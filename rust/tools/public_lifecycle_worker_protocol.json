@@ -8,10 +8,21 @@
     "scope_decision": "2026-10-11 approved lookup/aggregate/window/callback/producer at 1000/10000/100000 rows, 10 cold and 30 warm after 3 warmups, compatible previous release on the same machine",
     "correctness_smoke": "One case per run, both installed hosts, 1 cold/1 warm after 1 warmup; functional execution only",
     "truth": "Candidate-free stdlib algorithms regenerate and compare every input/expected byte and the retained generator. Original fixtures remain unchanged.",
-    "request_extensions": ["optional explicit host environment", "artifact_names for every root/producer output"],
-    "worker_extensions": ["build_artifact_presence from actual files before Save", "saved_artifacts for every named output after each Save"],
+    "request_extensions": [
+      "optional explicit host environment",
+      "artifact_names for every root/producer output"
+    ],
+    "worker_extensions": [
+      "build_artifact_presence from actual files before Save",
+      "saved_artifacts for every named output after each Save"
+    ],
     "acceptance": "Exact copied root cells/types/order/binary64 bits, empty issues/null logs, independently declared node/source ledgers, zero published files after Build, complete Build/two Save observations, successful Save returns, exact artifact identities/order/columns/rows/bytes. Prospective report artifacts are retained without interpreting them as publication.",
-    "remaining": "Approved-size capacity, qualified candidate/baseline characterization, phase and actual callback instrumentation, additional memory providers, and numeric budgets remain open. This extension does not close B17/B18."
+    "remaining": "Approved-size capacity, isolated candidate/baseline distributions, actual installed phase and callback qualification, and numeric budgets remain open. This extension does not close B17/B18.",
+    "representative_controller": "collect_public_performance.py",
+    "representative_scope": "independent truth child before every case; all 21 installed tuples in dispatched performance.yml; source-built previous release archive/wheel retained; no unsupported baseline API becomes a timing sample",
+    "optional_callback_observer": "once-delegating signature-preserving installed callable wrapper; full independent parameter/result trace; ordinary and observer complete normalized reports and both held Saves must agree; observer child never counts toward characterization",
+    "host_view_access_counts": "actual output/issues/log getter invocations; not internal allocation/copy estimates",
+    "retention_compression": "characterization retains views, raw reports and copied saved bytes as lossless gzip members; decompressed original bytes decide independent acceptance. Clocks and compression are separate boundaries; public work files remain ordinary original files."
   },
   "workers": {
     "python": "public_lifecycle_python_worker.py",
@@ -36,7 +47,8 @@
   "controller_dependencies": [
     "Python standard library",
     "Git",
-    "Unix ps or Windows PowerShell process inventory"
+    "Unix ps or Windows PowerShell process inventory",
+    "fresh small child RSS broker"
   ],
   "worker_dependencies": {
     "python": [
@@ -112,17 +124,25 @@
     "python_macos": "same provider, original bytes",
     "python_windows": null,
     "r": null,
-    "scope": "whole child lifetime including imports, copies and raw evidence writes; cumulative across warm repetitions, excludes parent/controller acceptance; sampled at end of each repetition"
+    "scope": "whole child lifetime including imports, copies and raw evidence writes; cumulative across warm repetitions, excludes parent/controller acceptance; sampled at end of each repetition",
+    "controller_child_lifetime": {
+      "linux": "os.wait4(child_pid).ru_maxrss, original KiB",
+      "macos": "os.wait4(child_pid).ru_maxrss, original bytes",
+      "windows": "GetProcessMemoryInfo(child_handle).PeakWorkingSetSize, original bytes",
+      "launch": "fresh small broker excludes large generator/controller fork RSS",
+      "retention": "process.json preserves child identity, exit status and actual observation; unavailable provider never becomes zero",
+      "qualification": "actual Linux allocation and parent-isolation controls; macOS/Windows require installed CI evidence"
+    }
   },
   "unavailable": {
-    "phase_durations": null,
-    "actual_callback_counts": null,
+    "phase_durations": "null unless original application-measurements/1 evidence is required and independently admitted",
+    "actual_callback_counts": "null unless actual engine function entries/returns or independent once-delegating callback traces are retained",
     "isolated_process_startup": null,
     "shipped_schema_initialization": null,
     "os_filesystem_cache": null
   },
   "prohibited": [
-    "runtime phase instrumentation",
+    "phase estimates or replayed/fabricated timestamps; new runtime probe endpoints",
     "callback-count inference from handler names/report arrays",
     "numeric release budgets",
     "concurrent compilation",
@@ -133,5 +153,14 @@
   ],
   "harness_identity": "Truth source_revision and truth_repository_head are separate from the harness surrounding checkout_head (null outside Git). Retained executed controller/protocol/worker bytes are authoritative; a surrounding checkout commit does not prove untracked or modified harness bytes.",
   "native_call_order_limit": "Worker order records the public Build and subsequent metadata anchors; private held-owner observation transport runs after Build outside timers and is not an actual callback/native-call count.",
-  "worker_executable_admission": "Launch the caller's absolute lexical executable spelling to preserve Python pyvenv.cfg context; independently resolve/audit its real target and reject invocation or actual target inside a checkout. Actual loaded package/native origins and versions are checked after public Build."
+  "worker_executable_admission": "Launch the caller's absolute lexical executable spelling to preserve Python pyvenv.cfg context; independently resolve/audit its real target and reject invocation or actual target inside a checkout. Actual loaded package/native origins and versions are checked after public Build.",
+  "producer_root_build_reference": "Explicit Python-reference scope only: producer environments must contain empty functions and only schema/language/lock metadata, with no codelist/study/submission fields. The actual previous callable/signature/source/schema are retained; source bytes must equal the pinned release. Independent root cells/issues/logs and artifact absence admit truth before ten cold and 33 warm attempts. No Save is called or timed; complete graph Save and full native lifecycle memory comparability stay unavailable.",
+  "actual_application_measurements": {
+    "transport": "Optional include_measurements on the existing private held-owner observations method; unchanged default report bytes. Flagged candidate collections require original evidence admission.",
+    "capture": "During original engine/host-port execution, using owner-local std::time::Instant nanosecond offsets; bounded actual stage entry/Result exits and real function entry/return aggregates; no replay.",
+    "typing": "Original uint64 JSON offsets/counts retained verbatim for both hosts; R does not convert those integers to binary64.",
+    "retention": "Canonical report and measurement sidecar written separately in bounded chunks; no report cell DOM in workers. Controller verifies unchanged original stage/callback records across Build and both Saves, actual Save prefixes, node identity, complete typed outcomes and independent callback expectations.",
+    "scope": "Preparation, activation when entered, source Input, dataset admission/derivation/output-keys/verification, output preparation and actual native held Saves. Enclosing Build-service Result is distinct from authoritative held build acceptance; intervals must not be added as exclusive phases.",
+    "unavailable": "Internal allocator copy counts, isolated startup, shipped-schema initialization and OS cache state remain unavailable. Public getter counts are actual calls and carry no internal-copy estimate."
+  }
 }

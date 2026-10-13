@@ -5472,16 +5472,16 @@ class TestClosedGrammarContracts(unittest.TestCase):
     # -- the R parser reads the same files ----------------------------------
 
     def test_the_r_runner_reads_the_same_contracts(self):
-        runner = (
-            self.root / 'R' / 'cdiscbuilder' / 'inst' / 'conformance' /
-            'grammar_conformance.R'
-        )
-        text = runner.read_text()
+        stager = self.root / 'rust' / 'tools' / 'stage_grammar_inputs.py'
+        text = stager.read_text()
         for contract, rule_id in VALIDATOR.GRAMMAR_CONTRACTS.items():
             with self.subTest(contract=contract):
                 self.assertIn(contract, text)
                 self.assertIn(rule_id, text)
-        self.assertIn('"grammar"', text)
+        self.assertIn('"yaml/grammar"', text)
+        runner = self.root / 'R' / 'yamaa' / 'tests' / 'public_grammar.R'
+        self.assertIn('"grammar-original"', runner.read_text())
+        self.assertIn('yamaa_domain(', runner.read_text())
 
 
 class TestDeclaredValidationErrors(unittest.TestCase):

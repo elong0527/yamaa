@@ -1,0 +1,1925 @@
+{
+  "protocol": "public-performance-frontier-record/1",
+  "date": "2026-10-13",
+  "system": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "machine": "x86_64",
+  "runtime": "CPython 3.12.14",
+  "package_form": "wheel",
+  "candidate_revision": "a1a9c2d216075f331ac108aa4d3638573f103cea",
+  "previous_release_revision": "845a91ff9ba4ab6599efbd79fafe1c4e1dd14255",
+  "previous_release_tag": "yamaa-py-0.3.0",
+  "baseline_archive": "/workspace/scratch/performance-baseline/yamaa-reference-845a91ff.tar.gz",
+  "baseline_wheel": "/workspace/scratch/performance-baseline/yamaa-0.3.0-cp312-abi3-linux_x86_64.whl",
+  "qualification": "Functional frontier only; one truth child, no approved cold/warm distribution. Raw clocks do not count toward budgets. Other platforms/forms remain uncollected.",
+  "phase_durations": null,
+  "budget_approved": false,
+  "transition_approved": false,
+  "rows": [
+    {
+      "evaluator": "candidate",
+      "case": "lookup-1000-1",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8194040284410,
+        "end_ns": 8194097045690,
+        "duration_ns": 56761280
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 72404,
+        "original_unit": "KiB",
+        "bytes": 74141696,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": {
+        "class": "ValueError",
+        "message": "held Saves failed"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/lookup-1000-1-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "lookup-1000-4",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8194370505854,
+        "end_ns": 8194476875781,
+        "duration_ns": 106369927
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 59428,
+        "original_unit": "KiB",
+        "bytes": 60854272,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/lookup-1000-4-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "lookup-10000-1",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8194704654767,
+        "end_ns": 8194832030320,
+        "duration_ns": 127375553
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 61760,
+        "original_unit": "KiB",
+        "bytes": 63242240,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/lookup-10000-1-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "lookup-10000-4",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8195070332008,
+        "end_ns": 8195214395221,
+        "duration_ns": 144063213
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 64776,
+        "original_unit": "KiB",
+        "bytes": 66330624,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/lookup-10000-4-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "lookup-100000-1",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8195448461688,
+        "end_ns": 8195468822013,
+        "duration_ns": 20360325
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 73544,
+        "original_unit": "KiB",
+        "bytes": 75309056,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/lookup-100000-1-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "lookup-100000-4",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8195779705845,
+        "end_ns": 8195799319861,
+        "duration_ns": 19614016
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 70772,
+        "original_unit": "KiB",
+        "bytes": 72470528,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/lookup-100000-4-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "aggregate-1000-10",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8196105834779,
+        "end_ns": 8196114705826,
+        "duration_ns": 8871047
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 65056,
+        "original_unit": "KiB",
+        "bytes": 66617344,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-final-frontier/aggregate-1000-10-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "aggregate-1000-100",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8196344883973,
+        "end_ns": 8196352428127,
+        "duration_ns": 7544154
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 63820,
+        "original_unit": "KiB",
+        "bytes": 65351680,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-final-frontier/aggregate-1000-100-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "aggregate-10000-10",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8196566801362,
+        "end_ns": 8196617162471,
+        "duration_ns": 50361109
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 87920,
+        "original_unit": "KiB",
+        "bytes": 90030080,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/aggregate-10000-10-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "aggregate-10000-100",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8196820268397,
+        "end_ns": 8196873148992,
+        "duration_ns": 52880595
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 87856,
+        "original_unit": "KiB",
+        "bytes": 89964544,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/aggregate-10000-100-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "aggregate-100000-10",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8197067878702,
+        "end_ns": 8197092418719,
+        "duration_ns": 24540017
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 77284,
+        "original_unit": "KiB",
+        "bytes": 79138816,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/aggregate-100000-10-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "aggregate-100000-100",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8197321296429,
+        "end_ns": 8197346024626,
+        "duration_ns": 24728197
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 74180,
+        "original_unit": "KiB",
+        "bytes": 75960320,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/aggregate-100000-100-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "window-1000-10",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8197598015147,
+        "end_ns": 8197630250884,
+        "duration_ns": 32235737
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 83856,
+        "original_unit": "KiB",
+        "bytes": 85868544,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": {
+        "class": "ValueError",
+        "message": "held Saves failed"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/window-1000-10-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "window-1000-100",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8198097679417,
+        "end_ns": 8198128912634,
+        "duration_ns": 31233217
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 83880,
+        "original_unit": "KiB",
+        "bytes": 85893120,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": {
+        "class": "ValueError",
+        "message": "held Saves failed"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/window-1000-100-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "window-10000-10",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8198570033038,
+        "end_ns": 8198679259844,
+        "duration_ns": 109226806
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 104888,
+        "original_unit": "KiB",
+        "bytes": 107405312,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/window-10000-10-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "window-10000-100",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8198939536338,
+        "end_ns": 8199040567851,
+        "duration_ns": 101031513
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 104884,
+        "original_unit": "KiB",
+        "bytes": 107401216,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/window-10000-100-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "window-100000-10",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8199287686251,
+        "end_ns": 8199315220042,
+        "duration_ns": 27533791
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 79460,
+        "original_unit": "KiB",
+        "bytes": 81367040,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/window-100000-10-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "window-100000-100",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8199993313120,
+        "end_ns": 8200023930856,
+        "duration_ns": 30617736
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 79760,
+        "original_unit": "KiB",
+        "bytes": 81674240,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/window-100000-100-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "callback-1000-1",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8200791624348,
+        "end_ns": 8200904867384,
+        "duration_ns": 113243036
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 76208,
+        "original_unit": "KiB",
+        "bytes": 78036992,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-final-frontier/callback-1000-1-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "callback-1000-1",
+      "mode": "callback-observer",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8201270267314,
+        "end_ns": 8201384871174,
+        "duration_ns": 114603860
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 77744,
+        "original_unit": "KiB",
+        "bytes": 79609856,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": 859,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-final-frontier/callback-1000-1-callback-observer-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "callback-10000-1",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8201746512857,
+        "end_ns": 8201955809376,
+        "duration_ns": 209296519
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 95488,
+        "original_unit": "KiB",
+        "bytes": 97779712,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"report_limit\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/callback-10000-1-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "callback-10000-1",
+      "mode": "callback-observer",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": null,
+      "child_peak_rss": null,
+      "host_view_access_counts": null,
+      "actual_callback_calls": null,
+      "issues": null,
+      "failure": {
+        "class": "ValueError",
+        "message": "not launched: independent-truth preflight refused"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/callback-10000-1-callback-observer-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "callback-100000-1",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8202210757334,
+        "end_ns": 8202337950979,
+        "duration_ns": 127193645
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 83316,
+        "original_unit": "KiB",
+        "bytes": 85315584,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"source_boundary\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/callback-100000-1-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "callback-100000-1",
+      "mode": "callback-observer",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": null,
+      "child_peak_rss": null,
+      "host_view_access_counts": null,
+      "actual_callback_calls": null,
+      "issues": null,
+      "failure": {
+        "class": "ValueError",
+        "message": "not launched: independent-truth preflight refused"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/callback-100000-1-callback-observer-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "producer-1000-1",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8202656227286,
+        "end_ns": 8202721281966,
+        "duration_ns": 65054680
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 77312,
+        "original_unit": "KiB",
+        "bytes": 79167488,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"report_limit\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/producer-1000-1-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "producer-1000-3",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8202929812801,
+        "end_ns": 8202955879241,
+        "duration_ns": 26066440
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 63584,
+        "original_unit": "KiB",
+        "bytes": 65110016,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"producer_build\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/producer-1000-3-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "producer-10000-1",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8203165363088,
+        "end_ns": 8203234700979,
+        "duration_ns": 69337891
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 95160,
+        "original_unit": "KiB",
+        "bytes": 97443840,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"producer_build\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/producer-10000-1-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "producer-10000-3",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8203477197168,
+        "end_ns": 8203555809274,
+        "duration_ns": 78612106
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 93672,
+        "original_unit": "KiB",
+        "bytes": 95920128,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"producer_build\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/producer-10000-3-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "producer-100000-1",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8203813835498,
+        "end_ns": 8203845347521,
+        "duration_ns": 31512023
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 82364,
+        "original_unit": "KiB",
+        "bytes": 84340736,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"original_boundary\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/producer-100000-1-truth-0"
+    },
+    {
+      "evaluator": "candidate",
+      "case": "producer-100000-3",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 8204179885539,
+        "end_ns": 8204216258117,
+        "duration_ns": 36372578
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 80312,
+        "original_unit": "KiB",
+        "bytes": 82239488,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 1,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [
+        [
+          "engine",
+          "engine_rejected",
+          null,
+          [],
+          "{\"code\":\"original_boundary\",\"stage\":\"build\"}"
+        ]
+      ],
+      "failure": {
+        "class": "ValueError",
+        "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 329, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/performance-final-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-final-frontier/producer-100000-3-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "lookup-1000-1",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7447399556744,
+        "end_ns": 7447560934377,
+        "duration_ns": 161377633
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 104400,
+        "original_unit": "KiB",
+        "bytes": 106905600,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/lookup-1000-1-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "lookup-1000-4",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7448025357646,
+        "end_ns": 7448211330218,
+        "duration_ns": 185972572
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 104708,
+        "original_unit": "KiB",
+        "bytes": 107220992,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/lookup-1000-4-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "lookup-10000-1",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7448668063321,
+        "end_ns": 7449481150127,
+        "duration_ns": 813086806
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 138472,
+        "original_unit": "KiB",
+        "bytes": 141795328,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/lookup-10000-1-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "lookup-10000-4",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7450334208509,
+        "end_ns": 7451627959615,
+        "duration_ns": 1293751106
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 141024,
+        "original_unit": "KiB",
+        "bytes": 144408576,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/lookup-10000-4-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "lookup-100000-1",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7452504065846,
+        "end_ns": 7459965922457,
+        "duration_ns": 7461856611
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 500384,
+        "original_unit": "KiB",
+        "bytes": 512393216,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/lookup-100000-1-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "lookup-100000-4",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7464994073011,
+        "end_ns": 7477374030903,
+        "duration_ns": 12379957892
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 515820,
+        "original_unit": "KiB",
+        "bytes": 528199680,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/lookup-100000-4-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "aggregate-1000-10",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7482451412336,
+        "end_ns": 7482565705554,
+        "duration_ns": 114293218
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 100984,
+        "original_unit": "KiB",
+        "bytes": 103407616,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/aggregate-1000-10-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "aggregate-1000-100",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7482986784200,
+        "end_ns": 7483097445770,
+        "duration_ns": 110661570
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 99704,
+        "original_unit": "KiB",
+        "bytes": 102096896,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/aggregate-1000-100-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "aggregate-10000-10",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7483519508109,
+        "end_ns": 7483825523144,
+        "duration_ns": 306015035
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 104764,
+        "original_unit": "KiB",
+        "bytes": 107278336,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/aggregate-10000-10-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "aggregate-10000-100",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7484321335637,
+        "end_ns": 7484611134668,
+        "duration_ns": 289799031
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 104776,
+        "original_unit": "KiB",
+        "bytes": 107290624,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/aggregate-10000-100-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "aggregate-100000-10",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7485021759356,
+        "end_ns": 7487258899903,
+        "duration_ns": 2237140547
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 153396,
+        "original_unit": "KiB",
+        "bytes": 157077504,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/aggregate-100000-10-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "aggregate-100000-100",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7488090826369,
+        "end_ns": 7490063684781,
+        "duration_ns": 1972858412
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 138360,
+        "original_unit": "KiB",
+        "bytes": 141680640,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/aggregate-100000-100-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "window-1000-10",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7490522359634,
+        "end_ns": 7490798211291,
+        "duration_ns": 275851657
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 110300,
+        "original_unit": "KiB",
+        "bytes": 112947200,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/window-1000-10-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "window-1000-100",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7491374563122,
+        "end_ns": 7491638661864,
+        "duration_ns": 264098742
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 111348,
+        "original_unit": "KiB",
+        "bytes": 114020352,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/window-1000-100-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "window-10000-10",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7492191782253,
+        "end_ns": 7494014770300,
+        "duration_ns": 1822988047
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 230292,
+        "original_unit": "KiB",
+        "bytes": 235819008,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/window-10000-10-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "window-10000-100",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7495946941558,
+        "end_ns": 7498202233022,
+        "duration_ns": 2255291464
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 222560,
+        "original_unit": "KiB",
+        "bytes": 227901440,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/window-10000-100-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "window-100000-10",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7500234811028,
+        "end_ns": 7519118213935,
+        "duration_ns": 18883402907
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 1279520,
+        "original_unit": "KiB",
+        "bytes": 1310228480,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/window-100000-10-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "window-100000-100",
+      "mode": "truth",
+      "accepted": true,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7536670071971,
+        "end_ns": 7557742491619,
+        "duration_ns": 21072419648
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 1314356,
+        "original_unit": "KiB",
+        "bytes": 1345900544,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "actual_callback_calls": null,
+      "issues": [],
+      "failure": null,
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/window-100000-100-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "callback-1000-1",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7574978630961,
+        "end_ns": 7574978643890,
+        "duration_ns": 12929
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 91592,
+        "original_unit": "KiB",
+        "bytes": 93790208,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {},
+      "actual_callback_calls": null,
+      "issues": null,
+      "failure": {
+        "class": "ValueError",
+        "message": "reference repetition failed: {'class': 'TypeError', 'message': \"yamaa_domain() got an unexpected keyword argument 'environment'\", 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 292, in run\\n    result = timed(\\n             ^^^^^^\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 295, in <lambda>\\n    lambda: domain(\\n            ^^^^^^^\\nTypeError: yamaa_domain() got an unexpected keyword argument \\'environment\\'\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/callback-1000-1-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "callback-10000-1",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7575447271365,
+        "end_ns": 7575447284234,
+        "duration_ns": 12869
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 91004,
+        "original_unit": "KiB",
+        "bytes": 93188096,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {},
+      "actual_callback_calls": null,
+      "issues": null,
+      "failure": {
+        "class": "ValueError",
+        "message": "reference repetition failed: {'class': 'TypeError', 'message': \"yamaa_domain() got an unexpected keyword argument 'environment'\", 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 292, in run\\n    result = timed(\\n             ^^^^^^\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 295, in <lambda>\\n    lambda: domain(\\n            ^^^^^^^\\nTypeError: yamaa_domain() got an unexpected keyword argument \\'environment\\'\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/callback-10000-1-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "callback-100000-1",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7575932040054,
+        "end_ns": 7575932053344,
+        "duration_ns": 13290
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 90768,
+        "original_unit": "KiB",
+        "bytes": 92946432,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {},
+      "actual_callback_calls": null,
+      "issues": null,
+      "failure": {
+        "class": "ValueError",
+        "message": "reference repetition failed: {'class': 'TypeError', 'message': \"yamaa_domain() got an unexpected keyword argument 'environment'\", 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 292, in run\\n    result = timed(\\n             ^^^^^^\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 295, in <lambda>\\n    lambda: domain(\\n            ^^^^^^^\\nTypeError: yamaa_domain() got an unexpected keyword argument \\'environment\\'\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/callback-100000-1-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "producer-1000-1",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7576510964444,
+        "end_ns": 7576510978335,
+        "duration_ns": 13891
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 91248,
+        "original_unit": "KiB",
+        "bytes": 93437952,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {},
+      "actual_callback_calls": null,
+      "issues": null,
+      "failure": {
+        "class": "ValueError",
+        "message": "reference repetition failed: {'class': 'TypeError', 'message': \"yamaa_domain() got an unexpected keyword argument 'environment'\", 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 292, in run\\n    result = timed(\\n             ^^^^^^\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 295, in <lambda>\\n    lambda: domain(\\n            ^^^^^^^\\nTypeError: yamaa_domain() got an unexpected keyword argument \\'environment\\'\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/producer-1000-1-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "producer-1000-3",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7577000295269,
+        "end_ns": 7577000308549,
+        "duration_ns": 13280
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 90868,
+        "original_unit": "KiB",
+        "bytes": 93048832,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {},
+      "actual_callback_calls": null,
+      "issues": null,
+      "failure": {
+        "class": "ValueError",
+        "message": "reference repetition failed: {'class': 'TypeError', 'message': \"yamaa_domain() got an unexpected keyword argument 'environment'\", 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 292, in run\\n    result = timed(\\n             ^^^^^^\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 295, in <lambda>\\n    lambda: domain(\\n            ^^^^^^^\\nTypeError: yamaa_domain() got an unexpected keyword argument \\'environment\\'\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/producer-1000-3-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "producer-10000-1",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7577553363810,
+        "end_ns": 7577553376870,
+        "duration_ns": 13060
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 90184,
+        "original_unit": "KiB",
+        "bytes": 92348416,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {},
+      "actual_callback_calls": null,
+      "issues": null,
+      "failure": {
+        "class": "ValueError",
+        "message": "reference repetition failed: {'class': 'TypeError', 'message': \"yamaa_domain() got an unexpected keyword argument 'environment'\", 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 292, in run\\n    result = timed(\\n             ^^^^^^\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 295, in <lambda>\\n    lambda: domain(\\n            ^^^^^^^\\nTypeError: yamaa_domain() got an unexpected keyword argument \\'environment\\'\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/producer-10000-1-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "producer-10000-3",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7578110384860,
+        "end_ns": 7578110399612,
+        "duration_ns": 14752
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 90308,
+        "original_unit": "KiB",
+        "bytes": 92475392,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {},
+      "actual_callback_calls": null,
+      "issues": null,
+      "failure": {
+        "class": "ValueError",
+        "message": "reference repetition failed: {'class': 'TypeError', 'message': \"yamaa_domain() got an unexpected keyword argument 'environment'\", 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 292, in run\\n    result = timed(\\n             ^^^^^^\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 295, in <lambda>\\n    lambda: domain(\\n            ^^^^^^^\\nTypeError: yamaa_domain() got an unexpected keyword argument \\'environment\\'\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/producer-10000-3-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "producer-100000-1",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7578693486986,
+        "end_ns": 7578693500306,
+        "duration_ns": 13320
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 91244,
+        "original_unit": "KiB",
+        "bytes": 93433856,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {},
+      "actual_callback_calls": null,
+      "issues": null,
+      "failure": {
+        "class": "ValueError",
+        "message": "reference repetition failed: {'class': 'TypeError', 'message': \"yamaa_domain() got an unexpected keyword argument 'environment'\", 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 292, in run\\n    result = timed(\\n             ^^^^^^\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 295, in <lambda>\\n    lambda: domain(\\n            ^^^^^^^\\nTypeError: yamaa_domain() got an unexpected keyword argument \\'environment\\'\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/producer-100000-1-truth-0"
+    },
+    {
+      "evaluator": "previous-python-reference",
+      "case": "producer-100000-3",
+      "mode": "truth",
+      "accepted": false,
+      "timing_qualified": false,
+      "build_clock": {
+        "start_ns": 7579343815175,
+        "end_ns": 7579343828294,
+        "duration_ns": 13119
+      },
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 91040,
+        "original_unit": "KiB",
+        "bytes": 93224960,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "host_view_access_counts": {},
+      "actual_callback_calls": null,
+      "issues": null,
+      "failure": {
+        "class": "ValueError",
+        "message": "reference repetition failed: {'class': 'TypeError', 'message': \"yamaa_domain() got an unexpected keyword argument 'environment'\", 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 292, in run\\n    result = timed(\\n             ^^^^^^\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 29, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/performance-reference-schema-frontier/harness/public_lifecycle_python_worker.py\", line 295, in <lambda>\\n    lambda: domain(\\n            ^^^^^^^\\nTypeError: yamaa_domain() got an unexpected keyword argument \\'environment\\'\\n'}"
+      },
+      "raw_directory": "/workspace/scratch/performance-reference-schema-frontier/producer-100000-3-truth-0"
+    }
+  ]
+}
