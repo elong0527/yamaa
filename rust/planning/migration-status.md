@@ -1,7 +1,7 @@
 # yamaa Rust migration status
 
 Assessed 2026-10-13 against main
-`81a210ca98cc98402579144ab8845facf78b653b`. The implementation and acceptance
+`9f88cdb6b3855fdef2df8e8b208d2f948396edbc`. The implementation and acceptance
 owner is [#1969](https://github.com/elong0527/yamaa/issues/1969). This snapshot
 records merged behavior and remaining gates; it is not release approval.
 Earlier narrative remains in [the archive](archive/migration-status-before-work-packages.md).
@@ -31,7 +31,11 @@ explicit. No previous passing case is removed. This is complete installed corpus
 evidence for the candidate revision. Its deferred shared Rust and numerical
 checks and the final combined-main audit remain separate acceptance gates.
 
-The candidate now admits producer-linked input schemas without an explicit
+This complete ratchet and its last two active public runners are merged in
+#2104. The merged main revision must still pass its own complete installed and
+artifact audit; the candidate's recorded source is not relabeled as main.
+
+The merged unified engine now admits producer-linked input schemas without an explicit
 environment for `adam-adsl-randomization`, `negative-redefined-date` and
 `sdtm-dm-race-ethnicity`. The merged resource-kind priority and Windows R staging
 changes (#2090) preserve the directory and real-symlink diagnostic truth. The
@@ -52,10 +56,18 @@ and the R JSON inheritance callback is replaced by a typed engine outcome
 truth and ratchet evidence. Translating-binding acceptance (#1989) is closed with
 the exact-head full matrix and the independently replayed complete main audit.
 
+The external merges of #2091 and #2099 include unified route selection and the
+bounded ordinary string-key index. #1987, #1984 and #1993 were closed externally
+on 2026-10-13. Their scope implementation is merged; final combined-main
+qualification remains a release gate. #2084's exact-head full dispatch
+38433386841 passes every installed lane. Independent replay reproduces all 21
+complete corpus verdict arrays against unchanged truth and confirms strict
+Status: OK on all three R hosts.
+
 The external merge of #2089 retires R/cdiscbuilder, points installation guidance
 and shared grammar replay at R/yamaa, and includes the earlier probe-removal
-slices. That merge does not supply final qualification: main still lacks the
-last public filesystem and supplied-environment controls retained in #2093.
+slices. Main still lacks the last public filesystem controls retained in #2093;
+its supplied-environment diagnostic follow-up is included in #2091.
 The installed Python filesystem suite on this main revision still imports the
 legacy IO helper; its public replacement must land before Python removal.
 
@@ -73,17 +85,17 @@ the deferred Rust and numerical evidence. See [CI instructions](../../.github/ci
 
 ## Remaining work
 
-| Scope | Open owners and concrete remaining gate |
+| Scope | Owners and concrete remaining gate |
 | --- | --- |
 | Language acceptance | #1980: qualify the consolidated authored scalar/key and grouped-source forms in #2108. #2005: finish top-level assertions on declared selected lookup fields and their complete predicate-site acceptance. Candidate public corpus coverage is complete. |
-| Diagnostic ownership | #2084 empties the adapter/binding literal allowlist using independent JSON truth. Core/engine ownership and normative null decisions are merged; #1984 still requires the current-head full dispatch and combined-main evidence. |
-| Binding and orchestration ownership | #1989 is closed with #2085's full-matrix evidence. #1987's unified ordinary/environment/producer candidate passes the full installed dispatch. Qualify its supplied-environment diagnostic follow-up and final composition before closure. |
-| Callback/probe cleanup | #2089 includes the earlier endpoint and JSON-protocol retirement. #1988/#1990 still need #2093's final public filesystem, supplied-environment and unique assertion controls in the complete installed matrix. Diagnostic context remains JSON text. |
-| Public surface and R package | #1991: complete qualified Python legacy-surface removal and final installed contract evidence. #1993's R/yamaa guidance, grammar replay and cdiscbuilder deletion are merged in #2089; its final package matrix remains pending. |
-| Repository tooling | Native CSV and regex validator routes and the retained style CLI are merged (#2095/#2097/#2087). #2111 retains all 420 original validator controls, 1,907 passing Rust tests and 77 active native fixture proofs plus two historical exclusions. Its exact full installed matrix includes mandatory real-R issue transport; that acceptance is pending. #2109's changed numerical tools pass on all three hosts and await the full installed matrix. |
+| Diagnostic ownership | #1984 is closed externally; #2084's full installed matrix and independently replayed diagnostic corpus pass. Renew the combined-main audit with the remaining composition. |
+| Binding and orchestration ownership | #1989 is closed with #2085's full-matrix evidence. #1987 is closed externally after the unified engine/lookup composition landed. Retain its full installed follow-up and final main audit as release evidence. |
+| Callback/probe cleanup | #2089 includes the earlier endpoint and JSON-protocol retirement. #1988/#1990 still need #2093's final public filesystem and unique assertion controls in the complete installed matrix. Exact 90029d34 passes all three R source hosts, all twelve R supplemental suites, the 316-case ratchet and strict checks; eighteen Python lanes remain in qualification. Diagnostic context remains JSON text. |
+| Public surface and R package | #1991: complete qualified Python legacy-surface removal and final installed contract evidence. #1993 is closed externally with #2089's R/yamaa guidance, grammar replay and cdiscbuilder deletion. Full-range integers, public lifetime/interrupt and filesystem suites pass all three R hosts at 90029d34; final versioned package acceptance remains. |
+| Repository tooling | Native CSV and regex validator routes and the retained style CLI are merged (#2095/#2097/#2087). #2111 at f00cffdc retains all 420 original validator controls, 1,919 passing shared Rust tests, 491 engine feature tests and 77 active native fixture proofs plus two historical exclusions. Its exact full matrix 38458966887 includes mandatory real-R issue transport; that acceptance is pending. #2109's changed numerical tools pass on all three hosts and await the complete installed composition. |
 | Release evidence | #1996: final combined-main evidence, complete public corpus, Windows R resource behavior and locked package membership after the remaining changes. |
-| Measurements | #1998 and #1973 item 10: collect the approved workload/size/form matrix, same-machine prior-release baselines, phase/callback/RSS evidence, raw samples and concrete passing budgets. Actual phase and cumulative-work prototypes pass functional controls; largest-size resource acceptance and distributions are incomplete. |
-| Transition and removal | #1999 and #1973 item 11: approve the existing [transition plan](transition.md) only after all entry criteria pass. Two draft rollback releases retain eleven assets with authenticated byte-equality receipts; the R canonical source archive passes all three hosts, while remaining Python source/host rollback proof is pending. #2110 prepares Python removal separately. |
+| Measurements | #1998 and #1973 item 10: complete the approved workload/size/form matrix, comparable baselines and passing budgets. #2094 merges the retained collector; #2117's unapproved capacity/phase prototype passes seven ordinary 100k cases and callback observation, while two producer forms refuse at a separately unwired CSV limit. Actual report framing/copy scope and largest-size producer acceptance remain under review. No capacity or numerical budget is approved. |
+| Transition and removal | #1999 and #1973 item 11: approve the [transition plan](transition.md) only after all entry criteria pass. Two unpublished rollback releases retain eleven byte-verified assets. The canonical R archive passes all three hosts; exact prior Python wheel/source replay on eighteen tuples is running separately. #2110 prepares Python removal and #2113 prepares coherent 0.4 versions/notes; both remain gated candidates. |
 
 The maintainer delegated implementation decisions in
 [maintainer-decisions.md](maintainer-decisions.md); no additional confirmation is
