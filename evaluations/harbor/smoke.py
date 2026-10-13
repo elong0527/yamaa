@@ -1,6 +1,7 @@
 """Run offline oracle/nop checks through Harbor's real Docker verifier.
 
 Randomly sample ten buildable tasks, or select every task with --all-cases.
+Use --benchmarks or --benchmarks-file to restrict the candidate benchmarks.
 Oracle and nop share the selection, saved with its seed and exclusions.
 No model API or key is used.
 """
@@ -32,6 +33,16 @@ def sample_tasks(tasks: list[Path], seed: int) -> list[Path]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--benchmarks", nargs="+")
+    selection.add_argument(
+        "--benchmarks-file", type=Path, help="JSON benchmark-name list"
+    )
+    parser.add_argument(
+        "--allow-empty",
+        action="store_true",
+        help="record and skip a restricted selection with no buildable tasks",
+    )
     # Older launch scripts pass --full. It now uses the same ten-task sample.
     parser.add_argument("--full", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--seed", type=int, help="repeat a saved preflight sample")
@@ -53,7 +64,23 @@ def main() -> None:
     args = parser.parse_args()
     if (args.image or args.verifier_image) and len(args.language) != 1:
         parser.error("image overrides require exactly one language")
-    names = sorted(p.parent.name for p in build.PROMPTS.glob("*/full.md"))
+    available = sorted(p.parent.name for p in build.PROMPTS.glob("*/full.md"))
+    names = args.benchmarks
+    if args.benchmarks_file is not None:
+        names = json.loads(args.benchmarks_file.read_text())
+    restricted = names is not None
+    if restricted:
+        if not isinstance(names, list) or any(
+            not isinstance(name, str) for name in names
+        ):
+            parser.error("benchmarks must be a JSON list of benchmark names")
+        unknown = sorted(set(names) - set(available))
+        if unknown:
+            parser.error(f"unknown benchmarks: {', '.join(unknown)}")
+        names = sorted(set(names))
+    else:
+        names = available
+    args.out.mkdir(parents=True, exist_ok=True)
     tasks, skipped = build.build_selection(
         names,
         languages=args.language,
@@ -66,12 +93,41 @@ def main() -> None:
     )
     for note in skipped:
         print(f"skip {note}")
+    seed = args.seed if args.seed is not None else secrets.randbits(64)
+    candidates = tasks
+    tasks = sorted(candidates) if args.all_cases else sample_tasks(candidates, seed)
+    (args.out / "sample.json").write_text(
+        json.dumps(
+            {
+                "seed": seed,
+                "candidate_tasks": len(candidates),
+                "selection": "all" if args.all_cases else "sample",
+                "languages": args.language,
+                "benchmarks": names,
+                "skipped": skipped,
+                "tasks": [t.name for t in tasks],
+                "agents": ["oracle", "nop"],
+                "prompt_tiers": args.prompt,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
     if not tasks:
+        if args.allow_empty and restricted:
+            (args.out / "summary.json").write_text(
+                json.dumps({"agents": {}, "failures": [], "skipped": skipped}, indent=2)
+                + "\n"
+            )
+            print(
+                "no buildable tasks in the restricted selection; skipping verification"
+            )
+            return
         raise RuntimeError("no buildable tasks selected")
     probe_task = next(
         (
             t
-            for t in tasks
+            for t in candidates
             if t.name.startswith("adam-adsl-age-group-") and t.name.endswith("-python")
         ),
         None,
@@ -86,25 +142,6 @@ def main() -> None:
             build.git_commit(),
             "python",
         )
-    seed = args.seed if args.seed is not None else secrets.randbits(64)
-    candidates = tasks
-    tasks = sorted(candidates) if args.all_cases else sample_tasks(candidates, seed)
-    (args.out / "sample.json").write_text(
-        json.dumps(
-            {
-                "seed": seed,
-                "candidate_tasks": len(candidates),
-                "selection": "all" if args.all_cases else "sample",
-                "languages": args.language,
-                "skipped": skipped,
-                "tasks": [t.name for t in tasks],
-                "agents": ["oracle", "nop"],
-                "prompt_tiers": args.prompt,
-            },
-            indent=2,
-        )
-        + "\n"
-    )
     print(f"selected {len(tasks)} of {len(candidates)} tasks (seed {seed})", flush=True)
     probe_image = "yamaa-harbor-sandbox-probe:local"
     try:

@@ -103,3 +103,17 @@ assessments and their exact comparison, 18 complete public cohort and producer
 comparisons, 21 corpus-wide public inventories, six package build records, and three shared-crates checks.
 Every missing, expired, failed, stale, wrong-attempt or incomplete tuple remains
 visible. CI-script discovery runs independent fixture tests for this protocol.
+
+## Harbor Oracle coverage
+
+PRs select changed Harbor benchmarks from their data, prompts, and reference
+solutions using the PR merge-base diff. Renames include both benchmark names;
+deleted or non-Harbor benchmarks are excluded from the current selection.
+Every buildable selected case is verified by both oracle and nop, including all
+R/Python prompt tiers. PRs without affected cases skip the Docker steps and
+retain harness regression tests.
+
+Shared harness, image, workflow, selection-code, or dependency changes affect
+every benchmark and use full coverage. Scheduled and manual runs always retain
+all 134 confident opensas cases and the ten-task R/Python preflight.
+The workflow summary and `harbor-verification` artifact record the selection.
