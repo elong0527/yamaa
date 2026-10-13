@@ -56,9 +56,7 @@ class CompletePublicTruth(unittest.TestCase):
                     "package_form": "wheel" if host == "python" else "source",
                 },
                 "installation": {
-                    "runtime_version": "3.12.unit"
-                    if host == "python"
-                    else "4.6.1.unit",
+                    "runtime_version": "3.12.unit" if host == "python" else "4.6.1",
                     "host_package_version": "unit-unqualified",
                     "core_version": "fixture-engine",
                     "package_location": "/unit-unqualified/package",
@@ -93,6 +91,7 @@ class CompletePublicTruth(unittest.TestCase):
                 raw.update(
                     runtime=host, backend="rust", engine_version="fixture-engine"
                 )
+                raw["runtime_version"] = record["installation"]["runtime_version"]
                 cohort.write(root / "public-reports" / f"{name}.{host}.rust.json", raw)
             self.producer_owner(root, host, record)
 
@@ -120,6 +119,7 @@ class CompletePublicTruth(unittest.TestCase):
                 + ("uv.lock" if host == "python" else "renv.lock"),
             },
         )
+        raw["runtime_version"] = record["installation"]["runtime_version"]
         for group in ("nodes", "tables", "verifications", "callbacks"):
             for observation in raw[group]:
                 observation["specification"] = case + "/" + observation["specification"]

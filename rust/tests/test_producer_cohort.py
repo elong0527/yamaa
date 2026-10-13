@@ -194,7 +194,10 @@ class OriginalProducerCohort(unittest.TestCase):
                     "run": "unit:unqualified",
                     "artifact_reference": "unit:unqualified",
                 },
-                "installation": {"core_version": self.raw["engine_version"]},
+                "installation": {
+                    "core_version": self.raw["engine_version"],
+                    "runtime_version": self.raw["runtime_version"],
+                },
             }
             (owner / "provenance.json").write_text(
                 json.dumps({"scope": "supplemental_suites", **record})
