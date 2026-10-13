@@ -275,9 +275,14 @@ Both `oracle` and `nop` run the same sample: ten trials each, twenty total.
 score 0. If fewer than ten tasks are available, it checks all of them.
 `sample.json` saves the selected tasks and random seed; pass that seed with
 `--seed` to repeat the sample from the same source and prompt tiers.
-The Harbor Oracle workflow (`.github/workflows/harbor-oracle.yml`) samples
-across all three prompt tiers and both languages on pull requests, Mondays,
-and manual runs. Before a model run, use the same sampled preflight:
+The Harbor Oracle workflow (`.github/workflows/harbor-oracle.yml`) limits PR
+Docker verification to benchmarks whose data, prompts, or reference solutions
+changed. It checks every buildable R/Python task for those benchmarks across
+all three prompt tiers. Shared harness, image, or dependency changes affect
+every benchmark; those PRs, Mondays, and manual runs keep the full opensas
+selection and ten-task R/Python preflight. PRs without affected Harbor
+benchmarks skip Docker verification while retaining harness regression tests.
+Before a model run, use the same sampled preflight:
 
 ```bash
 uv run --project python --no-sync python evaluations/harbor/smoke.py \
@@ -305,8 +310,10 @@ uv run --project python --no-sync python evaluations/harbor/smoke.py \
 This runs oracle and nop on the same 134 cases, with no model key. The saved
 `sample.json` lists every selected task and exclusion; `summary.json` records
 each case's rewards and exceptions. Jobs retain the usual task snapshots,
-verifier grades and logs. CI runs this complete selection on pull requests,
-weekly and through the Harbor Oracle workflow's manual dispatch.
+verifier grades and logs. Weekly and manual CI runs retain this complete
+selection. PRs verify only impacted benchmarks, or the complete selection when
+shared changes affect every benchmark. The CI artifact records the selected
+benchmark names alongside the usual task selection and verifier diagnostics.
 
 For a model evaluation, pass `--language opensas` to `build.py`; it creates a
 separate opensas dataset, job and leaderboard per requested prompt tier.

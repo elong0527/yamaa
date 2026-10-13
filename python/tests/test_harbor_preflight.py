@@ -73,8 +73,9 @@ def test_preflight_sample_is_bounded_unique_and_reproducible(smoke):
 
 
 @pytest.mark.parametrize("all_cases", [False, True])
+@pytest.mark.parametrize("selection_mode", [None, "cli", "file"])
 def test_preflight_runs_both_agents_on_the_saved_selection(
-    tmp_path, monkeypatch, smoke, all_cases
+    tmp_path, monkeypatch, smoke, all_cases, selection_mode
 ):
     tasks = []
     names = ["adam-adsl-age-group-python", *[f"task-{i:02}-r" for i in range(14)]]
@@ -84,7 +85,13 @@ def test_preflight_runs_both_agents_on_the_saved_selection(
         (task / "task.toml").write_text(f'[task]\nname = "yamaa/{name}"\n')
         (task / "tests/contract.json").write_text('{"challenge_required": true}')
         tasks.append(task)
-    monkeypatch.setattr(build, "build_selection", lambda *a, **kw: (tasks, []))
+    built_names = []
+
+    def build_selected(names, **kwargs):
+        built_names.extend(names)
+        return tasks, []
+
+    monkeypatch.setattr(build, "build_selection", build_selected)
     monkeypatch.setattr(build, "git_commit", lambda: "test")
     runner = _load("run")
     jobs = []
@@ -131,6 +138,14 @@ def test_preflight_runs_both_agents_on_the_saved_selection(
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(smoke.subprocess, "run", run_command)
+    selected = ["adam-adsl-age-group", "adam-adtte-dor"]
+    selection_args = []
+    if selection_mode == "cli":
+        selection_args = ["--benchmarks", *selected]
+    elif selection_mode == "file":
+        selection_file = tmp_path / "selected.json"
+        selection_file.write_text(json.dumps([*reversed(selected), selected[0]]))
+        selection_args = ["--benchmarks-file", str(selection_file)]
     monkeypatch.setattr(
         sys,
         "argv",
@@ -140,11 +155,18 @@ def test_preflight_runs_both_agents_on_the_saved_selection(
             str(tmp_path),
             "--seed",
             "42",
+            *selection_args,
             *(["--all-cases"] if all_cases else []),
         ],
     )
     smoke.main()
     sample = json.loads((tmp_path / "sample.json").read_text())
+    expected_names = (
+        selected
+        if selection_mode
+        else sorted(path.parent.name for path in build.PROMPTS.glob("*/full.md"))
+    )
+    assert built_names == sample["benchmarks"] == expected_names
     assert sample["seed"] == 42 and sample["candidate_tasks"] == 15
     assert [j["agents"][0]["name"] for j in jobs] == ["oracle", "nop"]
     assert jobs[0]["tasks"] == jobs[1]["tasks"]
@@ -153,6 +175,110 @@ def test_preflight_runs_both_agents_on_the_saved_selection(
     assert sample["selection"] == ("all" if all_cases else "sample")
     summary = json.loads((tmp_path / "summary.json").read_text())
     assert summary["failures"] == []
+
+
+@pytest.mark.parametrize("allow_empty", [False, True])
+def test_restricted_opensas_exclusion_is_recorded_without_running_unrelated_cases(
+    tmp_path, monkeypatch, smoke, allow_empty
+):
+    monkeypatch.setattr(build, "git_commit", lambda: "test")
+    calls = []
+    monkeypatch.setattr(
+        smoke.subprocess, "run", lambda *args, **kwargs: calls.append(args)
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "smoke.py",
+            "--out",
+            str(tmp_path),
+            "--benchmarks",
+            "adam-adsl-investigator-comment",
+            "--language",
+            "opensas",
+            "--all-cases",
+            *(["--allow-empty"] if allow_empty else []),
+        ],
+    )
+    if allow_empty:
+        smoke.main()
+        sample = json.loads((tmp_path / "sample.json").read_text())
+        assert sample["benchmarks"] == ["adam-adsl-investigator-comment"]
+        assert sample["tasks"] == [] and sample["candidate_tasks"] == 0
+        assert "spaces-only" in sample["skipped"][0]
+        assert json.loads((tmp_path / "summary.json").read_text())["agents"] == {}
+    else:
+        with pytest.raises(RuntimeError, match="no buildable tasks"):
+            smoke.main()
+    assert calls == []
+
+
+def test_restricted_preflight_builds_every_tier_only_for_impacted_benchmarks(
+    tmp_path, monkeypatch, smoke
+):
+    monkeypatch.setattr(build, "git_commit", lambda: "test")
+
+    def stop_before_docker(*args, **kwargs):
+        raise RuntimeError("stop before Docker execution")
+
+    monkeypatch.setattr(smoke.subprocess, "run", stop_before_docker)
+    selected = ["adam-adsl-age-group", "adam-adtte-dor"]
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "smoke.py",
+            "--out",
+            str(tmp_path),
+            "--benchmarks",
+            *selected,
+            "--prompt",
+            "full",
+            "conventions",
+            "brief",
+            "--all-cases",
+        ],
+    )
+    with pytest.raises(RuntimeError, match="stop before Docker execution"):
+        smoke.main()
+    expected = {
+        f"{benchmark}{suffix}-{language}"
+        for benchmark in selected
+        for suffix in ("", "-conventions", "-brief")
+        for language in ("r", "python")
+    }
+    sample = json.loads((tmp_path / "sample.json").read_text())
+    assert sample["benchmarks"] == selected
+    assert sample["candidate_tasks"] == 12
+    assert set(sample["tasks"]) == expected
+    assert {path.name for path in (tmp_path / "tasks").iterdir()} == expected
+
+
+def test_allow_empty_cannot_hide_a_broken_full_selection(tmp_path, monkeypatch, smoke):
+    monkeypatch.setattr(build, "git_commit", lambda: "test")
+    monkeypatch.setattr(build, "build_selection", lambda *a, **kw: ([], []))
+    monkeypatch.setattr(
+        sys, "argv", ["smoke.py", "--out", str(tmp_path), "--allow-empty"]
+    )
+    with pytest.raises(RuntimeError, match="no buildable tasks"):
+        smoke.main()
+
+
+@pytest.mark.parametrize("selection", [{"case": "wrong"}, ["../outside"], [None]])
+def test_invalid_benchmark_selection_is_rejected_before_building(
+    tmp_path, monkeypatch, smoke, selection
+):
+    selection_file = tmp_path / "selected.json"
+    selection_file.write_text(json.dumps(selection))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["smoke.py", "--out", str(tmp_path), "--benchmarks-file", str(selection_file)],
+    )
+    with pytest.raises(SystemExit) as error:
+        smoke.main()
+    assert error.value.code == 2
 
 
 @pytest.fixture
