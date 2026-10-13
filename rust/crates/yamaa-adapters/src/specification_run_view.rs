@@ -56,7 +56,7 @@ impl RunView for crate::file_producer_build::NodeReport<'_> {
         self.compiled()
     }
     fn check_diagnostics(&self) -> Vec<Diagnostic> {
-        self.compiled().verification_declaration_diagnostics()
+        self.compiled().check_declaration_diagnostics()
     }
 }
 impl<T: RunView + ?Sized> RunView for std::sync::Arc<T> {
