@@ -7,9 +7,10 @@ from pathlib import Path
 import pytest
 from _odm_documents import ODM_13, ODM_20
 
-from yamaa.odm.errors import ODMError
-from yamaa.odm.readers import iter_odm_records, read_odm
-from yamaa.odm.schema import ODM_ITEM_SCHEMA
+from yamaa._odm.errors import ODMError
+from yamaa import read_odm
+from yamaa._odm.readers import iter_odm_records
+from yamaa._odm.schema import ODM_ITEM_SCHEMA
 
 
 def test_odm13_preserves_values_and_enriches_exact_metadata(odm13_path: Path) -> None:

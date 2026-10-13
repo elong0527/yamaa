@@ -13,6 +13,8 @@
         "define",
         "domain",
         "generate_study_document",
+        "read_odm",
+        "write_odm_parquet",
         "yamaa_domain"
       ],
       "disposition": "replace",
@@ -22,6 +24,14 @@
         "__version__": {
           "disposition": "retain_candidate",
           "rationale": "Retain installed package version metadata; release API inventory still needs explicit sign-off."
+        },
+        "read_odm": {
+          "disposition": "retain_candidate",
+          "rationale": "Approved retained pure ODM IO helper, loaded lazily from the private package; installed qualification remains required."
+        },
+        "write_odm_parquet": {
+          "disposition": "retain_candidate",
+          "rationale": "Approved retained pure ODM IO helper, loaded lazily from the private package; installed qualification remains required."
         }
       }
     },
