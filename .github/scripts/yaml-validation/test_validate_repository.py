@@ -5799,7 +5799,7 @@ class TestReferenceDependencyBoundary(unittest.TestCase):
         self.assertEqual(self.forbidden_imports(
             'import yamaa\n'
             'from yamaa import check as shared_check\n'
-            'from yamaa._native import _check_project_metadata\n'
+            'from yamaa._native import _prepare_file_project\n'
         ), [])
 
     def test_boundary_has_no_dependency_back_on_the_validator(self):

@@ -16,9 +16,6 @@ class _DomainResult:
 def _domain_file(
     specification: str, environment: str | None = None
 ) -> _DomainResult: ...
-def _check_project_metadata(
-    specification: str, environment: str, language: str
-) -> list[tuple]: ...
 def _check_file(
     specification: str, environment: str | None = None
 ) -> list[tuple[str, str, str | None, list[str], str]]: ...

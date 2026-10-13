@@ -476,7 +476,6 @@
         "_Specification.report",
         "_Specification.source",
         "_check_file",
-        "_check_project_metadata",
         "_define_file",
         "_domain_file",
         "_prepare_document",
@@ -593,10 +592,6 @@
         "_prepare_file_project": {
           "disposition": "internal",
           "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
-        },
-        "_check_project_metadata": {
-          "disposition": "internal",
-          "rationale": "Static shared admission of either host for repository validation; grants no activation authority."
         },
         "_DomainResult.project_failures": {
           "disposition": "internal",
