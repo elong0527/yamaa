@@ -31,9 +31,9 @@ class ProducerOwnerReview(unittest.TestCase):
     def audit_owner(self):
         return self.fixture.output / "raw/python" / producer.NAME
 
-    def prepared_audit(self):
+    def prepared_audit(self, is_producer=True):
         fixture = self.fixture
-        inventory = fixture.compare(True)
+        inventory = fixture.compare(is_producer)
         audit = object.__new__(controls.audit_module.Audit)
         audit.directory = fixture.directory / "independent-audit"
         audit.source = {"sha": fixture.revision}
@@ -47,17 +47,19 @@ class ProducerOwnerReview(unittest.TestCase):
             path.parent.mkdir(parents=True)
             path.write_bytes(b"synthetic mutation control; never qualification")
             audit.artifacts.append({"name": artifact, "expired": False})
-        source = audit.directory / "source" / cohort.TRUTH_PATHS[producer.NAME]
-        source.parent.mkdir(parents=True)
-        shutil.copyfile(controls.ROOT / cohort.TRUTH_PATHS[producer.NAME], source)
+        names = (producer.NAME,) if is_producer else cohort.COHORT
+        for name in names:
+            source = audit.directory / "source" / cohort.TRUTH_PATHS[name]
+            source.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(controls.ROOT / cohort.TRUTH_PATHS[name], source)
         return audit, inventory
 
-    def check_audit(self, audit, inventory):
+    def check_audit(self, audit, inventory, is_producer=True):
         return audit.committed_cohort(
             "ubuntu-24.04",
             "3.12",
             "wheel",
-            True,
+            is_producer,
             self.fixture.output,
             inventory,
         )
@@ -156,6 +158,28 @@ class ProducerOwnerReview(unittest.TestCase):
         raw["source_reads"][0]["specification"] = case + "/spec.yaml"
         with self.assertRaisesRegex(ValueError, "source|resource|owner|node"):
             producer.project_report(raw, case)
+
+    def test_qualifier_rejects_nonnull_error_on_actual_complete_public_report(self):
+        path = (
+            self.fixture.evidence
+            / "python/public-reports/schema-lookup.python.rust.json"
+        )
+        raw = cohort.read(path)
+        self.assertEqual(raw["outcome"], "success")
+        raw["error"] = "unexpected infrastructure error"
+        cohort.write(path, raw)
+        with self.assertRaisesRegex(ValueError, "error|report|identity"):
+            self.fixture.compare()
+
+    def test_audit_rejects_nonnull_error_on_actual_complete_public_report(self):
+        audit, inventory = self.prepared_audit(False)
+        path = self.fixture.output / "reports/python/schema-lookup.python.rust.json"
+        raw = cohort.read(path)
+        self.assertEqual(raw["outcome"], "success")
+        raw["error"] = "unexpected infrastructure error"
+        cohort.write(path, raw)
+        with self.assertRaisesRegex(ValueError, "error|report|identity"):
+            self.check_audit(audit, inventory, False)
 
 
 if __name__ == "__main__":
