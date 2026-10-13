@@ -2164,7 +2164,7 @@ local({
 local({
   label <- "completed-lookup-assertions"
   source(file.path(root,paste0(label,"-truth.R")),local=TRUE)
-  stopifnot(length(completed_lookup_assertion_truth)==17L)
+  stopifnot(length(completed_lookup_assertion_truth)==21L)
   for (name in names(completed_lookup_assertion_truth)) for (attempt in seq_len(2L)) {
     truth <- completed_lookup_assertion_truth[[name]]
     directory <- tempfile("yamaa-completed-assert-");dir.create(directory)

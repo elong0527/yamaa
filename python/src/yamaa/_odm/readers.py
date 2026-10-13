@@ -436,7 +436,11 @@ def iter_odm_records(
                         value = element.get("Value")
                         value_present = True
                     elif value_children:
-                        value = value_children[0].text or ""
+                        # itertext, not .text: character data after a
+                        # comment or processing-instruction child lives in
+                        # that child's tail, and .text alone would silently
+                        # truncate the value at the annotation.
+                        value = "".join(value_children[0].itertext())
                         value_present = True
                     else:
                         value = None

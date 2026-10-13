@@ -1,0 +1,4423 @@
+{
+  "protocol": "public-capacity-frontier/1",
+  "source_revision": "8e8ded1f195a514cfde186a197adc47b39bf9a0a",
+  "policy_status": "unapproved isolated candidate; no numerical budget or cutover approval",
+  "artifact_reference": "local-release-unapproved-capacity-8e8ded1f",
+  "installation_receipt": "/workspace/scratch/capacity-100k-installation-8e8ded1f/installation.json",
+  "raw_collection": "/workspace/scratch/capacity-100k-frontier-8e8ded1f",
+  "lossless_archive": "/workspace/scratch/capacity-100k-frontier-8e8ded1f.retained.tar.gz",
+  "archive_receipt": "/workspace/scratch/capacity-100k-frontier-8e8ded1f.retention.json",
+  "sampling": "one fresh truth child per case, plus one independent callback observer child; no timing distributions",
+  "ordinary_100k_full_lifecycles_accepted": 7,
+  "producer_100k_full_lifecycles_accepted": 0,
+  "limitation": "Both producer shapes refuse at generated-source Input after the first successful node. The contract-bearing CSV conversion/ordinal branch still has65,536 rows/262,144 cells, while the ordinary branch uses candidate constants. Dataset classified refusal is absent; no opaque source cause is inferred from report text. Exact decoder cause is being independently witnessed. Whole-child RSS includes public view DOM/canonical report/measurement transport and is diagnostic only.",
+  "local_controls": {
+    "engine_unfiltered_pass": 505,
+    "engine_harness_results": 58,
+    "adapter_units_pass": 114,
+    "application_pass": 11,
+    "producer_adapter_pass": 35,
+    "project_pass": 9,
+    "specification_pass": 68,
+    "strict_all_target_clippy": "core/engine/adapter/Python pass",
+    "guards": "dependencies/diagnostics/release API/closed publication inventory pass"
+  },
+  "cases": [
+    {
+      "case": "lookup-100000-1",
+      "full_lifecycle_accepted": true,
+      "children": [
+        {
+          "raw_child": "/workspace/scratch/capacity-100k-frontier-8e8ded1f/lookup-100000-1-truth-0",
+          "mode": "truth",
+          "accepted": true,
+          "failure": null,
+          "actual_child_peak_rss": {
+            "provider": "os.wait4(child_pid).ru_maxrss",
+            "raw": 533780,
+            "original_unit": "KiB",
+            "bytes": 546590720,
+            "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+            "system": "Linux"
+          },
+          "held_save_returns": [
+            true,
+            true
+          ],
+          "actual_host_getter_invocations": {
+            "output": 2,
+            "issues": 1,
+            "verification_log": 1,
+            "warning_log": 1
+          },
+          "encoded_canonical_report_bytes": {
+            "build": 18925315,
+            "save_1": 23406426,
+            "save_2": 23406426
+          },
+          "actual_original_execution_measurements": {
+            "build": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 0,
+              "saves": [],
+              "stages": [
+                {
+                  "completed_ns": 3895530,
+                  "entered_ns": 6520,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 712044977,
+                  "entered_ns": 3896071,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 65030602,
+                  "entered_ns": 3898164,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 65037682,
+                  "entered_ns": 65034197,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 325053518,
+                  "entered_ns": 65037872,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 420279630,
+                  "entered_ns": 325054400,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 443976631,
+                  "entered_ns": 420280691,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 695231146,
+                  "entered_ns": 455466969,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            },
+            "save_1": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 1,
+              "saves": [
+                {
+                  "attempt": 1,
+                  "completed_ns": 4600513517,
+                  "entered_ns": 4571259264,
+                  "outcome": "succeeded"
+                }
+              ],
+              "stages": [
+                {
+                  "completed_ns": 3895530,
+                  "entered_ns": 6520,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 712044977,
+                  "entered_ns": 3896071,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 65030602,
+                  "entered_ns": 3898164,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 65037682,
+                  "entered_ns": 65034197,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 325053518,
+                  "entered_ns": 65037872,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 420279630,
+                  "entered_ns": 325054400,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 443976631,
+                  "entered_ns": 420280691,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 695231146,
+                  "entered_ns": 455466969,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            },
+            "save_2": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 2,
+              "saves": [
+                {
+                  "attempt": 1,
+                  "completed_ns": 4600513517,
+                  "entered_ns": 4571259264,
+                  "outcome": "succeeded"
+                },
+                {
+                  "attempt": 2,
+                  "completed_ns": 4789429309,
+                  "entered_ns": 4749383276,
+                  "outcome": "succeeded"
+                }
+              ],
+              "stages": [
+                {
+                  "completed_ns": 3895530,
+                  "entered_ns": 6520,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 712044977,
+                  "entered_ns": 3896071,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 65030602,
+                  "entered_ns": 3898164,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 65037682,
+                  "entered_ns": 65034197,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 325053518,
+                  "entered_ns": 65037872,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 420279630,
+                  "entered_ns": 325054400,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 443976631,
+                  "entered_ns": 420280691,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 695231146,
+                  "entered_ns": 455466969,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            }
+          },
+          "actual_row_buffer_scopes_in_original_order": [
+            {
+              "rows": 100000,
+              "columns": 1,
+              "encoded_bytes": 3500001,
+              "requested_buffer_capacity": 4194304
+            },
+            {
+              "rows": 85714,
+              "columns": 3,
+              "encoded_bytes": 8390452,
+              "requested_buffer_capacity": 16777216
+            },
+            {
+              "rows": 100000,
+              "columns": 2,
+              "encoded_bytes": 7033336,
+              "requested_buffer_capacity": 8388608
+            }
+          ],
+          "actual_projection_scopes_in_original_order": [
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 62927380,
+              "cells_charged": 357142,
+              "work_charged": 24138902
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 25168168,
+              "cells_charged": 200000,
+              "work_charged": 14266895
+            },
+            {
+              "retained_limit_bytes": 100663296,
+              "retained_charged_bytes": 39528,
+              "cells_charged": 0,
+              "work_charged": 2113
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 83309332,
+              "cells_charged": 0,
+              "work_charged": 7678820
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 83309332,
+              "cells_charged": 0,
+              "work_charged": 7678820
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case": "lookup-100000-4",
+      "full_lifecycle_accepted": true,
+      "children": [
+        {
+          "raw_child": "/workspace/scratch/capacity-100k-frontier-8e8ded1f/lookup-100000-4-truth-0",
+          "mode": "truth",
+          "accepted": true,
+          "failure": null,
+          "actual_child_peak_rss": {
+            "provider": "os.wait4(child_pid).ru_maxrss",
+            "raw": 588516,
+            "original_unit": "KiB",
+            "bytes": 602640384,
+            "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+            "system": "Linux"
+          },
+          "held_save_returns": [
+            true,
+            true
+          ],
+          "actual_host_getter_invocations": {
+            "output": 2,
+            "issues": 1,
+            "verification_log": 1,
+            "warning_log": 1
+          },
+          "encoded_canonical_report_bytes": {
+            "build": 44096882,
+            "save_1": 48577993,
+            "save_2": 48577993
+          },
+          "actual_original_execution_measurements": {
+            "build": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 0,
+              "saves": [],
+              "stages": [
+                {
+                  "completed_ns": 3623636,
+                  "entered_ns": 10616,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 1086459694,
+                  "entered_ns": 3624207,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 241421903,
+                  "entered_ns": 3626591,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 241434932,
+                  "entered_ns": 241428763,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 527915582,
+                  "entered_ns": 241435042,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 612413996,
+                  "entered_ns": 527916674,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 645682183,
+                  "entered_ns": 612415037,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 1068019025,
+                  "entered_ns": 657134165,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            },
+            "save_1": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 1,
+              "saves": [
+                {
+                  "attempt": 1,
+                  "completed_ns": 3683574967,
+                  "entered_ns": 3667688094,
+                  "outcome": "succeeded"
+                }
+              ],
+              "stages": [
+                {
+                  "completed_ns": 3623636,
+                  "entered_ns": 10616,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 1086459694,
+                  "entered_ns": 3624207,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 241421903,
+                  "entered_ns": 3626591,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 241434932,
+                  "entered_ns": 241428763,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 527915582,
+                  "entered_ns": 241435042,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 612413996,
+                  "entered_ns": 527916674,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 645682183,
+                  "entered_ns": 612415037,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 1068019025,
+                  "entered_ns": 657134165,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            },
+            "save_2": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 2,
+              "saves": [
+                {
+                  "attempt": 1,
+                  "completed_ns": 3683574967,
+                  "entered_ns": 3667688094,
+                  "outcome": "succeeded"
+                },
+                {
+                  "attempt": 2,
+                  "completed_ns": 3862828186,
+                  "entered_ns": 3849346118,
+                  "outcome": "succeeded"
+                }
+              ],
+              "stages": [
+                {
+                  "completed_ns": 3623636,
+                  "entered_ns": 10616,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 1086459694,
+                  "entered_ns": 3624207,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 241421903,
+                  "entered_ns": 3626591,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 241434932,
+                  "entered_ns": 241428763,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 527915582,
+                  "entered_ns": 241435042,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 612413996,
+                  "entered_ns": 527916674,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 645682183,
+                  "entered_ns": 612415037,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 1068019025,
+                  "entered_ns": 657134165,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            }
+          },
+          "actual_row_buffer_scopes_in_original_order": [
+            {
+              "rows": 100000,
+              "columns": 1,
+              "encoded_bytes": 3500001,
+              "requested_buffer_capacity": 4194304
+            },
+            {
+              "rows": 342856,
+              "columns": 3,
+              "encoded_bytes": 33561805,
+              "requested_buffer_capacity": 67108864
+            },
+            {
+              "rows": 100000,
+              "columns": 2,
+              "encoded_bytes": 7033336,
+              "requested_buffer_capacity": 8388608
+            }
+          ],
+          "actual_projection_scopes_in_original_order": [
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 213922324,
+              "cells_charged": 1128568,
+              "work_charged": 75253034
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 25168168,
+              "cells_charged": 200000,
+              "work_charged": 14266895
+            },
+            {
+              "retained_limit_bytes": 100663296,
+              "retained_charged_bytes": 44872,
+              "cells_charged": 0,
+              "work_charged": 2465
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 83314676,
+              "cells_charged": 0,
+              "work_charged": 7679172
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 83314676,
+              "cells_charged": 0,
+              "work_charged": 7679172
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case": "aggregate-100000-10",
+      "full_lifecycle_accepted": true,
+      "children": [
+        {
+          "raw_child": "/workspace/scratch/capacity-100k-frontier-8e8ded1f/aggregate-100000-10-truth-0",
+          "mode": "truth",
+          "accepted": true,
+          "failure": null,
+          "actual_child_peak_rss": {
+            "provider": "os.wait4(child_pid).ru_maxrss",
+            "raw": 132652,
+            "original_unit": "KiB",
+            "bytes": 135835648,
+            "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+            "system": "Linux"
+          },
+          "held_save_returns": [
+            true,
+            true
+          ],
+          "actual_host_getter_invocations": {
+            "output": 2,
+            "issues": 1,
+            "verification_log": 1,
+            "warning_log": 1
+          },
+          "encoded_canonical_report_bytes": {
+            "build": 8399594,
+            "save_1": 8626908,
+            "save_2": 8626908
+          },
+          "actual_original_execution_measurements": {
+            "build": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 0,
+              "saves": [],
+              "stages": [
+                {
+                  "completed_ns": 3904884,
+                  "entered_ns": 10706,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 131385243,
+                  "entered_ns": 3905335,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 36455896,
+                  "entered_ns": 3907859,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 36469416,
+                  "entered_ns": 36461765,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 67790660,
+                  "entered_ns": 36469496,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 72709310,
+                  "entered_ns": 67791581,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 73082285,
+                  "entered_ns": 72709631,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 130444905,
+                  "entered_ns": 73289172,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            },
+            "save_1": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 1,
+              "saves": [
+                {
+                  "attempt": 1,
+                  "completed_ns": 459885169,
+                  "entered_ns": 427091428,
+                  "outcome": "succeeded"
+                }
+              ],
+              "stages": [
+                {
+                  "completed_ns": 3904884,
+                  "entered_ns": 10706,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 131385243,
+                  "entered_ns": 3905335,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 36455896,
+                  "entered_ns": 3907859,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 36469416,
+                  "entered_ns": 36461765,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 67790660,
+                  "entered_ns": 36469496,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 72709310,
+                  "entered_ns": 67791581,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 73082285,
+                  "entered_ns": 72709631,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 130444905,
+                  "entered_ns": 73289172,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            },
+            "save_2": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 2,
+              "saves": [
+                {
+                  "attempt": 1,
+                  "completed_ns": 459885169,
+                  "entered_ns": 427091428,
+                  "outcome": "succeeded"
+                },
+                {
+                  "attempt": 2,
+                  "completed_ns": 489284035,
+                  "entered_ns": 487084316,
+                  "outcome": "succeeded"
+                }
+              ],
+              "stages": [
+                {
+                  "completed_ns": 3904884,
+                  "entered_ns": 10706,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 131385243,
+                  "entered_ns": 3905335,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 36455896,
+                  "entered_ns": 3907859,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 36469416,
+                  "entered_ns": 36461765,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 67790660,
+                  "entered_ns": 36469496,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 72709310,
+                  "entered_ns": 67791581,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 73082285,
+                  "entered_ns": 72709631,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 130444905,
+                  "entered_ns": 73289172,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            }
+          },
+          "actual_row_buffer_scopes_in_original_order": [
+            {
+              "rows": 100000,
+              "columns": 2,
+              "encoded_bytes": 7625669,
+              "requested_buffer_capacity": 8388608
+            },
+            {
+              "rows": 10000,
+              "columns": 2,
+              "encoded_bytes": 772853,
+              "requested_buffer_capacity": 1048576
+            }
+          ],
+          "actual_projection_scopes_in_original_order": [
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 25175824,
+              "cells_charged": 200000,
+              "work_charged": 15451974
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 3148168,
+              "cells_charged": 20000,
+              "work_charged": 1565945
+            },
+            {
+              "retained_limit_bytes": 100663296,
+              "retained_charged_bytes": 24940,
+              "cells_charged": 0,
+              "work_charged": 1380
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 6123608,
+              "cells_charged": 0,
+              "work_charged": 396231
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 6123608,
+              "cells_charged": 0,
+              "work_charged": 396231
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case": "aggregate-100000-100",
+      "full_lifecycle_accepted": true,
+      "children": [
+        {
+          "raw_child": "/workspace/scratch/capacity-100k-frontier-8e8ded1f/aggregate-100000-100-truth-0",
+          "mode": "truth",
+          "accepted": true,
+          "failure": null,
+          "actual_child_peak_rss": {
+            "provider": "os.wait4(child_pid).ru_maxrss",
+            "raw": 102248,
+            "original_unit": "KiB",
+            "bytes": 104701952,
+            "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+            "system": "Linux"
+          },
+          "held_save_returns": [
+            true,
+            true
+          ],
+          "actual_host_getter_invocations": {
+            "output": 2,
+            "issues": 1,
+            "verification_log": 1,
+            "warning_log": 1
+          },
+          "encoded_canonical_report_bytes": {
+            "build": 7703921,
+            "save_1": 7726805,
+            "save_2": 7726805
+          },
+          "actual_original_execution_measurements": {
+            "build": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 0,
+              "saves": [],
+              "stages": [
+                {
+                  "completed_ns": 3451480,
+                  "entered_ns": 10916,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 105132289,
+                  "entered_ns": 3452021,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 36046076,
+                  "entered_ns": 3454595,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 36059826,
+                  "entered_ns": 36054578,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 57766890,
+                  "entered_ns": 36060016,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 58141647,
+                  "entered_ns": 57767991,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 58155878,
+                  "entered_ns": 58141897,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 104663583,
+                  "entered_ns": 58291960,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            },
+            "save_1": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 1,
+              "saves": [
+                {
+                  "attempt": 1,
+                  "completed_ns": 150827446,
+                  "entered_ns": 149326275,
+                  "outcome": "succeeded"
+                }
+              ],
+              "stages": [
+                {
+                  "completed_ns": 3451480,
+                  "entered_ns": 10916,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 105132289,
+                  "entered_ns": 3452021,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 36046076,
+                  "entered_ns": 3454595,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 36059826,
+                  "entered_ns": 36054578,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 57766890,
+                  "entered_ns": 36060016,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 58141647,
+                  "entered_ns": 57767991,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 58155878,
+                  "entered_ns": 58141897,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 104663583,
+                  "entered_ns": 58291960,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            },
+            "save_2": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 2,
+              "saves": [
+                {
+                  "attempt": 1,
+                  "completed_ns": 150827446,
+                  "entered_ns": 149326275,
+                  "outcome": "succeeded"
+                },
+                {
+                  "attempt": 2,
+                  "completed_ns": 173621135,
+                  "entered_ns": 172419219,
+                  "outcome": "succeeded"
+                }
+              ],
+              "stages": [
+                {
+                  "completed_ns": 3451480,
+                  "entered_ns": 10916,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 105132289,
+                  "entered_ns": 3452021,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 36046076,
+                  "entered_ns": 3454595,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 36059826,
+                  "entered_ns": 36054578,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 57766890,
+                  "entered_ns": 36060016,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 58141647,
+                  "entered_ns": 57767991,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 58155878,
+                  "entered_ns": 58141897,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 104663583,
+                  "entered_ns": 58291960,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            }
+          },
+          "actual_row_buffer_scopes_in_original_order": [
+            {
+              "rows": 100000,
+              "columns": 2,
+              "encoded_bytes": 7625561,
+              "requested_buffer_capacity": 8388608
+            },
+            {
+              "rows": 1000,
+              "columns": 2,
+              "encoded_bytes": 77285,
+              "requested_buffer_capacity": 131072
+            }
+          ],
+          "actual_projection_scopes_in_original_order": [
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 25175848,
+              "cells_charged": 200000,
+              "work_charged": 15451762
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 395668,
+              "cells_charged": 2000,
+              "work_charged": 156811
+            },
+            {
+              "retained_limit_bytes": 100663296,
+              "retained_charged_bytes": 24964,
+              "cells_charged": 0,
+              "work_charged": 1384
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 646508,
+              "cells_charged": 0,
+              "work_charged": 41381
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 646508,
+              "cells_charged": 0,
+              "work_charged": 41381
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case": "window-100000-10",
+      "full_lifecycle_accepted": true,
+      "children": [
+        {
+          "raw_child": "/workspace/scratch/capacity-100k-frontier-8e8ded1f/window-100000-10-truth-0",
+          "mode": "truth",
+          "accepted": true,
+          "failure": null,
+          "actual_child_peak_rss": {
+            "provider": "os.wait4(child_pid).ru_maxrss",
+            "raw": 1364980,
+            "original_unit": "KiB",
+            "bytes": 1397739520,
+            "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+            "system": "Linux"
+          },
+          "held_save_returns": [
+            true,
+            true
+          ],
+          "actual_host_getter_invocations": {
+            "output": 2,
+            "issues": 1,
+            "verification_log": 1,
+            "warning_log": 1
+          },
+          "encoded_canonical_report_bytes": {
+            "build": 35201152,
+            "save_1": 39281460,
+            "save_2": 39281460
+          },
+          "actual_original_execution_measurements": {
+            "build": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 0,
+              "saves": [],
+              "stages": [
+                {
+                  "completed_ns": 4126904,
+                  "entered_ns": 9995,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 786450641,
+                  "entered_ns": 4127375,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 44474278,
+                  "entered_ns": 4130099,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 44485175,
+                  "entered_ns": 44480227,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 309403811,
+                  "entered_ns": 44485365,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 405228689,
+                  "entered_ns": 309404993,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 416861269,
+                  "entered_ns": 405229851,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 776613950,
+                  "entered_ns": 433306842,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            },
+            "save_1": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 1,
+              "saves": [
+                {
+                  "attempt": 1,
+                  "completed_ns": 8042379117,
+                  "entered_ns": 8024676445,
+                  "outcome": "succeeded"
+                }
+              ],
+              "stages": [
+                {
+                  "completed_ns": 4126904,
+                  "entered_ns": 9995,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 786450641,
+                  "entered_ns": 4127375,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 44474278,
+                  "entered_ns": 4130099,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 44485175,
+                  "entered_ns": 44480227,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 309403811,
+                  "entered_ns": 44485365,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 405228689,
+                  "entered_ns": 309404993,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 416861269,
+                  "entered_ns": 405229851,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 776613950,
+                  "entered_ns": 433306842,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            },
+            "save_2": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 2,
+              "saves": [
+                {
+                  "attempt": 1,
+                  "completed_ns": 8042379117,
+                  "entered_ns": 8024676445,
+                  "outcome": "succeeded"
+                },
+                {
+                  "attempt": 2,
+                  "completed_ns": 8202581790,
+                  "entered_ns": 8173613484,
+                  "outcome": "succeeded"
+                }
+              ],
+              "stages": [
+                {
+                  "completed_ns": 4126904,
+                  "entered_ns": 9995,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 786450641,
+                  "entered_ns": 4127375,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 44474278,
+                  "entered_ns": 4130099,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 44485175,
+                  "entered_ns": 44480227,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 309403811,
+                  "entered_ns": 44485365,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 405228689,
+                  "entered_ns": 309404993,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 416861269,
+                  "entered_ns": 405229851,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 776613950,
+                  "entered_ns": 433306842,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            }
+          },
+          "actual_row_buffer_scopes_in_original_order": [
+            {
+              "rows": 100000,
+              "columns": 3,
+              "encoded_bytes": 10130001,
+              "requested_buffer_capacity": 16777216
+            },
+            {
+              "rows": 100000,
+              "columns": 7,
+              "encoded_bytes": 25070001,
+              "requested_buffer_capacity": 33554432
+            }
+          ],
+          "actual_projection_scopes_in_original_order": [
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 50341868,
+              "cells_charged": 300000,
+              "work_charged": 20560633
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 100667268,
+              "cells_charged": 700000,
+              "work_charged": 50840288
+            },
+            {
+              "retained_limit_bytes": 100663296,
+              "retained_charged_bytes": 25708,
+              "cells_charged": 0,
+              "work_charged": 1384
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 82608092,
+              "cells_charged": 0,
+              "work_charged": 7562281
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 82608092,
+              "cells_charged": 0,
+              "work_charged": 7562281
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case": "window-100000-100",
+      "full_lifecycle_accepted": true,
+      "children": [
+        {
+          "raw_child": "/workspace/scratch/capacity-100k-frontier-8e8ded1f/window-100000-100-truth-0",
+          "mode": "truth",
+          "accepted": true,
+          "failure": null,
+          "actual_child_peak_rss": {
+            "provider": "os.wait4(child_pid).ru_maxrss",
+            "raw": 1374608,
+            "original_unit": "KiB",
+            "bytes": 1407598592,
+            "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+            "system": "Linux"
+          },
+          "held_save_returns": [
+            true,
+            true
+          ],
+          "actual_host_getter_invocations": {
+            "output": 2,
+            "issues": 1,
+            "verification_log": 1,
+            "warning_log": 1
+          },
+          "encoded_canonical_report_bytes": {
+            "build": 35797155,
+            "save_1": 40113463,
+            "save_2": 40113463
+          },
+          "actual_original_execution_measurements": {
+            "build": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 0,
+              "saves": [],
+              "stages": [
+                {
+                  "completed_ns": 4594508,
+                  "entered_ns": 9704,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 794077355,
+                  "entered_ns": 4594949,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 43743647,
+                  "entered_ns": 4597323,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 43759431,
+                  "entered_ns": 43750187,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 281687111,
+                  "entered_ns": 43759511,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 372543274,
+                  "entered_ns": 281688313,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 385792617,
+                  "entered_ns": 372545007,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 783947049,
+                  "entered_ns": 410040507,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            },
+            "save_1": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 1,
+              "saves": [
+                {
+                  "attempt": 1,
+                  "completed_ns": 8227309885,
+                  "entered_ns": 8210497025,
+                  "outcome": "succeeded"
+                }
+              ],
+              "stages": [
+                {
+                  "completed_ns": 4594508,
+                  "entered_ns": 9704,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 794077355,
+                  "entered_ns": 4594949,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 43743647,
+                  "entered_ns": 4597323,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 43759431,
+                  "entered_ns": 43750187,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 281687111,
+                  "entered_ns": 43759511,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 372543274,
+                  "entered_ns": 281688313,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 385792617,
+                  "entered_ns": 372545007,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 783947049,
+                  "entered_ns": 410040507,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            },
+            "save_2": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 2,
+              "saves": [
+                {
+                  "attempt": 1,
+                  "completed_ns": 8227309885,
+                  "entered_ns": 8210497025,
+                  "outcome": "succeeded"
+                },
+                {
+                  "attempt": 2,
+                  "completed_ns": 8370668348,
+                  "entered_ns": 8348795578,
+                  "outcome": "succeeded"
+                }
+              ],
+              "stages": [
+                {
+                  "completed_ns": 4594508,
+                  "entered_ns": 9704,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 794077355,
+                  "entered_ns": 4594949,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 43743647,
+                  "entered_ns": 4597323,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 43759431,
+                  "entered_ns": 43750187,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 281687111,
+                  "entered_ns": 43759511,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 372543274,
+                  "entered_ns": 281688313,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 385792617,
+                  "entered_ns": 372545007,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 783947049,
+                  "entered_ns": 410040507,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            }
+          },
+          "actual_row_buffer_scopes_in_original_order": [
+            {
+              "rows": 100000,
+              "columns": 3,
+              "encoded_bytes": 10212001,
+              "requested_buffer_capacity": 16777216
+            },
+            {
+              "rows": 100000,
+              "columns": 7,
+              "encoded_bytes": 25584001,
+              "requested_buffer_capacity": 33554432
+            }
+          ],
+          "actual_projection_scopes_in_original_order": [
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 50341892,
+              "cells_charged": 300000,
+              "work_charged": 20724637
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 100667280,
+              "cells_charged": 700000,
+              "work_charged": 51868290
+            },
+            {
+              "retained_limit_bytes": 100663296,
+              "retained_charged_bytes": 25732,
+              "cells_charged": 0,
+              "work_charged": 1388
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 85440128,
+              "cells_charged": 0,
+              "work_charged": 8034287
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 85440128,
+              "cells_charged": 0,
+              "work_charged": 8034287
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case": "callback-100000-1",
+      "full_lifecycle_accepted": true,
+      "children": [
+        {
+          "raw_child": "/workspace/scratch/capacity-100k-frontier-8e8ded1f/callback-100000-1-truth-0",
+          "mode": "truth",
+          "accepted": true,
+          "failure": null,
+          "actual_child_peak_rss": {
+            "provider": "os.wait4(child_pid).ru_maxrss",
+            "raw": 517392,
+            "original_unit": "KiB",
+            "bytes": 529809408,
+            "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+            "system": "Linux"
+          },
+          "held_save_returns": [
+            true,
+            true
+          ],
+          "actual_host_getter_invocations": {
+            "output": 2,
+            "issues": 1,
+            "verification_log": 1,
+            "warning_log": 1
+          },
+          "encoded_canonical_report_bytes": {
+            "build": 15459623,
+            "save_1": 18170971,
+            "save_2": 18170971
+          },
+          "actual_original_execution_measurements": {
+            "build": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 2,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "activation",
+                  "succeeded": 2
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 85714,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 85714
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 0,
+              "saves": [],
+              "stages": [
+                {
+                  "completed_ns": 16133710,
+                  "entered_ns": 14571,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 661250510,
+                  "entered_ns": 16134691,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 193734940,
+                  "entered_ns": 16145457,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "activation"
+                },
+                {
+                  "completed_ns": 232555455,
+                  "entered_ns": 193736011,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 232582265,
+                  "entered_ns": 232560783,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 419776238,
+                  "entered_ns": 232582515,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 497651807,
+                  "entered_ns": 419777300,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 505729524,
+                  "entered_ns": 497653209,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 661222488,
+                  "entered_ns": 505754671,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            },
+            "save_1": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 2,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "activation",
+                  "succeeded": 2
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 85714,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 85714
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 1,
+              "saves": [
+                {
+                  "attempt": 1,
+                  "completed_ns": 3191710994,
+                  "entered_ns": 3178415903,
+                  "outcome": "succeeded"
+                }
+              ],
+              "stages": [
+                {
+                  "completed_ns": 16133710,
+                  "entered_ns": 14571,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 661250510,
+                  "entered_ns": 16134691,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 193734940,
+                  "entered_ns": 16145457,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "activation"
+                },
+                {
+                  "completed_ns": 232555455,
+                  "entered_ns": 193736011,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 232582265,
+                  "entered_ns": 232560783,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 419776238,
+                  "entered_ns": 232582515,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 497651807,
+                  "entered_ns": 419777300,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 505729524,
+                  "entered_ns": 497653209,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 661222488,
+                  "entered_ns": 505754671,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            },
+            "save_2": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 2,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "activation",
+                  "succeeded": 2
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 85714,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 85714
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 2,
+              "saves": [
+                {
+                  "attempt": 1,
+                  "completed_ns": 3191710994,
+                  "entered_ns": 3178415903,
+                  "outcome": "succeeded"
+                },
+                {
+                  "attempt": 2,
+                  "completed_ns": 3247394158,
+                  "entered_ns": 3233702087,
+                  "outcome": "succeeded"
+                }
+              ],
+              "stages": [
+                {
+                  "completed_ns": 16133710,
+                  "entered_ns": 14571,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 661250510,
+                  "entered_ns": 16134691,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 193734940,
+                  "entered_ns": 16145457,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "activation"
+                },
+                {
+                  "completed_ns": 232555455,
+                  "entered_ns": 193736011,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 232582265,
+                  "entered_ns": 232560783,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 419776238,
+                  "entered_ns": 232582515,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 497651807,
+                  "entered_ns": 419777300,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 505729524,
+                  "entered_ns": 497653209,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 661222488,
+                  "entered_ns": 505754671,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            }
+          },
+          "actual_row_buffer_scopes_in_original_order": [
+            {
+              "rows": 100000,
+              "columns": 2,
+              "encoded_bytes": 7728569,
+              "requested_buffer_capacity": 8388608
+            },
+            {
+              "rows": 100000,
+              "columns": 2,
+              "encoded_bytes": 7728569,
+              "requested_buffer_capacity": 8388608
+            }
+          ],
+          "actual_projection_scopes_in_original_order": [
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 25175740,
+              "cells_charged": 200000,
+              "work_charged": 15657760
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 25168204,
+              "cells_charged": 200000,
+              "work_charged": 15657367
+            },
+            {
+              "retained_limit_bytes": 100663296,
+              "retained_charged_bytes": 62736,
+              "cells_charged": 0,
+              "work_charged": 3676
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 66209716,
+              "cells_charged": 0,
+              "work_charged": 4826579
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 66209716,
+              "cells_charged": 0,
+              "work_charged": 4826579
+            }
+          ]
+        },
+        {
+          "raw_child": "/workspace/scratch/capacity-100k-frontier-8e8ded1f/callback-100000-1-callback-observer-0",
+          "mode": "callback-observer",
+          "accepted": true,
+          "failure": null,
+          "actual_child_peak_rss": {
+            "provider": "os.wait4(child_pid).ru_maxrss",
+            "raw": 590740,
+            "original_unit": "KiB",
+            "bytes": 604917760,
+            "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+            "system": "Linux"
+          },
+          "held_save_returns": [
+            true,
+            true
+          ],
+          "actual_host_getter_invocations": {
+            "output": 2,
+            "issues": 1,
+            "verification_log": 1,
+            "warning_log": 1
+          },
+          "encoded_canonical_report_bytes": {
+            "build": 15459707,
+            "save_1": 18171055,
+            "save_2": 18171055
+          },
+          "actual_original_execution_measurements": {
+            "build": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 2,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "activation",
+                  "succeeded": 2
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 85714,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 85714
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 0,
+              "saves": [],
+              "stages": [
+                {
+                  "completed_ns": 11955069,
+                  "entered_ns": 10626,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 725737949,
+                  "entered_ns": 11955620,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 98440305,
+                  "entered_ns": 11966436,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "activation"
+                },
+                {
+                  "completed_ns": 128661394,
+                  "entered_ns": 98442999,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 128682606,
+                  "entered_ns": 128666772,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 494349438,
+                  "entered_ns": 128682696,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 563612717,
+                  "entered_ns": 494350780,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 570599742,
+                  "entered_ns": 563613979,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 725675887,
+                  "entered_ns": 570634964,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            },
+            "save_1": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 2,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "activation",
+                  "succeeded": 2
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 85714,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 85714
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 1,
+              "saves": [
+                {
+                  "attempt": 1,
+                  "completed_ns": 3078350441,
+                  "entered_ns": 3068890461,
+                  "outcome": "succeeded"
+                }
+              ],
+              "stages": [
+                {
+                  "completed_ns": 11955069,
+                  "entered_ns": 10626,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 725737949,
+                  "entered_ns": 11955620,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 98440305,
+                  "entered_ns": 11966436,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "activation"
+                },
+                {
+                  "completed_ns": 128661394,
+                  "entered_ns": 98442999,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 128682606,
+                  "entered_ns": 128666772,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 494349438,
+                  "entered_ns": 128682696,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 563612717,
+                  "entered_ns": 494350780,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 570599742,
+                  "entered_ns": 563613979,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 725675887,
+                  "entered_ns": 570634964,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            },
+            "save_2": {
+              "admitted": true,
+              "build_accepted": true,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 2,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "activation",
+                  "succeeded": 2
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 85714,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "execution_derivation",
+                  "succeeded": 85714
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": null,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 2,
+              "saves": [
+                {
+                  "attempt": 1,
+                  "completed_ns": 3078350441,
+                  "entered_ns": 3068890461,
+                  "outcome": "succeeded"
+                },
+                {
+                  "attempt": 2,
+                  "completed_ns": 3123036249,
+                  "entered_ns": 3111535315,
+                  "outcome": "succeeded"
+                }
+              ],
+              "stages": [
+                {
+                  "completed_ns": 11955069,
+                  "entered_ns": 10626,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 725737949,
+                  "entered_ns": 11955620,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 98440305,
+                  "entered_ns": 11966436,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "activation"
+                },
+                {
+                  "completed_ns": 128661394,
+                  "entered_ns": 98442999,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 128682606,
+                  "entered_ns": 128666772,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 494349438,
+                  "entered_ns": 128682696,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 563612717,
+                  "entered_ns": 494350780,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 570599742,
+                  "entered_ns": 563613979,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 725675887,
+                  "entered_ns": 570634964,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            }
+          },
+          "actual_row_buffer_scopes_in_original_order": [
+            {
+              "rows": 100000,
+              "columns": 2,
+              "encoded_bytes": 7728569,
+              "requested_buffer_capacity": 8388608
+            },
+            {
+              "rows": 100000,
+              "columns": 2,
+              "encoded_bytes": 7728569,
+              "requested_buffer_capacity": 8388608
+            }
+          ],
+          "actual_projection_scopes_in_original_order": [
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 25176028,
+              "cells_charged": 200000,
+              "work_charged": 15657808
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 25168348,
+              "cells_charged": 200000,
+              "work_charged": 15657391
+            },
+            {
+              "retained_limit_bytes": 100663296,
+              "retained_charged_bytes": 63600,
+              "cells_charged": 0,
+              "work_charged": 3820
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 66210724,
+              "cells_charged": 0,
+              "work_charged": 4826747
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 66210724,
+              "cells_charged": 0,
+              "work_charged": 4826747
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case": "producer-100000-1",
+      "full_lifecycle_accepted": false,
+      "children": [
+        {
+          "raw_child": "/workspace/scratch/capacity-100k-frontier-8e8ded1f/producer-100000-1-truth-0",
+          "mode": "truth",
+          "accepted": false,
+          "failure": {
+            "class": "ValueError",
+            "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/capacity-100k-frontier-8e8ded1f/harness/public_lifecycle_python_worker.py\", line 360, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/capacity-100k-frontier-8e8ded1f/harness/public_lifecycle_python_worker.py\", line 40, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/capacity-100k-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+          },
+          "actual_child_peak_rss": {
+            "provider": "os.wait4(child_pid).ru_maxrss",
+            "raw": 196716,
+            "original_unit": "KiB",
+            "bytes": 201437184,
+            "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+            "system": "Linux"
+          },
+          "held_save_returns": [],
+          "actual_host_getter_invocations": {
+            "output": 1,
+            "issues": 1,
+            "verification_log": 1,
+            "warning_log": 1
+          },
+          "encoded_canonical_report_bytes": {
+            "build": 18782090,
+            "save_1": 18782090
+          },
+          "actual_original_execution_measurements": {
+            "build": {
+              "admitted": true,
+              "build_accepted": false,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": 3,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": 3,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": 3,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": 3,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [
+                {
+                  "identity": "/workspace/scratch/capacity-100k-frontier-8e8ded1f/producer-100000-1-truth-0/work-0/producer-0.yaml",
+                  "index": 3
+                },
+                {
+                  "identity": "/workspace/scratch/capacity-100k-frontier-8e8ded1f/producer-100000-1-truth-0/work-0/left.yaml",
+                  "index": 1
+                }
+              ],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 0,
+              "saves": [],
+              "stages": [
+                {
+                  "completed_ns": 12652195,
+                  "entered_ns": 11397,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 417108119,
+                  "entered_ns": 12652746,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 41152537,
+                  "entered_ns": 12785273,
+                  "node": 3,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 41163904,
+                  "entered_ns": 41157724,
+                  "node": 3,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 138496514,
+                  "entered_ns": 41164474,
+                  "node": 3,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 207893923,
+                  "entered_ns": 138497726,
+                  "node": 3,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 215848186,
+                  "entered_ns": 207895025,
+                  "node": 3,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 366031221,
+                  "entered_ns": 215854335,
+                  "node": 3,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                },
+                {
+                  "completed_ns": 387267025,
+                  "entered_ns": 366071200,
+                  "node": 1,
+                  "outcome": "failed",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 387269468,
+                  "entered_ns": 387268146,
+                  "node": 1,
+                  "outcome": "failed",
+                  "phase": "output_preparation"
+                },
+                {
+                  "completed_ns": 417066497,
+                  "entered_ns": 388287021,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            },
+            "save_1": {
+              "admitted": true,
+              "build_accepted": false,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": 3,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": 3,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": 3,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": 3,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [
+                {
+                  "identity": "/workspace/scratch/capacity-100k-frontier-8e8ded1f/producer-100000-1-truth-0/work-0/producer-0.yaml",
+                  "index": 3
+                },
+                {
+                  "identity": "/workspace/scratch/capacity-100k-frontier-8e8ded1f/producer-100000-1-truth-0/work-0/left.yaml",
+                  "index": 1
+                }
+              ],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 1,
+              "saves": [
+                {
+                  "attempt": 1,
+                  "completed_ns": 463606221,
+                  "entered_ns": 463605650,
+                  "outcome": "failed"
+                }
+              ],
+              "stages": [
+                {
+                  "completed_ns": 12652195,
+                  "entered_ns": 11397,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 417108119,
+                  "entered_ns": 12652746,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 41152537,
+                  "entered_ns": 12785273,
+                  "node": 3,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 41163904,
+                  "entered_ns": 41157724,
+                  "node": 3,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 138496514,
+                  "entered_ns": 41164474,
+                  "node": 3,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 207893923,
+                  "entered_ns": 138497726,
+                  "node": 3,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 215848186,
+                  "entered_ns": 207895025,
+                  "node": 3,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 366031221,
+                  "entered_ns": 215854335,
+                  "node": 3,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                },
+                {
+                  "completed_ns": 387267025,
+                  "entered_ns": 366071200,
+                  "node": 1,
+                  "outcome": "failed",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 387269468,
+                  "entered_ns": 387268146,
+                  "node": 1,
+                  "outcome": "failed",
+                  "phase": "output_preparation"
+                },
+                {
+                  "completed_ns": 417066497,
+                  "entered_ns": 388287021,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            }
+          },
+          "actual_row_buffer_scopes_in_original_order": [
+            {
+              "rows": 100000,
+              "columns": 2,
+              "encoded_bytes": 7900001,
+              "requested_buffer_capacity": 8388608
+            },
+            {
+              "rows": 100000,
+              "columns": 2,
+              "encoded_bytes": 7900001,
+              "requested_buffer_capacity": 8388608
+            }
+          ],
+          "actual_projection_scopes_in_original_order": [
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 95310528,
+              "cells_charged": 400000,
+              "work_charged": 37461328
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 69440032,
+              "cells_charged": 0,
+              "work_charged": 5364169
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case": "producer-100000-3",
+      "full_lifecycle_accepted": false,
+      "children": [
+        {
+          "raw_child": "/workspace/scratch/capacity-100k-frontier-8e8ded1f/producer-100000-3-truth-0",
+          "mode": "truth",
+          "accepted": false,
+          "failure": {
+            "class": "ValueError",
+            "message": "repetition failed or differs from declared input: {'class': 'DomainError', 'message': 'cannot save a failed build', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/scratch/capacity-100k-frontier-8e8ded1f/harness/public_lifecycle_python_worker.py\", line 360, in run\\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/workspace/scratch/capacity-100k-frontier-8e8ded1f/harness/public_lifecycle_python_worker.py\", line 40, in timed\\n    return call()\\n           ^^^^^^\\n  File \"/workspace/scratch/capacity-100k-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\\n    return self._native.save()\\n           ^^^^^^^^^^^^^^^^^^^\\nyamaa.DomainError: cannot save a failed build\\n'}"
+          },
+          "actual_child_peak_rss": {
+            "provider": "os.wait4(child_pid).ru_maxrss",
+            "raw": 196684,
+            "original_unit": "KiB",
+            "bytes": 201404416,
+            "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+            "system": "Linux"
+          },
+          "held_save_returns": [],
+          "actual_host_getter_invocations": {
+            "output": 1,
+            "issues": 1,
+            "verification_log": 1,
+            "warning_log": 1
+          },
+          "encoded_canonical_report_bytes": {
+            "build": 18782096,
+            "save_1": 18782096
+          },
+          "actual_original_execution_measurements": {
+            "build": {
+              "admitted": true,
+              "build_accepted": false,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": 5,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": 5,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": 5,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": 5,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [
+                {
+                  "identity": "/workspace/scratch/capacity-100k-frontier-8e8ded1f/producer-100000-3-truth-0/work-0/producer-0.yaml",
+                  "index": 5
+                },
+                {
+                  "identity": "/workspace/scratch/capacity-100k-frontier-8e8ded1f/producer-100000-3-truth-0/work-0/producer-1.yaml",
+                  "index": 4
+                }
+              ],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 0,
+              "saves": [],
+              "stages": [
+                {
+                  "completed_ns": 12902367,
+                  "entered_ns": 11096,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 414024406,
+                  "entered_ns": 12902818,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 41389329,
+                  "entered_ns": 13062505,
+                  "node": 5,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 41400205,
+                  "entered_ns": 41394336,
+                  "node": 5,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 136679023,
+                  "entered_ns": 41400856,
+                  "node": 5,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 207232690,
+                  "entered_ns": 136680665,
+                  "node": 5,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 216091297,
+                  "entered_ns": 207233972,
+                  "node": 5,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 362859316,
+                  "entered_ns": 216099299,
+                  "node": 5,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                },
+                {
+                  "completed_ns": 381038377,
+                  "entered_ns": 362896952,
+                  "node": 4,
+                  "outcome": "failed",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 381041101,
+                  "entered_ns": 381039959,
+                  "node": 4,
+                  "outcome": "failed",
+                  "phase": "output_preparation"
+                },
+                {
+                  "completed_ns": 413979288,
+                  "entered_ns": 383605783,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            },
+            "save_1": {
+              "admitted": true,
+              "build_accepted": false,
+              "classified_refusals": [],
+              "clock": {
+                "origin": "owner-local monotonic origin immediately before original application entry",
+                "provider": "std::time::Instant",
+                "unit": "nanoseconds"
+              },
+              "function_calls": [
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": 5,
+                  "stage": "execution_admission",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": 5,
+                  "stage": "execution_derivation",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": 5,
+                  "stage": "output_keys",
+                  "succeeded": 0
+                },
+                {
+                  "entered": 0,
+                  "failed": 0,
+                  "node": 5,
+                  "stage": "verification",
+                  "succeeded": 0
+                }
+              ],
+              "nodes": [
+                {
+                  "identity": "/workspace/scratch/capacity-100k-frontier-8e8ded1f/producer-100000-3-truth-0/work-0/producer-0.yaml",
+                  "index": 5
+                },
+                {
+                  "identity": "/workspace/scratch/capacity-100k-frontier-8e8ded1f/producer-100000-3-truth-0/work-0/producer-1.yaml",
+                  "index": 4
+                }
+              ],
+              "original_execution_finished": true,
+              "protocol": "application-measurements/1",
+              "refusal": null,
+              "retention_limits": {
+                "identity_bytes": 1048576,
+                "nodes": 64,
+                "save_records": 16,
+                "stage_records": 1024
+              },
+              "save_attempts": 1,
+              "saves": [
+                {
+                  "attempt": 1,
+                  "completed_ns": 460367728,
+                  "entered_ns": 460367387,
+                  "outcome": "failed"
+                }
+              ],
+              "stages": [
+                {
+                  "completed_ns": 12902367,
+                  "entered_ns": 11096,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "preparation"
+                },
+                {
+                  "completed_ns": 414024406,
+                  "entered_ns": 12902818,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "build_service"
+                },
+                {
+                  "completed_ns": 41389329,
+                  "entered_ns": 13062505,
+                  "node": 5,
+                  "outcome": "succeeded",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 41400205,
+                  "entered_ns": 41394336,
+                  "node": 5,
+                  "outcome": "succeeded",
+                  "phase": "execution_admission"
+                },
+                {
+                  "completed_ns": 136679023,
+                  "entered_ns": 41400856,
+                  "node": 5,
+                  "outcome": "succeeded",
+                  "phase": "execution_derivation"
+                },
+                {
+                  "completed_ns": 207232690,
+                  "entered_ns": 136680665,
+                  "node": 5,
+                  "outcome": "succeeded",
+                  "phase": "output_keys"
+                },
+                {
+                  "completed_ns": 216091297,
+                  "entered_ns": 207233972,
+                  "node": 5,
+                  "outcome": "succeeded",
+                  "phase": "verification"
+                },
+                {
+                  "completed_ns": 362859316,
+                  "entered_ns": 216099299,
+                  "node": 5,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                },
+                {
+                  "completed_ns": 381038377,
+                  "entered_ns": 362896952,
+                  "node": 4,
+                  "outcome": "failed",
+                  "phase": "input"
+                },
+                {
+                  "completed_ns": 381041101,
+                  "entered_ns": 381039959,
+                  "node": 4,
+                  "outcome": "failed",
+                  "phase": "output_preparation"
+                },
+                {
+                  "completed_ns": 413979288,
+                  "entered_ns": 383605783,
+                  "node": null,
+                  "outcome": "succeeded",
+                  "phase": "output_preparation"
+                }
+              ],
+              "types": {
+                "function_counts": "uint64 actual calls",
+                "offsets": "uint64 nanoseconds since owner origin",
+                "resource_counts": "usize; required null preserves original overflow/absence"
+              }
+            }
+          },
+          "actual_row_buffer_scopes_in_original_order": [
+            {
+              "rows": 100000,
+              "columns": 2,
+              "encoded_bytes": 7900001,
+              "requested_buffer_capacity": 8388608
+            },
+            {
+              "rows": 100000,
+              "columns": 2,
+              "encoded_bytes": 7900001,
+              "requested_buffer_capacity": 8388608
+            }
+          ],
+          "actual_projection_scopes_in_original_order": [
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 95310784,
+              "cells_charged": 400000,
+              "work_charged": 37461336
+            },
+            {
+              "retained_limit_bytes": 805306368,
+              "retained_charged_bytes": 69440104,
+              "cells_charged": 0,
+              "work_charged": 5364186
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

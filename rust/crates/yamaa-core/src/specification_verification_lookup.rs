@@ -103,7 +103,7 @@ pub(super) fn bind(
         }
         if let Some(diagnostic) = failure {
             result.push(Verification {
-                path: diagnostic.spec_paths[0].clone(),
+                path: verification.path.clone(),
                 check: Check::InvalidDiagnostic(diagnostic),
             });
             continue;

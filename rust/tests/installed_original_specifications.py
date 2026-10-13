@@ -2652,7 +2652,7 @@ columns:
         label = "completed-lookup-assertions"
         cases = json.loads((ROOT / (label + "-truth.json")).read_text())["cases"]
         paths = json.loads((ROOT / (label + "-case-paths.json")).read_text())
-        self.assertEqual(len(cases), 17)
+        self.assertEqual(len(cases), 21)
 
         def issues(frame):
             rows = frame.to_dicts()

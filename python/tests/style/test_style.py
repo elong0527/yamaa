@@ -793,6 +793,47 @@ def test_redundant_intermediate_keeps_narrowing_lookups(
     assert "redundant_intermediate" not in _names(_spec(tmp_path, rename_only))
 
 
+def test_redundant_intermediate_is_not_read_by_a_longer_name(
+    tmp_path: Path,
+) -> None:
+    # The intermediate DSL is never read: the only qualified read is of the
+    # ADSL dataset itself, whose name merely ends with the intermediate id.
+    # A substring search for `DSL.` mistook that read for a read of DSL.
+    suffix = REDUNDANT.replace("  - id: ADSL1\n", "  - id: DSL\n").replace(
+        "    derivation: ADSL1.AGE", "    derivation: ADSL.AGE"
+    )
+    assert "redundant_intermediate" not in _names(_spec(tmp_path, suffix))
+    # A genuine qualified read of DSL, here after punctuation, still reports.
+    genuine = suffix.replace("    derivation: ADSL.AGE", "    derivation: DSL.AGE")
+    assert "redundant_intermediate" in _names(_spec(tmp_path, genuine))
+
+
+def test_repeated_row_derivation_rejects_suffix_intermediate_match(
+    tmp_path: Path,
+) -> None:
+    suffix = (
+        REPEATED.replace(
+            "input:\n  DM: input/dm.csv",
+            "input:\n  DM: input/dm.csv\n  ADSL: input/adsl.csv",
+        )
+        .replace(
+            "output:\n  path: dm.csv",
+            "intermediates:\n"
+            "  - id: DSL\n"
+            "    dataset: DM\n"
+            "    key: [STUDYID, USUBJID]\n"
+            "    no_match: null\n\n"
+            "output:\n  path: dm.csv",
+        )
+        .replace("DOMAIN: {literal: DM}", "DOMAIN: ADSL.AGE")
+    )
+    names = [
+        (item.name, item.spec_path)
+        for item in check_file(_spec(tmp_path, suffix), orders=ORDERS)
+    ]
+    assert ("repeated_row_derivation", "rows[0].derivations.DOMAIN") in names
+
+
 MISSING_LABEL = """\
 schema_version: "1.0"
 domain: ADSL

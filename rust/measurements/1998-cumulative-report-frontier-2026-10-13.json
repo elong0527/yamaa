@@ -1,0 +1,183 @@
+{
+  "protocol": "public-capacity-frontier/1",
+  "source_revision": "d63e76287c2ceb015a894a16df85825293f4bd25",
+  "artifact_reference": "local-release-cumulative-report-d63e7628",
+  "installation_receipt": "/workspace/scratch/capacity-pool-installation-d63e7628/provenance.json",
+  "raw_collection": "/workspace/scratch/capacity-pool-frontier-d63e7628",
+  "harness_files": "Retained actual executed harness bytes; later source edits are not asserted to have executed",
+  "policy_status": "unapproved isolated prototype, no cutover/numerical-budget approval",
+  "encoded_ceiling_bytes": 16777216,
+  "retained_projection_candidate_bytes": 100663296,
+  "sampling": "one actual fresh truth child per case; no cold/warm characterization",
+  "charge_scope_order": [
+    "cumulative actual native node reports",
+    "complete combined report metadata/row-block references",
+    "actual root Arrow/public/IPC copy passes",
+    "Save1 complete prepublication report/prefix",
+    "Save2 fresh complete prepublication report/prefix"
+  ],
+  "cases": [
+    {
+      "case": "producer-1000-3",
+      "independent_full_lifecycle_accepted": true,
+      "actual_child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 71116,
+        "original_unit": "KiB",
+        "bytes": 72822784,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_canonical_report_bytes": {
+        "build": 1300324,
+        "save_1": 1300552,
+        "save_2": 1300552
+      },
+      "actual_projection_charges_in_original_scope_order": [
+        {
+          "retained_limit_bytes": 100663296,
+          "retained_charged_bytes": 8320880,
+          "cells_charged": 28000,
+          "work_charged": 2593856
+        },
+        {
+          "retained_limit_bytes": 100663296,
+          "retained_charged_bytes": 4412132,
+          "cells_charged": 0,
+          "work_charged": 335063
+        },
+        {
+          "retained_limit_bytes": 100663296,
+          "retained_charged_bytes": 880144,
+          "cells_charged": 12000,
+          "work_charged": 54202
+        },
+        {
+          "retained_limit_bytes": 100663296,
+          "retained_charged_bytes": 4596048,
+          "cells_charged": 0,
+          "work_charged": 338143
+        },
+        {
+          "retained_limit_bytes": 100663296,
+          "retained_charged_bytes": 4596048,
+          "cells_charged": 0,
+          "work_charged": 338143
+        }
+      ],
+      "held_save_returns": [
+        true,
+        true
+      ],
+      "raw_child": "/workspace/scratch/capacity-pool-frontier-d63e7628/producer-1000-3-truth-0"
+    },
+    {
+      "case": "producer-10000-1",
+      "independent_full_lifecycle_accepted": true,
+      "actual_child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 137748,
+        "original_unit": "KiB",
+        "bytes": 141053952,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_canonical_report_bytes": {
+        "build": 9186759,
+        "save_1": 9186931,
+        "save_2": 9186931
+      },
+      "actual_projection_charges_in_original_scope_order": [
+        {
+          "retained_limit_bytes": 100663296,
+          "retained_charged_bytes": 49520600,
+          "cells_charged": 200000,
+          "work_charged": 18369612
+        },
+        {
+          "retained_limit_bytes": 100663296,
+          "retained_charged_bytes": 27921488,
+          "cells_charged": 0,
+          "work_charged": 2153478
+        },
+        {
+          "retained_limit_bytes": 100663296,
+          "retained_charged_bytes": 8547888,
+          "cells_charged": 120000,
+          "work_charged": 540194
+        },
+        {
+          "retained_limit_bytes": 100663296,
+          "retained_charged_bytes": 28053812,
+          "cells_charged": 0,
+          "work_charged": 2155925
+        },
+        {
+          "retained_limit_bytes": 100663296,
+          "retained_charged_bytes": 28053812,
+          "cells_charged": 0,
+          "work_charged": 2155925
+        }
+      ],
+      "held_save_returns": [
+        true,
+        true
+      ],
+      "raw_child": "/workspace/scratch/capacity-pool-frontier-d63e7628/producer-10000-1-truth-0"
+    },
+    {
+      "case": "producer-10000-3",
+      "independent_full_lifecycle_accepted": true,
+      "actual_child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 159256,
+        "original_unit": "KiB",
+        "bytes": 163078144,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_canonical_report_bytes": {
+        "build": 12944565,
+        "save_1": 12944793,
+        "save_2": 12944793
+      },
+      "actual_projection_charges_in_original_scope_order": [
+        {
+          "retained_limit_bytes": 100663296,
+          "retained_charged_bytes": 71134832,
+          "cells_charged": 280000,
+          "work_charged": 25864320
+        },
+        {
+          "retained_limit_bytes": 100663296,
+          "retained_charged_bytes": 41866880,
+          "cells_charged": 0,
+          "work_charged": 3229521
+        },
+        {
+          "retained_limit_bytes": 100663296,
+          "retained_charged_bytes": 8548144,
+          "cells_charged": 120000,
+          "work_charged": 540202
+        },
+        {
+          "retained_limit_bytes": 100663296,
+          "retained_charged_bytes": 42050796,
+          "cells_charged": 0,
+          "work_charged": 3232601
+        },
+        {
+          "retained_limit_bytes": 100663296,
+          "retained_charged_bytes": 42050796,
+          "cells_charged": 0,
+          "work_charged": 3232601
+        }
+      ],
+      "held_save_returns": [
+        true,
+        true
+      ],
+      "raw_child": "/workspace/scratch/capacity-pool-frontier-d63e7628/producer-10000-3-truth-0"
+    }
+  ]
+}

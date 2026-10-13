@@ -67,6 +67,39 @@ and publication prefixes without replay. Native spies cover all four combination
 of producer/ordinary and explicit/absent environment, and original non-Clone
 failures stop subsequent effects.
 
+Trusted application observers receive stage transitions separately from semantic
+reports. `application_observer::Scope` carries a shared observer and, for producer
+work, the actual borrowed graph node index and identity. `domain_with_observer`
+marks Preparation before native metadata admission, Build before entering the
+selected runtime port, and Finished after a returned success or failure. The
+checked source service marks its actual inspection/capture/decode/bind boundary
+and forwards the existing dataset Admission, Derivation, OutputKeys, Verification
+and Finished events. Project and producer services mark activation only when
+called definitions enter that gate; producer Output begins its actual report and
+artifact preparation. Ordinary output/report clocks are retained by the adapter.
+
+FunctionCall events occur immediately before delegated FunctionPort calls, or
+ActivationPort invocations during authored cases. Signature lookup and rejected
+or short-circuited argument admission produce no call event. Returned failures
+and unwinds keep their actual entered prefix and original native payload; a panic
+can omit Finished. Existing APIs use the no-op observer. Engine observers own no
+clock, allocate no measurement storage and alter no report, quota or Save
+authority. Adapters retain their bounded clocks and counts privately; Save
+measurement remains a separate actual held-owner operation.
+
+Typed Exit events preserve actual completion and failure independently of phase
+transitions. Dataset admission, derivation and output-key stages complete at their
+actual successful checkpoints; the last entered stage exits from its returned
+result before Dataset Finished. Input, activation, node output and enclosing
+request preparation/build use their actual returned results. FunctionReturn
+records the delegated port result without inspecting its opaque payload. A
+missing argument has no call/return pair, and an invocation or stage that unwinds
+has an unmatched entry rather than an invented failed return. These measurement
+outcomes do not replace diagnostic phases, findings or original error owners.
+An optional Refusal event copies only an existing classified execution limit's
+resource, limit and optional required amount before its failed exit. It neither
+invents a used counter nor classifies generic Capacity or opaque port failures.
+
 ## Current lifecycle
 
 The bounded `yamaa-engine::domain` use case now owns executable preflight.
@@ -611,3 +644,32 @@ stop subsequent effects. This service does not add a root-byte reread: the
 existing native entry-base verification remains the policy. Physical codecs,
 authored producer origins, reporting/publication and compatibility component
 entry points remain their separate boundaries.
+
+The shared-work prototype gives entered producer datasets one non-cloneable
+`execution_work::WorkBudget` with the existing whole-graph WorkCells ceiling.
+Each fresh runtime starts its work counter at the previous actual admitted
+amount. Every returned success or failure commits that counter; a refused charge
+never counts a visit which did not occur. Before entering derivation, the owner
+reserves its remaining ceiling, so an unwind cannot grant that work again. The
+original error or unwind payload is neither inspected nor replaced. Metadata
+and source-cardinality admission precede this reservation. Predicate work shares
+the same cumulative counter; resolutions, regex work, text and identities retain
+their existing per-node policies. The ordinary standalone APIs keep fresh scopes.
+
+Source rows are reserved before activation using admitted input slots:
+`floor(total_rows * node_input_slots / all_input_slots)`. The implementation uses
+checked quotient/remainder arithmetic, and the sum of reservations cannot exceed
+the existing total. Source aliases still consume their declared row/cell ingress;
+no study value or capture effect selects the weights. All other node quotas and
+whole-graph byte/cell/publication ceilings remain unchanged. This prototype
+changes how the bounded work and row allowances are allocated; it raises no
+ceiling and grants no publication authority. Existing expression/derived cache
+charges remain untouched, and their separately unqualified retained-schema/text
+scope is not accepted by this prototype.
+
+The observed producer path forwards its actual node Scope and shared WorkBudget
+through the same entry. Typed dataset phase/exit/refusal events and once-delegated
+callback entry/return events remain active under cumulative work admission. A
+21-cell graph control preserves the first successful node and both real callback
+returns, then reports the root OutputKeys WorkCells refusal with global required
+22 immediately before its failed exit; no root verification or encoding occurs.

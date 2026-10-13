@@ -9,7 +9,7 @@ combined main revision. Review readiness does not approve transition.
 ## Installation and source artifact
 
 The approved first release channel is a GitHub source asset. The planned shared
-release uses `yamaa_0.4.0.tar.gz`; the development template is still version 0.3.0.
+release uses `yamaa_0.4.0.tar.gz`; the prepared development template is version 0.4.0.
 Its source installation requires R 4.6.1, Rust 1.90.0/Cargo and platform compiler
 and make tools. Windows x64 additionally requires Rtools45 and the GNU Rust
 target. CRAN, r-universe and R binary distribution are later work.

@@ -19,8 +19,6 @@ on:
       - '.github/scripts/ci/native_matrix.py'
       - '.github/scripts/ci/test_native_matrix.py'
   pull_request:
-    # A maintainer can request all installed hosts before merging a feature.
-    types: [opened, synchronize, reopened, labeled, unlabeled]
     paths:
       - 'rust/**'
       - '!rust/*.md'
@@ -73,8 +71,6 @@ jobs:
           python-version: '3.14'
       - name: Select Linux PR coverage or the full installed matrix
         id: coverage
-        env:
-          NATIVE_FULL_MATRIX: ${{ contains(github.event.pull_request.labels.*.name, 'native-full-matrix') }}
         run: python .github/scripts/ci/native_matrix.py plan
 
   # Main pushes check the shared Rust crates alongside installed qualification.
@@ -125,6 +121,7 @@ jobs:
           (
             set -e
             python tools/check_benchmark_sdk_versions.py
+            python tools/check_shared_release_versions.py
             cargo fmt --all --check
             python tools/check_cargo_lock.py --output-dir "${RUNNER_TEMP}/rust-dependencies"
             cargo clippy --locked -p yamaa-core -p yamaa-engine -p yamaa-adapters -p yamaa-python --all-targets -- -D warnings
@@ -505,9 +502,9 @@ jobs:
         run: |
           mkdir -p native-r-library
           R CMD build --no-build-vignettes --no-manual native-stage/yamaa
-          python "${GITHUB_WORKSPACE}/rust/tools/check_cargo_lock.py" --output-dir "${RUNNER_TEMP}/rust-dependencies" yamaa_0.3.0.tar.gz
+          python "${GITHUB_WORKSPACE}/rust/tools/check_cargo_lock.py" --output-dir "${RUNNER_TEMP}/rust-dependencies" yamaa_0.4.0.tar.gz
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" "${GITHUB_WORKSPACE}/rust/tests/project-programs/r"
-          R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" yamaa_0.3.0.tar.gz
+          R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" yamaa_0.4.0.tar.gz
           if [ "${{ runner.os }}" = Windows ]; then
             python -c 'from pathlib import Path; import shutil; dlls = list(Path("native-r-library/yamaa/libs").rglob("yamaa.dll")); assert len(dlls) == 1, "installed R DLL is missing or ambiguous"; shutil.copy2(dlls[0], "windows-r-toolchain/yamaa.dll")'
           fi
@@ -557,7 +554,7 @@ jobs:
             --root "${GITHUB_WORKSPACE}" --catalog "${GITHUB_WORKSPACE}/rust/qualification/supplemental.json" \
             --output qualification/r-source --runtime r --staged-root "${RUNNER_TEMP}" \
             --source-revision "$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)" --package-form source \
-            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-${{ matrix.os }}/yamaa_0.3.0.tar.gz" \
+            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-${{ matrix.os }}/yamaa_0.4.0.tar.gz" \
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
       - name: Require repository validator real-R public Check transport
         if: ${{ always() && steps.r_install.outcome == 'success' }}
@@ -595,7 +592,7 @@ jobs:
           mkdir native-r-check
           cd native-r-check
           git -C "${GITHUB_WORKSPACE}" rev-parse HEAD > source-revision.txt
-          R CMD check --no-manual ../yamaa_0.3.0.tar.gz
+          R CMD check --no-manual ../yamaa_0.4.0.tar.gz
           python -c 'from pathlib import Path; lines = Path("yamaa.Rcheck/00check.log").read_text().splitlines(); assert "Status: OK" in lines, "R package check has unresolved findings"'
       - name: Preserve R package check
         if: ${{ always() && (steps.r_package_check.outcome == 'success' || steps.r_package_check.outcome == 'failure') }}
@@ -633,7 +630,7 @@ jobs:
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: native-r-${{ matrix.os }}
-          path: ${{ runner.temp }}/yamaa_0.3.0.tar.gz
+          path: ${{ runner.temp }}/yamaa_0.4.0.tar.gz
 
   public-cohort:
     name: public-cohort-complete-runs

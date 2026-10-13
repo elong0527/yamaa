@@ -390,6 +390,546 @@ impl Ports {
     }
 }
 type Attempt = build::BuildAttempt<Activation, Study, Decoder, Report, Codec>;
+
+mod application_observations {
+    use super::*;
+    use yamaa_engine::{
+        application_observer::{CallStage, Event, Observer, Outcome, Phase, Scope},
+        dataset::ExecutionPhase,
+    };
+    type NodeCoordinate = Option<(usize, String)>;
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    enum Seen {
+        Phase(NodeCoordinate, Phase),
+        Call(NodeCoordinate, CallStage),
+        Exit(NodeCoordinate, Phase, Outcome),
+        Return(NodeCoordinate, CallStage, Outcome),
+        Refusal(
+            NodeCoordinate,
+            Phase,
+            yamaa_engine::application_observer::Refusal,
+        ),
+    }
+    struct Recorder {
+        trace: Trace,
+        events: RefCell<Vec<Seen>>,
+    }
+    impl Observer for Recorder {
+        fn observe(&self, event: Event<'_>) {
+            let (node, seen, marker) = match event {
+                Event::Phase { node, phase } => (node, Seen::Phase(None, phase), "observe:phase"),
+                Event::FunctionCall { node, stage } => {
+                    (node, Seen::Call(None, stage), "observe:call")
+                }
+                Event::Exit {
+                    node,
+                    phase,
+                    outcome,
+                } => (node, Seen::Exit(None, phase, outcome), "observe:exit"),
+                Event::FunctionReturn {
+                    node,
+                    stage,
+                    outcome,
+                } => (node, Seen::Return(None, stage, outcome), "observe:return"),
+                Event::Refusal {
+                    node,
+                    phase,
+                    refusal,
+                } => (node, Seen::Refusal(None, phase, refusal), "observe:refusal"),
+            };
+            let node = node.map(|node| (node.index, node.identity.to_owned()));
+            let seen = match seen {
+                Seen::Phase(_, phase) => Seen::Phase(node, phase),
+                Seen::Call(_, stage) => Seen::Call(node, stage),
+                Seen::Exit(_, phase, outcome) => Seen::Exit(node, phase, outcome),
+                Seen::Return(_, stage, outcome) => Seen::Return(node, stage, outcome),
+                Seen::Refusal(_, phase, refusal) => Seen::Refusal(node, phase, refusal),
+            };
+            self.events.borrow_mut().push(seen);
+            self.trace.borrow_mut().push(marker.into());
+        }
+    }
+    fn recorder(ports: &Ports) -> Recorder {
+        Recorder {
+            trace: Rc::clone(&ports.activation.trace),
+            events: RefCell::new(vec![]),
+        }
+    }
+    fn calls(events: &[Seen]) -> Vec<(NodeCoordinate, CallStage)> {
+        events
+            .iter()
+            .filter_map(|event| match event {
+                Seen::Call(node, stage) => Some((node.clone(), *stage)),
+                _ => None,
+            })
+            .collect()
+    }
+    fn assert_immediately_before_actual_calls(ports: &Ports) {
+        let trace = ports.activation.trace.borrow();
+        let invoked = trace
+            .iter()
+            .enumerate()
+            .filter(|(_, event)| event.starts_with("invoke:"));
+        for (index, _) in invoked {
+            assert_eq!(trace[index - 1], "observe:call");
+        }
+        assert_eq!(
+            trace
+                .iter()
+                .filter(|event| *event == "observe:call")
+                .count(),
+            trace
+                .iter()
+                .filter(|event| event.starts_with("invoke:"))
+                .count()
+        );
+    }
+    #[test]
+    fn cumulative_work_entry_retains_actual_node_exits_calls_and_global_refusal() {
+        for (ceiling, accepted) in [(22, true), (21, false)] {
+            let mut ports = Ports::new();
+            let observer = recorder(&ports);
+            let mut attempt = Attempt::default();
+            let mut limits = build::Limits::default();
+            limits.execution.work_cells = ceiling;
+            limits.execution.source_rows = 3;
+            let result = prepared().build_publication_with_observer_into(
+                ports.borrow(),
+                limits,
+                &mut attempt,
+                Scope::new(&observer),
+            );
+            assert_eq!(result.is_ok(), accepted);
+            assert_eq!(attempt.outcome.is_ok(), accepted);
+            assert_immediately_before_actual_calls(&ports);
+            let events = observer.events.borrow();
+            assert_eq!(
+                calls(&events),
+                [
+                    (None, CallStage::Activation),
+                    (None, CallStage::Activation),
+                    (None, CallStage::Activation),
+                    (None, CallStage::Activation),
+                    (
+                        Some((1, "/p".into())),
+                        CallStage::Dataset(ExecutionPhase::Derivation)
+                    ),
+                    (
+                        Some((0, "/root".into())),
+                        CallStage::Dataset(ExecutionPhase::Derivation)
+                    )
+                ]
+            );
+            for node in [(1, "/p"), (0, "/root")] {
+                let identity = Some((node.0, node.1.into()));
+                assert!(events.contains(&Seen::Exit(
+                    identity.clone(),
+                    Phase::Input,
+                    Outcome::Succeeded
+                )));
+                assert!(events.contains(&Seen::Exit(
+                    identity.clone(),
+                    Phase::Dataset(ExecutionPhase::Admission),
+                    Outcome::Succeeded
+                )));
+                assert!(events.contains(&Seen::Exit(
+                    identity,
+                    Phase::Dataset(ExecutionPhase::Derivation),
+                    Outcome::Succeeded
+                )));
+            }
+            let root = Some((0, "/root".into()));
+            if accepted {
+                assert!(!events.iter().any(|e| matches!(e, Seen::Refusal(..))));
+                assert!(events.contains(&Seen::Exit(
+                    root,
+                    Phase::Dataset(ExecutionPhase::Verification),
+                    Outcome::Succeeded
+                )));
+            } else {
+                let refusal = Seen::Refusal(
+                    root.clone(),
+                    Phase::Dataset(ExecutionPhase::OutputKeys),
+                    yamaa_engine::application_observer::Refusal {
+                        resource: yamaa_engine::dataset::Resource::WorkCells,
+                        limit: 21,
+                        required: Some(22),
+                    },
+                );
+                let index = events
+                    .iter()
+                    .position(|e| *e == refusal)
+                    .expect("classified global work refusal absent");
+                assert_eq!(
+                    events[index + 1],
+                    Seen::Exit(
+                        root.clone(),
+                        Phase::Dataset(ExecutionPhase::OutputKeys),
+                        Outcome::Failed
+                    )
+                );
+                assert_eq!(
+                    events[index + 2],
+                    Seen::Phase(root.clone(), Phase::Dataset(ExecutionPhase::Finished))
+                );
+                assert!(!events.iter().any(|e| matches!(
+                    e,
+                    Seen::Phase(Some((0, _)), Phase::Dataset(ExecutionPhase::Verification))
+                )));
+                assert_eq!(
+                    events.last(),
+                    Some(&Seen::Exit(root, Phase::Output, Outcome::Failed))
+                );
+                assert!(attempt.nodes[0]
+                    .dataset
+                    .result
+                    .as_ref()
+                    .unwrap()
+                    .result
+                    .is_ok());
+                assert!(matches!(
+                    attempt.nodes[1]
+                        .dataset
+                        .result
+                        .as_ref()
+                        .unwrap()
+                        .result
+                        .as_ref()
+                        .map_err(|e| &**e),
+                    Err(ExecutionError::Limit {
+                        resource: yamaa_engine::dataset::Resource::WorkCells,
+                        limit: 21,
+                        required: Some(22)
+                    })
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn observer_preserves_alias_graph_truth_and_counts_only_real_activation_and_node_calls() {
+        let build = prepared();
+        let mut ordinary = Ports::new();
+        let mut plain = Attempt::default();
+        let expected = build
+            .build_publication_into(ordinary.borrow(), Default::default(), &mut plain)
+            .unwrap();
+        let mut ports = Ports::new();
+        let observer = recorder(&ports);
+        let mut attempt = Attempt::default();
+        let held = build
+            .build_publication_with_observer_into(
+                ports.borrow(),
+                Default::default(),
+                &mut attempt,
+                Scope::new(&observer),
+            )
+            .unwrap();
+        let real_trace = ports
+            .activation
+            .trace
+            .borrow()
+            .iter()
+            .filter(|event| !event.starts_with("observe:"))
+            .cloned()
+            .collect::<Vec<_>>();
+        assert_eq!(real_trace, *ordinary.activation.trace.borrow());
+        assert_eq!(ports.study.reads, ordinary.study.reads);
+        assert_eq!(ports.decoder.cells.get(), ordinary.decoder.cells.get());
+        assert_eq!(attempt.activation, plain.activation);
+        assert_eq!(
+            held.artifacts()
+                .iter()
+                .map(|artifact| (artifact.node(), artifact.path(), artifact.bytes()))
+                .collect::<Vec<_>>(),
+            expected
+                .artifacts()
+                .iter()
+                .map(|artifact| (artifact.node(), artifact.path(), artifact.bytes()))
+                .collect::<Vec<_>>()
+        );
+        let events = observer.events.borrow();
+        assert_eq!(
+            calls(&events),
+            [
+                (None, CallStage::Activation),
+                (None, CallStage::Activation),
+                (None, CallStage::Activation),
+                (None, CallStage::Activation),
+                (
+                    Some((1, "/p".into())),
+                    CallStage::Dataset(ExecutionPhase::Derivation)
+                ),
+                (
+                    Some((0, "/root".into())),
+                    CallStage::Dataset(ExecutionPhase::Derivation)
+                ),
+            ]
+        );
+        // Each function's third authored case short-circuits missingness without
+        // crossing the port; aliases still execute their one producer once.
+        assert_eq!(attempt.activation.tests.len(), 6);
+        assert_eq!(
+            attempt
+                .activation
+                .tests
+                .iter()
+                .filter(|case| case.invoked)
+                .count(),
+            4
+        );
+        let phases = events
+            .iter()
+            .filter_map(|event| match event {
+                Seen::Phase(node, phase) => Some((node.clone(), *phase)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let mut expected_phases = vec![(None, Phase::Activation)];
+        for (index, identity) in [(1, "/p"), (0, "/root")] {
+            expected_phases.push((Some((index, identity.into())), Phase::Input));
+            for phase in [
+                ExecutionPhase::Admission,
+                ExecutionPhase::Derivation,
+                ExecutionPhase::OutputKeys,
+                ExecutionPhase::Verification,
+                ExecutionPhase::Finished,
+            ] {
+                expected_phases.push((Some((index, identity.into())), Phase::Dataset(phase)));
+            }
+            expected_phases.push((Some((index, identity.into())), Phase::Output));
+        }
+        assert_eq!(phases, expected_phases);
+        assert_eq!(
+            events
+                .iter()
+                .filter_map(|event| if let Seen::Return(node, stage, outcome) = event {
+                    Some((node.clone(), *stage, *outcome))
+                } else {
+                    None
+                })
+                .collect::<Vec<_>>(),
+            calls(&events)
+                .into_iter()
+                .map(|(node, stage)| (node, stage, Outcome::Succeeded))
+                .collect::<Vec<_>>()
+        );
+        assert!(events
+            .iter()
+            .filter_map(|event| if let Seen::Exit(_, _, outcome) = event {
+                Some(outcome)
+            } else {
+                None
+            })
+            .all(|outcome| *outcome == Outcome::Succeeded));
+        assert_immediately_before_actual_calls(&ports);
+    }
+    #[test]
+    fn observer_keeps_failed_activation_live_callback_and_unwind_prefixes() {
+        for mode in [
+            Mode::Lock,
+            Mode::CaseInterrupt,
+            Mode::Producer,
+            Mode::Unwind,
+        ] {
+            let mut ports = Ports::new();
+            ports.activation.mode = mode;
+            let observer = recorder(&ports);
+            let mut attempt = Attempt::default();
+            let build = prepared();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                build.build_publication_with_observer_into(
+                    ports.borrow(),
+                    Default::default(),
+                    &mut attempt,
+                    Scope::new(&observer),
+                )
+            }));
+            assert_immediately_before_actual_calls(&ports);
+            let events = observer.events.borrow();
+            let calls = calls(&events);
+            match mode {
+                Mode::Lock => {
+                    assert!(result.unwrap().is_err());
+                    assert!(calls.is_empty());
+                    assert_eq!(
+                        *events,
+                        [
+                            Seen::Phase(None, Phase::Activation),
+                            Seen::Exit(None, Phase::Activation, Outcome::Failed)
+                        ]
+                    );
+                    assert!(attempt.nodes.is_empty());
+                }
+                Mode::CaseInterrupt => {
+                    assert!(result.unwrap().is_err());
+                    assert_eq!(
+                        calls,
+                        [(None, CallStage::Activation), (None, CallStage::Activation)]
+                    );
+                    assert!(attempt.nodes.is_empty());
+                    assert_eq!(ports.study.reads, 0);
+                    assert_eq!(
+                        events.last(),
+                        Some(&Seen::Exit(None, Phase::Activation, Outcome::Failed))
+                    );
+                    assert!(events.contains(&Seen::Return(
+                        None,
+                        CallStage::Activation,
+                        Outcome::Failed
+                    )));
+                }
+                Mode::Producer => {
+                    assert!(result.unwrap().is_err());
+                    assert_eq!(calls.len(), 5);
+                    assert!(events.contains(&Seen::Return(
+                        Some((1, "/p".into())),
+                        CallStage::Dataset(ExecutionPhase::Derivation),
+                        Outcome::Failed
+                    )));
+                    assert!(events.contains(&Seen::Exit(
+                        Some((1, "/p".into())),
+                        Phase::Dataset(ExecutionPhase::Derivation),
+                        Outcome::Failed
+                    )));
+                    assert_eq!(
+                        calls.last(),
+                        Some(&(
+                            Some((1, "/p".into())),
+                            CallStage::Dataset(ExecutionPhase::Derivation)
+                        ))
+                    );
+                    let error = attempt.nodes[0]
+                        .dataset
+                        .result
+                        .as_ref()
+                        .unwrap()
+                        .result
+                        .as_ref()
+                        .unwrap_err();
+                    let ExecutionError::ProjectFunction { error, .. } = error.as_ref() else {
+                        panic!("original callback error")
+                    };
+                    let FailureKind::CallFailed(error) = &error.kind else {
+                        panic!("original payload")
+                    };
+                    assert!(Rc::ptr_eq(&error.original, &ports.activation.original));
+                    assert!(!events
+                        .iter()
+                        .any(|event| matches!(event, Seen::Phase(Some((0, _)), _))));
+                }
+                Mode::Unwind => {
+                    let Err(payload) = result else {
+                        panic!("original invocation unwind")
+                    };
+                    assert!(Arc::ptr_eq(
+                        payload.downcast_ref::<Arc<()>>().unwrap(),
+                        &ports.activation.unwind
+                    ));
+                    assert_eq!(calls.len(), 5);
+                    assert_eq!(
+                        events
+                            .iter()
+                            .filter(|event| matches!(event, Seen::Return(..)))
+                            .count(),
+                        4
+                    );
+                    assert_eq!(
+                        events.last(),
+                        Some(&Seen::Call(
+                            Some((1, "/p".into())),
+                            CallStage::Dataset(ExecutionPhase::Derivation)
+                        ))
+                    );
+                    assert!(matches!(
+                        attempt.nodes[0].dataset.result,
+                        Err(PortError::Incomplete)
+                    ));
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    #[test]
+    fn source_and_output_exits_use_actual_refusals_and_leave_unwound_output_unmatched() {
+        for failure in ["source", "report", "unwind"] {
+            let mut ports = Ports::new();
+            ports.report.diagnostics = true;
+            let original = Arc::new(());
+            match failure {
+                "source" => ports.study.failure = true,
+                "report" => ports.report.diagnostic_failure = true,
+                "unwind" => ports.report.diagnostic_unwind = Some(Arc::clone(&original)),
+                _ => unreachable!(),
+            }
+            let observer = recorder(&ports);
+            let mut attempt = Attempt::default();
+            let build = prepared();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                build.build_publication_with_observer_into(
+                    ports.borrow(),
+                    Default::default(),
+                    &mut attempt,
+                    Scope::new(&observer),
+                )
+            }));
+            let events = observer.events.borrow();
+            match failure {
+                "source" => {
+                    assert!(result.unwrap().is_err());
+                    assert!(events.contains(&Seen::Exit(
+                        Some((1, "/p".into())),
+                        Phase::Input,
+                        Outcome::Failed
+                    )));
+                    assert!(!events
+                        .iter()
+                        .any(|event| matches!(event, Seen::Phase(_, Phase::Dataset(_)))));
+                    assert!(matches!(
+                        attempt.nodes[0].dataset.result,
+                        Err(PortError::Capture(CaptureError::External(
+                            "original source refusal"
+                        )))
+                    ));
+                }
+                "report" => {
+                    assert!(result.unwrap().is_err());
+                    assert_eq!(
+                        events.last(),
+                        Some(&Seen::Exit(
+                            Some((1, "/p".into())),
+                            Phase::Output,
+                            Outcome::Failed
+                        ))
+                    );
+                    assert!(matches!(
+                        attempt.nodes[0].output,
+                        Err(CompleteError::Report("original diagnostic refusal"))
+                    ));
+                }
+                "unwind" => {
+                    let Err(payload) = result else {
+                        panic!("original report unwind")
+                    };
+                    assert!(Arc::ptr_eq(
+                        payload.downcast_ref::<Arc<()>>().unwrap(),
+                        &original
+                    ));
+                    assert_eq!(
+                        events.last(),
+                        Some(&Seen::Phase(Some((1, "/p".into())), Phase::Output))
+                    );
+                    assert!(!events
+                        .iter()
+                        .any(|event| matches!(event, Seen::Exit(_, Phase::Output, _))));
+                }
+                _ => unreachable!(),
+            }
+            assert_immediately_before_actual_calls(&ports);
+        }
+    }
+}
 fn prepared() -> build::PreparedBuild {
     let root = document(
         &[("FIRST", Some("/p")), ("SECOND", Some("/p"))],
@@ -1326,6 +1866,400 @@ fn alias_cells_and_codec_storage_and_work_are_reserved_before_decoded_table_owne
             ));
         } else {
             assert_eq!(attempt.nodes.len(), 1);
+        }
+    }
+}
+
+#[test]
+fn actual_graph_has_one_work_ceiling_and_input_slot_reservations_at_exact_boundaries() {
+    // Each admitted one-row node costs six key-construction units, three
+    // function/value units and two output-key scans: eleven per entered node.
+    let prepared = prepared();
+    for (work, rows, accepted) in [(22, 3, true), (21, 3, false), (22, 2, false)] {
+        let mut ports = Ports::new();
+        let mut attempt = Attempt::default();
+        let mut limits = build::Limits::default();
+        limits.execution.work_cells = work;
+        limits.execution.source_rows = rows;
+        prepared.build_into(ports.borrow(), limits, &mut attempt);
+        assert_eq!(attempt.outcome.is_ok(), accepted);
+        assert_eq!(ports.study.reads, 1);
+        let trace = ports.activation.trace.borrow();
+        assert_eq!(
+            &trace[..7],
+            [
+                "lock",
+                "bind:beta",
+                "bind:alpha",
+                "invoke:beta:7",
+                "invoke:beta:-9223372036854775808",
+                "invoke:alpha:7",
+                "invoke:alpha:-9223372036854775808"
+            ]
+        );
+        if rows == 2 {
+            assert_eq!(attempt.nodes.len(), 1);
+            assert_eq!(attempt.nodes[0].node, 1);
+            assert!(matches!(
+                attempt.nodes[0]
+                    .dataset
+                    .result
+                    .as_ref()
+                    .unwrap()
+                    .result
+                    .as_ref()
+                    .map_err(|e| &**e),
+                Err(ExecutionError::Capacity)
+            ));
+            assert_eq!(ports.decoder.cells.get(), 0);
+            assert!(!trace.iter().any(|e| e == "invoke:beta:1"
+                || e == "invoke:alpha:1"
+                || e.starts_with("encode:")));
+        } else {
+            assert_eq!(attempt.nodes.len(), 2);
+            assert!(attempt.nodes[0]
+                .dataset
+                .result
+                .as_ref()
+                .unwrap()
+                .result
+                .is_ok());
+            assert!(attempt.nodes[0]
+                .output
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .artifact()
+                .is_some());
+            for source in &attempt.nodes[1].dataset.sources {
+                assert_eq!(source.read.snapshots_created, Some(0));
+            }
+            assert!(trace.iter().any(|e| e == "invoke:beta:1"));
+            assert!(trace.iter().any(|e| e == "invoke:alpha:1"));
+            if work == 21 {
+                assert!(matches!(
+                    attempt.nodes[1]
+                        .dataset
+                        .result
+                        .as_ref()
+                        .unwrap()
+                        .result
+                        .as_ref()
+                        .map_err(|e| &**e),
+                    Err(ExecutionError::Limit {
+                        resource: yamaa_engine::dataset::Resource::WorkCells,
+                        limit: 21,
+                        required: Some(22)
+                    })
+                ));
+                assert!(!trace.iter().any(|e| e == "encode:FIRST"));
+            } else {
+                assert!(attempt.nodes[1]
+                    .dataset
+                    .result
+                    .as_ref()
+                    .unwrap()
+                    .result
+                    .is_ok());
+                assert!(trace.iter().any(|e| e == "encode:FIRST"));
+            }
+        }
+    }
+}
+
+#[test]
+fn owned_column_weighted_output_cells_keep_the_completed_producer_at_the_exact_boundary() {
+    use yamaa_core::schema::{
+        Document, DocumentNode as N, SpecificationDocument, ValidationBudget,
+    };
+    fn append(nodes: &mut Vec<N>, node: N) -> usize {
+        let index = nodes.len();
+        nodes.push(node);
+        index
+    }
+    fn text(nodes: &mut Vec<N>, value: &str) -> usize {
+        append(nodes, N::Text(value.into()))
+    }
+    fn mapping(nodes: &mut Vec<N>, fields: Vec<(&str, usize)>) -> usize {
+        let fields = fields
+            .into_iter()
+            .map(|(name, value)| (text(nodes, name), value))
+            .collect();
+        append(nodes, N::Mapping(fields))
+    }
+    fn literal(nodes: &mut Vec<N>, value: i64) -> usize {
+        let value = append(nodes, N::Integer(value.to_string()));
+        let expression = mapping(nodes, vec![("literal", value)]);
+        mapping(nodes, vec![("value", expression)])
+    }
+    fn ordered(nodes: &[N], index: usize, output: &mut Vec<N>) -> usize {
+        let node = match &nodes[index] {
+            N::Sequence(items) => N::Sequence(
+                items
+                    .iter()
+                    .map(|&item| ordered(nodes, item, output))
+                    .collect(),
+            ),
+            N::Mapping(fields) => N::Mapping(
+                fields
+                    .iter()
+                    .map(|&(name, value)| {
+                        (ordered(nodes, name, output), ordered(nodes, value, output))
+                    })
+                    .collect(),
+            ),
+            node => node.clone(),
+        };
+        append(output, node)
+    }
+    struct RootCodec(Codec);
+    impl CodecPort for RootCodec {
+        type Error = &'static str;
+        fn encode(
+            &mut self,
+            plan: &PreparedSpecification,
+            dataset: &Dataset,
+            projection: &[usize],
+            maximum: usize,
+        ) -> Result<Vec<u8>, Self::Error> {
+            if plan.source().name == "RAW" {
+                return self.0.encode(plan, dataset, projection, maximum);
+            }
+            assert_eq!(projection, [0, 1, 2]);
+            assert_eq!(dataset.row_count(), 2);
+            for row in 0..2 {
+                assert_eq!(dataset.cell(row, 0).unwrap(), ValueRef::Int(1));
+                assert_eq!(dataset.cell(row, 1).unwrap(), ValueRef::Int(1));
+                assert_eq!(dataset.cell(row, 2).unwrap(), ValueRef::Int(row as i64 + 1));
+            }
+            self.0.trace.borrow_mut().push("encode:FIRST".into());
+            let bytes = b"ID,VALUE,ROW\n1,1,1\n1,1,2\n";
+            assert!(bytes.len() <= maximum);
+            Ok(bytes.to_vec())
+        }
+    }
+    let original = document(
+        &[("FIRST", Some("/p")), ("SECOND", Some("/p"))],
+        Some("alpha"),
+    );
+    let document = original.document();
+    let mut nodes = document.nodes().to_vec();
+    let columns = document.field(document.root(), "columns").unwrap();
+    for name in ["ROW", "EXTRA"] {
+        let column_name = text(&mut nodes, name);
+        let kind = text(&mut nodes, "int");
+        let label = text(&mut nodes, name);
+        let derivation = literal(&mut nodes, 0);
+        let column = mapping(
+            &mut nodes,
+            vec![
+                ("name", column_name),
+                ("type", kind),
+                ("label", label),
+                ("derivation", derivation),
+            ],
+        );
+        let N::Sequence(columns) = &mut nodes[columns] else {
+            panic!("declared columns");
+        };
+        columns.push(column);
+    }
+    let row_key = text(&mut nodes, "ROW");
+    let keys = document.field(document.root(), "keys").unwrap();
+    let N::Sequence(keys) = &mut nodes[keys] else {
+        panic!("declared keys");
+    };
+    keys.push(row_key);
+    let output = document.field(document.root(), "output").unwrap();
+    let projection = document.field(output, "columns").unwrap();
+    let row_projection = text(&mut nodes, "ROW");
+    let N::Sequence(projection) = &mut nodes[projection] else {
+        panic!("declared output projection");
+    };
+    projection.push(row_projection);
+    let rows = (1..=2)
+        .map(|value| {
+            let id = text(&mut nodes, &format!("row-{value}"));
+            let dataset = text(&mut nodes, "FIRST");
+            let row = literal(&mut nodes, value);
+            let derivations = mapping(&mut nodes, vec![("ROW", row)]);
+            mapping(
+                &mut nodes,
+                vec![
+                    ("id", id),
+                    ("dataset", dataset),
+                    ("derivations", derivations),
+                ],
+            )
+        })
+        .collect();
+    let rows = append(&mut nodes, N::Sequence(rows));
+    let rows_name = text(&mut nodes, "rows");
+    let N::Mapping(root) = &mut nodes[document.root()] else {
+        panic!("specification mapping");
+    };
+    root.push((rows_name, rows));
+    let mut ordered_nodes = Vec::new();
+    let root = ordered(&nodes, document.root(), &mut ordered_nodes);
+    let root = SpecificationDocument::admit(
+        Document::new(ordered_nodes, root, Default::default()).unwrap(),
+        &mut ValidationBudget::new(Default::default()),
+    )
+    .unwrap()
+    .unwrap();
+    let producer = support::document(&[("RAW", None)], Some("beta"));
+    let links = [
+        candidate("/root", "FIRST", "/p", &producer),
+        candidate("/root", "SECOND", "/p", &producer),
+    ];
+    let prepared = yamaa_engine::producer_graph::check(
+        "/root",
+        &[node("/root", &root, &links), node("/p", &producer, &[])],
+        environment(&["beta", "unused", "alpha"]),
+        Default::default(),
+    )
+    .unwrap()
+    .into_build();
+    assert_eq!(
+        prepared
+            .report_contexts()
+            .map(|(node, plan)| (node.identity(), plan.output().columns().len()))
+            .collect::<Vec<_>>(),
+        [("/root", 4), ("/p", 2)]
+    );
+    // The root owns four columns, while its serialized projection keeps three.
+    // Total12 reserves8 root cells and4 producer cells; total11 reserves7/3.
+    // The producer needs only2, so both runs enter the same completed prefix.
+    for (cells, accepted, root_calls) in [(12, true, 2), (11, false, 0)] {
+        let mut ports = Ports::new();
+        let mut codec = RootCodec(Codec {
+            trace: Rc::clone(&ports.codec.trace),
+            failure: false,
+        });
+        let mut attempt =
+            build::BuildAttempt::<Activation, Study, Decoder, Report, RootCodec>::default();
+        let mut limits = build::Limits::default();
+        limits.execution.output_cells = cells;
+        prepared.build_into(
+            build::Ports {
+                activation: &mut ports.activation,
+                study: &mut ports.study,
+                decoder: &mut ports.decoder,
+                report: &mut ports.report,
+                codec: &mut codec,
+            },
+            limits,
+            &mut attempt,
+        );
+        assert_eq!(
+            attempt.outcome.is_ok(),
+            accepted,
+            "outcome={:?}, dataset={:?}",
+            attempt.outcome,
+            attempt
+                .nodes
+                .last()
+                .map(|node| node.dataset.result.as_ref().map(|run| &run.result))
+        );
+        assert_eq!(ports.study.reads, 1);
+        assert_eq!(attempt.nodes.len(), 2);
+        let producer = &attempt.nodes[0];
+        assert_eq!(producer.node, 1);
+        let execution = producer
+            .dataset
+            .result
+            .as_ref()
+            .unwrap()
+            .result
+            .as_ref()
+            .unwrap();
+        assert_eq!(execution.dataset.row_count(), 1);
+        assert_eq!(execution.dataset.schema().columns().len(), 2);
+        assert_eq!(execution.dataset.cell(0, 1).unwrap(), ValueRef::Int(1));
+        assert_eq!(
+            producer
+                .output
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .artifact()
+                .unwrap()
+                .bytes(),
+            b"ID,VALUE\n1,1\n"
+        );
+        let root = &attempt.nodes[1];
+        assert_eq!(root.node, 0);
+        assert!(root.dataset.sources.iter().all(|source| {
+            source.read.captured
+                && source.read.snapshots_created == Some(0)
+                && source.snapshot.is_some()
+                && source.table.is_some()
+        }));
+        let trace = ports.activation.trace.borrow();
+        assert_eq!(
+            trace
+                .iter()
+                .filter(|event| *event == "invoke:beta:1")
+                .count(),
+            1
+        );
+        assert_eq!(
+            trace
+                .iter()
+                .filter(|event| *event == "invoke:alpha:1")
+                .count(),
+            root_calls
+        );
+        assert_eq!(
+            trace.iter().filter(|event| *event == "encode:RAW").count(),
+            1
+        );
+        if accepted {
+            let execution = root
+                .dataset
+                .result
+                .as_ref()
+                .unwrap()
+                .result
+                .as_ref()
+                .unwrap();
+            assert_eq!(execution.dataset.row_count(), 2);
+            assert_eq!(execution.dataset.schema().columns().len(), 4);
+            assert_eq!(execution.dataset.cell(0, 2).unwrap(), ValueRef::Int(1));
+            assert_eq!(execution.dataset.cell(1, 2).unwrap(), ValueRef::Int(2));
+            assert!(root
+                .output
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .artifact()
+                .is_some());
+            assert_eq!(
+                trace
+                    .iter()
+                    .filter(|event| *event == "encode:FIRST")
+                    .count(),
+                1
+            );
+        } else {
+            assert!(matches!(attempt.outcome, Err(Failure::Node { node: 0 })));
+            assert!(matches!(
+                root.dataset
+                    .result
+                    .as_ref()
+                    .unwrap()
+                    .result
+                    .as_ref()
+                    .map_err(|error| &**error),
+                Err(ExecutionError::Capacity)
+            ));
+            assert!(root.output.as_ref().unwrap().is_none());
+            assert!(!trace
+                .iter()
+                .any(|event| event == "report:/root" || event == "encode:FIRST"));
         }
     }
 }

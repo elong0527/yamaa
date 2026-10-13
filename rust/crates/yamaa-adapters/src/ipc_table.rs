@@ -21,10 +21,10 @@ pub const MAX_INPUT_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
 const MAX_METADATA: usize = 64 * 1024;
 const LIMITS: TableLimits = TableLimits {
-    max_rows: 65_536,
+    max_rows: yamaa_engine::capacity::SOURCE_ROWS,
     max_columns: 64,
     max_batches: 256,
-    max_cells: 262_144,
+    max_cells: yamaa_engine::capacity::SOURCE_CELLS,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -146,12 +146,12 @@ fn encode_dataset_projection<T: TableAccess<Error = std::convert::Infallible>>(
     table: &T,
     projection: Option<&[usize]>,
 ) -> Result<Vec<u8>, Error> {
-    if table.row_count() > LIMITS.max_rows
+    if table.row_count() > yamaa_engine::capacity::OUTPUT_ROWS
         || table.schema().columns().len() > LIMITS.max_columns
         || table
             .row_count()
             .checked_mul(table.schema().columns().len())
-            .is_none_or(|cells| cells > LIMITS.max_cells)
+            .is_none_or(|cells| cells > yamaa_engine::capacity::OUTPUT_CELLS)
     {
         return Err(Error::ShapeLimit);
     }

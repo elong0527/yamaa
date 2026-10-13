@@ -104,6 +104,21 @@ pub enum ExecutionPhase {
     Finished,
 }
 
+/// Completion is emitted at the actual admitted checkpoint or returned result,
+/// before Finished. A panic retains entry without inventing a returned outcome.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExecutionEvent {
+    Phase(ExecutionPhase),
+    Exit {
+        phase: ExecutionPhase,
+        outcome: crate::application_observer::Outcome,
+    },
+    Refusal {
+        phase: ExecutionPhase,
+        refusal: crate::application_observer::Refusal,
+    },
+}
+
 /// Caller-selected capacity limits, not normative language limits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Limits {
@@ -1023,6 +1038,17 @@ pub trait DatasetExecution {
         functions: &mut dyn FunctionPort<Error = T::Error>,
         limits: Limits,
     ) -> ExecutionAttempt<T::Error>;
+    /// Share one WorkCells ceiling across actual serial dataset executions.
+    /// Metadata admission failures do not enter the work owner. Returned native
+    /// failures preserve their original payload and commit only admitted work.
+    fn execute_with_work_budget<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
+        work: &crate::execution_work::WorkBudget,
+    ) -> ExecutionAttempt<T::Error>;
     /// Observe stage transitions without repeating evaluation or exposing intermediate output.
     /// The trusted observer owns its clock and must not mutate sources or callback state.
     /// Finished follows every returned success/failure, but is not guaranteed after a panic.
@@ -1033,6 +1059,24 @@ pub trait DatasetExecution {
         functions: &mut dyn FunctionPort<Error = T::Error>,
         limits: Limits,
         observer: &mut dyn FnMut(ExecutionPhase),
+    ) -> ExecutionAttempt<T::Error>;
+    /// Forward actual typed exits/refusals through the same cumulative work entry.
+    fn execute_with_execution_observer_and_work<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
+        observer: &mut dyn FnMut(ExecutionEvent),
+        work: &crate::execution_work::WorkBudget,
+    ) -> ExecutionAttempt<T::Error>;
+    fn execute_with_execution_observer<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
+        observer: &mut dyn FnMut(ExecutionEvent),
     ) -> ExecutionAttempt<T::Error>;
 }
 impl DatasetExecution for DatasetPlan {
@@ -1067,6 +1111,23 @@ impl DatasetExecution for DatasetPlan {
     ) -> ExecutionAttempt<T::Error> {
         Executor { plan: self }.execute_observed_functions(table, secondary, functions, limits)
     }
+    fn execute_with_work_budget<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
+        work: &crate::execution_work::WorkBudget,
+    ) -> ExecutionAttempt<T::Error> {
+        Executor { plan: self }.execute_scoped(
+            table,
+            secondary,
+            functions,
+            limits,
+            &mut |_| {},
+            Some(work),
+        )
+    }
     fn execute_with_phase_observer<T: TableAccess + ?Sized>(
         &self,
         table: &T,
@@ -1077,6 +1138,35 @@ impl DatasetExecution for DatasetPlan {
     ) -> ExecutionAttempt<T::Error> {
         Executor { plan: self }
             .execute_with_phase_observer(table, secondary, functions, limits, observer)
+    }
+    fn execute_with_execution_observer_and_work<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
+        observer: &mut dyn FnMut(ExecutionEvent),
+        work: &crate::execution_work::WorkBudget,
+    ) -> ExecutionAttempt<T::Error> {
+        Executor { plan: self }.execute_scoped(
+            table,
+            secondary,
+            functions,
+            limits,
+            observer,
+            Some(work),
+        )
+    }
+    fn execute_with_execution_observer<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
+        observer: &mut dyn FnMut(ExecutionEvent),
+    ) -> ExecutionAttempt<T::Error> {
+        Executor { plan: self }
+            .execute_with_execution_observer(table, secondary, functions, limits, observer)
     }
 }
 // A service borrows the one admitted model; it owns no second plan representation.
@@ -1149,7 +1239,43 @@ impl Executor<'_> {
         limits: Limits,
         observer: &mut dyn FnMut(ExecutionPhase),
     ) -> ExecutionAttempt<T::Error> {
-        observer(ExecutionPhase::Admission);
+        self.execute_with_execution_observer(table, secondary, functions, limits, &mut |event| {
+            if let ExecutionEvent::Phase(phase) = event {
+                observer(phase);
+            }
+        })
+    }
+
+    pub fn execute_with_execution_observer<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
+        observer: &mut dyn FnMut(ExecutionEvent),
+    ) -> ExecutionAttempt<T::Error> {
+        self.execute_scoped(table, secondary, functions, limits, observer, None)
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn execute_scoped<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
+        observer: &mut dyn FnMut(ExecutionEvent),
+        work: Option<&crate::execution_work::WorkBudget>,
+    ) -> ExecutionAttempt<T::Error> {
+        let active = core::cell::Cell::new(ExecutionPhase::Admission);
+        let mut observer = |event| {
+            if let ExecutionEvent::Phase(phase) = event {
+                if phase != ExecutionPhase::Finished {
+                    active.set(phase);
+                }
+            }
+            observer(event);
+        };
+        observer(ExecutionEvent::Phase(ExecutionPhase::Admission));
         let mut observations = AttemptObservations::default();
         for declaration in self.plan.conversion_handlers() {
             observations
@@ -1175,18 +1301,41 @@ impl Executor<'_> {
             functions,
             limits,
             &mut observations,
-            observer,
+            &mut observer,
+            work,
         );
+        if let Err(error) = &result {
+            if let ExecutionError::Limit {
+                resource,
+                limit,
+                required,
+            } = error.as_ref()
+            {
+                observer(ExecutionEvent::Refusal {
+                    phase: active.get(),
+                    refusal: crate::application_observer::Refusal {
+                        resource: *resource,
+                        limit: *limit,
+                        required: *required,
+                    },
+                });
+            }
+        }
+        observer(ExecutionEvent::Exit {
+            phase: active.get(),
+            outcome: crate::application_observer::Outcome::from_result(&result),
+        });
         let attempt = ExecutionAttempt {
             result,
             handler_counts: observations.handlers.snapshot().to_vec(),
             retained_verifications: observations.verifications,
         };
-        observer(ExecutionPhase::Finished);
+        observer(ExecutionEvent::Phase(ExecutionPhase::Finished));
         attempt
     }
 
     /// Share one handler ledger and resource budget for this immutable plan attempt.
+    #[allow(clippy::too_many_arguments)]
     fn execute_inner<T: TableAccess + ?Sized>(
         &self,
         table: &T,
@@ -1194,12 +1343,9 @@ impl Executor<'_> {
         functions: &mut dyn FunctionPort<Error = T::Error>,
         limits: Limits,
         observations: &mut AttemptObservations,
-        observer: &mut dyn FnMut(ExecutionPhase),
+        observer: &mut dyn FnMut(ExecutionEvent),
+        work: Option<&crate::execution_work::WorkBudget>,
     ) -> Result<Execution, Box<ExecutionError<T::Error>>> {
-        let AttemptObservations {
-            handlers,
-            verifications: records,
-        } = observations;
         functions::admit_plan(self.plan, functions)?;
         if table.schema() != self.plan.source()
             || secondary.len() != self.plan.secondary().len()
@@ -1218,9 +1364,48 @@ impl Executor<'_> {
         if rows.is_none_or(|rows| rows > limits.source_rows) {
             return Err(Box::new(ExecutionError::Capacity));
         }
-        observer(ExecutionPhase::Derivation);
+        observer(ExecutionEvent::Exit {
+            phase: ExecutionPhase::Admission,
+            outcome: crate::application_observer::Outcome::Succeeded,
+        });
+        let reservation = work.map(crate::execution_work::WorkBudget::enter);
+        let mut budget = match &reservation {
+            Some(reservation) => {
+                Budget::with_work(limits, reservation.limit(), reservation.prior())
+            }
+            None => Budget::new(limits),
+        };
+        observer(ExecutionEvent::Phase(ExecutionPhase::Derivation));
+        let result = self.execute_admitted(
+            table,
+            secondary,
+            functions,
+            limits,
+            observations,
+            observer,
+            &mut budget,
+        );
+        if let Some(reservation) = reservation {
+            reservation.complete(budget.used_work());
+        }
+        result
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn execute_admitted<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
+        observations: &mut AttemptObservations,
+        observer: &mut dyn FnMut(ExecutionEvent),
+        budget: &mut Budget,
+    ) -> Result<Execution, Box<ExecutionError<T::Error>>> {
+        let AttemptObservations {
+            handlers,
+            verifications: records,
+        } = observations;
         let primary = row_drivers::Driver::Primary(table);
-        let mut budget = Budget::new(limits);
         let mut intermediate_run = intermediates::Run::default();
         let mut candidates: Vec<Candidate> = Vec::new();
         intermediates::verify(
@@ -1232,7 +1417,7 @@ impl Executor<'_> {
                 functions,
                 secondary,
                 self_rows: &[],
-                budget: &mut budget,
+                budget,
                 handlers,
                 intermediates: &mut intermediate_run,
                 output_rows: &[],
@@ -1252,7 +1437,7 @@ impl Executor<'_> {
                     functions,
                     secondary,
                     self_rows: &[],
-                    budget: &mut budget,
+                    budget,
                     handlers,
                     intermediates: &mut intermediate_run,
                     output_rows: &[],
@@ -1273,7 +1458,7 @@ impl Executor<'_> {
                             functions,
                             secondary,
                             self_rows: &candidates,
-                            budget: &mut budget,
+                            budget,
                             handlers,
                             intermediates: &mut intermediate_run,
                             output_rows: &[],
@@ -1372,7 +1557,7 @@ impl Executor<'_> {
                                 functions,
                                 secondary,
                                 self_rows: &candidates[..first],
-                                budget: &mut budget,
+                                budget,
                                 handlers,
                                 intermediates: &mut intermediate_run,
                                 output_rows: &[],
@@ -1409,7 +1594,7 @@ impl Executor<'_> {
                                     functions,
                                     secondary,
                                     self_rows: &candidates[..first],
-                                    budget: &mut budget,
+                                    budget,
                                     handlers,
                                     intermediates: &mut intermediate_run,
                                     output_rows: &[],
@@ -1454,7 +1639,7 @@ impl Executor<'_> {
                         functions,
                         secondary,
                         self_rows: prior,
-                        budget: &mut budget,
+                        budget,
                         handlers,
                         intermediates: &mut intermediate_run,
                         output_rows: &[],
@@ -1463,7 +1648,7 @@ impl Executor<'_> {
                         aggregate_row: None,
                     },
                 )?;
-                intermediate_run.publish_self(self, &mut budget)?;
+                intermediate_run.publish_self(self, budget)?;
                 intermediates::verify(
                     self,
                     true,
@@ -1473,7 +1658,7 @@ impl Executor<'_> {
                         functions,
                         secondary,
                         self_rows: &candidates,
-                        budget: &mut budget,
+                        budget,
                         handlers,
                         intermediates: &mut intermediate_run,
                         output_rows: &[],
@@ -1489,13 +1674,7 @@ impl Executor<'_> {
             completed[assignment.column] = true;
         }
         let mut next_column = 0;
-        self.check_columns(
-            &candidates,
-            &completed,
-            &mut next_column,
-            records,
-            &mut budget,
-        )?;
+        self.check_columns(&candidates, &completed, &mut next_column, records, budget)?;
         for assignment in self.plan.columns() {
             let mut nested_windows = windows::Cache::default();
             let mut numbers = windows::Evaluation::new(
@@ -1504,26 +1683,18 @@ impl Executor<'_> {
                 self,
                 table,
                 limits,
-                &mut budget,
+                budget,
                 handlers,
             )?;
             for row in 0..candidates.len() {
                 let number = if let Some(run) = &mut numbers {
-                    Some(run.value(row, &candidates, table, &mut budget, assignment, self)?)
+                    Some(run.value(row, &candidates, table, budget, assignment, self)?)
                 } else {
                     None
                 };
                 let candidate = &candidates[row];
                 let value = if let Some(value) = number {
-                    finish(
-                        value,
-                        assignment,
-                        candidate,
-                        self,
-                        row,
-                        &mut budget,
-                        handlers,
-                    )?
+                    finish(value, assignment, candidate, self, row, budget, handlers)?
                 } else {
                     evaluate(
                         table,
@@ -1537,7 +1708,7 @@ impl Executor<'_> {
                             functions,
                             secondary,
                             self_rows: &candidates,
-                            budget: &mut budget,
+                            budget,
                             handlers,
                             intermediates: &mut intermediate_run,
                             output_rows: &candidates,
@@ -1552,15 +1723,13 @@ impl Executor<'_> {
                 candidate.completed[assignment.column] = true;
             }
             completed[assignment.column] = true;
-            self.check_columns(
-                &candidates,
-                &completed,
-                &mut next_column,
-                records,
-                &mut budget,
-            )?;
+            self.check_columns(&candidates, &completed, &mut next_column, records, budget)?;
         }
-        observer(ExecutionPhase::OutputKeys);
+        observer(ExecutionEvent::Exit {
+            phase: ExecutionPhase::Derivation,
+            outcome: crate::application_observer::Outcome::Succeeded,
+        });
+        observer(ExecutionEvent::Phase(ExecutionPhase::OutputKeys));
         let dataset = CompletedRows {
             schema: self.plan.output(),
             rows: candidates.iter().map(|row| &row.values).collect(),
@@ -1585,7 +1754,7 @@ impl Executor<'_> {
                     inventory: None,
 
                     row_count: None,
-                    offending_rows: identities(&dataset, self.plan.keys(), missing, &mut budget)?,
+                    offending_rows: identities(&dataset, self.plan.keys(), missing, budget)?,
                 });
             }
         }
@@ -1613,13 +1782,17 @@ impl Executor<'_> {
                 inventory: None,
 
                 row_count: None,
-                offending_rows: identities(&dataset, self.plan.keys(), duplicates, &mut budget)?,
+                offending_rows: identities(&dataset, self.plan.keys(), duplicates, budget)?,
             });
         }
         if !failures.is_empty() {
             return Err(Box::new(ExecutionError::KeyFailures(failures)));
         }
-        observer(ExecutionPhase::Verification);
+        observer(ExecutionEvent::Exit {
+            phase: ExecutionPhase::OutputKeys,
+            outcome: crate::application_observer::Outcome::Succeeded,
+        });
+        observer(ExecutionEvent::Phase(ExecutionPhase::Verification));
         for verification in self.plan.verifications() {
             let record = match &verification.check {
                 Check::NotMissing
@@ -1658,7 +1831,7 @@ impl Executor<'_> {
                             functions,
                             secondary,
                             self_rows: &candidates,
-                            budget: &mut budget,
+                            budget,
                             handlers,
                             intermediates: &mut intermediate_run,
                             output_rows: &candidates,
@@ -1704,7 +1877,7 @@ impl Executor<'_> {
                             repeated
                                 .into_iter()
                                 .flat_map(|members| members.iter().copied()),
-                            &mut budget,
+                            budget,
                         )?,
                     }
                 }
@@ -1717,8 +1890,7 @@ impl Executor<'_> {
                             .any(|&column| matches!(row[column], Value::Missing) != missing)
                             .then_some(index)
                     });
-                    let offending_rows =
-                        identities(&dataset, self.plan.keys(), offending, &mut budget)?;
+                    let offending_rows = identities(&dataset, self.plan.keys(), offending, budget)?;
                     CheckRecord {
                         path: verification.path.clone(),
                         code: yamaa_core::diagnostic::ConditionCode::VerificationAllOrNoneFailed,
@@ -1737,7 +1909,7 @@ impl Executor<'_> {
                     check,
                     &dataset,
                     limits,
-                    &mut budget,
+                    budget,
                     records,
                 )?,
                 Check::RowCount { .. } | Check::WideRowCount { .. } => {
@@ -1776,7 +1948,7 @@ impl Executor<'_> {
             schema: self.plan.output().clone(),
             rows: candidates.into_iter().map(|row| row.values).collect(),
         };
-        ordering::apply(self.plan.output_order(), &mut dataset, &mut budget)?;
+        ordering::apply(self.plan.output_order(), &mut dataset, budget)?;
         Ok(Execution {
             dataset,
             verifications: core::mem::take(records),

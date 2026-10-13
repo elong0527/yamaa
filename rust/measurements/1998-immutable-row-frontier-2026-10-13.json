@@ -1,0 +1,3228 @@
+{
+  "purpose": "functional capacity frontier; shared-machine clocks are diagnostic",
+  "source_revision": "3889a2ac77b7a2bb8416ead2da89a58e459b8eb5",
+  "harness_checkout_head": "3889a2ac77b7a2bb8416ead2da89a58e459b8eb5",
+  "artifact_reference": "source-built:immutable-report-3889a2ac",
+  "raw_evidence": "/workspace/scratch/resource-row-report-frontier-3889a2ac",
+  "installation_evidence": "/workspace/scratch/resource-row-report-installation-3889a2ac/provenance.json",
+  "accepted_cases": 14,
+  "declared_cases": 27,
+  "quota_changes": null,
+  "encoded_ceiling_bytes": 16777216,
+  "retained_projection_ceiling_bytes": 67108864,
+  "cases": [
+    {
+      "case": "lookup-1000-1",
+      "truth_accepted": true,
+      "two_held_saves_accepted": true,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 63736,
+        "original_unit": "KiB",
+        "bytes": 65265664,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": 187341,
+        "save_1": 228880,
+        "save_2": 228880
+      },
+      "maximum_single_projection_charge_bytes": 843844,
+      "projection_charges": [
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 602788,
+          "logical_cells_charged": 3571,
+          "work_charged": 238811
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 395608,
+          "logical_cells_charged": 2000,
+          "work_charged": 139475
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 39672,
+          "logical_cells_charged": 0,
+          "work_charged": 2137
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 843844,
+          "logical_cells_charged": 0,
+          "work_charged": 72572
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 843844,
+          "logical_cells_charged": 0,
+          "work_charged": 72572
+        }
+      ],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 0,
+        "rows": []
+      },
+      "report_error": null,
+      "save_returns": [
+        true,
+        true
+      ],
+      "public_failure": null,
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17651646975254,
+          "end_ns": 17651655194922,
+          "duration_ns": 8219668
+        },
+        "metadata_after_build": {
+          "start_ns": 17651655713032,
+          "end_ns": 17651657508331,
+          "duration_ns": 1795299
+        },
+        "copied_output": {
+          "start_ns": 17651657512407,
+          "end_ns": 17651658799951,
+          "duration_ns": 1287544
+        },
+        "copied_issues": {
+          "start_ns": 17651663683470,
+          "end_ns": 17651664387757,
+          "duration_ns": 704287
+        },
+        "copied_verification_log": {
+          "start_ns": 17651669292087,
+          "end_ns": 17651669298126,
+          "duration_ns": 6039
+        },
+        "copied_warning_log": {
+          "start_ns": 17651674273962,
+          "end_ns": 17651674278399,
+          "duration_ns": 4437
+        },
+        "held_save_1": {
+          "start_ns": 17651679168137,
+          "end_ns": 17651681550298,
+          "duration_ns": 2382161
+        },
+        "held_save_2": {
+          "start_ns": 17651682291310,
+          "end_ns": 17651683036207,
+          "duration_ns": 744897
+        }
+      }
+    },
+    {
+      "case": "lookup-1000-4",
+      "truth_accepted": true,
+      "two_held_saves_accepted": true,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 63252,
+        "original_unit": "KiB",
+        "bytes": 64770048,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": 434088,
+        "save_1": 475627,
+        "save_2": 475627
+      },
+      "maximum_single_projection_charge_bytes": 1782436,
+      "projection_charges": [
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 1782436,
+          "logical_cells_charged": 11284,
+          "work_charged": 739598
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 395608,
+          "logical_cells_charged": 2000,
+          "work_charged": 139475
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 45016,
+          "logical_cells_charged": 0,
+          "work_charged": 2489
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 849188,
+          "logical_cells_charged": 0,
+          "work_charged": 72924
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 849188,
+          "logical_cells_charged": 0,
+          "work_charged": 72924
+        }
+      ],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 0,
+        "rows": []
+      },
+      "report_error": null,
+      "save_returns": [
+        true,
+        true
+      ],
+      "public_failure": null,
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17651944596538,
+          "end_ns": 17651955469430,
+          "duration_ns": 10872892
+        },
+        "metadata_after_build": {
+          "start_ns": 17651956323219,
+          "end_ns": 17651957944308,
+          "duration_ns": 1621089
+        },
+        "copied_output": {
+          "start_ns": 17651957948344,
+          "end_ns": 17651959388635,
+          "duration_ns": 1440291
+        },
+        "copied_issues": {
+          "start_ns": 17651964867339,
+          "end_ns": 17651965487852,
+          "duration_ns": 620513
+        },
+        "copied_verification_log": {
+          "start_ns": 17651970525991,
+          "end_ns": 17651970533051,
+          "duration_ns": 7060
+        },
+        "copied_warning_log": {
+          "start_ns": 17651975695955,
+          "end_ns": 17651975702305,
+          "duration_ns": 6350
+        },
+        "held_save_1": {
+          "start_ns": 17651980763147,
+          "end_ns": 17651982227875,
+          "duration_ns": 1464728
+        },
+        "held_save_2": {
+          "start_ns": 17651983654065,
+          "end_ns": 17651984454154,
+          "duration_ns": 800089
+        }
+      }
+    },
+    {
+      "case": "lookup-10000-1",
+      "truth_accepted": false,
+      "two_held_saves_accepted": false,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 61856,
+        "original_unit": "KiB",
+        "bytes": 63340544,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": null,
+        "save_1": null
+      },
+      "maximum_single_projection_charge_bytes": null,
+      "projection_charges": [],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 1,
+        "rows": [
+          [
+            "engine",
+            "engine_rejected",
+            null,
+            [],
+            "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+          ]
+        ]
+      },
+      "report_error": null,
+      "save_returns": [],
+      "public_failure": {
+        "class": "DomainError",
+        "message": "cannot save a failed build",
+        "traceback": "Traceback (most recent call last):\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 349, in run\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 40, in timed\n    return call()\n           ^^^^^^\n  File \"/workspace/scratch/resource-policy-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\n    return self._native.save()\n           ^^^^^^^^^^^^^^^^^^^\nyamaa.DomainError: cannot save a failed build\n"
+      },
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17652331874076,
+          "end_ns": 17652353791766,
+          "duration_ns": 21917690
+        },
+        "metadata_after_build": {
+          "start_ns": 17652354183808,
+          "end_ns": 17652355935202,
+          "duration_ns": 1751394
+        },
+        "copied_output": {
+          "start_ns": 17652355939138,
+          "end_ns": 17652355945127,
+          "duration_ns": 5989
+        },
+        "copied_issues": {
+          "start_ns": 17652356121729,
+          "end_ns": 17652356791625,
+          "duration_ns": 669896
+        },
+        "copied_verification_log": {
+          "start_ns": 17652356920046,
+          "end_ns": 17652356924623,
+          "duration_ns": 4577
+        },
+        "copied_warning_log": {
+          "start_ns": 17652357151149,
+          "end_ns": 17652357154574,
+          "duration_ns": 3425
+        },
+        "held_save_1": {
+          "start_ns": 17652357277918,
+          "end_ns": 17652357281022,
+          "duration_ns": 3104
+        }
+      }
+    },
+    {
+      "case": "lookup-10000-4",
+      "truth_accepted": false,
+      "two_held_saves_accepted": false,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 63016,
+        "original_unit": "KiB",
+        "bytes": 64528384,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": null,
+        "save_1": null
+      },
+      "maximum_single_projection_charge_bytes": null,
+      "projection_charges": [],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 1,
+        "rows": [
+          [
+            "engine",
+            "engine_rejected",
+            null,
+            [],
+            "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+          ]
+        ]
+      },
+      "report_error": null,
+      "save_returns": [],
+      "public_failure": {
+        "class": "DomainError",
+        "message": "cannot save a failed build",
+        "traceback": "Traceback (most recent call last):\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 349, in run\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 40, in timed\n    return call()\n           ^^^^^^\n  File \"/workspace/scratch/resource-policy-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\n    return self._native.save()\n           ^^^^^^^^^^^^^^^^^^^\nyamaa.DomainError: cannot save a failed build\n"
+      },
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17652579288530,
+          "end_ns": 17652612677251,
+          "duration_ns": 33388721
+        },
+        "metadata_after_build": {
+          "start_ns": 17652612966381,
+          "end_ns": 17652614768329,
+          "duration_ns": 1801948
+        },
+        "copied_output": {
+          "start_ns": 17652614771885,
+          "end_ns": 17652614777854,
+          "duration_ns": 5969
+        },
+        "copied_issues": {
+          "start_ns": 17652614922769,
+          "end_ns": 17652615539937,
+          "duration_ns": 617168
+        },
+        "copied_verification_log": {
+          "start_ns": 17652615667797,
+          "end_ns": 17652615672604,
+          "duration_ns": 4807
+        },
+        "copied_warning_log": {
+          "start_ns": 17652615816337,
+          "end_ns": 17652615819001,
+          "duration_ns": 2664
+        },
+        "held_save_1": {
+          "start_ns": 17652615936857,
+          "end_ns": 17652615940352,
+          "duration_ns": 3495
+        }
+      }
+    },
+    {
+      "case": "lookup-100000-1",
+      "truth_accepted": false,
+      "two_held_saves_accepted": false,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 72812,
+        "original_unit": "KiB",
+        "bytes": 74559488,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": null,
+        "save_1": null
+      },
+      "maximum_single_projection_charge_bytes": null,
+      "projection_charges": [],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 1,
+        "rows": [
+          [
+            "engine",
+            "engine_rejected",
+            null,
+            [],
+            "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+          ]
+        ]
+      },
+      "report_error": null,
+      "save_returns": [],
+      "public_failure": {
+        "class": "DomainError",
+        "message": "cannot save a failed build",
+        "traceback": "Traceback (most recent call last):\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 349, in run\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 40, in timed\n    return call()\n           ^^^^^^\n  File \"/workspace/scratch/resource-policy-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\n    return self._native.save()\n           ^^^^^^^^^^^^^^^^^^^\nyamaa.DomainError: cannot save a failed build\n"
+      },
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17652829882145,
+          "end_ns": 17652849851098,
+          "duration_ns": 19968953
+        },
+        "metadata_after_build": {
+          "start_ns": 17652850469768,
+          "end_ns": 17652852349142,
+          "duration_ns": 1879374
+        },
+        "copied_output": {
+          "start_ns": 17652852353688,
+          "end_ns": 17652852360228,
+          "duration_ns": 6540
+        },
+        "copied_issues": {
+          "start_ns": 17652852510191,
+          "end_ns": 17652853392122,
+          "duration_ns": 881931
+        },
+        "copied_verification_log": {
+          "start_ns": 17652853524809,
+          "end_ns": 17652853530157,
+          "duration_ns": 5348
+        },
+        "copied_warning_log": {
+          "start_ns": 17652853651387,
+          "end_ns": 17652853653931,
+          "duration_ns": 2544
+        },
+        "held_save_1": {
+          "start_ns": 17652853759528,
+          "end_ns": 17652853764455,
+          "duration_ns": 4927
+        }
+      }
+    },
+    {
+      "case": "lookup-100000-4",
+      "truth_accepted": false,
+      "two_held_saves_accepted": false,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 72724,
+        "original_unit": "KiB",
+        "bytes": 74469376,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": null,
+        "save_1": null
+      },
+      "maximum_single_projection_charge_bytes": null,
+      "projection_charges": [],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 1,
+        "rows": [
+          [
+            "engine",
+            "engine_rejected",
+            null,
+            [],
+            "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+          ]
+        ]
+      },
+      "report_error": null,
+      "save_returns": [],
+      "public_failure": {
+        "class": "DomainError",
+        "message": "cannot save a failed build",
+        "traceback": "Traceback (most recent call last):\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 349, in run\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 40, in timed\n    return call()\n           ^^^^^^\n  File \"/workspace/scratch/resource-policy-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\n    return self._native.save()\n           ^^^^^^^^^^^^^^^^^^^\nyamaa.DomainError: cannot save a failed build\n"
+      },
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17653144597759,
+          "end_ns": 17653165228075,
+          "duration_ns": 20630316
+        },
+        "metadata_after_build": {
+          "start_ns": 17653165483534,
+          "end_ns": 17653167534102,
+          "duration_ns": 2050568
+        },
+        "copied_output": {
+          "start_ns": 17653167537718,
+          "end_ns": 17653167543777,
+          "duration_ns": 6059
+        },
+        "copied_issues": {
+          "start_ns": 17653167693519,
+          "end_ns": 17653168345478,
+          "duration_ns": 651959
+        },
+        "copied_verification_log": {
+          "start_ns": 17653168514219,
+          "end_ns": 17653168519247,
+          "duration_ns": 5028
+        },
+        "copied_warning_log": {
+          "start_ns": 17653168707487,
+          "end_ns": 17653168710431,
+          "duration_ns": 2944
+        },
+        "held_save_1": {
+          "start_ns": 17653169844236,
+          "end_ns": 17653169848883,
+          "duration_ns": 4647
+        }
+      }
+    },
+    {
+      "case": "aggregate-1000-10",
+      "truth_accepted": true,
+      "two_held_saves_accepted": true,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 58240,
+        "original_unit": "KiB",
+        "bytes": 59637760,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": 84986,
+        "save_1": 87424,
+        "save_2": 87424
+      },
+      "maximum_single_projection_charge_bytes": 403312,
+      "projection_charges": [
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 403312,
+          "logical_cells_charged": 2000,
+          "work_charged": 155014
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 27064,
+          "logical_cells_charged": 200,
+          "work_charged": 15889
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 25036,
+          "logical_cells_charged": 0,
+          "work_charged": 1396
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 98888,
+          "logical_cells_charged": 0,
+          "work_charged": 5911
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 98888,
+          "logical_cells_charged": 0,
+          "work_charged": 5911
+        }
+      ],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 0,
+        "rows": []
+      },
+      "report_error": null,
+      "save_returns": [
+        true,
+        true
+      ],
+      "public_failure": null,
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17653463960661,
+          "end_ns": 17653469688966,
+          "duration_ns": 5728305
+        },
+        "metadata_after_build": {
+          "start_ns": 17653469849604,
+          "end_ns": 17653471635870,
+          "duration_ns": 1786266
+        },
+        "copied_output": {
+          "start_ns": 17653471639435,
+          "end_ns": 17653472216613,
+          "duration_ns": 577178
+        },
+        "copied_issues": {
+          "start_ns": 17653472889203,
+          "end_ns": 17653473270950,
+          "duration_ns": 381747
+        },
+        "copied_verification_log": {
+          "start_ns": 17653473958412,
+          "end_ns": 17653473962819,
+          "duration_ns": 4407
+        },
+        "copied_warning_log": {
+          "start_ns": 17653474562810,
+          "end_ns": 17653474565615,
+          "duration_ns": 2805
+        },
+        "held_save_1": {
+          "start_ns": 17653475319966,
+          "end_ns": 17653476458428,
+          "duration_ns": 1138462
+        },
+        "held_save_2": {
+          "start_ns": 17653476877922,
+          "end_ns": 17653477539205,
+          "duration_ns": 661283
+        }
+      }
+    },
+    {
+      "case": "aggregate-1000-100",
+      "truth_accepted": true,
+      "two_held_saves_accepted": true,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 59580,
+        "original_unit": "KiB",
+        "bytes": 61009920,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": 77495,
+        "save_1": 77888,
+        "save_2": 77888
+      },
+      "maximum_single_projection_charge_bytes": 403336,
+      "projection_charges": [
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 403336,
+          "logical_cells_charged": 2000,
+          "work_charged": 153938
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 5572,
+          "logical_cells_charged": 20,
+          "work_charged": 1803
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 25060,
+          "logical_cells_charged": 0,
+          "work_charged": 1400
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 44156,
+          "logical_cells_charged": 0,
+          "work_charged": 2369
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 44156,
+          "logical_cells_charged": 0,
+          "work_charged": 2369
+        }
+      ],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 0,
+        "rows": []
+      },
+      "report_error": null,
+      "save_returns": [
+        true,
+        true
+      ],
+      "public_failure": null,
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17653696800840,
+          "end_ns": 17653701295141,
+          "duration_ns": 4494301
+        },
+        "metadata_after_build": {
+          "start_ns": 17653701439466,
+          "end_ns": 17653703340532,
+          "duration_ns": 1901066
+        },
+        "copied_output": {
+          "start_ns": 17653703344427,
+          "end_ns": 17653703797941,
+          "duration_ns": 453514
+        },
+        "copied_issues": {
+          "start_ns": 17653703988485,
+          "end_ns": 17653704411804,
+          "duration_ns": 423319
+        },
+        "copied_verification_log": {
+          "start_ns": 17653704595897,
+          "end_ns": 17653704599293,
+          "duration_ns": 3396
+        },
+        "copied_warning_log": {
+          "start_ns": 17653704768394,
+          "end_ns": 17653704771208,
+          "duration_ns": 2814
+        },
+        "held_save_1": {
+          "start_ns": 17653704933770,
+          "end_ns": 17653706067164,
+          "duration_ns": 1133394
+        },
+        "held_save_2": {
+          "start_ns": 17653706421231,
+          "end_ns": 17653706996416,
+          "duration_ns": 575185
+        }
+      }
+    },
+    {
+      "case": "aggregate-10000-10",
+      "truth_accepted": true,
+      "two_held_saves_accepted": true,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 65528,
+        "original_unit": "KiB",
+        "bytes": 67100672,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": 840929,
+        "save_1": 863813,
+        "save_2": 863813
+      },
+      "maximum_single_projection_charge_bytes": 3155848,
+      "projection_charges": [
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 3155848,
+          "logical_cells_charged": 20000,
+          "work_charged": 1545770
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 395716,
+          "logical_cells_charged": 2000,
+          "work_charged": 156819
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 25060,
+          "logical_cells_charged": 0,
+          "work_charged": 1400
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 646652,
+          "logical_cells_charged": 0,
+          "work_charged": 41405
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 646652,
+          "logical_cells_charged": 0,
+          "work_charged": 41405
+        }
+      ],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 0,
+        "rows": []
+      },
+      "report_error": null,
+      "save_returns": [
+        true,
+        true
+      ],
+      "public_failure": null,
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17653935907947,
+          "end_ns": 17653952158322,
+          "duration_ns": 16250375
+        },
+        "metadata_after_build": {
+          "start_ns": 17653953562359,
+          "end_ns": 17653955459729,
+          "duration_ns": 1897370
+        },
+        "copied_output": {
+          "start_ns": 17653955463585,
+          "end_ns": 17653956905919,
+          "duration_ns": 1442334
+        },
+        "copied_issues": {
+          "start_ns": 17653962203363,
+          "end_ns": 17653962944335,
+          "duration_ns": 740972
+        },
+        "copied_verification_log": {
+          "start_ns": 17653967732092,
+          "end_ns": 17653967739723,
+          "duration_ns": 7631
+        },
+        "copied_warning_log": {
+          "start_ns": 17653972923288,
+          "end_ns": 17653972929537,
+          "duration_ns": 6249
+        },
+        "held_save_1": {
+          "start_ns": 17653977806567,
+          "end_ns": 17653979270343,
+          "duration_ns": 1463776
+        },
+        "held_save_2": {
+          "start_ns": 17653980227736,
+          "end_ns": 17653981009157,
+          "duration_ns": 781421
+        }
+      }
+    },
+    {
+      "case": "aggregate-10000-100",
+      "truth_accepted": true,
+      "two_held_saves_accepted": true,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 62272,
+        "original_unit": "KiB",
+        "bytes": 63766528,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": 770612,
+        "save_1": 773050,
+        "save_2": 773050
+      },
+      "maximum_single_projection_charge_bytes": 3155872,
+      "projection_charges": [
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 3155872,
+          "logical_cells_charged": 20000,
+          "work_charged": 1544262
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 27088,
+          "logical_cells_charged": 200,
+          "work_charged": 15893
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 25084,
+          "logical_cells_charged": 0,
+          "work_charged": 1404
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 98960,
+          "logical_cells_charged": 0,
+          "work_charged": 5923
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 98960,
+          "logical_cells_charged": 0,
+          "work_charged": 5923
+        }
+      ],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 0,
+        "rows": []
+      },
+      "report_error": null,
+      "save_returns": [
+        true,
+        true
+      ],
+      "public_failure": null,
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17654407739665,
+          "end_ns": 17654421051753,
+          "duration_ns": 13312088
+        },
+        "metadata_after_build": {
+          "start_ns": 17654422514708,
+          "end_ns": 17654424721338,
+          "duration_ns": 2206630
+        },
+        "copied_output": {
+          "start_ns": 17654424727147,
+          "end_ns": 17654425673363,
+          "duration_ns": 946216
+        },
+        "copied_issues": {
+          "start_ns": 17654426635042,
+          "end_ns": 17654427213332,
+          "duration_ns": 578290
+        },
+        "copied_verification_log": {
+          "start_ns": 17654428752951,
+          "end_ns": 17654428764408,
+          "duration_ns": 11457
+        },
+        "copied_warning_log": {
+          "start_ns": 17654429437638,
+          "end_ns": 17654429500702,
+          "duration_ns": 63064
+        },
+        "held_save_1": {
+          "start_ns": 17654430232179,
+          "end_ns": 17654432538017,
+          "duration_ns": 2305838
+        },
+        "held_save_2": {
+          "start_ns": 17654433808606,
+          "end_ns": 17654434612871,
+          "duration_ns": 804265
+        }
+      }
+    },
+    {
+      "case": "aggregate-100000-10",
+      "truth_accepted": false,
+      "two_held_saves_accepted": false,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 76520,
+        "original_unit": "KiB",
+        "bytes": 78356480,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": null,
+        "save_1": null
+      },
+      "maximum_single_projection_charge_bytes": null,
+      "projection_charges": [],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 1,
+        "rows": [
+          [
+            "engine",
+            "engine_rejected",
+            null,
+            [],
+            "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+          ]
+        ]
+      },
+      "report_error": null,
+      "save_returns": [],
+      "public_failure": {
+        "class": "DomainError",
+        "message": "cannot save a failed build",
+        "traceback": "Traceback (most recent call last):\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 349, in run\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 40, in timed\n    return call()\n           ^^^^^^\n  File \"/workspace/scratch/resource-policy-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\n    return self._native.save()\n           ^^^^^^^^^^^^^^^^^^^\nyamaa.DomainError: cannot save a failed build\n"
+      },
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17654903625330,
+          "end_ns": 17654928440126,
+          "duration_ns": 24814796
+        },
+        "metadata_after_build": {
+          "start_ns": 17654928695455,
+          "end_ns": 17654930791711,
+          "duration_ns": 2096256
+        },
+        "copied_output": {
+          "start_ns": 17654930795707,
+          "end_ns": 17654930802287,
+          "duration_ns": 6580
+        },
+        "copied_issues": {
+          "start_ns": 17654930954073,
+          "end_ns": 17654931614054,
+          "duration_ns": 659981
+        },
+        "copied_verification_log": {
+          "start_ns": 17654931749074,
+          "end_ns": 17654931754703,
+          "duration_ns": 5629
+        },
+        "copied_warning_log": {
+          "start_ns": 17654931928501,
+          "end_ns": 17654931931525,
+          "duration_ns": 3024
+        },
+        "held_save_1": {
+          "start_ns": 17654932109039,
+          "end_ns": 17654932113446,
+          "duration_ns": 4407
+        }
+      }
+    },
+    {
+      "case": "aggregate-100000-100",
+      "truth_accepted": false,
+      "two_held_saves_accepted": false,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 76756,
+        "original_unit": "KiB",
+        "bytes": 78598144,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": null,
+        "save_1": null
+      },
+      "maximum_single_projection_charge_bytes": null,
+      "projection_charges": [],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 1,
+        "rows": [
+          [
+            "engine",
+            "engine_rejected",
+            null,
+            [],
+            "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+          ]
+        ]
+      },
+      "report_error": null,
+      "save_returns": [],
+      "public_failure": {
+        "class": "DomainError",
+        "message": "cannot save a failed build",
+        "traceback": "Traceback (most recent call last):\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 349, in run\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 40, in timed\n    return call()\n           ^^^^^^\n  File \"/workspace/scratch/resource-policy-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\n    return self._native.save()\n           ^^^^^^^^^^^^^^^^^^^\nyamaa.DomainError: cannot save a failed build\n"
+      },
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17655153468599,
+          "end_ns": 17655183242747,
+          "duration_ns": 29774148
+        },
+        "metadata_after_build": {
+          "start_ns": 17655183622621,
+          "end_ns": 17655186149738,
+          "duration_ns": 2527117
+        },
+        "copied_output": {
+          "start_ns": 17655186153554,
+          "end_ns": 17655186161195,
+          "duration_ns": 7641
+        },
+        "copied_issues": {
+          "start_ns": 17655186315544,
+          "end_ns": 17655187020282,
+          "duration_ns": 704738
+        },
+        "copied_verification_log": {
+          "start_ns": 17655187177976,
+          "end_ns": 17655187183385,
+          "duration_ns": 5409
+        },
+        "copied_warning_log": {
+          "start_ns": 17655187350743,
+          "end_ns": 17655187353347,
+          "duration_ns": 2604
+        },
+        "held_save_1": {
+          "start_ns": 17655187467978,
+          "end_ns": 17655187471883,
+          "duration_ns": 3905
+        }
+      }
+    },
+    {
+      "case": "window-1000-10",
+      "truth_accepted": true,
+      "two_held_saves_accepted": true,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 71848,
+        "original_unit": "KiB",
+        "bytes": 73572352,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": 353164,
+        "save_1": 394268,
+        "save_2": 394268
+      },
+      "maximum_single_projection_charge_bytes": 873836,
+      "projection_charges": [
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 403532,
+          "logical_cells_charged": 3000,
+          "work_charged": 206249
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 790452,
+          "logical_cells_charged": 7000,
+          "work_charged": 508696
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 25804,
+          "logical_cells_charged": 0,
+          "work_charged": 1400
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 873836,
+          "logical_cells_charged": 0,
+          "work_charged": 77905
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 873836,
+          "logical_cells_charged": 0,
+          "work_charged": 77905
+        }
+      ],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 0,
+        "rows": []
+      },
+      "report_error": null,
+      "save_returns": [
+        true,
+        true
+      ],
+      "public_failure": null,
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17655392128014,
+          "end_ns": 17655403159201,
+          "duration_ns": 11031187
+        },
+        "metadata_after_build": {
+          "start_ns": 17655403673816,
+          "end_ns": 17655405808169,
+          "duration_ns": 2134353
+        },
+        "copied_output": {
+          "start_ns": 17655405813597,
+          "end_ns": 17655409906120,
+          "duration_ns": 4092523
+        },
+        "copied_issues": {
+          "start_ns": 17655435527195,
+          "end_ns": 17655435978165,
+          "duration_ns": 450970
+        },
+        "copied_verification_log": {
+          "start_ns": 17655450532389,
+          "end_ns": 17655450544818,
+          "duration_ns": 12429
+        },
+        "copied_warning_log": {
+          "start_ns": 17655465688398,
+          "end_ns": 17655465700135,
+          "duration_ns": 11737
+        },
+        "held_save_1": {
+          "start_ns": 17655482205299,
+          "end_ns": 17655483987188,
+          "duration_ns": 1781889
+        },
+        "held_save_2": {
+          "start_ns": 17655484831914,
+          "end_ns": 17655485899120,
+          "duration_ns": 1067206
+        }
+      }
+    },
+    {
+      "case": "window-1000-100",
+      "truth_accepted": true,
+      "two_held_saves_accepted": true,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 71956,
+        "original_unit": "KiB",
+        "bytes": 73682944,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": 359127,
+        "save_1": 402591,
+        "save_2": 402591
+      },
+      "maximum_single_projection_charge_bytes": 902192,
+      "projection_charges": [
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 403556,
+          "logical_cells_charged": 3000,
+          "work_charged": 207893
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 790464,
+          "logical_cells_charged": 7000,
+          "work_charged": 518978
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 25828,
+          "logical_cells_charged": 0,
+          "work_charged": 1404
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 902192,
+          "logical_cells_charged": 0,
+          "work_charged": 82631
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 902192,
+          "logical_cells_charged": 0,
+          "work_charged": 82631
+        }
+      ],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 0,
+        "rows": []
+      },
+      "report_error": null,
+      "save_returns": [
+        true,
+        true
+      ],
+      "public_failure": null,
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17655801961290,
+          "end_ns": 17655811793215,
+          "duration_ns": 9831925
+        },
+        "metadata_after_build": {
+          "start_ns": 17655812350674,
+          "end_ns": 17655814397015,
+          "duration_ns": 2046341
+        },
+        "copied_output": {
+          "start_ns": 17655814400661,
+          "end_ns": 17655817744681,
+          "duration_ns": 3344020
+        },
+        "copied_issues": {
+          "start_ns": 17655833650084,
+          "end_ns": 17655834148004,
+          "duration_ns": 497920
+        },
+        "copied_verification_log": {
+          "start_ns": 17655848700837,
+          "end_ns": 17655848712574,
+          "duration_ns": 11737
+        },
+        "copied_warning_log": {
+          "start_ns": 17655863583188,
+          "end_ns": 17655863595236,
+          "duration_ns": 12048
+        },
+        "held_save_1": {
+          "start_ns": 17655877827372,
+          "end_ns": 17655879127404,
+          "duration_ns": 1300032
+        },
+        "held_save_2": {
+          "start_ns": 17655879906753,
+          "end_ns": 17655880595006,
+          "duration_ns": 688253
+        }
+      }
+    },
+    {
+      "case": "window-10000-10",
+      "truth_accepted": true,
+      "two_held_saves_accepted": true,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 190244,
+        "original_unit": "KiB",
+        "bytes": 194809856,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": 3521167,
+        "save_1": 3929473,
+        "save_2": 3929473
+      },
+      "maximum_single_projection_charge_bytes": 12586944,
+      "projection_charges": [
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 3156068,
+          "logical_cells_charged": 30000,
+          "work_charged": 2056653
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 12586944,
+          "logical_cells_charged": 70000,
+          "work_charged": 5084298
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 25828,
+          "logical_cells_charged": 0,
+          "work_charged": 1404
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 8304272,
+          "logical_cells_charged": 0,
+          "work_charged": 758311
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 8304272,
+          "logical_cells_charged": 0,
+          "work_charged": 758311
+        }
+      ],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 0,
+        "rows": []
+      },
+      "report_error": null,
+      "save_returns": [
+        true,
+        true
+      ],
+      "public_failure": null,
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17656203108015,
+          "end_ns": 17656272657737,
+          "duration_ns": 69549722
+        },
+        "metadata_after_build": {
+          "start_ns": 17656277177275,
+          "end_ns": 17656278913015,
+          "duration_ns": 1735740
+        },
+        "copied_output": {
+          "start_ns": 17656278917582,
+          "end_ns": 17656315422264,
+          "duration_ns": 36504682
+        },
+        "copied_issues": {
+          "start_ns": 17656489364619,
+          "end_ns": 17656489839355,
+          "duration_ns": 474736
+        },
+        "copied_verification_log": {
+          "start_ns": 17656654732439,
+          "end_ns": 17656654751828,
+          "duration_ns": 19389
+        },
+        "copied_warning_log": {
+          "start_ns": 17656813077971,
+          "end_ns": 17656813119493,
+          "duration_ns": 41522
+        },
+        "held_save_1": {
+          "start_ns": 17656973352770,
+          "end_ns": 17656976321442,
+          "duration_ns": 2968672
+        },
+        "held_save_2": {
+          "start_ns": 17656978643915,
+          "end_ns": 17656980785949,
+          "duration_ns": 2142034
+        }
+      }
+    },
+    {
+      "case": "window-10000-100",
+      "truth_accepted": true,
+      "two_held_saves_accepted": true,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 190804,
+        "original_unit": "KiB",
+        "bytes": 195383296,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": 3580770,
+        "save_1": 4012676,
+        "save_2": 4012676
+      },
+      "maximum_single_projection_charge_bytes": 12586956,
+      "projection_charges": [
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 3156092,
+          "logical_cells_charged": 30000,
+          "work_charged": 2073057
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 12586956,
+          "logical_cells_charged": 70000,
+          "work_charged": 5187100
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 25852,
+          "logical_cells_charged": 0,
+          "work_charged": 1408
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 8587508,
+          "logical_cells_charged": 0,
+          "work_charged": 805517
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 8587508,
+          "logical_cells_charged": 0,
+          "work_charged": 805517
+        }
+      ],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 0,
+        "rows": []
+      },
+      "report_error": null,
+      "save_returns": [
+        true,
+        true
+      ],
+      "public_failure": null,
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17658802362228,
+          "end_ns": 17658866614956,
+          "duration_ns": 64252728
+        },
+        "metadata_after_build": {
+          "start_ns": 17658872233637,
+          "end_ns": 17658874247721,
+          "duration_ns": 2014084
+        },
+        "copied_output": {
+          "start_ns": 17658874252679,
+          "end_ns": 17658910527749,
+          "duration_ns": 36275070
+        },
+        "copied_issues": {
+          "start_ns": 17659081736010,
+          "end_ns": 17659082529349,
+          "duration_ns": 793339
+        },
+        "copied_verification_log": {
+          "start_ns": 17659247138561,
+          "end_ns": 17659247156217,
+          "duration_ns": 17656
+        },
+        "copied_warning_log": {
+          "start_ns": 17659401857982,
+          "end_ns": 17659401874978,
+          "duration_ns": 16996
+        },
+        "held_save_1": {
+          "start_ns": 17659552819337,
+          "end_ns": 17659557309762,
+          "duration_ns": 4490425
+        },
+        "held_save_2": {
+          "start_ns": 17659559949326,
+          "end_ns": 17659562123557,
+          "duration_ns": 2174231
+        }
+      }
+    },
+    {
+      "case": "window-100000-10",
+      "truth_accepted": false,
+      "two_held_saves_accepted": false,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 77448,
+        "original_unit": "KiB",
+        "bytes": 79306752,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": null,
+        "save_1": null
+      },
+      "maximum_single_projection_charge_bytes": null,
+      "projection_charges": [],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 1,
+        "rows": [
+          [
+            "engine",
+            "engine_rejected",
+            null,
+            [],
+            "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+          ]
+        ]
+      },
+      "report_error": null,
+      "save_returns": [],
+      "public_failure": {
+        "class": "DomainError",
+        "message": "cannot save a failed build",
+        "traceback": "Traceback (most recent call last):\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 349, in run\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 40, in timed\n    return call()\n           ^^^^^^\n  File \"/workspace/scratch/resource-policy-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\n    return self._native.save()\n           ^^^^^^^^^^^^^^^^^^^\nyamaa.DomainError: cannot save a failed build\n"
+      },
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17661423953712,
+          "end_ns": 17661452422759,
+          "duration_ns": 28469047
+        },
+        "metadata_after_build": {
+          "start_ns": 17661452645560,
+          "end_ns": 17661454434320,
+          "duration_ns": 1788760
+        },
+        "copied_output": {
+          "start_ns": 17661454437975,
+          "end_ns": 17661454442872,
+          "duration_ns": 4897
+        },
+        "copied_issues": {
+          "start_ns": 17661454578714,
+          "end_ns": 17661455212086,
+          "duration_ns": 633372
+        },
+        "copied_verification_log": {
+          "start_ns": 17661455338514,
+          "end_ns": 17661455343461,
+          "duration_ns": 4947
+        },
+        "copied_warning_log": {
+          "start_ns": 17661455461557,
+          "end_ns": 17661455464190,
+          "duration_ns": 2633
+        },
+        "held_save_1": {
+          "start_ns": 17661455570018,
+          "end_ns": 17661455574174,
+          "duration_ns": 4156
+        }
+      }
+    },
+    {
+      "case": "window-100000-100",
+      "truth_accepted": false,
+      "two_held_saves_accepted": false,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 78864,
+        "original_unit": "KiB",
+        "bytes": 80756736,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": null,
+        "save_1": null
+      },
+      "maximum_single_projection_charge_bytes": null,
+      "projection_charges": [],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 1,
+        "rows": [
+          [
+            "engine",
+            "engine_rejected",
+            null,
+            [],
+            "{\"code\":\"result_projection\",\"stage\":\"build\"}"
+          ]
+        ]
+      },
+      "report_error": null,
+      "save_returns": [],
+      "public_failure": {
+        "class": "DomainError",
+        "message": "cannot save a failed build",
+        "traceback": "Traceback (most recent call last):\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 349, in run\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 40, in timed\n    return call()\n           ^^^^^^\n  File \"/workspace/scratch/resource-policy-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\n    return self._native.save()\n           ^^^^^^^^^^^^^^^^^^^\nyamaa.DomainError: cannot save a failed build\n"
+      },
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17662088663744,
+          "end_ns": 17662118875396,
+          "duration_ns": 30211652
+        },
+        "metadata_after_build": {
+          "start_ns": 17662119133830,
+          "end_ns": 17662121107133,
+          "duration_ns": 1973303
+        },
+        "copied_output": {
+          "start_ns": 17662121110809,
+          "end_ns": 17662121118460,
+          "duration_ns": 7651
+        },
+        "copied_issues": {
+          "start_ns": 17662121265889,
+          "end_ns": 17662121902396,
+          "duration_ns": 636507
+        },
+        "copied_verification_log": {
+          "start_ns": 17662122037086,
+          "end_ns": 17662122042364,
+          "duration_ns": 5278
+        },
+        "copied_warning_log": {
+          "start_ns": 17662122200168,
+          "end_ns": 17662122202902,
+          "duration_ns": 2734
+        },
+        "held_save_1": {
+          "start_ns": 17662122327938,
+          "end_ns": 17662122332004,
+          "duration_ns": 4066
+        }
+      }
+    },
+    {
+      "case": "callback-1000-1",
+      "truth_accepted": true,
+      "two_held_saves_accepted": true,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 68180,
+        "original_unit": "KiB",
+        "bytes": 69816320,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": 157083,
+        "save_1": 184369,
+        "save_2": 184369
+      },
+      "maximum_single_projection_charge_bytes": 737356,
+      "projection_charges": [
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 403228,
+          "logical_cells_charged": 2000,
+          "work_charged": 157208
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 395644,
+          "logical_cells_charged": 2000,
+          "work_charged": 156807
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 63024,
+          "logical_cells_charged": 0,
+          "work_charged": 3724
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 737356,
+          "logical_cells_charged": 0,
+          "work_charged": 52519
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 737356,
+          "logical_cells_charged": 0,
+          "work_charged": 52519
+        }
+      ],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 0,
+        "rows": []
+      },
+      "report_error": null,
+      "save_returns": [
+        true,
+        true
+      ],
+      "public_failure": null,
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17662771993723,
+          "end_ns": 17662883724064,
+          "duration_ns": 111730341
+        },
+        "metadata_after_build": {
+          "start_ns": 17662883930431,
+          "end_ns": 17662885714362,
+          "duration_ns": 1783931
+        },
+        "copied_output": {
+          "start_ns": 17662885718549,
+          "end_ns": 17662887042156,
+          "duration_ns": 1323607
+        },
+        "copied_issues": {
+          "start_ns": 17662892371538,
+          "end_ns": 17662892875116,
+          "duration_ns": 503578
+        },
+        "copied_verification_log": {
+          "start_ns": 17662897294245,
+          "end_ns": 17662897301836,
+          "duration_ns": 7591
+        },
+        "copied_warning_log": {
+          "start_ns": 17662902110895,
+          "end_ns": 17662902115802,
+          "duration_ns": 4907
+        },
+        "held_save_1": {
+          "start_ns": 17662906509874,
+          "end_ns": 17662908896992,
+          "duration_ns": 2387118
+        },
+        "held_save_2": {
+          "start_ns": 17662909406750,
+          "end_ns": 17662910294199,
+          "duration_ns": 887449
+        }
+      }
+    },
+    {
+      "case": "callback-10000-1",
+      "truth_accepted": true,
+      "two_held_saves_accepted": true,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 111288,
+        "original_unit": "KiB",
+        "bytes": 113958912,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": 1548226,
+        "save_1": 1819508,
+        "save_2": 1819508
+      },
+      "maximum_single_projection_charge_bytes": 6689368,
+      "projection_charges": [
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 3155764,
+          "logical_cells_charged": 20000,
+          "work_charged": 1566348
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 3148168,
+          "logical_cells_charged": 20000,
+          "work_charged": 1565945
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 63096,
+          "logical_cells_charged": 0,
+          "work_charged": 3736
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 6689368,
+          "logical_cells_charged": 0,
+          "work_charged": 486521
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 6689368,
+          "logical_cells_charged": 0,
+          "work_charged": 486521
+        }
+      ],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 0,
+        "rows": []
+      },
+      "report_error": null,
+      "save_returns": [
+        true,
+        true
+      ],
+      "public_failure": null,
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17663577257860,
+          "end_ns": 17663710794314,
+          "duration_ns": 133536454
+        },
+        "metadata_after_build": {
+          "start_ns": 17663712524696,
+          "end_ns": 17663714627011,
+          "duration_ns": 2102315
+        },
+        "copied_output": {
+          "start_ns": 17663714631278,
+          "end_ns": 17663734134888,
+          "duration_ns": 19503610
+        },
+        "copied_issues": {
+          "start_ns": 17663784956702,
+          "end_ns": 17663785567370,
+          "duration_ns": 610668
+        },
+        "copied_verification_log": {
+          "start_ns": 17663835303310,
+          "end_ns": 17663835322598,
+          "duration_ns": 19288
+        },
+        "copied_warning_log": {
+          "start_ns": 17663884639414,
+          "end_ns": 17663884657571,
+          "duration_ns": 18157
+        },
+        "held_save_1": {
+          "start_ns": 17663935437423,
+          "end_ns": 17663937657873,
+          "duration_ns": 2220450
+        },
+        "held_save_2": {
+          "start_ns": 17663938949924,
+          "end_ns": 17663940545706,
+          "duration_ns": 1595782
+        }
+      }
+    },
+    {
+      "case": "callback-100000-1",
+      "truth_accepted": false,
+      "two_held_saves_accepted": false,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 81088,
+        "original_unit": "KiB",
+        "bytes": 83034112,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": null,
+        "save_1": null
+      },
+      "maximum_single_projection_charge_bytes": 7620,
+      "projection_charges": [
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 7620,
+          "logical_cells_charged": 0,
+          "work_charged": 407
+        }
+      ],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 1,
+        "rows": [
+          [
+            "engine",
+            "engine_rejected",
+            null,
+            [],
+            "{\"code\":\"source_boundary\",\"stage\":\"build\"}"
+          ]
+        ]
+      },
+      "report_error": null,
+      "save_returns": [],
+      "public_failure": {
+        "class": "DomainError",
+        "message": "cannot save a failed build",
+        "traceback": "Traceback (most recent call last):\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 349, in run\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 40, in timed\n    return call()\n           ^^^^^^\n  File \"/workspace/scratch/resource-policy-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\n    return self._native.save()\n           ^^^^^^^^^^^^^^^^^^^\nyamaa.DomainError: cannot save a failed build\n"
+      },
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17666359659760,
+          "end_ns": 17666493219997,
+          "duration_ns": 133560237
+        },
+        "metadata_after_build": {
+          "start_ns": 17666493451982,
+          "end_ns": 17666495792982,
+          "duration_ns": 2341000
+        },
+        "copied_output": {
+          "start_ns": 17666495798119,
+          "end_ns": 17666495805050,
+          "duration_ns": 6931
+        },
+        "copied_issues": {
+          "start_ns": 17666495966390,
+          "end_ns": 17666497255936,
+          "duration_ns": 1289546
+        },
+        "copied_verification_log": {
+          "start_ns": 17666497413881,
+          "end_ns": 17666497419399,
+          "duration_ns": 5518
+        },
+        "copied_warning_log": {
+          "start_ns": 17666497590163,
+          "end_ns": 17666497593127,
+          "duration_ns": 2964
+        },
+        "held_save_1": {
+          "start_ns": 17666497706506,
+          "end_ns": 17666497711373,
+          "duration_ns": 4867
+        }
+      }
+    },
+    {
+      "case": "producer-1000-1",
+      "truth_accepted": true,
+      "two_held_saves_accepted": true,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 69524,
+        "original_unit": "KiB",
+        "bytes": 71192576,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": 923056,
+        "save_1": 923228,
+        "save_2": 923228
+      },
+      "maximum_single_projection_charge_bytes": 11584848,
+      "projection_charges": [
+        {
+          "retained_limit_bytes": 16777216,
+          "retained_charge_bytes": 1255152,
+          "logical_cells_charged": 4000,
+          "work_charged": 375968
+        },
+        {
+          "retained_limit_bytes": 16777216,
+          "retained_charge_bytes": 1254936,
+          "logical_cells_charged": 4000,
+          "work_charged": 375932
+        },
+        {
+          "retained_limit_bytes": 16777216,
+          "retained_charge_bytes": 1254984,
+          "logical_cells_charged": 4000,
+          "work_charged": 375940
+        },
+        {
+          "retained_limit_bytes": 16777216,
+          "retained_charge_bytes": 2046128,
+          "logical_cells_charged": 8000,
+          "work_charged": 714392
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 2953148,
+          "logical_cells_charged": 0,
+          "work_charged": 224088
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 11584848,
+          "logical_cells_charged": 12000,
+          "work_charged": 405206
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 3072672,
+          "logical_cells_charged": 0,
+          "work_charged": 226135
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 3072672,
+          "logical_cells_charged": 0,
+          "work_charged": 226135
+        }
+      ],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 0,
+        "rows": []
+      },
+      "report_error": null,
+      "save_returns": [
+        true,
+        true
+      ],
+      "public_failure": null,
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17666817723091,
+          "end_ns": 17666849557330,
+          "duration_ns": 31834239
+        },
+        "metadata_after_build": {
+          "start_ns": 17666850736343,
+          "end_ns": 17666852654374,
+          "duration_ns": 1918031
+        },
+        "copied_output": {
+          "start_ns": 17666852658359,
+          "end_ns": 17666854068646,
+          "duration_ns": 1410287
+        },
+        "copied_issues": {
+          "start_ns": 17666858951263,
+          "end_ns": 17666859386210,
+          "duration_ns": 434947
+        },
+        "copied_verification_log": {
+          "start_ns": 17666863966609,
+          "end_ns": 17666863975402,
+          "duration_ns": 8793
+        },
+        "copied_warning_log": {
+          "start_ns": 17666868447619,
+          "end_ns": 17666868453318,
+          "duration_ns": 5699
+        },
+        "held_save_1": {
+          "start_ns": 17666872849061,
+          "end_ns": 17666876487269,
+          "duration_ns": 3638208
+        },
+        "held_save_2": {
+          "start_ns": 17666877823596,
+          "end_ns": 17666879942986,
+          "duration_ns": 2119390
+        }
+      }
+    },
+    {
+      "case": "producer-1000-3",
+      "truth_accepted": true,
+      "two_held_saves_accepted": true,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 71964,
+        "original_unit": "KiB",
+        "bytes": 73691136,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": 1300498,
+        "save_1": 1300726,
+        "save_2": 1300726
+      },
+      "maximum_single_projection_charge_bytes": 11585104,
+      "projection_charges": [
+        {
+          "retained_limit_bytes": 11184808,
+          "retained_charge_bytes": 1255408,
+          "logical_cells_charged": 4000,
+          "work_charged": 375976
+        },
+        {
+          "retained_limit_bytes": 11184808,
+          "retained_charge_bytes": 1255480,
+          "logical_cells_charged": 4000,
+          "work_charged": 375988
+        },
+        {
+          "retained_limit_bytes": 11184808,
+          "retained_charge_bytes": 1255480,
+          "logical_cells_charged": 4000,
+          "work_charged": 375988
+        },
+        {
+          "retained_limit_bytes": 11184808,
+          "retained_charge_bytes": 1255192,
+          "logical_cells_charged": 4000,
+          "work_charged": 375940
+        },
+        {
+          "retained_limit_bytes": 11184808,
+          "retained_charge_bytes": 1255240,
+          "logical_cells_charged": 4000,
+          "work_charged": 375948
+        },
+        {
+          "retained_limit_bytes": 11184808,
+          "retained_charge_bytes": 2046384,
+          "logical_cells_charged": 8000,
+          "work_charged": 714400
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 4414220,
+          "logical_cells_charged": 0,
+          "work_charged": 335411
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 11585104,
+          "logical_cells_charged": 12000,
+          "work_charged": 405214
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 4580240,
+          "logical_cells_charged": 0,
+          "work_charged": 337935
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 4580240,
+          "logical_cells_charged": 0,
+          "work_charged": 337935
+        }
+      ],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 0,
+        "rows": []
+      },
+      "report_error": null,
+      "save_returns": [
+        true,
+        true
+      ],
+      "public_failure": null,
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17667309378789,
+          "end_ns": 17667342753207,
+          "duration_ns": 33374418
+        },
+        "metadata_after_build": {
+          "start_ns": 17667344738348,
+          "end_ns": 17667346629950,
+          "duration_ns": 1891602
+        },
+        "copied_output": {
+          "start_ns": 17667346634066,
+          "end_ns": 17667348146024,
+          "duration_ns": 1511958
+        },
+        "copied_issues": {
+          "start_ns": 17667353035902,
+          "end_ns": 17667353467333,
+          "duration_ns": 431431
+        },
+        "copied_verification_log": {
+          "start_ns": 17667357898069,
+          "end_ns": 17667357905961,
+          "duration_ns": 7892
+        },
+        "copied_warning_log": {
+          "start_ns": 17667362265972,
+          "end_ns": 17667362270068,
+          "duration_ns": 4096
+        },
+        "held_save_1": {
+          "start_ns": 17667366775074,
+          "end_ns": 17667371787795,
+          "duration_ns": 5012721
+        },
+        "held_save_2": {
+          "start_ns": 17667373310799,
+          "end_ns": 17667376841107,
+          "duration_ns": 3530308
+        }
+      }
+    },
+    {
+      "case": "producer-10000-1",
+      "truth_accepted": false,
+      "two_held_saves_accepted": false,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 95828,
+        "original_unit": "KiB",
+        "bytes": 98127872,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": 7218385,
+        "save_1": 7218385
+      },
+      "maximum_single_projection_charge_bytes": 27252172,
+      "projection_charges": [
+        {
+          "retained_limit_bytes": 16777216,
+          "retained_charge_bytes": 10806636,
+          "logical_cells_charged": 40000,
+          "work_charged": 3747378
+        },
+        {
+          "retained_limit_bytes": 16777216,
+          "retained_charge_bytes": 10806420,
+          "logical_cells_charged": 40000,
+          "work_charged": 3747342
+        },
+        {
+          "retained_limit_bytes": 16777216,
+          "retained_charge_bytes": 10806468,
+          "logical_cells_charged": 40000,
+          "work_charged": 3747350
+        },
+        {
+          "retained_limit_bytes": 16777216,
+          "retained_charge_bytes": 13956932,
+          "logical_cells_charged": 80000,
+          "work_charged": 4836394
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 27252172,
+          "logical_cells_charged": 40000,
+          "work_charged": 4816757
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 0,
+          "logical_cells_charged": 0,
+          "work_charged": 0
+        }
+      ],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 1,
+        "rows": [
+          [
+            "engine",
+            "engine_rejected",
+            null,
+            [],
+            "{\"code\":\"producer_build\",\"stage\":\"build\"}"
+          ]
+        ]
+      },
+      "report_error": {
+        "code": "output_limit",
+        "stage": "report"
+      },
+      "save_returns": [],
+      "public_failure": {
+        "class": "DomainError",
+        "message": "cannot save a failed build",
+        "traceback": "Traceback (most recent call last):\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 349, in run\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 40, in timed\n    return call()\n           ^^^^^^\n  File \"/workspace/scratch/resource-policy-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\n    return self._native.save()\n           ^^^^^^^^^^^^^^^^^^^\nyamaa.DomainError: cannot save a failed build\n"
+      },
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17667897164467,
+          "end_ns": 17668059405195,
+          "duration_ns": 162240728
+        },
+        "metadata_after_build": {
+          "start_ns": 17668071863594,
+          "end_ns": 17668073625102,
+          "duration_ns": 1761508
+        },
+        "copied_output": {
+          "start_ns": 17668073629138,
+          "end_ns": 17668073637400,
+          "duration_ns": 8262
+        },
+        "copied_issues": {
+          "start_ns": 17668073774784,
+          "end_ns": 17668074401125,
+          "duration_ns": 626341
+        },
+        "copied_verification_log": {
+          "start_ns": 17668074531299,
+          "end_ns": 17668074536917,
+          "duration_ns": 5618
+        },
+        "copied_warning_log": {
+          "start_ns": 17668074916822,
+          "end_ns": 17668074921780,
+          "duration_ns": 4958
+        },
+        "held_save_1": {
+          "start_ns": 17668075076279,
+          "end_ns": 17668075082799,
+          "duration_ns": 6520
+        }
+      }
+    },
+    {
+      "case": "producer-10000-3",
+      "truth_accepted": false,
+      "two_held_saves_accepted": false,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 114648,
+        "original_unit": "KiB",
+        "bytes": 117399552,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": 10976239,
+        "save_1": 10976239
+      },
+      "maximum_single_projection_charge_bytes": 41198140,
+      "projection_charges": [
+        {
+          "retained_limit_bytes": 11184808,
+          "retained_charge_bytes": 10806892,
+          "logical_cells_charged": 40000,
+          "work_charged": 3747386
+        },
+        {
+          "retained_limit_bytes": 11184808,
+          "retained_charge_bytes": 10806964,
+          "logical_cells_charged": 40000,
+          "work_charged": 3747398
+        },
+        {
+          "retained_limit_bytes": 11184808,
+          "retained_charge_bytes": 10806964,
+          "logical_cells_charged": 40000,
+          "work_charged": 3747398
+        },
+        {
+          "retained_limit_bytes": 11184808,
+          "retained_charge_bytes": 10806676,
+          "logical_cells_charged": 40000,
+          "work_charged": 3747350
+        },
+        {
+          "retained_limit_bytes": 11184808,
+          "retained_charge_bytes": 10806724,
+          "logical_cells_charged": 40000,
+          "work_charged": 3747358
+        },
+        {
+          "retained_limit_bytes": 11184808,
+          "retained_charge_bytes": 11008068,
+          "logical_cells_charged": 80000,
+          "work_charged": 3853352
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 41198140,
+          "logical_cells_charged": 40000,
+          "work_charged": 5892896
+        },
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 0,
+          "logical_cells_charged": 0,
+          "work_charged": 0
+        }
+      ],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 1,
+        "rows": [
+          [
+            "engine",
+            "engine_rejected",
+            null,
+            [],
+            "{\"code\":\"producer_build\",\"stage\":\"build\"}"
+          ]
+        ]
+      },
+      "report_error": {
+        "code": "output_limit",
+        "stage": "report"
+      },
+      "save_returns": [],
+      "public_failure": {
+        "class": "DomainError",
+        "message": "cannot save a failed build",
+        "traceback": "Traceback (most recent call last):\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 349, in run\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 40, in timed\n    return call()\n           ^^^^^^\n  File \"/workspace/scratch/resource-policy-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\n    return self._native.save()\n           ^^^^^^^^^^^^^^^^^^^\nyamaa.DomainError: cannot save a failed build\n"
+      },
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17668309063939,
+          "end_ns": 17668542431341,
+          "duration_ns": 233367402
+        },
+        "metadata_after_build": {
+          "start_ns": 17668564340688,
+          "end_ns": 17668566455692,
+          "duration_ns": 2115004
+        },
+        "copied_output": {
+          "start_ns": 17668566460529,
+          "end_ns": 17668566471936,
+          "duration_ns": 11407
+        },
+        "copied_issues": {
+          "start_ns": 17668566644783,
+          "end_ns": 17668567312445,
+          "duration_ns": 667662
+        },
+        "copied_verification_log": {
+          "start_ns": 17668569012522,
+          "end_ns": 17668569020885,
+          "duration_ns": 8363
+        },
+        "copied_warning_log": {
+          "start_ns": 17668569200391,
+          "end_ns": 17668569203516,
+          "duration_ns": 3125
+        },
+        "held_save_1": {
+          "start_ns": 17668569323945,
+          "end_ns": 17668569330765,
+          "duration_ns": 6820
+        }
+      }
+    },
+    {
+      "case": "producer-100000-1",
+      "truth_accepted": false,
+      "two_held_saves_accepted": false,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 80292,
+        "original_unit": "KiB",
+        "bytes": 82219008,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": 1219,
+        "save_1": 1219
+      },
+      "maximum_single_projection_charge_bytes": 39072,
+      "projection_charges": [
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 39072,
+          "logical_cells_charged": 0,
+          "work_charged": 1855
+        }
+      ],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 1,
+        "rows": [
+          [
+            "engine",
+            "engine_rejected",
+            null,
+            [],
+            "{\"code\":\"original_boundary\",\"stage\":\"build\"}"
+          ]
+        ]
+      },
+      "report_error": null,
+      "save_returns": [],
+      "public_failure": {
+        "class": "DomainError",
+        "message": "cannot save a failed build",
+        "traceback": "Traceback (most recent call last):\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 349, in run\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 40, in timed\n    return call()\n           ^^^^^^\n  File \"/workspace/scratch/resource-policy-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\n    return self._native.save()\n           ^^^^^^^^^^^^^^^^^^^\nyamaa.DomainError: cannot save a failed build\n"
+      },
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17668849430401,
+          "end_ns": 17668885819060,
+          "duration_ns": 36388659
+        },
+        "metadata_after_build": {
+          "start_ns": 17668886086928,
+          "end_ns": 17668887995135,
+          "duration_ns": 1908207
+        },
+        "copied_output": {
+          "start_ns": 17668887998970,
+          "end_ns": 17668888037147,
+          "duration_ns": 38177
+        },
+        "copied_issues": {
+          "start_ns": 17668888202102,
+          "end_ns": 17668888871167,
+          "duration_ns": 669065
+        },
+        "copied_verification_log": {
+          "start_ns": 17668889013368,
+          "end_ns": 17668889019598,
+          "duration_ns": 6230
+        },
+        "copied_warning_log": {
+          "start_ns": 17668889163061,
+          "end_ns": 17668889165835,
+          "duration_ns": 2774
+        },
+        "held_save_1": {
+          "start_ns": 17668889522405,
+          "end_ns": 17668889527482,
+          "duration_ns": 5077
+        }
+      }
+    },
+    {
+      "case": "producer-100000-3",
+      "truth_accepted": false,
+      "two_held_saves_accepted": false,
+      "child_peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 80972,
+        "original_unit": "KiB",
+        "bytes": 82915328,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "encoded_report_bytes": {
+        "build": 1219,
+        "save_1": 1219
+      },
+      "maximum_single_projection_charge_bytes": 39072,
+      "projection_charges": [
+        {
+          "retained_limit_bytes": 67108864,
+          "retained_charge_bytes": 39072,
+          "logical_cells_charged": 0,
+          "work_charged": 1857
+        }
+      ],
+      "classified_resource_refusal": null,
+      "public_issues": {
+        "columns": [
+          [
+            "phase",
+            "str"
+          ],
+          [
+            "condition",
+            "str"
+          ],
+          [
+            "requirement",
+            "str"
+          ],
+          [
+            "spec_paths",
+            "list[str]"
+          ],
+          [
+            "context",
+            "str"
+          ]
+        ],
+        "row_count": 1,
+        "rows": [
+          [
+            "engine",
+            "engine_rejected",
+            null,
+            [],
+            "{\"code\":\"original_boundary\",\"stage\":\"build\"}"
+          ]
+        ]
+      },
+      "report_error": null,
+      "save_returns": [],
+      "public_failure": {
+        "class": "DomainError",
+        "message": "cannot save a failed build",
+        "traceback": "Traceback (most recent call last):\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 349, in run\n    returned = timed(row[\"durations\"], \"held_\" + label, result.save)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/scratch/resource-row-report-frontier-3889a2ac/harness/public_lifecycle_python_worker.py\", line 40, in timed\n    return call()\n           ^^^^^^\n  File \"/workspace/scratch/resource-policy-env/lib/python3.12/site-packages/yamaa/_domain.py\", line 38, in save\n    return self._native.save()\n           ^^^^^^^^^^^^^^^^^^^\nyamaa.DomainError: cannot save a failed build\n"
+      },
+      "diagnostic_durations": {
+        "public_build": {
+          "start_ns": 17669230496987,
+          "end_ns": 17669266642334,
+          "duration_ns": 36145347
+        },
+        "metadata_after_build": {
+          "start_ns": 17669266938324,
+          "end_ns": 17669269164699,
+          "duration_ns": 2226375
+        },
+        "copied_output": {
+          "start_ns": 17669269169856,
+          "end_ns": 17669269177818,
+          "duration_ns": 7962
+        },
+        "copied_issues": {
+          "start_ns": 17669269331116,
+          "end_ns": 17669269990126,
+          "duration_ns": 659010
+        },
+        "copied_verification_log": {
+          "start_ns": 17669270169092,
+          "end_ns": 17669270174249,
+          "duration_ns": 5157
+        },
+        "copied_warning_log": {
+          "start_ns": 17669270305785,
+          "end_ns": 17669270308379,
+          "duration_ns": 2594
+        },
+        "held_save_1": {
+          "start_ns": 17669270417481,
+          "end_ns": 17669270421937,
+          "duration_ns": 4456
+        }
+      }
+    }
+  ],
+  "actual_callback_observers": [
+    {
+      "case": "callback-1000-1",
+      "combined_activation_and_derivation_calls": 859,
+      "stage_counts": null
+    },
+    {
+      "case": "callback-10000-1",
+      "combined_activation_and_derivation_calls": 8573,
+      "stage_counts": null
+    }
+  ],
+  "timing_budget_approval": null,
+  "transition_approval": null
+}

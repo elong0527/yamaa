@@ -17,13 +17,13 @@ PR_PLATFORM = "ubuntu-24.04"
 PR_PYTHONS = ("3.12", "3.14")
 
 
-def plan(event, *, full_pr=False):
-    if event == "pull_request" and not full_pr:
+def plan(event):
+    if event == "pull_request":
         # Keep PR feedback on Linux and exercise both supported Python endpoints.
         platforms = [PR_PLATFORM]
         pythons = PR_PYTHONS
         r_platforms = [PR_PLATFORM]
-    elif event in {"pull_request", "push", "workflow_dispatch"}:
+    elif event in {"push", "workflow_dispatch"}:
         platforms = list(PLATFORMS)
         pythons = PYTHONS
         r_platforms = list(R_PLATFORMS)
@@ -43,7 +43,7 @@ def plan(event, *, full_pr=False):
         "r": {"os": r_platforms},
         "run-r": bool(r_platforms),
         "run-rust": event == "push",
-        "full": event in {"push", "workflow_dispatch"} or full_pr,
+        "full": event in {"push", "workflow_dispatch"},
         "compare-os": platforms[0],
     }
 
@@ -115,10 +115,7 @@ def main():
         ).strip()
         compare_cohorts(json.loads(os.environ["QUALIFICATION_MATRIX"]), root, revision)
         return
-    coverage = plan(
-        os.environ["GITHUB_EVENT_NAME"],
-        full_pr=os.environ.get("NATIVE_FULL_MATRIX") == "true",
-    )
+    coverage = plan(os.environ["GITHUB_EVENT_NAME"])
     with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
         for key, value in coverage.items():
             encoded = (
@@ -138,8 +135,7 @@ def main():
                 "PR native coverage: Linux, Python 3.12 and 3.14, "
                 "wheel and source installs.\n\n"
                 "Full installed platform coverage and complete cohort "
-                "comparisons run on main pushes, manual full-matrix dispatches, "
-                "or PRs labeled native-full-matrix.\n"
+                "comparisons run on main pushes or manual full-matrix dispatches.\n"
             )
         summary.write(
             "Shared Rust checks and cross-platform math run only on pushes to main.\n"

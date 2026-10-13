@@ -24,7 +24,7 @@ class CompletedAssertionStage(unittest.TestCase):
             self.assertEqual((root / (label + "-truth.json")).read_bytes(), fixture.read_bytes())
             paths = json.loads((root / (label + "-case-paths.json")).read_text())
             self.assertEqual(list(paths), list(truth["cases"]))
-            self.assertEqual(list(paths.values()), [f"{index:04d}" for index in range(1, 18)])
+            self.assertEqual(list(paths.values()), [f"{index:04d}" for index in range(1, 22)])
             r_truth = (root / (label + "-truth.R")).read_text()
             for name, case in truth["cases"].items():
                 directory = root / (label + "-cases") / paths[name]

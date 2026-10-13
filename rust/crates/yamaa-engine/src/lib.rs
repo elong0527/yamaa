@@ -4,7 +4,9 @@
 
 extern crate alloc;
 
+pub mod application_observer;
 pub mod build;
+pub mod capacity;
 pub mod dataset;
 mod dataset_budget;
 pub mod dataset_predicate;
@@ -12,6 +14,7 @@ pub mod dictionary_preparation;
 pub mod document_preparation;
 pub mod domain;
 pub mod domain_entry;
+pub mod execution_work;
 pub mod file_preparation;
 pub mod function_invocation;
 pub mod host_values;

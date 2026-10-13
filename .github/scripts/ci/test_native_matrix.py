@@ -74,34 +74,6 @@ class NativeCoverage(unittest.TestCase):
         )
         self.assertFalse(dispatch["run-rust"])
 
-    def test_labeled_pr_qualifies_the_complete_installed_matrix(self):
-        self.assertEqual(
-            native_matrix.plan("pull_request", full_pr=True),
-            native_matrix.plan("workflow_dispatch"),
-        )
-        with tempfile.TemporaryDirectory() as directory:
-            output = Path(directory) / "output"
-            summary = Path(directory) / "summary"
-            environment = dict(
-                os.environ,
-                GITHUB_EVENT_NAME="pull_request",
-                NATIVE_FULL_MATRIX="true",
-                GITHUB_OUTPUT=str(output),
-                GITHUB_STEP_SUMMARY=str(summary),
-            )
-            subprocess.run(
-                [sys.executable, native_matrix.__file__, "plan"],
-                env=environment,
-                check=True,
-            )
-            values = dict(
-                line.split("=", 1) for line in output.read_text().splitlines()
-            )
-            self.assertEqual(values["full"], "true")
-            self.assertEqual(values["run-rust"], "false")
-            self.assertEqual(len(json.loads(values["qualify"])["include"]), 18)
-            self.assertEqual(len(json.loads(values["r"])["os"]), 3)
-
     def test_pr_checks_both_installation_forms_on_linux_and_python_endpoints(self):
         coverage = native_matrix.plan("pull_request")
         self.assertEqual(

@@ -78,6 +78,12 @@ pub trait CodecPort {
 /// Select the original node context and enforce this report's complete byte
 /// budget. Reports own observations only; no method grants publication authority.
 pub trait ReportPort: OutputReport {
+    /// A generic port retains equal reservations. A native port may pool this
+    /// capacity only while admitting cumulative actual encoded lengths and
+    /// retained projection charges across every entered node.
+    fn report_allowance(&mut self, total: usize, nodes: usize) -> usize {
+        total / nodes
+    }
     /// Prepare bounded diagnostic output from this actual entered attempt before
     /// its primary can become available to any dependent. This also runs after
     /// an execution/source failure, preserving the original attempt unchanged.
@@ -109,8 +115,9 @@ pub struct Ports<'a, A, P, D, R, C> {
     pub codec: &'a mut C,
 }
 
-/// Execution/cell/text capacities reserve a conservative equal share per node
-/// before host entry. Byte reads and serialized output share cumulative budgets;
+/// Source rows reserve a share weighted by admitted input slots before host
+/// entry; WorkCells has one actual cumulative owner across entered datasets.
+/// Other cell/text capacities keep an equal share per node. Byte reads and serialized output share cumulative budgets;
 /// alias re-ingestion consumes read/work budget while borrowing the same Arc.
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
@@ -131,18 +138,18 @@ impl Default for Limits {
         Self {
             nodes: 64,
             source_bytes: 16_777_216,
-            source_cells: 1_048_576,
+            source_cells: crate::capacity::SOURCE_CELLS,
             source_storage_bytes: 67_108_864,
             decode_work_bytes: 268_435_456,
             output_bytes: 16_777_216,
-            report_bytes: 16_777_216,
+            report_bytes: crate::capacity::REPORT_ENCODED_BYTES,
             routing_work: 67_108_864,
             execution: dataset::Limits {
                 source_rows: 1_048_576,
                 output_rows: 1_048_576,
-                output_cells: 1_048_576,
+                output_cells: crate::capacity::GRAPH_OUTPUT_CELLS,
                 key_cells: 1_048_576,
-                work_cells: 67_108_864,
+                work_cells: crate::capacity::EXECUTION_WORK,
                 scalar_text_bytes: 16_777_216,
                 output_text_bytes: 16_777_216,
                 identity_cells: 1_048_576,
@@ -267,6 +274,29 @@ impl PreparedBuild {
         R: ReportPort,
         C: CodecPort,
     {
+        self.build_publication_with_observer_into(
+            ports,
+            limits,
+            attempt,
+            crate::application_observer::Scope::new(&crate::application_observer::Noop),
+        )
+    }
+
+    pub fn build_publication_with_observer_into<A, P, D, R, C>(
+        &self,
+        ports: Ports<'_, A, P, D, R, C>,
+        limits: Limits,
+        attempt: &mut BuildAttempt<A, P, D, R, C>,
+        scope: crate::application_observer::Scope<'_>,
+    ) -> Result<crate::producer_publication::PreparedPublication, &'static str>
+    where
+        A: ActivationPort,
+        P: StudyPort,
+        D: DecodePort,
+        D::Table: TableAccess<Error = A::Error>,
+        R: ReportPort,
+        C: CodecPort,
+    {
         *attempt = Attempt::default();
         let graph = self.metadata();
         let count = graph.nodes().len();
@@ -291,6 +321,49 @@ impl PreparedBuild {
                 return Err("producer_build_failed");
             }
         };
+        let source_rows = match plans
+            .iter()
+            .map(|plan| {
+                row_allowance(
+                    limits.execution.source_rows,
+                    plan.sources().len(),
+                    source_count,
+                )
+            })
+            .collect::<Option<Vec<_>>>()
+        {
+            Some(rows) => rows,
+            None => {
+                attempt.outcome = Err(Failure::Limit("producer_source_rows"));
+                return Err("producer_build_failed");
+            }
+        };
+        let column_count = match plans.iter().try_fold(0usize, |sum, plan| {
+            sum.checked_add(plan.output().columns().len())
+        }) {
+            Some(count) => count,
+            _ => {
+                attempt.outcome = Err(Failure::Limit("producer_output_cells"));
+                return Err("producer_build_failed");
+            }
+        };
+        let output_cells = match plans
+            .iter()
+            .map(|plan| {
+                output_cell_allowance(
+                    limits.execution.output_cells,
+                    plan.output().columns().len(),
+                    column_count,
+                )
+            })
+            .collect::<Option<Vec<_>>>()
+        {
+            Some(cells) => cells,
+            None => {
+                attempt.outcome = Err(Failure::Limit("producer_output_cells"));
+                return Err("producer_build_failed");
+            }
+        };
         // Every declared source, including aliases, reserves a codec share. This
         // conservative reservation bounds all retained/staged decoded ownership
         // without deriving an identity or trusting post-allocation size checks.
@@ -305,14 +378,20 @@ impl PreparedBuild {
         let activated = if selected.is_empty() {
             Vec::new()
         } else {
-            match project_activation::activate_references_observed(
+            scope.phase(crate::application_observer::Phase::Activation);
+            let result = project_activation::activate_references_observed(
                 environment.language().expect("admitted called language"),
                 environment.lock().expect("admitted called lock"),
                 &selected,
-                ports.activation,
+                &mut scope.activation(ports.activation),
                 limits.activation,
                 &mut attempt.activation,
-            ) {
+            );
+            scope.exit(
+                crate::application_observer::Phase::Activation,
+                crate::application_observer::Outcome::from_result(&result),
+            );
+            match result {
                 Ok(functions) => functions,
                 Err(error) => {
                     attempt.outcome = Err(Failure::Activation(error));
@@ -339,6 +418,7 @@ impl PreparedBuild {
         let mut output_left = limits.output_bytes;
         let routing_left = Cell::new(limits.routing_work);
         let e = limits.execution;
+        let execution_work = crate::execution_work::WorkBudget::new(e.work_cells);
         let node_limits = run::Limits {
             source_bytes: limits.source_bytes,
             source_cells: limits.source_cells,
@@ -356,7 +436,16 @@ impl PreparedBuild {
         };
         for &index in graph.order() {
             let node = &graph.nodes()[index];
+            let node_scope = scope.for_node(index, node.identity());
             let plan = plans[index];
+            let node_limits = run::Limits {
+                execution: dataset::Limits {
+                    source_rows: source_rows[index],
+                    output_cells: output_cells[index],
+                    ..node_limits.execution
+                },
+                ..node_limits
+            };
             attempt.nodes.push(NodeAttempt {
                 node: index,
                 dataset: CapturedAttempt::new(plan.source()),
@@ -376,7 +465,7 @@ impl PreparedBuild {
             let mut functions =
                 Bindings::projected(&activated, node.activation_slots(), calls, ports.activation)
                     .expect("complete graph projections preflighted before sources");
-            run::execute_with_functions_into(
+            run::execute_with_observer_and_work_into(
                 plan,
                 &mut sources,
                 &mut NodeDecoder {
@@ -390,57 +479,70 @@ impl PreparedBuild {
                 &mut functions,
                 node_limits,
                 &mut entered.dataset,
+                node_scope,
+                &execution_work,
             );
-            let diagnostics = ports.report.prepare_diagnostics(
-                node,
-                &entered.dataset,
-                output_left,
-                limits.report_bytes / count,
-            );
-            match diagnostics {
-                Ok(bytes) if bytes <= output_left => output_left -= bytes,
-                Ok(_) => {
-                    entered.output = Err(output::CompleteError::OutputLimit);
+            node_scope.phase(crate::application_observer::Phase::Output);
+            let output_result = (|| {
+                let report_allowance = ports.report.report_allowance(limits.report_bytes, count);
+                let diagnostics = ports.report.prepare_diagnostics(
+                    node,
+                    &entered.dataset,
+                    output_left,
+                    report_allowance,
+                );
+                match diagnostics {
+                    Ok(bytes) if bytes <= output_left => output_left -= bytes,
+                    Ok(_) => {
+                        entered.output = Err(output::CompleteError::OutputLimit);
+                        attempt.outcome = Err(Failure::Node { node: index });
+                        return Err("producer_build_failed");
+                    }
+                    Err(error) => {
+                        entered.output = Err(output::CompleteError::Report(error));
+                        attempt.outcome = Err(Failure::Node { node: index });
+                        return Err("producer_build_failed");
+                    }
+                }
+                let execution = entered
+                    .dataset
+                    .result
+                    .as_ref()
+                    .ok()
+                    .and_then(|execution| execution.result.as_ref().ok());
+                let Some(execution) = execution else {
                     attempt.outcome = Err(Failure::Node { node: index });
                     return Err("producer_build_failed");
-                }
-                Err(error) => {
-                    entered.output = Err(output::CompleteError::Report(error));
+                };
+                let report_allowance = ports.report.report_allowance(limits.report_bytes, count);
+                let prepared = prepare_output(
+                    node,
+                    plan,
+                    &entered.dataset,
+                    execution,
+                    (output_left, report_allowance),
+                    ports.report,
+                    ports.codec,
+                );
+                entered.output = prepared.map(Some);
+                let artifact = entered
+                    .output
+                    .as_ref()
+                    .ok()
+                    .and_then(Option::as_ref)
+                    .and_then(PreparedOutput::artifact);
+                let Some(artifact) = artifact else {
                     attempt.outcome = Err(Failure::Node { node: index });
                     return Err("producer_build_failed");
-                }
-            }
-            let execution = entered
-                .dataset
-                .result
-                .as_ref()
-                .ok()
-                .and_then(|execution| execution.result.as_ref().ok());
-            let Some(execution) = execution else {
-                attempt.outcome = Err(Failure::Node { node: index });
-                return Err("producer_build_failed");
-            };
-            let prepared = prepare_output(
-                node,
-                plan,
-                &entered.dataset,
-                execution,
-                (output_left, limits.report_bytes / count),
-                ports.report,
-                ports.codec,
+                };
+                output_left -= artifact.bytes().len(); // output::prepare enforced remaining quota.
+                Ok(())
+            })();
+            node_scope.exit(
+                crate::application_observer::Phase::Output,
+                crate::application_observer::Outcome::from_result(&output_result),
             );
-            entered.output = prepared.map(Some);
-            let artifact = entered
-                .output
-                .as_ref()
-                .ok()
-                .and_then(Option::as_ref)
-                .and_then(PreparedOutput::artifact);
-            let Some(artifact) = artifact else {
-                attempt.outcome = Err(Failure::Node { node: index });
-                return Err("producer_build_failed");
-            };
-            output_left -= artifact.bytes().len(); // output::prepare enforced remaining quota.
+            output_result?;
         }
         attempt.outcome = Ok(());
         crate::producer_publication::PreparedPublication::from_actual(
@@ -676,4 +778,64 @@ fn charge_routing(remaining: &Cell<usize>) -> Result<(), &'static str> {
             .ok_or("producer_routing_work")?,
     );
     Ok(())
+}
+
+// floor(total * slots / all), without overflowing the otherwise bounded product.
+// All reservations sum to at most total; no source effects select the weights.
+fn row_allowance(total: usize, slots: usize, all: usize) -> Option<usize> {
+    if all == 0 || slots == 0 || slots > all {
+        return None;
+    }
+    (total / all)
+        .checked_mul(slots)?
+        .checked_add((total % all).checked_mul(slots)? / all)
+}
+fn output_cell_allowance(total: usize, columns: usize, all: usize) -> Option<usize> {
+    if columns == 0 {
+        Some(0)
+    } else {
+        row_allowance(total, columns, all)
+    }
+}
+#[cfg(test)]
+mod output_cell_allowance_tests {
+    use super::output_cell_allowance;
+    #[test]
+    fn actual_owned_columns_reserve_a_wider_root_without_expanding_the_total() {
+        let widths = [2, 2, 2, 2, 2, 4];
+        let total = 2_097_152;
+        let allocated = widths.map(|width| output_cell_allowance(total, width, 14).unwrap());
+        assert_eq!(allocated[5], 599_186);
+        assert!(allocated[..5].iter().all(|&cells| cells >= 200_000));
+        assert!(allocated.iter().sum::<usize>() <= total);
+        assert_eq!(output_cell_allowance(total, 0, 0), Some(0));
+        assert_eq!(
+            output_cell_allowance(usize::MAX, 4, 14),
+            Some(usize::MAX / 14 * 4 + (usize::MAX % 14) * 4 / 14)
+        );
+    }
+}
+#[cfg(test)]
+mod row_allowance_tests {
+    use super::row_allowance;
+    #[test]
+    fn input_slots_bound_the_total_and_preserve_the_wider_root() {
+        let total = 1_048_576;
+        let allocations = [1, 1, 1, 1, 1, 2].map(|slots| row_allowance(total, slots, 7).unwrap());
+        assert_eq!(
+            allocations,
+            [149_796, 149_796, 149_796, 149_796, 149_796, 299_593]
+        );
+        assert_eq!(allocations.iter().sum::<usize>(), 1_048_573);
+        for total in [0, 1, 6, 7, 700_000, usize::MAX] {
+            let leaf = row_allowance(total, 1, 7).unwrap();
+            let root = row_allowance(total, 2, 7).unwrap();
+            assert!(leaf.checked_mul(5).unwrap().checked_add(root).unwrap() <= total);
+        }
+        assert_eq!(row_allowance(700_000, 2, 7), Some(200_000));
+        assert_eq!(row_allowance(699_999, 2, 7), Some(199_999));
+        assert_eq!(row_allowance(total, 0, 7), None);
+        assert_eq!(row_allowance(total, 8, 7), None);
+        assert_eq!(row_allowance(total, 1, 0), None);
+    }
 }
