@@ -1414,3 +1414,57 @@ fn known_entry_refusal_keeps_preexisting_raw_captures_and_both_schemas_after_fil
     );
     assert_eq!(owner.capture_reads(), 1);
 }
+
+#[test]
+fn absent_environment_selects_producer_without_capturing_or_inventing_metadata() {
+    let study = Study::new();
+    // A nearby environment is deliberately unreadable as YAML. Absence must
+    // neither discover it nor convert it into an empty captured document.
+    study.write("environment.yaml", "[");
+    study.write(
+        "leaf.yaml",
+        &yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false),
+    );
+    study.write(
+        "root.yaml",
+        &yaml(
+            "{P: {path: leaf.csv, schema: leaf.yaml}}",
+            "P",
+            "root.csv",
+            false,
+        ),
+    );
+    let selected = file_workflow::select_request(
+        yamaa_engine::build::Request {
+            specification: &study.path("root.yaml"),
+            environment: None,
+        },
+        Language::Python,
+    )
+    .unwrap_or_else(|error| {
+        panic!(
+            "original producer admission: {:?}",
+            yamaa_adapters::project_application::selection_failure(&error, Language::Python)
+        )
+    });
+    let file_workflow::Selected::Producer(graph) = selected else {
+        panic!("schema link selects producer");
+    };
+    assert_eq!(graph.capture_reads(), 2);
+    assert!(graph.environment().root_optional().is_none());
+    assert!(graph.environment().lock().is_none());
+    assert!(graph.environment().captures().is_empty());
+    assert!(graph
+        .graph()
+        .checked()
+        .metadata()
+        .environment()
+        .functions()
+        .is_empty());
+    assert_eq!(graph.captured_sources().count(), 2);
+    assert!(!study.0.join("never-read.csv").exists());
+    assert!(!study.0.join("leaf.csv").exists());
+    assert!(!study.0.join("root.csv").exists());
+    fs::remove_dir_all(&study.0).unwrap();
+    assert!(producer_check::prepared(&graph).unwrap().is_empty());
+}

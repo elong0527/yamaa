@@ -3,6 +3,8 @@ use pyo3::prelude::*;
 mod define_entry;
 mod domain_entry;
 #[cfg(any(unix, windows))]
+mod file_domain;
+#[cfg(any(unix, windows))]
 mod file_producer;
 #[cfg(any(unix, windows))]
 mod file_project;
