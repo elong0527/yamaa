@@ -6,16 +6,13 @@ Lower case, always, including at the start of a sentence, in headings, in page
 titles, in nav labels, and in doc comments. The hex logo spells it that way and
 the site is built to match. Do not "fix" it to title case or upper case.
 
-Two places keep capitals on purpose, because the string there is not the
+One place keeps capitals on purpose, because the string there is not the
 project name being written as prose:
 
-- **`YAMAA-01` in `benchmark/**/input/` and `benchmark/**/expected/`** is a
+- **`YAMAA-01` in `benchmarks/**/input/` and `benchmarks/**/expected/`** is a
   CDISC `STUDYID` data value, and uppercase study identifiers are the
   convention in clinical data. It also lives inside committed `.parquet`
   fixtures, so changing it means regenerating binary test data.
-- **`YAMAA_*` in `R/cdiscbuilder/`** (`YAMAA_GRAMMAR_CONTRACTS`,
-  `YAMAA_PREDICATE_RESERVED`, ...) are R constant identifiers, where
-  SCREAMING_SNAKE_CASE is the whole-identifier convention.
 
 ## The two halves of the site share one palette
 
