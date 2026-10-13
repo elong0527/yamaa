@@ -15,6 +15,7 @@ mod project_result;
 mod specification_inheritance;
 mod specification_result;
 mod specification_service;
+mod style;
 mod temporal_result;
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -73,5 +74,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
         specification_inheritance::_prepare_inherited_specification,
         module
     )?)?;
+    module.add_function(wrap_pyfunction!(style::_style_same_value, module)?)?;
     Ok(())
 }
