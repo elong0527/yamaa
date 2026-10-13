@@ -276,7 +276,10 @@ fn independently_authored_installed_host_truth_has_the_same_complete_native_obse
     let dispositions: serde_json::Value =
         serde_json::from_str(include_str!("fixtures/case_predicate_dispositions.json")).unwrap();
     for name in dispositions["cases"].as_object().unwrap().keys() {
-        assert!(truth["cases"].get(name).is_some(), "unknown disposition {name}");
+        assert!(
+            truth["cases"].get(name).is_some(),
+            "unknown disposition {name}"
+        );
     }
     for (name, case) in truth["cases"].as_object().unwrap() {
         if let Some(disposition) = dispositions["cases"].get(name) {
