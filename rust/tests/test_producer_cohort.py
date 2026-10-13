@@ -131,7 +131,7 @@ class OriginalProducerCohort(unittest.TestCase):
         for _ in range(2):
             self.raw["source_reads"].append(
                 {
-                    "specification": self.case + "/spec.yaml",
+                    "specification": self.case + "/producer.yaml",
                     "base_directory": self.case,
                     "path": "produced.parquet",
                     "outcome": "captured",
