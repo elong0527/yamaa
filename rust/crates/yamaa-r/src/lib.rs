@@ -2,6 +2,8 @@
 use extendr_api::prelude::*;
 mod define_entry;
 mod domain_entry;
+#[cfg(any(unix, windows))]
+mod file_domain;
 mod file_producer;
 mod file_project;
 mod file_publication;

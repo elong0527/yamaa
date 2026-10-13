@@ -132,18 +132,21 @@ impl std::fmt::Debug for Error {
 struct Configured {
     resources: Resources,
     entry: String,
-    environment: String,
+    environment: Option<String>,
     specification_schema: Arc<CapturedSchema>,
     environment_schema: Arc<CapturedSchema>,
 }
-fn configure(specification: &str, environment: &str) -> Result<Configured, Error> {
+fn configure(specification: &str, environment: Option<&str>) -> Result<Configured, Error> {
     let (resources, entry) =
         crate::file_configuration::resources(specification).map_err(Error::Configuration)?;
     // Public caller paths retain the established absolute-path policy. This is
     // a lexical fact; the first environment file is opened only after admission.
     let specification_schema = crate::shipped_schema::capture().map_err(Error::Schema)?;
     let environment_schema = crate::shipped_schema::capture_environment().map_err(Error::Schema)?;
-    let environment = match crate::project_application::environment_path(environment) {
+    let environment = match environment
+        .map(crate::project_application::environment_path)
+        .transpose()
+    {
         Ok(environment) => environment,
         Err(error) => {
             return Err(Error::Environment(Box::new(RejectedEnvironment {
@@ -166,11 +169,14 @@ fn configure(specification: &str, environment: &str) -> Result<Configured, Error
 }
 
 pub fn prepare(specification: &str, environment: &str, host: Language) -> Result<FileGraph, Error> {
-    let request = configure(specification, environment)?;
+    let request = configure(specification, Some(environment))?;
     prepare_with_resources(
         request.resources,
         &request.entry,
-        &request.environment,
+        request
+            .environment
+            .as_deref()
+            .expect("explicit environment"),
         host,
         request.specification_schema,
         request.environment_schema,
@@ -190,7 +196,7 @@ pub fn prepare_with_resources(
     let (resources, environment, entry) = capture_environment(
         resources,
         entry,
-        environment,
+        Some(environment),
         host,
         Arc::clone(&specification_schema),
         environment_schema,
@@ -205,14 +211,16 @@ pub fn prepare_with_resources(
 /// no activation, study-source or publication port. The ordinary capability keeps
 /// existing build/Save behavior; the static producer graph grants no publisher.
 /// Installed public dispatch remains a separate integration boundary.
-pub enum Selected {
-    Ordinary(Box<FileProject>),
-    Producer(Box<FileGraph>),
-}
+pub type Selected = yamaa_engine::build::Prepared<
+    crate::file_preparation::FileSpecification,
+    Box<FileProject>,
+    Box<FileGraph>,
+>;
 #[derive(Debug)]
 pub enum SelectionError {
     Preparation(Error),
     Ordinary(Box<RejectedOrdinary>),
+    Plain(Box<crate::file_preparation::RejectedPlain>),
 }
 impl SelectionError {
     /// Bounded aliases of originally retained bytes; no file access or replay.
@@ -227,6 +235,7 @@ impl SelectionError {
             Self::Preparation(Error::Environment(error)) => error.retained_sources(aliases, text),
             Self::Preparation(Error::Graph(error)) => error.retained_sources(aliases, text),
             Self::Ordinary(error) => error.retained_sources(aliases, text),
+            Self::Plain(error) => error.retained_sources(aliases, text),
             Self::Preparation(Error::Configuration(_) | Error::Schema(_)) => Ok(Vec::new()),
         }
     }
@@ -237,16 +246,67 @@ pub fn select(
     environment: &str,
     host: Language,
 ) -> Result<Selected, SelectionError> {
-    let request = configure(specification, environment).map_err(SelectionError::Preparation)?;
-    select_with_resources(
-        request.resources,
-        &request.entry,
-        &request.environment,
+    select_request(
+        yamaa_engine::build::Request {
+            specification,
+            environment: Some(environment),
+        },
         host,
-        request.specification_schema,
-        request.environment_schema,
-        Default::default(),
     )
+}
+
+pub fn select_request(
+    request: yamaa_engine::build::Request<'_>,
+    host: Language,
+) -> Result<Selected, SelectionError> {
+    yamaa_engine::build::prepare(request, &mut Metadata { host })
+}
+
+struct Metadata {
+    host: Language,
+}
+impl yamaa_engine::build::PreparationPort for Metadata {
+    type Entry = crate::file_graph::CapturedEntry;
+    type Plain = crate::file_preparation::FileSpecification;
+    type Project = Box<FileProject>;
+    type Producer = Box<FileGraph>;
+    type Failure = SelectionError;
+    fn capture(
+        &mut self,
+        request: yamaa_engine::build::Request<'_>,
+    ) -> Result<Self::Entry, SelectionError> {
+        let request = configure(request.specification, request.environment)
+            .map_err(SelectionError::Preparation)?;
+        let (resources, environment, entry) = capture_environment(
+            request.resources,
+            &request.entry,
+            request.environment.as_deref(),
+            self.host,
+            Arc::clone(&request.specification_schema),
+            request.environment_schema,
+            Default::default(),
+        )
+        .map_err(SelectionError::Preparation)?;
+        FileGraph::capture_admitted_entry(resources, entry, environment)
+            .map_err(|error| SelectionError::Preparation(Error::Graph(error)))
+    }
+    fn selection(entry: &Self::Entry) -> &yamaa_engine::build::EntrySelection {
+        entry.selection()
+    }
+    fn plain(&mut self, entry: Self::Entry) -> Result<Self::Plain, SelectionError> {
+        crate::file_preparation::FileSpecification::from_workflow(entry)
+            .map_err(SelectionError::Plain)
+    }
+    fn project(&mut self, entry: Self::Entry) -> Result<Self::Project, SelectionError> {
+        FileProject::from_workflow(entry)
+            .map(Box::new)
+            .map_err(SelectionError::Ordinary)
+    }
+    fn producer(&mut self, entry: Self::Entry) -> Result<Self::Producer, SelectionError> {
+        FileGraph::prepare_captured(entry)
+            .map(Box::new)
+            .map_err(|error| SelectionError::Preparation(Error::Graph(error)))
+    }
 }
 
 pub fn select_with_resources(
@@ -261,7 +321,7 @@ pub fn select_with_resources(
     let (resources, environment, entry) = capture_environment(
         resources,
         entry,
-        environment,
+        Some(environment),
         host,
         Arc::clone(&specification_schema),
         environment_schema,
@@ -270,21 +330,13 @@ pub fn select_with_resources(
     .map_err(SelectionError::Preparation)?;
     let entry = FileGraph::capture_admitted_entry(resources, entry, environment)
         .map_err(|error| SelectionError::Preparation(Error::Graph(error)))?;
-    if entry.is_producer() {
-        FileGraph::prepare_captured(entry)
-            .map(|graph| Selected::Producer(Box::new(graph)))
-            .map_err(|error| SelectionError::Preparation(Error::Graph(error)))
-    } else {
-        FileProject::from_workflow(entry)
-            .map(|project| Selected::Ordinary(Box::new(project)))
-            .map_err(SelectionError::Ordinary)
-    }
+    yamaa_engine::build::select(entry, true, &mut Metadata { host })
 }
 
 fn capture_environment(
     mut resources: Resources,
     entry: &str,
-    environment: &str,
+    environment: Option<&str>,
     host: Language,
     specification_schema: Arc<CapturedSchema>,
     environment_schema: Arc<CapturedSchema>,
@@ -307,11 +359,16 @@ fn capture_environment(
             })
             .map_err(file_project::Error::Resource)?;
         resources
-            .charge_metadata_text(entry.len().checked_add(environment.len()).ok_or(
-                file_project::Error::Resource(crate::file_resources::Error::Limit),
-            )?)
+            .charge_metadata_text(
+                entry
+                    .len()
+                    .checked_add(environment.map_or(0, str::len))
+                    .ok_or(file_project::Error::Resource(
+                        crate::file_resources::Error::Limit,
+                    ))?,
+            )
             .map_err(file_project::Error::Resource)?;
-        Ok((entry.to_owned(), environment.to_owned()))
+        Ok((entry.to_owned(), environment.map(str::to_owned)))
     })();
     let (owned_entry, owned_environment) = match paths {
         Ok(paths) => paths,
@@ -340,12 +397,19 @@ fn capture_environment(
             return Err(Error::Admission(Box::new(RejectedAdmission {
                 error,
                 entry: Some(owned_entry),
-                environment: Some(owned_environment),
+                environment: owned_environment,
                 specification_schema,
                 environment_schema,
                 resources,
             })))
         }
+    };
+    let Some(environment) = environment else {
+        return Ok((
+            resources,
+            crate::project_source::OwnedEnvironment::without_environment(host),
+            admission,
+        ));
     };
     match file_project::capture_environment(
         &mut resources,
@@ -357,7 +421,7 @@ fn capture_environment(
         Err(error) => Err(Error::Environment(Box::new(RejectedEnvironment {
             error,
             entry: Some(owned_entry),
-            environment: Some(owned_environment),
+            environment: owned_environment,
             specification_schema,
             environment_schema,
             resources,
