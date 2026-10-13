@@ -25,7 +25,7 @@ compare_reports = module.compare_reports
 
 class OriginalProducerCohort(unittest.TestCase):
     def test_authored_inputs_are_exact_original_test_literals(self):
-        tree = ast.parse((ROOT / "python/tests/planning/test_workflow.py").read_text())
+        tree = ast.parse((ROOT / "rust/tests/support/producer_input_literals.py").read_text())
         function = next(
             node
             for node in tree.body

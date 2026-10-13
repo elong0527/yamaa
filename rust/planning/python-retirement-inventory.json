@@ -3132,5 +3132,393 @@
     "benchmarks/schema-inherited-output/expected/spec_resolved.yaml",
     "benchmarks/schema-inheritance/expected/spec_resolved.yaml"
   ],
-  "historical_assets_disposition": "#1973 item 14: resolved-specification outputs have no retained public producer. All actual CSV/Parquet/report/grammar truth remains unchanged; original historical bytes remain retrievable at source_revision."
+  "historical_assets_disposition": "#1973 item 14: resolved-specification outputs have no retained public producer. All actual CSV/Parquet/report/grammar truth remains unchanged; original historical bytes remain retrievable at source_revision.",
+  "retired_numeric_transport_fixture": {
+    "path": "rust/crates/yamaa-adapters/tests/fixtures/numeric_transport.tsv",
+    "source_revision": "c7b88a4fd3a593d5742c9449a23bbdb75291ee20",
+    "cases": [
+      {
+        "id": "integer",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "integer"
+      },
+      {
+        "id": "integral_float",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "integral_float"
+      },
+      {
+        "id": "integer_text",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "integer_text"
+      },
+      {
+        "id": "fraction_text",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "fraction_text"
+      },
+      {
+        "id": "fraction_unhandled",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "fraction_unhandled"
+      },
+      {
+        "id": "integer_handler",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "integer_handler"
+      },
+      {
+        "id": "text_handler",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "text_handler"
+      },
+      {
+        "id": "null_handler",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "null_handler"
+      },
+      {
+        "id": "failed_text_handler",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "failed_text_handler"
+      },
+      {
+        "id": "failed_float_handler",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "failed_float_handler"
+      },
+      {
+        "id": "large_handler_diagnostic",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "large_handler_diagnostic"
+      },
+      {
+        "id": "unused_bad_handler",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "unused_bad_handler"
+      },
+      {
+        "id": "missing_does_not_handle",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "missing_does_not_handle"
+      },
+      {
+        "id": "missing_temporal_target",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "missing_temporal_target"
+      },
+      {
+        "id": "numeric_to_date_handler",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "numeric_to_date_handler"
+      },
+      {
+        "id": "numeric_to_date_unhandled",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "numeric_to_date_unhandled"
+      },
+      {
+        "id": "max_integer",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "max_integer"
+      },
+      {
+        "id": "float_out_of_range",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "float_out_of_range"
+      },
+      {
+        "id": "max_integer_replacement",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "max_integer_replacement"
+      },
+      {
+        "id": "division_is_not_convertible",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "division_is_not_convertible"
+      },
+      {
+        "id": "overflow_is_not_convertible",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "overflow_is_not_convertible"
+      },
+      {
+        "id": "missing_eager_unknown",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "missing_eager_unknown"
+      },
+      {
+        "id": "input_type_not_convertible",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "input_type_not_convertible"
+      },
+      {
+        "id": "round_digits_not_convertible",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "round_digits_not_convertible"
+      },
+      {
+        "id": "round_then_convert",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "round_then_convert"
+      },
+      {
+        "id": "arithmetic_overflow_missing",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "arithmetic_overflow_missing"
+      },
+      {
+        "id": "negative_zero_to_float",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "negative_zero_to_float"
+      },
+      {
+        "id": "integer_to_float_promotion",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "integer_to_float_promotion"
+      },
+      {
+        "id": "datetime_handler",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "datetime_handler"
+      },
+      {
+        "id": "invalid_temporal_handler",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "invalid_temporal_handler"
+      },
+      {
+        "id": "invalid_boolean_handler",
+        "disposition": "retain_typed_numeric_lifecycle",
+        "proof": "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs",
+        "fixture": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+        "fixture_id": "invalid_boolean_handler"
+      },
+      {
+        "id": "unsupported_before_resolution",
+        "disposition": "retire_numeric_1_endpoint_envelope_or_reference_subset_selector_under_1990",
+        "reason": "No numeric/1 endpoint, JSON request protocol or public numerical-policy selector remains. Approved PortableLibmV1 is the production policy."
+      },
+      {
+        "id": "opt_in_exp",
+        "disposition": "retain_typed_semantics",
+        "proof": "rust/crates/yamaa-core/tests/evaluation.rs",
+        "witness": "shared_function_vectors; numeric_math.tsv under PortableLibmV1"
+      },
+      {
+        "id": "opt_in_ln_domain",
+        "disposition": "retain_typed_semantics",
+        "proof": "rust/crates/yamaa-core/tests/evaluation.rs",
+        "witness": "shared_function_vectors; numeric_math.tsv domain failures"
+      },
+      {
+        "id": "opt_in_power_domain",
+        "disposition": "retain_typed_semantics",
+        "proof": "rust/crates/yamaa-core/tests/evaluation.rs",
+        "witness": "shared_function_vectors; numeric_math.tsv domain failures"
+      },
+      {
+        "id": "literal_overflow",
+        "disposition": "retain_typed_semantics",
+        "proof": "rust/crates/yamaa-core/tests/numeric_compiler.rs",
+        "witness": "shared_literal_vectors_through_compilation"
+      },
+      {
+        "id": "repeated_resolution",
+        "disposition": "retain_typed_semantics",
+        "proof": "rust/crates/yamaa-core/tests/evaluation.rs",
+        "witness": "repeated_resolution_and_plan_reuse_do_not_cache_values"
+      },
+      {
+        "id": "no_missing_short_circuit",
+        "disposition": "retain_typed_semantics",
+        "proof": "rust/crates/yamaa-core/tests/evaluation.rs",
+        "witness": "shared_evaluation_vectors; eager missing operand traces"
+      },
+      {
+        "id": "invalid_grammar",
+        "disposition": "retain_typed_semantics",
+        "proof": "rust/crates/yamaa-core/tests/numeric_parser.rs",
+        "witness": "failure_priority_matches_reference"
+      },
+      {
+        "id": "prohibited_construct",
+        "disposition": "retain_typed_semantics",
+        "proof": "rust/crates/yamaa-core/tests/numeric_parser.rs",
+        "witness": "failure_priority_matches_reference"
+      },
+      {
+        "id": "prohibited_function",
+        "disposition": "retain_typed_semantics",
+        "proof": "rust/crates/yamaa-core/tests/numeric_parser.rs",
+        "witness": "grammar_failures_preserve_context_and_both_coordinates"
+      },
+      {
+        "id": "wrong_arity",
+        "disposition": "retain_typed_semantics",
+        "proof": "rust/crates/yamaa-core/tests/numeric_parser.rs",
+        "witness": "grammar_failures_preserve_context_and_both_coordinates"
+      },
+      {
+        "id": "wrong_protocol",
+        "disposition": "retire_numeric_1_endpoint_envelope_or_reference_subset_selector_under_1990",
+        "reason": "No numeric/1 endpoint, JSON request protocol or public numerical-policy selector remains. Approved PortableLibmV1 is the production policy."
+      },
+      {
+        "id": "bool_target",
+        "disposition": "retire_numeric_1_endpoint_envelope_or_reference_subset_selector_under_1990",
+        "reason": "No numeric/1 endpoint, JSON request protocol or public numerical-policy selector remains. Approved PortableLibmV1 is the production policy."
+      },
+      {
+        "id": "duplicate_binding",
+        "disposition": "retire_numeric_1_endpoint_envelope_or_reference_subset_selector_under_1990",
+        "reason": "No numeric/1 endpoint, JSON request protocol or public numerical-policy selector remains. Approved PortableLibmV1 is the production policy."
+      },
+      {
+        "id": "empty_binding",
+        "disposition": "retire_numeric_1_endpoint_envelope_or_reference_subset_selector_under_1990",
+        "reason": "No numeric/1 endpoint, JSON request protocol or public numerical-policy selector remains. Approved PortableLibmV1 is the production policy."
+      },
+      {
+        "id": "invalid_scalar",
+        "disposition": "retire_numeric_1_endpoint_envelope_or_reference_subset_selector_under_1990",
+        "reason": "No numeric/1 endpoint, JSON request protocol or public numerical-policy selector remains. Approved PortableLibmV1 is the production policy."
+      },
+      {
+        "id": "unused_invalid_scalar",
+        "disposition": "retire_numeric_1_endpoint_envelope_or_reference_subset_selector_under_1990",
+        "reason": "No numeric/1 endpoint, JSON request protocol or public numerical-policy selector remains. Approved PortableLibmV1 is the production policy."
+      },
+      {
+        "id": "null_handler_wrapper",
+        "disposition": "retire_numeric_1_endpoint_envelope_or_reference_subset_selector_under_1990",
+        "reason": "No numeric/1 endpoint, JSON request protocol or public numerical-policy selector remains. Approved PortableLibmV1 is the production policy."
+      },
+      {
+        "id": "unknown_policy",
+        "disposition": "retire_numeric_1_endpoint_envelope_or_reference_subset_selector_under_1990",
+        "reason": "No numeric/1 endpoint, JSON request protocol or public numerical-policy selector remains. Approved PortableLibmV1 is the production policy."
+      },
+      {
+        "id": "empty_column_path",
+        "disposition": "retire_numeric_1_endpoint_envelope_or_reference_subset_selector_under_1990",
+        "reason": "No numeric/1 endpoint, JSON request protocol or public numerical-policy selector remains. Approved PortableLibmV1 is the production policy."
+      },
+      {
+        "id": "unknown_field",
+        "disposition": "retire_numeric_1_endpoint_envelope_or_reference_subset_selector_under_1990",
+        "reason": "No numeric/1 endpoint, JSON request protocol or public numerical-policy selector remains. Approved PortableLibmV1 is the production policy."
+      },
+      {
+        "id": "nonfinite_binding_missing",
+        "disposition": "retain_typed_semantics",
+        "proof": "rust/crates/yamaa-core/tests/values.rs",
+        "witness": "boundary_normalization_preserves_finite_bits_and_rejects_every_nonfinite_kind"
+      },
+      {
+        "id": "minimum_binding",
+        "disposition": "retain_typed_semantics",
+        "proof": "rust/crates/yamaa-core/tests/values.rs",
+        "witness": "missing_absence_empty_text_boolean_and_i64_are_distinct"
+      },
+      {
+        "id": "large_binding",
+        "disposition": "retain_typed_semantics",
+        "proof": "rust/crates/yamaa-core/tests/values.rs",
+        "witness": "mixed_numeric_comparison_keeps_full_integer_precision"
+      },
+      {
+        "id": "temporal_handler_rejected",
+        "disposition": "retire_numeric_1_endpoint_envelope_or_reference_subset_selector_under_1990",
+        "reason": "No numeric/1 endpoint, JSON request protocol or public numerical-policy selector remains. Approved PortableLibmV1 is the production policy."
+      },
+      {
+        "id": "temporal_binding_rejected",
+        "disposition": "retain_typed_semantics",
+        "proof": "rust/crates/yamaa-core/tests/evaluation.rs",
+        "witness": "identifiers_reject_every_nonnumeric_type"
+      },
+      {
+        "id": "nested_provenance",
+        "disposition": "retain_typed_semantics",
+        "proof": "rust/crates/yamaa-core/tests/numeric_compiler.rs",
+        "witness": "source_spans_identify_the_failed_node"
+      },
+      {
+        "id": "unicode_positions",
+        "disposition": "retain_typed_semantics",
+        "proof": "rust/crates/yamaa-core/tests/numeric_parser.rs",
+        "witness": "grammar_failures_preserve_context_and_both_coordinates"
+      }
+    ],
+    "semantic_cases_retained": 47,
+    "protocol_cases_retired": 12
+  },
+  "relocated_authored_inputs": {
+    "source_revision": "c7b88a4fd3a593d5742c9449a23bbdb75291ee20",
+    "source_path": "python/tests/planning/test_workflow.py",
+    "retained_path": "rust/tests/support/producer_input_literals.py",
+    "test_function": "test_shared_producer_executes_once_and_shares_generated_snapshot",
+    "scope": "Exact original three write_text input literals retained unchanged; independent fixture identity assertion still executes. No expected output regenerated."
+  }
 }
