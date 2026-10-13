@@ -86,6 +86,27 @@ def test_item_cannot_be_null_and_contain_a_value(tmp_path: Path) -> None:
         list(iter_odm_records(source))
 
 
+@pytest.mark.parametrize("annotation", ["<!-- c -->", "<?pi data?>"])
+def test_comment_or_pi_inside_item_data_is_ignored(
+    tmp_path: Path, annotation: str
+) -> None:
+    # lxml gives comment and processing-instruction nodes a callable tag,
+    # not a name; scanning an ItemData's children for a Value element must
+    # skip them instead of raising a raw ValueError from QName.
+    source = tmp_path / "annotated.xml"
+    source.write_text(
+        ODM_13.replace(
+            '<ItemData ItemOID="I.DATE" Value="2026-01-02"/>',
+            f'<ItemData ItemOID="I.DATE" Value="2026-01-02">{annotation}</ItemData>',
+        ),
+        encoding="utf-8",
+    )
+
+    rows = list(iter_odm_records(source))
+
+    assert [row.value for row in rows] == ["2026-01-02", "", None]
+
+
 def test_unsupported_group_depth_is_rejected(tmp_path: Path) -> None:
     source = tmp_path / "three-groups.xml"
     source.write_text(

@@ -413,10 +413,15 @@ def iter_odm_records(
                     if subject is None or event is None:
                         raise ODMError("ItemData requires subject and event context")
                     item_oid = _required_attribute(element, "ItemOID")
+                    # Comment and processing-instruction children carry a
+                    # callable tag in lxml, not a name; they are not elements
+                    # and never a `Value` child, so skip them before QName
+                    # would raise a raw ValueError on the callable.
                     value_children = [
                         child
                         for child in element
-                        if etree.QName(child.tag).namespace == odm_namespace
+                        if isinstance(child.tag, str)
+                        and etree.QName(child.tag).namespace == odm_namespace
                         and _local_name(child.tag) == "Value"
                     ]
                     if "Value" in element.attrib and value_children:
