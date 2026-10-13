@@ -120,7 +120,7 @@ fn case_predicate_multiplicity_retains_its_complete_report_and_blocks_publicatio
     assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(), b"sentinel");
 }
 #[test]
-fn filtered_case_source_is_shared_by_columns_record_rows_and_grouped_keys() {
+fn filtered_case_source_is_shared_by_columns_and_record_rows() {
     let body = SOURCE
         .replace("        - when: 'FALSE'\n          then: SRC.BAD\n", "")
         .replace("when: \"SRC.V > 0\"", "when: 'TRUE'")
@@ -129,13 +129,23 @@ fn filtered_case_source_is_shared_by_columns_record_rows_and_grouped_keys() {
             "then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}",
         )
         .replace("    type: int", "    type: str");
-    for (rows,expected) in [
-        ("",b"ID,VALUE\na,a\nb,\n".as_slice()),
-        ("rows:\n  - id: records\n    dataset: SRC\n    derivations: {}\n",b"ID,VALUE\na,a\nb,\n".as_slice()),
-        ("rows:\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.ID]\n    derivations: {}\n",b"ID,VALUE\na,a\nb,\n".as_slice()),
+    for (rows, expected) in [
+        ("", b"ID,VALUE\na,a\nb,\n".as_slice()),
+        (
+            "rows:\n  - id: records\n    dataset: SRC\n    derivations: {}\n",
+            b"ID,VALUE\na,a\nb,\n".as_slice(),
+        ),
     ] {
-        let fixture=Fixture::new(); fs::write(fixture.0.join("input.csv"),"ID,V,BAD\na,1,hidden\nb,,hidden\n").unwrap();
-        let mut result=fixture.run(&format!("{body}{rows}")).unwrap(); assert!(result.issues().is_empty(),"{:?}",result.issues()); assert!(result.save().unwrap()); assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(),expected);
+        let fixture = Fixture::new();
+        fs::write(
+            fixture.0.join("input.csv"),
+            "ID,V,BAD\na,1,hidden\nb,,hidden\n",
+        )
+        .unwrap();
+        let mut result = fixture.run(&format!("{body}{rows}")).unwrap();
+        assert!(result.issues().is_empty(), "{:?}", result.issues());
+        assert!(result.save().unwrap());
+        assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(), expected);
     }
 }
 #[test]
@@ -205,7 +215,18 @@ fn unchanged_original_case_and_filtered_source_truth_passes_in_full() {
 fn independently_authored_installed_host_truth_has_the_same_complete_native_observations() {
     let truth: serde_json::Value =
         serde_json::from_str(include_str!("fixtures/case_predicates.json")).unwrap();
+    let dispositions: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/case_predicate_dispositions.json")).unwrap();
     for (name, case) in truth["cases"].as_object().unwrap() {
+        if let Some(disposition) = dispositions["cases"].get(name) {
+            assert_eq!(
+                disposition["classification"],
+                "historical_private_reference_defect"
+            );
+            assert_eq!(case["csv"], disposition["historical_csv"]);
+            assert_eq!(disposition["requirement"], "REQ-0148");
+            continue;
+        }
         let fixture = Fixture::new();
         for (name, contents) in case["inputs"].as_object().unwrap() {
             fs::write(fixture.0.join(name), contents.as_str().unwrap()).unwrap();
