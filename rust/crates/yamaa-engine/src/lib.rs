@@ -10,7 +10,6 @@ pub mod capacity;
 pub mod dataset;
 mod dataset_budget;
 pub mod dataset_predicate;
-mod dataset_verification;
 pub mod dictionary_preparation;
 pub mod document_preparation;
 pub mod domain;

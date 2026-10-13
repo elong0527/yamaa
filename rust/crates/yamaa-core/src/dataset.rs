@@ -1759,14 +1759,24 @@ impl DatasetPlan {
                 | Check::Matches(_) => return Err(PlanError::InvalidColumns),
                 Check::InvalidDiagnostic(_) => {}
                 Check::InvalidDeclaration { .. } => {}
-                Check::PredicateDeclaration(predicate) => predicate
-                    .validate(0, &vec![true; width], true)
-                    .map_err(PlanError::Predicate)?,
+                Check::PredicateDeclaration(predicate) => verification_predicates::validate(
+                    predicate,
+                    &source,
+                    &secondary,
+                    &intermediates,
+                    &output,
+                    &templates,
+                )?,
                 Check::Assert { when, require } => {
                     for predicate in when.iter().chain([require]) {
-                        predicate
-                            .validate(0, &vec![true; width], true)
-                            .map_err(PlanError::Predicate)?;
+                        verification_predicates::validate(
+                            predicate,
+                            &source,
+                            &secondary,
+                            &intermediates,
+                            &output,
+                            &templates,
+                        )?;
                     }
                 }
                 Check::Unique(columns) => {
@@ -2045,3 +2055,5 @@ mod donor_admission_tests;
 
 #[path = "dataset_metadata_types.rs"]
 mod metadata_types;
+#[path = "dataset_verification_predicate.rs"]
+mod verification_predicates;

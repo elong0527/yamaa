@@ -271,51 +271,53 @@ pub(super) fn validate_reads(
     mode: &RowMode,
     available: &[bool],
 ) -> Result<(), PlanError> {
-    fn named(
-        index: usize,
-        items: &[Intermediate],
-        source: usize,
-        mode: &RowMode,
-        available: &[bool],
-        depth: usize,
-    ) -> Result<(), PlanError> {
-        if depth > 64 {
-            return Err(PlanError::InvalidIntermediate);
-        }
-        let item = items.get(index).ok_or(PlanError::InvalidIntermediate)?;
-        for key in &item.keys {
-            if let Some(MatchRead::Record { column, .. }) = key.value.read() {
-                if source != 0 {
-                    return Err(PlanError::InvalidIntermediate);
-                }
-                if matches!(mode.local_mode(), RowMode::Groups(keys) if !keys.contains(column)) {
-                    return Err(PlanError::NonGroupSource);
-                }
-            }
-        }
-        for field in item.current_fields() {
-            field.validate_context(source, mode, available)?;
-            if let CurrentRead::Intermediate {
-                index: child,
-                column: _,
-            } = field.read
-            {
-                if child >= index {
-                    return Err(PlanError::InvalidIntermediate);
-                }
-                if items[child].keys.iter().filter_map(|key| key.value.read()).any(|read| matches!(read, MatchRead::Output { column, .. } if !available.get(*column).copied().unwrap_or(false))) {
-                        return Err(PlanError::InvalidLookup);
-                    }
-                named(child, items, source, mode, available, depth + 1)?;
-            }
-        }
-        Ok(())
-    }
     let mut result = Ok(());
     visit(expression, &mut |index| {
         if result.is_ok() {
-            result = named(index, items, source, mode, available, 0);
+            result = validate_named_read(index, items, source, mode, available, 0);
         }
     });
     result
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn validate_named_read(
+    index: usize,
+    items: &[Intermediate],
+    source: usize,
+    mode: &RowMode,
+    available: &[bool],
+    depth: usize,
+) -> Result<(), PlanError> {
+    if depth > 64 {
+        return Err(PlanError::InvalidIntermediate);
+    }
+    let item = items.get(index).ok_or(PlanError::InvalidIntermediate)?;
+    for key in &item.keys {
+        if let Some(MatchRead::Record { column, .. }) = key.value.read() {
+            if source != 0 {
+                return Err(PlanError::InvalidIntermediate);
+            }
+            if matches!(mode.local_mode(), RowMode::Groups(keys) if !keys.contains(column)) {
+                return Err(PlanError::NonGroupSource);
+            }
+        }
+    }
+    for field in item.current_fields() {
+        field.validate_context(source, mode, available)?;
+        if let CurrentRead::Intermediate {
+            index: child,
+            column: _,
+        } = field.read
+        {
+            if child >= index {
+                return Err(PlanError::InvalidIntermediate);
+            }
+            if items[child].keys.iter().filter_map(|key| key.value.read()).any(|read| matches!(read, MatchRead::Output { column, .. } if !available.get(*column).copied().unwrap_or(false))) {
+                    return Err(PlanError::InvalidLookup);
+                }
+            validate_named_read(child, items, source, mode, available, depth + 1)?;
+        }
+    }
+    Ok(())
 }

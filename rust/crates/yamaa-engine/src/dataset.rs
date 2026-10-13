@@ -1730,9 +1730,9 @@ impl Executor<'_> {
             outcome: crate::application_observer::Outcome::Succeeded,
         });
         observer(ExecutionEvent::Phase(ExecutionPhase::OutputKeys));
-        let mut dataset = Dataset {
-            schema: self.plan.output().clone(),
-            rows: candidates.into_iter().map(|row| row.values).collect(),
+        let dataset = CompletedRows {
+            schema: self.plan.output(),
+            rows: candidates.iter().map(|row| &row.values).collect(),
         };
         let mut failures = Vec::new();
         budget.work(dataset.rows.len(), self.plan.keys().len())?;
@@ -1820,11 +1820,25 @@ impl Executor<'_> {
                     }));
                 }
                 Check::Assert { .. } | Check::PredicateDeclaration(_) => {
-                    let Some(record) = crate::dataset_verification::predicate_check(
+                    let Some(record) = verification::predicate_check(
                         verification,
                         &dataset,
-                        self.plan.keys(),
-                        budget,
+                        self,
+                        table,
+                        &candidates,
+                        &mut EvaluationState {
+                            primary: &primary,
+                            functions,
+                            secondary,
+                            self_rows: &candidates,
+                            budget,
+                            handlers,
+                            intermediates: &mut intermediate_run,
+                            output_rows: &candidates,
+                            aggregate_row: None,
+                            output_offset: 0,
+                            windows: &mut windows::Cache::default(),
+                        },
                         records,
                     )?
                     else {
@@ -1890,7 +1904,7 @@ impl Executor<'_> {
                         offending_rows,
                     }
                 }
-                Check::ScopedRowCount(check) => crate::dataset_verification::row_count_check(
+                Check::ScopedRowCount(check) => verification::row_count_check(
                     verification,
                     check,
                     &dataset,
@@ -1929,6 +1943,11 @@ impl Executor<'_> {
                 core::mem::take(records),
             )));
         }
+        drop(dataset);
+        let mut dataset = Dataset {
+            schema: self.plan.output().clone(),
+            rows: candidates.into_iter().map(|row| row.values).collect(),
+        };
         ordering::apply(self.plan.output_order(), &mut dataset, budget)?;
         Ok(Execution {
             dataset,
@@ -2268,7 +2287,7 @@ impl Executor<'_> {
 
 /// Retain original output keys without substituting projected or row-number identity.
 pub(crate) fn identities<E>(
-    dataset: &Dataset,
+    dataset: &CompletedRows<'_>,
     keys: &[usize],
     rows: impl IntoIterator<Item = usize>,
     budget: &mut Budget,
@@ -2331,3 +2350,8 @@ fn failure_identity<E>(
             .collect(),
     }))
 }
+
+#[path = "dataset_verification.rs"]
+mod verification;
+
+use verification::CompletedRows;

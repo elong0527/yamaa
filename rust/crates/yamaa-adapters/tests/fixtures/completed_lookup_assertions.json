@@ -1,0 +1,1189 @@
+{
+  "authorship": "Independent REQ-0183/0185/0383/0384/0372 examples. Tables, findings and complete verification records are authored here; no candidate observation or retiring evaluator supplied expected truth.",
+  "cases": {
+    "lookup-when": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - unique: {columns: [ID], id: prefix}\n  - assert: {id: selected, when: \"P.X = 2\", require: \"VALUE = 2\"}\n  - row_count: {min: 3, max: 3}\n",
+      "inputs": {
+        "src.csv": "ID\na\nb\nc\n",
+        "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
+      },
+      "issues": [],
+      "check_issues": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        },
+        {
+          "check": "assert",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0384",
+          "severity": "error",
+          "spec_path": "verifications[1].assert",
+          "target": null,
+          "verification_id": "selected"
+        },
+        {
+          "check": "row_count",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0385",
+          "severity": "error",
+          "spec_path": "verifications[2].row_count",
+          "target": null,
+          "verification_id": null
+        }
+      ],
+      "handlers": [],
+      "csv": "ID,VALUE\na,2\nb,2\nc,2\n",
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ],
+      "table": {
+        "columns": [
+          [
+            "ID",
+            "str"
+          ],
+          [
+            "VALUE",
+            "int"
+          ]
+        ],
+        "rows": [
+          [
+            "a",
+            "2"
+          ],
+          [
+            "b",
+            "2"
+          ],
+          [
+            "c",
+            "2"
+          ]
+        ]
+      }
+    },
+    "lookup-require": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - unique: {columns: [ID], id: prefix}\n  - assert: {id: selected, when: \"P.X IS NOT NULL\", require: \"P.X = VALUE\"}\n  - row_count: {min: 3, max: 3}\n",
+      "inputs": {
+        "src.csv": "ID\na\nb\nc\n",
+        "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
+      },
+      "issues": [],
+      "check_issues": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        },
+        {
+          "check": "assert",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0384",
+          "severity": "error",
+          "spec_path": "verifications[1].assert",
+          "target": null,
+          "verification_id": "selected"
+        },
+        {
+          "check": "row_count",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0385",
+          "severity": "error",
+          "spec_path": "verifications[2].row_count",
+          "target": null,
+          "verification_id": null
+        }
+      ],
+      "handlers": [],
+      "csv": "ID,VALUE\na,2\nb,2\nc,2\n",
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ],
+      "table": {
+        "columns": [
+          [
+            "ID",
+            "str"
+          ],
+          [
+            "VALUE",
+            "int"
+          ]
+        ],
+        "rows": [
+          [
+            "a",
+            "2"
+          ],
+          [
+            "b",
+            "2"
+          ],
+          [
+            "c",
+            "2"
+          ]
+        ]
+      }
+    },
+    "same-selected-fields": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: P.X}\nverifications:\n  - unique: {columns: [ID], id: prefix}\n  - assert: {id: selected, when: \"P.X IS NOT NULL\", require: \"P.X = VALUE AND P.Z IS NULL\"}\n  - row_count: {min: 3, max: 3}\n",
+      "inputs": {
+        "src.csv": "ID\na\nb\nc\n",
+        "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
+      },
+      "issues": [],
+      "check_issues": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        },
+        {
+          "check": "assert",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0384",
+          "severity": "error",
+          "spec_path": "verifications[1].assert",
+          "target": null,
+          "verification_id": "selected"
+        },
+        {
+          "check": "row_count",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0385",
+          "severity": "error",
+          "spec_path": "verifications[2].row_count",
+          "target": null,
+          "verification_id": null
+        }
+      ],
+      "handlers": [
+        {
+          "count": 1,
+          "handler": "multiple_matches",
+          "spec_path": "columns.VALUE.derivation.source.multiple_matches"
+        },
+        {
+          "count": 1,
+          "handler": "no_match",
+          "spec_path": "columns.VALUE.derivation.source.no_match"
+        }
+      ],
+      "csv": "ID,VALUE\na,2\nb,2\nc,\n",
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ],
+      "table": {
+        "columns": [
+          [
+            "ID",
+            "str"
+          ],
+          [
+            "VALUE",
+            "int"
+          ]
+        ],
+        "rows": [
+          [
+            "a",
+            "2"
+          ],
+          [
+            "b",
+            "2"
+          ],
+          [
+            "c",
+            null
+          ]
+        ]
+      }
+    },
+    "record-lookup-require": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nrows: [{id: records, dataset: SRC, derivations: {}}]\nverifications:\n  - unique: {columns: [ID], id: prefix}\n  - assert: {id: selected, when: \"P.X IS NOT NULL\", require: \"P.X = VALUE\"}\n  - row_count: {min: 3, max: 3}\n",
+      "inputs": {
+        "src.csv": "ID\na\nb\nc\n",
+        "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
+      },
+      "issues": [],
+      "check_issues": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        },
+        {
+          "check": "assert",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0384",
+          "severity": "error",
+          "spec_path": "verifications[1].assert",
+          "target": null,
+          "verification_id": "selected"
+        },
+        {
+          "check": "row_count",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0385",
+          "severity": "error",
+          "spec_path": "verifications[2].row_count",
+          "target": null,
+          "verification_id": null
+        }
+      ],
+      "handlers": [],
+      "csv": "ID,VALUE\na,2\nb,2\nc,2\n",
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ],
+      "table": {
+        "columns": [
+          [
+            "ID",
+            "str"
+          ],
+          [
+            "VALUE",
+            "int"
+          ]
+        ],
+        "rows": [
+          [
+            "a",
+            "2"
+          ],
+          [
+            "b",
+            "2"
+          ],
+          [
+            "c",
+            "2"
+          ]
+        ]
+      }
+    },
+    "group-lookup-require": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nrows: [{id: groups, dataset: SRC, group_by: [SRC.ID], derivations: {}}]\nverifications:\n  - unique: {columns: [ID], id: prefix}\n  - assert: {id: selected, when: \"P.X IS NOT NULL\", require: \"P.X = VALUE\"}\n  - row_count: {min: 3, max: 3}\n",
+      "inputs": {
+        "src.csv": "ID\na\nb\nc\n",
+        "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
+      },
+      "issues": [],
+      "check_issues": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        },
+        {
+          "check": "assert",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0384",
+          "severity": "error",
+          "spec_path": "verifications[1].assert",
+          "target": null,
+          "verification_id": "selected"
+        },
+        {
+          "check": "row_count",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0385",
+          "severity": "error",
+          "spec_path": "verifications[2].row_count",
+          "target": null,
+          "verification_id": null
+        }
+      ],
+      "handlers": [],
+      "csv": "ID,VALUE\na,2\nb,2\nc,2\n",
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ],
+      "table": {
+        "columns": [
+          [
+            "ID",
+            "str"
+          ],
+          [
+            "VALUE",
+            "int"
+          ]
+        ],
+        "rows": [
+          [
+            "a",
+            "2"
+          ],
+          [
+            "b",
+            "2"
+          ],
+          [
+            "c",
+            "2"
+          ]
+        ]
+      }
+    },
+    "valid-when-unknown-require": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - unique: {columns: [ID], id: prefix}\n  - assert: {id: selected, when: \"P.X > 0\", require: \"UNKNOWN > 0\"}\n  - row_count: {min: 3, max: 3}\n",
+      "inputs": {
+        "src.csv": "ID\na\nb\nc\n",
+        "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "requirement": "REQ-0405",
+          "spec_paths": [
+            "verifications[1].assert.require"
+          ],
+          "context": {
+            "identifier": "UNKNOWN"
+          }
+        }
+      ],
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "requirement": "REQ-0405",
+          "spec_paths": [
+            "verifications[1].assert.require"
+          ],
+          "context": {
+            "identifier": "UNKNOWN"
+          }
+        }
+      ],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ],
+      "handlers": [],
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ]
+    },
+    "missing-lookup-field": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - unique: {columns: [ID], id: prefix}\n  - assert: {id: selected, require: \"P.ABSENT = 0\"}\n  - row_count: {min: 3, max: 3}\n",
+      "inputs": {
+        "src.csv": "ID\na\nb\nc\n",
+        "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "requirement": "REQ-0405",
+          "spec_paths": [
+            "verifications[1].assert.require"
+          ],
+          "context": {
+            "identifier": "P.ABSENT"
+          }
+        }
+      ],
+      "check_issues": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ],
+      "handlers": [],
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ]
+    },
+    "when-type-before-require-name": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - unique: {columns: [ID], id: prefix}\n  - assert: {id: selected, when: \"P.X = 'bad'\", require: \"UNKNOWN > 0\"}\n  - row_count: {min: 3, max: 3}\n",
+      "inputs": {
+        "src.csv": "ID\na\nb\nc\n",
+        "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "requirement": "REQ-0190",
+          "spec_paths": [
+            "verifications[1].assert.when"
+          ],
+          "context": {
+            "left_type": "int",
+            "right_type": "str"
+          }
+        }
+      ],
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "requirement": "REQ-0405",
+          "spec_paths": [
+            "verifications[1].assert.require"
+          ],
+          "context": {
+            "identifier": "UNKNOWN"
+          }
+        }
+      ],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ],
+      "handlers": [],
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ]
+    },
+    "empty-type-admission": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - unique: {columns: [ID], id: prefix}\n  - assert: {id: selected, require: \"P.X = 'bad'\"}\n  - row_count: {min: 3, max: 3}\n",
+      "inputs": {
+        "src.csv": "ID\n",
+        "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "requirement": "REQ-0190",
+          "spec_paths": [
+            "verifications[1].assert.require"
+          ],
+          "context": {
+            "left_type": "int",
+            "right_type": "str"
+          }
+        }
+      ],
+      "check_issues": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 0,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ],
+      "handlers": [],
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ]
+    },
+    "unhandled-predicate-unknown": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - unique: {columns: [ID], id: prefix}\n  - assert: {id: selected, require: \"P.X = 2\"}\n  - row_count: {min: 3, max: 3}\n",
+      "inputs": {
+        "src.csv": "ID\na\nb\nc\n",
+        "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
+      },
+      "issues": [
+        {
+          "phase": "verification",
+          "condition": "assert_failed",
+          "requirement": "REQ-0384",
+          "spec_paths": [
+            "verifications[1].assert"
+          ],
+          "context": {
+            "failure_count": 1,
+            "keys": [
+              {
+                "ID": "c"
+              }
+            ],
+            "verification_id": "selected"
+          }
+        }
+      ],
+      "check_issues": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        },
+        {
+          "check": "assert",
+          "evaluated_count": 3,
+          "failure": {
+            "phase": "verification",
+            "condition": "assert_failed",
+            "requirement": "REQ-0384",
+            "context": {
+              "failure_count": 1,
+              "keys": [
+                {
+                  "ID": "c"
+                }
+              ],
+              "verification_id": "selected"
+            },
+            "spec_paths": [
+              "verifications[1].assert"
+            ],
+            "severity": "error",
+            "log_context": {
+              "failure_count": 1,
+              "keys": [
+                {
+                  "ID": "c"
+                }
+              ],
+              "verification_id": "selected"
+            },
+            "offending_keys": [
+              {
+                "ID": "c"
+              }
+            ]
+          },
+          "requirement": "REQ-0384",
+          "severity": "error",
+          "spec_path": "verifications[1].assert",
+          "target": null,
+          "verification_id": "selected"
+        },
+        {
+          "check": "row_count",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0385",
+          "severity": "error",
+          "spec_path": "verifications[2].row_count",
+          "target": null,
+          "verification_id": null
+        }
+      ],
+      "handlers": [],
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ]
+    },
+    "no-match-literal": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: 3\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - unique: {columns: [ID], id: prefix}\n  - assert: {id: selected, require: \"P.X = 3\"}\n  - row_count: {min: 1, max: 1}\n",
+      "inputs": {
+        "src.csv": "ID\nc\n",
+        "donor.csv": "ID,SEQ,X,Z\n"
+      },
+      "issues": [],
+      "check_issues": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        },
+        {
+          "check": "assert",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0384",
+          "severity": "error",
+          "spec_path": "verifications[1].assert",
+          "target": null,
+          "verification_id": "selected"
+        },
+        {
+          "check": "row_count",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0385",
+          "severity": "error",
+          "spec_path": "verifications[2].row_count",
+          "target": null,
+          "verification_id": null
+        }
+      ],
+      "handlers": [],
+      "csv": "ID,VALUE\nc,2\n",
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ],
+      "table": {
+        "columns": [
+          [
+            "ID",
+            "str"
+          ],
+          [
+            "VALUE",
+            "int"
+          ]
+        ],
+        "rows": [
+          [
+            "c",
+            "2"
+          ]
+        ]
+      }
+    },
+    "mixed-template-choice": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, KIND, CUT]\ninput:\n  SRC: {path: src.csv, types: {CUT: int}}\n  DONOR: {path: donor.csv, types: {SEQ: int, CUT: int, X: int}}\noutput: {path: result.csv, columns: [ID, KIND, CUT, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: {ID: ID, CUT: CUT, MODE: KIND}\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: KIND, type: str}\n  - {name: CUT, type: int, derivation: SRC.CUT}\n  - {name: VALUE, type: int, derivation: P.X}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID, SRC.CUT], derivations: {KIND: {literal: group}}}\n  - {id: records, dataset: SRC, derivations: {KIND: {literal: record}}}\nverifications:\n  - unique: {columns: [ID, KIND, CUT], id: prefix}\n  - assert: {id: selected, when: \"P.X > 0\", require: \"P.X = VALUE\"}\n  - row_count: {min: 4, max: 4}\n",
+      "inputs": {
+        "src.csv": "ID,CUT\na,1\na,2\n",
+        "donor.csv": "ID,SEQ,CUT,MODE,X,Z\na,1,1,group,1,\na,2,2,group,2,\na,3,1,record,11,\na,4,2,record,12,\n"
+      },
+      "issues": [],
+      "check_issues": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 4,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        },
+        {
+          "check": "assert",
+          "evaluated_count": 4,
+          "failure": null,
+          "requirement": "REQ-0384",
+          "severity": "error",
+          "spec_path": "verifications[1].assert",
+          "target": null,
+          "verification_id": "selected"
+        },
+        {
+          "check": "row_count",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0385",
+          "severity": "error",
+          "spec_path": "verifications[2].row_count",
+          "target": null,
+          "verification_id": null
+        }
+      ],
+      "handlers": [],
+      "csv": "ID,KIND,CUT,VALUE\na,group,1,1\na,group,2,2\na,record,1,11\na,record,2,12\n",
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ],
+      "table": {
+        "columns": [
+          [
+            "ID",
+            "str"
+          ],
+          [
+            "KIND",
+            "str"
+          ],
+          [
+            "CUT",
+            "int"
+          ],
+          [
+            "VALUE",
+            "int"
+          ]
+        ],
+        "rows": [
+          [
+            "a",
+            "group",
+            "1",
+            "1"
+          ],
+          [
+            "a",
+            "group",
+            "2",
+            "2"
+          ],
+          [
+            "a",
+            "record",
+            "1",
+            "11"
+          ],
+          [
+            "a",
+            "record",
+            "2",
+            "12"
+          ]
+        ]
+      }
+    },
+    "false-when-eager-require-no-match": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - unique: {columns: [ID], id: prefix}\n  - assert: {id: selected, when: \"FALSE\", require: \"P.X > 0\"}\n  - row_count: {min: 1, max: 1}\n",
+      "inputs": {
+        "src.csv": "ID\nc\n",
+        "donor.csv": "ID,SEQ,X,Z\n"
+      },
+      "issues": [
+        {
+          "phase": "join",
+          "condition": "unmatched_key",
+          "requirement": "REQ-0124",
+          "spec_paths": [
+            "intermediates[0]"
+          ],
+          "context": {
+            "intermediate": "P",
+            "dataset": "DONOR",
+            "key": [
+              "ID"
+            ],
+            "intermediate_key": {
+              "ID": "c"
+            },
+            "keys": [
+              {
+                "ID": "c"
+              }
+            ]
+          }
+        }
+      ],
+      "check_issues": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ],
+      "handlers": [],
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ]
+    },
+    "and-eager-operand-no-match": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - unique: {columns: [ID], id: prefix}\n  - assert: {id: selected, when: \"FALSE AND P.X > 0\", require: \"TRUE\"}\n  - row_count: {min: 1, max: 1}\n",
+      "inputs": {
+        "src.csv": "ID\nc\n",
+        "donor.csv": "ID,SEQ,X,Z\n"
+      },
+      "issues": [
+        {
+          "phase": "join",
+          "condition": "unmatched_key",
+          "requirement": "REQ-0124",
+          "spec_paths": [
+            "intermediates[0]"
+          ],
+          "context": {
+            "intermediate": "P",
+            "dataset": "DONOR",
+            "key": [
+              "ID"
+            ],
+            "intermediate_key": {
+              "ID": "c"
+            },
+            "keys": [
+              {
+                "ID": "c"
+              }
+            ]
+          }
+        }
+      ],
+      "check_issues": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ],
+      "handlers": [],
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ]
+    },
+    "or-eager-operand-no-match": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - unique: {columns: [ID], id: prefix}\n  - assert: {id: selected, when: \"FALSE\", require: \"TRUE OR P.X > 0\"}\n  - row_count: {min: 1, max: 1}\n",
+      "inputs": {
+        "src.csv": "ID\nc\n",
+        "donor.csv": "ID,SEQ,X,Z\n"
+      },
+      "issues": [
+        {
+          "phase": "join",
+          "condition": "unmatched_key",
+          "requirement": "REQ-0124",
+          "spec_paths": [
+            "intermediates[0]"
+          ],
+          "context": {
+            "intermediate": "P",
+            "dataset": "DONOR",
+            "key": [
+              "ID"
+            ],
+            "intermediate_key": {
+              "ID": "c"
+            },
+            "keys": [
+              {
+                "ID": "c"
+              }
+            ]
+          }
+        }
+      ],
+      "check_issues": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ],
+      "handlers": [],
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ]
+    },
+    "prior-failure-before-require-name": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - unique: {columns: [VALUE], id: prefix}\n  - assert: {id: selected, when: \"P.X > 0\", require: \"UNKNOWN > 0\"}\n  - row_count: {min: 3, max: 3}\n",
+      "inputs": {
+        "src.csv": "ID\na\nb\nc\n",
+        "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "requirement": "REQ-0405",
+          "spec_paths": [
+            "verifications[1].assert.require"
+          ],
+          "context": {
+            "identifier": "UNKNOWN"
+          }
+        }
+      ],
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "requirement": "REQ-0405",
+          "spec_paths": [
+            "verifications[1].assert.require"
+          ],
+          "context": {
+            "identifier": "UNKNOWN"
+          }
+        }
+      ],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 1,
+          "failure": {
+            "phase": "verification",
+            "condition": "unique_failed",
+            "requirement": "REQ-0381",
+            "spec_paths": [
+              "verifications[0].unique"
+            ],
+            "context": {
+              "columns": [
+                "VALUE"
+              ],
+              "failure_count": 1,
+              "keys": [
+                {
+                  "ID": "a"
+                },
+                {
+                  "ID": "b"
+                },
+                {
+                  "ID": "c"
+                }
+              ],
+              "verification_id": "prefix"
+            },
+            "severity": "error",
+            "log_context": {
+              "columns": [
+                "VALUE"
+              ],
+              "failure_count": 1,
+              "keys": [
+                {
+                  "ID": "a"
+                },
+                {
+                  "ID": "b"
+                },
+                {
+                  "ID": "c"
+                }
+              ],
+              "verification_id": "prefix"
+            },
+            "offending_keys": [
+              {
+                "ID": "a"
+              },
+              {
+                "ID": "b"
+              },
+              {
+                "ID": "c"
+              }
+            ]
+          },
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ],
+      "handlers": [],
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ]
+    },
+    "selected-warning-retains-output": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, warning_log: warnings.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - unique: {columns: [ID], id: prefix}\n  - assert: {id: selected, severity: warning, require: \"P.X = 3\"}\n  - row_count: {min: 3, max: 3}\n",
+      "inputs": {
+        "src.csv": "ID\na\nb\nc\n",
+        "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
+      },
+      "issues": [],
+      "check_issues": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        },
+        {
+          "check": "assert",
+          "evaluated_count": 3,
+          "failure": {
+            "phase": "verification",
+            "condition": "assert_failed",
+            "requirement": "REQ-0384",
+            "spec_paths": [
+              "verifications[1].assert"
+            ],
+            "context": {
+              "failure_count": 3,
+              "keys": [
+                {
+                  "ID": "a"
+                },
+                {
+                  "ID": "b"
+                },
+                {
+                  "ID": "c"
+                }
+              ],
+              "verification_id": "selected"
+            },
+            "severity": "warning",
+            "log_context": {
+              "failure_count": 3,
+              "keys": [
+                {
+                  "ID": "a"
+                },
+                {
+                  "ID": "b"
+                },
+                {
+                  "ID": "c"
+                }
+              ],
+              "verification_id": "selected"
+            },
+            "offending_keys": [
+              {
+                "ID": "a"
+              },
+              {
+                "ID": "b"
+              },
+              {
+                "ID": "c"
+              }
+            ]
+          },
+          "requirement": "REQ-0384",
+          "severity": "warning",
+          "spec_path": "verifications[1].assert",
+          "target": null,
+          "verification_id": "selected"
+        },
+        {
+          "check": "row_count",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0385",
+          "severity": "error",
+          "spec_path": "verifications[2].row_count",
+          "target": null,
+          "verification_id": null
+        }
+      ],
+      "handlers": [],
+      "csv": "ID,VALUE\na,2\nb,2\nc,2\n",
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ],
+      "table": {
+        "columns": [
+          [
+            "ID",
+            "str"
+          ],
+          [
+            "VALUE",
+            "int"
+          ]
+        ],
+        "rows": [
+          [
+            "a",
+            "2"
+          ],
+          [
+            "b",
+            "2"
+          ],
+          [
+            "c",
+            "2"
+          ]
+        ]
+      }
+    }
+  }
+}

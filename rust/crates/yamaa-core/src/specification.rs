@@ -1662,6 +1662,7 @@ impl PreparedSpecification {
                 self.project_calls.as_ref(),
                 &mut findings,
             )?;
+            let verifications = self.verifications.bind(self, &secondary, &intermediates)?;
             return rows
                 .bind(
                     self,
@@ -1669,7 +1670,7 @@ impl PreparedSpecification {
                     &self.source().name,
                     &self.output,
                     &self.keys,
-                    self.verifications(),
+                    &verifications,
                     self.project_calls.as_ref(),
                     &self.intermediates,
                     secondary,
@@ -2164,6 +2165,7 @@ impl PreparedSpecification {
         let record_windows = key_assignments
             .iter()
             .any(|a| a.expression.window().is_some());
+        let verifications = self.verifications.bind(self, &secondary, &intermediates)?;
         DatasetPlan::new_with_intermediates(
             crate::dataset::SourceSchemas {
                 primary: source.clone(),
@@ -2185,7 +2187,7 @@ impl PreparedSpecification {
             }],
             columns,
             self.keys.clone(),
-            self.verifications.checks.clone(),
+            verifications,
         )
         .and_then(|plan| plan.with_column_verifications(self.column_verification_groups()))
         .and_then(|plan| plan.with_warning_verifications(self.warning_verification_paths()))

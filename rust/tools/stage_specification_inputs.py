@@ -570,11 +570,66 @@ def stage_source_selection_truth(destination: Path, fixture="source_selection", 
         "source_selection_truth <- list(\n" + ",\n".join(entries) + "\n)\n", encoding="ascii")
 
 
+def stage_completed_lookup_assertion_truth(destination: Path):
+    """Project authored typed cells into both installed hosts without executing them."""
+    fixture, label = "completed_lookup_assertions", "completed-lookup-assertions"
+    source = REPOSITORY / ("rust/crates/yamaa-adapters/tests/fixtures/" + fixture + ".json")
+    shutil.copy2(source, destination / (label + "-truth.json"))
+    truth = json.loads(source.read_text(encoding="ascii"))
+    directories = destination / (label + "-cases")
+    directories.mkdir()
+    text = lambda value: json.dumps(value, ensure_ascii=True)
+    vector = lambda values: "c(" + ",".join(values) + ")" if values else "character()"
+
+    def issues(rows):
+        fields = []
+        for field in ("phase", "condition", "requirement", "context"):
+            values = [text(json.dumps(row[field], sort_keys=True, separators=(",", ":")))
+                      if field == "context" else text(row[field]) for row in rows]
+            fields.append(field + "=" + vector(values))
+        paths = [vector([text(path) for path in row["spec_paths"]]) for row in rows]
+        fields.insert(3, "spec_paths=list(" + ",".join(paths) + ")")
+        return "list(" + ",".join(fields) + ")"
+
+    entries = []
+    case_paths = {}
+    for index, (name, case) in enumerate(truth["cases"].items(), start=1):
+        case_paths[name] = f"{index:04d}"
+        directory = directories / case_paths[name]
+        directory.mkdir()
+        (directory / "spec.yaml").write_text(case["specification"], encoding="ascii", newline="\n")
+        for path, contents in case["inputs"].items():
+            (directory / path).write_text(contents, encoding="ascii", newline="\n")
+        fields = ["directory=" + text(case_paths[name]), "issues=" + issues(case["issues"]), "check_issues=" + issues(case["check_issues"]),
+                  "handlers=" + text(json.dumps(case["handlers"], sort_keys=True, separators=(",", ":")))]
+        if "verifications" in case:
+            records = [{**record, "specification": "__SPECIFICATION__"} for record in case["verifications"]]
+            fields.append("verifications=" + text(json.dumps(records, sort_keys=True, separators=(",", ":"))))
+        reads = [{"base_directory": ".", "condition": None, "outcome": "captured",
+                  "path": path, "snapshots_created": 1} for path in case["source_reads"]]
+        fields.append("source_reads=" + text(json.dumps(reads, sort_keys=True, separators=(",", ":"))))
+        if "table" in case:
+            (directory / "expected.csv").write_text(case["csv"], encoding="ascii", newline="\n")
+            columns, kinds = [], []
+            for index, (column, kind) in enumerate(case["table"]["columns"]):
+                values = ["NA_character_" if row[index] is None else text(row[index])
+                          for row in case["table"]["rows"]]
+                columns.append(text(column) + "=" + vector(values))
+                kinds.append(text(column) + "=" + text(kind))
+            fields.extend(("columns=list(" + ",".join(columns) + ")", "kinds=c(" + ",".join(kinds) + ")"))
+        entries.append(text(name) + "=list(" + ",".join(fields) + ")")
+    (destination / (label + "-case-paths.json")).write_text(
+        json.dumps(case_paths, indent=2) + "\n", encoding="ascii")
+    (destination / (label + "-truth.R")).write_text(
+        "# Literal typed cells and complete findings from independent completed-row assertion truth.\n"
+        "completed_lookup_assertion_truth <- list(\n" + ",\n".join(entries) + "\n)\n", encoding="ascii")
+
 def stage(destination: Path):
     """Keep original files separate from independently authored expected reports."""
     destination.mkdir(parents=True, exist_ok=False)
     (destination / "schema").mkdir()
     stage_inheritance_replay(destination)
+    stage_completed_lookup_assertion_truth(destination)
     stage_decode_replay(destination)
     stage_source_selection_truth(destination)
     stage_source_selection_truth(destination, "source_filter_scope", "source-filter-scope")
