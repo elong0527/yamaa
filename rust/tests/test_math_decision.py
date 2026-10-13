@@ -14,7 +14,7 @@ TOOLS = Path(__file__).parents[1] / "tools"
 sys.path.insert(0, str(TOOLS))
 import assess_math_decision
 from assess_math import difference
-from assess_math_decision import native_request
+from assess_math_decision import numeric_fixture
 from math_certificates import certify
 from math_corpus import expected_inputs
 from math_decision_corpus import cases
@@ -87,6 +87,34 @@ class TemporaryWorkspaceCleanup(unittest.TestCase):
                 self.assertIs(caught.exception, failure)
 
 
+class PublicNumericSuccessor(unittest.TestCase):
+    """Retire numeric/1 while retaining its accepted frozen numerical witnesses."""
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            from yamaa import _native
+        except ImportError:
+            raise unittest.SkipTest("installed native package is unavailable") from None
+        if not hasattr(_native, "_CORE_VERSION"):
+            raise unittest.SkipTest("probe-free installed package is unavailable")
+        cls.report = json.loads((TOOLS.parent / "qualification/math-decision-v1.json").read_text())
+
+    def test_all_frozen_numeric_values_and_language_failures_use_public_domain(self):
+        archived = {row["input"]["id"]: row["native"] for row in self.report["boundaries"]}
+        for case in cases():
+            with self.subTest(case=case["id"]):
+                actual = assess_math_decision.public_numeric(numeric_fixture(case))
+                self.assertEqual(assess_math_decision.outcome_bits(actual["outcome"]), assess_math_decision.outcome_bits(archived[case["id"]]["outcome"]))
+
+    def test_integer_conversion_handlers_keep_exact_values_and_call_counts(self):
+        for archived in self.report["integer_handlers"]:
+            with self.subTest(case=archived["input"]["id"]):
+                actual = assess_math_decision.public_numeric(numeric_fixture(archived["input"], "int", True))
+                self.assertEqual(actual["outcome"], archived["native"]["outcome"])
+                self.assertEqual([int(row["count"]) for row in actual["handler_counts"]], [int(row["count"]) for row in archived["native"]["handler_counts"]])
+
+
 class MathDecisionEvidence(unittest.TestCase):
     """Retained raw inputs, classes and exact observables are independently pinned."""
 
@@ -117,7 +145,7 @@ class MathDecisionEvidence(unittest.TestCase):
 
     def test_integer_promotion_retains_original_input_and_promoted_bits(self):
         case = next(case for case in cases() if case["id"] == "power-promoted-odd")
-        request = native_request(case)
+        request = numeric_fixture(case)
         self.assertEqual(request["bindings"][1]["value"], {"int": "9007199254740993"})
         self.assertEqual(case["inputs"][1], "4340000000000000")
 

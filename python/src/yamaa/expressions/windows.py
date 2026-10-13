@@ -281,7 +281,7 @@ def evaluate_window(
         return row_number(partition)
     if operation == "rank":
         method = payload.get("method", "competition")
-        if method not in {"competition", "dense"}:
+        if not isinstance(method, str) or method not in {"competition", "dense"}:
             return _condition(
                 "value_not_permitted",
                 {"field": "method", "value": str(method)},

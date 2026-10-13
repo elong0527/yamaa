@@ -1,8 +1,7 @@
 //! Resolve shared inherited findings while preserving opaque host failures.
 use super::{capture_failure, captured_schema};
 use crate::{
-    inheritance_transport::{self, Failure},
-    schema_transport::errors,
+    schema_outcomes as errors,
     specification_source::{InheritanceError, SourceFailure},
 };
 use serde_json::{json, Value};
@@ -62,6 +61,51 @@ fn traversal_finding<E>(error: &graph::Error<E>) -> Result<Option<Value>, captur
         json!({"status":"invalid", "diagnostics":[super::portable_diagnostic(finding).ok_or(captured_schema::Error::InvalidContext)?]}),
     ))
 }
+// The engine classifies the typed error. This boundary only serializes its
+// already-owned fields; no source request or JSON reply crosses a host callback.
+fn traversal_outcome<E>(schema: &SchemaStructure, error: graph::Error<E>) -> Result<Value, E> {
+    use yamaa_engine::inheritance_outcome::{self, Outcome};
+    let error = match inheritance_outcome::traversal_outcome(error, 16_777_216) {
+        Ok(Outcome::Diagnostic(finding)) => {
+            return Ok(match super::portable_diagnostic(finding) {
+                Some(finding) => json!({"status":"invalid", "diagnostics":[finding]}),
+                None => rejected("diagnostic_context"),
+            });
+        }
+        Ok(Outcome::Original(error)) => error,
+        Err(_) => return Ok(rejected("diagnostic_context_limit")),
+    };
+    Ok(match error {
+        graph::Error::Host(error) => return Err(error),
+        graph::Error::Resource(error) => {
+            let resource = match error.resource {
+                graph::Resource::Layers => "layers",
+                graph::Resource::ParentVisits => "parent_visits",
+                graph::Resource::Depth => "depth",
+                graph::Resource::PathBytes => "path_bytes",
+                graph::Resource::InputNodes => "input_nodes",
+                graph::Resource::InputTextBytes => "input_text_bytes",
+                graph::Resource::Work => "work",
+            };
+            json!({"status":"resource_limit", "phase":"inheritance", "resource":resource, "limit":error.limit})
+        }
+        graph::Error::UnsupportedControlField { source, field } => {
+            json!({"status":"unsupported", "feature":"inheritance_control_field", "source":source, "field":field})
+        }
+        graph::Error::Layer {
+            source,
+            entry,
+            input,
+            error,
+        } => normalized(
+            schema,
+            Some(&input),
+            error,
+            &[("source", &source), ("entry", &entry)],
+        ),
+        _ => rejected("transport"),
+    })
+}
 fn dictionary_failure_ref<'a, T>(
     document: &crate::specification_source::PreparedDocument,
     error: &'a yamaa_engine::dictionary_preparation::Error<
@@ -95,10 +139,8 @@ fn dictionary_failure_ref<'a, T>(
             let crate::specification_source::Error::Decode { error, .. } = error else {
                 return Ok(capture_failure(error));
             };
-            if let Some(mut rows) = crate::yaml_transport::semantic_diagnostics(error) {
+            if let Some(mut rows) = crate::yaml_diagnostics::semantic_diagnostics(error) {
                 for row in &mut rows {
-                    row["phase"] = json!("validation");
-                    row["requirement"] = Value::Null;
                     if matches!(error, crate::yaml_decode::DecodeFailure::NonAscii(_)) {
                         row["context"]["path"] = json!(reference.written());
                     }
@@ -126,7 +168,7 @@ fn dictionary_failure_ref<'a, T>(
             json!({"status":"rejected","stage":"dictionary","code":"declaring_origin"})
         }
     };
-    Ok(crate::yaml_transport::encode_outcome("specification/prototype",outcome,16_777_216)
+    Ok(crate::yaml_diagnostics::encode_outcome("specification/prototype",outcome,16_777_216)
         .unwrap_or_else(|_|json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"dictionary","code":"response_limit"}}).to_string()))
 }
 
@@ -179,7 +221,7 @@ pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<String, &T> {
                         // cycle carrier remains a transport refusal.
                         _ => graph::Error::InvalidIdentity,
                     };
-                    match inheritance_transport::traversal_outcome(error) {
+                    match traversal_outcome(schema, error) {
                         Ok(value) => literal(value),
                         Err(_) => rejected("transport"),
                     }
@@ -219,7 +261,7 @@ pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<String, &T> {
         ),
     };
     Ok(
-        crate::yaml_transport::encode_outcome("specification/prototype", outcome, 16_777_216)
+        crate::yaml_diagnostics::encode_outcome("specification/prototype", outcome, 16_777_216)
             .unwrap_or_else(|_| {
                 json!({"protocol":"specification/prototype","outcome":rejected("response_limit")})
                     .to_string()
@@ -262,10 +304,9 @@ pub fn failure<T>(error: InheritanceError<T>) -> Result<String, T> {
         E::Traversal(error) => match traversal_finding(&error) {
             Ok(Some(outcome)) => outcome,
             Err(error) => context_failure(error),
-            Ok(None) => match inheritance_transport::traversal_outcome(error) {
+            Ok(None) => match traversal_outcome(schema, error) {
                 Ok(value) => literal(value),
-                Err(Failure::Host(error)) => return source(error),
-                Err(Failure::Transport(_)) => rejected("transport"),
+                Err(error) => return source(error),
             },
         },
         E::ParentsRequired => rejected("parents_required"),
@@ -291,7 +332,7 @@ pub fn failure<T>(error: InheritanceError<T>) -> Result<String, T> {
         }
     };
     Ok(
-        crate::yaml_transport::encode_outcome("specification/prototype", outcome, 16_777_216)
+        crate::yaml_diagnostics::encode_outcome("specification/prototype", outcome, 16_777_216)
             .unwrap_or_else(|_| {
                 json!({"protocol":"specification/prototype","outcome":rejected("response_limit")})
                     .to_string()

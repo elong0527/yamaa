@@ -16,7 +16,7 @@ fn diagnostic(
     paths: Vec<String>,
     context: Value,
 ) -> Value {
-    json!({"phase":phase,"condition":condition,"requirement":requirement,"spec_paths":paths,"context":context})
+    crate::issue_rows::report(phase, condition, requirement, paths, context)
 }
 pub(crate) fn binding(error: &BindError, source: &SourceDeclaration) -> Option<Vec<Value>> {
     let BindError::Invalid(findings) = error else {
@@ -227,7 +227,7 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
 }
 
 fn capture_response(outcome: Value) -> String {
-    crate::yaml_transport::encode_outcome("specification/prototype", outcome, 16_777_216)
+    crate::yaml_diagnostics::encode_outcome("specification/prototype", outcome, 16_777_216)
         .unwrap_or_else(|_| json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"capture","code":"diagnostic_context_limit"}}).to_string())
 }
 /// Preparation exposes semantic context, never an arbitrary dump of source bytes.
@@ -235,7 +235,7 @@ fn capture_response(outcome: Value) -> String {
 pub fn capture_failure(error: &crate::specification_source::Error) -> String {
     use crate::specification_source::Error;
     if let Error::Decode { identity, error } = error {
-        if let Some(diagnostics) = crate::yaml_transport::capture_diagnostics(error, identity) {
+        if let Some(diagnostics) = crate::yaml_diagnostics::capture_diagnostics(error, identity) {
             return capture_response(json!({"status":"invalid","diagnostics":diagnostics}));
         }
     }

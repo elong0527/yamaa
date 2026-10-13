@@ -23,6 +23,24 @@ import measure_scalable_public as scalable
 import prepare_public_workloads as workloads
 
 
+def normalized_report(path, work):
+    """Compare decoded reports across native and specification path spellings."""
+    spellings = (str(work), lifecycle.specification_identity(work))
+
+    def walk(value):
+        if isinstance(value, str):
+            for spelling in spellings:
+                value = value.replace(spelling, "<work>")
+            return value
+        if isinstance(value, list):
+            return [walk(item) for item in value]
+        if isinstance(value, dict):
+            return {key: walk(item) for key, item in value.items()}
+        return value
+
+    return walk(lifecycle.read_json(path))
+
+
 def root_build_environment(case, authored):
     """Admit only generated producer environments with no active semantics."""
     if case["family"] != "producer":
@@ -257,9 +275,9 @@ def collect(args):
                     ordinary_child = output / row["children"][0]["child"]
                     ordinary = lifecycle.read_json(ordinary_child / "response.json")["repetitions"][0]
                     for stage in ("build", "save_1", "save_2"):
-                        lhs = lifecycle.retained_bytes(ordinary_child / ordinary["reports"][stage]).decode("utf-8").replace(ordinary["declaration"]["work_directory"], "<work>")
-                        rhs = lifecycle.retained_bytes(child / response["repetitions"][0]["reports"][stage]).decode("utf-8").replace(staged[0]["work_directory"], "<work>")
-                        if json.loads(lhs) != json.loads(rhs):
+                        lhs = normalized_report(ordinary_child / ordinary["reports"][stage], Path(ordinary["declaration"]["work_directory"]))
+                        rhs = normalized_report(child / response["repetitions"][0]["reports"][stage], Path(staged[0]["work_directory"]))
+                        if lhs != rhs:
                             raise ValueError("callback observer changed complete public observations")
                     observation["actual_callback_calls"] = actual["count"]
                     observation["accepted"] = True

@@ -50,7 +50,7 @@ pub(crate) fn convert(
         }
     }
     let rows = types.convert(parsed).map_err(Error::Typing)?;
-    let batch = crate::table_transport::sanitized_batch(&rows, 0, row_count)
+    let batch = crate::ipc_table::sanitized_batch(&rows, 0, row_count)
         .map_err(|error| Error::Table(TableError::Arrow(error)))?;
     ArrowTable::try_new(rows.schema().clone(), vec![batch], table_limits).map_err(Error::Table)
 }

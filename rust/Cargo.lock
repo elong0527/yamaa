@@ -1199,7 +1199,6 @@ dependencies = [
  "pyo3",
  "pyo3-build-config",
  "yamaa-adapters",
- "yamaa-core",
  "yamaa-engine",
 ]
 
@@ -1209,7 +1208,6 @@ version = "0.1.0"
 dependencies = [
  "extendr-api",
  "yamaa-adapters",
- "yamaa-core",
  "yamaa-engine",
 ]
 

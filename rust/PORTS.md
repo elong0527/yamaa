@@ -16,6 +16,8 @@ and codec interfaces are native traits; adapters translate values and errors.
 | `TableAccess` | core | Immutable Arrow snapshots, core normalized CSV tables and engine output tables; test fakes | Bounds or original opaque cell-access error |
 | `inheritance::SourcePort` | engine | Typed inheritance capture adapter; native captured-file port; remaining R JSON compatibility probe | Source failure or traversal resource limit |
 | `project_activation::ActivationPort` | engine | Python/R locked-package adapters; native fakes | Original lock, binding, conformance or interrupt failure |
+| `build::PreparationPort` | engine | One shared native metadata connector, for absent or explicit environments and recursive producers; native spies | Original retained preparation owner; sealed whole-entry selection before execution |
+| `build::Ports` | engine | One shared native application with Python/R activation and result ports; native fakes | Preparation failure before study authority; checked activation/build/output/report failures remain distinct; no Build publication authority |
 | `build::ResourceReader` | engine | One native metadata reader shared by original document/parent/producer/dictionary and environment/function/codelist/lock preparation | Original file/quota/snapshot failure; declaring identity and held bytes retained |
 | `project_preparation::CapturePort` | engine | Adapter native file metadata capture; shared scripted native fake | Original capture/interrupt payload, bounded source/byte/identity refusal or malformed native reply kind |
 | `project_preparation::DecodePort` | engine | Adapter captured YAML/schema codec; shared scripted native fake | Original structural failure with retained source/context; closed environment/function/codelist target |
@@ -45,10 +47,25 @@ inspects the whole authored input collection and verifies held snapshots before
 returning its sealed route fact. Schema defaults cannot invent producer inputs.
 Neither operation grants activation, study-data or publication authority.
 
-This is the shared preparation foundation for #1987. The complete Build/Check
-composition, held result/publication envelope and removal of both bindings'
-route assembly remain required; the existing checked lower services retain their
-current activation, report and explicit Save behavior during that migration.
+`build::prepare` owns route selection from that sealed original-entry fact.
+An ordinary entry without an environment keeps its plain checked capability;
+explicit environments use the checked project, and producer graphs use the
+checked graph with either an explicit or absent environment. Absence has no root
+capture, dependency, lock or discovery location; producer reports retain a null
+source identity. Metadata is captured once and moved into the selected capability.
+
+`build::domain` and `build::check`, also exposed by `domain_entry`, are the one
+Build and Check entry points for both installed hosts. Their shared native
+application composes the metadata connector and static checks with host activation
+and result-conversion ports. The bindings convert arguments and owned results;
+they do not select or reconstruct a route. Existing checked engine services own
+lock/binding/function-test admission before study capture, source decoding,
+execution and output gates. Report and public projection complete before the held
+result exposes explicit Save. No publisher is accepted during Build or Check;
+Save uses only the completed result's held bytes and preserves original failures
+and publication prefixes without replay. Native spies cover all four combinations
+of producer/ordinary and explicit/absent environment, and original non-Clone
+failures stop subsequent effects.
 
 ## Current lifecycle
 
@@ -132,6 +149,42 @@ binding or runtime failure. `execute_with_port_into` updates these observations
 in place so an outer panic boundary can preserve completed observations without
 reopening or reparsing input. An interrupted attempt remains explicitly
 incomplete until the adapter maps its boundary failure.
+
+Ordinary named selections without derived materialization charge the choices
+cache for one lookup and, on a miss, one insertion search plus three new typed
+fields. No prior entries or donor values/text are copied into a choice. The
+tuple comparison admits its identity tag, identity value and intermediate index.
+The pinned Rust 1.90 B-tree has eleven keys per node, at least five keys/six edges
+in a non-root node, and a linear node search: see its
+[node layout](https://github.com/rust-lang/rust/blob/1.90.0/library/alloc/src/collections/btree/node.rs)
+and [search](https://github.com/rust-lang/rust/blob/1.90.0/library/alloc/src/collections/btree/search.rs).
+Twelve comparisons at each of `1 + ceil(log6(max(entries, 1)))` rounded levels
+bound each search, including the root and unsuccessful searches. Thus each new
+ordinary choice consumes at least 75 logical work units. Existing identity,
+key-cell, string and selected-value admission remains cumulative. Expression
+keys and all derived contexts retain their prior linear cache admission;
+current-dependent materialized schema/text retention needs a separate guard.
+
+The ordinary cache's held storage is bounded separately from work. On the
+qualified 64-bit Rust 1.90 hosts, the actual typed choice entry is 40 bytes and
+the string/bucket entry is 48 bytes. Including unused node slots and all twelve
+internal edges, conservative node sizes are respectively 552 and 640 bytes;
+numeric-key/vector or numeric-key/index maps need at most 464 bytes per node.
+With `N(n) = 1 + floor(n/5)`, a tree with `n` entries has at most `N(n)` nodes,
+including an allocated empty root. For ordinary-only attempts, let `C` be
+choices, `E` eligibility entries, `I` indexes, `G` retained distinct string
+groups, and `R` the sum of input-row capacities of held eligibility vectors.
+Let `W`, `K`, and `T` be existing work-cell, key-cell, and scalar-text limits.
+Then `C <= floor(W/75)`, `I <= floor(K/128)`, `G <= K`, and
+`R <= min(W, E * source_rows)`; `E` also cannot exceed admitted intermediate
+declarations. Index bucket capacities hold at most `2*K` coordinates, and
+copied key strings at most `T` bytes. A conservative requested-storage bound is
+`104 + 552*N(C) + 464*N(E) + 8*R + 464*N(I) + 640*(I + floor(G/5)) + 16*K + T`
+bytes. It includes map metadata, unused node capacity, string storage and row
+coordinate capacity. Allocator metadata/rounding and other retained execution
+objects belong to measured process RSS, not this logical cache bound. SELF
+invalidation still charges the actual linear visit to held entries. No quota
+is increased by this accounting change.
 
 Core owns pure CSV profile admission, declared type admission/conversion, and
 their closed failure causes and diagnostic context. Its immutable typed rows own

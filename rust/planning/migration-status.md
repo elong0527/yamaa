@@ -1,62 +1,90 @@
 # yamaa Rust migration status
 
-Assessed 2026-10-11 against main
-`c8076646f403e2c15337c7771fa4341d2e5eaeee`. The current implementation and
-acceptance owner is [#1969](https://github.com/elong0527/yamaa/issues/1969).
-Its work packages replace the closed legacy umbrella and architecture issues.
-This snapshot records merged behavior and remaining gates; it is not release
-approval. Earlier narrative is preserved in
-[the archive](archive/migration-status-before-work-packages.md).
+Assessed 2026-10-13 against main
+`4b93a8e694f0ea8f73059ccdb82b4e79fdf21b12`. The implementation and acceptance
+owner is [#1969](https://github.com/elong0527/yamaa/issues/1969). This snapshot
+records merged behavior and remaining gates; it is not release approval.
+Earlier narrative remains in [the archive](archive/migration-status-before-work-packages.md).
+
+## Verified public coverage
+
+The last completed full main audit inspected here is
+[run 38420713250](https://github.com/elong0527/yamaa/actions/runs/38420713250),
+source `c42788b2ffc6025c76d699e3794ab4ee70d9fe6e`. Its retained audit and
+independent replay pass all 97 evidence checks. All 21 saved main inventories
+also replay the same complete verdicts against unchanged expected outputs:
+312 Python/Unix R passes and 311 Windows R passes, with the previously recorded
+refusals and path mismatches. The separate complete installed dispatch
+[run 38416920074](https://github.com/elong0527/yamaa/actions/runs/38416920074),
+source `2ba10418607933f92597f7c00ac363a3113a49db`, qualifies the unified-engine
+candidate. All 21 saved public inventories were independently replayed against
+unchanged committed expected outputs before advancing the ratchet below.
+
+| Installed routes | Pass | Mismatch | Unsupported | Error | Historical exclusions |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| All 18 Python interpreter/platform/form routes | 316 | 0 | 0 | 0 | 2 |
+| All three R source-package routes | 316 | 0 | 0 | 0 | 2 |
+
+The ratchet is the intersection: **316 Python and 316 R benchmarks out of 318**.
+Every active case passes; the two approved historical path exclusions remain
+explicit. No previous passing case is removed. This is complete installed corpus
+evidence for the candidate revision. Its deferred shared Rust and numerical
+checks and the final combined-main audit remain separate acceptance gates.
+
+The candidate now admits producer-linked input schemas without an explicit
+environment for `adam-adsl-randomization`, `negative-redefined-date` and
+`sdtm-dm-race-ethnicity`. The merged resource-kind priority and Windows R staging
+changes (#2090) preserve the directory and real-symlink diagnostic truth. The
+two newly qualified positive runners use the public `domain` API. None of these
+changes modifies expected outputs.
 
 ## Merged implementation
 
-The public Python `domain`/`check` and R `yamaa_domain`/`yamaa_check` use the
-shared engine. The shared compiled model (#1752), environment/functions/codelists
-(#1757), producer workflows (#1741), Define-XML/Dataset-JSON (#1758), numerical
-policy (#1740), declaring-file paths (#1905), and bounded cohort (#1739) have
-closed implementation owners. Their independent fixtures and retained reports
-qualify their stated scopes. They do not substitute for complete public-corpus
-or final combined installed-matrix evidence.
+Both public hosts execute domain/check/define through the shared Rust engine.
+The shared compiled model, environment/functions/codelists, producer workflows,
+Define-XML/Dataset-JSON, numerical policy, declaring-file paths and bounded cohort
+have merged implementation. Later work added mapping/cut, input options and
+ordering, aggregates, scalar text/extremes, ODM, row derivations, submission
+metadata and correlated intermediate derivations with eager verification.
+Binding-to-core dependencies and duplicated binding policy are removed (#2085),
+and the R JSON inheritance callback is replaced by a typed engine outcome
+(#2086). Correlated-intermediate acceptance (#1979) is closed with its full-matrix
+truth and ratchet evidence.
 
-Cargo locking and source-package membership checks retain the canonical lock,
-member manifests, build scripts and Rust sources. The approved first release
-requires eighteen CPython 3.12-3.14 wheel/source lanes and three R 4.6.1 source
-lanes on Linux x86_64, macOS arm64 and Windows x64. See
-[the decisions](maintainer-decisions.md).
+The first release still requires CPython 3.12-3.14 wheel and independent source
+rebuilds on Linux x86_64, macOS arm64 and Windows x64, plus R 4.6.1 source builds
+and strict R CMD check on all three hosts. Canonical Cargo locking and staged
+workspace membership remain enforced. The retained public contract suites and
+Windows R installed suites pass in the audited run above.
 
-PR #2000 is merged at this assessment revision. It replaces the Windows R
-UTF-8-sensitive handler-ledger regexp with literal truth comparison and adds
-full-matrix branch dispatch. The dispatched head's Windows R job has passed;
-its full dispatched run and combined-main run are still incomplete at this
-assessment. #1970 remains open until both complete acceptance gates pass.
+The CI policy merged in #2080 defers shared Rust checks and exact cross-platform
+math assessment to main pushes. Complete manual PR-head dispatch still qualifies
+all 18 installed Python routes, three R hosts and public/producer cohorts before
+merge. Complete work-package acceptance uses the combined main audit, including
+the deferred Rust and numerical evidence. See [CI instructions](../../.github/ci.md).
 
-## Remaining implementation and qualification
+## Remaining work
 
-| Scope | Work-package owners and concrete gate |
+| Scope | Open owners and concrete remaining gate |
 | --- | --- |
-| CI prerequisites | [#1970](https://github.com/elong0527/yamaa/issues/1970): complete Windows R acceptance; [#1971](https://github.com/elong0527/yamaa/issues/1971): run feature-gated fake-port tests and document full dispatch. |
-| Public conformance | [#1974](https://github.com/elong0527/yamaa/issues/1974): run every benchmark through both installed public APIs, compare independent truth, and seed a full-matrix ratchet. Counts come from that inventory, not component tests or static feature scans. |
-| Language | [#1975](https://github.com/elong0527/yamaa/issues/1975)-[#1983](https://github.com/elong0527/yamaa/issues/1983): mapping/cut, ordering/input options, aggregates, scalar text/extremes, correlated intermediates, source/handler options, row derivations, ODM, and predicate/integer edges. [#2005](https://github.com/elong0527/yamaa/issues/2005): remaining predicate sites and verification literals. |
-| Submission use case | [#1986](https://github.com/elong0527/yamaa/issues/1986): engine Define use case and specification submission metadata. |
-| Semantic ownership | [#1984](https://github.com/elong0527/yamaa/issues/1984), [#1985](https://github.com/elong0527/yamaa/issues/1985), [#2004](https://github.com/elong0527/yamaa/issues/2004): diagnostics registry, literal guard and normative requirements; [#1989](https://github.com/elong0527/yamaa/issues/1989), then [#1987](https://github.com/elong0527/yamaa/issues/1987): translating bindings and one engine build use case. |
-| Boundary cleanup | [#1988](https://github.com/elong0527/yamaa/issues/1988): retire R JSON inheritance callback; [#1990](https://github.com/elong0527/yamaa/issues/1990): migrate consumers and retire component probes. |
-| Public API and consumers | [#1991](https://github.com/elong0527/yamaa/issues/1991): tested domain/check/define contract; [#1992](https://github.com/elong0527/yamaa/issues/1992): public benchmark runners; [#1993](https://github.com/elong0527/yamaa/issues/1993): R package/docs and deliberate cdiscbuilder retirement. |
-| Repository tooling | [#1995](https://github.com/elong0527/yamaa/issues/1995): declaring-file policy in the validator; [#2002](https://github.com/elong0527/yamaa/issues/2002): validator/style decoupling before reference removal. |
-| Final evidence | [#1996](https://github.com/elong0527/yamaa/issues/1996): Windows R, locked packages and final full matrix; [#1997](https://github.com/elong0527/yamaa/issues/1997): automated provenance/coverage audit; [#1998](https://github.com/elong0527/yamaa/issues/1998): representative cold/warm performance and memory. |
-| Transition/removal | [#1999](https://github.com/elong0527/yamaa/issues/1999): the [gated transition and rollback plan](transition.md) requires combined-main acceptance before approval; [#1994](https://github.com/elong0527/yamaa/issues/1994): remove the reference and obsolete API after all entry criteria pass. |
+| Language acceptance | #1980: finish additional authored scalar/key source forms and the reviewed grouped-filter disposition (#2101/#2103). #2005: finish declared predicate-site acceptance. Candidate public corpus coverage is complete. |
+| Diagnostic ownership | #2084 empties the adapter/binding literal allowlist using independent JSON truth. Core/engine ownership and normative null decisions are merged; #1984 still requires the current-head full dispatch and combined-main evidence. |
+| Binding and orchestration ownership | #1989 implementation is merged; renew combined-main acceptance. #1987's unified ordinary/environment/producer candidate passes the full installed dispatch. Qualify its supplied-environment diagnostic follow-up and final composition before closure. |
+| Callback/probe cleanup | The R inheritance/1 callback is retired; #1988's remaining transports and #1990's unique assertions, obsolete exports and assisted consumers are addressed by the probe-removal candidate. Its cohort/audit replacement must reject malformed evidence. Diagnostic context remains JSON text. |
+| Public surface and R package | #1991: complete the approved installed surface and deliberate removals; #1993: finish R/yamaa installation guidance, grammar replay and cdiscbuilder retirement. |
+| Repository tooling | Native CSV and regex validator routes and the retained style CLI are merged (#2095/#2097/#2087). #2002 must finish held native metadata, typed declaration/grammar consumers and the complete original validator controls before reference removal. |
+| Release evidence | #1996: final combined-main evidence, complete public corpus, Windows R resource behavior and locked package membership after the remaining changes. |
+| Measurements | #1998 and #1973 item 10: collect the approved workload/size/form matrix, same-machine prior-release baselines, phase/callback/RSS evidence, raw samples and concrete passing budgets. The generator and collector exist; collection is incomplete. |
+| Transition and removal | #1999 and #1973 item 11: approve the existing [transition plan](transition.md) only after all entry criteria and rollback rehearsals pass; #1994 then removes the reference and obsolete APIs, renewing all affected evidence. |
 
-Initial policy questions are tracked in
-[#1973](https://github.com/elong0527/yamaa/issues/1973). Under the maintainer's
-delegated decision authority, initial dispositions are recorded in PR #2006;
-numeric budgets and transition approval still require their actual evidence.
-The lossless R NUL-string representation remains the target.
+The maintainer delegated implementation decisions in
+[maintainer-decisions.md](maintainer-decisions.md); no additional confirmation is
+needed to continue independent implementation. Evidence-dependent budgets and
+transition approval remain pending. The reference evaluator, assisted inventory,
+component probe exports and R/cdiscbuilder remain in main. Their removal
+candidates are not release approval.
 
-The assisted inventory is historical and frozen. Retire it only after the
-public conformance ratchet qualifies on the full matrix, before deleting its
-probe consumers. All existing per-slice `*-qualification.md` ledgers are frozen;
-new evidence belongs in the implementing PR and the #1997 audit record.
-
-See the [finite blocker register](release-readiness.md) and
-[delivery/evidence rules](migration-order.md). Update this snapshot at each
-wave using #1972 or its explicit refresh successor; feature PRs do not own the
-planning narrative.
+Keep the assisted inventory frozen until its qualified public/typed replacements
+permit retirement. Existing per-slice qualification ledgers remain historical.
+New evidence belongs in implementing PRs and the automated main audit. See
+[the blocker register](release-readiness.md) and [delivery order](migration-order.md).

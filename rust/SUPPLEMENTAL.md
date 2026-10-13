@@ -1,8 +1,8 @@
 # Supplemental contract evidence
 
 The benchmark inventory answers which original specifications ran completely.
-The supplemental catalog answers which service contracts and installed probes
-exist and which of those probe suites actually ran. These are different claims.
+The supplemental catalog answers which typed service contracts and installed public suites
+exist and which of those suites actually ran. These are different claims.
 
 `qualification/supplemental.json` explicitly lists shared fixture contracts,
 supporting inputs/documentation, known consumer source files and installed Python/R
@@ -28,10 +28,9 @@ ran. Rust-only and reference-only consumers remain linked source evidence rather
 than being relabeled as installed-host passes. Existing Cargo debug/release,
 reference Python, grammar and numerical assessment jobs remain necessary gates.
 
-`component` includes typed-plan execution, transport, ownership and host bridge
-checks. `compile` includes syntax/schema/inheritance/binding services and may
-exercise temporary host orchestration. Neither level asserts a complete shared
-compiler or satisfies `shared_run`. Inline assertions are represented by their
+`component` includes typed execution, ownership and host bridge checks.
+`compile` includes typed syntax/schema/inheritance/binding services. Neither
+level substitutes for public `shared_run` qualification. Inline assertions are represented by their
 suite identity. The separate complete-run inventory supplies the actual benchmark
 claim and preserves its independent artifact/observation comparisons.
 
@@ -61,3 +60,33 @@ integer conversions are exact or fail. These approved contracts follow
 [#1973](https://github.com/elong0527/yamaa/issues/1973) items 2-4. The suite
 catalog and successful local execution do not replace exact-commit qualification
 on all required Python wheel/source and R source platforms, including Windows R.
+
+## Component endpoint retirement
+
+#1990 removes every installed prototype endpoint and request protocol. The 24
+remaining installed suites qualify public domain/check/define and retained typed
+lifecycle ports. Python `_CORE_VERSION` and R's private `.core_version()` expose
+compiled package metadata without the former capabilities/installation probe.
+The frozen assisted inventory is historical evidence; native CI and its audit
+use the public benchmark ratchet and installed supplemental evidence.
+
+| Retired family | Assertion disposition |
+| --- | --- |
+| Installation/capabilities and scalar/1 | Remove endpoint/envelope assertions. Typed `scalar_bytes`, `public_table` and installed public-contract suites preserve full i64, nonfinite normalization, Unicode/NUL and separate missingness. |
+| numeric/1 | Remove request limits/coercion assertions. Core numeric compiler, engine numeric lifecycle and shared arithmetic/literal fixtures preserve semantics and failure ordering. Installed math decision replay now uses public domain. |
+| numeric/predicate/aggregate syntax | Private typed parser examples preserve complete AST, source position and differential comparisons; 409 shared grammar checks and 407 installed public checks preserve independent YAML grammar truth. |
+| regex/1 | Remove installed protocol assertions. Typed core regex suite and private development-only regex observations retain independent R022 and differential assessment. |
+| dependency/column dependency | Remove probe envelope assertions. Typed core dependency suites continue to consume the same independent TSV truth. |
+| reference/1 | Remove installed metadata-query interfaces. Typed core reference binding/scope, intermediate, key, match-value and relation suites plus original public specifications preserve semantic assertions. |
+| schema/1 and yaml/1 | Remove installed tree/query interfaces. Typed schema capture, preparation, diagnostic, bundle, normalization, layer, window and inheritance tests preserve sources/defaults/ordering. Historical schema citation fixtures remain test-only evidence. |
+| inheritance/1 | #1988 replaces the callback with typed inheritance outcomes. Installed private inherited-document ports retain original errors/effects; public specifications qualify the production path. |
+| table inspection/round trip | Remove installed endpoints. Seven adversarial IPC, masked payload, ownership, schema/shape, UTF-8 and expansion checks use typed IPC decoding and a private fixture serializer. Public outputs qualify installed ownership. |
+| dataset/1 and function/1 | Remove JSON plans and explicit callable endpoints. Engine dataset/compiler/function-port suites and installed public environment/producer/lifecycle suites retain semantic, effect, interruption, recovery and result assertions. Typed successors explicitly preserve reducer source provenance, missing-only reductions and wide-count/projection refusals. |
+| dataset profile/1 | Remove prototype measurement endpoint/harness. Public lifecycle measurement retains actual public execution, raw observations and process-failure evidence. |
+
+No JSON request or reply crosses a host callback boundary. Production execution
+and authored-source findings use the five fields phase, condition, requirement,
+spec_paths and context. Installed issue context remains JSON text; retained
+report observations use the same fields with their admitted context object.
+Retired malformed-envelope tests have no surviving API to qualify. No benchmark
+expected bytes or the #1974 benchmark inventory are changed by retirement.

@@ -27,18 +27,10 @@ write_json <- function(path, value) {
   dir.create(dirname(path), recursive=TRUE, showWarnings=FALSE)
   writeBin(charToRaw(paste0(json(value), "\n")), path)
 }
-copy_inputs <- function(source, target) {
-  dir.create(target, recursive=TRUE, showWarnings=FALSE)
-  for (path in list.files(source, full.names=TRUE, all.files=TRUE, no..=TRUE)) {
-    name <- basename(path)
-    if (name %in% c("expected", "run.py", "run.R", "README.md")) next
-    destination <- file.path(target, name)
-    link <- Sys.readlink(path)
-    if (!is.na(link) && nzchar(link)) {
-      if (!file.symlink(link, destination)) stop("could not stage symbolic link")
-    } else if (dir.exists(path)) copy_inputs(path, destination)
-    else if (!file.copy(path, destination)) stop("could not stage input: ", path)
-  }
+move_inputs <- function(source, target) {
+  if (!dir.exists(source)) stop("missing fresh R inputs; regenerate the conformance plan: ", source)
+  dir.create(dirname(target), recursive=TRUE, showWarnings=FALSE)
+  if (!file.rename(source, target)) stop("could not move staged R inputs to execution work: ", source)
 }
 public_table <- function(frame) {
   if (is.null(frame)) return(NULL)
@@ -90,7 +82,7 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
     stop("public runner requires an installed package outside the fixture checkout")
   write_json(file.path(output, "run.json"), list(protocol="public-conformance/1", runtime="r",
     runtime_version=as.character(getRversion()), host_package_version=as.character(packageVersion("yamaa")),
-    engine_version=engine_info()$core_version, source_revision=args[[4L]],
+    engine_version=yamaa:::.core_version(), source_revision=args[[4L]],
     platform=R.version$platform, package_form=Sys.getenv("PUBLIC_CONFORMANCE_PACKAGE_FORM", "installed"),
     evidence=paste0(Sys.getenv("GITHUB_SERVER_URL"), "/", Sys.getenv("GITHUB_REPOSITORY"), "/actions/runs/", Sys.getenv("GITHUB_RUN_ID")),
     table_encoding="str:utf8-hex,float:ieee754-be,int:decimal,date:epoch-days,datetime:epoch-seconds"))
@@ -100,7 +92,7 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
     record <- tryCatch({
       if (!nzchar(entries$excluded[[1L]])) {
         case <- file.path(output, "work", name)
-        copy_inputs(file.path(fixtures, name), case)
+        move_inputs(file.path(args[[1L]], "r-inputs", name), case)
         for (index in seq_len(nrow(entries))) {
           entry <- entries[index, , drop=FALSE]
           environment <- if(nzchar(entry$environment[[1L]])) entry$environment[[1L]] else NULL

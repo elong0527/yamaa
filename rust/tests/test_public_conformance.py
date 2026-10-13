@@ -3,6 +3,7 @@
 import contextlib
 import importlib.util
 import io
+import os
 import shutil
 import tempfile
 import unittest
@@ -83,6 +84,31 @@ class PublicConformance(unittest.TestCase):
         self.assertEqual(self.verdict()["verdict"], "pass")
         self.build["tables"]["output"]["columns"][0][1] = "float"
         self.assertEqual(self.verdict()["verdict"], "mismatch")
+
+    def test_r_input_staging_preserves_native_links_and_excludes_expected_truth(self):
+        inputs = self.case / "input"
+        inputs.mkdir()
+        (inputs / "target.csv").write_bytes(b"ID\n1\n")
+        (inputs / "directory").mkdir()
+        os.symlink("target.csv", inputs / "linked.csv")
+        os.symlink("absent.csv", inputs / "broken.csv")
+        os.symlink("directory", inputs / "linked-directory", target_is_directory=True)
+        output = self.root / "plan"
+        with contextlib.redirect_stdout(io.StringIO()):
+            judge.emit_plan(self.fixtures, output)
+        staged = output / "r-inputs/simple"
+        for name, target in (("linked.csv", "target.csv"), ("broken.csv", "absent.csv"), ("linked-directory", "directory")):
+            self.assertTrue((staged / "input" / name).is_symlink())
+            self.assertEqual(os.readlink(staged / "input" / name), target)
+        self.assertEqual((staged / "input/target.csv").read_bytes(), b"ID\n1\n")
+        self.assertFalse((staged / "expected").exists())
+        self.assertFalse((staged / "run.py").exists())
+        self.assertFalse((staged / "run.R").exists())
+        moved = self.root / "execution/simple"
+        moved.parent.mkdir()
+        staged.rename(moved)
+        self.assertTrue((moved / "input/linked.csv").is_symlink())
+        self.assertEqual(os.readlink(moved / "input/linked.csv"), "target.csv")
 
     def test_quoted_empty_is_distinct_from_missing_and_csv_bytes_are_exact(self):
         self.build["tables"]["output"]["rows"][0][1] = None

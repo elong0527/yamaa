@@ -346,7 +346,7 @@ fn failure_position_is_retained_row_position_not_private_attempt_token() {
 fn cumulative_work_equality_refusal_and_fresh_attempt_are_effect_safe() {
     let (src, donor, trace) = tables();
     let plan = plan(&src, &donor, false, T::Str, true);
-    let minimum = (0..1000)
+    let minimum = (0..limits().work_cells)
         .find(|&work| {
             let mut l = limits();
             l.work_cells = work;

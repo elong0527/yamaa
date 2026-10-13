@@ -65,7 +65,14 @@ impl FileProject {
         entry: crate::file_graph::CapturedEntry,
     ) -> Result<Self, Box<RejectedOrdinary>> {
         let (mut resources, entry, document, environment) = entry.into_ordinary_parts();
-        match PreparedRun::prepare(document, environment).and_then(|run| {
+        match PreparedRun::prepare_with_profile_inspection(
+            document,
+            environment,
+            |document, dataset, path| {
+                crate::source_profile_inspection::inspect(document, &resources, dataset, path)
+            },
+        )
+        .and_then(|run| {
             let findings = crate::verification_logs::location_findings(&resources, &run);
             if findings.is_empty() {
                 Ok(run)
@@ -115,7 +122,14 @@ impl FileProject {
             &document.source().identity,
         )
         .map_err(Error::Document)?;
-        let run = PreparedRun::prepare(document, environment).map_err(Error::Compile)?;
+        let run = PreparedRun::prepare_with_profile_inspection(
+            document,
+            environment,
+            |document, dataset, path| {
+                crate::source_profile_inspection::inspect(document, &resources, dataset, path)
+            },
+        )
+        .map_err(Error::Compile)?;
         let findings = crate::verification_logs::location_findings(&resources, &run);
         if !findings.is_empty() {
             return Err(Error::Compile(run.reject(

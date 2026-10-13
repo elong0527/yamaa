@@ -3,11 +3,8 @@ use pyo3::{
     prelude::*,
     types::{PyInt, PyString, PyTuple},
 };
-use yamaa_adapters::function_transport::CallbackError;
-use yamaa_core::{
-    temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
-    value::Value,
-};
+use yamaa_adapters::callback::CallbackError;
+use yamaa_engine::host_values::{Date, DatePrecision, DateTime, DateTimePrecision, Value};
 
 /// An owned temporal or an invalid representation, never a generic object box.
 /// No public constructor, subclassing, fields or mutation are exposed to Python.

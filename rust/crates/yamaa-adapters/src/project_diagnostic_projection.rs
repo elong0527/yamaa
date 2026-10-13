@@ -42,10 +42,13 @@ pub(crate) fn value(diagnostic: Diagnostic<'_>) -> Json {
         .into_iter()
         .map(|(name, value)| (name.to_owned(), fact(value)))
         .collect();
-    json!({
-        "phase":mapping.phase, "condition":mapping.condition, "requirement":mapping.requirement,
-        "spec_paths":[diagnostic.spec_path], "context":context,
-    })
+    crate::issue_rows::report(
+        mapping.phase,
+        mapping.condition,
+        mapping.requirement,
+        vec![diagnostic.spec_path.to_owned()],
+        context.into(),
+    )
 }
 pub(crate) fn issue(diagnostic: Diagnostic<'_>) -> Result<Issue, InvalidIssue> {
     Issue::from_diagnostic(value(diagnostic))

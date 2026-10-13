@@ -8,16 +8,16 @@ use std::{
 };
 use yamaa_adapters::issue_rows::Issue;
 
-struct State {
+pub(crate) struct State {
     #[cfg(any(unix, windows))]
-    result: Option<yamaa_adapters::file_application::Domain>,
+    pub(crate) result: Option<yamaa_adapters::file_application::Domain>,
     #[cfg(any(unix, windows))]
-    project: Option<Rc<crate::file_project::platform::HeldAttempt>>,
+    pub(crate) project: Option<Rc<crate::file_project::platform::HeldAttempt>>,
     #[cfg(any(unix, windows))]
-    _preparation: Option<yamaa_adapters::file_workflow::SelectionError>,
+    pub(crate) _preparation: Option<yamaa_adapters::file_workflow::SelectionError>,
     #[cfg(any(unix, windows))]
-    producer: Option<crate::file_producer::platform::PublicResult>,
-    issues: Vec<Issue>,
+    pub(crate) producer: Option<crate::file_producer::platform::PublicResult>,
+    pub(crate) issues: Vec<Issue>,
 }
 thread_local! { static HANDLES:RefCell<BTreeMap<usize,Weak<RefCell<State>>>>=const { RefCell::new(BTreeMap::new()) }; }
 struct Handle {
@@ -69,11 +69,10 @@ fn environment(value: &Robj) -> std::result::Result<Option<Raw>, String> {
 }
 #[cfg(not(any(unix, windows)))]
 fn unavailable() -> Vec<Issue> {
-    vec![Issue::from_core(yamaa_core::application_issue::unsupported(
-        "native_file_transport",
-        None,
-    ))
-    .expect("application issue")]
+    vec![
+        Issue::from_core(yamaa_engine::host_values::unavailable_file_transport())
+            .expect("application issue"),
+    ]
 }
 #[extendr]
 fn domain_file(
@@ -89,144 +88,35 @@ fn domain_file(
         let version = text(&version)?;
         #[cfg(any(unix, windows))]
         {
-            if let Some(environment) = environment {
-                if capabilities.len() != 3 {
-                    return Err("invalid project host capabilities".into());
-                }
-                let verify = capabilities
-                    .elt(0)
-                    .map_err(|_| "missing lock capability")?
-                    .as_function()
-                    .ok_or("invalid lock capability")?;
-                let resolve = capabilities
-                    .elt(1)
-                    .map_err(|_| "missing binding capability")?
-                    .as_function()
-                    .ok_or("invalid binding capability")?;
-                let formatter = capabilities
-                    .elt(2)
-                    .map_err(|_| "missing condition capability")?
-                    .as_function()
-                    .ok_or("invalid condition capability")?;
-                let selected = match yamaa_adapters::file_workflow::select(
-                    specification,
-                    environment,
-                    yamaa_core::project_function::Language::R,
-                ) {
-                    Ok(selected) => selected,
-                    Err(error) => {
-                        return store(State {
-                            producer: None,
-                            result: None,
-                            project: None,
-                            issues: yamaa_adapters::project_application::selection_failure(
-                                &error,
-                                yamaa_core::project_function::Language::R,
-                            ),
-                            _preparation: Some(error),
-                        })
-                    }
-                };
-                let mut project = match selected {
-                    yamaa_adapters::file_workflow::Selected::Ordinary(project) => project,
-                    yamaa_adapters::file_workflow::Selected::Producer(graph) => {
-                        let mut build = graph.into_build();
-                        let fields = [version, yamaa_core::VERSION, "domain", specification, "."];
-                        if fields.iter().any(|text| text.len() > 65536) {
-                            return Err("producer identity byte limit".into());
-                        }
-                        let producer = crate::file_producer::platform::build_selected(
-                            &mut build,
-                            fields.map(str::to_owned).to_vec(),
-                            verify,
-                            resolve,
-                            formatter,
-                        )?;
-                        return store(State {
-                            producer: Some(producer),
-                            result: None,
-                            project: None,
-                            _preparation: None,
-                            issues: Vec::new(),
-                        });
-                    }
-                };
-                let inner = project.build_with(|run| {
-                    crate::project_activation::Port::new(
-                        run.captured_environment()
-                            .lock()
-                            .map_or(&[], |lock| &lock.source.bytes),
-                        verify,
-                        resolve,
-                    )
-                });
-                let attempt = Rc::new(crate::file_project::platform::HeldAttempt {
-                    inner,
-                    run: project.retained_run(),
-                });
-                let fields =
-                    [version, yamaa_core::VERSION, "domain", specification, "."].map(str::to_owned);
-                let formatted = crate::project_result::platform::format(
-                    Rc::clone(&attempt),
-                    &fields,
-                    &formatter,
-                );
-                let result = match formatted.formatted {
-                    Some(result) => {
-                        yamaa_adapters::file_application::Domain::from_project(result, &project)
-                    }
-                    None => Err(yamaa_adapters::file_application::rejected(
-                        "build",
-                        formatted.refusal,
-                    )),
-                };
-                return store(match result {
-                    Ok(result) => State {
-                        producer: None,
-                        result: Some(result),
-                        project: Some(attempt),
-                        _preparation: None,
-                        issues: Vec::new(),
-                    },
-                    Err(issues) => State {
-                        producer: None,
-                        result: None,
-                        project: Some(attempt),
-                        _preparation: None,
-                        issues,
-                    },
-                });
-            }
-            let result = yamaa_adapters::file_application::domain(
+            let runtime = crate::file_domain::Runtime::new(specification, version, capabilities)?;
+            let mut ports = yamaa_adapters::file_application::Application {
+                host: yamaa_engine::host_values::Language::R,
+                runtime,
+            };
+            let state = match yamaa_engine::domain_entry::domain(
                 yamaa_engine::domain_entry::Request {
                     specification,
                     environment,
                 },
-                yamaa_adapters::specification_report::Identity {
-                    runtime: "r",
-                    runtime_version: version,
-                    engine_version: yamaa_core::VERSION,
-                    example: "domain",
-                    specification,
-                    base_directory: ".",
-                },
-            );
-            store(match result {
-                Ok(result) => State {
-                    producer: None,
-                    result: Some(result),
-                    project: None,
-                    _preparation: None,
-                    issues: Vec::new(),
-                },
-                Err(issues) => State {
-                    producer: None,
-                    result: None,
-                    project: None,
-                    _preparation: None,
-                    issues,
-                },
-            })
+                &mut ports,
+            ) {
+                Ok(state) => state,
+                Err(yamaa_adapters::file_application::ApplicationError::Runtime(error)) => {
+                    return Err(error)
+                }
+                Err(yamaa_adapters::file_application::ApplicationError::Preparation(error)) => {
+                    State {
+                        producer: None,
+                        result: None,
+                        project: None,
+                        issues: yamaa_adapters::project_application::selection_failure(
+                            &error, ports.host,
+                        ),
+                        _preparation: Some(error),
+                    }
+                }
+            };
+            store(state)
         }
         #[cfg(not(any(unix, windows)))]
         {
@@ -246,13 +136,6 @@ fn check_file(specification: Raw, environment_path: Robj, version: Raw) -> List 
         let version = text(&version)?;
         #[cfg(any(unix, windows))]
         {
-            if let Some(environment) = environment {
-                return crate::issue_frame::frame(&yamaa_adapters::project_application::check(
-                    specification,
-                    environment,
-                    yamaa_core::project_function::Language::R,
-                ));
-            }
             let issues = yamaa_adapters::file_application::check(
                 yamaa_engine::domain_entry::Request {
                     specification,
@@ -261,7 +144,7 @@ fn check_file(specification: Raw, environment_path: Robj, version: Raw) -> List 
                 yamaa_adapters::specification_report::Identity {
                     runtime: "r",
                     runtime_version: version,
-                    engine_version: yamaa_core::VERSION,
+                    engine_version: yamaa_engine::host_values::VERSION,
                     example: "check",
                     specification,
                     base_directory: ".",
@@ -451,9 +334,12 @@ fn domain_preparation_sources(handle: Robj) -> List {
         #[cfg(any(unix, windows))]
         if let Some(error) = &state._preparation {
             let sources = error
-                .retained_sources(65_536, 16_777_216)
+                .retained_sources(
+                    yamaa_adapters::host_limits::RECORDS,
+                    yamaa_adapters::host_limits::REPLY_BYTES,
+                )
                 .map_err(|_| "source evidence limit; original preparation remains retained")?;
-            let mut remaining = 67_108_864usize;
+            let mut remaining = yamaa_adapters::host_limits::SOURCE_BYTES;
             for (_, bytes) in &sources {
                 remaining = remaining
                     .checked_sub(bytes.len())

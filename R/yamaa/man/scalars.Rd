@@ -30,7 +30,7 @@ Arithmetic \code{+}, \code{-}, \code{*}, \code{/} and comparisons use
 shared Rust scalar semantics. Unary plus/minus are supported. There is no vector
 recycling, Boolean-to-number conversion or implicit text conversion. Integer
 operations check overflow. Mixed float operands promote to binary64; use \code{1L}
-or \code{int64("1")} for an integer operand. Nonfinite values normalize to missing.
+or \code{yamaa:::int64("1")} for an integer operand. Nonfinite values normalize to missing.
 
 \code{as.character} preserves integer decimal text and NUL-free UTF-8 text.
 UTF-8 text containing NUL requires \code{utf8_bytes}; conversion to R character
@@ -38,11 +38,12 @@ fails explicitly. \code{as.double} and \code{as.integer} accept an integer only
 when the destination can represent it exactly as a non-missing value. Scalar
 operators return these lossless classes for int/str, ordinary R double/logical
 for float/bool, or logical NA for missing.}
+\keyword{internal}
 \examples{
-x <- int64("9007199254740993")
+x <- yamaa:::int64("9007199254740993")
 as.character(x + 1L)
 x > 9007199254740992
-s <- utf8_scalar(as.raw(c(97L, 0L, 98L)))
-utf8_bytes(s)
-s == utf8_scalar(as.raw(c(97L, 0L, 98L)))
+s <- yamaa:::utf8_scalar(as.raw(c(97L, 0L, 98L)))
+yamaa:::utf8_bytes(s)
+s == yamaa:::utf8_scalar(as.raw(c(97L, 0L, 98L)))
 }

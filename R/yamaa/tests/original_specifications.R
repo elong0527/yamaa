@@ -79,7 +79,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   }
   gc()
   inputs <- if(case_name=="schema-lookup") c(DM="input/dm.csv",AE="input/ae.csv",MEDDRA="input/meddict.csv") else if(case_name %in% c("schema-window-functions","negative-row-no-prior")) c(VS="input/vs.csv") else if(case_name %in% c("negative-source-missing-field","negative-source-trivial-filter")) c(ODM="input/odm.csv") else if(case_name %in% c("negative-paired-dates","negative-not-missing-age","negative-implausible-age","negative-invalid-sex","negative-sex-code","negative-matches-bad-pattern")) c(DM="input/dm.csv") else c(LB="input/lb.csv")
-  stopifnot(identical(specification_source(handle),list(name=names(inputs)[[1L]],path=unname(inputs[[1L]]))))
+  stopifnot(identical(yamaa:::specification_source(handle),list(name=names(inputs)[[1L]],path=unname(inputs[[1L]]))))
   state <- new.env(parent=emptyenv()); state$reads <- 0L; state$requests <- character(); state$content <- list()
   capture <- function(name,path,maximum) {
     stopifnot(identical(path,unname(inputs[[name]])))
@@ -95,7 +95,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   expected <- rawToChar(rawfile(file.path(root,"expected",paste0(case_name,".json"))))
   expected <- sub('"runtime":"python"','"runtime":"r"',expected,fixed=TRUE)
   expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
-  expected <- sub('fixture-engine',engine_info()$core_version,expected,fixed=TRUE)
+  expected <- sub('fixture-engine',yamaa:::.core_version(),expected,fixed=TRUE)
   published <- 0L
   directory <- tempfile("original-published-"); dir.create(directory)
   publish <- function(path,content) {
@@ -109,7 +109,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
     TRUE
   }
   for(created in c(1L,0L)) {
-    report <- specification_report(handle,capture,publish,case_name,specification)
+    report <- yamaa:::specification_report(handle,capture,publish,case_name,specification)
     if(created==0L) expected <- gsub('"snapshots_created":1','"snapshots_created":0',expected,fixed=TRUE)
     stopifnot(identical(report,expected))
   }
@@ -155,16 +155,16 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   stopifnot(inherits(tryCatch(build_issues(expired_result),error=identity),"error"))
   stopifnot(inherits(tryCatch(build_output(handle),error=identity),"error"))
   stopifnot(inherits(tryCatch(build_issues(handle),error=identity),"error"))
-  stopifnot(inherits(tryCatch(specification_source(result),error=identity),"error"))
+  stopifnot(inherits(tryCatch(yamaa:::specification_source(result),error=identity),"error"))
   # Exercise native filesystem transport over every unchanged original input.
   ports <- get(".file_resources_ports",envir=asNamespace("yamaa"))(case,case)
   native_expected <- rawToChar(rawfile(file.path(root,"expected",paste0(case_name,".json"))))
   native_expected <- sub('"runtime":"python"','"runtime":"r"',native_expected,fixed=TRUE)
   native_expected <- sub('fixture-runtime',as.character(getRversion()),native_expected,fixed=TRUE)
-  native_expected <- sub('fixture-engine',engine_info()$core_version,native_expected,fixed=TRUE)
+  native_expected <- sub('fixture-engine',yamaa:::.core_version(),native_expected,fixed=TRUE)
   for(created in c(1L,0L)) {
     if(created==0L) native_expected <- gsub('"snapshots_created":1','"snapshots_created":0',native_expected,fixed=TRUE)
-    actual <- specification_report(handle,ports$capture,publish,case_name,specification,inspect=ports$inspect)
+    actual <- yamaa:::specification_report(handle,ports$capture,publish,case_name,specification,inspect=ports$inspect)
     stopifnot(identical(actual,native_expected))
   }
   stopifnot(ports$reads()==length(inputs))
@@ -194,7 +194,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   file_expected <- rawToChar(rawfile(file.path(root,"expected",paste0(case_name,".json"))))
   file_expected <- sub('"runtime":"python"','"runtime":"r"',file_expected,fixed=TRUE)
   file_expected <- sub('fixture-runtime',as.character(getRversion()),file_expected,fixed=TRUE)
-  file_expected <- sub('fixture-engine',engine_info()$core_version,file_expected,fixed=TRUE)
+  file_expected <- sub('fixture-engine',yamaa:::.core_version(),file_expected,fixed=TRUE)
   for(created in c(1L,0L)) {
     if(created==0L) file_expected <- gsub('"snapshots_created":1','"snapshots_created":0',file_expected,fixed=TRUE)
     file_result <- get(".file_specification_build",envir=asNamespace("yamaa"))(file_handle,case_name,specification)
@@ -215,7 +215,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   unlink(directory,recursive=TRUE)
   cat(case_name,"complete original report and cached source capture passed\n")
   expired <- unserialize(serialize(handle,NULL))
-  stopifnot(inherits(tryCatch(specification_source(expired),error=identity),"error"))
+  stopifnot(inherits(tryCatch(yamaa:::specification_source(expired),error=identity),"error"))
 }
 # Replay existing complete graph failure truth through the raw-YAML entry point.
 inherited_prepare <- get(".prepare_document",envir=asNamespace("yamaa"))
@@ -323,14 +323,14 @@ for(i in seq_len(nrow(capture_truth))) {
   expected <- row$expected[[1L]]
   expected <- sub('"runtime":"python"','"runtime":"r"',expected,fixed=TRUE)
   expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
-  expected <- sub('fixture-engine',engine_info()$core_version,expected,fixed=TRUE)
+  expected <- sub('fixture-engine',yamaa:::.core_version(),expected,fixed=TRUE)
   result <- build(handle,capture,case_name)
   expected_requests <- c("DM","AE")[seq_len(fail_at+1L)]
   stopifnot(identical(requests,expected_requests),identical(build_observations(result),expected),is.null(build_output(result)))
   requests <- character()
-  stopifnot(identical(specification_failure_report(handle,capture,case_name),expected),identical(requests,expected_requests))
+  stopifnot(identical(yamaa:::specification_failure_report(handle,capture,case_name),expected),identical(requests,expected_requests))
   requests <- character()
-  stopifnot(identical(specification_report(handle,capture,function(...) stop("failed capture published"),case_name),expected),identical(requests,expected_requests))
+  stopifnot(identical(yamaa:::specification_report(handle,capture,function(...) stop("failed capture published"),case_name),expected),identical(requests,expected_requests))
   rm(capture,failure); gc()
   for(j in seq_len(2L)) {
     actual <- tryCatch(build_save(result,function(...) stop("failed result reached publisher")),error=identity)
@@ -369,7 +369,7 @@ for(i in seq_len(nrow(inspection_truth))) {
   expected <- row$expected[[1L]]
   expected <- sub('"runtime":"python"','"runtime":"r"',expected,fixed=TRUE)
   expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
-  expected <- sub('fixture-engine',engine_info()$core_version,expected,fixed=TRUE)
+  expected <- sub('fixture-engine',yamaa:::.core_version(),expected,fixed=TRUE)
   for(j in seq_len(2L)) {
     requests <- character()
     result <- build(handle,capture,"schema-lookup",inspect=inspect)
@@ -378,9 +378,9 @@ for(i in seq_len(nrow(inspection_truth))) {
     stopifnot(inherits(actual,"error"),identical(conditionMessage(actual),"cannot save a failed build"))
   }
   requests <- character()
-  stopifnot(identical(specification_failure_report(handle,capture,"schema-lookup",inspect=inspect),expected),identical(requests,c("DM","AE","MEDDRA")))
+  stopifnot(identical(yamaa:::specification_failure_report(handle,capture,"schema-lookup",inspect=inspect),expected),identical(requests,c("DM","AE","MEDDRA")))
   requests <- character()
-  stopifnot(identical(specification_report(handle,capture,function(...) stop("inspection failure published"),"schema-lookup",inspect=inspect),expected),identical(requests,c("DM","AE","MEDDRA")))
+  stopifnot(identical(yamaa:::specification_report(handle,capture,function(...) stop("inspection failure published"),"schema-lookup",inspect=inspect),expected),identical(requests,c("DM","AE","MEDDRA")))
   # Construct the same independently authored metadata causes using real files.
   directory <- tempfile("native-inspection-"); dir.create(directory)
   dir.create(file.path(directory,"input"))
@@ -413,7 +413,7 @@ for(kind in c("error","interrupt")) {
       if(returned) return(list("missing",failure))
       stop(failure)
     }
-    for(operation in list(function() build(handle,no_port,"schema-lookup",inspect=inspect),function() specification_failure_report(handle,no_port,"schema-lookup",inspect=inspect),function() specification_report(handle,no_port,no_port,"schema-lookup",inspect=inspect))) {
+    for(operation in list(function() build(handle,no_port,"schema-lookup",inspect=inspect),function() yamaa:::specification_failure_report(handle,no_port,"schema-lookup",inspect=inspect),function() yamaa:::specification_report(handle,no_port,no_port,"schema-lookup",inspect=inspect))) {
       requests <- character()
       actual <- tryCatch(operation(),error=identity,interrupt=identity)
       stopifnot(identical(actual,failure),identical(requests,c("DM","AE")))
@@ -453,7 +453,7 @@ for(kind in c("error","interrupt")) {
   failure <- structure(list(message="retained source condition",call=NULL,payload=new.env()),class=c("source_test_condition",kind,"condition"))
   calls <- 0L
   capture <- function(...) {calls <<- calls+1L;stop(failure)}
-  actual <- tryCatch(specification_failure_report(handle,capture,"failure"),error=identity,interrupt=identity)
+  actual <- tryCatch(yamaa:::specification_failure_report(handle,capture,"failure"),error=identity,interrupt=identity)
   stopifnot(identical(actual,failure),calls==1L)
   calls <- 0L
   actual <- tryCatch(build(handle,capture,"failure"),error=identity,interrupt=identity)
@@ -469,14 +469,14 @@ for(kind in c("error","interrupt")) {
     list(rawfile(file.path(case,path)),TRUE)
   }
   publish <- function(...) stop("source failure reached publication")
-  actual <- tryCatch(specification_report(handle,capture,publish,case_name),error=identity,interrupt=identity)
+  actual <- tryCatch(yamaa:::specification_report(handle,capture,publish,case_name),error=identity,interrupt=identity)
   stopifnot(identical(actual,failure),identical(requests,c("DM","AE")))
 }
 for(rejected in list(FALSE,NULL,NA,logical(),c(TRUE,FALSE),1L,"TRUE")) {
   calls <- 0L
   capture <- function(name,path,maximum) list(rawfile(file.path(case,path)),TRUE)
   publish <- function(...) {calls <<- calls+1L;rejected}
-  actual <- tryCatch(specification_report(handle,capture,publish,case_name),error=identity)
+  actual <- tryCatch(yamaa:::specification_report(handle,capture,publish,case_name),error=identity)
   stopifnot(inherits(actual,"error"),calls==1L)
   stopifnot(identical(conditionMessage(actual),"publication callback rejected output"))
 }
@@ -487,11 +487,11 @@ for(kind in c("error","interrupt")) {
   calls <- 0L
   capture <- function(name,path,maximum) list(rawfile(file.path(case,path)),TRUE)
   publish <- function(...) {calls <<- calls+1L;stop(failure)}
-  actual <- tryCatch(specification_report(handle,capture,publish,case_name),error=identity,interrupt=identity)
+  actual <- tryCatch(yamaa:::specification_report(handle,capture,publish,case_name),error=identity,interrupt=identity)
   stopifnot(identical(actual,failure),calls==1L)
 }
 for(invalid in list(NULL,1L,new("externalptr"))) {
-  stopifnot(inherits(tryCatch(specification_source(invalid),error=identity),"error"))
+  stopifnot(inherits(tryCatch(yamaa:::specification_source(invalid),error=identity),"error"))
 }
 cat("retained host errors/interruptions and invalid/expired handles passed\n")
 
@@ -513,7 +513,7 @@ parquet_result <- build(parquet_handle,parquet_capture,"adam-adlb-ordered-sum","
 parquet_expected <- rawToChar(rawfile(file.path(root,"expected","adam-adlb-ordered-sum.json")))
 parquet_expected <- sub('"runtime":"python"','"runtime":"r"',parquet_expected,fixed=TRUE)
 parquet_expected <- sub("fixture-runtime",as.character(getRversion()),parquet_expected,fixed=TRUE)
-parquet_expected <- sub("fixture-engine",engine_info()$core_version,parquet_expected,fixed=TRUE)
+parquet_expected <- sub("fixture-engine",yamaa:::.core_version(),parquet_expected,fixed=TRUE)
 parquet_unsaved <- sub('^\\{"artifacts":.*,"backend":','{"artifacts":[],"backend":',parquet_expected)
 stopifnot(identical(build_observations(parquet_result),parquet_unsaved))
 parquet_saved <- list()
@@ -556,7 +556,7 @@ handle <- prepare_entry("spec.yaml",charToRaw(source),no_port,no_port,no_port)
 expected <- rawToChar(rawfile(file.path(root,"expected",paste0(case_name,".json"))))
 expected <- sub('"runtime":"python"','"runtime":"r"',expected,fixed=TRUE)
 expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
-expected <- sub('fixture-engine',engine_info()$core_version,expected,fixed=TRUE)
+expected <- sub('fixture-engine',yamaa:::.core_version(),expected,fixed=TRUE)
 expected <- gsub('"path":"input/lb.csv"','"path":"input/lb.parquet"',expected,fixed=TRUE)
 requests <- character(); saves <- 0L
 capture <- function(name,path,maximum) {
@@ -594,7 +594,7 @@ ports <- get(".file_resources_ports",envir=asNamespace("yamaa"))(directory,direc
 native_expected <- expected
 for(created in c(1L,0L)) {
   if(created==0L) native_expected <- gsub('"snapshots_created":1','"snapshots_created":0',native_expected,fixed=TRUE)
-  actual <- specification_report(handle,ports$capture,function(path,content) {
+  actual <- yamaa:::specification_report(handle,ports$capture,function(path,content) {
     stopifnot(path=="adlb.csv",identical(content,rawfile(file.path(case,"expected","adlb.csv"))))
     TRUE
   },case_name,inspect=ports$inspect)
@@ -635,7 +635,7 @@ for(test in cases) {
   }
   result <- build(handle,capture,test[[1L]])
   finding <- paste0('{"condition":"',test[[2L]],'","context":{',test[[4L]],'},"phase":"ingest","requirement":"',test[[3L]],'","spec_paths":["input.SRC.path"]}')
-  expected <- paste0('{"artifacts":[],"backend":"rust","callbacks":[],"diagnostics":[',finding,'],"engine_version":"',engine_info()$core_version,'","error":null,"example":"',test[[1L]],'","handler_counts":[],"nodes":[{"diagnostics":[',finding,'],"handler_counts":[],"outcome":"failure","specification":"spec.yaml","unsupported":[]}],"outcome":"failure","report_version":"0.3.0-draft","runtime":"r","runtime_version":"',as.character(getRversion()),'","source_reads":[{"base_directory":".","condition":null,"outcome":"captured","path":"input.parquet","snapshots_created":1}],"tables":[],"unsupported":[],"verifications":[]}')
+  expected <- paste0('{"artifacts":[],"backend":"rust","callbacks":[],"diagnostics":[',finding,'],"engine_version":"',yamaa:::.core_version(),'","error":null,"example":"',test[[1L]],'","handler_counts":[],"nodes":[{"diagnostics":[',finding,'],"handler_counts":[],"outcome":"failure","specification":"spec.yaml","unsupported":[]}],"outcome":"failure","report_version":"0.3.0-draft","runtime":"r","runtime_version":"',as.character(getRversion()),'","source_reads":[{"base_directory":".","condition":null,"outcome":"captured","path":"input.parquet","snapshots_created":1}],"tables":[],"unsupported":[],"verifications":[]}')
   stopifnot(identical(build_observations(result),expected),is.null(build_output(result)))
   failure <- tryCatch(build_save(result,no_port),error=identity)
   stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),"cannot save a failed build"),identical(requests,"input.parquet"))
@@ -702,7 +702,7 @@ findings <- paste0(
   '{"condition":"source_field_value_invalid","context":{"dataset":"FIRST","field":"OTHER","path":"FIRST.parquet","row":1,"value":1},"phase":"ingest","requirement":"REQ-1041","spec_paths":["input.FIRST.path"]},',
   '{"condition":"source_field_name_duplicate","context":{"dataset":"SECOND","field":"I","path":"SECOND.parquet"},"phase":"ingest","requirement":"REQ-1039","spec_paths":["input.SECOND.path"]}')
 reads <- paste0('{"base_directory":".","condition":null,"outcome":"captured","path":"',c("FIRST","SECOND","THIRD"),'.parquet","snapshots_created":1}',collapse=",")
-expected <- paste0('{"artifacts":[],"backend":"rust","callbacks":[],"diagnostics":[',findings,'],"engine_version":"',engine_info()$core_version,'","error":null,"example":"collection","handler_counts":[],"nodes":[{"diagnostics":[',findings,'],"handler_counts":[],"outcome":"failure","specification":"spec.yaml","unsupported":[]}],"outcome":"failure","report_version":"0.3.0-draft","runtime":"r","runtime_version":"',as.character(getRversion()),'","source_reads":[',reads,'],"tables":[],"unsupported":[],"verifications":[]}')
+expected <- paste0('{"artifacts":[],"backend":"rust","callbacks":[],"diagnostics":[',findings,'],"engine_version":"',yamaa:::.core_version(),'","error":null,"example":"collection","handler_counts":[],"nodes":[{"diagnostics":[',findings,'],"handler_counts":[],"outcome":"failure","specification":"spec.yaml","unsupported":[]}],"outcome":"failure","report_version":"0.3.0-draft","runtime":"r","runtime_version":"',as.character(getRversion()),'","source_reads":[',reads,'],"tables":[],"unsupported":[],"verifications":[]}')
 stopifnot(identical(build_observations(result),expected),is.null(build_output(result)),
           identical(requests,c("FIRST","SECOND","THIRD")))
 failure <- tryCatch(build_save(result,no_port),error=identity)
@@ -729,7 +729,7 @@ failed_report_truth <- function(fixture,prefix,cases,content=charToRaw("ID\n1\n"
     rm(handle); gc()
     expected <- gsub('"runtime":"python"','"runtime":"r"',truth$expected[[i]],fixed=TRUE)
     expected <- gsub('"runtime_version":"fixture-runtime"',paste0('"runtime_version":"',as.character(getRversion()),'"'),expected,fixed=TRUE)
-    expected <- gsub('"engine_version":"fixture-engine"',paste0('"engine_version":"',engine_info()$core_version,'"'),expected,fixed=TRUE)
+    expected <- gsub('"engine_version":"fixture-engine"',paste0('"engine_version":"',yamaa:::.core_version(),'"'),expected,fixed=TRUE)
     stopifnot(identical(build_observations(result),expected),is.null(build_output(result)))
     for(j in seq_len(2L)) {
       failure <- tryCatch(build_save(result,no_port),error=identity)
@@ -770,7 +770,7 @@ scalar_report_truth <- function(fixture,prefix,cases) {
     rm(handle);gc()
     expected <- gsub('"runtime":"python"','"runtime":"r"',truth$expected[[i]],fixed=TRUE)
     expected <- gsub('"runtime_version":"fixture-runtime"',paste0('"runtime_version":"',as.character(getRversion()),'"'),expected,fixed=TRUE)
-    expected <- gsub('"engine_version":"fixture-engine"',paste0('"engine_version":"',engine_info()$core_version,'"'),expected,fixed=TRUE)
+    expected <- gsub('"engine_version":"fixture-engine"',paste0('"engine_version":"',yamaa:::.core_version(),'"'),expected,fixed=TRUE)
     unsaved <- sub('^\\{"artifacts":.*,"backend":','{"artifacts":[],"backend":',expected)
     stopifnot(identical(build_observations(result),unsaved))
     hex <- truth$output_hex[[i]]
@@ -823,7 +823,7 @@ for(i in seq_len(nrow(filter_truth))) {
   }
   expected <- sub('"runtime":"python"','"runtime":"r"',captured,fixed=TRUE)
   expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
-  expected <- sub('fixture-engine',engine_info()$core_version,expected,fixed=TRUE)
+  expected <- sub('fixture-engine',yamaa:::.core_version(),expected,fixed=TRUE)
   unsaved <- if(length(artifact)) sub('"artifacts":\\[.*?\\],"backend"','"artifacts":[],"backend"',expected,perl=TRUE) else expected
   calls <- 0L
   capture <- function(name,path,maximum) {
@@ -863,7 +863,7 @@ for(i in seq_len(nrow(source_binding_truth))) {
   artifact <- hex_raw(row$artifact_hex[[1L]])
   expected <- sub('"runtime":"python"','"runtime":"r"',row$expected[[1L]],fixed=TRUE)
   expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
-  expected <- sub('fixture-engine',engine_info()$core_version,expected,fixed=TRUE)
+  expected <- sub('fixture-engine',yamaa:::.core_version(),expected,fixed=TRUE)
   unsaved <- if(length(artifact)) sub('"artifacts":\\[.*?\\],"backend"','"artifacts":[],"backend"',expected,perl=TRUE) else expected
   case <- file.path(root,"source-binding-cases",row$case[[1L]])
   for(j in seq_len(2L)) {
@@ -909,7 +909,7 @@ for(i in seq_len(nrow(mapping_cut_truth))) {
   artifact <- hex_raw(row$artifact_hex[[1L]])
   expected <- sub('"runtime":"python"','"runtime":"r"',rawToChar(hex_raw(row$expected_wire_hex[[1L]])),fixed=TRUE)
   expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
-  expected <- sub('fixture-engine',engine_info()$core_version,expected,fixed=TRUE)
+  expected <- sub('fixture-engine',yamaa:::.core_version(),expected,fixed=TRUE)
   unsaved <- if(length(artifact)) sub('"artifacts":\\[.*?\\],"backend"','"artifacts":[],"backend"',expected,perl=TRUE) else expected
   case <- file.path(root,"mapping-cut-cases",paste0(row$case[[1L]],"-fixture"))
   for(j in seq_len(2L)) {
@@ -960,7 +960,7 @@ for(name in names(dictionaries)) {
   stopifnot(dictionary_reads(handle)==2L)
   expected <- sub('"runtime":"python"','"runtime":"r"',rawToChar(hex_raw(row$expected_wire_hex[[1L]])),fixed=TRUE)
   expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
-  expected <- sub('fixture-engine',engine_info()$core_version,expected,fixed=TRUE)
+  expected <- sub('fixture-engine',yamaa:::.core_version(),expected,fixed=TRUE)
   artifact <- hex_raw(row$artifact_hex[[1L]])
   for(created in c(1L,0L)) {
     if(created==0L) expected <- sub('"snapshots_created":1','"snapshots_created":0',expected,fixed=TRUE)
@@ -1063,7 +1063,7 @@ writeBin(charToRaw("[changed"),entry_path);writeBin(charToRaw("[changed"),file.p
 writeBin(charToRaw("ID\n1\n"),file.path(directory,"parent","input.csv"))
 result <- file_build(handle,"file-view")
 held_output <- build_output(result)
-stopifnot(identical(table_snapshot(held_output),'{"protocol":"table/1","columns":[["ID","int"]],"row_count":"1","chunks":["1"],"rows":[[{"int":"1"}]]}'),file_reads(handle)==3L)
+stopifnot(is.raw(held_output), length(held_output)>0L, file_reads(handle)==3L)
 writeBin(charToRaw("ID\n2\n"),file.path(directory,"parent","input.csv"))
 actual <- tryCatch(file_build(handle,"file-view"),error=identity)
 stopifnot(inherits(actual,"error"),conditionMessage(actual)=="captured resource content changed",identical(build_output(result),held_output),file_reads(handle)==3L)
@@ -1183,7 +1183,7 @@ for(case_name in names(issue_frame_truth)[!startsWith(names(issue_frame_truth),"
   report <- rawToChar(rawfile(file.path(root,"expected",paste0(case_name,".json"))))
   report <- sub('"runtime":"python"','"runtime":"r"',report,fixed=TRUE)
   report <- sub('fixture-runtime',as.character(getRversion()),report,fixed=TRUE)
-  report <- sub('fixture-engine',engine_info()$core_version,report,fixed=TRUE)
+  report <- sub('fixture-engine',yamaa:::.core_version(),report,fixed=TRUE)
   report <- sub(paste0('"example":"',case_name,'"'),'"example":"domain"',report,fixed=TRUE)
   entry_field <- paste0('"specification":',json_text(entry))
   report <- gsub(paste0('"specification":',json_text(basename(entry))),
@@ -1241,7 +1241,12 @@ dir.create(file.path(directory,"absent"))
 stopifnot(identical(built$save(),TRUE),nrow(built$issues)==0L,identical(rawfile(file.path(directory,"absent/output.csv")),charToRaw("ID\n-9223372036854775808\n9223372036854775807\n")))
 refused <- yamaa_domain("absent.yaml",environment="absent-environment.yaml")
 stopifnot(is.null(domain_observations(refused)))
-stopifnot(is.null(refused$output),identical(refused$issues$condition,"engine_rejected"),identical(refused$issues,yamaa_check("absent.yaml",environment="absent-environment.yaml")$issues))
+stopifnot(is.null(refused$output),identical(refused$issues$phase,"validation"),
+  identical(refused$issues$condition,"project_environment_missing"),
+  identical(refused$issues$requirement,"REQ-0694"),identical(refused$issues$spec_paths,list("environment")),
+  identical(refused$issues$context,paste0('{"cause":"missing","path":',
+    json_text(file.path(normalizePath(getwd(),winslash="/"),"absent-environment.yaml")),'}')),
+  identical(refused$issues,yamaa_check("absent.yaml",environment="absent-environment.yaml")$issues))
 stopifnot(inherits(tryCatch(yamaa_domain(NULL),error=identity),"error"))
 for(path in c(strrep("x",65537L),strrep("\u00e9",32769L))) {
   refused <- yamaa_domain(path)

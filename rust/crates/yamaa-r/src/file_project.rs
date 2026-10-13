@@ -52,7 +52,7 @@ pub(super) mod platform {
         }
     }
     fn text(raw: &Raw) -> std::result::Result<&str, String> {
-        if raw.len() > 65536 {
+        if raw.len() > yamaa_adapters::host_limits::IDENTITY_BYTES {
             return Err("project path byte limit".into());
         }
         std::str::from_utf8(raw.as_slice()).map_err(|_| "invalid project path UTF-8".into())
@@ -116,7 +116,7 @@ pub(super) mod platform {
             resources,
             paths[2],
             paths[3],
-            yamaa_core::project_function::Language::R,
+            yamaa_engine::host_values::Language::R,
             specification_schema,
             environment_schema,
         );

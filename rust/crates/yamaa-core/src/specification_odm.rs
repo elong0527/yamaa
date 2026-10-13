@@ -644,6 +644,20 @@ pub(super) fn inputs(d: &Document) -> Result<BTreeSet<&str>, PrepareError> {
     Ok(found)
 }
 
+impl Declaration {
+    pub(super) fn check_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+        if let Some((expression, compiled)) = &self.filter {
+            static_checks::predicate(
+                compiled,
+                expression,
+                &format!("{}.filter", self.path),
+                findings,
+            )?;
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

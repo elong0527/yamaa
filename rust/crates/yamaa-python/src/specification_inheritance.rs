@@ -87,8 +87,14 @@ impl InheritancePort for Port<'_, '_> {
                 ));
             }
             Ok(Some(Identity {
-                identity: text(&result.get_item(0)?, 65_536)?,
-                display_path: text(&result.get_item(1)?, 65_536)?,
+                identity: text(
+                    &result.get_item(0)?,
+                    yamaa_adapters::host_limits::IDENTITY_BYTES,
+                )?,
+                display_path: text(
+                    &result.get_item(1)?,
+                    yamaa_adapters::host_limits::IDENTITY_BYTES,
+                )?,
             }))
         })())
     }

@@ -113,8 +113,8 @@ pub(crate) struct AdmittedEntry {
     limits: Limits,
 }
 impl CapturedEntry {
-    pub(crate) fn is_producer(&self) -> bool {
-        self.selection.is_producer()
+    pub(crate) fn selection(&self) -> &yamaa_engine::build::EntrySelection {
+        &self.selection
     }
     pub(crate) fn into_ordinary_parts(
         self,

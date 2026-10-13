@@ -14,6 +14,79 @@ use yamaa_adapters::{
 use yamaa_core::project_function::Language;
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
+#[test]
+fn unavailable_environment_precedes_bad_entry_and_valid_environment_is_retained_before_missing_entry(
+) {
+    let study = Study::new();
+    let entry = study.path("root.yaml");
+    let environment = study.path("missing-environment.yaml");
+    for entry_bytes in [None, Some("[invalid entry that must not be read")] {
+        if let Some(bytes) = entry_bytes {
+            study.write("root.yaml", bytes);
+        }
+        let file_workflow::SelectionError::Preparation(Error::Environment(owner)) =
+            file_workflow::select(&entry, &environment, Language::Python)
+                .err()
+                .unwrap()
+        else {
+            panic!("original unavailable environment owner")
+        };
+        assert!(matches!(
+            owner.error(),
+            yamaa_adapters::file_project::Error::Resource(
+                yamaa_adapters::file_resources::Error::Missing
+            )
+        ));
+        assert_eq!(owner.capture_reads(), 0);
+        assert_eq!(owner.captured_sources().count(), 0);
+        let rejection = Error::Environment(owner);
+        let rows = producer_check::rejected(&rejection, Language::Python).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].condition, "project_environment_missing");
+        assert_eq!(rows[0].requirement.as_deref(), Some("REQ-0694"));
+        assert_eq!(rows[0].spec_paths, ["environment"]);
+        assert_eq!(
+            rows[0].context,
+            serde_json::json!({"cause":"missing", "path":environment}).to_string()
+        );
+        assert!(matches!(
+            producer_check::rejected_with_limit(&rejection, Language::Python, 1),
+            Err(producer_check::Error::Projection(_))
+        ));
+        let Error::Environment(owner) = &rejection else {
+            unreachable!()
+        };
+        assert_eq!(owner.capture_reads(), 0);
+        assert_eq!(owner.captured_sources().count(), 0);
+    }
+    fs::remove_file(study.0.join("root.yaml")).unwrap();
+    let environment = study.path("environment.yaml");
+    study.write(
+        "environment.yaml",
+        "schema_version: '1.0'\nlanguage: python\n",
+    );
+    let file_workflow::SelectionError::Preparation(Error::Graph(owner)) =
+        file_workflow::select(&entry, &environment, Language::Python)
+            .err()
+            .unwrap()
+    else {
+        panic!("valid environment precedes missing entry")
+    };
+    assert!(matches!(
+        owner.error(),
+        yamaa_adapters::file_graph::Error::Document(
+            yamaa_adapters::file_preparation::Error::Resource(
+                yamaa_adapters::file_resources::Error::Missing
+            )
+        )
+    ));
+    assert_eq!(owner.capture_reads(), 1);
+    let sources = owner.captured_sources().collect::<Vec<_>>();
+    assert_eq!(sources.len(), 1);
+    assert_eq!(sources[0].0, environment);
+    assert_eq!(sources[0].1, b"schema_version: '1.0'\nlanguage: python\n");
+    assert!(!study.0.join("input.csv").exists());
+}
 struct Study(PathBuf);
 impl Study {
     fn new() -> Self {
@@ -1413,4 +1486,138 @@ fn known_entry_refusal_keeps_preexisting_raw_captures_and_both_schemas_after_fil
         matches!(producer_check::rejected(&error, Language::Python), Err(producer_check::Error::Original(original)) if std::ptr::eq(original, &error))
     );
     assert_eq!(owner.capture_reads(), 1);
+}
+
+#[test]
+fn absent_environment_selects_producer_without_capturing_or_inventing_metadata() {
+    let study = Study::new();
+    // A nearby environment is deliberately unreadable as YAML. Absence must
+    // neither discover it nor convert it into an empty captured document.
+    study.write("environment.yaml", "[");
+    study.write(
+        "leaf.yaml",
+        &yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false),
+    );
+    study.write(
+        "root.yaml",
+        &yaml(
+            "{P: {path: leaf.csv, schema: leaf.yaml}}",
+            "P",
+            "root.csv",
+            false,
+        ),
+    );
+    let selected = file_workflow::select_request(
+        yamaa_engine::build::Request {
+            specification: &study.path("root.yaml"),
+            environment: None,
+        },
+        Language::Python,
+    )
+    .unwrap_or_else(|error| {
+        panic!(
+            "original producer admission: {:?}",
+            yamaa_adapters::project_application::selection_failure(&error, Language::Python)
+        )
+    });
+    let file_workflow::Selected::Producer(graph) = selected else {
+        panic!("schema link selects producer");
+    };
+    assert_eq!(graph.capture_reads(), 2);
+    assert!(graph.environment().root_optional().is_none());
+    assert!(graph.environment().lock().is_none());
+    assert!(graph.environment().captures().is_empty());
+    assert!(graph
+        .graph()
+        .checked()
+        .metadata()
+        .environment()
+        .functions()
+        .is_empty());
+    assert_eq!(graph.captured_sources().count(), 2);
+    assert!(!study.0.join("never-read.csv").exists());
+    assert!(!study.0.join("leaf.csv").exists());
+    assert!(!study.0.join("root.csv").exists());
+    fs::remove_dir_all(&study.0).unwrap();
+    assert!(producer_check::prepared(&graph).unwrap().is_empty());
+}
+
+#[test]
+fn plain_workflow_profile_inspection_keeps_physical_kind_before_study_capture() {
+    use yamaa_core::diagnostic::{ConditionCode as C, ContextValue};
+    use yamaa_core::specification::PrepareError;
+    use yamaa_core::value::Value;
+
+    let study = Study::new();
+    study.write("environment.yaml", "[");
+    study.write("parent/base.yaml", "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input/unknown}\noutput: {path: output.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n");
+    study.write(
+        "entry/root.yaml",
+        "schema_version: '1.0'\nparents: [../parent/base.yaml]\n",
+    );
+    fs::create_dir_all(study.0.join("parent/input")).unwrap();
+    for (kind, expected) in [
+        (0, C::ResourceNotRegularFile),
+        (1, C::SourceUnknownProfile),
+        (2, C::SourceUnknownProfile),
+        (3, C::ResourceSymlink),
+    ] {
+        let input = study.0.join("parent/input/unknown");
+        match kind {
+            0 => fs::create_dir(&input).unwrap(),
+            1 => fs::write(&input, b"ID\n1\n").unwrap(),
+            2 => (),
+            _ => {
+                fs::write(study.0.join("parent/input/target"), b"ID\n1\n").unwrap();
+                #[cfg(unix)]
+                std::os::unix::fs::symlink("target", &input).unwrap();
+                #[cfg(windows)]
+                std::os::windows::fs::symlink_file("target", &input).unwrap();
+            }
+        }
+        let Err(file_workflow::SelectionError::Plain(owner)) = file_workflow::select_request(
+            yamaa_engine::build::Request {
+                specification: &study.path("entry/root.yaml"),
+                environment: None,
+            },
+            Language::Python,
+        ) else {
+            panic!("plain route must retain its preparation rejection");
+        };
+        assert_eq!(
+            owner.capture_reads(),
+            2,
+            "only root and parent metadata were captured"
+        );
+        let yamaa_adapters::file_preparation::Error::Compile(
+            yamaa_adapters::specification_run::Error::Prepare(PrepareError::Invalid(findings)),
+        ) = owner.error()
+        else {
+            panic!("original compiler finding remains owned");
+        };
+        let issue = findings[0].diagnostic();
+        assert_eq!(issue.code, expected);
+        assert_eq!(issue.spec_paths, ["input.SRC.path"]);
+        if matches!(kind, 0 | 3) {
+            assert_eq!(
+                issue.context["path"],
+                ContextValue::Scalar(Value::Str("input/unknown".into()))
+            );
+            assert_eq!(
+                issue.context["dataset"],
+                ContextValue::Scalar(Value::Str("SRC".into()))
+            );
+        }
+        let sources = owner.retained_sources(16, 16_777_216).unwrap();
+        assert_eq!(sources.len(), 2);
+        assert!(sources
+            .iter()
+            .all(|(identity, _)| !identity.ends_with("environment.yaml")
+                && !identity.ends_with("input/unknown")));
+        match kind {
+            0 => fs::remove_dir(&input).unwrap(),
+            2 => (),
+            _ => fs::remove_file(&input).unwrap(),
+        }
+    }
 }

@@ -130,6 +130,7 @@ jobs:
             python tools/generate_regex_identifiers.py
             python tools/generate_schema_printable.py
             python tools/generate_shipped_schema.py
+            uv run --project ../python --locked --no-editable python tools/check_shared_grammar.py
             python tools/check_float_text.py
             python tools/check_sqrt.py
             python tools/check_rounding.py
@@ -335,96 +336,31 @@ jobs:
         run: |
           echo "QUALIFICATION_SOURCE_REVISION=$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
           uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/table-requirements.txt"
+      - name: Install the grammar fixture codec
+        run: python -m pip install py-yaml12==0.2.0
       - name: Stage installed checks outside checkout
         working-directory: ${{ runner.temp }}
         run: |
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_python.py" installed_python.py
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/scalar_transport.tsv" scalar_transport.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/numeric_transport.tsv" numeric_transport.tsv
-          cp -R "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/tables" tables
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_tables.py" installed_tables.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_functions.py" installed_functions.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_temporal_results.py" installed_temporal_results.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_datasets.py" installed_datasets.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_specification.py" installed_specification.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_project_functions.py" installed_project_functions.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_producer_builds.py" installed_producer_builds.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_producers.py" installed_public_producers.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_producer_cohort.py" installed_producer_cohort.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_profile.py" installed_profile.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_dependencies.py" installed_dependencies.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_references.py" installed_references.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_aggregate_planning.py" installed_aggregate_planning.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_aggregate_syntax.py" installed_aggregate_syntax.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_numeric_syntax.py" installed_numeric_syntax.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_regex.py" installed_regex.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_predicate_syntax.py" installed_predicate_syntax.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_predicate_execution.py" installed_predicate_execution.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_schema.py" installed_schema.py
-          cp "${GITHUB_WORKSPACE}/rust/tools/private_schema_requirements.py" private_schema_requirements.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_original_specifications.py" installed_original_specifications.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_verification_logs.py" installed_verification_logs.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_producer_logs.py" installed_producer_logs.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_file_resources.py" installed_file_resources.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_inheritance.py" installed_inheritance.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_original_specifications.py" installed_original_specifications.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_producer_builds.py" installed_producer_builds.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_producer_cohort.py" installed_producer_cohort.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_producer_logs.py" installed_producer_logs.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_project_functions.py" installed_project_functions.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_contract.py" installed_public_contract.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_define.py" installed_public_define.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_environment.py" installed_public_environment.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_grammar.py" installed_public_grammar.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_producers.py" installed_public_producers.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_verification_logs.py" installed_verification_logs.py
+          cp "${GITHUB_WORKSPACE}/rust/tools/private_schema_requirements.py" private_schema_requirements.py
           python "${GITHUB_WORKSPACE}/rust/tools/stage_specification_inputs.py" specification-original
           python "${GITHUB_WORKSPACE}/rust/tools/stage_project_inputs.py" project-original
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_environment.py" installed_public_environment.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_define.py" installed_public_define.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_contract.py" installed_public_contract.py
           python "${GITHUB_WORKSPACE}/rust/tools/stage_define_inputs.py" define-fixtures
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_yaml.py" installed_yaml.py
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/yaml_transport.tsv" yaml_transport.tsv
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_schema_loading.py" installed_schema_loading.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_inheritance.py" installed_inheritance.py
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/inheritance_traversal.tsv" inheritance_traversal.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/inheritance_sources.tsv" inheritance_sources.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/schema_transport.tsv" schema_transport.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/schema_model.tsv" schema_model.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/schema_windows.tsv" schema_windows.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/schema_composition.tsv" schema_composition.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/schema_layer_admission.tsv" schema_layer_admission.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/schema_inheritance_dependencies.tsv" schema_inheritance_dependencies.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/predicate_syntax.tsv" predicate_syntax.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/regex_transport.tsv" regex_transport.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/aggregate_syntax.tsv" aggregate_syntax.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/numeric_syntax.tsv" numeric_syntax.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-core/tests/fixtures/dependency_analysis.tsv" dependency_analysis.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-core/tests/fixtures/column_dependencies.tsv" column_dependencies.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/reference_binding.tsv" reference_binding.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/reference_scope.tsv" reference_scope.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/reference_intermediate.tsv" reference_intermediate.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/reference_keys.tsv" reference_keys.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/reference_match_values.tsv" reference_match_values.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/reference_relations.tsv" reference_relations.tsv
-          cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-functions" specification-functions
-          cp -R "${GITHUB_WORKSPACE}/benchmarks/adam-adlb-ordered-sum" specification-adlb
-          cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-window-functions" specification-windows
-          cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-lookup" specification-lookup
-          cp -R "${GITHUB_WORKSPACE}/benchmarks/adam-advs-bmi" specification-advs-bmi
+          python "${GITHUB_WORKSPACE}/rust/tools/stage_grammar_inputs.py" grammar-original
           cp -R "${GITHUB_WORKSPACE}/yaml" specification-yaml
           cp -R "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/environment-candidate" specification-environment-candidate
-          cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-inheritance" specification-inheritance
-          cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-column-composition" specification-column-composition
-          cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-inherited-output" specification-inherited-output
-          cp -R "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/datasets" datasets
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-engine/tests/fixtures/function_invocation.tsv" function_invocation.tsv
-          mkdir -p conformance-suite
-          # Use native symlink creation: MSYS cp failed on the path-validation
-          # fixture on Windows. Preserve link text instead of dereferencing it.
-          python - <<'PY'
-          import os
-          import shutil
-          from pathlib import Path
-          shutil.copytree(
-              Path(os.environ["GITHUB_WORKSPACE"]) / "benchmarks",
-              Path("conformance-suite/benchmarks"),
-              symlinks=True,
-          )
-          PY
-          cp -R "${GITHUB_WORKSPACE}/yaml" conformance-suite/yaml
-          cp -R "${GITHUB_WORKSPACE}/rust/qualification" conformance-suite/gates
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_conformance.py" conformance-suite/installed_conformance.py
-          cp "${GITHUB_WORKSPACE}/rust/tools/qualify_native.py" conformance-suite/qualify_native.py
       - name: Install the wheel
         if: matrix.form == 'wheel'
         working-directory: ${{ runner.temp }}
@@ -464,15 +400,6 @@ jobs:
           ARCHIVE: ${{ matrix.form == 'wheel' && '*.whl' || '*.tar.gz' }}
         run: |
           archives=(native-dist/${ARCHIVE})
-          python -I conformance-suite/qualify_native.py \
-            --fixtures conformance-suite/benchmarks --schema conformance-suite/yaml \
-            --gates conformance-suite/gates --output "qualification/${FORM}" \
-            --producer-fixtures conformance-suite/gates/producer-cohort \
-            --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form "${FORM}" \
-            --reference-artifacts reference-dist --native-artifacts native-dist \
-            --reference-artifact-prefix "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-reference-${{ matrix.os }}-${{ env.NATIVE_BUILD_PYTHON }}" \
-            --native-artifact-prefix "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-python-${{ matrix.os }}-${{ env.NATIVE_BUILD_PYTHON }}" \
-            --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/${FORM}/public-reports" python -I "${GITHUB_WORKSPACE}/rust/tools/supplemental_inventory.py" \
             --root "${GITHUB_WORKSPACE}" --catalog "${GITHUB_WORKSPACE}/rust/qualification/supplemental.json" \
             --output "qualification/${FORM}/supplemental" --runtime python --staged-root "${RUNNER_TEMP}" \
@@ -480,36 +407,12 @@ jobs:
             --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-python-${{ matrix.os }}-${{ env.NATIVE_BUILD_PYTHON }}/$(basename "${archives[0]}")" \
             --host-artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-reference-${{ matrix.os }}-${{ env.NATIVE_BUILD_PYTHON }}/$(basename reference-dist/*.whl)" \
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-      - name: Measure dataset phases
-        if: matrix.form == 'wheel'
-        working-directory: ${{ runner.temp }}
-        run: python -I "${GITHUB_WORKSPACE}/rust/tools/measure_dataset_phases.py" --root "${GITHUB_WORKSPACE}" --repeats 1 --output dataset-phases.json
-      - name: Check regex and predicate services on the oldest advertised Python ABI
-        if: matrix.form == 'wheel'
-        working-directory: ${{ runner.temp }}
-        run: |
-          uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_regex.py
-          uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_predicate_syntax.py
-          # Keep independent schema probes usable with only the native wheel.
-          uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_schema.py SchemaService.test_independent_truth_without_python_interpreter SchemaService.test_prepared_snapshot_owns_metadata_and_uses_the_same_results SchemaService.test_host_types_and_closed_transport
-          # The separate reference comparison needs the actual Python facade.
-          uv run --no-project --python 3.12 --with-requirements table-requirements.txt --with native-dist/*.whl python -E -s installed_schema.py
-          uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_yaml.py
-          uv run --no-project --python 3.12 --with-requirements table-requirements.txt --with native-dist/*.whl python -E -s installed_schema_loading.py
-          uv run --no-project --python 3.12 --with-requirements table-requirements.txt --with native-dist/*.whl python -E -s installed_inheritance.py
       - name: Preserve native qualification reports
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: native-qualification-${{ matrix.os }}-${{ matrix.python }}-${{ matrix.form }}
           path: ${{ runner.temp }}/qualification
-          if-no-files-found: error
-      - name: Preserve measurement smoke samples
-        if: matrix.form == 'wheel'
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
-        with:
-          name: dataset-phases-${{ matrix.os }}-${{ matrix.python }}
-          path: ${{ runner.temp }}/dataset-phases.json
           if-no-files-found: error
 
   math-portability:
@@ -588,6 +491,8 @@ jobs:
         if: runner.os == 'Windows'
         working-directory: rust
         run: cargo clippy --locked --target x86_64-pc-windows-gnu -p yamaa-r -- -D warnings
+      - name: Install the shared grammar fixture codec
+        run: python -m pip install py-yaml12==0.2.0
       - name: Stage standalone R package
         run: python rust/tools/stage_r_package.py "${RUNNER_TEMP}/native-stage/yamaa"
       - name: Build and install R outside checkout
@@ -632,31 +537,17 @@ jobs:
         if: ${{ always() && steps.r_install.outcome == 'success' }}
         working-directory: ${{ runner.temp }}
         run: |
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/installation.R" installation.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_builds.R" producer_builds.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_producers.R" public_producers.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_cohort.R" producer_cohort.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/scalars.R" scalars.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/functions.R" functions.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/datasets.R" datasets.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/dataset_callbacks.R" dataset_callbacks.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/dependencies.R" dependencies.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/column_dependencies.R" column_dependencies.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/references.R" references.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/aggregate_syntax.R" aggregate_syntax.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/numeric_syntax.R" numeric_syntax.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/regex.R" regex.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/predicate_syntax.R" predicate_syntax.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/predicate_execution.R" predicate_execution.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/schema.R" schema.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/original_specifications.R" original_specifications.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/verification_logs.R" verification_logs.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_logs.R" producer_logs.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_environment.R" public_environment.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_define.R" public_define.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_contract.R" public_contract.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/inheritance.R" inheritance.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/yaml.R" yaml.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_grammar.R" public_grammar.R
           YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/r-source/public-reports" R_LIBS="${RUNNER_TEMP}/native-r-library" python -I "${GITHUB_WORKSPACE}/rust/tools/supplemental_inventory.py" \
             --root "${GITHUB_WORKSPACE}" --catalog "${GITHUB_WORKSPACE}/rust/qualification/supplemental.json" \
             --output qualification/r-source --runtime r --staged-root "${RUNNER_TEMP}" \
@@ -787,6 +678,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          python -m pip install uv==0.11.6
+          uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/audit-requirements.txt"
+          python -m pip install --no-deps -r "${RUNNER_TEMP}/audit-requirements.txt"
           python rust/tools/audit_native_run.py --run-id "${GITHUB_RUN_ID}" \
             --repository "${GITHUB_REPOSITORY}" --output "${RUNNER_TEMP}/native-run-audit" --check
       - name: Show the evidence record

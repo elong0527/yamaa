@@ -1,9 +1,5 @@
 //! Public-request argument/result conversion; the shared engine owns the lifecycle.
-use pyo3::{
-    exceptions::PyException,
-    prelude::*,
-    types::{PyBytes, PyTuple},
-};
+use pyo3::{exceptions::PyException, prelude::*, types::PyBytes};
 #[cfg(any(unix, windows))]
 use std::sync::Mutex;
 use yamaa_adapters::issue_rows::Issue;
@@ -13,14 +9,14 @@ pyo3::create_exception!(yamaa, DomainError, PyException);
 #[pyclass(frozen, module = "yamaa._native", name = "_DomainResult")]
 pub struct Domain {
     #[cfg(any(unix, windows))]
-    inner: Option<Mutex<yamaa_adapters::file_application::Domain>>,
+    pub(crate) inner: Option<Mutex<yamaa_adapters::file_application::Domain>>,
     #[cfg(any(unix, windows))]
-    project: Option<crate::file_project::Attempt>,
+    pub(crate) project: Option<crate::file_project::Attempt>,
     #[cfg(any(unix, windows))]
-    _preparation: Option<yamaa_adapters::file_workflow::SelectionError>,
+    pub(crate) _preparation: Option<yamaa_adapters::file_workflow::SelectionError>,
     #[cfg(any(unix, windows))]
-    producer: Option<crate::file_producer::Report>,
-    failures: Vec<Issue>,
+    pub(crate) producer: Option<crate::file_producer::Report>,
+    pub(crate) failures: Vec<Issue>,
 }
 #[pymethods]
 impl Domain {
@@ -54,11 +50,16 @@ impl Domain {
     ) -> PyResult<Vec<(String, Bound<'py, PyBytes>)>> {
         #[cfg(any(unix, windows))]
         if let Some(error) = &self._preparation {
-            let sources = error.retained_sources(65_536, 16_777_216).map_err(|_| {
-                pyo3::exceptions::PyValueError::new_err(
-                    "source evidence limit; original preparation remains retained",
+            let sources = error
+                .retained_sources(
+                    yamaa_adapters::host_limits::RECORDS,
+                    yamaa_adapters::host_limits::REPLY_BYTES,
                 )
-            })?;
+                .map_err(|_| {
+                    pyo3::exceptions::PyValueError::new_err(
+                        "source evidence limit; original preparation remains retained",
+                    )
+                })?;
             crate::file_producer::source_budget(
                 sources
                     .iter()
@@ -182,11 +183,10 @@ impl Domain {
 
 #[cfg(not(any(unix, windows)))]
 fn unavailable() -> Vec<Issue> {
-    vec![Issue::from_core(yamaa_core::application_issue::unsupported(
-        "native_file_transport",
-        None,
-    ))
-    .expect("application issue")]
+    vec![
+        Issue::from_core(yamaa_engine::host_values::unavailable_file_transport())
+            .expect("application issue"),
+    ]
 }
 #[pyfunction]
 #[pyo3(signature=(specification,environment=None))]
@@ -197,126 +197,31 @@ pub fn _domain_file(
 ) -> PyResult<Domain> {
     #[cfg(any(unix, windows))]
     {
-        if let Some(environment) = environment {
-            let selected = match yamaa_adapters::file_workflow::select(
-                specification,
-                environment,
-                yamaa_core::project_function::Language::Python,
-            ) {
-                Ok(selected) => selected,
-                Err(error) => {
-                    return Ok(Domain {
-                        producer: None,
-                        inner: None,
-                        project: None,
-                        failures: yamaa_adapters::project_application::selection_failure(
-                            &error,
-                            yamaa_core::project_function::Language::Python,
-                        ),
-                        _preparation: Some(error),
-                    })
-                }
-            };
-            let mut project = match selected {
-                yamaa_adapters::file_workflow::Selected::Ordinary(project) => project,
-                yamaa_adapters::file_workflow::Selected::Producer(graph) => {
-                    let mut build = graph.into_build();
-                    let metadata = PyTuple::new(
-                        py,
-                        [
-                            py.version(),
-                            yamaa_core::VERSION,
-                            "domain",
-                            specification,
-                            ".",
-                        ],
-                    )?;
-                    let fields =
-                        std::sync::Arc::new(crate::specification_result::fields(&metadata)?);
-                    let attempt =
-                        crate::file_producer::build_selected(py, &mut build, fields, 16_777_216);
-                    let producer = attempt.formatted(py, 16_777_216, true)?;
-                    return Ok(Domain {
-                        producer: Some(producer),
-                        inner: None,
-                        project: None,
-                        _preparation: None,
-                        failures: Vec::new(),
-                    });
-                }
-            };
-            let inner = project.build_with(|run| {
-                crate::project_activation::Port::new(
-                    py,
-                    run.captured_environment()
-                        .lock()
-                        .map_or(&[], |lock| &lock.source.bytes),
-                )
-            });
-            let attempt = crate::file_project::Attempt {
-                inner: std::sync::Arc::new(Mutex::new(inner)),
-                run: project.retained_run(),
-            };
-            let metadata = PyTuple::new(
-                py,
-                [
-                    py.version(),
-                    yamaa_core::VERSION,
-                    "domain",
-                    specification,
-                    ".",
-                ],
-            )?;
-            let result = crate::project_result::prepare(py, &attempt, &metadata)?;
-            result.propagate_interrupt(py)?;
-            let (attempt, result) = result.into_application(&project);
-            return Ok(match result {
-                Ok(inner) => Domain {
-                    producer: None,
-                    inner: Some(Mutex::new(inner)),
-                    project: Some(attempt),
-                    _preparation: None,
-                    failures: Vec::new(),
-                },
-                Err(failures) => Domain {
-                    producer: None,
-                    inner: None,
-                    project: Some(attempt),
-                    _preparation: None,
-                    failures,
-                },
-            });
-        }
-        let result = yamaa_adapters::file_application::domain(
+        let mut ports = yamaa_adapters::file_application::Application {
+            host: yamaa_engine::host_values::Language::Python,
+            runtime: crate::file_domain::Runtime { py, specification },
+        };
+        match yamaa_engine::domain_entry::domain(
             yamaa_engine::domain_entry::Request {
                 specification,
                 environment,
             },
-            yamaa_adapters::specification_report::Identity {
-                runtime: "python",
-                runtime_version: py.version(),
-                engine_version: yamaa_core::VERSION,
-                example: "domain",
-                specification,
-                base_directory: ".",
-            },
-        );
-        Ok(match result {
-            Ok(inner) => Domain {
-                producer: None,
-                inner: Some(Mutex::new(inner)),
-                project: None,
-                _preparation: None,
-                failures: Vec::new(),
-            },
-            Err(failures) => Domain {
-                producer: None,
-                inner: None,
-                project: None,
-                _preparation: None,
-                failures,
-            },
-        })
+            &mut ports,
+        ) {
+            Ok(result) => Ok(result),
+            Err(yamaa_adapters::file_application::ApplicationError::Runtime(error)) => Err(error),
+            Err(yamaa_adapters::file_application::ApplicationError::Preparation(error)) => {
+                Ok(Domain {
+                    producer: None,
+                    inner: None,
+                    project: None,
+                    failures: yamaa_adapters::project_application::selection_failure(
+                        &error, ports.host,
+                    ),
+                    _preparation: Some(error),
+                })
+            }
+        }
     }
     #[cfg(not(any(unix, windows)))]
     {
@@ -335,15 +240,6 @@ pub fn _check_file(
 ) -> Vec<crate::specification_result::IssueRow> {
     #[cfg(any(unix, windows))]
     {
-        if let Some(environment) = environment {
-            return crate::specification_result::issue_rows(
-                &yamaa_adapters::project_application::check(
-                    specification,
-                    environment,
-                    yamaa_core::project_function::Language::Python,
-                ),
-            );
-        }
         let issues = yamaa_adapters::file_application::check(
             yamaa_engine::domain_entry::Request {
                 specification,
@@ -352,7 +248,7 @@ pub fn _check_file(
             yamaa_adapters::specification_report::Identity {
                 runtime: "python",
                 runtime_version: py.version(),
-                engine_version: yamaa_core::VERSION,
+                engine_version: yamaa_engine::host_values::VERSION,
                 example: "check",
                 specification,
                 base_directory: ".",
@@ -376,8 +272,8 @@ pub fn _check_project_metadata(
     language: &str,
 ) -> PyResult<Vec<crate::specification_result::IssueRow>> {
     let host = match language {
-        "python" => yamaa_core::project_function::Language::Python,
-        "r" => yamaa_core::project_function::Language::R,
+        "python" => yamaa_engine::host_values::Language::Python,
+        "r" => yamaa_engine::host_values::Language::R,
         _ => {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "invalid project language",

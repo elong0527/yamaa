@@ -110,6 +110,34 @@ class PublicProducers(unittest.TestCase):
                 (directory / "provenance.json").write_text(provenance, encoding="utf-8")
         return json.loads(text)
 
+    def test_absent_environment_graph_keeps_no_metadata_and_saves_held_artifacts(self):
+        from yamaa import check
+
+        self.write("producer/layers/base.yaml", PRODUCER.replace(
+            "{function: {name: id_float, args: {x: RAW.VALUE}}}", "RAW.VALUE"
+        ))
+        self.write("env/environment.yaml", "[")
+        (self.root / "generated").mkdir()
+        with (
+            patch.object(host, "verify_versions", side_effect=AssertionError("unexpected activation")),
+            patch.object(host, "resolve_callable", side_effect=AssertionError("unexpected binding")),
+        ):
+            result = domain(self.root / "consumer/root.yaml")
+            self.assertTrue(result.issues.is_empty(), result.issues)
+            self.assertEqual(result.output["VALUE"].to_list(), [2.46, 4.70])
+            observed = self.observe(result)
+            self.assertEqual(observed["environment"], {"source": None, "lock_source": None})
+            self.assertEqual(observed["activation"]["lock"], "not_requested")
+            self.assertFalse(any(name.endswith("environment.yaml") for name, _ in self.entered(result).retained_sources()))
+            (self.root / "raw/raw.csv").unlink()
+            self.assertTrue(check(self.root / "consumer/root.yaml").issues.is_empty())
+            for name in ("consumer/root.yaml", "producer/p.yaml", "producer/layers/base.yaml"):
+                (self.root / name).unlink()
+            for _ in range(2):
+                self.assertTrue(result.save())
+                self.assertEqual((self.root / "generated/producer.csv").read_bytes(), PRODUCED)
+                self.assertEqual((self.root / "generated/root.csv").read_bytes(), CONSUMED)
+
     def test_original_aliases_fresh_union_before_data_and_retained_public_views(self):
         self.write("raw/raw.csv", b"ID,VALUE\n1,99.99\n")
         events = []

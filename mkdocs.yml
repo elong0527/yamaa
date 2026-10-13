@@ -86,4 +86,4 @@ nav:
   - Benchmark: benchmark/index.md
   - Engine:
       - Python engine: https://github.com/elong0527/yamaa/tree/main/python
-      - R engine: https://github.com/elong0527/yamaa/tree/main/R/cdiscbuilder
+      - R engine: https://github.com/elong0527/yamaa/tree/main/R/yamaa
