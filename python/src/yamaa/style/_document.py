@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 import yaml
 
-from yamaa.specification._yaml import _Yaml12Loader
+from yamaa._native import _style_same_value
 
 _SUPPRESSION = re.compile(
     r"^#\s*yamaa-style:\s*allow\s+(?P<names>[a-z_, ]+?)\s*(?:--\s*(?P<reason>.*))?$"
@@ -62,8 +62,11 @@ class Document:
 
 
 def parse(text: str) -> Document:
-    """Compose `text` under the engine's YAML 1.2 core rules, keeping marks."""
-    root = yaml.compose(text, Loader=_Yaml12Loader)
+    """Keep source nodes and marks for layout policy, without interpreting scalars."""
+    raw = text.encode("utf-8")
+    if not _style_same_value(raw, raw):
+        raise yaml.YAMLError("shared YAML reader refused the style document")
+    root = yaml.compose(text, Loader=yaml.BaseLoader)
     lines = text.split("\n")
     if lines and lines[-1] == "":
         lines.pop()

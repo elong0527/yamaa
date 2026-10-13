@@ -150,13 +150,7 @@ correct them; no fix is offered. A
 comment `# yamaa-style: allow <name> -- <reason>` directly above a field or
 an entry suppresses that finding there.
 
-```python
-from yamaa.style import check_file, fix_file
-
-for finding in check_file("study/adsl.yaml"):
-    print(finding.render())
-changed, remaining = fix_file("study/adsl.yaml")
-```
+The style CLI uses the schema field order packaged with the installed release.
 
 ## Typed values and scalar expressions
 

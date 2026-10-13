@@ -34,6 +34,8 @@ mod lookup_diagnostics;
 mod match_values;
 #[path = "specification_relation_predicate.rs"]
 mod relation_predicates;
+#[path = "specification_static_checks.rs"]
+mod static_checks;
 pub use lookup_diagnostics::LookupFinding;
 use lookup_diagnostics::ReferenceCause;
 #[path = "specification_output_diagnostics.rs"]
@@ -391,6 +393,7 @@ struct Declaration {
 /// Private admitted representation: no caller-provided typed plan or binding indices.
 #[derive(Debug)]
 pub struct PreparedSpecification {
+    check_expressions: Vec<crate::diagnostic::Diagnostic>,
     project_calls: Option<crate::project_calls::ProjectCalls>,
     sources: Vec<SourceDeclaration>,
     source_interpretations: Vec<SourceInterpretation>,
@@ -1276,7 +1279,8 @@ impl PreparedSpecification {
                 }
                 None => None,
             };
-            return Ok(Self {
+            return Self {
+                check_expressions: Vec::new(),
                 project_calls: project.map(|p| p.calls),
                 sources,
                 source_interpretations,
@@ -1294,7 +1298,8 @@ impl PreparedSpecification {
                 rows: Some(rows),
                 verifications,
                 column_verifications,
-            });
+            }
+            .finish_checks();
         }
         let mut declarations = Vec::new();
         for (column, &id) in columns.iter().enumerate() {
@@ -1383,7 +1388,8 @@ impl PreparedSpecification {
         if !extra.is_empty() {
             return Err(PrepareError::Unsupported(extra));
         }
-        Ok(Self {
+        Self {
+            check_expressions: Vec::new(),
             project_calls: project.map(|p| p.calls),
             sources,
             source_interpretations,
@@ -1401,7 +1407,8 @@ impl PreparedSpecification {
             rows: None,
             verifications,
             column_verifications,
-        })
+        }
+        .finish_checks()
     }
     pub fn source(&self) -> &SourceDeclaration {
         &self.sources[self.driver]

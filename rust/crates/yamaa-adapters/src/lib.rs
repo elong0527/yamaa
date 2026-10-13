@@ -38,6 +38,7 @@ pub mod regex_transport;
 pub mod predicate_syntax;
 mod schema_diagnostic_kinds;
 pub mod schema_transport;
+pub mod style_values;
 pub mod yaml_decode;
 mod yaml_source;
 pub mod yaml_transport;
@@ -136,3 +137,6 @@ mod project_diagnostic_projection;
 mod file_inventory;
 
 pub mod host_limits;
+
+#[cfg(test)]
+mod test_diagnostic_truth;
