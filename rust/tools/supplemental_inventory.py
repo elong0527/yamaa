@@ -52,8 +52,8 @@ def require_native_consumer(source, name):
 
     def reference(module):
         return (
-            (module == "yamaa.io" or module.startswith("yamaa.io."))
-            and module != "yamaa.io.odm"
+            module == "yamaa.io"
+            or module.startswith("yamaa.io.")
             or any(
                 module == prefix or module.startswith(prefix + ".")
                 for prefix in prefixes
