@@ -17,7 +17,7 @@
   </xs:annotation>
 
   <xs:import namespace="http://www.cdisc.org/ns/odm/v1.3"
-    schemaLocation="../cdisc-odm-1.3.2/ODM1-3-2-foundation.xsd"/>
+    schemaLocation="../../odm/1.3.2/ODM1-3-2-foundation.xsd"/>
 
   <!--
      +===========================================================================+

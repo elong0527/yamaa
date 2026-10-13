@@ -13,9 +13,15 @@ on:
       - 'rust/tools/check_rounding.py'
       - 'rust/tools/assess_math_decision.py'
       - 'rust/tools/native-numeric-tool-assertions.json'
+      - 'rust/crates/yamaa-core/**'
+      - 'rust/crates/yamaa-adapters/examples/**'
+      - 'rust/crates/yamaa-adapters/tests/fixtures/**'
+      - 'rust/qualification/**'
+      - 'yaml/conformance/**'
       - 'rust/tests/test_native_numeric_tools.py'
       - 'rust/tests/test_math_decision.py'
       - 'rust/tests/test_predicate_syntax_encoding.py'
+      - 'rust/tests/test_*rounding*.py'
       - '.github/workflows/native-numeric-tools.yml'
   push:
     branches: [main]
