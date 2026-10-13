@@ -47,3 +47,28 @@ fn declared_document_version_is_a_custom_field_without_a_shipped_version_gate() 
         json!({"issues": []})
     );
 }
+
+#[test]
+fn named_environment_class_uses_the_complete_authored_include_closure() {
+    let sources = vec![
+        (
+            "schema_environment.yaml".into(),
+            "version: '1.0'\nincludes: [schema_shared.yaml]\nenvironment_class:\n  - schema_version: {type: str, required: true}\n  - language: {type: str, values: [python, r]}\n  - lock: {type: project_path}\n".into(),
+        ),
+        (
+            "schema_shared.yaml".into(),
+            "version: '1.0'\nproject_path: {type: str, min_length: 1}\n".into(),
+        ),
+    ];
+    let observed = fixture::observe_input(
+        fixture::SchemaInput::Modules(sources),
+        "schema_version: '1.0'\nlanguage: false\nlock: owned.lock\n",
+        Some("environment_class"),
+    );
+    assert_eq!(
+        observed,
+        json!({"issues": [{"phase":"validation", "condition":"invalid_field_type",
+        "requirement":"REQ-0287", "spec_paths":["language"],
+        "context":{"expected":"str", "actual":"bool"}}]})
+    );
+}

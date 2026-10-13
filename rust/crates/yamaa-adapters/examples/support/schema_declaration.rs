@@ -20,16 +20,35 @@ fn value(value: V<'_>) -> Value {
     }
 }
 
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+pub enum SchemaInput {
+    Text(String),
+    /// The entry module is first; all include identities retain authored spelling.
+    Modules(Vec<(String, String)>),
+}
+
+#[cfg(test)]
 pub fn observe(schema: &str, document: &str) -> Value {
-    let captured = CapturedSchema::admit(
-        vec![Source {
-            identity: "authored-schema.yaml".into(),
-            bytes: schema.as_bytes().into(),
-        }],
-        0,
-        Limits::default(),
-    )
-    .expect("admitted authored schema");
+    observe_input(SchemaInput::Text(schema.into()), document, None)
+}
+
+pub fn observe_input(input: SchemaInput, document: &str, root: Option<&str>) -> Value {
+    let sources = match input {
+        SchemaInput::Text(text) => vec![("authored-schema.yaml".into(), text)],
+        SchemaInput::Modules(modules) => modules,
+    }
+    .into_iter()
+    .map(|(identity, text)| Source {
+        identity,
+        bytes: text.into_bytes(),
+    })
+    .collect();
+    let captured = match root {
+        Some(root) => CapturedSchema::admit_root(sources, 0, root, Limits::default()),
+        None => CapturedSchema::admit(sources, 0, Limits::default()),
+    }
+    .expect("admitted authored schema closure");
     let decoded =
         decode_yaml(document.as_bytes(), Default::default()).expect("decoded authored document");
     let schema = captured.structure();
