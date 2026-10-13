@@ -6,7 +6,7 @@ use yamaa_adapters::{
     file_application::{self, RuntimePort},
     specification_report::Identity,
 };
-pub struct Runtime<'request> {
+pub(crate) struct Runtime<'request> {
     specification: &'request str,
     version: &'request str,
     verify: Function,
