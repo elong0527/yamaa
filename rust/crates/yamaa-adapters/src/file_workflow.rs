@@ -318,10 +318,31 @@ pub fn select_with_resources(
     environment_schema: Arc<CapturedSchema>,
     limits: Limits,
 ) -> Result<Selected, SelectionError> {
-    let (resources, environment, entry) = capture_environment(
+    select_with_optional_resources(
         resources,
         entry,
         Some(environment),
+        host,
+        specification_schema,
+        environment_schema,
+        limits,
+    )
+}
+
+pub fn select_with_optional_resources(
+    resources: Resources,
+    entry: &str,
+    environment: Option<&str>,
+    host: Language,
+    specification_schema: Arc<CapturedSchema>,
+    environment_schema: Arc<CapturedSchema>,
+    limits: Limits,
+) -> Result<Selected, SelectionError> {
+    let has_environment = environment.is_some();
+    let (resources, environment, entry) = capture_environment(
+        resources,
+        entry,
+        environment,
         host,
         Arc::clone(&specification_schema),
         environment_schema,
@@ -330,7 +351,7 @@ pub fn select_with_resources(
     .map_err(SelectionError::Preparation)?;
     let entry = FileGraph::capture_admitted_entry(resources, entry, environment)
         .map_err(|error| SelectionError::Preparation(Error::Graph(error)))?;
-    yamaa_engine::build::select(entry, true, &mut Metadata { host })
+    yamaa_engine::build::select(entry, has_environment, &mut Metadata { host })
 }
 
 fn capture_environment(

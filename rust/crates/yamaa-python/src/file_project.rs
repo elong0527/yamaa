@@ -6,8 +6,8 @@ use pyo3::{
 };
 use std::sync::{Arc, Mutex, MutexGuard};
 use yamaa_adapters::{
-    file_project::{self, FileProject},
     file_resources::Resources,
+    file_workflow::{self, Selected, SelectionError},
 };
 use yamaa_engine::host_values::Language;
 
@@ -17,10 +17,10 @@ type NativeAttempt = yamaa_adapters::project_run::Attempt<
 >;
 #[pyclass(frozen, module = "yamaa._native", name = "_ProjectSpecification")]
 pub struct Specification {
-    inner: Mutex<Result<FileProject, file_project::Error>>,
+    inner: Mutex<Result<Selected, SelectionError>>,
 }
 impl Specification {
-    fn get(&self) -> PyResult<MutexGuard<'_, Result<FileProject, file_project::Error>>> {
+    fn get(&self) -> PyResult<MutexGuard<'_, Result<Selected, SelectionError>>> {
         self.inner.try_lock().map_err(|_| {
             pyo3::exceptions::PyRuntimeError::new_err(
                 "native project handle is already borrowed or poisoned",
@@ -31,18 +31,69 @@ impl Specification {
 #[pymethods]
 impl Specification {
     fn preparation_status(&self) -> PyResult<&'static str> {
-        Ok(match &*self.get()? {
-            Ok(_) => "ready",
-            Err(file_project::Error::Resource(_)) => "resource_failure",
-            Err(file_project::Error::Environment(_)) => "environment_failure",
-            Err(file_project::Error::Document(_)) => "document_failure",
-            Err(file_project::Error::Compile(_)) => "compile_failure",
+        Ok(if self.get()?.is_ok() {
+            "ready"
+        } else {
+            "preparation_failure"
         })
+    }
+    fn check_issues(&self) -> PyResult<Vec<crate::specification_result::IssueRow>> {
+        let state = self.get()?;
+        let issues = match &*state {
+            Ok(owner) => yamaa_adapters::source_metadata::selected_issues(owner)
+                .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.message()))?,
+            Err(error) => {
+                yamaa_adapters::project_application::selection_failure(error, Language::Python)
+            }
+        };
+        Ok(crate::specification_result::issue_rows(&issues))
+    }
+    fn input_metadata(&self) -> PyResult<Vec<crate::source_metadata::InputRow>> {
+        let state = self.get()?;
+        let owner = state
+            .as_ref()
+            .map_err(|_| pyo3::exceptions::PyValueError::new_err("project preparation failed"))?;
+        yamaa_adapters::source_metadata::selected_inputs(owner)
+            .map(crate::source_metadata::input_rows)
+            .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.message()))
+    }
+    fn capture_input_metadata<'py>(
+        &self,
+        py: Python<'py>,
+        index: usize,
+        maximum: usize,
+    ) -> PyResult<(
+        Option<Bound<'py, PyBytes>>,
+        Vec<crate::specification_result::IssueRow>,
+    )> {
+        let mut state = self.get()?;
+        let owner = state
+            .as_mut()
+            .map_err(|_| pyo3::exceptions::PyValueError::new_err("project preparation failed"))?;
+        Ok(
+            match yamaa_adapters::source_metadata::selected_capture(owner, index, maximum) {
+                Ok(bytes) => (Some(PyBytes::new(py, &bytes)), Vec::new()),
+                Err(issues) => (None, crate::specification_result::issue_rows(&issues)),
+            },
+        )
+    }
+    fn check_source_metadata(
+        &self,
+        sources: &Bound<'_, PyList>,
+    ) -> PyResult<Vec<crate::specification_result::IssueRow>> {
+        let sources = crate::source_metadata::convert(sources)?;
+        let state = self.get()?;
+        let owner = state
+            .as_ref()
+            .map_err(|_| pyo3::exceptions::PyValueError::new_err("project preparation failed"))?;
+        let issues = yamaa_adapters::source_metadata::selected_check(owner, &sources)
+            .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.message()))?;
+        Ok(crate::specification_result::issue_rows(&issues))
     }
     fn capture_reads(&self) -> PyResult<usize> {
         self.get()?
             .as_ref()
-            .map(FileProject::capture_reads)
+            .map(yamaa_adapters::source_metadata::selected_reads)
             .map_err(|_| pyo3::exceptions::PyValueError::new_err("project preparation failed"))
     }
     fn build(&self, py: Python<'_>) -> PyResult<Attempt> {
@@ -50,6 +101,11 @@ impl Specification {
         let project = state
             .as_mut()
             .map_err(|_| pyo3::exceptions::PyValueError::new_err("project preparation failed"))?;
+        let yamaa_engine::build::Prepared::Ordinary(project) = project else {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "this metadata handle is not an ordinary project build capability",
+            ));
+        };
         let inner = project.build_with(|run| {
             crate::project_activation::Port::new(
                 py,
@@ -156,11 +212,12 @@ impl Attempt {
 /// Candidate closures are explicit; installed public formats are unchanged.
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
+#[pyo3(signature = (project_root, base_directory, entry, environment, data_roots, specification_modules, specification_entry, environment_modules, environment_entry))]
 pub fn _prepare_file_project(
     project_root: &str,
     base_directory: &str,
     entry: &str,
-    environment: &str,
+    environment: Option<&str>,
     data_roots: &Bound<'_, PyList>,
     specification_modules: &Bound<'_, PyList>,
     specification_entry: usize,
@@ -168,8 +225,9 @@ pub fn _prepare_file_project(
     environment_entry: usize,
 ) -> PyResult<Specification> {
     if data_roots.len() >= 64
-        || [project_root, base_directory, entry, environment]
-            .iter()
+        || [project_root, base_directory, entry]
+            .into_iter()
+            .chain(environment)
             .any(|text| text.len() > yamaa_adapters::host_limits::IDENTITY_BYTES)
     {
         return Err(pyo3::exceptions::PyValueError::new_err(
@@ -200,13 +258,14 @@ pub fn _prepare_file_project(
     )?;
     let resources = Resources::new(project_root, base_directory, &roots)
         .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.message()))?;
-    let inner = FileProject::prepare(
+    let inner = file_workflow::select_with_optional_resources(
         resources,
         entry,
         environment,
         Language::Python,
         specification_schema,
         environment_schema,
+        Default::default(),
     );
     Ok(Specification {
         inner: Mutex::new(inner),
