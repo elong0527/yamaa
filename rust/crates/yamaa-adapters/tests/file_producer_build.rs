@@ -1480,7 +1480,13 @@ fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_r
     use yamaa_adapters::{ipc_table::TableError, producer_result};
     let study = Study::new();
     study.rounded();
-    let declarations = (0..59).map(|index| format!("  - {{name: EXTRA{index}, type: float, label: Extra value, derivation: {{literal: 1.234}}}}\n")).collect::<String>();
+    study.write(
+        "producer/layers/base.yaml",
+        PRODUCER
+            .replace("ID: int", "ID: str")
+            .replace("name: ID, type: int", "name: ID, type: str"),
+    );
+    let declarations = (0..59).map(|index| format!("  - {{name: EXTRA{index}, type: str, label: Extra value, derivation: {{literal: null}}}}\n")).collect::<String>();
     let names = std::iter::once("ID".to_owned())
         .chain(std::iter::once("VALUE".to_owned()))
         .chain((0..59).map(|index| format!("EXTRA{index}")))
@@ -1489,6 +1495,7 @@ fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_r
     study.write(
         "consumer/root.yaml",
         CONSUMER
+            .replace("name: ID, type: int", "name: ID, type: str")
             .replace("output: {path:", &format!("{declarations}output: {{path:"))
             .replace(
                 "columns: [ID, VALUE], decimals: 2",
@@ -1499,7 +1506,7 @@ fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_r
         "raw/raw.csv",
         format!(
             "ID,VALUE\n{}",
-            (1..=100)
+            (1..=23000)
                 .map(|index| format!("{index},1.234\n"))
                 .collect::<String>()
         ),
@@ -1509,7 +1516,15 @@ fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_r
     let attempt = build.build_reported(&mut host, report_id(), Limits::default());
     assert!(attempt.accepted());
     let before = host.trace.clone();
-    match producer_result::prepare_classified(&attempt, report_id(), 16777216, &[]) {
+    // Three actual typed-copy passes visit 4,347,000 cells, exceeding the
+    // cumulative 4,194,304-cell copying allowance.
+    // The complete indexed graph and encoded report remain accepted first.
+    match producer_result::prepare_classified(
+        &attempt,
+        report_id(),
+        yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+        &[],
+    ) {
         Err(producer_result::Error::Output {
             attempt: held,
             observations,
@@ -1535,7 +1550,12 @@ fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_r
     fs::remove_dir_all(&study.0).unwrap();
     assert!(attempt.accepted());
     assert!(matches!(
-        producer_result::prepare_classified(&attempt, report_id(), 16777216, &[]),
+        producer_result::prepare_classified(
+            &attempt,
+            report_id(),
+            yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+            &[]
+        ),
         Err(producer_result::Error::Output {
             error: TableError::OutputLimit,
             ..
@@ -1839,9 +1859,11 @@ fn native_complete_reports_pin_independent_rounded_truth_and_union_after_all_own
                 {"name":"root","profile":"csv","columns":["ID","VALUE"],"types":["int","float"],"row_count":2,"records":["ID,VALUE","1,2.46","2,4.70"],"byte_length":23,"content":"ID,VALUE\n1,2.46\n2,4.70\n","specification":consumer}],
             "tables":tables,"diagnostics":[],"unsupported":[],"handler_counts":[],"verifications":[],"callbacks":[],"error":null,
             "source_reads":[{"base_directory":study.path("producer"),"path":"../raw/raw.csv","outcome":"captured","condition":null,"snapshots_created":created,"specification":producer}]});
-        assert_eq!(observed, expected);
+        assert_eq!(observed.observations_value(false), expected);
         assert_eq!(
-            attempt_report(attempt, report_id(), 16_777_216).unwrap(),
+            attempt_report(attempt, report_id(), 16_777_216)
+                .unwrap()
+                .observations_value(false),
             expected
         );
         let bytes = attempt.graph.nodes[1]
@@ -2027,7 +2049,7 @@ fn native_report_admission_stops_dependents_and_whole_report_limits_keep_earlier
         attempt_report(&first, report_id(), 16_777_216).unwrap()["error"]["code"],
         "output_limit"
     );
-    limits.engine.report_bytes = 65536;
+    limits.engine.report_bytes = 8192;
     let later = build.build_reported(&mut activation, report_id(), limits);
     assert!(!later.accepted());
     assert_eq!(later.graph.nodes.len(), 2);
@@ -2162,7 +2184,7 @@ fn whole_report_rejects_contradictory_actual_activation_and_node_order_without_r
 }
 
 #[test]
-fn a_larger_caller_report_budget_cannot_defer_the_fixed_formatter_ceiling_until_after_copy() {
+fn a_larger_caller_budget_cannot_bypass_retained_formatter_admission_before_identity_copy() {
     let study = Study::new();
     study.write(
         "producer/p.yaml",
@@ -2182,13 +2204,20 @@ fn a_larger_caller_report_budget_cannot_defer_the_fixed_formatter_ceiling_until_
             "str",
         ),
     );
-    let text = "x".repeat(1_400_000);
+    let text = "small";
     study.write("raw/raw.csv", format!("ID,VALUE\n1,{text}\n"));
+    // Borrowed caller metadata exceeds the fixed retained admission by itself.
+    // It must be rejected before report JSON copies it, even with usize::MAX.
+    let oversized_runtime = "x".repeat(yamaa_engine::capacity::REPORT_RETAINED_BYTES / 12 + 1);
+    let identity = yamaa_adapters::specification_report::Identity {
+        runtime_version: &oversized_runtime,
+        ..report_id()
+    };
     let mut build = study.build(Language::Python);
     let mut host = Activation::new(&study, Mode::Lock);
     let mut limits = Limits::default();
     limits.engine.report_bytes = usize::MAX;
-    let attempt = build.build_reported(&mut host, report_id(), limits);
+    let attempt = build.build_reported(&mut host, identity, limits);
     assert!(!attempt.accepted());
     assert!(host.trace.is_empty());
     assert_eq!(attempt.graph.nodes.len(), 1);
@@ -2212,14 +2241,20 @@ fn a_larger_caller_report_budget_cannot_defer_the_fixed_formatter_ceiling_until_
             .unwrap()
             .cell(0, 1)
             .unwrap(),
-        ValueRef::Str(&text)
+        ValueRef::Str(text)
     );
-    assert!(matches!(
-        yamaa_adapters::producer_report::attempt_report(&attempt, report_id(), usize::MAX),
-        Err(yamaa_adapters::producer_report::ProjectionError::Report(
-            yamaa_adapters::specification_report::Error::OutputLimit
-        ))
-    ));
+    // The original attempt still owns its admitted source and execution.
+    // A separately bounded diagnostic view uses ordinary metadata and excludes
+    // the refused derived table/artifact; it does not replay original inputs.
+    let failed = yamaa_adapters::producer_report::attempt_report(&attempt, report_id(), usize::MAX)
+        .unwrap()
+        .observations_value(false);
+    assert_eq!(failed["error"]["code"], "output_limit");
+    assert_eq!(failed["artifacts"], serde_json::json!([]));
+    assert_eq!(
+        failed["tables"][0]["rows"][0][1],
+        serde_json::json!({"type":"str","value":text})
+    );
     assert!(!study.0.join("generated").exists());
 }
 

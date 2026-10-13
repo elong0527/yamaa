@@ -106,6 +106,114 @@
           }
         }
       ]
+    },
+    "assert_lookup_selected": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: input.csv, types: {ID: int, SEQ: int, LIMIT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int, X: int}}\noutput: {path: result.csv, columns: [ID, SEQ, VALUE]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: 'D.TIME <= SRC.LIMIT'\n    order_by: [D.TIME]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: VALUE, type: int, derivation: P.X}\nverifications:\n  - assert:\n      when: 'P.X IS NOT NULL'\n      require: 'VALUE = P.X AND P.X >= 10'\n",
+      "inputs": {
+        "input.csv": "ID,SEQ,LIMIT\n1,1,2\n1,2,4\n2,1,2\n",
+        "donor.csv": "ID,TIME,X\n1,1,10\n1,3,30\n"
+      },
+      "csv": "ID,SEQ,VALUE\n1,1,10\n1,2,30\n2,1,\n"
+    },
+    "assert_lookup_only": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: input.csv, types: {ID: int, SEQ: int, LIMIT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int, X: int}}\noutput: {path: result.csv, columns: [ID, SEQ, VALUE]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: 'D.TIME <= SRC.LIMIT'\n    order_by: [D.TIME]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: VALUE, type: int, derivation: {literal: 0}}\nverifications:\n  - assert:\n      when: 'P.X IS NOT NULL'\n      require: 'P.X >= 10'\n",
+      "inputs": {
+        "input.csv": "ID,SEQ,LIMIT\n1,1,2\n1,2,4\n2,1,2\n",
+        "donor.csv": "ID,TIME,X\n1,1,10\n1,3,30\n"
+      },
+      "csv": "ID,SEQ,VALUE\n1,1,0\n1,2,0\n2,1,0\n"
+    },
+    "assert_lookup_empty": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: input.csv, types: {ID: int, SEQ: int, LIMIT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int, X: int}}\noutput: {path: result.csv, columns: [ID, SEQ, VALUE]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: 'D.TIME <= SRC.LIMIT'\n    order_by: [D.TIME]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: VALUE, type: int, derivation: P.X}\nverifications:\n  - assert:\n      when: 'P.X IS NOT NULL'\n      require: 'VALUE = P.X AND P.X >= 10'\n",
+      "inputs": {
+        "input.csv": "ID,SEQ,LIMIT\n",
+        "donor.csv": "ID,TIME,X\n1,1,10\n1,3,30\n"
+      },
+      "csv": "ID,SEQ,VALUE\n"
+    },
+    "assert_lookup_records": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: input.csv, types: {ID: int, SEQ: int, LIMIT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int, X: int}}\noutput: {path: result.csv, columns: [ID, SEQ, VALUE]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: 'D.TIME <= SRC.LIMIT'\n    order_by: [D.TIME]\n    keep: last\n    no_match: null\nrows:\n  - id: record\n    dataset: SRC\n    derivations: {ID: SRC.ID, SEQ: SRC.SEQ, VALUE: P.X}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: VALUE, type: int}\nverifications:\n  - assert:\n      when: 'P.X IS NOT NULL'\n      require: 'VALUE = P.X AND P.X >= 10'\n",
+      "inputs": {
+        "input.csv": "ID,SEQ,LIMIT\n1,1,2\n1,2,4\n2,1,2\n",
+        "donor.csv": "ID,TIME,X\n1,1,10\n1,3,30\n"
+      },
+      "csv": "ID,SEQ,VALUE\n1,1,10\n1,2,30\n2,1,\n"
+    },
+    "assert_lookup_missing": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: input.csv, types: {ID: int, SEQ: int, LIMIT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int, X: int}}\noutput: {path: result.csv, columns: [ID, SEQ, VALUE]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: 'D.TIME <= SRC.LIMIT'\n    order_by: [D.TIME]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: VALUE, type: int, derivation: P.X}\nverifications:\n  - assert:\n      when: 'P.X IS NOT NULL'\n      require: 'P.MISSING = 10'\n",
+      "inputs": {
+        "input.csv": "ID,SEQ,LIMIT\n1,1,2\n1,2,4\n2,1,2\n",
+        "donor.csv": "ID,TIME,X\n1,1,10\n1,3,30\n"
+      },
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "requirement": "REQ-0405",
+          "spec_paths": [
+            "verifications[0].assert.require"
+          ],
+          "context": {
+            "identifier": "P.MISSING"
+          }
+        }
+      ]
+    },
+    "assert_lookup_undeclared": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: input.csv, types: {ID: int, SEQ: int, LIMIT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int, X: int}}\noutput: {path: result.csv, columns: [ID, SEQ, VALUE]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: 'D.TIME <= SRC.LIMIT'\n    order_by: [D.TIME]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: VALUE, type: int, derivation: P.X}\nverifications:\n  - assert:\n      when: 'P.X IS NOT NULL'\n      require: 'U.X = 10'\n",
+      "inputs": {
+        "input.csv": "ID,SEQ,LIMIT\n1,1,2\n1,2,4\n2,1,2\n",
+        "donor.csv": "ID,TIME,X\n1,1,10\n1,3,30\n"
+      },
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "requirement": "REQ-0405",
+          "spec_paths": [
+            "verifications[0].assert.require"
+          ],
+          "context": {
+            "identifier": "U.X"
+          }
+        }
+      ]
+    },
+    "assert_lookup_source": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: input.csv, types: {ID: int, SEQ: int, LIMIT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int, X: int}}\noutput: {path: result.csv, columns: [ID, SEQ, VALUE]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: 'D.TIME <= SRC.LIMIT'\n    order_by: [D.TIME]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: VALUE, type: int, derivation: P.X}\nverifications:\n  - assert:\n      when: 'P.X IS NOT NULL'\n      require: 'SRC.LIMIT = 10'\n",
+      "inputs": {
+        "input.csv": "ID,SEQ,LIMIT\n1,1,2\n1,2,4\n2,1,2\n",
+        "donor.csv": "ID,TIME,X\n1,1,10\n1,3,30\n"
+      },
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "requirement": "REQ-0405",
+          "spec_paths": [
+            "verifications[0].assert.require"
+          ],
+          "context": {
+            "identifier": "SRC.LIMIT"
+          }
+        }
+      ]
+    },
+    "assert_lookup_grouped": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: input.csv, types: {ID: int, SEQ: int, LIMIT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int, X: int}}\noutput: {path: result.csv, columns: [ID, SEQ, VALUE]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: 'D.TIME <= SRC.LIMIT'\n    order_by: [D.TIME]\n    keep: last\n    no_match: null\nrows:\n  - id: record\n    dataset: SRC\n    group_by: [SRC.ID, SRC.SEQ, SRC.LIMIT]\n    derivations: {ID: SRC.ID, SEQ: SRC.SEQ, VALUE: P.X}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: VALUE, type: int}\nverifications:\n  - assert:\n      when: 'P.X IS NOT NULL'\n      require: 'VALUE = P.X AND P.X >= 10'\n",
+      "inputs": {
+        "input.csv": "ID,SEQ,LIMIT\n1,1,2\n1,2,4\n2,1,2\n",
+        "donor.csv": "ID,TIME,X\n1,1,10\n1,3,30\n"
+      },
+      "csv": "ID,SEQ,VALUE\n1,1,10\n1,2,30\n2,1,\n"
+    },
+    "assert_lookup_self": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: input.csv, types: {ID: int, SEQ: int, LIMIT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int, X: int}}\noutput: {path: result.csv, columns: [ID, SEQ, VALUE]}\nintermediates:\n  - id: P\n    dataset: SELF\n    key: [ID]\n    order_by: [SELF.SEQ]\n    keep: first\n    no_match: null\nrows:\n  - id: record\n    dataset: SRC\n    derivations: {ID: SRC.ID, SEQ: SRC.SEQ, VALUE: SRC.LIMIT}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: VALUE, type: int}\nverifications:\n  - assert:\n      when: 'P.VALUE IS NOT NULL'\n      require: 'P.VALUE = 2'\n",
+      "inputs": {
+        "input.csv": "ID,SEQ,LIMIT\n1,1,2\n1,2,4\n2,1,2\n",
+        "donor.csv": "ID,TIME,X\n1,1,10\n1,3,30\n"
+      },
+      "csv": "ID,SEQ,VALUE\n1,1,2\n1,2,4\n2,1,2\n"
     }
   }
 }

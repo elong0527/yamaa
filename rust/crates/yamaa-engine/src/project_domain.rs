@@ -13,6 +13,15 @@ use yamaa_core::{
     table::TableAccess,
 };
 
+pub type BuildEvidence<'a, P, D> = (
+    &'a mut CapturedAttempt<
+        <P as SourcePort>::Error,
+        <D as SourceDecoder>::Error,
+        <D as SourceDecoder>::Table,
+    >,
+    &'a mut project_activation::Observations,
+);
+
 /// The private fields tie compilation and selected indices to the same immutable
 /// environment. No caller can swap a different definition collection at build.
 #[derive(Debug)]
@@ -58,7 +67,10 @@ impl CheckedProject<'_> {
             decoder,
             limits,
             attempt,
-            None,
+            (
+                None,
+                crate::application_observer::Scope::new(&crate::application_observer::Noop),
+            ),
         )
     }
 
@@ -83,7 +95,35 @@ impl CheckedProject<'_> {
             decoder,
             limits,
             attempt,
-            Some(observations),
+            (
+                Some(observations),
+                crate::application_observer::Scope::new(&crate::application_observer::Noop),
+            ),
+        )
+    }
+
+    /// Retain activation evidence and forward trusted application events without
+    /// adding measurement fields to the semantic attempt.
+    pub fn build_with_observer_into<A: ActivationPort, P: SourcePort, D: SourceDecoder>(
+        &self,
+        activation: &mut A,
+        source: &mut P,
+        decoder: &mut D,
+        limits: Limits,
+        evidence: BuildEvidence<'_, P, D>,
+        scope: crate::application_observer::Scope<'_>,
+    ) -> Result<(), Failure<A::Error>>
+    where
+        D::Table: TableAccess<Error = A::Error>,
+    {
+        build(
+            (&self.checked, self.environment),
+            activation,
+            source,
+            decoder,
+            limits,
+            evidence.0,
+            (Some(evidence.1), scope),
         )
     }
 }
@@ -148,7 +188,10 @@ impl CheckedOwnedProject {
             decoder,
             limits,
             attempt,
-            None,
+            (
+                None,
+                crate::application_observer::Scope::new(&crate::application_observer::Noop),
+            ),
         )
     }
 
@@ -171,7 +214,33 @@ impl CheckedOwnedProject {
             decoder,
             limits,
             attempt,
-            Some(observations),
+            (
+                Some(observations),
+                crate::application_observer::Scope::new(&crate::application_observer::Noop),
+            ),
+        )
+    }
+
+    pub fn build_with_observer_into<A: ActivationPort, P: SourcePort, D: SourceDecoder>(
+        &self,
+        activation: &mut A,
+        source: &mut P,
+        decoder: &mut D,
+        limits: Limits,
+        evidence: BuildEvidence<'_, P, D>,
+        scope: crate::application_observer::Scope<'_>,
+    ) -> Result<(), Failure<A::Error>>
+    where
+        D::Table: TableAccess<Error = A::Error>,
+    {
+        build(
+            (&self.checked, &self.environment),
+            activation,
+            source,
+            decoder,
+            limits,
+            evidence.0,
+            (Some(evidence.1), scope),
         )
     }
 }
@@ -182,7 +251,10 @@ fn build<A: ActivationPort, P: SourcePort, D: SourceDecoder>(
     decoder: &mut D,
     limits: Limits,
     attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
-    observations: Option<&mut project_activation::Observations>,
+    (observations, scope): (
+        Option<&mut project_activation::Observations>,
+        crate::application_observer::Scope<'_>,
+    ),
 ) -> Result<(), Failure<A::Error>>
 where
     D::Table: TableAccess<Error = A::Error>,
@@ -196,7 +268,14 @@ where
     });
     let selected = checked.compiled().called_functions();
     if selected.is_empty() {
-        checked.build_into(source, decoder, limits, attempt);
+        checked.build_with_observer_into(
+            source,
+            decoder,
+            &mut crate::dataset::unavailable_functions(),
+            limits,
+            attempt,
+            scope,
+        );
         return Ok(());
     }
     let functions = selected
@@ -209,18 +288,29 @@ where
     let lock = environment
         .lock()
         .expect("admitted called functions declare a lock");
+    scope.phase(crate::application_observer::Phase::Activation);
     let activated = match observations {
         Some(observations) => project_activation::activate_references_observed(
             language,
             lock,
             &functions,
-            activation,
+            &mut scope.activation(activation),
             project_activation::Limits::default(),
             observations,
         ),
-        None => project_activation::activate_references(language, lock, &functions, activation),
-    }?;
+        None => project_activation::activate_references(
+            language,
+            lock,
+            &functions,
+            &mut scope.activation(activation),
+        ),
+    };
+    scope.exit(
+        crate::application_observer::Phase::Activation,
+        crate::application_observer::Outcome::from_result(&activated),
+    );
+    let activated = activated?;
     let mut bindings = Bindings::new(&activated, activation);
-    checked.build_with_functions_into(source, decoder, &mut bindings, limits, attempt);
+    checked.build_with_observer_into(source, decoder, &mut bindings, limits, attempt, scope);
     Ok(())
 }

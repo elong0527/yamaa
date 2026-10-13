@@ -169,6 +169,25 @@ pub(crate) mod platform {
         resolve_host: Function,
         maximum: usize,
     ) -> Rc<Attempt> {
+        build_selected_attempt_with_observer(
+            prepared,
+            fields,
+            verify,
+            resolve_host,
+            maximum,
+            yamaa_engine::application_observer::Scope::new(
+                &yamaa_engine::application_observer::Noop,
+            ),
+        )
+    }
+    fn build_selected_attempt_with_observer(
+        prepared: &mut FileBuild,
+        fields: Vec<String>,
+        verify: Function,
+        resolve_host: Function,
+        maximum: usize,
+        scope: yamaa_engine::application_observer::Scope<'_>,
+    ) -> Rc<Attempt> {
         let provenance = std::sync::Arc::clone(prepared.provenance());
         let mut port = crate::project_activation::Port::new(
             provenance
@@ -180,10 +199,11 @@ pub(crate) mod platform {
         );
         let mut limits = Limits::default();
         limits.engine.report_bytes = maximum;
-        let inner = prepared.build_owned_reported(
+        let inner = prepared.build_owned_reported_with_observer(
             &mut port,
             crate::specification_result::identity(&fields),
             limits,
+            scope,
         );
         Rc::new(Attempt {
             inner: RefCell::new(inner),
@@ -197,32 +217,56 @@ pub(crate) mod platform {
         state: State,
         _slot: Slot,
     }
-    pub(crate) fn build_selected(
+    pub(crate) fn build_selected_with_observer(
         prepared: &mut FileBuild,
         fields: Vec<String>,
         verify: Function,
         resolve_host: Function,
         formatter: Function,
+        scope: yamaa_engine::application_observer::Scope<'_>,
     ) -> Result<PublicResult, String> {
         let slot = Slot::reserve()?;
-        let attempt = build_selected_attempt(
+        let attempt = build_selected_attempt_with_observer(
             prepared,
             fields,
             verify,
             resolve_host,
-            yamaa_adapters::host_limits::REPLY_BYTES,
+            yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+            scope,
         );
-        Ok(PublicResult {
-            state: format_attempt(
-                attempt,
-                &formatter,
-                yamaa_adapters::host_limits::REPLY_BYTES,
-                true,
-            )?,
-            _slot: slot,
-        })
+        scope.phase(yamaa_engine::application_observer::Phase::Output);
+        let converted = (|| {
+            Ok(PublicResult {
+                state: format_attempt(
+                    attempt,
+                    &formatter,
+                    yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+                    true,
+                )?,
+                _slot: slot,
+            })
+        })();
+        scope.exit(
+            yamaa_engine::application_observer::Phase::Output,
+            if converted.is_ok() {
+                yamaa_engine::application_observer::Outcome::Succeeded
+            } else {
+                yamaa_engine::application_observer::Outcome::Failed
+            },
+        );
+        converted
     }
     impl PublicResult {
+        pub(crate) fn accepted(&self) -> bool {
+            match &self.state {
+                State::Report {
+                    domain: Some(result),
+                    ..
+                } => result.output().is_some(),
+                _ => false,
+            }
+        }
+
         pub(crate) fn save(
             &mut self,
         ) -> Result<bool, yamaa_adapters::file_application::FailedBuild> {
@@ -278,7 +322,7 @@ pub(crate) mod platform {
                 State::Report {
                     domain: Some(result),
                     ..
-                } => Some(result.observations().to_string()),
+                } => Some(result.observations_json()),
                 State::Report { observations, .. } => observations.clone(),
                 _ => None,
             }

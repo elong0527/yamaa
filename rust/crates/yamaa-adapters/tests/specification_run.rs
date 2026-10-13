@@ -938,7 +938,9 @@ fn actual_capture_observations_survive_errors_and_distinguish_cached_reads() {
             limit: usize,
         ) -> Result<Arc<[u8]>, Self::Error> {
             assert_eq!((&*source.name, &*source.path), ("LB", "input/lb.csv"));
-            assert_eq!(limit, 8_388_608);
+            // The cumulative source owner has 16 MiB; the CSV decoder keeps
+            // its independent 8 MiB per-file admission after capture.
+            assert_eq!(limit, 16_777_216);
             self.requests += 1;
             if self.fail {
                 return Err("resource_path_missing");
@@ -1085,7 +1087,7 @@ fn whole_failure_reports_match_reference_observations_from_actual_capture() {
         )
         .unwrap();
         expected["backend"] = serde_json::json!("rust");
-        assert_eq!(actual, expected, "{name}");
+        assert_eq!(actual.observations_value(false), expected, "{name}");
     }
 }
 
@@ -3246,7 +3248,10 @@ fn independent_scalar_reports(fixture: &str, prefix: &str, expected_cases: usize
         } else {
             assert!(result.output().is_some());
             for _ in 0..2 {
-                assert_eq!(result.save(&mut port).unwrap(), &expected);
+                assert_eq!(
+                    result.save(&mut port).unwrap().observations_value(false),
+                    expected
+                );
             }
             assert_eq!(port.saves, 2);
         }
@@ -3761,7 +3766,10 @@ fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
         } else {
             assert!(result.output().is_some());
             for _ in 0..2 {
-                assert_eq!(*result.save(&mut port).unwrap(), expected);
+                assert_eq!(
+                    result.save(&mut port).unwrap().observations_value(false),
+                    expected
+                );
             }
             assert_eq!(port.saves, 2);
         }
@@ -3862,7 +3870,12 @@ fn original_source_bindings_match_complete_reports_and_exact_repeated_csv() {
                 ));
             } else {
                 for _ in 0..2 {
-                    assert_eq!(*result.save(&mut port).unwrap(), expected, "{}", fields[0]);
+                    assert_eq!(
+                        result.save(&mut port).unwrap().observations_value(false),
+                        expected,
+                        "{}",
+                        fields[0]
+                    );
                 }
                 assert_eq!(port.saves, 2);
             }
@@ -3975,7 +3988,12 @@ fn original_mapping_cut_match_complete_reports_and_exact_repeated_csv() {
                 ));
             } else {
                 for _ in 0..2 {
-                    assert_eq!(*result.save(&mut port).unwrap(), expected, "{}", fields[0]);
+                    assert_eq!(
+                        result.save(&mut port).unwrap().observations_value(false),
+                        expected,
+                        "{}",
+                        fields[0]
+                    );
                 }
                 assert_eq!(port.saves, 2);
             }

@@ -320,3 +320,74 @@ fn independently_authored_installed_host_truth_has_the_same_complete_native_obse
         }
     }
 }
+
+fn lookup_fixture(name: &str) -> (Fixture, String) {
+    let truth: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/case_predicates.json")).unwrap();
+    let case = &truth["cases"][name];
+    let fixture = Fixture::new();
+    for (filename, contents) in case["inputs"].as_object().unwrap() {
+        fs::write(fixture.0.join(filename), contents.as_str().unwrap()).unwrap();
+    }
+    (fixture, case["specification"].as_str().unwrap().into())
+}
+
+#[test]
+fn assertion_lookup_reuses_current_selection_without_adding_derivation_handlers() {
+    let (fixture, body) = lookup_fixture("assert_lookup_selected");
+    let result = fixture.run(&body).unwrap();
+    assert!(result.issues().is_empty());
+    assert_eq!(
+        result.observations()["handler_counts"],
+        serde_json::json!([
+            {"spec_path":"columns.VALUE.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
+            {"spec_path":"columns.VALUE.derivation.source.no_match","handler":"no_match","count":1}
+        ])
+    );
+}
+
+#[test]
+fn false_when_still_resolves_require_lookup_and_refuses_an_unhandled_absence() {
+    let (fixture, body) = lookup_fixture("assert_lookup_only");
+    let body = body
+        .replace("    no_match: null\n", "")
+        .replace("when: 'P.X IS NOT NULL'", "when: 'FALSE'");
+    let mut result = fixture.run(&body).unwrap();
+    assert!(
+        !result.issues().is_empty(),
+        "require must be evaluated on exempt rows"
+    );
+    let definition = yamaa_core::diagnostic::ConditionCode::DatasetUnmatchedKey.definition();
+    assert_eq!(result.issues().len(), 1);
+    assert_eq!(result.issues()[0].phase, definition.phase);
+    assert_eq!(result.issues()[0].condition, definition.condition);
+    assert_eq!(
+        result.issues()[0].requirement.as_deref(),
+        definition.requirement
+    );
+    assert!(result.output().is_none());
+    assert!(result.save().is_err());
+    assert!(!fixture.0.join("result.csv").exists());
+}
+
+#[test]
+fn empty_output_validates_lookup_operand_types_without_selecting_a_donor() {
+    let (fixture, body) = lookup_fixture("assert_lookup_empty");
+    let body = body
+        .replace("when: 'P.X IS NOT NULL'", "when: 'FALSE'")
+        .replace(
+            "require: 'VALUE = P.X AND P.X >= 10'",
+            "require: \"P.X LIKE 'text%'\"",
+        );
+    let mut result = fixture.run(&body).unwrap();
+    assert!(
+        !result.issues().is_empty(),
+        "empty output still admits declaration types"
+    );
+    assert_eq!(
+        result.observations()["handler_counts"],
+        serde_json::json!([])
+    );
+    assert!(result.output().is_none());
+    assert!(result.save().is_err());
+}

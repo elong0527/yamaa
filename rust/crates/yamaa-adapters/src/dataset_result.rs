@@ -14,17 +14,17 @@ use yamaa_engine::{
     table_grouping::GroupingError,
     table_reduction::TableReductionError,
 };
-pub(crate) const MAX_SOURCE_CELLS: usize = 262_144;
+pub(crate) const MAX_SOURCE_CELLS: usize = yamaa_engine::capacity::SOURCE_CELLS;
 pub(crate) const LIMITS: dataset::Limits = dataset::Limits {
-    source_rows: 65_536,
-    output_rows: 65_536,
-    output_cells: 262_144,
-    key_cells: 262_144,
-    work_cells: 4_194_304,
+    source_rows: yamaa_engine::capacity::SOURCE_ROWS,
+    output_rows: yamaa_engine::capacity::OUTPUT_ROWS,
+    output_cells: yamaa_engine::capacity::OUTPUT_CELLS,
+    key_cells: yamaa_engine::capacity::KEY_CELLS,
+    work_cells: yamaa_engine::capacity::EXECUTION_WORK,
     scalar_text_bytes: 16 * 1024 * 1024,
-    output_text_bytes: 1_048_576,
-    identity_cells: 65_536,
-    identity_text_bytes: 1_048_576,
+    output_text_bytes: yamaa_engine::capacity::OUTPUT_TEXT_BYTES,
+    identity_cells: yamaa_engine::capacity::IDENTITY_CELLS,
+    identity_text_bytes: yamaa_engine::capacity::IDENTITY_TEXT_BYTES,
 };
 const MAX_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
 /// Typed result and boundary failures are not language diagnostics.

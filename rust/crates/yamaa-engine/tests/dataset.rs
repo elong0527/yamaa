@@ -1676,7 +1676,9 @@ fn verification_identity_budgets_accumulate_across_checks() {
 /// Work admission precedes grouped reads and the aggregate's eager argument collection.
 #[test]
 fn work_limits_fail_before_the_next_source_operation() {
+    use yamaa_engine::application_observer::{Outcome, Refusal};
     use yamaa_engine::dataset::Resource;
+    use yamaa_engine::dataset::{ExecutionEvent, ExecutionPhase};
     let source = table(
         &[("id", ColumnType::Int), ("x", ColumnType::Int)],
         vec![
@@ -1709,21 +1711,49 @@ fn work_limits_fail_before_the_next_source_operation() {
         vec![],
     )
     .unwrap();
+    let mut events = Vec::new();
+    let attempt = plan.execute_with_execution_observer(
+        &source,
+        &[],
+        &mut yamaa_engine::function_invocation::NoFunctions::new(),
+        Limits {
+            work_cells: 2,
+            ..limits()
+        },
+        &mut |event| events.push(event),
+    );
     assert_eq!(
-        *plan
-            .execute(
-                &source,
-                Limits {
-                    work_cells: 2,
-                    ..limits()
-                }
-            )
-            .unwrap_err(),
+        *attempt.result.unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::WorkCells,
             limit: 2,
             required: Some(3)
         }
+    );
+    assert_eq!(
+        &events[events.len() - 3..],
+        [
+            ExecutionEvent::Refusal {
+                phase: ExecutionPhase::Derivation,
+                refusal: Refusal {
+                    resource: Resource::WorkCells,
+                    limit: 2,
+                    required: Some(3)
+                }
+            },
+            ExecutionEvent::Exit {
+                phase: ExecutionPhase::Derivation,
+                outcome: Outcome::Failed
+            },
+            ExecutionEvent::Phase(ExecutionPhase::Finished),
+        ]
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event, ExecutionEvent::Refusal { .. }))
+            .count(),
+        1
     );
     assert!(source.reads.borrow().is_empty());
     assert_eq!(
@@ -5634,6 +5664,63 @@ mod dataset_functions {
         assert_eq!(measured, plain);
         assert_eq!(calls.calls, plain_calls.calls);
         assert_eq!(*source.reads.borrow(), reads);
+    }
+
+    #[test]
+    fn typed_execution_exits_close_actual_success_and_each_failed_stage_before_finished() {
+        use yamaa_engine::application_observer::Outcome;
+        use yamaa_engine::dataset::{ExecutionEvent, ExecutionPhase::*};
+        for failure in [
+            None,
+            Some(Admission),
+            Some(Derivation),
+            Some(OutputKeys),
+            Some(Verification),
+        ] {
+            let mut source = source(vec![vec![Value::Int(1), Value::Int(10), Value::Int(20)]]);
+            let plan = record_plan(
+                &source,
+                schema(&[("ID", ColumnType::Int)]),
+                vec![assign(0, Expression::Source(0))],
+                vec![verification(Check::RowCount {
+                    min: None,
+                    max: Some(if failure == Some(Verification) { 0 } else { 1 }),
+                })],
+            );
+            match failure {
+                Some(Admission) => source.schema = schema(&[("OTHER", ColumnType::Int)]),
+                Some(Derivation) => source.fail = Some((0, 0)),
+                Some(OutputKeys) => source.rows[0][0] = Value::Missing,
+                _ => (),
+            }
+            let mut events = Vec::new();
+            let attempt = plan.execute_with_execution_observer(
+                &source,
+                &[],
+                &mut callbacks(),
+                limits(),
+                &mut |event| events.push(event),
+            );
+            assert_eq!(attempt.result.is_ok(), failure.is_none());
+            let mut expected = Vec::new();
+            for phase in [Admission, Derivation, OutputKeys, Verification] {
+                expected.push(ExecutionEvent::Phase(phase));
+                expected.push(ExecutionEvent::Exit {
+                    phase,
+                    outcome: if failure == Some(phase) {
+                        Outcome::Failed
+                    } else {
+                        Outcome::Succeeded
+                    },
+                });
+                if failure == Some(phase) {
+                    break;
+                }
+            }
+            expected.push(ExecutionEvent::Phase(Finished));
+            assert_eq!(events, expected);
+            assert_eq!(source.reads.borrow().is_empty(), failure == Some(Admission));
+        }
     }
 
     /// Every returned failure closes the reached phase without inventing later work.

@@ -4,6 +4,7 @@ use crate::{
     file_producer_build::{NodeReport, Provenance},
     project_report,
     report_projection::Budget,
+    report_storage::StoredReport,
     specification_report::{self as report, Error, Identity},
 };
 use serde_json::{json, Value};
@@ -135,7 +136,7 @@ fn successful_observations<C, D, T: TableAccess>(
     attempt: &CapturedAttempt<C, D, T>,
     id: &Identity<'_>,
     budget: &mut Budget,
-) -> Result<Value, Error> {
+) -> Result<StoredReport, Error> {
     let entered = attempt
         .result
         .as_ref()
@@ -231,8 +232,9 @@ pub struct NativeReport<'a, 'i> {
     id: Identity<'i>,
     selected: Option<usize>,
     maximum: usize,
+    encoded_left: Option<usize>,
     budget: Option<Budget>,
-    value: Option<Value>,
+    value: Option<StoredReport>,
     logs: Vec<NodeLogs>,
 }
 impl<'a, 'i> NativeReport<'a, 'i> {
@@ -242,6 +244,7 @@ impl<'a, 'i> NativeReport<'a, 'i> {
             id,
             selected: None,
             maximum: 0,
+            encoded_left: None,
             budget: None,
             value: None,
             logs: Vec::new(),
@@ -253,17 +256,38 @@ impl<'a, 'i> NativeReport<'a, 'i> {
             .nth(self.selected.ok_or(Error::InvalidObservation)?)
             .ok_or(Error::InvalidObservation)
     }
-    fn finish(&self, value: Value) -> Result<Value, Error> {
-        if value.to_string().len() > self.maximum {
-            return Err(Error::OutputLimit);
+    fn admit_budget(&mut self, maximum: usize) {
+        if self.encoded_left.is_none() {
+            let maximum = maximum.min(yamaa_engine::capacity::REPORT_ENCODED_BYTES);
+            self.encoded_left = Some(maximum);
+            self.budget = Some(Budget::new(maximum));
         }
-        report::bounded(value)
+    }
+    fn finish(&mut self, value: StoredReport) -> Result<StoredReport, Error> {
+        let length = crate::report_projection::encoded_length_within_limit(
+            &value,
+            self.maximum
+                .min(self.encoded_left.ok_or(Error::InvalidObservation)?),
+        )?;
+        let value = report::bounded(value)?;
+        *self
+            .encoded_left
+            .as_mut()
+            .ok_or(Error::InvalidObservation)? -= length;
+        Ok(value)
     }
     pub(crate) fn take_logs(&mut self) -> Vec<NodeLogs> {
         std::mem::take(&mut self.logs)
     }
 }
 impl ReportPort for NativeReport<'_, '_> {
+    fn report_allowance(&mut self, total: usize, _nodes: usize) -> usize {
+        self.admit_budget(total);
+        total.min(
+            self.encoded_left
+                .expect("admitted cumulative report budget"),
+        )
+    }
     fn prepare_diagnostics<C, D, T: TableAccess>(
         &mut self,
         node: &Node,
@@ -271,6 +295,7 @@ impl ReportPort for NativeReport<'_, '_> {
         output_bytes: usize,
         report_bytes: usize,
     ) -> Result<usize, Error> {
+        self.admit_budget(report_bytes);
         use crate::verification_logs::{self as logs, PreparationLimits};
         let count = self.provenance.metadata().nodes().len();
         let index = self
@@ -289,7 +314,7 @@ impl ReportPort for NativeReport<'_, '_> {
         if !declarations.declared() {
             return Ok(0);
         }
-        let mut budget = Budget::new(report_bytes);
+        let budget = self.budget.as_mut().ok_or(Error::InvalidObservation)?;
         budget.entries(count)?;
         budget.work(count.checked_mul(3).ok_or(Error::OutputLimit)?)?;
         if self.logs.len() >= count || self.logs.iter().any(|held| held.node == index) {
@@ -297,7 +322,7 @@ impl ReportPort for NativeReport<'_, '_> {
         }
         let slots = usize::from(declarations.verification().is_some())
             + usize::from(declarations.warning().is_some());
-        let value = log_observations(&view, attempt, &identity(&view, &self.id), &mut budget)?;
+        let value = log_observations(&view, attempt, &identity(&view, &self.id), budget)?;
         let success = attempt
             .result
             .as_ref()
@@ -333,10 +358,10 @@ impl ReportPort for NativeReport<'_, '_> {
         maximum: usize,
     ) -> Result<(), Error> {
         self.selected = None;
-        self.budget = None;
         self.value = None;
         self.maximum = maximum;
-        let mut budget = Budget::new(maximum);
+        self.admit_budget(maximum);
+        let budget = self.budget.as_mut().ok_or(Error::InvalidObservation)?;
         let count = self.provenance.metadata().nodes().len();
         budget.entries(count)?;
         budget.work(count.checked_mul(3).ok_or(Error::OutputLimit)?)?;
@@ -352,18 +377,16 @@ impl ReportPort for NativeReport<'_, '_> {
             .report_views()
             .nth(index)
             .ok_or(Error::InvalidObservation)?;
-        let value =
-            successful_observations(&view, attempt, &identity(&view, &self.id), &mut budget)?;
+        let value = successful_observations(&view, attempt, &identity(&view, &self.id), budget)?;
         self.selected = Some(index);
-        self.budget = Some(budget);
         self.value = Some(value);
         Ok(())
     }
 }
 impl OutputReport for NativeReport<'_, '_> {
     type Error = Error;
-    type Report = Value;
-    fn failure(&mut self) -> Result<Value, Error> {
+    type Report = StoredReport;
+    fn failure(&mut self) -> Result<StoredReport, Error> {
         let value = self.value.take().ok_or(Error::InvalidObservation)?;
         self.finish(value)
     }
@@ -374,7 +397,7 @@ impl OutputReport for NativeReport<'_, '_> {
     fn rejected(
         &mut self,
         findings: &[yamaa_core::specification::OutputFinding],
-    ) -> Result<Value, Error> {
+    ) -> Result<StoredReport, Error> {
         let budget = self.budget.as_mut().ok_or(Error::InvalidObservation)?;
         budget.entries(findings.len())?;
         for finding in findings {
@@ -403,7 +426,7 @@ impl OutputReport for NativeReport<'_, '_> {
         execution: &Execution,
         projection: &[usize],
         bytes: &[u8],
-    ) -> Result<Value, Error> {
+    ) -> Result<StoredReport, Error> {
         let view = self.view()?;
         let value = self.value.take().ok_or(Error::InvalidObservation)?;
         let budget = self.budget.as_mut().ok_or(Error::InvalidObservation)?;
@@ -420,7 +443,7 @@ impl OutputReport for NativeReport<'_, '_> {
     }
 }
 
-pub type NativeAttempt<E> = crate::file_producer_build::Attempt<E, Value, Error>;
+pub type NativeAttempt<E> = crate::file_producer_build::Attempt<E, StoredReport, Error>;
 
 /// Projection refusal borrows the exact complete native attempt. The bounded
 /// actual prefix remains available beside opaque host failures and interrupts.
@@ -429,7 +452,7 @@ pub enum ProjectionError<'a, E> {
     Report(Error),
     Original {
         attempt: &'a NativeAttempt<E>,
-        observations: Value,
+        observations: StoredReport,
     },
 }
 impl<E> std::fmt::Debug for ProjectionError<'_, E> {
@@ -682,13 +705,13 @@ fn decoded_finding(
 }
 fn failed_observations<'a, E>(
     view: &NodeReport<'_>,
-    entered: &'a crate::file_producer_build::GraphAttempt<E, Value, Error>,
+    entered: &'a crate::file_producer_build::GraphAttempt<E, StoredReport, Error>,
     position: usize,
     id: &Identity<'_>,
     budget: &mut Budget,
     facts: &crate::producer_diagnostics::Facts<'a, '_, E>,
     entry: &str,
-) -> Result<(Value, bool), Error> {
+) -> Result<(StoredReport, bool), Error> {
     use yamaa_engine::dataset::ExecutionError;
     use yamaa_engine::specification_run::{PortError, RunError};
     let node = &entered.nodes[position];
@@ -882,7 +905,7 @@ fn failed_observations<'a, E>(
         }
         Err(_) => portable = false,
         Ok(Some(output)) if output.artifact().is_none() => {
-            budget.json(output.prepared_report())?;
+            budget.shared_report(output.prepared_report())?;
             diagnostics.extend(
                 output.prepared_report()["diagnostics"]
                     .as_array()
@@ -904,7 +927,7 @@ pub fn attempt_report<'a, E>(
     attempt: &'a NativeAttempt<E>,
     id: Identity<'_>,
     maximum: usize,
-) -> Result<Value, ProjectionError<'a, E>> {
+) -> Result<StoredReport, ProjectionError<'a, E>> {
     attempt_report_classified(attempt, id, maximum, &[])
 }
 
@@ -915,7 +938,7 @@ pub fn attempt_report_classified<'a, E>(
     id: Identity<'_>,
     maximum: usize,
     facts: &[project_report::Classified<'a, E>],
-) -> Result<Value, ProjectionError<'a, E>> {
+) -> Result<StoredReport, ProjectionError<'a, E>> {
     let mut budget = Budget::new(maximum);
     let facts = crate::producer_diagnostics::Facts::admit(attempt, facts, &mut budget)?;
     let metadata = attempt.provenance.metadata();
@@ -976,7 +999,9 @@ pub fn attempt_report_classified<'a, E>(
         budget.text(&lock.source.identity)?;
     }
     let environment = json!({"source":environment.root_optional().map(|root| &root.source().identity),"lock_source":environment.lock().map(|lock| &lock.source.identity)});
-    let mut result = json!({"report_version":"0.3.0-draft","runtime":id.runtime,"backend":"rust","runtime_version":id.runtime_version,"engine_version":id.engine_version,"example":id.example,"entry":attempt.provenance.entry(),"outcome":if attempt.accepted() {"success"} else {"failure"},"activation":activation,"environment":environment,"nodes":[],"artifacts":[],"diagnostics":[],"unsupported":[],"handler_counts":[],"tables":[],"verifications":[],"callbacks":[],"source_reads":[],"error":null});
+    let mut result = StoredReport::empty(
+        json!({"report_version":"0.3.0-draft","runtime":id.runtime,"backend":"rust","runtime_version":id.runtime_version,"engine_version":id.engine_version,"example":id.example,"entry":attempt.provenance.entry(),"outcome":if attempt.accepted() {"success"} else {"failure"},"activation":activation,"environment":environment,"nodes":[],"artifacts":[],"diagnostics":[],"unsupported":[],"handler_counts":[],"tables":[],"verifications":[],"callbacks":[],"source_reads":[],"error":null}),
+    );
     let mut portable = attempt.boundary.is_ok()
         && attempt.resources.is_ok()
         && activation_findings.is_some()
@@ -1034,7 +1059,7 @@ pub fn attempt_report_classified<'a, E>(
             {
                 return Err(Error::InvalidObservation.into());
             }
-            budget.json(output.prepared_report())?;
+            budget.shared_report(output.prepared_report())?;
             output.prepared_report().clone()
         } else {
             if position + 1 != entered.len() {
@@ -1064,7 +1089,6 @@ pub fn attempt_report_classified<'a, E>(
             "diagnostics",
             "unsupported",
             "handler_counts",
-            "tables",
             "verifications",
             "callbacks",
             "source_reads",
@@ -1081,6 +1105,8 @@ pub fn attempt_report_classified<'a, E>(
                 .ok_or(Error::InvalidObservation)?
                 .append(values);
         }
+        budget.entries(value.row_blocks())?;
+        result.append_tables(&mut value)?;
         if !value["error"].is_null() {
             result["error"] = value["error"].take();
         }
@@ -1088,9 +1114,7 @@ pub fn attempt_report_classified<'a, E>(
     if attempt.accepted() && entered.len() != metadata.order().len() {
         return Err(Error::InvalidObservation.into());
     }
-    if result.to_string().len() > maximum {
-        return Err(Error::OutputLimit.into());
-    }
+    crate::report_projection::encoded_within_limit(&result, maximum)?;
     let result = report::bounded(result)?;
     if portable {
         Ok(result)

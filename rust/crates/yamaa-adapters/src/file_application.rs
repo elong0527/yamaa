@@ -1,4 +1,5 @@
 //! One native lifecycle behind both hosts' file entry points.
+use crate::report_storage::StoredReport;
 use crate::{
     file_preparation::{self, FileSpecification},
     issue_rows::Issue,
@@ -130,7 +131,7 @@ pub struct Domain {
     output: Option<(crate::public_table::PublicTable, Vec<u8>)>,
     targets: Option<Vec<crate::file_publication::AnchoredTarget>>,
     publication_issues: Failure,
-    published: Option<Value>,
+    published: Option<StoredReport>,
     publication_attempt: PublicationAttempt,
 }
 #[derive(Default)]
@@ -255,17 +256,25 @@ impl Domain {
     /// Retain complete run observations without recapture. Artifacts describe
     /// only a successful latest save; a refused save returns build observations.
     pub fn observations(&self) -> Value {
-        self.published
-            .clone()
-            .unwrap_or_else(|| self.result.observations())
+        self.published.as_ref().map_or_else(
+            || self.result.observations(),
+            |report| report.observations_value(false),
+        )
+    }
+    pub fn observations_json(&self) -> String {
+        self.published.as_ref().map_or_else(
+            || self.result.observations_json(),
+            |report| report.observations_json(false),
+        )
     }
     /// Preflight the complete target set before writing held log/primary bytes.
     /// Failed builds may publish their diagnostic log on explicit Save and still
     /// raise the original failed-build result. Build itself never writes.
     pub fn save(&mut self) -> Result<bool, FailedBuild> {
-        self.save_with(16_777_216, |publisher, path, bytes| {
-            publisher.publish(path, bytes)
-        })
+        self.save_with(
+            yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+            |publisher, path, bytes| publisher.publish(path, bytes),
+        )
     }
     fn save_with(
         &mut self,
@@ -286,18 +295,27 @@ impl Domain {
             return if failed { Err(FailedBuild) } else { Ok(false) };
         };
         let items = self.result.publication_items();
-        // Every at-most-three prefix report is admitted and owned before any
-        // target is published. Later successful calls only move held evidence.
+        // Own one complete report and all at-most-three artifact entries before
+        // publication. Every prefix fits the admitted complete encoded report;
+        // its artifact slots are reserved before the first publisher. Later
+        // success only moves an already-owned entry into an admitted slot.
         let mut budget = crate::report_projection::Budget::new(report_limit);
-        let reports = (0..=items.len())
-            .map(|completed| {
-                self.result
-                    .publication_observations(completed, &mut budget)
-                    .map(Some)
-            })
-            .collect::<Result<Vec<_>, _>>();
-        let mut reports = match reports {
-            Ok(reports) => reports,
+        let report = (|| {
+            let mut report = self
+                .result
+                .publication_observations(items.len(), &mut budget)?;
+            let Value::Array(artifacts) = report["artifacts"].take() else {
+                return Err(specification_report::Error::InvalidObservation);
+            };
+            if artifacts.len() != items.len() {
+                return Err(specification_report::Error::InvalidObservation);
+            }
+            budget.entries(artifacts.len())?;
+            report["artifacts"] = Value::Array(Vec::with_capacity(artifacts.len()));
+            Ok((report, artifacts.into_iter()))
+        })();
+        let (report, mut artifacts) = match report {
+            Ok(report) => report,
             Err(_) => {
                 self.publication_issues = rejected("output", "publication_report_limit");
                 return if failed { Err(FailedBuild) } else { Ok(false) };
@@ -345,13 +363,19 @@ impl Domain {
                 }
             }
         }
-        self.published = reports[0].take();
+        self.published = Some(report);
         for (index, (publisher, (path, bytes, _))) in publishers.iter_mut().zip(items).enumerate() {
             self.publication_attempt.entered = index + 1;
             match catch_unwind(AssertUnwindSafe(|| publish(publisher, path, bytes))) {
                 Ok(Ok(())) => {
                     self.publication_attempt.completed = index + 1;
-                    self.published = reports[index + 1].take();
+                    self.published
+                        .as_mut()
+                        .expect("admitted report")
+                        .get_mut("artifacts")
+                        .and_then(Value::as_array_mut)
+                        .expect("admitted artifact slots")
+                        .push(artifacts.next().expect("admitted artifact entry"));
                 }
                 Ok(Err(error)) => {
                     self.publication_issues = publication_at(
@@ -402,6 +426,27 @@ pub trait RuntimePort {
         &mut self,
         prepared: Box<crate::file_graph::FileGraph>,
     ) -> Result<Self::Result, Self::Error>;
+    fn plain_with_observer(
+        &mut self,
+        prepared: FileSpecification,
+        _scope: yamaa_engine::application_observer::Scope<'_>,
+    ) -> Result<Self::Result, Self::Error> {
+        self.plain(prepared)
+    }
+    fn project_with_observer(
+        &mut self,
+        prepared: Box<crate::file_project::FileProject>,
+        _scope: yamaa_engine::application_observer::Scope<'_>,
+    ) -> Result<Self::Result, Self::Error> {
+        self.project(prepared)
+    }
+    fn producer_with_observer(
+        &mut self,
+        prepared: Box<crate::file_graph::FileGraph>,
+        _scope: yamaa_engine::application_observer::Scope<'_>,
+    ) -> Result<Self::Result, Self::Error> {
+        self.producer(prepared)
+    }
 }
 pub enum ApplicationError<E> {
     Preparation(crate::file_workflow::SelectionError),
@@ -452,35 +497,86 @@ impl<R: RuntimePort> yamaa_engine::build::Ports for Application<R> {
             .producer(prepared)
             .map_err(ApplicationError::Runtime)
     }
+    fn build_plain_with_observer(
+        &mut self,
+        prepared: FileSpecification,
+        scope: yamaa_engine::application_observer::Scope<'_>,
+    ) -> Result<R::Result, Self::Failure> {
+        self.runtime
+            .plain_with_observer(prepared, scope)
+            .map_err(ApplicationError::Runtime)
+    }
+    fn build_project_with_observer(
+        &mut self,
+        prepared: Self::Project,
+        scope: yamaa_engine::application_observer::Scope<'_>,
+    ) -> Result<R::Result, Self::Failure> {
+        self.runtime
+            .project_with_observer(prepared, scope)
+            .map_err(ApplicationError::Runtime)
+    }
+    fn build_producer_with_observer(
+        &mut self,
+        prepared: Self::Producer,
+        scope: yamaa_engine::application_observer::Scope<'_>,
+    ) -> Result<R::Result, Self::Failure> {
+        self.runtime
+            .producer_with_observer(prepared, scope)
+            .map_err(ApplicationError::Runtime)
+    }
 }
 impl RuntimePort for Native<'_> {
     type Result = Domain;
     type Error = Failure;
-    fn plain(&mut self, mut prepared: FileSpecification) -> Result<Domain, Failure> {
-        let attempt = prepared.build();
+    fn plain(&mut self, prepared: FileSpecification) -> Result<Domain, Failure> {
+        self.plain_with_observer(
+            prepared,
+            yamaa_engine::application_observer::Scope::new(
+                &yamaa_engine::application_observer::Noop,
+            ),
+        )
+    }
+    fn plain_with_observer(
+        &mut self,
+        mut prepared: FileSpecification,
+        scope: yamaa_engine::application_observer::Scope<'_>,
+    ) -> Result<Domain, Failure> {
+        let attempt = prepared.build_with_observer(scope);
         if let Some(error) = file_preparation::opaque_resource_failure(&attempt) {
             return Err(resource_failure("capture", error));
         }
-        let result = specification_report::build_result(
-            prepared.run(),
-            &attempt,
-            Identity {
-                runtime: self.identity.runtime,
-                runtime_version: self.identity.runtime_version,
-                engine_version: self.identity.engine_version,
-                example: self.identity.example,
-                specification: self.identity.specification,
-                base_directory: self.identity.base_directory,
-            },
-        )
-        .map_err(|_| rejected("build", "result_projection"))?;
-        Domain::from_build(result, |field| {
-            if field == "path" {
-                prepared.publication_target()
+        scope.phase(yamaa_engine::application_observer::Phase::Output);
+        let converted = (|| {
+            let result = specification_report::build_result(
+                prepared.run(),
+                &attempt,
+                Identity {
+                    runtime: self.identity.runtime,
+                    runtime_version: self.identity.runtime_version,
+                    engine_version: self.identity.engine_version,
+                    example: self.identity.example,
+                    specification: self.identity.specification,
+                    base_directory: self.identity.base_directory,
+                },
+            )
+            .map_err(|_| rejected("build", "result_projection"))?;
+            Domain::from_build(result, |field| {
+                if field == "path" {
+                    prepared.publication_target()
+                } else {
+                    prepared.publication_field_target(field)
+                }
+            })
+        })();
+        scope.exit(
+            yamaa_engine::application_observer::Phase::Output,
+            if converted.is_ok() {
+                yamaa_engine::application_observer::Outcome::Succeeded
             } else {
-                prepared.publication_field_target(field)
-            }
-        })
+                yamaa_engine::application_observer::Outcome::Failed
+            },
+        );
+        converted
     }
     fn project(&mut self, _: Box<crate::file_project::FileProject>) -> Result<Domain, Failure> {
         Err(unsupported("environment", Some("environment")))
@@ -493,6 +589,13 @@ impl RuntimePort for Native<'_> {
 /// Convert an already checked plain capability without recapturing metadata.
 pub fn plain(prepared: FileSpecification, identity: Identity<'_>) -> Result<Domain, Failure> {
     Native { identity }.plain(prepared)
+}
+pub fn plain_with_observer(
+    prepared: FileSpecification,
+    identity: Identity<'_>,
+    scope: yamaa_engine::application_observer::Scope<'_>,
+) -> Result<Domain, Failure> {
+    Native { identity }.plain_with_observer(prepared, scope)
 }
 fn native(identity: Identity<'_>) -> Application<Native<'_>> {
     Application {
@@ -543,6 +646,16 @@ mod tests {
         }
     }
     fn built() -> (Study, Domain) {
+        built_with(false, false)
+    }
+    fn built_with(fatal: bool, nested: bool) -> (Study, Domain) {
+        built_observed(fatal, nested, None)
+    }
+    fn built_observed(
+        fatal: bool,
+        nested: bool,
+        measurements: Option<&crate::application_measurements::Measurements>,
+    ) -> (Study, Domain) {
         let root = std::env::temp_dir().join(format!(
             "yamaa-save-log-attempt-{}-{}",
             std::process::id(),
@@ -553,23 +666,60 @@ mod tests {
         let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../../benchmarks/schema-verification-log");
         fs::copy(fixture.join("input/dm.csv"), root.join("input/dm.csv")).unwrap();
-        fs::copy(fixture.join("spec.yaml"), root.join("spec.yaml")).unwrap();
+        let mut specification = fs::read_to_string(fixture.join("spec.yaml")).unwrap();
+        if fatal {
+            specification = specification.replace("severity: warning", "severity: error");
+        }
+        if nested {
+            fs::create_dir(root.join("nested")).unwrap();
+            for name in ["adsl-checks.csv", "adsl-warnings.csv", "adsl.csv"] {
+                specification = specification.replace(name, &format!("nested/{name}"));
+            }
+        }
+        fs::write(root.join("spec.yaml"), specification).unwrap();
         let entry = root.join("spec.yaml").to_str().unwrap().to_owned();
-        let result = domain(
-            Request {
-                specification: &entry,
-                environment: None,
-            },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "logs",
-                specification: &entry,
-                base_directory: ".",
-            },
-        )
-        .unwrap();
+        let identity = || Identity {
+            runtime: "test",
+            runtime_version: "test",
+            engine_version: yamaa_core::VERSION,
+            example: "logs",
+            specification: &entry,
+            base_directory: ".",
+        };
+        let request = || Request {
+            specification: &entry,
+            environment: None,
+        };
+        let ordinary = domain(request(), identity()).unwrap();
+        let result = if let Some(measurements) = measurements {
+            let mut application = native(identity());
+            let observed = domain_entry::domain_with_observer(
+                request(),
+                &mut application,
+                yamaa_engine::application_observer::Scope::new(measurements),
+            )
+            .unwrap_or_else(|_| panic!("observed fixture failed"));
+            measurements.complete(observed.output().is_some());
+            assert_eq!(observed.observations_json(), ordinary.observations_json());
+            assert_eq!(observed.output(), ordinary.output());
+            assert_eq!(observed.verification_log(), ordinary.verification_log());
+            assert_eq!(observed.warning_log(), ordinary.warning_log());
+            assert_eq!(
+                observed
+                    .issues()
+                    .iter()
+                    .map(|issue| (&issue.condition, &issue.context))
+                    .collect::<Vec<_>>(),
+                ordinary
+                    .issues()
+                    .iter()
+                    .map(|issue| (&issue.condition, &issue.context))
+                    .collect::<Vec<_>>()
+            );
+            observed
+        } else {
+            ordinary
+        };
         fs::remove_file(root.join("input/dm.csv")).unwrap();
         fs::remove_file(root.join("spec.yaml")).unwrap();
         (Study(root), result)
@@ -583,9 +733,98 @@ mod tests {
     }
     impl std::error::Error for Marker {}
     #[test]
+    fn actual_observed_owner_preserves_report_log_bytes_original_save_failure_and_retry() {
+        use crate::application_measurements::Measurements;
+        let measurements = Measurements::new();
+        let (study, mut result) = built_observed(false, false, Some(&measurements));
+        let original = result.observations_json();
+        let evidence = measurements.evidence();
+        assert_eq!(evidence["admitted"], true);
+        assert_eq!(evidence["build_accepted"], true);
+        for phase in [
+            "preparation",
+            "build_service",
+            "input",
+            "execution_admission",
+            "execution_derivation",
+            "output_keys",
+            "verification",
+            "output_preparation",
+        ] {
+            assert!(
+                evidence["stages"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|stage| stage["phase"] == phase && stage["outcome"] == "succeeded"),
+                "missing actual stage {phase}: {evidence}"
+            );
+        }
+        assert_eq!(
+            serde_json::from_str::<Value>(&measurements.envelope(Some(original.clone()))).unwrap()
+                ["report"],
+            result.observations()
+        );
+        let marker = Arc::new(());
+        measurements.save_entered();
+        assert!(!result
+            .save_with(16_777_216, |_, _, _| Err(
+                crate::file_publication::Error::Io(std::io::Error::other(Marker(Arc::clone(
+                    &marker
+                ))))
+            ))
+            .unwrap());
+        measurements.save_completed("refused");
+        let Some(crate::file_publication::Error::Io(error)) = &result.publication_attempt.failure
+        else {
+            panic!("original error was lost")
+        };
+        assert!(Arc::ptr_eq(
+            &error.get_ref().unwrap().downcast_ref::<Marker>().unwrap().0,
+            &marker
+        ));
+        assert_eq!(result.observations_json(), original);
+        for _ in 0..2 {
+            measurements.save_entered();
+            assert!(result.save().unwrap());
+            measurements.save_completed("succeeded");
+        }
+        let after = measurements.evidence();
+        assert_eq!(after["stages"], evidence["stages"]);
+        assert_eq!(after["function_calls"], evidence["function_calls"]);
+        assert_eq!(after["admitted"], true);
+        assert_eq!(after["save_attempts"], 3);
+        assert_eq!(after["saves"][0]["outcome"], "refused");
+        assert_eq!(after["saves"][2]["outcome"], "succeeded");
+        assert_eq!(
+            result.observations()["artifacts"].as_array().unwrap().len(),
+            3
+        );
+        assert!(study.0.join("adsl.csv").exists());
+        let failed = Measurements::new();
+        let (_, mut result) = built_observed(true, false, Some(&failed));
+        assert_eq!(failed.evidence()["admitted"], true);
+        assert_eq!(failed.evidence()["build_accepted"], false);
+        failed.save_entered();
+        assert!(result.save().is_err());
+        failed.save_completed("failed");
+        assert_eq!(failed.evidence()["saves"][0]["outcome"], "failed");
+    }
+    #[test]
     fn actual_late_failures_retain_original_error_entered_prefix_and_retry() {
         for fail_at in 0..3 {
             let (study, mut result) = built();
+            let mut expected = result.observations();
+            assert_eq!(result.observations_json(), expected.to_string());
+            expected["artifacts"] = Value::Array(
+                result
+                    .result
+                    .publication_items()
+                    .into_iter()
+                    .take(fail_at)
+                    .map(|(_, _, value)| value.clone())
+                    .collect(),
+            );
             let marker = Arc::new(());
             let mut entered = 0;
             assert!(!result
@@ -616,6 +855,8 @@ mod tests {
                 result.observations()["artifacts"].as_array().unwrap().len(),
                 fail_at
             );
+            assert_eq!(result.observations(), expected);
+            assert_eq!(result.observations_json(), expected.to_string());
             for (index, name) in ["adsl-checks.csv", "adsl-warnings.csv", "adsl.csv"]
                 .iter()
                 .enumerate()
@@ -640,7 +881,85 @@ mod tests {
                 result.observations()["artifacts"].as_array().unwrap().len(),
                 3
             );
+            assert_eq!(
+                result.observations_json(),
+                result.observations().to_string()
+            );
         }
+    }
+    #[test]
+    fn failed_build_ancillary_log_keeps_original_failure_and_fresh_retry_prefix() {
+        let (study, mut result) = built_with(true, false);
+        assert!(result.output().is_none());
+        assert!(result.verification_log().is_some());
+        let original = result.observations();
+        let marker = Arc::new(());
+        assert!(result
+            .save_with(16_777_216, |_, _, _| {
+                Err(crate::file_publication::Error::Io(std::io::Error::other(
+                    Marker(Arc::clone(&marker)),
+                )))
+            })
+            .is_err());
+        assert_eq!(result.publication_attempt.entered, 1);
+        assert_eq!(result.publication_attempt.completed, 0);
+        let Some(crate::file_publication::Error::Io(error)) = &result.publication_attempt.failure
+        else {
+            panic!("original ancillary error lost")
+        };
+        assert!(Arc::ptr_eq(
+            &error.get_ref().unwrap().downcast_ref::<Marker>().unwrap().0,
+            &marker
+        ));
+        assert_eq!(result.observations(), original);
+        assert!(result.save().is_err());
+        assert_eq!(result.publication_attempt.entered, 1);
+        assert_eq!(result.publication_attempt.completed, 1);
+        assert!(result.publication_attempt.failure.is_none());
+        assert!(study.0.join("adsl-checks.csv").exists());
+        assert!(!study.0.join("adsl-warnings.csv").exists());
+        assert!(!study.0.join("adsl.csv").exists());
+        let mut expected = original;
+        expected["artifacts"] = Value::Array(
+            result
+                .result
+                .publication_items()
+                .into_iter()
+                .map(|(_, _, value)| value.clone())
+                .collect(),
+        );
+        assert_eq!(result.observations(), expected);
+        assert_eq!(result.observations_json(), expected.to_string());
+    }
+    #[cfg(unix)]
+    #[test]
+    fn linked_parent_refuses_before_publish_and_restored_parent_retries_from_empty_prefix() {
+        let (study, mut result) = built_with(false, true);
+        let original = result.observations();
+        fs::remove_dir(study.0.join("nested")).unwrap();
+        fs::create_dir(study.0.join("foreign")).unwrap();
+        std::os::unix::fs::symlink("foreign", study.0.join("nested")).unwrap();
+        assert!(!result
+            .save_with(16_777_216, |_, _, _| panic!(
+                "linked parent entered publisher"
+            ))
+            .unwrap());
+        assert_eq!(result.publication_attempt.entered, 0);
+        assert_eq!(result.publication_attempt.completed, 0);
+        assert!(matches!(
+            result.publication_attempt.failure,
+            Some(crate::file_publication::Error::InvalidTarget)
+        ));
+        assert_eq!(result.observations(), original);
+        assert_eq!(fs::read_dir(study.0.join("foreign")).unwrap().count(), 0);
+        fs::remove_file(study.0.join("nested")).unwrap();
+        fs::create_dir(study.0.join("nested")).unwrap();
+        assert!(result.save().unwrap());
+        assert_eq!(result.publication_attempt.completed, 3);
+        assert_eq!(
+            result.observations()["artifacts"].as_array().unwrap().len(),
+            3
+        );
     }
     #[test]
     fn native_unwind_keeps_the_failing_boundary_and_original_payload() {

@@ -147,6 +147,12 @@ impl FileSpecification {
     pub fn build(&mut self) -> CapturedAttempt<ResourceError> {
         self.run.execute_with_port(&mut self.resources)
     }
+    pub fn build_with_observer(
+        &mut self,
+        scope: yamaa_engine::application_observer::Scope<'_>,
+    ) -> CapturedAttempt<ResourceError> {
+        self.run.execute_with_observer(&mut self.resources, scope)
+    }
 }
 
 /// Retain one native capture/inheritance path for ordinary and project models.
