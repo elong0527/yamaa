@@ -230,6 +230,14 @@ class ProducerOwnerReview(unittest.TestCase):
                 self.fixture.directory / "changed-runtime",
             )
 
+    def test_audit_requires_approved_r_runtime_version(self):
+        audit, _ = self.prepared_audit()
+        record = cohort.read(self.fixture.output / "r-installed-evidence.json")
+        audit.evidence(record, "r", "ubuntu-24.04", "4.6.1", "source")
+        record["installation"]["runtime_version"] = "4.6.0"
+        with self.assertRaisesRegex(ValueError, "runtime|version"):
+            audit.evidence(record, "r", "ubuntu-24.04", "4.6.1", "source")
+
 
 if __name__ == "__main__":
     unittest.main()
