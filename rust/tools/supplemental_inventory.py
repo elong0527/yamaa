@@ -150,7 +150,7 @@ print(json.dumps({
     code = """
 suppressPackageStartupMessages(library(yamaa))
 writeLines(c(as.character(getRversion()), as.character(packageVersion("yamaa")),
-             .core_version(), normalizePath(find.package("yamaa"))))
+             yamaa:::.core_version(), normalizePath(find.package("yamaa"))))
 """
     # Windows Rscript can fail while forwarding multiline -e expressions.
     # A real script uses the same public calls as the installed R suites.
