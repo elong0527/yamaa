@@ -8,20 +8,8 @@ import unittest
 from pathlib import Path
 
 from yamaa import _native as yamaa_native
-from yamaa.adapters._native_schema_wire import encode_tree
 
 ROOT = Path(__file__).with_name("specification-original")
-SCHEMA = json.dumps({
-    "protocol": "schema/1",
-    "schema": {"entry": 0, "root_class": "root_class", "modules": [{
-        "name": "schema.yaml", "document": encode_tree({
-            "version": "1.0", "root_class": [
-                {"schema_version": {"type": "str"}},
-                {"parents": {"type": ["str", "list[str]"]}},
-            ],
-        }),
-    }]},
-})
 
 
 def modules():
@@ -87,25 +75,16 @@ class Boundary(unittest.TestCase):
             self.assertEqual(path, "adlb.csv")
             self.assertEqual(content, (self.case / "expected/adlb.csv").read_bytes())
 
-        metadata = (platform.python_version(), yamaa_native.engine_info()["core_version"], "schema-inheritance", "spec_study.yaml", ".")
+        metadata = (platform.python_version(), yamaa_native._CORE_VERSION, "schema-inheritance", "spec_study.yaml", ".")
         expected = json.loads((ROOT / "expected/schema-inheritance.json").read_text())
         expected.update(runtime="python", runtime_version=metadata[0], engine_version=metadata[1])
         self.assertEqual(json.loads(specification.report(capture, publish, metadata)), expected)
         self.assertEqual(publications, ["adlb.csv"])
         self.assertEqual(reads, [("LB", "input/lb.csv")])
 
-    def test_retired_callbacks_are_absent_and_private_schema_query_is_unchanged(self):
-        self.assertFalse(hasattr(yamaa_native, "traverse_inheritance"))
-        snapshot, compiled = yamaa_native._compile_schema(SCHEMA)
-        self.assertEqual(json.loads(compiled)["outcome"]["status"], "compiled")
-        self.assertFalse(hasattr(snapshot, "traverse_inheritance"))
-        queries = [{"operation": "validate_document", "document": encode_tree({"schema_version": "1.0", "parents": []})}]
-        query = json.dumps({"protocol": "schema/1", "queries": queries})
-        expected = {"protocol": "schema/1", "outcome": {"status": "analyzed", "results": [{"status": "valid", "diagnostics": []}]}}
-        self.assertEqual(json.loads(snapshot.analyze(query)), expected)
-        stateless = json.loads(yamaa_native.interpret_schema(json.dumps({**json.loads(SCHEMA), "queries": queries})))
-        self.assertEqual(stateless["outcome"].pop("schema"), json.loads(compiled)["outcome"])
-        self.assertEqual(stateless, expected)
+    def test_retired_callbacks_and_schema_probes_are_absent(self):
+        for name in ("traverse_inheritance", "_compile_schema", "interpret_schema", "decode_yaml"):
+            self.assertFalse(hasattr(yamaa_native, name), name)
 
     def test_complete_original_reports_and_typed_source_effects(self):
         for explicit in (False, True):

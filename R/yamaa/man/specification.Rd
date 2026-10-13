@@ -26,6 +26,7 @@ specification_failure_report(handle, capture, example,
 \item{base_directory}{Relative source-base identity in observations.}
 }
 \value{An owned handle, source request, or portable report JSON.}
+\keyword{internal}
 \description{
 The current shared compiler admits one CSV driver with declared scalar types,
 source/compute columns, and a closed row-template/ordered-SUM slice. Other

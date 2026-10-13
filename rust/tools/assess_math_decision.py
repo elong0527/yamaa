@@ -133,8 +133,8 @@ def sample_inventory(directory):
     }
 
 
-def native_request(case, target="float", handler=False):
-    """Use the existing qualification transport, never a public policy selector."""
+def numeric_fixture(case, target="float", handler=False):
+    """Describe independent fixture inputs and lifecycle expectations."""
     operands = case["inputs"]
     bindings = []
     for index, operand in enumerate(operands):
@@ -143,8 +143,6 @@ def native_request(case, target="float", handler=False):
             value = {"int": case["original_integer_exponent"]}
         bindings.append({"name": "AB"[index], "value": value})
     request = {
-        "protocol": "numeric/1",
-        "math_policy": "portable_libm_v1",
         "expression": case["function"] + ("(A, B)" if len(operands) == 2 else "(A)"),
         "column_path": "columns.VALUE",
         "target": target,
@@ -153,6 +151,77 @@ def native_request(case, target="float", handler=False):
     if handler:
         request["unconvertible"] = {"value": {"int": "9"}}
     return request
+
+
+def public_numeric(request):
+    """Observe an independent numeric fixture through the installed public domain."""
+    import struct
+    from tempfile import TemporaryDirectory
+
+    import yamaa
+    import yaml
+
+    types = {"ID": "int"}
+    values = ["1"]
+    columns = [{"name": "ID", "type": "int", "derivation": "SRC.ID"}]
+    for binding in request["bindings"]:
+        name, value = binding["name"], binding["value"]
+        kind = "int" if "int" in value else "float"
+        types[name] = kind
+        content = (
+            value["int"]
+            if kind == "int"
+            else ""
+            if "missing" in value
+            else repr(decode(value["float"]))
+        )
+        values.append(content)
+        columns.append({"name": name, "type": kind, "derivation": "SRC." + name})
+    expression = {"compute": {"expr": request["expression"]}}
+    if "unconvertible" in request:
+        expression = {
+            "value": expression,
+            "unconvertible": int(request["unconvertible"]["value"]["int"]),
+        }
+    columns.append(
+        {"name": "VALUE", "type": request["target"], "derivation": expression}
+    )
+    document = {
+        "schema_version": "1.0",
+        "domain": "MATH",
+        "keys": ["ID"],
+        "input": {"SRC": {"path": "input.csv", "types": types}},
+        "columns": columns,
+        "output": {"path": "output.csv", "columns": ["ID", "VALUE"]},
+    }
+    with TemporaryDirectory(prefix="yamaa-math-public-") as temporary:
+        directory = Path(temporary)
+        (directory / "spec.yaml").write_text(
+            yaml.safe_dump(document, sort_keys=False), encoding="ascii"
+        )
+        (directory / "input.csv").write_text(
+            ",".join(types) + "\n" + ",".join(values) + "\n", encoding="ascii"
+        )
+        result = yamaa.domain(directory / "spec.yaml")
+        if not result.issues.is_empty():
+            return {
+                "outcome": {
+                    "status": "failure",
+                    "diagnostic": result.issues.row(0, named=True),
+                },
+                "handler_counts": [],
+            }
+        value = result.output["VALUE"][0]
+        cell = (
+            {"missing": None}
+            if value is None
+            else {"int": str(value)}
+            if request["target"] == "int"
+            else {"float": struct.pack(">d", value).hex()}
+        )
+        observations = result._native.observations()
+        counts = json.loads(observations)["handler_counts"] if observations else []
+        return {"outcome": {"status": "value", "value": cell}, "handler_counts": counts}
 
 
 def historical(case, target="float", handler=False):
@@ -167,7 +236,7 @@ def historical(case, target="float", handler=False):
     )
     from yamaa.specification.models import Expression, HandledExpression
 
-    request = native_request(case, target, handler)
+    request = numeric_fixture(case, target, handler)
     arguments = {"value": Expression(root={"compute": request["expression"]})}
     if handler:
         arguments["unconvertible"] = 9
@@ -240,11 +309,10 @@ def outcome_bits(outcome):
 
 def boundaries():
     """Keep actual native and historical observations beside independent input truth."""
-    from yamaa import _native
 
     results = []
     for case in cases():
-        native = json.loads(_native.evaluate_numeric(json.dumps(native_request(case))))
+        native = public_numeric(numeric_fixture(case))
         reference = historical(case)
         candidate = outcome_bits(native["outcome"])
         certificate = certify(
@@ -374,7 +442,6 @@ def downstream(values):
 def fixture_evidence():
     """Replay unchanged affected goldens and expose the remaining frontend refusal."""
     import yamaa
-    from yamaa import _native
     from yamaa._reference_domain import yamaa_domain
 
     import yaml
@@ -396,8 +463,8 @@ def fixture_evidence():
                 if policy == "historical":
                     result = originals[function](*operands)
                 else:
-                    request = native_request({"function": function, "inputs": inputs})
-                    observed = json.loads(_native.evaluate_numeric(json.dumps(request)))
+                    request = numeric_fixture({"function": function, "inputs": inputs})
+                    observed = public_numeric(request)
                     value = observed["outcome"]["value"]
                     result = (
                         float("inf") if "missing" in value else decode(value["float"])
@@ -604,18 +671,13 @@ def main():
         "integer_handlers": [],
         "affected_fixtures": fixture_evidence(),
     }
-    from yamaa import _native
 
     for identity in ("power-integer-admitted", "power-integer-refused"):
         case = next(case for case in cases() if case["id"] == identity)
         report["integer_handlers"].append(
             {
                 "input": case,
-                "native": json.loads(
-                    _native.evaluate_numeric(
-                        json.dumps(native_request(case, "int", True))
-                    )
-                ),
+                "native": public_numeric(numeric_fixture(case, "int", True)),
                 "historical": historical(case, "int", True),
             }
         )

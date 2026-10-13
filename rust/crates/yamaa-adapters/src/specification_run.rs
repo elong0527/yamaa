@@ -3,7 +3,7 @@
 use crate::{
     arrow_table::{ArrowTable, TableLimits},
     csv_source::{self, TextTableError},
-    dataset_transport::{self, DatasetResponse, DatasetTransportError},
+    dataset_result::{self, DatasetError, DatasetResponse},
     specification_source::PreparedDocument,
 };
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -23,7 +23,7 @@ pub enum Error {
     OdmValues(Vec<yamaa_core::odm_source::MissingValues>),
     Sources(Vec<(SourceDeclaration, Error)>),
     Bind(BindError),
-    Execution(DatasetTransportError),
+    Execution(DatasetError),
 }
 pub use yamaa_engine::specification_run::{InspectionFailure, SourcePort, SourceRead};
 #[derive(Debug)]
@@ -74,7 +74,7 @@ impl PreparedRun {
         let attempt = catch_unwind(AssertUnwindSafe(|| {
             application::execute_bytes(self.compiled(), bytes, &mut SourceDecoder, limits())
         }))
-        .map_err(|_| Error::Execution(DatasetTransportError::Internal))?;
+        .map_err(|_| Error::Execution(DatasetError::Internal))?;
         let execution = attempt
             .result
             .map_err(|error| run_error(error, self.compiled()))?;
@@ -90,15 +90,13 @@ impl PreparedRun {
                 .build_into(port, &mut SourceDecoder, limits(), &mut attempt);
         }));
         let result = if guarded.is_err() {
-            Err(PortError::Run(Error::Execution(
-                DatasetTransportError::Internal,
-            )))
+            Err(PortError::Run(Error::Execution(DatasetError::Internal)))
         } else {
             match attempt.result {
                 Ok(execution) => response(execution).map_err(PortError::Run),
-                Err(application::PortError::Incomplete) => Err(PortError::Run(Error::Execution(
-                    DatasetTransportError::Internal,
-                ))),
+                Err(application::PortError::Incomplete) => {
+                    Err(PortError::Run(Error::Execution(DatasetError::Internal)))
+                }
                 Err(application::PortError::Capture(error)) => Err(PortError::Capture(error)),
                 Err(application::PortError::Inspect(errors)) => Err(PortError::Inspect(errors)),
                 Err(application::PortError::Run(error)) => {
@@ -125,18 +123,18 @@ impl PreparedRun {
 pub(crate) fn limits() -> application::Limits {
     application::Limits {
         source_bytes: csv_source::Limits::default().bytes,
-        source_cells: dataset_transport::MAX_SOURCE_CELLS,
-        execution: dataset_transport::LIMITS,
+        source_cells: dataset_result::MAX_SOURCE_CELLS,
+        execution: dataset_result::LIMITS,
     }
 }
 
 fn response(
-    execution: yamaa_engine::dataset::ExecutionAttempt<crate::function_transport::CallbackError>,
+    execution: yamaa_engine::dataset::ExecutionAttempt<crate::callback::CallbackError>,
 ) -> Result<DatasetResponse, Error> {
     catch_unwind(AssertUnwindSafe(|| {
-        dataset_transport::specification_response(execution)
+        dataset_result::specification_response(execution)
     }))
-    .map_err(|_| Error::Execution(DatasetTransportError::Internal))?
+    .map_err(|_| Error::Execution(DatasetError::Internal))?
     .map_err(Error::Execution)
 }
 
@@ -173,8 +171,8 @@ fn run_error(error: application::RunError<Error>, prepared: &PreparedSpecificati
                 limit,
             }))
         }
-        application::RunError::SourceCells => Error::Execution(DatasetTransportError::Table(
-            crate::table_transport::TableTransportError::ShapeLimit,
+        application::RunError::SourceCells => Error::Execution(DatasetError::Table(
+            crate::ipc_table::TableError::ShapeLimit,
         )),
     }
 }
@@ -182,7 +180,7 @@ fn run_error(error: application::RunError<Error>, prepared: &PreparedSpecificati
 pub(crate) struct SourceDecoder;
 impl application::SourceDecoder for SourceDecoder {
     type Error = Error;
-    type Table = dataset_transport::Snapshot;
+    type Table = dataset_result::Snapshot;
     fn continue_after(&self, error: &Self::Error) -> bool {
         matches!(
             error,
@@ -208,7 +206,7 @@ impl application::SourceDecoder for SourceDecoder {
         source: &SourceDeclaration,
         bytes: &[u8],
     ) -> Result<Self::Table, Self::Error> {
-        decode_source(source, bytes, None).map(dataset_transport::Snapshot)
+        decode_source(source, bytes, None).map(dataset_result::Snapshot)
     }
     fn decode_with_interpretation(
         &mut self,
@@ -216,7 +214,7 @@ impl application::SourceDecoder for SourceDecoder {
         bytes: &[u8],
         interpretation: yamaa_core::specification::SourceInterpretation,
     ) -> Result<Self::Table, Self::Error> {
-        decode_interpreted(source, bytes, None, interpretation).map(dataset_transport::Snapshot)
+        decode_interpreted(source, bytes, None, interpretation).map(dataset_result::Snapshot)
     }
 }
 

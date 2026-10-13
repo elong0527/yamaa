@@ -138,7 +138,7 @@ def main(argv=None):
             "runtime": "python",
             "runtime_version": platform.python_version(),
             "host_package_version": yamaa.__version__,
-            "engine_version": _native.engine_info()["core_version"],
+            "engine_version": _native._CORE_VERSION,
             "source_revision": args.source_revision,
             "platform": platform.platform(),
             "package_form": args.package_form,

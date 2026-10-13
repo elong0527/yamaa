@@ -4,43 +4,16 @@
 #[allow(unsafe_code)]
 mod windows_file;
 
-pub mod column_dependency_transport;
-pub mod dataset_profile;
-pub mod dataset_transport;
-pub mod dependency_transport;
-mod function_signature;
-pub mod function_transport;
-pub mod numeric_transport;
-mod predicate_transport;
-pub mod reference_transport;
-pub mod scalar_transport;
-
-/// Exercise resource inclusion without depending on the checkout at runtime.
-pub fn installation_resource() -> &'static str {
-    include_str!("../resources/installation.txt")
-}
-
 pub mod arrow_table;
 mod arrow_temporal;
 #[cfg(any(unix, windows))]
 pub mod file_define;
 pub mod public_table;
-pub mod table_transport;
 
 pub mod scalar_bytes;
 
-pub mod aggregate_transport;
-
-pub mod numeric_syntax;
-
-pub mod regex_transport;
-
-pub mod predicate_syntax;
-mod schema_diagnostic_kinds;
-pub mod schema_transport;
 pub mod yaml_decode;
 mod yaml_source;
-pub mod yaml_transport;
 
 pub mod csv_artifact;
 pub mod csv_source;
@@ -135,3 +108,12 @@ mod project_diagnostic_projection;
 mod file_inventory;
 
 pub mod host_limits;
+
+pub mod callback;
+pub mod dataset_result;
+mod dataset_snapshot;
+mod execution_diagnostics;
+pub mod ipc_table;
+mod report_scalar;
+mod schema_outcomes;
+mod yaml_diagnostics;

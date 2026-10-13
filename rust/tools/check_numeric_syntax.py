@@ -57,7 +57,7 @@ def compare_reference(text, outcome):
 
 
 def main():
-    """Replay both independent truth and reference samples through real transport."""
+    """Replay both independent truth and reference samples through typed Rust parsers."""
     contract = cases()
     sources = [case["text"] for case in contract] + numeric_sources()
     run = subprocess.run(
@@ -69,11 +69,11 @@ def main():
             "-p",
             "yamaa-adapters",
             "--example",
-            "numeric_syntax_probe",
+            "numeric_syntax_fixture",
         ],
         cwd=WORKSPACE,
         input="".join(
-            json.dumps({"protocol": "numeric-syntax/1", "expression": text}) + "\n"
+            json.dumps(text) + "\n"
             for text in sources
         ),
         text=True,
@@ -84,7 +84,7 @@ def main():
     assert len(responses) == len(sources)
     for case, response in zip(contract, responses, strict=False):
         actual = response["outcome"]
-        assert response["protocol"] == "numeric-syntax/1"
+
         assert actual["status"] == (
             "parsed" if case["parse"] == "accept" else "invalid"
         ), (case, actual)
@@ -106,7 +106,7 @@ def main():
     for text, response in zip(sources, responses, strict=True):
         compare_reference(text, response["outcome"])
     print(
-        f"Numeric syntax transport: {len(contract)} independent contract checks and {len(sources)} complete reference comparisons passed"
+        f"Numeric typed syntax fixture: {len(contract)} independent contract checks and {len(sources)} complete reference comparisons passed"
     )
 
 
