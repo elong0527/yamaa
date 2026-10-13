@@ -203,3 +203,27 @@ check_integer_output_conversions <- function() {
 }
 check_integer_output_conversions()
 cat("Full-range R integer output exact-or-error conversions and ownership passed\n")
+
+# Production callback packing survives retirement of the explicit callback probe.
+local({
+  pack <- get(".function_pack", asNamespace("yamaa"))
+  unpack <- get(".scalar_unpack", asNamespace("yamaa"))
+  for (value in list(yamaa:::int64("-9223372036854775808"),
+                    yamaa:::int64("9223372036854775807"),
+                    yamaa:::utf8_bytes(as.raw(c(97L, 0L, 98L))),
+                    structure(0, class = "Date"),
+                    structure(0, class = c("POSIXct", "POSIXt"), tzone = "UTC"))) {
+    stopifnot(identical(unpack(pack(value)), value))
+  }
+  for (epoch in c(NA_real_, NaN, Inf, -Inf)) {
+    for (value in list(structure(epoch, class = "Date"),
+                      structure(epoch, class = c("POSIXct", "POSIXt"), tzone = "UTC"))) {
+      packed <- pack(value)
+      stopifnot(identical(packed$tag, 0L), identical(packed$payload, raw()),
+                is.null(packed$error))
+    }
+  }
+  reject(pack(structure(0.5, class = "Date")), "invalid temporal scalar")
+  reject(pack(structure(0, class = c("POSIXct", "POSIXt"), tzone = "local")))
+})
+cat("Private production callback scalar packing and shared temporal admission passed\n")
