@@ -106,7 +106,7 @@ pub(super) fn bind(
                 path: diagnostic.spec_paths[0].clone(),
                 check: Check::InvalidDiagnostic(diagnostic),
             });
-            break;
+            continue;
         }
         result.push(bound);
     }
