@@ -15,7 +15,7 @@ from yamaa import DefineError, define
 import yaml
 
 ROOT = Path(__file__).with_name("define-fixtures")
-SCHEMAS = Path(yamaa.__file__).parent / "submission/schemas"
+SCHEMAS = ROOT / "schemas"
 
 
 class PublicDefine(unittest.TestCase):

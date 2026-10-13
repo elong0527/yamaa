@@ -1024,6 +1024,123 @@
         "rust/tests/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications.R"
       ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/define-schemas/dataset.schema.json",
+      "family": "define-schema",
+      "level": "component",
+      "consumers": [
+        "rust/tests/installed_public_define.py",
+        "rust/tools/stage_define_inputs.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/define-schemas/define/2.1/define-enumerations.xsd",
+      "family": "define-schema",
+      "level": "component",
+      "consumers": [
+        "rust/tests/installed_public_define.py",
+        "rust/tools/stage_define_inputs.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/define-schemas/define/2.1/define-extension.xsd",
+      "family": "define-schema",
+      "level": "component",
+      "consumers": [
+        "rust/tests/installed_public_define.py",
+        "rust/tools/stage_define_inputs.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/define-schemas/define/2.1/define-ns.xsd",
+      "family": "define-schema",
+      "level": "component",
+      "consumers": [
+        "rust/tests/installed_public_define.py",
+        "rust/tools/stage_define_inputs.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/define-schemas/define/2.1/define2-1-0.xsd",
+      "family": "define-schema",
+      "level": "component",
+      "consumers": [
+        "rust/tests/installed_public_define.py",
+        "rust/tools/stage_define_inputs.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/define-schemas/define/2.1/xlink.xsd",
+      "family": "define-schema",
+      "level": "component",
+      "consumers": [
+        "rust/tests/installed_public_define.py",
+        "rust/tools/stage_define_inputs.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/define-schemas/define/2.1/xml.xsd",
+      "family": "define-schema",
+      "level": "component",
+      "consumers": [
+        "rust/tests/installed_public_define.py",
+        "rust/tools/stage_define_inputs.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/define-schemas/define/2.1/xmldsig-core-schema.xsd",
+      "family": "define-schema",
+      "level": "component",
+      "consumers": [
+        "rust/tests/installed_public_define.py",
+        "rust/tools/stage_define_inputs.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/define-schemas/odm/1.3.2/ODM1-3-2-foundation.xsd",
+      "family": "define-schema",
+      "level": "component",
+      "consumers": [
+        "rust/tests/installed_public_define.py",
+        "rust/tools/stage_define_inputs.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/define-schemas/odm/1.3.2/ODM1-3-2.xsd",
+      "family": "define-schema",
+      "level": "component",
+      "consumers": [
+        "rust/tests/installed_public_define.py",
+        "rust/tools/stage_define_inputs.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/define-schemas/odm/1.3.2/xlink.xsd",
+      "family": "define-schema",
+      "level": "component",
+      "consumers": [
+        "rust/tests/installed_public_define.py",
+        "rust/tools/stage_define_inputs.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/define-schemas/odm/1.3.2/xml.xsd",
+      "family": "define-schema",
+      "level": "component",
+      "consumers": [
+        "rust/tests/installed_public_define.py",
+        "rust/tools/stage_define_inputs.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/define-schemas/odm/1.3.2/xmldsig-core-schema.xsd",
+      "family": "define-schema",
+      "level": "component",
+      "consumers": [
+        "rust/tests/installed_public_define.py",
+        "rust/tools/stage_define_inputs.py"
+      ]
     }
   ],
   "suites": [
@@ -1590,6 +1707,18 @@
     {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/tables/expected.tsv",
       "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/define-schemas/DATASET-JSON-LICENSE",
+      "role": "documentation"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/define-schemas/LICENSE",
+      "role": "documentation"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/define-schemas/README.md",
+      "role": "documentation"
     }
   ]
 }
