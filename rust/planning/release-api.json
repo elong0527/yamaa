@@ -684,7 +684,6 @@
         "specification_source",
         "table_round_trip",
         "table_snapshot",
-        "traverse_inheritance",
         "utf8_bytes",
         "utf8_scalar",
         "yamaa_check",
