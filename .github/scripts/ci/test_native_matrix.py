@@ -1,4 +1,4 @@
-"""Check that PR sampling retains its dependencies and main retains all coverage."""
+"""Check that Linux PR coverage retains its dependencies and main retains all coverage."""
 
 import itertools
 import json
@@ -38,15 +38,15 @@ class NativeCoverage(unittest.TestCase):
                 self.assertEqual(values["full"], str(event != "pull_request").lower())
                 self.assertEqual(
                     len(json.loads(values["qualify"])["include"]),
-                    1 if event == "pull_request" else 18,
+                    4 if event == "pull_request" else 18,
                 )
                 self.assertIn(
-                    "PR sample" if event == "pull_request" else "Full",
+                    "PR native coverage" if event == "pull_request" else "Full",
                     summary.read_text(),
                 )
 
     def test_main_keeps_every_supported_route(self):
-        coverage = native_matrix.plan("push", "1")
+        coverage = native_matrix.plan("push")
         routes = {
             (row["os"], row["python"], row["form"])
             for row in coverage["qualify"]["include"]
@@ -65,27 +65,33 @@ class NativeCoverage(unittest.TestCase):
 
     def test_dispatch_qualifies_the_same_full_matrix_before_merge(self):
         self.assertEqual(
-            native_matrix.plan("workflow_dispatch", "2"),
-            native_matrix.plan("push", "1"),
+            native_matrix.plan("workflow_dispatch"),
+            native_matrix.plan("push"),
         )
 
-    def test_new_pr_runs_sample_all_routes_and_retries_keep_the_choice(self):
-        observed = set()
-        for run_id in range(1000):
-            coverage = native_matrix.plan("pull_request", str(run_id))
-            self.assertEqual(coverage, native_matrix.plan("pull_request", str(run_id)))
-            self.assertEqual(len(coverage["qualify"]["include"]), 1)
-            selected = coverage["qualify"]["include"][0]
-            observed.add(tuple(selected.values()))
-            self.assertEqual(
-                coverage["build"]["include"], [{"os": selected["os"], "python": "3.14"}]
-            )
-            self.assertEqual(coverage["compare-os"], selected["os"])
-            self.assertFalse(coverage["full"])
-            expected_r = [selected["os"]]
-            self.assertEqual(coverage["r"]["os"], expected_r)
-            self.assertEqual(coverage["run-r"], bool(expected_r))
-        self.assertEqual(len(observed), 18)
+    def test_pr_checks_both_installation_forms_on_linux_and_python_endpoints(self):
+        coverage = native_matrix.plan("pull_request")
+        self.assertEqual(
+            {
+                (row["os"], row["python"], row["form"])
+                for row in coverage["qualify"]["include"]
+            },
+            {
+                ("ubuntu-24.04", "3.12", "wheel"),
+                ("ubuntu-24.04", "3.12", "source"),
+                ("ubuntu-24.04", "3.14", "wheel"),
+                ("ubuntu-24.04", "3.14", "source"),
+            },
+        )
+        self.assertEqual(len(coverage["qualify"]["include"]), 4)
+        self.assertEqual(
+            coverage["build"]["include"],
+            [{"os": "ubuntu-24.04", "python": "3.14"}],
+        )
+        self.assertEqual(coverage["compare-os"], "ubuntu-24.04")
+        self.assertFalse(coverage["full"])
+        self.assertEqual(coverage["r"]["os"], ["ubuntu-24.04"])
+        self.assertTrue(coverage["run-r"])
 
     def test_comparison_uses_only_selected_evidence_and_requires_r_on_every_os(self):
         for platform in native_matrix.PLATFORMS:
@@ -109,7 +115,7 @@ class NativeCoverage(unittest.TestCase):
                     for form in native_matrix.FORMS
                 ]
             },
-            native_matrix.plan("push", "1")["qualify"],
+            native_matrix.plan("push")["qualify"],
         )
         probe = """import argparse
 import json
@@ -177,7 +183,7 @@ args.output.mkdir(parents=True)
                     self.assertEqual(python["route"]["os"], r["os"])
 
     def test_failed_cohort_comparison_fails_the_job(self):
-        matrix = native_matrix.plan("pull_request", "1")["qualify"]
+        matrix = native_matrix.plan("pull_request")["qualify"]
         with (
             patch(
                 "native_matrix.subprocess.run",
@@ -189,7 +195,7 @@ args.output.mkdir(parents=True)
 
     def test_unknown_event_cannot_silently_reduce_coverage(self):
         with self.assertRaises(ValueError):
-            native_matrix.plan("schedule", "1")
+            native_matrix.plan("schedule")
 
 
 if __name__ == "__main__":
