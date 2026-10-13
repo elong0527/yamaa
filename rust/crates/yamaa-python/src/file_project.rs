@@ -57,7 +57,8 @@ impl Specification {
     fn diagnostic_origins(&self) -> PyResult<Vec<(String, String)>> {
         let state = self.get()?;
         match &*state {
-            Ok(_) => Ok(Vec::new()),
+            Ok(owner) => yamaa_adapters::source_metadata::selected_origins(owner)
+                .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.message())),
             Err(error) => yamaa_adapters::source_metadata::rejected_origins(error)
                 .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.message())),
         }

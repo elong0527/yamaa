@@ -620,7 +620,7 @@
         },
         "_ProjectSpecification.diagnostic_origins": {
           "disposition": "internal",
-          "rationale": "Bounded contributor path/source identities from held native normalization rejection for repository human diagnostic attribution; no source recapture, semantic tree or portable context modification."
+          "rationale": "Bounded contributor path/source identities from held native normalization rejection or ready static findings for repository human diagnostic attribution; no source recapture, semantic tree or portable context modification."
         },
         "_ProjectSpecification.input_metadata": {
           "disposition": "internal",

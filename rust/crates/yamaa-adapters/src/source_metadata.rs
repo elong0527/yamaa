@@ -261,6 +261,47 @@ pub fn selected_reads(selected: &crate::file_workflow::Selected) -> usize {
     }
 }
 
+/// Ready static issues retain their original contributors without extending the
+/// public issue context. Only native-emitted paths are observed by this carrier.
+pub fn selected_origins(
+    selected: &crate::file_workflow::Selected,
+) -> Result<Vec<(String, String)>, Error> {
+    use yamaa_engine::build::Prepared;
+    let run: &dyn RunView = match selected {
+        Prepared::Plain(owner) => owner.run(),
+        Prepared::Ordinary(owner) => owner.run(),
+        // Graph issue projection already retains each declaring source; do not
+        // collapse potentially identical issue paths from different node owners.
+        Prepared::Producer(_) => return Ok(Vec::new()),
+    };
+    if run.document().inheritance().is_none() {
+        return Ok(Vec::new());
+    }
+    let findings = run.check_diagnostics();
+    let borrowed = findings
+        .iter()
+        .flat_map(|finding| &finding.spec_paths)
+        .filter_map(|path| {
+            run.document()
+                .declaring_source(path)
+                .map(|source| (path.as_str(), source))
+        })
+        .collect::<Vec<_>>();
+    if borrowed.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut budget = Budget::new(1, Limits::default()).map_err(Error::Application)?;
+    budget.columns(borrowed.len()).map_err(Error::Application)?;
+    for (path, source) in &borrowed {
+        budget.text(path.len()).map_err(Error::Application)?;
+        budget.text(source.len()).map_err(Error::Application)?;
+    }
+    Ok(borrowed
+        .into_iter()
+        .map(|(path, source)| (path.into(), source.into()))
+        .collect())
+}
+
 /// Human attribution over the original held normalization provenance. This
 /// borrows only diagnostic paths/source identities and never captures a file.
 pub fn rejected_origins(
