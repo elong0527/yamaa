@@ -41,6 +41,28 @@ def _raised_conditions() -> set[str]:
             if isinstance(value, ast.Constant) and isinstance(value.value, str):
                 names.add(value.value)
 
+        def add_positional(value: ast.expr, source: Path, line: int) -> None:
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                names.add(value.value)
+                return
+            # Pass-throughs are already resolved by the scans above: a
+            # ``*.condition`` attribute forwards a condition held by an
+            # exception or result, whose names come from its ``condition``
+            # default, class attribute, or a literal ``condition=`` at its
+            # construction; a bare ``condition`` name forwards the enclosing
+            # function's ``condition`` parameter, whose default and literal
+            # call sites are likewise scanned. Anything else is unsupported:
+            # fail explicitly instead of silently omitting a name that
+            # could be unregistered.
+            if isinstance(value, ast.Attribute) and value.attr == "condition":
+                return
+            if isinstance(value, ast.Name) and value.id == "condition":
+                return
+            raise AssertionError(
+                f"unsupported condition expression at {source}:{line}: "
+                f"{ast.dump(value)}"
+            )
+
         for definition in ast.walk(tree):
             if isinstance(definition, ast.ClassDef):
                 for statement in definition.body:
@@ -93,20 +115,12 @@ def _raised_conditions() -> set[str]:
                 else getattr(func, "id", "")
             )
             if name == "expression_condition" and len(node.args) >= 2:
-                condition = node.args[1]
-                if isinstance(condition, ast.Constant) and isinstance(
-                    condition.value, str
-                ):
-                    names.add(condition.value)
+                add_positional(node.args[1], path, node.lineno)
             if name == "_condition":
                 for index in condition_positions:
                     if len(node.args) <= index:
                         continue
-                    condition = node.args[index]
-                    if isinstance(condition, ast.Constant) and isinstance(
-                        condition.value, str
-                    ):
-                        names.add(condition.value)
+                    add_positional(node.args[index], path, node.lineno)
     return names
 
 
