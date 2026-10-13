@@ -114,6 +114,12 @@ def stage(destination: Path):
     helper = importlib.util.module_from_spec(helper_spec)
     helper_spec.loader.exec_module(helper)
     helper.stage(resources / "specification-original")
+    grammar_spec = importlib.util.spec_from_file_location(
+        "stage_grammar_inputs", Path(__file__).with_name("stage_grammar_inputs.py")
+    )
+    grammar_helper = importlib.util.module_from_spec(grammar_spec)
+    grammar_spec.loader.exec_module(grammar_helper)
+    grammar_helper.stage(resources / "grammar-original")
     shutil.copytree(
         WORKSPACE / "crates/yamaa-adapters/tests/fixtures/environment-candidate",
         resources / "specification-environment-candidate",

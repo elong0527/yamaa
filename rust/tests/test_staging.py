@@ -34,6 +34,10 @@ class StagingTests(unittest.TestCase):
                     self.assertEqual(source.read_bytes(), copied.read_bytes())
             self.assertTrue((embedded / "rust-toolchain.toml").is_file())
             self.assertFalse((embedded / "target").exists())
+            grammar = destination / "inst/grammar-original/grammar"
+            for source in (staging.REPOSITORY / "yaml/grammar").glob("*.yaml"):
+                self.assertEqual((grammar / source.name).read_bytes(), source.read_bytes())
+            self.assertTrue((destination / "tests/public_grammar.R").is_file())
             self.assertEqual(
                 (embedded / "Cargo.lock").read_bytes(),
                 (staging.WORKSPACE / "Cargo.lock").read_bytes(),
