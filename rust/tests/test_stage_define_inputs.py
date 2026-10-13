@@ -22,7 +22,7 @@ class DefineStage(unittest.TestCase):
             destination = Path(temporary) / "define-fixtures"
             stage.stage(destination)
             schemas = destination / "schemas"
-            originals = ROOT / "rust/tests/fixtures/submission-schemas"
+            originals = ROOT / "rust/tests/schemas"
             for original in originals.rglob("*"):
                 if original.is_file():
                     self.assertEqual(
