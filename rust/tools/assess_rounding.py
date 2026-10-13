@@ -1,8 +1,8 @@
-"""Characterize the Python reference against the independent REQ-0418 rule.
+"""Observe compiled rounding policies against the independent exact rational oracle.
 
-The oracle uses exact rational arithmetic on the promoted binary64 input and the
-specified decimal quantum. It does not call Python round, the reference helper,
-or a candidate Rust implementation. Agreement on this sample is not qualification.
+Both existing policies replay the unchanged boundary corpus with exact bit and
+input identities. Historical scalar assessment remains available for retained
+reporting controls; component success does not qualify installed hosts.
 """
 
 import argparse
@@ -122,7 +122,11 @@ def cases():
 
 
 def assess(samples, reference):
-    """Retain exact discrepancies and escaped exceptions without blessing reference truth."""
+    """Retain historical scalar discrepancies/exceptions for reporting controls.
+
+    Active qualification uses compiled_assessment; this callable never supplies
+    an independent oracle or current native qualification.
+    """
     observations = []
     mismatches = []
     seen = set()
