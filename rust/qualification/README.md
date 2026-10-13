@@ -83,13 +83,16 @@ suites remain separate. These dispositions do not suppress table differences.
 
 Each sampled PR lane and every main or full-dispatch lane uploads its inventory,
 individual records and staged saved artifacts. The committed
-`public-conformance.json` gates both installed hosts. Its first 260 cases per
-host are the independently replayed intersection of all eighteen Python lanes
-and three R hosts in combined-main run 38250972601 at
-`14147ecfde9511fda9bf41840ae6306959c01667`. The preceding exact-head full
-dispatch 38249603102 has the same passing set. The remaining 50 unsupported, three
-mismatch and three error cases stay visible; two historical cases retain their
-approved exclusion. This corpus evidence does not complete other migration or
+`public-conformance.json` gates both installed hosts. Its 265 Python cases and
+264 R cases are the independently replayed intersection of all eighteen Python
+lanes and three R hosts in combined-main run 38306751419 at
+`1eeeaf04294e4c4c4f09bc6382bbde8c38aab14b`. This advances the original 260 cases
+per host without removing a pass. Every lane retains 50 unsupported cases and
+two historical exclusions. Python and Linux/macOS R retain one mismatch;
+Windows R retains two, including the symlink negative that passes elsewhere.
+No lane reports an execution error. The host-specific intersection keeps that
+Windows R mismatch visible rather than adding it to R's gate. This corpus
+evidence does not complete other migration or
 release gates. Run locally against an installed package outside the checkout:
 
 ```sh
@@ -119,7 +122,7 @@ that seeding PR. The assisted gates above stay in place until their separate
 retirement decision.
 
 `tools/seed_public_conformance.py` enforces that seeding contract. Download all
-`public-conformance-*` artifacts from one completed full main or dispatched
+`public-conformance-*` artifacts from one successful completed full main or dispatched
 `native.yml` run into a directory, with one subdirectory per artifact. Retain
 the run's REST metadata separately, then run:
 
@@ -134,7 +137,8 @@ python rust/tools/seed_public_conformance.py --fixtures benchmarks \
 
 The output must be a fresh file. The tool requires all eighteen Python and
 three R inventories from that exact revision/run, checks each host's platform,
-runtime and package identity, and replays every saved observation against the
+runtime and package identity, requires a successful run conclusion, and replays
+every saved observation against the
 independent expected files. A claimed pass whose saved output changed is refused.
 Only the intersection of actual passes enters each host's list. To advance an
 existing ratchet, pass `--previous rust/qualification/public-conformance.json`;

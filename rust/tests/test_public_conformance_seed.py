@@ -31,6 +31,7 @@ class RatchetSeed(unittest.TestCase):
             "id": 42,
             "run_attempt": 1,
             "status": "completed",
+            "conclusion": "success",
             "event": "workflow_dispatch",
             "head_branch": "candidate",
             "head_sha": "f" * 40,
@@ -133,6 +134,9 @@ class RatchetSeed(unittest.TestCase):
         for fields in (
             {"event": "pull_request"},
             {"status": "in_progress"},
+            {"conclusion": "failure"},
+            {"conclusion": "cancelled"},
+            {"conclusion": None},
             {"event": "push", "head_branch": "other"},
             {"path": ".github/workflows/python.yml"},
         ):

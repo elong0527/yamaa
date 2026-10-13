@@ -1,6 +1,6 @@
 """Seed the public ratchet from complete, replayed evidence for one full run.
 
-Download the public-conformance-* artifacts from a completed native main or
+Download the public-conformance-* artifacts from a successful native main or
 dispatched run, and retain its REST run metadata with them. Each saved report is
 recompared with independent truth before its pass can enter the intersection.
 """
@@ -34,10 +34,11 @@ def seed(fixtures, artifacts, run_file, output, previous=None):
     run = read(run_file)
     require(
         run.get("status") == "completed"
+        and run.get("conclusion") == "success"
         and run.get("event") in {"push", "workflow_dispatch"}
         and (run["event"] != "push" or run.get("head_branch") == "main")
         and run.get("path", "").split("@", 1)[0] == ".github/workflows/native.yml",
-        "ratchet requires a completed full native main or dispatched run",
+        "ratchet requires a successful completed full native main or dispatched run",
     )
     revision, evidence = run.get("head_sha"), run.get("html_url")
     require(

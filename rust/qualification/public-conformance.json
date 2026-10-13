@@ -1,7 +1,7 @@
 {
   "protocol": "public-conformance-ratchet/1",
-  "source_revision": "14147ecfde9511fda9bf41840ae6306959c01667",
-  "evidence": "https://github.com/elong0527/yamaa/actions/runs/38250972601",
+  "source_revision": "1eeeaf04294e4c4c4f09bc6382bbde8c38aab14b",
+  "evidence": "https://github.com/elong0527/yamaa/actions/runs/38306751419",
   "run_attempt": 1,
   "benchmarks": 318,
   "python": [
@@ -151,6 +151,8 @@
     "negative-overlapping-windows",
     "negative-paired-dates",
     "negative-path-missing",
+    "negative-path-symlink",
+    "negative-path-url",
     "negative-pr-after-cr",
     "negative-precision-bad-source",
     "negative-previous-fixed",
@@ -253,13 +255,16 @@
     "sdtm-lb-compartments",
     "sdtm-lb-findings",
     "sdtm-lb-grading",
+    "sdtm-lb-lab-specific-ranges",
     "sdtm-lb-multiform",
     "sdtm-lb-ranges",
     "sdtm-mh-ongoing-conditions",
+    "sdtm-mh-prespecified-conditions",
     "sdtm-pr-procedures",
     "sdtm-relrec-dataset-level",
     "sdtm-suppmh-linkage",
     "sdtm-suppmh-qualifiers",
+    "sdtm-sv-subject-visits",
     "sdtm-tr-tumor-measurements",
     "sdtm-tu-tumor-identification",
     "sdtm-vs-replicates",
@@ -413,6 +418,7 @@
     "negative-overlapping-windows",
     "negative-paired-dates",
     "negative-path-missing",
+    "negative-path-url",
     "negative-pr-after-cr",
     "negative-precision-bad-source",
     "negative-previous-fixed",
@@ -515,13 +521,16 @@
     "sdtm-lb-compartments",
     "sdtm-lb-findings",
     "sdtm-lb-grading",
+    "sdtm-lb-lab-specific-ranges",
     "sdtm-lb-multiform",
     "sdtm-lb-ranges",
     "sdtm-mh-ongoing-conditions",
+    "sdtm-mh-prespecified-conditions",
     "sdtm-pr-procedures",
     "sdtm-relrec-dataset-level",
     "sdtm-suppmh-linkage",
     "sdtm-suppmh-qualifiers",
+    "sdtm-sv-subject-visits",
     "sdtm-tr-tumor-measurements",
     "sdtm-tu-tumor-identification",
     "sdtm-vs-replicates",
@@ -532,210 +541,210 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.12-wheel",
       "summary": {
-        "pass": 260,
-        "mismatch": 3,
+        "pass": 265,
+        "mismatch": 1,
         "unsupported": 50,
-        "error": 3,
+        "error": 0,
         "excluded": 2
       }
     },
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.12-source",
       "summary": {
-        "pass": 260,
-        "mismatch": 3,
+        "pass": 265,
+        "mismatch": 1,
         "unsupported": 50,
-        "error": 3,
+        "error": 0,
         "excluded": 2
       }
     },
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.13-wheel",
       "summary": {
-        "pass": 260,
-        "mismatch": 3,
+        "pass": 265,
+        "mismatch": 1,
         "unsupported": 50,
-        "error": 3,
+        "error": 0,
         "excluded": 2
       }
     },
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.13-source",
       "summary": {
-        "pass": 260,
-        "mismatch": 3,
+        "pass": 265,
+        "mismatch": 1,
         "unsupported": 50,
-        "error": 3,
+        "error": 0,
         "excluded": 2
       }
     },
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.14-wheel",
       "summary": {
-        "pass": 260,
-        "mismatch": 3,
+        "pass": 265,
+        "mismatch": 1,
         "unsupported": 50,
-        "error": 3,
+        "error": 0,
         "excluded": 2
       }
     },
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.14-source",
       "summary": {
-        "pass": 260,
-        "mismatch": 3,
+        "pass": 265,
+        "mismatch": 1,
         "unsupported": 50,
-        "error": 3,
+        "error": 0,
         "excluded": 2
       }
     },
     {
       "artifact": "public-conformance-python-macos-15-3.12-wheel",
       "summary": {
-        "pass": 260,
-        "mismatch": 3,
+        "pass": 265,
+        "mismatch": 1,
         "unsupported": 50,
-        "error": 3,
+        "error": 0,
         "excluded": 2
       }
     },
     {
       "artifact": "public-conformance-python-macos-15-3.12-source",
       "summary": {
-        "pass": 260,
-        "mismatch": 3,
+        "pass": 265,
+        "mismatch": 1,
         "unsupported": 50,
-        "error": 3,
+        "error": 0,
         "excluded": 2
       }
     },
     {
       "artifact": "public-conformance-python-macos-15-3.13-wheel",
       "summary": {
-        "pass": 260,
-        "mismatch": 3,
+        "pass": 265,
+        "mismatch": 1,
         "unsupported": 50,
-        "error": 3,
+        "error": 0,
         "excluded": 2
       }
     },
     {
       "artifact": "public-conformance-python-macos-15-3.13-source",
       "summary": {
-        "pass": 260,
-        "mismatch": 3,
+        "pass": 265,
+        "mismatch": 1,
         "unsupported": 50,
-        "error": 3,
+        "error": 0,
         "excluded": 2
       }
     },
     {
       "artifact": "public-conformance-python-macos-15-3.14-wheel",
       "summary": {
-        "pass": 260,
-        "mismatch": 3,
+        "pass": 265,
+        "mismatch": 1,
         "unsupported": 50,
-        "error": 3,
+        "error": 0,
         "excluded": 2
       }
     },
     {
       "artifact": "public-conformance-python-macos-15-3.14-source",
       "summary": {
-        "pass": 260,
-        "mismatch": 3,
+        "pass": 265,
+        "mismatch": 1,
         "unsupported": 50,
-        "error": 3,
+        "error": 0,
         "excluded": 2
       }
     },
     {
       "artifact": "public-conformance-python-windows-latest-3.12-wheel",
       "summary": {
-        "pass": 260,
-        "mismatch": 3,
+        "pass": 265,
+        "mismatch": 1,
         "unsupported": 50,
-        "error": 3,
+        "error": 0,
         "excluded": 2
       }
     },
     {
       "artifact": "public-conformance-python-windows-latest-3.12-source",
       "summary": {
-        "pass": 260,
-        "mismatch": 3,
+        "pass": 265,
+        "mismatch": 1,
         "unsupported": 50,
-        "error": 3,
+        "error": 0,
         "excluded": 2
       }
     },
     {
       "artifact": "public-conformance-python-windows-latest-3.13-wheel",
       "summary": {
-        "pass": 260,
-        "mismatch": 3,
+        "pass": 265,
+        "mismatch": 1,
         "unsupported": 50,
-        "error": 3,
+        "error": 0,
         "excluded": 2
       }
     },
     {
       "artifact": "public-conformance-python-windows-latest-3.13-source",
       "summary": {
-        "pass": 260,
-        "mismatch": 3,
+        "pass": 265,
+        "mismatch": 1,
         "unsupported": 50,
-        "error": 3,
+        "error": 0,
         "excluded": 2
       }
     },
     {
       "artifact": "public-conformance-python-windows-latest-3.14-wheel",
       "summary": {
-        "pass": 260,
-        "mismatch": 3,
+        "pass": 265,
+        "mismatch": 1,
         "unsupported": 50,
-        "error": 3,
+        "error": 0,
         "excluded": 2
       }
     },
     {
       "artifact": "public-conformance-python-windows-latest-3.14-source",
       "summary": {
-        "pass": 260,
-        "mismatch": 3,
+        "pass": 265,
+        "mismatch": 1,
         "unsupported": 50,
-        "error": 3,
+        "error": 0,
         "excluded": 2
       }
     },
     {
       "artifact": "public-conformance-r-ubuntu-24.04",
       "summary": {
-        "pass": 260,
-        "mismatch": 3,
+        "pass": 265,
+        "mismatch": 1,
         "unsupported": 50,
-        "error": 3,
+        "error": 0,
         "excluded": 2
       }
     },
     {
       "artifact": "public-conformance-r-macos-15",
       "summary": {
-        "pass": 260,
-        "mismatch": 3,
+        "pass": 265,
+        "mismatch": 1,
         "unsupported": 50,
-        "error": 3,
+        "error": 0,
         "excluded": 2
       }
     },
     {
       "artifact": "public-conformance-r-windows-latest",
       "summary": {
-        "pass": 260,
-        "mismatch": 4,
+        "pass": 264,
+        "mismatch": 2,
         "unsupported": 50,
-        "error": 2,
+        "error": 0,
         "excluded": 2
       }
     }
