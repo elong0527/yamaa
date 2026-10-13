@@ -375,7 +375,7 @@ parent, closed-loop paths and exact version text. Complete context admission
 precedes copies; malformed loop carriers and quota refusal remain distinct.
 The engine exposes borrowed projection without changing traversal effects or
 retaining a second host error. The original-document adapter uses the shared
-envelope directly. The legacy inheritance/1 probe still represents the same
+envelope directly. The retired inheritance/1 probe historically represented the same
 core findings in its compatibility context list until API retirement.
 Captured schema arenas, resource failures and opaque host errors retain their
 separate authority and precedence. This slice contributes to #1753/#1754; it

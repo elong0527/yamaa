@@ -10,7 +10,6 @@ mod file_publication;
 mod file_resources;
 mod file_specification;
 mod function_callback;
-mod inheritance_callback;
 mod issue_frame;
 #[cfg(any(unix, windows))]
 mod project_activation;
@@ -298,7 +297,6 @@ use file_resources;
 use file_specification;
 use file_project;
 use file_producer;
-    use inheritance_callback;
     fn engine_info;
     fn analyze_dependencies;
     fn analyze_references;
