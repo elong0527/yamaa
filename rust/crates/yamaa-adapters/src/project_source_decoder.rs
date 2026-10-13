@@ -133,10 +133,10 @@ impl<E> yamaa_engine::producer_build::DecodePort for Decoder<E> {
                 parsed,
                 types,
                 crate::arrow_table::TableLimits {
-                    max_rows: 65_536,
+                    max_rows: yamaa_engine::capacity::SOURCE_ROWS,
                     max_columns: 64,
                     max_batches: 1,
-                    max_cells: limits.cells.min(262_144),
+                    max_cells: limits.cells.min(yamaa_engine::capacity::SOURCE_CELLS),
                 },
             )
             .map_err(|e| DecodeError::Codec(crate::specification_run::typed_source_error(e)))?;
@@ -144,10 +144,10 @@ impl<E> yamaa_engine::producer_build::DecodePort for Decoder<E> {
                 source,
                 table,
                 crate::arrow_table::TableLimits {
-                    max_rows: 65_536,
+                    max_rows: yamaa_engine::capacity::SOURCE_ROWS,
                     max_columns: 64,
                     max_batches: 1,
-                    max_cells: limits.cells.min(262_144),
+                    max_cells: limits.cells.min(yamaa_engine::capacity::SOURCE_CELLS),
                 },
             )
             .map_err(DecodeError::Codec)?
@@ -159,5 +159,99 @@ impl<E> yamaa_engine::producer_build::DecodePort for Decoder<E> {
             table,
             error: PhantomData,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{csv_source::TextTableError, specification_source::Source};
+    use yamaa_core::{specification::SourceProfile, value::ColumnType};
+    use yamaa_engine::producer_build::{DecodeError, DecodeLimits, DecodePort};
+
+    #[test]
+    fn generated_contract_csv_admits_100k_and_retains_exact_cell_and_ordinal_boundaries() {
+        let document = crate::shipped_schema::capture()
+            .unwrap()
+            .prepare_standalone(Source {
+                identity: "producer.yaml".into(),
+                bytes: b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: int, label: Value, derivation: RAW.VALUE}\noutput: {path: produced.csv, columns: [ID, VALUE]}\n".to_vec(),
+            })
+            .unwrap();
+        let contract =
+            yamaa_core::producer_contract::prepare(document.model(), Default::default()).unwrap();
+        let mut source = SourceDeclaration {
+            name: "P".into(),
+            path: "produced.csv".into(),
+            types: vec![
+                ("ID".into(), ColumnType::Int),
+                ("VALUE".into(), ColumnType::Int),
+            ],
+            profile: SourceProfile::Csv,
+            empty_string_present: false,
+            ordinal: None,
+        };
+        let mut bytes = String::from("ID,VALUE\n");
+        for row in 1..=100_000 {
+            use std::fmt::Write;
+            writeln!(bytes, "{row},1").unwrap();
+        }
+        let limits = DecodeLimits {
+            cells: 200_000,
+            storage_bytes: 8_388_608,
+            work_bytes: 8_388_608,
+        };
+        let table = Decoder::<std::convert::Infallible>::default()
+            .decode_bounded(&source, bytes.as_bytes(), Some(&contract), limits)
+            .unwrap();
+        assert_eq!(table.row_count(), 100_000);
+        for row in 0..100_000 {
+            assert_eq!(table.cell(row, 0).unwrap(), ValueRef::Int(row as i64 + 1));
+            assert_eq!(table.cell(row, 1).unwrap(), ValueRef::Int(1));
+        }
+        assert!(matches!(
+            Decoder::<std::convert::Infallible>::default().decode_bounded(
+                &source,
+                bytes.as_bytes(),
+                Some(&contract),
+                DecodeLimits {
+                    cells: 199_999,
+                    ..limits
+                }
+            ),
+            Err(DecodeError::Codec(Error::Source(TextTableError::Table(
+                crate::arrow_table::TableError::Limit {
+                    resource: "cells",
+                    limit: 199_999,
+                    required: Some(200_000)
+                }
+            ))))
+        ));
+        source.ordinal = Some("POSITION".into());
+        let table = Decoder::<std::convert::Infallible>::default()
+            .decode_bounded(
+                &source,
+                bytes.as_bytes(),
+                Some(&contract),
+                DecodeLimits {
+                    cells: 300_000,
+                    ..limits
+                },
+            )
+            .unwrap();
+        assert_eq!(table.schema().columns()[2].name, "POSITION");
+        assert_eq!(table.cell(99_999, 2).unwrap(), ValueRef::Int(100_000));
+        assert!(matches!(
+            Decoder::<std::convert::Infallible>::default().decode_bounded(
+                &source,
+                bytes.as_bytes(),
+                Some(&contract),
+                DecodeLimits {
+                    cells: 299_999,
+                    ..limits
+                }
+            ),
+            Err(DecodeError::Codec(Error::Ordinal(_)))
+        ));
     }
 }
