@@ -32,7 +32,7 @@ jobs:
       - name: Install pinned docs dependencies
         run: python -m pip install -r docs/requirements.txt
       - name: Test canonical site pages
-        run: python -m unittest discover -s .github/scripts/docs -p 'test_*.py'
+        run: python .github/scripts/commands/docs.py test
 
   validate:
     name: repository-validation (ubuntu-latest)
@@ -69,61 +69,43 @@ jobs:
           uv sync --project python --extra test --locked
 
       - name: Check formatting and lint once
-        run: |
-          uv run --project python --no-sync ruff format --check python/src/yamaa python/tests .github/scripts/ci .github/scripts/docs
-          uv run --project python --no-sync ruff check python/src/yamaa python/tests .github/scripts/ci .github/scripts/docs
+        run: python .github/scripts/commands/repository.py lint
 
       - name: Check CI selection and dependencies
-        run: python -m unittest discover -s .github/scripts/ci -p 'test_*.py'
+        run: python .github/scripts/commands/repository.py ci-tests
 
       - name: Run unit tests
-        run: |
-          uv run --project python --no-sync python .github/scripts/yaml-validation/test_validate_repository.py
+        run: python .github/scripts/commands/repository.py validator-tests
 
       - name: Run repository validation
-        run: |
-          uv run --project python --no-sync python .github/scripts/yaml-validation/validate_repository.py
+        run: python .github/scripts/commands/repository.py validator
 
       # REQ-1280: every benchmark specification follows the style contract.
       - name: Check specification style
-        run: |
-          uv run --project python --no-sync python rust/tools/generate_style_orders.py
-          uv run --project python --no-sync python -m yamaa.style benchmarks/*/spec*.yaml
+        run: python .github/scripts/commands/repository.py style
 
       - name: Check execution manifest
-        run: |
-          uv run --project python --no-sync python .github/scripts/yaml-validation/check_execution_manifest.py
+        run: python .github/scripts/commands/repository.py manifest
 
       - name: Check vocabulary coverage
-        run: |
-          uv run --project python --no-sync python .github/scripts/yaml-validation/check_vocabulary_coverage.py
+        run: python .github/scripts/commands/repository.py vocabulary
 
       - name: Check rule metadata
-        run: |
-          uv run --project python --no-sync python .github/scripts/yaml-validation/check_rule_metadata.py
+        run: python .github/scripts/commands/repository.py metadata
 
       - name: Check documentation
-        run: |
-          uv run --project python --no-sync python .github/scripts/yaml-validation/check_documentation.py
+        run: python .github/scripts/commands/repository.py documentation
 
-      - name: Check rule migration and generated references
-        run: |
-          uv run --project python --no-sync python .github/scripts/yaml-validation/test_rule_rewrite.py
-          uv run --project python --no-sync python .github/scripts/yaml-validation/check_rule_rewrite.py
-          uv run --project python --no-sync python .github/scripts/yaml-validation/generate_rule_reference.py --check
+      - name: Check current rule ownership and generated references
+        run: python .github/scripts/commands/repository.py rule-references
 
       - name: Check rules prose and requirement registry
-        run: |
-          uv run --project python --no-sync python .github/scripts/yaml-validation/test_rationale_phrases.py
-          uv run --project python --no-sync python .github/scripts/yaml-validation/check_rationale_phrases.py
-          uv run --project python --no-sync python .github/scripts/yaml-validation/test_requirement_registry.py
-          uv run --project python --no-sync python .github/scripts/yaml-validation/check_requirement_registry.py
+        run: python .github/scripts/commands/repository.py rules
 
       - name: Check validation blocker issues
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          uv run --project python --no-sync python .github/scripts/yaml-validation/check_validation_blockers.py
+        run: python .github/scripts/commands/repository.py blockers
 
       - name: Install pinned dashboard dependencies
         if: steps.changes.outputs.dashboards == 'true'
@@ -139,7 +121,7 @@ jobs:
           LC_ALL: C.UTF-8
           PYTHONHASHSEED: '1'
           TZ: UTC
-        run: uv run --project python --no-sync python .github/scripts/benchmark-docs/generate.py --all --quiet --output-dir "${RUNNER_TEMP}/yamaa-benchmark-docs-first"
+        run: uv run --project python --locked --no-sync python .github/scripts/commands/docs.py dashboards --output-dir "${RUNNER_TEMP}/yamaa-benchmark-docs-first"
 
       - name: Generate every benchmark again in a different environment
         if: steps.changes.outputs.dashboards == 'true'
@@ -147,7 +129,7 @@ jobs:
           LC_ALL: C.UTF-8
           PYTHONHASHSEED: '8675309'
           TZ: Pacific/Honolulu
-        run: uv run --project python --no-sync python .github/scripts/benchmark-docs/generate.py --all --quiet --output-dir "${RUNNER_TEMP}/yamaa-benchmark-docs-second"
+        run: uv run --project python --locked --no-sync python .github/scripts/commands/docs.py dashboards --output-dir "${RUNNER_TEMP}/yamaa-benchmark-docs-second"
 
       - name: Confirm byte-for-byte deterministic output
         if: steps.changes.outputs.dashboards == 'true'

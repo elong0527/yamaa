@@ -19,6 +19,8 @@ class DashboardChanges(unittest.TestCase):
             "evaluations/harbor/solutions/schema-functions/result.R",
             ".github/scripts/benchmark-docs/generate.py",
             ".github/scripts/ci/dashboard_changes.py",
+            ".github/scripts/commands/docs.py",
+            "Makefile",
             ".github/workflows/yaml-validation.yml",
             "docs/articles/benchmark.md",
         ):

@@ -16,6 +16,7 @@ on:
       - 'mkdocs.yml'
       - '.github/scripts/benchmark-docs/**'
       - '.github/scripts/docs/**'
+      - '.github/scripts/commands/docs.py'
       - '.github/workflows/deploy-docs.yml'
 
 concurrency:
@@ -48,7 +49,7 @@ jobs:
           LC_ALL: C.UTF-8
           PYTHONHASHSEED: '1'
           TZ: UTC
-        run: python .github/scripts/benchmark-docs/generate.py --all --quiet
+        run: python .github/scripts/commands/docs.py dashboards
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@8a96df13519ee81fd526f2dfca5962811136661b # v2
       - name: Render slide decks
@@ -56,7 +57,7 @@ jobs:
           quarto render docs/slides/yamaa-pilot7-2026-09-25/index.qmd
           quarto render docs/slides/yamaa-njsug-2026-10-09/index.qmd
       - name: Build the MkDocs site
-        run: python -m mkdocs build --strict
+        run: python .github/scripts/commands/docs.py build
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:

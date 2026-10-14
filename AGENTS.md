@@ -1,5 +1,14 @@
 # Conventions
 
+## Find the current commands and contracts
+
+Run `make help` at the repository root for supported checks and their prerequisites.
+`make check-fast` provides repository feedback; installed-host checks and complete
+native release qualification are separate routes. Local targets and CI share the
+owned scripts under `.github/scripts/commands/` and the canonical `rust/tools/`.
+Current architecture/development and release gates live in `docs/development.md`
+and `docs/release.md`; language contracts remain in `rules/` and `yaml/`.
+
 ## The project name is written `yamaa`, never `YAMAA`
 
 Lower case, always, including at the start of a sentence, in headings, in page
