@@ -9,6 +9,7 @@ functions:
     - name: q
       type: float
     returns: float
+    comparison_decimals: 20
     tests:
     - id: centre
       covers:
@@ -24,6 +25,13 @@ functions:
       args:
         q: -8.0
       result: 6.22096057427178e-16
+    - id: displayed-lower-tail
+      covers:
+      - boundary
+      - numeric-comparison
+      args:
+        q: -3.0
+      result: 0.0013498980316300957
     - id: missing-short-circuits
       covers:
       - short-circuit-missing:q

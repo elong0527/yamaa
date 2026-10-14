@@ -33,6 +33,17 @@ functions:
         adjust: 0.0
         as_percent: false
       result: 2.5
+    - id: binary-value-above-decimal-tie
+      covers:
+      - boundary
+      - numeric-comparison
+      args:
+        numerator: 2.0
+        denominator: 400.0
+        decimals: 2
+        adjust: 0.0
+        as_percent: false
+      result: 0.01
     - id: zero-numerator-boundary
       covers:
       - boundary
