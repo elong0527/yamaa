@@ -1079,6 +1079,25 @@
         "R/yamaa/tests/public_grammar.R",
         "R/yamaa/tests/public_file_resources.R"
       ]
+    },
+    {
+      "path": "rust/tests/host-fixtures/sas-cases.json",
+      "family": "sas",
+      "level": "component",
+      "consumers": [
+        "R/yamaa/tests/sas_sources.R",
+        "rust/tests/installed_sas_sources.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/compressed-truth.csv",
+      "family": "sas",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/table/sas_source.rs",
+        "R/yamaa/tests/sas_sources.R",
+        "rust/tests/installed_sas_sources.py"
+      ]
     }
   ],
   "suites": [
@@ -1284,6 +1303,20 @@
       "path": "rust/tests/installed_odm_helpers.py",
       "staged_path": "installed_odm_helpers.py",
       "level": "component"
+    },
+    {
+      "id": "python/sas-sources",
+      "runtime": "python",
+      "path": "rust/tests/installed_sas_sources.py",
+      "staged_path": "installed_sas_sources.py",
+      "level": "shared_run"
+    },
+    {
+      "id": "r/sas-sources",
+      "runtime": "r",
+      "path": "R/yamaa/tests/sas_sources.R",
+      "staged_path": "sas_sources.R",
+      "level": "shared_run"
     }
   ],
   "support_files": [
@@ -1678,6 +1711,90 @@
     {
       "path": "rust/tests/host-fixtures/README.md",
       "role": "documentation"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/LICENSE-haven.txt",
+      "role": "documentation"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/LICENSE-pandas.txt",
+      "role": "documentation"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/README.md",
+      "role": "documentation"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/build_xport.py",
+      "role": "documentation"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/datetime.sas7bdat",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/fractional.xpt",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/integer-bounds.xpt",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/integer-overflow.xpt",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/missing.xpt",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/multi-v5.xpt",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/multi-v8.xpt",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/precision.xpt",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/rdc.sas7bdat",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/rle.sas7bdat",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/unsupported-compression.sas7bdat",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/utf8.xpt",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/v5.xpt",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/v8.xpt",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/rdc-big-endian.sas7bdat",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/decimal.xpt",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/member-text.xpt",
+      "role": "input"
     }
   ]
 }

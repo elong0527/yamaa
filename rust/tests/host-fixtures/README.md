@@ -35,6 +35,19 @@ CSV preservation controls also remain. Exact float bit witnesses, NUL/invalid
 UTF-8 refusals, native ownership, callback order/identity, interrupts, provenance,
 publication retries and argument/class assertions stay in each actual host.
 No paired suite is replaced by a reference result or removed from the catalog.
+
+`sas-cases.json` adds paired SAS source controls with explicitly authored typed
+rows, exact CSV bytes, encoding declarations and refusal causes. Integer
+boundaries remain decimal strings. Both hosts consume the canonical transport
+and SAS binary inputs under `rust/crates/yamaa-adapters/tests/fixtures/sas`,
+staged by the supplemental catalog into `host-fixtures/sas`. Their independent
+writer, upstream source notes and fixture licenses stay beside those binaries
+in Rust source packages. Compression controls compare every input cell with the
+unchanged independent pandas CSV owner. The haven temporal owner asserts its
+documented first row only; other rows are never generated as golden truth by
+the candidate reader. Each installed host also verifies failed saves and held
+output after the original source and specification are changed or removed.
+
 The `original-specifications.typed_intermediates` cases additionally share
 authored conversion inputs, expected CSV bytes, refusal conditions and reached
 handler counts with the Rust adapter execution controls. Python and R exercise
