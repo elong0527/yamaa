@@ -849,6 +849,28 @@
           "$ref": "#/$defs/segmented_entry"
         }
       ]
+    },
+    "measurement_scopes": {
+      "description": "Descriptive report metadata only; original cold/warm metric names, raw values, clocks, sampling and distributions remain unchanged. Boundary descriptions apply to cold.<boundary>.median_ns and warm.<boundary>.median_ns where observed.",
+      "const": {
+        "protocol": "public-lifecycle/1",
+        "boundaries": {
+          "package_import": "Actual package/runtime import once per fresh child; isolated process startup is unavailable. Warm import is not assigned to each repetition.",
+          "public_build": "Actual public domain/Build invocation on the declared lifecycle. Producer root-Build reference is a separate root-evaluator scope.",
+          "copied_output": "Public output getter plus complete canonical typed-frame construction: schema, rows, cells, binary64, i64 and date representations. Subsequent JSON/gzip checkpoint writes are outside this timer.",
+          "copied_issues": "Public issues getter plus canonical issues conversion; subsequent JSON/gzip checkpoint writes are outside this timer.",
+          "copied_verification_log": "Public verification-log getter plus canonical typed-frame conversion when present; subsequent JSON/gzip checkpoint writes are outside this timer.",
+          "copied_warning_log": "Public warning-log getter plus canonical typed-frame conversion when present; subsequent JSON/gzip checkpoint writes are outside this timer.",
+          "metadata_after_build": "Collector package/version/origin metadata reads after Build.",
+          "held_save_1": "Actual first held public Save invocation; reached-report capture and saved-byte retention follow outside this timer.",
+          "held_save_2": "Actual repeated held public Save invocation; reached-report capture and saved-byte retention follow outside this timer."
+        },
+        "phase_durations": "Original owner-local stage durations summed by phase across the retained nested-node ledger. Inclusive nested sums are not additive wall-time partitions. Native output_preparation is a Build phase; it is separate from the copied_output getter-plus-canonical-construction boundary.",
+        "owner_held_save_intervals": "Original owner-local completed_ns minus entered_ns for each retained held Save interval, reported as phase.held_save_1/2 separately from outer held_save_1/2 timers.",
+        "child_peak_rss": "Actual whole-child-lifetime process peak, including collector work outside boundary timers. Cold has ten fresh-child observations; warm has one whole warm-child observation across all three warmups and thirty measured repetitions. No per-repetition RSS values or cross-runner pooling are invented.",
+        "outside_outer_timers": "Original report/measurement transport, JSON/gzip checkpoint serialization, saved-byte copying and controller acceptance remain outside outer call/canonical-conversion timers. No overhead subtraction or timing repair is applied.",
+        "baseline_ratios": "Compatible ratios require Python candidate and prior Python 0.3.0 observations on the same actual runner with the same lookup/aggregate/window scope. R-to-Python ratios remain incomparable. Producer root-Build is a separate comparator scope from full-graph Build, Save and child RSS."
+      }
     }
   },
   "examples": [

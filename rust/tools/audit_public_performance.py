@@ -91,6 +91,12 @@ def variants():
     }
 
 
+def measurement_scopes():
+    return read(Path(__file__).with_suffix(".schema.json"))["$defs"][
+        "measurement_scopes"
+    ]["const"]
+
+
 def logical_entries(entry):
     """Keep complete cases on their original runner; never combine distributions."""
     keys = ("artifact_id", "artifact_name", "run_attempt", "campaign", "collections")
@@ -1677,6 +1683,7 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
         "baseline_gaps": "Callbacks have no retained compatible baseline. R runners retain Python baseline observations, whose cross-host ratios remain incomparable. Producer root-Build is a separate scope; full-graph Build, Save and child RSS have no comparable baseline.",
         "warm_rss_scope": child_peak_rss.SCOPE
         + "; one actual warm-child peak, never 30 invented per-repetition peaks",
+        "measurement_scopes": measurement_scopes(),
     }
     collection_statuses = {
         report[key]["status"]
@@ -1703,6 +1710,14 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
 
 
 def markdown(report):
+    scopes = report["measurement_scopes"]
+    boundary_table = (
+        "| Boundary | Actual retained timing scope |\n| --- | --- |\n"
+        + "".join(
+            f"| `{boundary}` | {description} |\n"
+            for boundary, description in scopes["boundaries"].items()
+        )
+    )
     return (
         f"# public performance replay\n\nSource: `{report['source_revision']}`; original run {report['run_id']}, attempt {report['run_attempt']}.\n\n"
         f"| Gate | Verdict |\n| --- | --- |\n| Harness correctness | {report['harness_correctness']['status']} |\n"
@@ -1713,6 +1728,8 @@ def markdown(report):
         f"| Original run completion | {report['run_completion']['status']} |\n"
         f"| Numeric budgets | {report['budgets']['status']} |\n\n{report['baseline_gaps']}\n\n"
         f"Warm RSS: {report['warm_rss_scope']}.\n\nAcceptance: {'pass' if report['accepted'] else 'incomplete or failed'}.\n"
+        f"\n{boundary_table}\n{scopes['phase_durations']}\n\n{scopes['owner_held_save_intervals']}\n\n"
+        f"{scopes['child_peak_rss']}\n\n{scopes['outside_outer_timers']}\n\n{scopes['baseline_ratios']}\n"
     )
 
 
@@ -1753,6 +1770,7 @@ def main(argv=None, entry_provider=None):
             "budgets": {"status": "not_evaluated"},
             "collection_gate": {"scope": "collection-only", "status": "fail"},
             "run_completion": {"status": "incomplete"},
+            "measurement_scopes": measurement_scopes(),
         }
     lifecycle.write_json(args.output / "performance-audit.json", report)
     text = (
