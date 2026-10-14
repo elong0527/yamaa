@@ -71,7 +71,7 @@ def artifact_job(name):
 def timestamp(value):
     if not isinstance(value, str):
         raise TypeError("missing native evidence timestamp")
-    result = datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    result = datetime.datetime.fromisoformat(value)
     if result.tzinfo is None:
         raise ValueError("native evidence timestamp lacks timezone")
     return result
@@ -114,6 +114,8 @@ def validate(run, jobs, artifacts, repository, revision, branch):
         matches = [item for item in artifacts if item["name"] == name]
         if (
             len(matches) != 1
+            or type(matches[0].get("id")) is not int
+            or matches[0]["id"] <= 0
             or matches[0]["expired"]
             or matches[0]["size_in_bytes"] <= 0
             or matches[0].get("workflow_run", {}).get("head_sha") != revision
@@ -203,11 +205,17 @@ def admit(args):
                     run, jobs, artifacts, args.repository, args.revision, args.branch
                 )
                 if os.environ.get("GITHUB_OUTPUT"):
+                    identities = {
+                        artifact["name"]: artifact["id"]
+                        for artifact in artifacts
+                        if artifact["name"] in required_artifacts()
+                    }
                     with open(
                         os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8"
                     ) as output:
                         output.write(
                             f"run-id={run['id']}\nrun-attempt={run['run_attempt']}\nrevision={run['head_sha']}\n"
+                            f"artifact-ids={json.dumps(identities, sort_keys=True)}\n"
                         )
                 print(
                     "Admitted complete exact-source native run " + run["html_url"],

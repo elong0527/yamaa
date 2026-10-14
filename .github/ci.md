@@ -178,6 +178,87 @@ comparisons, 21 corpus-wide public inventories, six package build records, and t
 Every missing, expired, failed, stale, wrong-attempt or incomplete tuple remains
 visible. CI-script discovery runs independent fixture tests for this protocol.
 
+## Retained public performance campaign
+
+Push a reviewed, stable source to `qualification/issue-2142-frontier` to retain
+one independent-truth attempt for all 27 workloads on the 21 installed tuples.
+This route sets capacity tracing for the candidate children and retains original
+refusals; it does not establish timing budgets. The same source first needs its
+complete successful native run. Push `qualification/issue-1998` only after the
+runtime policy and harness stabilize to collect characterization: ten cold
+samples and thirty warm samples after three warm-ups, with same-machine prior
+Python 0.3.0 comparators built before any measurements. Workflow dispatch remains
+available for an explicit native run and purpose. Reusable workflow calls are
+not a campaign entry point: their caller context does not identify this exact
+performance workflow run.
+
+Both hosts use nine approved dimension variants per logical tuple: 162 Python
+jobs and 27 R jobs. Each job retains its variant's 1k, 10k and 100k cases, complete
+sampling distributions, and applicable prior Python comparison on that same
+actual runner. The index still names 18 Python and three R logical tuples, each with nine
+independently bound original artifact segments. No individual case distribution
+is split across runners. The auditor rejects unexpected, overlapping, duplicate
+or missing segments/cases; the required counts remain 567 candidate cells and
+504 prior lifecycle/root-Build comparator cells.
+Before any long producer starts, three OS-specific engine-free R preflights must
+pass their original checkpoint/PID controls. A platform refusal blocks collection
+and retains its original controls and partial bootstrap bytes. Every actual R
+producer also runs its own preflight, using pinned jsonlite 2.0.0 in its actual private
+library to require the focused checkpoint byte/failure controls with zero skips.
+It also proves that the plain R4.6.1 worker PID equals the RSS broker child,
+touches 64MiB of pages, preserves its authored nonzero exit and observes at least
+that child allocation. Original process/control receipts stay in the segment
+artifact; this preflight is an authored control rather than a memory budget.
+Its test count, verdict and original log remain separate from timing samples.
+
+Every source attempt preserves raw failures, partial collections, all 21 logical
+slots, and source/baseline/harness histories in a Git bundle. Its native,
+producer, index and verified storage jobs must all succeed. Successful original
+collection/storage is separate from independent collection qualification and
+numeric acceptance. Frontier retains independent truth or refusals and its index
+without claiming timing acceptance. Root-Build producer and cross-host Python
+comparators require their explicit scope dispositions.
+
+Trusted qualification pushes retain unchanged original Actions ZIP bytes in a
+new unpublished run/attempt evidence draft and verify authenticated retrieval.
+This storage extends beyond 90-day Actions expiry. It never publishes a release,
+creates a Git tag, replaces an asset, or approves a budget.
+The serial original-storage job allows the hosted maximum 360 minutes for
+download, upload and independent byte retrieval of every ZIP; this is transfer
+headroom rather than a proven wall bound or numeric performance threshold.
+
+`performance-replay.yml` runs after the trusted characterization completes. It
+keeps the original in-progress `run.json` unchanged and adds a separately fetched
+`completion-run.json` and completed manifest. A metadata-only catalog derives
+complete reader units from the original manifest: currently 189 independently
+bound segments, still 21 logical tuples. Legacy whole-tuple campaigns retain their
+original units and remain independently replayable. Each trusted reader job
+independently validates every original typed view/report/Save/source/clock/RSS
+record for all its cases and applicable roles. Its fragment remains
+`accepted:false` with budgets `not_evaluated`.
+
+The strict aggregate binds original reader run/attempt/reviewed checkout, exact
+successful jobs and immutable artifact IDs/creation intervals. It rejects
+missing, duplicate, unexpected or mismatched cases and independently recomputes
+raw distributions and ledgers. Collection qualification requires complete 567
+candidate and 504 comparator cells plus original native/source/terminal-success
+proof. Original fragment ZIPs, API snapshots and reports are verified and appended
+to the same unpublished source draft. Failed original or reader attempts cannot
+qualify. A fresh reviewed reader run may repair infrastructure while reusing the
+same successful immutable source samples.
+
+The measured source, original qualified reader and current aggregate revisions
+remain separate. Later `evidence/issue-1998-replay` pushes select the original
+source/run/attempt and original successful reader run/attempt/revision through
+versioned `rust/qualification/performance-replay.json`. Reviewed same-source
+`performance-budgets.json` is applied to those SAME qualified fragments, without
+recollecting or repeating typed capture. The original reader snapshot remains
+immutable; a separately fetched `reader-completion-run.json` must prove that
+attempt terminal-success. Numeric evidence acceptance still requires independent
+verification of the actual finalizer's completed successful run/job/report
+artifact before migration closure. The compact current campaign index records
+that genuine terminal receipt and durable original identities when available.
+
 ## Harbor Oracle coverage
 
 PR Python smoke runs lightweight image, hardening and fairness regression tests

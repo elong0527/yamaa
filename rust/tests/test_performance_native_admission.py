@@ -2,6 +2,7 @@
 
 import copy
 import importlib.util
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -49,13 +50,14 @@ class NativeAdmission(unittest.TestCase):
         ]
         self.artifacts = [
             {
+                "id": identity,
                 "name": name,
                 "expired": False,
                 "size_in_bytes": 10,
                 "workflow_run": {"id": 42, "head_sha": self.revision},
                 "created_at": "2026-10-13T12:05:00Z",
             }
-            for name in admission.required_artifacts()
+            for identity, name in enumerate(sorted(admission.required_artifacts()), start=1)
         ]
 
     def validate(self):
@@ -218,9 +220,20 @@ class NativeAdmission(unittest.TestCase):
             ):
                 admission.admit(args)
             self.assertEqual(
-                export.read_text(),
+                export.read_text().split("artifact-ids=", 1)[0],
                 f"run-id=42\nrun-attempt=2\nrevision={self.revision}\n",
             )
+            exported = json.loads(export.read_text().split("artifact-ids=", 1)[1])
+            self.assertEqual(exported, {item["name"]: item["id"] for item in self.artifacts})
+
+    def test_invalid_original_artifact_ids_cannot_admit_a_download(self):
+        original = self.artifacts[0]["id"]
+        for value in (None, True, 0, -1, "1"):
+            with self.subTest(identity=value):
+                self.artifacts[0]["id"] = value
+                with self.assertRaisesRegex(ValueError, "native artifact"):
+                    self.validate()
+        self.artifacts[0]["id"] = original
 
     def test_missing_native_run_expires_at_declared_wait_bound(self):
         with tempfile.TemporaryDirectory() as directory:

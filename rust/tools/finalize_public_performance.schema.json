@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Same-original public performance replay request",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "protocol": {"enum": ["public-performance-replay/1", "public-performance-replay/2"]},
+    "repository": {"const": "elong0527/yamaa"},
+    "source_revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "run_id": {"type": "integer", "minimum": 1},
+    "run_attempt": {"type": "integer", "minimum": 1},
+    "reader": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "run_id": {"type": "integer", "minimum": 1},
+        "run_attempt": {"type": "integer", "minimum": 1},
+        "revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      },
+      "required": ["run_id", "run_attempt", "revision"]
+    }
+  },
+  "required": ["protocol", "repository", "source_revision", "run_id", "run_attempt"],
+  "allOf": [
+    {"if": {"properties": {"protocol": {"const": "public-performance-replay/2"}}},
+     "then": {"required": ["reader"]}, "else": {"not": {"required": ["reader"]}}}
+  ],
+  "description": "Version1 selects a completed successful original source attempt for fresh independent unit reading. Version2 additionally pins the original successful qualified reader run/attempt/revision and applies reviewed same-source budgets to the SAME immutable fragments. Measured source, original reader and current aggregate revisions stay separate; original metadata/ZIPs remain unchanged and separately fetched source/reader terminal receipts are required. Actual finalizer completion is independently verified before migration closure."
+}

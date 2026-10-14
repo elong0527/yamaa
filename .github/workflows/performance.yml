@@ -1,12 +1,14 @@
 name: Public performance evidence
 
 on:
-  # Only this explicitly pushed qualification branch starts the expensive matrix.
+  # Explicit pushes select final characterization or the untimed capacity frontier.
   push:
-    branches: [qualification/issue-1998]
+    branches: [qualification/issue-1998, qualification/issue-2142-frontier]
     paths:
       - 'rust/**'
       - '!rust/measurements/**'
+      - '!rust/qualification/performance-campaign.json'
+      - '!rust/qualification/performance-budgets.json'
       - '!rust/*.md'
       - 'python/**'
       - '!python/*.md'
@@ -22,20 +24,6 @@ on:
       - '.github/scripts/commands/rust_tests.py'
       - '.github/scripts/commands/check_r.py'
       - '.github/scripts/ci/test_performance_selection.py'
-  workflow_call:
-    inputs:
-      native_run_id:
-        required: true
-        type: string
-      purpose:
-        default: capacity-frontier
-        type: string
-      phase_measurements:
-        default: false
-        type: boolean
-      baseline_ref:
-        default: yamaa-py-0.3.0
-        type: string
   workflow_dispatch:
     inputs:
       native_run_id:
@@ -58,8 +46,9 @@ on:
         type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/qualification/issue-1998' }}
+  # A newer source must not cancel an original collection or its retention.
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -73,7 +62,7 @@ env:
   RUSTUP_TOOLCHAIN: 1.90.0
   CARGO_BUILD_JOBS: '2'
   CARGO_INCREMENTAL: '0'
-  COLLECTION_PURPOSE: ${{ inputs.purpose || 'characterization' }}
+  COLLECTION_PURPOSE: ${{ github.ref == 'refs/heads/qualification/issue-2142-frontier' && 'capacity-frontier' || inputs.purpose || 'characterization' }}
   BASELINE_REF: ${{ inputs.baseline_ref || 'yamaa-py-0.3.0' }}
   PHASE_MEASUREMENTS: ${{ github.event_name == 'push' || inputs.phase_measurements }}
 
@@ -84,6 +73,8 @@ jobs:
     timeout-minutes: 125
     outputs:
       run-id: ${{ steps.admit.outputs.run-id }}
+      run-attempt: ${{ steps.admit.outputs.run-attempt }}
+      artifact-ids: ${{ steps.admit.outputs.artifact-ids }}
       revision: ${{ steps.admit.outputs.revision }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -110,14 +101,119 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
-  python:
+  r_preflight:
     needs: native
+    name: performance-r-preflight (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: '4.6.1'
+          rtools-version: ${{ runner.os == 'Windows' && '45' || '' }}
+          use-public-rspm: true
+      - name: Install locked engine-free readers and the exact private JSON codec
+        env:
+          R_LIBS: ${{ runner.temp }}/performance-r-preflight-library
+        run: |
+          python -m pip install uv==0.11.6
+          uv export --project python --locked --extra test --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/requirements.txt"
+          python -m pip install --no-deps -r "${RUNNER_TEMP}/requirements.txt"
+          python - <<'PY'
+          import json, os, tarfile, urllib.request
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          library=root/'performance-r-preflight-library'
+          library.mkdir()
+          codec=root/'jsonlite_2.0.0.tar.gz'
+          with urllib.request.urlopen('https://codeload.github.com/cran/jsonlite/tar.gz/refs/tags/2.0.0') as original:
+              codec.write_bytes(original.read())
+          with tarfile.open(codec) as original:
+              original.extractall(root/'codec-source', filter='data')
+          with open(os.environ['GITHUB_ENV'],'a') as env:
+              env.write('R_LIBS='+str(library)+'\n')
+          record={'scope':'authored platform R checkpoint/PID controls before long collection; no SDK or timing samples',
+                  'repository':os.environ['GITHUB_REPOSITORY'],'source_revision':os.environ['GITHUB_SHA'],
+                  'run_id':int(os.environ['GITHUB_RUN_ID']),'run_attempt':int(os.environ['GITHUB_RUN_ATTEMPT']),
+                  'os':os.environ['RUNNER_OS'],'jsonlite_version':'2.0.0','runtime_version':'4.6.1',
+                  'private_library':str(library),'accepted':False}
+          (root/'r-platform-preflight.json').write_text(json.dumps(record,indent=2)+'\n')
+          PY
+          R CMD INSTALL --library="${R_LIBS}" "${RUNNER_TEMP}/codec-source/jsonlite-2.0.0" 2>&1 | tee "${RUNNER_TEMP}/jsonlite-install.log"
+      - name: Require actual R checkpoint bytes and original failure ordering without skips
+        id: views
+        run: |
+          python - <<'PY' 2>&1 | tee "${RUNNER_TEMP}/r-retention-controls.log"
+          import json, os, shutil, subprocess, sys, unittest
+          from pathlib import Path
+          executable=shutil.which('Rscript')
+          record={'scope':'authored actual-R checkpoint controls; no timing samples',
+                  'rscript':executable,'private_library':os.environ['R_LIBS'],
+                  'tests_run':0,'skipped':[],'success':False}
+          destination=Path(os.environ['RUNNER_TEMP'])/'r-retention-controls.json'
+          preflight=subprocess.run([executable,'--vanilla','-e',
+              'root <- normalizePath(Sys.getenv("R_LIBS"), winslash="/", mustWork=TRUE); '
+              'library(jsonlite, lib.loc=root); '
+              'stopifnot(as.character(packageVersion("jsonlite")) == "2.0.0"); '
+              'stopifnot(dirname(normalizePath(find.package("jsonlite"), winslash="/")) == root)'],
+              capture_output=True,text=True) if executable else None
+          record['private_namespace_preflight']=preflight.returncode if preflight else None
+          if preflight is None or preflight.returncode:
+              destination.write_text(json.dumps(record,indent=2)+'\n')
+              if preflight: print(preflight.stderr)
+              raise SystemExit(1)
+          suite=unittest.defaultTestLoader.discover('rust/tests',pattern='test_public_lifecycle_view_retention.py')
+          expected=suite.countTestCases()
+          result=unittest.TextTestRunner(verbosity=2).run(suite)
+          record.update(tests_expected=expected,tests_run=result.testsRun,
+              skipped=[{'test':str(test),'reason':reason} for test,reason in result.skipped],
+              failures=[str(test) for test,_ in result.failures],errors=[str(test) for test,_ in result.errors])
+          record['success']=expected>=3 and result.testsRun==expected and result.wasSuccessful() and not result.skipped
+          destination.write_text(json.dumps(record,indent=2)+'\n')
+          raise SystemExit(0 if record['success'] else 1)
+          PY
+      - name: Prove plain R worker PID, touched child RSS and original nonzero exit
+        id: rss
+        run: python rust/tools/check_r_child_peak_rss.py --rscript "$(command -v Rscript)" --output "${RUNNER_TEMP}/r-child-rss-controls"
+      - name: Preserve original platform controls and any refusal
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: performance-r-preflight-${{ matrix.os }}
+          retention-days: 90
+          path: |
+            ${{ runner.temp }}/r-platform-preflight.json
+            ${{ runner.temp }}/jsonlite_2.0.0.tar.gz
+            ${{ runner.temp }}/jsonlite-install.log
+            ${{ runner.temp }}/codec-source
+            ${{ runner.temp }}/r-retention-controls.json
+            ${{ runner.temp }}/r-retention-controls.log
+            ${{ runner.temp }}/r-child-rss-controls
+          if-no-files-found: error
+      - name: Block long collection on any platform control refusal
+        if: always()
+        run: test "${{ steps.views.outcome }}" = success && test "${{ steps.rss.outcome }}" = success
+
+  python:
+    needs: [native, r_preflight]
     env:
       NATIVE_RUN_ID: ${{ needs.native.outputs.run-id }}
-    name: performance-python (${{ matrix.os }}, ${{ matrix.python }}, ${{ matrix.form }})
+      NATIVE_RUN_ATTEMPT: ${{ needs.native.outputs.run-attempt }}
+      PERFORMANCE_VARIANT: ${{ matrix.variant }}
+    name: performance-python (${{ matrix.os }}, ${{ matrix.python }}, ${{ matrix.form }}, ${{ matrix.variant }})
     runs-on: ${{ matrix.os }}
-    # Approved reference producer 100k Build alone takes about 30-42 seconds;
-    # both baseline scopes retain ten cold and 33 warm attempts for every case.
+    # Actual large-case diagnostics require bounded dimension groups. Each
+    # case keeps its complete original distribution and same-machine baseline.
     timeout-minutes: 240
     strategy:
       fail-fast: false
@@ -125,6 +221,7 @@ jobs:
         os: [ubuntu-24.04, macos-15, windows-latest]
         python: ['3.12', '3.13', '3.14']
         form: [wheel, source]
+        variant: [lookup-1, lookup-4, aggregate-10, aggregate-100, window-10, window-100, callback-1, producer-1, producer-3]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -137,14 +234,15 @@ jobs:
         with:
           github-token: ${{ github.token }}
           run-id: ${{ needs.native.outputs.run-id }}
-          name: native-python-${{ matrix.os }}-3.14
+          artifact-ids: ${{ fromJSON(needs.native.outputs.artifact-ids)[format('native-python-{0}-3.14', matrix.os)] }}
+          merge-multiple: true
           path: ${{ runner.temp }}/candidate-distribution
       - name: Admit candidate source identity and prepare previous release source
         env:
           GH_TOKEN: ${{ github.token }}
           BASELINE_REF: ${{ inputs.baseline_ref || 'yamaa-py-0.3.0' }}
         run: |
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${NATIVE_RUN_ID}" > "${RUNNER_TEMP}/native-run.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${NATIVE_RUN_ID}/attempts/${NATIVE_RUN_ATTEMPT}" > "${RUNNER_TEMP}/native-run.json"
           python - <<'PY'
           import json, os
           from pathlib import Path
@@ -191,25 +289,43 @@ jobs:
         run: |
           candidate_artifact=$(python -c 'from pathlib import Path; import os; print(next((Path(os.environ["RUNNER_TEMP"])/"candidate-distribution").glob("*.whl" if "${{ matrix.form }}"=="wheel" else "*.tar.gz")))')
           baseline_artifact=$(python -c 'from pathlib import Path; import os; print(next((Path(os.environ["RUNNER_TEMP"])/"baseline-distribution").glob("*.whl")))')
-          python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "${CANDIDATE_REVISION}" --host python --executable "${CANDIDATE_PYTHON}" --artifact "${candidate_artifact}" --artifact-reference "github-actions:${NATIVE_RUN_ID}/native-python-${{ matrix.os }}-3.14/$(basename "${candidate_artifact}")" --form "${{ matrix.form }}" --build-association "completed native workflow source/package association; current job installs wheel or rebuilds source before measurement" --output "${RUNNER_TEMP}/candidate-installation"
+          python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "${CANDIDATE_REVISION}" --host python --executable "${CANDIDATE_PYTHON}" --artifact "${candidate_artifact}" --artifact-reference "github-actions:${NATIVE_RUN_ID}/attempt-${NATIVE_RUN_ATTEMPT}/native-python-${{ matrix.os }}-3.14/$(basename "${candidate_artifact}")" --form "${{ matrix.form }}" --build-association "completed native workflow source/package association; current job installs wheel or rebuilds source before measurement" --output "${RUNNER_TEMP}/candidate-installation"
           python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "$(cat "${RUNNER_TEMP}/baseline-revision.txt")" --host python --executable "${BASELINE_PYTHON}" --artifact "${baseline_artifact}" --artifact-reference "source-built:${BASELINE_REF}/$(basename "${baseline_artifact}")" --form wheel --build-association "clean source-built previous release archive; baseline-build.log retained; not a downloaded previous-release binary" --output "${RUNNER_TEMP}/baseline-installation"
       - name: Create same-runner campaign before original measurements
         run: python rust/tools/performance_campaign.py create --campaign "${RUNNER_TEMP}/machine-campaign.json"
+      - name: Select the complete approved dimension variant without splitting samples
+        run: |
+          python - <<'PY'
+          import os, sys
+          sys.path.insert(0, 'rust/tools')
+          from index_public_performance import variant_cases
+          cases=variant_cases(os.environ['PERFORMANCE_VARIANT'])
+          with open(os.environ['GITHUB_ENV'],'a') as env:
+              env.write('PERFORMANCE_CASES='+' '.join(cases)+'\n')
+          PY
       - name: Collect candidate with independent truth before timing
         id: candidate
         continue-on-error: true
         run: |
           phase_args=()
           if [[ "${PHASE_MEASUREMENTS}" == "true" ]]; then phase_args+=(--phase-measurements); fi
-          python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${CANDIDATE_PYTHON}" --provenance "${RUNNER_TEMP}/candidate-installation/provenance.json" --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/candidate-evidence" "${phase_args[@]}"
+          if [[ "${COLLECTION_PURPOSE}" == "capacity-frontier" ]]; then export YAMAA_REPORT_CAPACITY_TRACE=1; fi
+          read -r -a case_args <<< "${PERFORMANCE_CASES}"
+          python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${CANDIDATE_PYTHON}" --provenance "${RUNNER_TEMP}/candidate-installation/provenance.json" --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/candidate-evidence" --cases "${case_args[@]}" "${phase_args[@]}"
       - name: Collect compatible previous-release Python reference on the same runner
+        if: startsWith(matrix.variant, 'lookup-') || startsWith(matrix.variant, 'aggregate-') || startsWith(matrix.variant, 'window-')
         id: baseline
         continue-on-error: true
-        run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --families lookup aggregate window --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/baseline-evidence"
+        run: |
+          read -r -a case_args <<< "${PERFORMANCE_CASES}"
+          python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --families lookup aggregate window --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/baseline-evidence" --cases "${case_args[@]}"
       - name: Collect supported producer root-Build reference without graph Saves
+        if: startsWith(matrix.variant, 'producer-')
         id: producer_baseline
         continue-on-error: true
-        run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --scope producer-root-build --families producer --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/producer-root-build-baseline"
+        run: |
+          read -r -a case_args <<< "${PERFORMANCE_CASES}"
+          python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --scope producer-root-build --families producer --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/producer-root-build-baseline" --cases "${case_args[@]}"
       - name: Attach original campaign identity without changing sample admission
         if: always()
         run: |
@@ -227,7 +343,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
-          name: performance-python-${{ matrix.os }}-${{ matrix.python }}-${{ matrix.form }}
+          name: performance-python-${{ matrix.os }}-${{ matrix.python }}-${{ matrix.form }}-${{ matrix.variant }}
           retention-days: 90
           path: |
             ${{ runner.temp }}/native-run.json
@@ -245,19 +361,34 @@ jobs:
           if-no-files-found: error
       - name: Require complete evidence after preserving failures
         if: always()
-        run: test "${{ steps.candidate.outcome }}" = success && test "${{ steps.baseline.outcome }}" = success && test "${{ steps.producer_baseline.outcome }}" = success
+        env:
+          CANDIDATE_OUTCOME: ${{ steps.candidate.outcome }}
+          BASELINE_OUTCOME: ${{ steps.baseline.outcome }}
+          PRODUCER_BASELINE_OUTCOME: ${{ steps.producer_baseline.outcome }}
+        run: |
+          test "${CANDIDATE_OUTCOME}" = success
+          case "${PERFORMANCE_VARIANT}" in
+            lookup-*|aggregate-*|window-*) test "${BASELINE_OUTCOME}" = success ;;
+            producer-*) test "${PRODUCER_BASELINE_OUTCOME}" = success ;;
+            callback-1) true ;;
+            *) exit 1 ;;
+          esac
 
   r:
-    needs: native
+    needs: [native, r_preflight]
     env:
       NATIVE_RUN_ID: ${{ needs.native.outputs.run-id }}
-    name: performance-r (${{ matrix.os }}, source)
+      NATIVE_RUN_ATTEMPT: ${{ needs.native.outputs.run-attempt }}
+      PERFORMANCE_VARIANT: ${{ matrix.variant }}
+    name: performance-r (${{ matrix.os }}, source, ${{ matrix.variant }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-15, windows-latest]
+        # A complete dimension variant (all three sizes) stays on one runner.
+        variant: [lookup-1, lookup-4, aggregate-10, aggregate-100, window-10, window-100, callback-1, producer-1, producer-3]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -275,14 +406,15 @@ jobs:
         with:
           github-token: ${{ github.token }}
           run-id: ${{ needs.native.outputs.run-id }}
-          name: native-r-${{ matrix.os }}
+          artifact-ids: ${{ fromJSON(needs.native.outputs.artifact-ids)[format('native-r-{0}', matrix.os)] }}
+          merge-multiple: true
           path: ${{ runner.temp }}/candidate-distribution
       - name: Admit source identity and build R and its admitted monotonic timer
         env:
           GH_TOKEN: ${{ github.token }}
           R_LIBS: ${{ runner.temp }}/performance-r-library
         run: |
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${NATIVE_RUN_ID}" > "${RUNNER_TEMP}/native-run.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${NATIVE_RUN_ID}/attempts/${NATIVE_RUN_ATTEMPT}" > "${RUNNER_TEMP}/native-run.json"
           python - <<'PY'
           import json, os, tarfile, urllib.request
           from pathlib import Path
@@ -297,6 +429,11 @@ jobs:
               archive.write_bytes(source.read())
           with tarfile.open(archive) as source:
               source.extractall(root/'timer-source', filter='data')
+          codec=root/'jsonlite_2.0.0.tar.gz'
+          with urllib.request.urlopen('https://codeload.github.com/cran/jsonlite/tar.gz/refs/tags/2.0.0') as source:
+              codec.write_bytes(source.read())
+          with tarfile.open(codec) as source:
+              source.extractall(root/'codec-source', filter='data')
           with open(os.environ['GITHUB_ENV'],'a') as env:
               env.write('CANDIDATE_REVISION='+run['head_sha']+'\n')
               env.write('R_LIBS='+str(root/'performance-r-library')+'\n')
@@ -305,7 +442,7 @@ jobs:
           if [ "${{ runner.os }}" = Windows ]; then
             rustup target add --toolchain 1.90.0 x86_64-pc-windows-gnu
           fi
-          Rscript --vanilla -e 'install.packages("jsonlite", repos="https://cloud.r-project.org", lib=Sys.getenv("R_LIBS"))'
+          R CMD INSTALL --library="${R_LIBS}" "${RUNNER_TEMP}/codec-source/jsonlite-2.0.0" 2>&1 | tee "${RUNNER_TEMP}/jsonlite-install.log"
           R CMD INSTALL --library="${R_LIBS}" "${RUNNER_TEMP}/timer-source/microbenchmark" 2>&1 | tee "${RUNNER_TEMP}/timer-build.log"
           if [ "${{ runner.os }}" = Windows ]; then
             r_include=$(Rscript --vanilla -e 'cat(R.home("include"))')
@@ -329,7 +466,38 @@ jobs:
       - name: Record actual installed R origins and source association
         run: |
           artifact=$(python -c 'from pathlib import Path; import os; print(next((Path(os.environ["RUNNER_TEMP"])/"candidate-distribution").glob("*.tar.gz")))')
-          python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "${CANDIDATE_REVISION}" --host r --executable "$(command -v Rscript)" --artifact "${artifact}" --artifact-reference "github-actions:${NATIVE_RUN_ID}/native-r-${{ matrix.os }}/$(basename "${artifact}")" --form source --build-association "completed native workflow source archive; rebuilt before collection; candidate-build.log retained" --clock-config "${TIMER_CONFIG}" --clock-library "${TIMER_LIBRARY}" --output "${RUNNER_TEMP}/candidate-installation"
+          python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "${CANDIDATE_REVISION}" --host r --executable "$(command -v Rscript)" --artifact "${artifact}" --artifact-reference "github-actions:${NATIVE_RUN_ID}/attempt-${NATIVE_RUN_ATTEMPT}/native-r-${{ matrix.os }}/$(basename "${artifact}")" --form source --build-association "completed native workflow source archive; rebuilt before collection; candidate-build.log retained" --clock-config "${TIMER_CONFIG}" --clock-library "${TIMER_LIBRARY}" --output "${RUNNER_TEMP}/candidate-installation"
+      - name: Require actual R checkpoint bytes and original failure ordering without skips
+        run: |
+          python - <<'PY' 2>&1 | tee "${RUNNER_TEMP}/r-retention-controls.log"
+          import json, os, shutil, subprocess, sys, unittest
+          from pathlib import Path
+          executable=shutil.which('Rscript')
+          record={'scope':'authored actual-R checkpoint controls; no timing samples',
+                  'rscript':executable,'private_library':os.environ['R_LIBS'],
+                  'tests_run':0,'skipped':[],'success':False}
+          destination=Path(os.environ['RUNNER_TEMP'])/'r-retention-controls.json'
+          preflight=subprocess.run([executable,'--vanilla','-e',
+              'root <- normalizePath(Sys.getenv("R_LIBS"), winslash="/", mustWork=TRUE); '
+              'library(jsonlite, lib.loc=root); '
+              'stopifnot(as.character(packageVersion("jsonlite")) == "2.0.0"); '
+              'stopifnot(dirname(normalizePath(find.package("jsonlite"), winslash="/")) == root)'],
+              capture_output=True,text=True) if executable else None
+          record['private_namespace_preflight']=preflight.returncode if preflight else None
+          if preflight is None or preflight.returncode:
+              destination.write_text(json.dumps(record,indent=2)+'\n')
+              if preflight: print(preflight.stderr)
+              raise SystemExit(1)
+          suite=unittest.defaultTestLoader.discover('rust/tests',pattern='test_public_lifecycle_view_retention.py')
+          expected=suite.countTestCases()
+          result=unittest.TextTestRunner(verbosity=2).run(suite)
+          record.update(tests_expected=expected,tests_run=result.testsRun,
+              skipped=[{'test':str(test),'reason':reason} for test,reason in result.skipped],
+              failures=[str(test) for test,_ in result.failures],errors=[str(test) for test,_ in result.errors])
+          record['success']=expected>=3 and result.testsRun==expected and result.wasSuccessful() and not result.skipped
+          destination.write_text(json.dumps(record,indent=2)+'\n')
+          raise SystemExit(0 if record['success'] else 1)
+          PY
       - name: Secure and install previous-release Python reference on the R runner
         env:
           BASELINE_REF: ${{ inputs.baseline_ref || 'yamaa-py-0.3.0' }}
@@ -356,23 +524,43 @@ jobs:
           uv pip install --python "${baseline_python}" --no-deps -r "${RUNNER_TEMP}/requirements.txt" "${RUNNER_TEMP}"/baseline-distribution/*.whl
           artifact=$(python -c 'from pathlib import Path; import os; print(next((Path(os.environ["RUNNER_TEMP"])/"baseline-distribution").glob("*.whl")))')
           python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "$(cat "${RUNNER_TEMP}/baseline-revision.txt")" --host python --executable "${baseline_python}" --artifact "${artifact}" --artifact-reference "source-built:${BASELINE_REF}/$(basename "${artifact}")" --form wheel --build-association "clean source-built previous release archive on the R measurement runner; baseline-build.log retained" --output "${RUNNER_TEMP}/baseline-installation"
+      - name: Prove plain R worker PID, touched child RSS and original nonzero exit
+        run: python rust/tools/check_r_child_peak_rss.py --rscript "$(command -v Rscript)" --output "${RUNNER_TEMP}/r-child-rss-controls"
       - name: Create same-runner campaign before original measurements
         run: python rust/tools/performance_campaign.py create --campaign "${RUNNER_TEMP}/machine-campaign.json"
+      - name: Select the complete approved dimension variant without splitting samples
+        run: |
+          python - <<'PY'
+          import os, sys
+          sys.path.insert(0, 'rust/tools')
+          from index_public_performance import variant_cases
+          cases=variant_cases(os.environ['PERFORMANCE_VARIANT'])
+          with open(os.environ['GITHUB_ENV'],'a') as env:
+              env.write('PERFORMANCE_CASES='+' '.join(cases)+'\n')
+          PY
       - name: Collect installed R with independent truth and child lifetime peak RSS
         id: candidate
         continue-on-error: true
         run: |
           phase_args=()
           if [[ "${PHASE_MEASUREMENTS}" == "true" ]]; then phase_args+=(--phase-measurements); fi
-          python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host r --executable "$(command -v Rscript)" --provenance "${RUNNER_TEMP}/candidate-installation/provenance.json" --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/candidate-evidence" "${phase_args[@]}"
+          if [[ "${COLLECTION_PURPOSE}" == "capacity-frontier" ]]; then export YAMAA_REPORT_CAPACITY_TRACE=1; fi
+          read -r -a case_args <<< "${PERFORMANCE_CASES}"
+          python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host r --executable "$(command -v Rscript)" --provenance "${RUNNER_TEMP}/candidate-installation/provenance.json" --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/candidate-evidence" --cases "${case_args[@]}" "${phase_args[@]}"
       - name: Collect compatible previous-release reference on the same R runner
+        if: startsWith(matrix.variant, 'lookup-') || startsWith(matrix.variant, 'aggregate-') || startsWith(matrix.variant, 'window-')
         id: baseline
         continue-on-error: true
-        run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --families lookup aggregate window --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/baseline-evidence"
+        run: |
+          read -r -a case_args <<< "${PERFORMANCE_CASES}"
+          python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --families lookup aggregate window --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/baseline-evidence" --cases "${case_args[@]}"
       - name: Collect supported producer root-Build reference on the R runner
+        if: startsWith(matrix.variant, 'producer-')
         id: producer_baseline
         continue-on-error: true
-        run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --scope producer-root-build --families producer --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/producer-root-build-baseline"
+        run: |
+          read -r -a case_args <<< "${PERFORMANCE_CASES}"
+          python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --scope producer-root-build --families producer --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/producer-root-build-baseline" --cases "${case_args[@]}"
       - name: Attach original campaign identity without changing sample admission
         if: always()
         run: |
@@ -390,7 +578,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
-          name: performance-r-${{ matrix.os }}-source
+          name: performance-r-${{ matrix.os }}-source-${{ matrix.variant }}
           retention-days: 90
           path: |
             ${{ runner.temp }}/native-run.json
@@ -398,10 +586,16 @@ jobs:
             ${{ runner.temp }}/candidate-distribution
             ${{ runner.temp }}/candidate-build.log
             ${{ runner.temp }}/timer-build.log
+            ${{ runner.temp }}/jsonlite_2.0.0.tar.gz
+            ${{ runner.temp }}/jsonlite-install.log
+            ${{ runner.temp }}/codec-source
             ${{ runner.temp }}/timer-windows-macros.txt
             ${{ runner.temp }}/microbenchmark_1.5.0.tar.gz
             ${{ runner.temp }}/timer-source
             ${{ runner.temp }}/candidate-installation
+            ${{ runner.temp }}/r-retention-controls.json
+            ${{ runner.temp }}/r-retention-controls.log
+            ${{ runner.temp }}/r-child-rss-controls
             ${{ runner.temp }}/candidate-evidence
             ${{ runner.temp }}/previous-release.tar.gz
             ${{ runner.temp }}/baseline-revision.txt
@@ -413,4 +607,94 @@ jobs:
           if-no-files-found: error
       - name: Require complete evidence after preserving failures
         if: always()
-        run: test "${{ steps.candidate.outcome }}" = success && test "${{ steps.baseline.outcome }}" = success && test "${{ steps.producer_baseline.outcome }}" = success
+        env:
+          CANDIDATE_OUTCOME: ${{ steps.candidate.outcome }}
+          BASELINE_OUTCOME: ${{ steps.baseline.outcome }}
+          PRODUCER_BASELINE_OUTCOME: ${{ steps.producer_baseline.outcome }}
+        run: |
+          test "${CANDIDATE_OUTCOME}" = success
+          case "${PERFORMANCE_VARIANT}" in
+            lookup-*|aggregate-*|window-*) test "${BASELINE_OUTCOME}" = success ;;
+            producer-*) test "${PRODUCER_BASELINE_OUTCOME}" = success ;;
+            callback-1) true ;;
+            *) exit 1 ;;
+          esac
+
+  index:
+    needs: [native, python, r]
+    if: always()
+    name: Retain exact original campaign index
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Retain exact attempt metadata and self-contained source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python rust/tools/index_public_performance.py --input "${RUNNER_TEMP}/performance-input" \
+            --checkout "${GITHUB_WORKSPACE}" --repository "${GITHUB_REPOSITORY}" \
+            --revision "${GITHUB_SHA}" --run-id "${GITHUB_RUN_ID}" \
+            --attempt "${GITHUB_RUN_ATTEMPT}" --baseline-ref "${BASELINE_REF}" \
+            --native-run-id "${{ needs.native.outputs.run-id }}" \
+            --native-attempt "${{ needs.native.outputs.run-attempt }}" --r-variants --python-variants
+      - name: Preserve complete tuple selection and original source histories
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: performance-index
+          retention-days: 90
+          path: ${{ runner.temp }}/performance-input
+          if-no-files-found: error
+
+  retain:
+    needs: [native, r_preflight, python, r, index]
+    if: always() && github.event_name == 'push' && (github.ref == 'refs/heads/qualification/issue-1998' || github.ref == 'refs/heads/qualification/issue-2142-frontier')
+    name: Preserve original campaign bytes in an unpublished draft
+    runs-on: ubuntu-24.04
+    # Transfer headroom for every immutable original ZIP; this is not a budget.
+    timeout-minutes: 360
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Store original ZIPs additively and verify authenticated byte retrieval
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python rust/tools/retain_public_performance.py --repository "${GITHUB_REPOSITORY}" \
+            --revision "${GITHUB_SHA}" --run-id "${GITHUB_RUN_ID}" \
+            --attempt "${GITHUB_RUN_ATTEMPT}" --output "${RUNNER_TEMP}/performance-retention"
+      - name: Preserve storage receipt and original artifact identities
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: performance-retention
+          retention-days: 90
+          path: |
+            ${{ runner.temp }}/performance-retention/retention.json
+            ${{ runner.temp }}/performance-retention/original-artifacts.json
+            ${{ runner.temp }}/performance-retention/original-jobs.json
+          if-no-files-found: error
+      - name: Preserve refused original downloads and retrieval differences
+        if: failure()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: performance-retention-failure-${{ github.run_attempt }}
+          retention-days: 90
+          path: |
+            ${{ runner.temp }}/performance-retention/*.zip*
+            ${{ runner.temp }}/performance-retention/retrieved-*
+          if-no-files-found: ignore
