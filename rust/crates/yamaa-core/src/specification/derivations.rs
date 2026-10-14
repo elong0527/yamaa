@@ -559,7 +559,15 @@ pub(super) fn bind_row(
                     });
                 }
             }
-            static_types::numeric(compiled, named, catalog, secondary, intermediates, findings)?;
+            static_types::numeric(
+                compiled,
+                &bindings,
+                named,
+                catalog,
+                secondary,
+                intermediates,
+                findings,
+            )?;
             (findings.len() == before)
                 .then(|| BoundNumeric::new(compiled.clone(), bindings).map(Expression::Compute))
                 .transpose()

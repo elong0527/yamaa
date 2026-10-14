@@ -339,6 +339,8 @@ def run_suites(root, catalog, *, runtime, staged_root, output, evidence):
         row["log"] = log.name
         failed = row["result"] != "pass"
         print(suite["id"], row["result"], flush=True)
+        if failed:
+            print(log.read_text(encoding="utf-8", errors="replace"), flush=True)
     report = {
         "version": "1",
         "scope": "supplemental_suites",

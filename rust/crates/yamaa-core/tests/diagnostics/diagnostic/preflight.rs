@@ -422,6 +422,51 @@ fn base<'a>(
 
 pub(super) fn reached() -> BTreeSet<ConditionCode> {
     let mut log_codes = BTreeSet::new();
+    for (columns, keys, expected) in [
+        (
+            vec![column("ID", Some(source()))],
+            vec![],
+            (
+                "invalid_field_type",
+                Some("REQ-0220"),
+                vec!["keys"],
+                vec![
+                    ("expected", text("at least one key column")),
+                    ("actual", text("empty list")),
+                ],
+            ),
+        ),
+        (
+            vec![column("ID", Some(source()))],
+            vec![Text("ID"), Text("ID")],
+            (
+                "duplicate_identifier",
+                Some("REQ-0220"),
+                vec!["keys[1]"],
+                vec![("identifier", text("ID"))],
+            ),
+        ),
+        (
+            vec![column("ID", Some(source())), column("ID", Some(source()))],
+            vec![Text("ID")],
+            (
+                "duplicate_identifier",
+                Some("REQ-0238"),
+                vec!["columns[1].name"],
+                vec![("identifier", text("ID"))],
+            ),
+        ),
+    ] {
+        log_codes.extend(check(
+            base(
+                "TEST",
+                Map(vec![("SRC", Map(vec![("path", Text("source.csv"))]))]),
+                columns,
+                keys,
+            ),
+            vec![expected],
+        ));
+    }
     log_codes.extend(check(
         base(
             "TEST",

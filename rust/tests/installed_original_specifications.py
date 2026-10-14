@@ -2066,7 +2066,7 @@ columns:
                                 self.assertEqual(path.read_bytes(), original)
 
 
-    def test_public_intermediate_keys_complete_unchanged_nineteen_captures(self):
+    def test_public_intermediate_keys_complete_nineteen_captures_with_static_admission(self):
         import shutil
         import yamaa
         reference = json.loads((ROOT / "key-reference.json").read_text(encoding="utf-8"))
@@ -2074,6 +2074,18 @@ columns:
         with tempfile.TemporaryDirectory() as directory:
             for name, case in reference.items():
                 with self.subTest(case=name):
+                    # REQ-0190 admits predicate types before cell-dependent key
+                    # reads. Keep the historical capture and state today's
+                    # finding explicitly, as the Rust and R controls do.
+                    expected_findings = case.get("findings", [])
+                    if name == "dependency_before_bad_filter":
+                        expected_findings = [{
+                            "phase": "validation",
+                            "condition": "incompatible_input_type",
+                            "requirement": "REQ-0190",
+                            "spec_paths": ["intermediates[0].filter"],
+                            "context": {"left_type": "int", "right_type": "str"},
+                        }]
                     work = Path(directory) / name
                     shutil.copytree(ROOT / "keys" / name, work)
                     entry = work / "spec.yaml"
@@ -2087,7 +2099,7 @@ columns:
                             findings = result.issues.to_dicts()
                             for finding in findings:
                                 finding["context"] = json.loads(finding["context"])
-                            self.assertEqual(findings, case.get("findings", []))
+                            self.assertEqual(findings, expected_findings)
                             wire = result._native.observations()
                             if wire is None:
                                 self.assertEqual(case["handlers"], [])

@@ -13,12 +13,13 @@ from pathlib import Path
 
 import _typed_fixtures
 import _native_schema
+from validation_diagnostics import ValidationDiagnostic
 
 
-class Finding(str):
+class Finding(ValidationDiagnostic):
     def __new__(cls, row, label):
         path = label + ('.' + row['spec_paths'][0] if row['spec_paths'][0] else '')
-        value = super().__new__(cls, f"ERROR: {path}: {row['condition']}: "
+        value = str.__new__(cls, f"ERROR: {path}: {row['condition']}: "
             + _native_json.dumps(row['context'], sort_keys=True))
         value.path, value.condition = path, row['condition']
         value.context, value.requirement = row['context'], row['requirement']
@@ -88,6 +89,33 @@ def declarations(specification, label='spec', *, fill_derivations=True, output=F
 def driver(specification):
     """Return the held model's driver selection fact without Python inference."""
     return observation(specification, bind=False)['driver']
+
+
+def contracts(specification, label='spec', path=None, _environment=None, *, snapshots=None):
+    """Observe authored declarations or actual captured source metadata."""
+    if path is None:
+        return declarations(specification, label, fill_derivations=False, output=True)
+    import _source_controls
+    return _source_controls.document(specification, label, path, snapshots=snapshots)
+
+
+def names(specification, label='spec'):
+    """Complete omitted derivations in namespace-only controls."""
+    spec, _ = complete(specification)
+    for column in spec['columns']:
+        column.setdefault('derivation', {'literal': None})
+    return declarations(spec, label, output=True)
+
+
+def grouped_rows(specification, label='spec'):
+    """Supply only the absent input/column scaffold for row-key controls."""
+    spec = copy.deepcopy(specification)
+    dataset = spec.get('base', 'SRC')
+    spec.setdefault('input', {dataset: {'path': 'source.csv'}})
+    spec.setdefault('columns', [{'name': 'ID', 'type': 'str'}])
+    for row in spec.get('rows', []):
+        row.setdefault('derivations', {'ID': {'literal': 'fixture'}})
+    return declarations(spec, label)
 
 
 @lru_cache(maxsize=1)

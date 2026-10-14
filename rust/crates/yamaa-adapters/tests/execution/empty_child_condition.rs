@@ -48,7 +48,7 @@ fn first_issue(spec: &Path) -> String {
         Ok(domain) => domain.issues(),
         Err(failure) => failure,
     };
-    let issue = failure.iter().next().expect("benchmark must fail");
+    let issue = failure.first().expect("benchmark must fail");
     format!(
         "{} | {} | {:?}",
         issue.phase, issue.condition, issue.requirement

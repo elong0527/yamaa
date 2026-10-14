@@ -114,10 +114,32 @@ def schema_errors(error, label):
     try:
         defects = _native_json.loads(str(error))["schema_defects"]
     except (ValueError, TypeError, KeyError):
-        return [f"ERROR: {label}: {error}"]
+        return [f"ERROR: {label}: {str(error).replace('symbolic link', 'symlink')}"]
+    def message(item):
+        kind = item['kind']
+        descriptions = {
+            'FieldEntry': 'class field must be a one-entry mapping',
+            'Descriptor(PatternRequiresString)': 'pattern requires a string type',
+            'Descriptor(RequiredDefault)': 'a required field cannot declare a default',
+            'Descriptor(MinimumRequiresString)': 'minimum length requires a string type',
+            'UnsafeInclude': 'include must stay inside the yaml directory and match schema_[a-z0-9_]+.yaml',
+        }
+        for code, detail in descriptions.items():
+            if kind.startswith(code):
+                return detail
+        for code, detail in (
+            ('DuplicateDeclaration', 'duplicate declaration'),
+            ('DuplicateField', 'duplicate class field'),
+            ('UnknownFieldsFrom', 'unknown fields_from class'),
+            ('FieldsFromCycle', 'class fields_from cycle'),
+            ('UnknownType', 'unknown_type'),
+        ):
+            if kind.startswith(code + '('):
+                return detail + ' ' + repr(kind[len(code) + 1:-1].strip('"'))
+        return kind
     return [
         f"ERROR: {Path(label).parent / item.get('identity', Path(label).name)}."
-        f"{item['path']}: {item['kind']}"
+        f"{item['path']}: {message(item)}"
         + (
             f" (authored {item['authored']!r})"
             if item.get("authored") is not None

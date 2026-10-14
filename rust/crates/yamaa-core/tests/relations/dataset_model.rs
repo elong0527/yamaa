@@ -118,7 +118,7 @@ fn malformed_row_filter_columns_retain_the_existing_scope_error() {
 }
 
 #[test]
-fn record_and_group_filters_reject_deferred_window_dependencies() {
+fn record_filters_reject_windows_and_group_filters_admit_completed_windows() {
     use yamaa_core::{
         bound_expression::{Binding, BindingError, BoundPredicate, Read},
         dataset::{OrderTerm, Window, WindowKind},
@@ -168,7 +168,7 @@ fn record_and_group_filters_reject_deferred_window_dependencies() {
                 vec![0],
                 vec![],
             );
-            if column == 0 {
+            if column == 0 || matches!(mode, RowMode::Groups(_)) {
                 assert!(plan.is_ok(), "{plan:?}");
             } else {
                 assert_eq!(

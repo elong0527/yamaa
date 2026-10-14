@@ -3,21 +3,60 @@
 bmi <- function(weight_kg, height_cm, cm_per_m = 100L) {
   weight_kg / (height_cm / as.integer(cm_per_m)) ^ 2
 }
+# Round the exact stored binary64 value to decimal places with ties to even,
+# as Python round() does. Windows sprintf() and R round() can treat a value
+# just above a decimal tie (such as 2 / 400) as the tie itself.
+.project_round <- function(value, decimals) {
+  if (!is.finite(value) || value == 0 || decimals > 323L) return(value)
+  if (decimals < -308L) return(value * 0)
+
+  # Little-endian decimal digits keep every operation small and exact.
+  multiply <- function(digits, factor, carry = 0L) {
+    for (index in seq_along(digits)) {
+      product <- digits[[index]] * factor + carry
+      digits[[index]] <- product %% 10L
+      carry <- product %/% 10L
+    }
+    if (carry) digits <- c(digits, carry)
+    digits
+  }
+  bytes <- as.integer(writeBin(abs(value), raw(), size = 8L, endian = "big"))
+  exponent <- (bytes[[1L]] %% 128L) * 16L + bytes[[2L]] %/% 16L
+  digits <- as.integer(exponent != 0L)
+  for (index in 2:8) {
+    for (bit in if (index == 2L) 3:0 else 7:0) {
+      digits <- multiply(digits, 2L, bitwAnd(bitwShiftR(bytes[[index]], bit), 1L))
+    }
+  }
+  shift <- max(exponent, 1L) - 1023L - 52L
+  scale <- max(-shift, 0L)
+  for (step in seq_len(abs(shift))) {
+    digits <- multiply(digits, if (shift < 0L) 5L else 2L)
+  }
+
+  discard <- scale - decimals
+  if (discard <= 0L) return(value)
+  if (length(digits) <= discard) {
+    digits <- c(digits, integer(discard + 1L - length(digits)))
+  }
+  remainder <- digits[seq_len(discard)]
+  kept <- digits[-seq_len(discard)]
+  halfway <- remainder[[discard]]
+  if (halfway > 5L || (halfway == 5L &&
+      (any(remainder[-discard] != 0L) || kept[[1L]] %% 2L == 1L))) {
+    kept <- multiply(kept, 1L, 1L)
+  }
+  rounded <- as.numeric(paste0(if (value < 0) "-" else "",
+    paste0(rev(kept), collapse = ""), "e", -decimals))
+  if (!is.finite(rounded)) stop("rounded value is too large")
+  rounded
+}
+
 project_ratio <- function(numerator, denominator, decimals = 2L,
                           adjust = 0, as_percent = FALSE) {
   value <- numerator / denominator
   if (as_percent) value <- value * 100
-  decimals <- as.integer(decimals)
-  # printf rounds the stored binary value, matching Python's round() for
-  # decimal places; R's round() can treat a nearby binary value as a tie.
-  value <- if (decimals > 323L) {
-    # More decimal places cannot change a binary64 value.
-    value
-  } else if (decimals >= 0L) {
-    as.numeric(sprintf("%.*f", decimals, value))
-  } else {
-    round(value, decimals)
-  }
+  value <- .project_round(value, as.integer(decimals))
   if (is.na(adjust)) adjust <- 0
   value + adjust
 }

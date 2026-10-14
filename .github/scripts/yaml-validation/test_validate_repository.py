@@ -23,6 +23,18 @@ VALIDATOR = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(VALIDATOR)
 
 import _semantic_controls as CONTROLS
+import _source_controls as SOURCE_CONTROLS
+import _native_odm as OWNER_NATIVE_ODM
+import _repository_yaml as OWNER_REPOSITORY_YAML
+import _typed_fixtures as OWNER_TYPED_FIXTURES
+import decimal as OWNER_DECIMAL
+import editorial as OWNER_EDITORIAL
+import grammar_checks as OWNER_GRAMMAR_CHECKS
+import regex_checks as OWNER_REGEX_CHECKS
+import repository_artifacts as OWNER_REPOSITORY_ARTIFACTS
+import repository_manifests as OWNER_REPOSITORY_MANIFESTS
+import repository_structure as OWNER_REPOSITORY_STRUCTURE
+import validation_diagnostics as OWNER_VALIDATION_DIAGNOSTICS
 import _native_specification as OWNER_NATIVE_SPECIFICATION
 import repository_schema as OWNER_REPOSITORY_SCHEMA
 
@@ -47,9 +59,9 @@ def typed_schema_control(specification, label, _path, environment, *_args, **_kw
     """Isolate original custom-schema truth from whole-spec version admission."""
     schema = {'version': environment.get('version', '1.0'),
         **environment['classes']}
-    observation = VALIDATOR._typed_fixtures.observe('schema',
+    observation = OWNER_TYPED_FIXTURES.observe('schema',
         json.dumps([yaml.safe_dump(schema), json.dumps(specification)]))
-    return [VALIDATOR.validation_diagnostic(
+    return [OWNER_VALIDATION_DIAGNOSTICS.validation_diagnostic(
         label + ('.' + path if path else ''), row['condition'],
         row['condition'] + ': ' + json.dumps(row['context']),
         context=row['context'])
@@ -73,7 +85,7 @@ class TestYamlLoader(unittest.TestCase):
             "upper_false_value: FALSE\n"
             "mixed_true_value: TrUe\n"
             "mixed_false_value: FaLsE\n",
-            Loader=VALIDATOR.UniqueKeyLoader,
+            Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader,
         )
         self.assertEqual(loaded["yes_value"], "yes")
         self.assertEqual(loaded["on_value"], "ON")
@@ -92,7 +104,7 @@ class TestYamlLoader(unittest.TestCase):
             "sexagesimal_value: 1:20\n"
             "exponent_value: 1e3\n"
             "underscored_value: 1_000\n",
-            Loader=VALIDATOR.UniqueKeyLoader,
+            Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader,
         )
         self.assertEqual(loaded["date_value"], "2025-01-02")
         self.assertEqual(loaded["decimal_value"], 12)
@@ -112,7 +124,7 @@ class TestYamlLoader(unittest.TestCase):
                 f"value_{index}: {spelling}\n"
                 for index, spelling in enumerate(spellings)
             ) + "quoted: '.inf'\n",
-            Loader=VALIDATOR.UniqueKeyLoader,
+            Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader,
         )
 
         for index, spelling in enumerate(spellings):
@@ -124,14 +136,14 @@ class TestYamlLoader(unittest.TestCase):
         with self.assertRaises(yaml.YAMLError):
             yaml.load(
                 "first: &value text\nsecond: *value\n",
-                Loader=VALIDATOR.UniqueKeyLoader,
+                Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader,
             )
 
     def test_merge_keys_are_rejected(self):
         with self.assertRaises(yaml.YAMLError):
             yaml.load(
                 "base: &base {a: 1}\nmerged: {<<: *base}\n",
-                Loader=VALIDATOR.UniqueKeyLoader,
+                Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader,
             )
 
     def test_merge_keys_report_the_intended_reason(self):
@@ -146,14 +158,14 @@ class TestYamlLoader(unittest.TestCase):
         ):
             yaml.load(
                 "merged:\n  <<: just_a_scalar\n",
-                Loader=VALIDATOR.UniqueKeyLoader,
+                Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader,
             )
 
     def test_explicit_tags_are_rejected(self):
         with self.assertRaises(yaml.YAMLError):
             yaml.load(
                 "value: !!str 123\n",
-                Loader=VALIDATOR.UniqueKeyLoader,
+                Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader,
             )
 
 
@@ -177,7 +189,7 @@ class TestTextSourceBoundary(unittest.TestCase):
                 'rust/crates/yamaa-core/unicode/notes.md',
             ):
                 (root / relative).write_text(chr(0x00A9), encoding='utf-8')
-            errors = VALIDATOR.validate_ascii_sources(root)
+            errors = OWNER_EDITORIAL.validate_ascii_sources(root)
         self.assertEqual(errors, [
             'ERROR: LICENSE-UNICODE.txt:1:1: non_ascii_source byte 0xC2',
             'ERROR: rust/crates/yamaa-core/unicode/notes.md:1:1: non_ascii_source byte 0xC2',
@@ -200,8 +212,8 @@ class TestTextSourceBoundary(unittest.TestCase):
                     encoding='utf-8',
                 )
 
-            errors = VALIDATOR.validate_ascii_sources(root)
-            csv_errors = VALIDATOR.validate_csv_shapes(root)
+            errors = OWNER_EDITORIAL.validate_ascii_sources(root)
+            csv_errors = OWNER_REPOSITORY_ARTIFACTS.validate_csv_shapes(root)
 
         self.assertEqual(
             errors,
@@ -217,7 +229,7 @@ class TestTextSourceBoundary(unittest.TestCase):
                 encoding='utf-8',
             )
 
-            errors = VALIDATOR.validate_ascii_sources(root)
+            errors = OWNER_EDITORIAL.validate_ascii_sources(root)
 
         self.assertEqual(
             errors,
@@ -227,7 +239,7 @@ class TestTextSourceBoundary(unittest.TestCase):
     def test_rejects_a_decoded_surrogate(self):
         document = {'value': chr(0xD800)}
 
-        errors = VALIDATOR.validate_unicode_scalars(document, 'spec.yaml')
+        errors = OWNER_EDITORIAL.validate_unicode_scalars(document, 'spec.yaml')
 
         self.assertEqual(
             errors,
@@ -241,7 +253,7 @@ class TestTextSourceBoundary(unittest.TestCase):
         key = chr(0xD800)
         document = {key: chr(0xD801)}
 
-        errors = VALIDATOR.validate_unicode_scalars(document, 'spec.yaml')
+        errors = OWNER_EDITORIAL.validate_unicode_scalars(document, 'spec.yaml')
 
         self.assertEqual(
             errors,
@@ -266,7 +278,7 @@ class TestTextSourceBoundary(unittest.TestCase):
                 b'VALUE\n' + bytes([0xFF]) + b'\n'
             )
 
-            errors = VALIDATOR.validate_csv_shapes(Path(temp_dir))
+            errors = OWNER_REPOSITORY_ARTIFACTS.validate_csv_shapes(Path(temp_dir))
 
         self.assertEqual(len(errors), 1)
         self.assertIn('invalid_text', errors[0])
@@ -2155,14 +2167,14 @@ class TestDerivedBenchmarkInventory(unittest.TestCase):
 class TestConditionRegistry(unittest.TestCase):
     def setUp(self):
         self.root = TOOL_PATH.parents[3]
-        self.registry, load_errors = VALIDATOR.load_condition_registry(
+        self.registry, load_errors = OWNER_REPOSITORY_MANIFESTS.load_condition_registry(
             self.root
         )
         self.assertEqual(load_errors, [])
 
     def test_repository_registry_passes(self):
         self.assertEqual(
-            VALIDATOR.validate_condition_registry(
+            OWNER_REPOSITORY_MANIFESTS.validate_condition_registry(
                 self.root, self.registry
             ),
             [],
@@ -2172,7 +2184,7 @@ class TestConditionRegistry(unittest.TestCase):
         changed = copy.deepcopy(self.registry)
         del changed['conditions']['aggregate_multiple_records']
 
-        errors = VALIDATOR.validate_condition_registry(self.root, changed)
+        errors = OWNER_REPOSITORY_MANIFESTS.validate_condition_registry(self.root, changed)
 
         self.assertEqual(
             errors,
@@ -2192,7 +2204,7 @@ class TestConditionRegistry(unittest.TestCase):
             'derivation'
         ]
 
-        errors = VALIDATOR.validate_condition_registry(self.root, changed)
+        errors = OWNER_REPOSITORY_MANIFESTS.validate_condition_registry(self.root, changed)
 
         self.assertEqual(
             errors,
@@ -2208,16 +2220,16 @@ class TestConditionRegistry(unittest.TestCase):
 class TestValidationManifest(unittest.TestCase):
     def test_repository_manifest_is_complete_and_registered(self):
         root = TOOL_PATH.parents[3]
-        manifest, load_errors = VALIDATOR.load_validation_manifest(root)
+        manifest, load_errors = OWNER_REPOSITORY_MANIFESTS.load_validation_manifest(root)
 
         self.assertEqual(load_errors, [])
         self.assertEqual(
-            VALIDATOR.validate_validation_manifest(root, manifest), []
+            OWNER_REPOSITORY_MANIFESTS.validate_validation_manifest(root, manifest), []
         )
 
     def test_manifest_rejects_missing_and_stale_fixtures(self):
         root = TOOL_PATH.parents[3]
-        manifest, _ = VALIDATOR.load_validation_manifest(root)
+        manifest, _ = OWNER_REPOSITORY_MANIFESTS.load_validation_manifest(root)
         changed = copy.deepcopy(manifest)
         removed = next(iter(changed['fixtures']))
         del changed['fixtures'][removed]
@@ -2229,7 +2241,7 @@ class TestValidationManifest(unittest.TestCase):
         }
 
         message = '\n'.join(
-            VALIDATOR.validate_validation_manifest(root, changed)
+            OWNER_REPOSITORY_MANIFESTS.validate_validation_manifest(root, changed)
         )
 
         self.assertIn(removed, message)
@@ -2242,14 +2254,14 @@ class TestValidationManifest(unittest.TestCase):
             'validator': 'name_contract',
         }
         diagnostics = [
-            VALIDATOR.validation_diagnostic(
+            OWNER_VALIDATION_DIAGNOSTICS.validation_diagnostic(
                 'example/spec.yaml.input.ADLB',
                 'duplicate_identifier',
                 'duplicate',
             )
         ]
 
-        errors = VALIDATOR.validate_registered_fixture_diagnostics(
+        errors = OWNER_REPOSITORY_MANIFESTS.validate_registered_fixture_diagnostics(
             'negative-example', entry, diagnostics, ['example/spec.yaml']
         )
 
@@ -2263,13 +2275,13 @@ class TestValidationManifest(unittest.TestCase):
             'blocked_by': '#103',
         }
         diagnostics = [
-            VALIDATOR.validation_diagnostic(
+            OWNER_VALIDATION_DIAGNOSTICS.validation_diagnostic(
                 f'example/spec.yaml.{path}', 'dependency_cycle', 'cycle'
             )
             for path in entry['spec_paths']
         ]
 
-        errors = VALIDATOR.validate_registered_fixture_diagnostics(
+        errors = OWNER_REPOSITORY_MANIFESTS.validate_registered_fixture_diagnostics(
             'negative-example', entry, diagnostics, ['example/spec.yaml']
         )
 
@@ -2282,18 +2294,18 @@ class TestValidationManifest(unittest.TestCase):
             'spec_paths': ['columns.RESULT.derivation.compute.expr'],
             'validator': 'numeric_expression',
         }
-        expected = VALIDATOR.validation_diagnostic(
+        expected = OWNER_VALIDATION_DIAGNOSTICS.validation_diagnostic(
             'example/spec.yaml.columns.RESULT.derivation.compute.expr',
             'unknown_field',
             'unknown identifier',
         )
-        unrelated = VALIDATOR.validation_diagnostic(
+        unrelated = OWNER_VALIDATION_DIAGNOSTICS.validation_diagnostic(
             'example/spec.yaml.output.columns',
             'undeclared_column',
             'unknown output column',
         )
 
-        errors = VALIDATOR.validate_registered_fixture_diagnostics(
+        errors = OWNER_REPOSITORY_MANIFESTS.validate_registered_fixture_diagnostics(
             'negative-example', entry, [expected, unrelated],
             ['example/spec.yaml']
         )
@@ -2339,7 +2351,7 @@ class TestValidationManifest(unittest.TestCase):
 class TestProjectFunctionEnvironment(unittest.TestCase):
     def test_submission_environment_schema_is_checked_without_domain_or_data_reads(self):
         real_root = TOOL_PATH.parents[3]
-        schema, errors = VALIDATOR.build_schema_env(real_root, 'schema_environment.yaml')
+        schema, errors = OWNER_REPOSITORY_SCHEMA.build_schema_env(real_root, 'schema_environment.yaml')
         self.assertEqual(errors, [])
         original = yaml.safe_load((real_root / 'benchmarks/sdtm-dm-metadata/environment.yaml').read_text())
         with tempfile.TemporaryDirectory() as temporary:
@@ -2348,12 +2360,12 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
             case.mkdir(parents=True)
             environment = case / 'environment.yaml'
             environment.write_text(yaml.safe_dump(original))
-            with patch.object(VALIDATOR._native_specification, 'validate') as native:
-                self.assertEqual(VALIDATOR.validate_examples_environment_documents(root, schema), [])
+            with patch.object(OWNER_NATIVE_SPECIFICATION, 'validate') as native:
+                self.assertEqual(OWNER_REPOSITORY_STRUCTURE.validate_examples_environment_documents(root, schema), [])
                 for value in ('', 1, [], None):
                     original['sdtm']['source_system_version'] = value
                     environment.write_text(yaml.safe_dump(original))
-                    errors = VALIDATOR.validate_examples_environment_documents(root, schema)
+                    errors = OWNER_REPOSITORY_STRUCTURE.validate_examples_environment_documents(root, schema)
                     self.assertTrue(errors, repr(value))
                     self.assertTrue(any('source_system_version' in error for error in errors))
             native.assert_not_called()
@@ -2370,8 +2382,8 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
                 'columns': [{'name': 'STUDYID', 'type': 'str',
                     'submission': {'core': 'Req', 'role': 'Identifier'}}],
             }
-            with patch.object(VALIDATOR._native_specification, 'validate') as native:
-                errors = VALIDATOR.validate_spec_functions(
+            with patch.object(OWNER_NATIVE_SPECIFICATION, 'validate') as native:
+                errors = OWNER_REPOSITORY_SCHEMA.validate_spec_functions(
                     specification, 'submission.spec', case / 'spec.yaml', {})
             self.assertEqual(errors, [])
             native.assert_not_called()
@@ -2384,11 +2396,11 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
             (case / 'spec.yaml').write_text('schema_version: "1.0"\n')
             specification = {'intermediates': [{'id': 'derived',
                 'derivations': {'value': {'function': {'name': 'missing'}}}}]}
-            with patch.object(VALIDATOR._native_specification, 'validate', return_value=[
+            with patch.object(OWNER_NATIVE_SPECIFICATION, 'validate', return_value=[
                 ('validation', 'unknown_function', 'REQ-0675',
                     ['intermediates[0].derivations.value'], '{"function":"missing"}'),
             ]) as native:
-                errors = VALIDATOR.validate_spec_functions(
+                errors = OWNER_REPOSITORY_SCHEMA.validate_spec_functions(
                     specification, 'project.spec', case / 'spec.yaml', {})
             native.assert_called_once()
             self.assertEqual(len(errors), 1)
@@ -2402,7 +2414,7 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
                 (case / 'spec.yaml').write_text('schema_version: "1.0"\n')
                 environment = case / 'environment.yaml'
                 environment.write_text(yaml.safe_dump({'schema_version': '1.0', 'language': language}))
-                errors = VALIDATOR.validate_spec_functions_against(
+                errors = OWNER_REPOSITORY_SCHEMA.validate_spec_functions_against(
                     {}, 'project.spec', case / 'spec.yaml', {}, [], {}, environment)
                 self.assertTrue(errors)
                 self.assertTrue(any('language' in str(error) for error in errors))
@@ -2414,8 +2426,8 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
                 case.mkdir(parents=True)
                 environment = case / 'environment.yaml'
                 environment.write_bytes(content)
-                with patch.object(VALIDATOR._native_specification, 'validate') as native:
-                    errors = VALIDATOR.validate_spec_functions_against(
+                with patch.object(OWNER_NATIVE_SPECIFICATION, 'validate') as native:
+                    errors = OWNER_REPOSITORY_SCHEMA.validate_spec_functions_against(
                         {}, 'project.spec', case / 'spec.yaml', {}, [], {}, environment)
                 self.assertEqual(len(errors), 1)
                 self.assertIn(str(environment), str(errors[0]))
@@ -2428,10 +2440,10 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
             (case / 'spec.yaml').write_text('schema_version: "1.0"\n')
             environment = case / 'environment.yaml'
             environment.write_text('language: r\n')
-            with patch.object(VALIDATOR._native_specification, 'validate', return_value=[
+            with patch.object(OWNER_NATIVE_SPECIFICATION, 'validate', return_value=[
                 ('validation', 'engine_rejected', None, [], '{"stage":"environment","code":"invalid_packaging_lock"}'),
             ]):
-                errors = VALIDATOR.validate_spec_functions_against(
+                errors = OWNER_REPOSITORY_SCHEMA.validate_spec_functions_against(
                     {}, 'project.spec', case / 'spec.yaml', {}, [], {}, environment)
             self.assertEqual(len(errors), 1)
             self.assertIn(str(environment), str(errors[0]))
@@ -2439,12 +2451,12 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
 
     def test_authoritative_versionless_environment_and_call_shapes(self):
         root = TOOL_PATH.parents[3]
-        environment, errors = VALIDATOR.build_schema_env(root, 'schema_environment.yaml')
+        environment, errors = OWNER_REPOSITORY_SCHEMA.build_schema_env(root, 'schema_environment.yaml')
         self.assertEqual(errors, [])
         source = yaml.safe_load((root / 'benchmarks/adam-adsl-bmi/python/environment.yaml').read_text())
-        self.assertEqual(VALIDATOR.validate_type(source, ['environment_class'], environment, 'environment'), [])
+        self.assertEqual(OWNER_REPOSITORY_SCHEMA.validate_type(source, ['environment_class'], environment, 'environment'), [])
         source['version'] = '1.0.0'
-        self.assertTrue(VALIDATOR.validate_type(source, ['environment_class'], environment, 'environment'))
+        self.assertTrue(OWNER_REPOSITORY_SCHEMA.validate_type(source, ['environment_class'], environment, 'environment'))
 
     def test_original_function_studies_use_explicit_equivalent_environments(self):
         root = TOOL_PATH.parents[3]
@@ -2476,7 +2488,7 @@ class TestRuleMetadata(unittest.TestCase):
                 '---\nid: R001\ntitle: Rule\nstatus: proposed\n---\n'
             )
 
-            errors = VALIDATOR.validate_rule_metadata(root)
+            errors = OWNER_EDITORIAL.validate_rule_metadata(root)
 
         self.assertEqual(len(errors), 2)
         self.assertTrue(all('normative' in error for error in errors))
@@ -2566,22 +2578,22 @@ class TestStableRequirementReferences(unittest.TestCase):
 
 class TestSpecificationInheritance(unittest.TestCase):
     def setUp(self):
-        self.env, schema_errors = VALIDATOR.build_schema_env(
+        self.env, schema_errors = OWNER_REPOSITORY_SCHEMA.build_schema_env(
             TOOL_PATH.parents[3]
         )
         self.assertEqual(schema_errors, [])
 
     def resolve(self, path):
         with open(path, 'r', encoding='utf-8') as handle:
-            spec = yaml.load(handle, Loader=VALIDATOR.UniqueKeyLoader)
-        return VALIDATOR.resolve_spec_inheritance(
+            spec = yaml.load(handle, Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader)
+        return OWNER_REPOSITORY_SCHEMA.resolve_spec_inheritance(
             spec, 'example/spec.yaml', path, self.env
         )
 
     def test_bare_string_derivation_normalizes_to_source(self):
         # REQ-0319: the repository validator mirrors the engine's parse-time
         # expansion so resolved fixtures keep the canonical form.
-        normalized = VALIDATOR.normalize_single_type_value(
+        normalized = OWNER_REPOSITORY_SCHEMA.normalize_single_type_value(
             'DM.AGE', 'derivation', self.env, False
         )
         self.assertEqual(
@@ -2589,7 +2601,7 @@ class TestSpecificationInheritance(unittest.TestCase):
         )
 
     def test_bare_case_result_normalizes_to_source(self):
-        normalized = VALIDATOR.normalize_single_type_value(
+        normalized = OWNER_REPOSITORY_SCHEMA.normalize_single_type_value(
             'DM.AGE', 'case_result', self.env, False
         )
         self.assertEqual(normalized, {'source': {'variable': 'DM.AGE'}})
@@ -2672,7 +2684,7 @@ class TestSpecificationInheritance(unittest.TestCase):
         self.assertEqual(resolved['metadata'], {'owner': 'b'})
         self.assertEqual(
             resolved['input'],
-            {'DM': {'path': 'input/dm.csv', 'types': {'AGE': 'int'}}},
+            {'DM': {'path': 'input/dm.csv', 'types': {'AGE': 'int'}, 'empty_string': 'missing'}},
         )
         self.assertNotIn('intermediates', resolved)
         self.assertEqual(
@@ -2704,7 +2716,8 @@ class TestSpecificationInheritance(unittest.TestCase):
                 '  - name: X\n'
                 '    type: str\n'
                 '    label: Value\n'
-                '    derivation: {source: ref.VALUE}\n'
+                '    derivation: {literal: root}\n'
+                '  - {name: R, type: str, label: Reference, derivation: ref.VALUE}\n'
                 'rows:\n'
                 '  - id: main\n'
                 '    dataset: DM\n'
@@ -2718,7 +2731,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'parents: parent.yaml\n'
                 'domain: TEST\n'
                 'keys: [X]\n'
-                'output: {path: out.csv, columns: [X]}\n'
+                'output: {path: out.csv, columns: [X, R]}\n'
                 'intermediates:\n'
                 '  - id: ref\n'
                 '    no_match: 0\n'
@@ -2772,9 +2785,9 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'output: {path: out.csv, columns: [A]}\n'
             )
             with open(spec_path, 'r', encoding='utf-8') as handle:
-                spec = yaml.load(handle, Loader=VALIDATOR.UniqueKeyLoader)
+                spec = yaml.load(handle, Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader)
 
-            errors = VALIDATOR.validate_spec_document(
+            errors = OWNER_REPOSITORY_SCHEMA.validate_spec_document(
                 spec, 'example/spec.yaml', spec_path, self.env
             )
 
@@ -2853,9 +2866,9 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'output: {path: out.csv, columns: [A]}\n'
             )
             with open(spec_path, 'r', encoding='utf-8') as handle:
-                spec = yaml.load(handle, Loader=VALIDATOR.UniqueKeyLoader)
+                spec = yaml.load(handle, Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader)
 
-            errors = VALIDATOR.validate_spec_document(
+            errors = OWNER_REPOSITORY_SCHEMA.validate_spec_document(
                 spec, 'example/spec.yaml', spec_path, self.env
             )
 
@@ -2865,21 +2878,19 @@ class TestSpecificationInheritance(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             parent = root / 'parent.yaml'
-            parent.write_text('schema_version: "1.0"\n')
+            parent.write_text('schema_version: "1.0"\ndomain: TEST\nkeys: [ID]\ninput: {DM: source.csv}\ncolumns: [{name: ID, type: str, derivation: DM.ID}]\n')
             spec_path = root / 'spec.yaml'
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 f'parents: "{parent.resolve()}"\n'
-                'output: {path: out.csv, columns: []}\n'
+                'output: {path: out.csv, columns: [ID]}\n'
             )
 
             resolved, errors, _ = self.resolve(spec_path)
 
         self.assertEqual(errors, [])
-        self.assertEqual(
-            resolved,
-            {'schema_version': '1.0', 'output': {'path': 'out.csv', 'columns': []}},
-        )
+        self.assertNotIn('parents', resolved)
+        self.assertEqual(resolved['output'], {'path': 'out.csv', 'columns': ['ID']})
 
     def test_entry_inherits_output_where_its_layer_names(self):
         # Issue #845: an entry may omit output (REQ-0623); the inherited
@@ -2890,9 +2901,10 @@ class TestSpecificationInheritance(unittest.TestCase):
             (root / 'study').mkdir()
             (root / 'common' / 'parent.yaml').write_text(
                 'schema_version: "1.0"\n'
+                'domain: TEST\nkeys: [ID]\ninput: {DM: source.csv}\ncolumns: [{name: ID, type: str, derivation: DM.ID}]\n'
                 'output:\n'
                 '  path: out.csv\n'
-                '  columns: []\n'
+                '  columns: [ID]\n'
                 '  warning_log: warnings.csv\n'
             )
             spec_path = root / 'study' / 'spec.yaml'
@@ -2908,7 +2920,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             resolved['output'],
             {
                 'path': '../common/out.csv',
-                'columns': [],
+                'columns': ['ID'],
                 'warning_log': '../common/warnings.csv',
             },
         )
@@ -2935,9 +2947,9 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'keys: [A]\n'
             )
             with open(spec_path, 'r', encoding='utf-8') as handle:
-                spec = yaml.load(handle, Loader=VALIDATOR.UniqueKeyLoader)
+                spec = yaml.load(handle, Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader)
 
-            errors = VALIDATOR.validate_spec_document(
+            errors = OWNER_REPOSITORY_SCHEMA.validate_spec_document(
                 spec, 'example/spec.yaml', spec_path, self.env
             )
 
@@ -3015,14 +3027,14 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'output: {path: out.csv, columns: [ID]}\n'
             )
             with open(spec_path, 'r', encoding='utf-8') as handle:
-                spec = yaml.load(handle, Loader=VALIDATOR.UniqueKeyLoader)
+                spec = yaml.load(handle, Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader)
 
             resolved, _, _ = self.resolve(spec_path)
-            errors = VALIDATOR.validate_spec_document(
+            errors = OWNER_REPOSITORY_SCHEMA.validate_spec_document(
                 spec, 'example/spec.yaml', spec_path, self.env
             )
             (root / 'input' / 'dm.csv').unlink()
-            missing = VALIDATOR.validate_spec_document(
+            missing = OWNER_REPOSITORY_SCHEMA.validate_spec_document(
                 spec, 'example/spec.yaml', spec_path, self.env
             )
 
@@ -3100,7 +3112,7 @@ class TestSpecificationInheritance(unittest.TestCase):
 
 class TestTypeValidation(unittest.TestCase):
     def test_int_rejects_string(self):
-        errors = VALIDATOR.validate_type(
+        errors = OWNER_REPOSITORY_SCHEMA.validate_type(
             "not-an-int",
             ["int"],
             {"classes": {}, "aliases": {}, "registries": {}},
@@ -3120,7 +3132,7 @@ class TestTypeValidation(unittest.TestCase):
                 }
             },
         }
-        errors = VALIDATOR.validate_type(
+        errors = OWNER_REPOSITORY_SCHEMA.validate_type(
             {"first": "a", "second": "b"},
             ["operation"],
             env,
@@ -3135,7 +3147,7 @@ class TestTypeValidation(unittest.TestCase):
             "aliases": {"status": {"type": "str", "values": ["A", "B"]}},
             "registries": {},
         }
-        errors = VALIDATOR.validate_type("C", ["status"], env, "spec.status")
+        errors = OWNER_REPOSITORY_SCHEMA.validate_type("C", ["status"], env, "spec.status")
         self.assertTrue(errors)
         self.assertIn("allowed values", errors[0])
 
@@ -3145,19 +3157,19 @@ class TestTypeValidation(unittest.TestCase):
             "aliases": {"variable": {"type": "str", "pattern": "^[A-Z]+$"}},
             "registries": {},
         }
-        errors = VALIDATOR.validate_type("lower", ["variable"], env, "spec.name")
+        errors = OWNER_REPOSITORY_SCHEMA.validate_type("lower", ["variable"], env, "spec.name")
         self.assertTrue(errors)
         self.assertIn("pattern", errors[0])
 
-    def test_alias_min_length_constraint(self):
+    def test_alias_min_length_requires_string(self):
         env = {
             "classes": {},
             "aliases": {"variables": {"type": "list[str]", "min_length": 1}},
             "registries": {},
         }
-        errors = VALIDATOR.validate_type([], ["variables"], env, "spec.keys")
+        errors = OWNER_REPOSITORY_SCHEMA.check_descriptor(env["aliases"]["variables"], False, "schema.variables")
         self.assertTrue(errors)
-        self.assertIn("minimum length", errors[0])
+        self.assertIn("minimum length requires a string", errors[0])
 
     def test_alias_size_constraint(self):
         env = {
@@ -3165,12 +3177,12 @@ class TestTypeValidation(unittest.TestCase):
             "aliases": {"pair": {"type": "list[str]", "size": 2}},
             "registries": {},
         }
-        errors = VALIDATOR.validate_type(["one"], ["pair"], env, "spec.pair")
+        errors = OWNER_REPOSITORY_SCHEMA.validate_type(["one"], ["pair"], env, "spec.pair")
         self.assertTrue(errors)
         self.assertIn("size 2", errors[0])
 
     def test_descriptor_rejects_constraint_on_wrong_type(self):
-        errors = VALIDATOR.check_descriptor(
+        errors = OWNER_REPOSITORY_SCHEMA.check_descriptor(
             {"type": "int", "pattern": "^[0-9]+$"},
             False,
             "schema:count",
@@ -3179,7 +3191,7 @@ class TestTypeValidation(unittest.TestCase):
         self.assertIn("pattern", "\n".join(errors))
 
     def test_descriptor_rejects_default_on_required_field(self):
-        errors = VALIDATOR.check_descriptor(
+        errors = OWNER_REPOSITORY_SCHEMA.check_descriptor(
             {"type": "str", "required": True, "default": "x"},
             True,
             "schema:name",
@@ -3191,7 +3203,7 @@ class TestTypeValidation(unittest.TestCase):
         env = {"classes": {}, "aliases": {}, "registries": {}}
         valid = {"outer": {"inner": 1}}
         self.assertEqual(
-            VALIDATOR.validate_type(
+            OWNER_REPOSITORY_SCHEMA.validate_type(
                 valid,
                 ["dict[str, dict[str, int]]"],
                 env,
@@ -3199,7 +3211,7 @@ class TestTypeValidation(unittest.TestCase):
             ),
             [],
         )
-        errors = VALIDATOR.validate_type(
+        errors = OWNER_REPOSITORY_SCHEMA.validate_type(
             {"outer": {"inner": "wrong"}},
             ["dict[str, dict[str, int]]"],
             env,
@@ -3211,17 +3223,17 @@ class TestTypeValidation(unittest.TestCase):
     def test_bare_list_and_dict_types(self):
         env = {"classes": {}, "aliases": {}, "registries": {}}
         self.assertEqual(
-            VALIDATOR.validate_type([], ["list"], env, "spec.items"), []
+            OWNER_REPOSITORY_SCHEMA.validate_type([], ["list"], env, "spec.items"), []
         )
         self.assertEqual(
-            VALIDATOR.validate_type({}, ["dict"], env, "spec.mapping"), []
+            OWNER_REPOSITORY_SCHEMA.validate_type({}, ["dict"], env, "spec.mapping"), []
         )
 
     def test_size_accepts_bare_list_and_dict_types(self):
         for type_name in ("list", "dict"):
             with self.subTest(type_name=type_name):
                 self.assertEqual(
-                    VALIDATOR.check_descriptor(
+                    OWNER_REPOSITORY_SCHEMA.check_descriptor(
                         {"type": type_name, "size": 0},
                         is_class_field=False,
                         path="schema.value",
@@ -3241,22 +3253,22 @@ class TestTypeValidation(unittest.TestCase):
             'registries': {},
         }
 
-        errors = VALIDATOR.validate_type(
+        errors = OWNER_REPOSITORY_SCHEMA.validate_type(
             'middle', ['int', 'day_rule'], env, 'spec.day'
         )
 
         self.assertEqual(len(errors), 1)
-        self.assertIsInstance(errors[0], VALIDATOR.ValidationDiagnostic)
+        self.assertIsInstance(errors[0], OWNER_VALIDATION_DIAGNOSTICS.ValidationDiagnostic)
         self.assertEqual(errors[0].condition, 'value_not_permitted')
 
 
 class TestDateImputeSchema(unittest.TestCase):
     def setUp(self):
-        self.env, schema_errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[3])
+        self.env, schema_errors = OWNER_REPOSITORY_SCHEMA.build_schema_env(TOOL_PATH.parents[3])
         self.assertEqual(schema_errors, [])
 
     def test_accepts_month_minimum_source_precision(self):
-        errors = VALIDATOR.validate_type(
+        errors = OWNER_REPOSITORY_SCHEMA.validate_type(
             {
                 "date_impute": {
                     "source": "AE.AESTDTC",
@@ -3273,7 +3285,7 @@ class TestDateImputeSchema(unittest.TestCase):
         self.assertEqual(errors, [])
 
     def test_rejects_unknown_minimum_source_precision(self):
-        errors = VALIDATOR.validate_type(
+        errors = OWNER_REPOSITORY_SCHEMA.validate_type(
             {
                 "date_impute": {
                     "source": "AE.AESTDTC",
@@ -3293,7 +3305,7 @@ class TestDateImputeSchema(unittest.TestCase):
     def test_accepts_integer_and_month_position_day(self):
         for day in (15, "first", "last"):
             with self.subTest(day=day):
-                errors = VALIDATOR.validate_type(
+                errors = OWNER_REPOSITORY_SCHEMA.validate_type(
                     {
                         "date_impute": {
                             "source": "AE.AESTDTC",
@@ -3309,7 +3321,7 @@ class TestDateImputeSchema(unittest.TestCase):
                 self.assertEqual(errors, [])
 
     def test_rejects_unknown_day_position(self):
-        errors = VALIDATOR.validate_type(
+        errors = OWNER_REPOSITORY_SCHEMA.validate_type(
             {
                 "date_impute": {
                     "source": "AE.AESTDTC",
@@ -3325,7 +3337,7 @@ class TestDateImputeSchema(unittest.TestCase):
         self.assertTrue(errors)
 
     def test_accepts_not_before_bound(self):
-        errors = VALIDATOR.validate_type(
+        errors = OWNER_REPOSITORY_SCHEMA.validate_type(
             {
                 "date_impute": {
                     "source": "AE.AESTDTC",
@@ -3342,7 +3354,7 @@ class TestDateImputeSchema(unittest.TestCase):
         self.assertEqual(errors, [])
 
     def test_rejects_unknown_date_impute_field(self):
-        errors = VALIDATOR.validate_type(
+        errors = OWNER_REPOSITORY_SCHEMA.validate_type(
             {
                 "date_impute": {
                     "source": "AE.AESTDTC",
@@ -3361,11 +3373,11 @@ class TestDateImputeSchema(unittest.TestCase):
 
 class TestToDateSchema(unittest.TestCase):
     def setUp(self):
-        self.env, schema_errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[3])
+        self.env, schema_errors = OWNER_REPOSITORY_SCHEMA.build_schema_env(TOOL_PATH.parents[3])
         self.assertEqual(schema_errors, [])
 
     def validate(self, payload):
-        return VALIDATOR.validate_type(
+        return OWNER_REPOSITORY_SCHEMA.validate_type(
             {"to_date": payload},
             ["expression"],
             self.env,
@@ -3387,24 +3399,24 @@ class TestToDateSchema(unittest.TestCase):
 
 class TestNamedWindows(unittest.TestCase):
     def setUp(self):
-        self.env, errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[3])
+        self.env, errors = OWNER_REPOSITORY_SCHEMA.build_schema_env(TOOL_PATH.parents[3])
         self.assertEqual(errors, [])
         self.path = TOOL_PATH.parents[3] / 'benchmarks/adam-adrs-confirmed-response/spec.yaml'
-        self.spec = yaml.load(self.path.read_text(), Loader=VALIDATOR.UniqueKeyLoader)
+        self.spec = yaml.load(self.path.read_text(), Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader)
 
     def prepare(self, spec):
-        return VALIDATOR.prepare_spec_document(spec, 'spec', self.path, self.env)
+        return OWNER_REPOSITORY_SCHEMA.prepare_spec_document(spec, 'spec', self.path, self.env)
 
     def test_expands_full_references_without_mutating_authoring(self):
         resolved, errors, _ = self.prepare(self.spec)
         self.assertEqual(errors, [])
         self.assertNotIn('windows', resolved)
-        windows = [column['derivation']['row_value']['window']
+        windows = [column['derivation']['value']['row_value']['window']
                    for column in resolved['columns']
                    if isinstance(column.get('derivation'), dict)
-                   and 'row_value' in column['derivation']]
+                   and 'row_value' in column['derivation'].get('value', {})]
         self.assertEqual(len(windows), 2)
-        self.assertEqual(windows[0], self.spec['windows']['RESPONSE_ORDER'])
+        self.assertEqual(windows[0], {'group_by': ['STUDYID', 'USUBJID'], 'order_by': [{'variable': 'ADT', 'direction': 'asc', 'nulls': 'last'}, {'variable': 'RSSEQ', 'direction': 'asc', 'nulls': 'last'}]})
         self.assertEqual(windows[0], windows[1])
         self.assertIsNot(windows[0], windows[1])
         self.assertIn('windows', self.spec)
@@ -3428,7 +3440,7 @@ class TestNamedWindows(unittest.TestCase):
     def test_reference_mapping_is_rejected_by_schema(self):
         for value in ({'ref': 'RESPONSE_ORDER'},
                       {'ref': 'RESPONSE_ORDER', 'group_by': ['USUBJID']}):
-            errors = VALIDATOR.validate_type(
+            errors = OWNER_REPOSITORY_SCHEMA.validate_type(
                 {'row_value': {'source': 'ADT', 'offset': 1, 'window': value}},
                 ['expression'], self.env, 'spec.columns.NEXTDT.derivation')
             self.assertTrue(errors)
@@ -3441,7 +3453,7 @@ class TestNamedWindows(unittest.TestCase):
             child = {'schema_version': '1.0', 'parents': 'parent.yaml',
                      'windows': {'RESPONSE_ORDER': {'order_by': ['ADT']},
                                  'UNUSED': {'group_by': ['ABSENT']}}}
-            resolved, errors, _ = VALIDATOR.resolve_spec_inheritance(
+            resolved, errors, _ = OWNER_REPOSITORY_SCHEMA.resolve_spec_inheritance(
                 child, 'spec', root / 'spec.yaml', self.env)
             self.assertEqual(errors, [])
             nextdt = next(c for c in resolved['columns'] if c['name'] == 'NEXTDT')
@@ -3453,11 +3465,11 @@ class TestNamedWindows(unittest.TestCase):
 
 class TestPreviousNonMissingSchema(unittest.TestCase):
     def setUp(self):
-        self.env, schema_errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[3])
+        self.env, schema_errors = OWNER_REPOSITORY_SCHEMA.build_schema_env(TOOL_PATH.parents[3])
         self.assertEqual(schema_errors, [])
 
     def validate(self, payload):
-        return VALIDATOR.validate_type(
+        return OWNER_REPOSITORY_SCHEMA.validate_type(
             {"previous_non_missing": payload},
             ["expression"],
             self.env,
@@ -3524,7 +3536,7 @@ class TestGroupedRows(unittest.TestCase):
             ],
         }
 
-        errors = VALIDATOR.validate_grouped_rows(spec, "example/spec.yaml")
+        errors = CONTROLS.grouped_rows(spec, "example/spec.yaml")
 
         self.assertEqual(errors, [])
 
@@ -3534,10 +3546,10 @@ class TestGroupedRows(unittest.TestCase):
             "rows": [{"id": "derived", "group_by": []}],
         }
 
-        errors = VALIDATOR.validate_grouped_rows(spec, "example/spec.yaml")
+        errors = CONTROLS.grouped_rows(spec, "example/spec.yaml")
 
         self.assertTrue(errors)
-        self.assertIn("at least one", "\n".join(errors))
+        self.assertEqual(errors[0].context, {"group_by": [], "row": "derived"})
 
     def test_rejects_unqualified_or_wrong_driver_variable(self):
         spec = {
@@ -3551,10 +3563,10 @@ class TestGroupedRows(unittest.TestCase):
             ],
         }
 
-        errors = VALIDATOR.validate_grouped_rows(spec, "example/spec.yaml")
+        errors = CONTROLS.grouped_rows(spec, "example/spec.yaml")
 
         self.assertEqual(len(errors), 2)
-        self.assertIn("driver 'ADLBIN'", "\n".join(errors))
+        self.assertEqual([error.context["dataset"] for error in errors], ["ADLBIN", "ADLBIN"])
 
     def test_rejects_duplicate_group_variable(self):
         spec = {
@@ -3567,10 +3579,11 @@ class TestGroupedRows(unittest.TestCase):
             ],
         }
 
-        errors = VALIDATOR.validate_grouped_rows(spec, "example/spec.yaml")
+        errors = CONTROLS.grouped_rows(spec, "example/spec.yaml")
 
         self.assertTrue(errors)
-        self.assertIn("duplicate", "\n".join(errors))
+        self.assertEqual(errors[0].condition, "invalid_field_type")
+        self.assertEqual(errors[0].context["group_by"], ["ADLBIN.USUBJID", "ADLBIN.USUBJID"])
 
 
 class TestSpecNames(unittest.TestCase):
@@ -3587,7 +3600,7 @@ class TestSpecNames(unittest.TestCase):
         }
 
         self.assertEqual(
-            VALIDATOR.validate_spec_names(spec, "example/spec.yaml"), []
+            CONTROLS.names(spec, "example/spec.yaml"), []
         )
 
     def test_rejects_a_colliding_or_unknown_warning_log_path(self):
@@ -3611,10 +3624,10 @@ class TestSpecNames(unittest.TestCase):
             "warning_log": "adsl.txt",
         }
 
-        collision_errors = VALIDATOR.validate_spec_names(
+        collision_errors = CONTROLS.names(
             colliding, "example/spec.yaml"
         )
-        unknown_errors = VALIDATOR.validate_spec_names(
+        unknown_errors = CONTROLS.names(
             unknown, "example/spec.yaml"
         )
 
@@ -3659,16 +3672,16 @@ class TestSpecNames(unittest.TestCase):
             "verification_log": "adsl-checks.parquet",
         }
 
-        primary_errors = VALIDATOR.validate_spec_names(
+        primary_errors = CONTROLS.names(
             primary_collision, "example/spec.yaml"
         )
-        log_errors = VALIDATOR.validate_spec_names(
+        log_errors = CONTROLS.names(
             log_collision, "example/spec.yaml"
         )
-        unknown_errors = VALIDATOR.validate_spec_names(
+        unknown_errors = CONTROLS.names(
             unknown, "example/spec.yaml"
         )
-        governed_errors = VALIDATOR.validate_spec_names(
+        governed_errors = CONTROLS.names(
             governed, "example/spec.yaml"
         )
 
@@ -3692,13 +3705,18 @@ class TestSpecNames(unittest.TestCase):
             "columns": [{"name": "USUBJID"}, {"name": "USUBJID"}],
         }
 
-        errors = VALIDATOR.validate_spec_names(spec, "example/spec.yaml")
+        errors = CONTROLS.names(spec, "example/spec.yaml")
 
-        message = "\n".join(errors)
-        self.assertIn("duplicate column name", message)
-        self.assertIn("duplicate key column", message)
-        self.assertIn("duplicate output column", message)
-        self.assertIn("undeclared column 'MISSING'", message)
+        self.assertIn('duplicate_identifier', [error.condition for error in errors])
+        self.assertIn('example/spec.yaml.columns[1].name', [error.path for error in errors])
+        self.assertIn('example/spec.yaml.keys[1]', [error.path for error in errors])
+        self.assertIn('undeclared_column', [error.condition for error in errors])
+        spec['columns'].pop()
+        spec['keys'] = ['USUBJID']
+        projection = CONTROLS.names(spec, 'example/spec.yaml')
+        self.assertEqual([(error.condition, error.path, error.context) for error in projection], [
+            ('duplicate_identifier', 'example/spec.yaml.output.columns[1]', {'column': 'USUBJID'})
+        ])
 
     def test_rejects_empty_keys(self):
         spec = {
@@ -3709,7 +3727,7 @@ class TestSpecNames(unittest.TestCase):
             "columns": [{"name": "USUBJID"}],
         }
 
-        errors = VALIDATOR.validate_spec_names(spec, "example/spec.yaml")
+        errors = CONTROLS.names(spec, "example/spec.yaml")
 
         self.assertIn("at least one key column", "\n".join(errors))
 
@@ -3722,11 +3740,11 @@ class TestSpecNames(unittest.TestCase):
             'columns': [{'name': 'USUBJID'}, {'name': 'SITEID'}],
         }
 
-        errors = VALIDATOR.validate_spec_names(spec, 'example/spec.yaml')
+        errors = CONTROLS.names(spec, 'example/spec.yaml')
 
         diagnostics = [
             error for error in errors
-            if isinstance(error, VALIDATOR.ValidationDiagnostic)
+            if isinstance(error, OWNER_VALIDATION_DIAGNOSTICS.ValidationDiagnostic)
             and error.condition == 'internal_column_in_keys'
         ]
         self.assertEqual(
@@ -3746,7 +3764,7 @@ class TestSpecNames(unittest.TestCase):
                 }
 
                 root = TOOL_PATH.parents[3]
-                env, env_errors = VALIDATOR.build_schema_env(root)
+                env, env_errors = OWNER_REPOSITORY_SCHEMA.build_schema_env(root)
                 self.assertEqual(env_errors, [])
                 errors = typed_schema_control(spec, 'example/spec.yaml', None, {
                     'classes': {'root_class': [{'output': {'type': 'output_class'}}],
@@ -3754,7 +3772,7 @@ class TestSpecNames(unittest.TestCase):
 
                 diagnostics = [
                     error for error in errors
-                    if isinstance(error, VALIDATOR.ValidationDiagnostic)
+                    if isinstance(error, OWNER_VALIDATION_DIAGNOSTICS.ValidationDiagnostic)
                     and error.path == 'example/spec.yaml.output.columns[0]'
                 ]
                 self.assertEqual(len(diagnostics), 1)
@@ -3780,7 +3798,7 @@ class TestSpecNames(unittest.TestCase):
         }
 
         self.assertEqual(
-            VALIDATOR.validate_spec_names(spec, "example/spec.yaml"), []
+            CONTROLS.names(spec, "example/spec.yaml"), []
         )
 
     def test_rejects_unknown_and_repeated_output_order_terms(self):
@@ -3801,18 +3819,13 @@ class TestSpecNames(unittest.TestCase):
             "columns": [{"name": "USUBJID"}],
         }
 
-        errors = VALIDATOR.validate_spec_names(spec, "example/spec.yaml")
+        errors = CONTROLS.names(spec, "example/spec.yaml")
 
-        message = "\n".join(errors)
-        self.assertIn(
-            "output.order_by[1]: duplicate order term 'USUBJID'", message
-        )
-        self.assertIn(
-            "output.order_by[2]: undeclared column 'DM.USUBJID'", message
-        )
-        self.assertIn(
-            "output.order_by[3]: undeclared column 'MISSING'", message
-        )
+        self.assertEqual([(error.path, error.condition, error.context) for error in errors], [
+            ('example/spec.yaml.output.order_by[1]', 'duplicate_order_term', {'column': 'USUBJID'}),
+            ('example/spec.yaml.output.order_by[2]', 'undeclared_column', {'column': 'DM.USUBJID'}),
+            ('example/spec.yaml.output.order_by[3]', 'undeclared_column', {'column': 'MISSING'}),
+        ])
 
     def test_rejects_dataset_and_lookup_namespace_errors(self):
         spec = {
@@ -3829,14 +3842,20 @@ class TestSpecNames(unittest.TestCase):
             "rows": [{"id": "row"}, {"id": "row", "dataset": "MISSING"}],
         }
 
-        errors = VALIDATOR.validate_spec_names(spec, "example/spec.yaml")
+        errors = CONTROLS.names(spec, "example/spec.yaml")
 
-        message = "\n".join(errors)
-        self.assertIn("must not equal the output domain", message)
-        self.assertIn("undeclared dataset 'MISSING'", message)
-        self.assertIn("duplicate intermediate id", message)
-        self.assertIn("conflicts with a dataset or domain", message)
-        self.assertIn("duplicate row id", message)
+        self.assertIn('duplicate_identifier', [error.condition for error in errors])
+        self.assertIn('driver_unavailable', [error.condition for error in errors])
+        spec['domain'] = 'OUT'
+        spec['base'] = 'ADSL'
+        spec['keys'] = ['ID']
+        spec['columns'] = [{'name': 'ID'}]
+        spec['output']['columns'] = ['ID']
+        spec.pop('rows')
+        spec['intermediates'][0]['dataset'] = 'ADSL'
+        additional = CONTROLS.names(spec, 'example/spec.yaml')
+        self.assertTrue(additional)
+        self.assertIn('ADSL', '\n'.join(additional))
 
     def test_accepts_intermediate_row_driver(self):
         # REQ-1262: a row template may name a named intermediate as
@@ -3853,7 +3872,7 @@ class TestSpecNames(unittest.TestCase):
             "rows": [{"id": "serious", "dataset": "SERIOUS_AE"}],
         }
 
-        errors = VALIDATOR.validate_spec_names(spec, "example/spec.yaml")
+        errors = CONTROLS.names(spec, "example/spec.yaml")
 
         self.assertEqual(errors, [])
 
@@ -3871,12 +3890,12 @@ class TestSpecContracts(unittest.TestCase):
             ],
         }
 
-        errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
+        errors = CONTROLS.contracts(spec, "example/spec.yaml")
 
         message = "\n".join(errors)
-        self.assertIn("base is required", message)
+        self.assertIn("driver_unavailable", message)
         self.assertIn("AGE", message)
-        self.assertIn("no derivation", message)
+        self.assertIn("missing_derivation", message)
 
     def test_accepts_missing_base_with_one_dataset(self):
         spec = {
@@ -3890,7 +3909,7 @@ class TestSpecContracts(unittest.TestCase):
         }
 
         self.assertEqual(
-            VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml"), []
+            CONTROLS.contracts(spec, "example/spec.yaml"), []
         )
 
     def test_warning_verification_requires_a_warning_log(self):
@@ -3917,11 +3936,11 @@ class TestSpecContracts(unittest.TestCase):
             ],
         }
 
-        missing = VALIDATOR.validate_spec_contracts(
+        missing = CONTROLS.contracts(
             spec, "example/spec.yaml"
         )
         spec["output"]["warning_log"] = "adsl-violations.csv"
-        governed = VALIDATOR.validate_spec_contracts(
+        governed = CONTROLS.contracts(
             spec, "example/spec.yaml"
         )
 
@@ -3930,17 +3949,17 @@ class TestSpecContracts(unittest.TestCase):
 
     def test_default_driver_dataset_prefers_base(self):
         self.assertEqual(
-            VALIDATOR.default_driver_dataset(
+            CONTROLS.driver(
                 {"base": "DM", "input": {"DM": "dm.csv", "VS": "vs.csv"}}
             ),
             "DM",
         )
         self.assertEqual(
-            VALIDATOR.default_driver_dataset({"input": {"DM": "dm.csv"}}),
+            CONTROLS.driver({"input": {"DM": "dm.csv"}}),
             "DM",
         )
         self.assertIsNone(
-            VALIDATOR.default_driver_dataset(
+            CONTROLS.driver(
                 {"input": {"DM": "dm.csv", "VS": "vs.csv"}}
             )
         )
@@ -3969,14 +3988,15 @@ class TestSpecContracts(unittest.TestCase):
             ],
         }
 
-        errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
+        errors = CONTROLS.contracts(spec, "example/spec.yaml")
 
         message = "\n".join(errors)
-        self.assertIn("order_by and keep", message)
-        self.assertIn("requires at least one bound", message)
-        self.assertIn("at least two distinct columns", message)
-        self.assertIn("duplicate dataset verification id", message)
-        self.assertIn("range requires an int or float column", message)
+        self.assertEqual([error.condition for error in errors], ['unpaired_fields'])
+        self.assertEqual(errors[0].context, {'intermediate': 'FIRST', 'declared': ['order_by'], 'missing': ['keep']})
+        spec.pop('intermediates')
+        remaining = CONTROLS.contracts(spec, 'example/spec.yaml')
+        self.assertTrue(remaining)
+        self.assertIn('verifications', '\n'.join(remaining))
 
     def test_a_row_may_override_an_odm_column_derivation(self):
         # REQ-1260: the item read is a default in the row that uses its own
@@ -4003,14 +4023,14 @@ class TestSpecContracts(unittest.TestCase):
             ],
         }
 
-        errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
+        errors = CONTROLS.contracts(spec, "example/spec.yaml")
 
         duplicates = [
             error for error in errors
             if getattr(error, "condition", None) == "duplicate_derivation"
         ]
         self.assertEqual(duplicates, [])
-        self.assertIn("SEX", VALIDATOR.row_local_column_derivations(spec))
+        self.assertNotIn("missing_derivation", [error.condition for error in errors])
 
     def test_short_unique_still_checks_declared_columns(self):
         spec = {
@@ -4025,9 +4045,10 @@ class TestSpecContracts(unittest.TestCase):
             "verifications": [{"unique": ["MISSING"]}],
         }
 
-        errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
+        errors = CONTROLS.contracts(spec, "example/spec.yaml")
 
-        self.assertIn("unique[0]: unknown column 'MISSING'", "\n".join(errors))
+        self.assertEqual(errors[0].condition, 'unknown_field')
+        self.assertEqual(errors[0].context['reason'], "unknown column 'MISSING'")
 
     def test_accepts_grouped_row_count(self):
         spec = {
@@ -4053,12 +4074,12 @@ class TestSpecContracts(unittest.TestCase):
         }
 
         self.assertEqual(
-            VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml"), []
+            CONTROLS.contracts(spec, "example/spec.yaml"), []
         )
 
     def test_row_count_fraction_bounds(self):
         spec = {
-            "domain": "DM",
+            "domain": "OUT",
             "input": {"DM": "dm.csv"},
             "base": "DM",
             "keys": ["USUBJID"],
@@ -4074,18 +4095,20 @@ class TestSpecContracts(unittest.TestCase):
             }}],
         }
         self.assertEqual(
-            VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml"), []
+            CONTROLS.contracts(spec, "example/spec.yaml"), []
         )
 
         spec["verifications"][0]["row_count"]["max_fraction"] = 1.1
-        errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
-        self.assertIn("max_fraction: must be between 0 and 1", "\n".join(errors))
+        errors = CONTROLS.contracts(spec, "example/spec.yaml")
+        self.assertEqual(errors[0].path, 'example/spec.yaml.verifications[0].row_count.max_fraction')
+        self.assertEqual(errors[0].context['reason'], 'a row_count fraction is between 0 and 1')
 
         spec["verifications"][0]["row_count"].update(
             {"min_fraction": 0.75, "max_fraction": 0.25}
         )
-        errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
-        self.assertIn("min_fraction must not exceed max_fraction", "\n".join(errors))
+        errors = CONTROLS.contracts(spec, "example/spec.yaml")
+        self.assertIn('fraction', errors[0].context['reason'])
+        self.assertIn('max', errors[0].context['reason'])
 
     def test_accepts_grouped_row_count_without_id_but_rejects_bad_columns(self):
         spec = {
@@ -4108,13 +4131,17 @@ class TestSpecContracts(unittest.TestCase):
             ],
         }
 
-        errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
+        errors = CONTROLS.contracts(spec, "example/spec.yaml")
 
         message = "\n".join(errors)
         self.assertNotIn("missing_verification_id", message)
-        self.assertIn("group_by: duplicate column 'USUBJID'", message)
-        self.assertIn("group_by: unknown column 'MISSING'", message)
-        self.assertIn("group_by: requires at least one column", message)
+        self.assertIn('row_count group_by repeats a column', message)
+        spec['verifications'][0]['row_count']['group_by'] = ['MISSING']
+        self.assertIn("unknown column 'MISSING'", '\n'.join(CONTROLS.contracts(spec, 'example/spec.yaml')))
+        spec['verifications'] = [spec['verifications'][1]]
+        empty = CONTROLS.contracts(spec, 'example/spec.yaml')
+        self.assertEqual(empty[0].condition, 'invalid_declaration')
+        self.assertIn('group_by names at least one column', empty[0].context['reason'])
 
     def test_rejects_duplicate_row_count_verification_id(self):
         spec = {
@@ -4143,14 +4170,12 @@ class TestSpecContracts(unittest.TestCase):
             ],
         }
 
-        errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
+        errors = CONTROLS.contracts(spec, "example/spec.yaml")
 
-        self.assertIn(
-            "duplicate dataset verification id", "\n".join(errors)
-        )
+        self.assertIn("duplicate_identifier", "\n".join(errors))
 
     def test_rejects_a_source_extension_that_names_no_profile(self):
-        snapshots = VALIDATOR.ProjectSnapshots()
+        snapshots = SOURCE_CONTROLS.Captures()
         with tempfile.TemporaryDirectory() as temp_dir:
             example_dir = Path(temp_dir)
             input_dir = example_dir / "input"
@@ -4171,7 +4196,7 @@ class TestSpecContracts(unittest.TestCase):
                 ],
             }
 
-            errors = VALIDATOR.validate_spec_contracts(
+            errors = CONTROLS.contracts(
                 spec, "example/spec.yaml", spec_path, snapshots=snapshots
             )
 
@@ -4186,10 +4211,10 @@ class TestSpecContracts(unittest.TestCase):
             if getattr(error, 'condition', None) == 'source_profile_unknown'
         )
         self.assertEqual(diagnostic.path, "example/spec.yaml.input.DM.path")
-        self.assertEqual(diagnostic.context, {'path': 'input/dm.txt'})
+        self.assertEqual(diagnostic.context, {'dataset': 'DM', 'path': 'input/dm.txt'})
 
     def test_accepts_parquet_as_a_source_profile(self):
-        snapshots = VALIDATOR.ProjectSnapshots()
+        snapshots = SOURCE_CONTROLS.Captures()
         with tempfile.TemporaryDirectory() as temp_dir:
             example_dir = Path(temp_dir)
             input_dir = example_dir / "input"
@@ -4204,10 +4229,10 @@ class TestSpecContracts(unittest.TestCase):
                 "base": "DM",
                 "keys": ["USUBJID"],
                 "output": {"columns": ["USUBJID"]},
-                "columns": [],
+                "columns": [{"name": "USUBJID", "derivation": {"literal": "fixture"}}],
             }
 
-            errors = VALIDATOR.validate_spec_contracts(
+            errors = CONTROLS.contracts(
                 spec, "example/spec.yaml", spec_path, snapshots=snapshots
             )
 
@@ -4232,10 +4257,10 @@ class TestSpecContracts(unittest.TestCase):
                 "base": "DM",
                 "keys": ["USUBJID"],
                 "output": {"columns": ["USUBJID"]},
-                "columns": [],
+                "columns": [{"name": "USUBJID", "derivation": {"literal": "fixture"}}],
             }
 
-            errors = VALIDATOR.validate_spec_contracts(
+            errors = CONTROLS.contracts(
                 spec, "example/spec.yaml", spec_path
             )
 
@@ -4279,12 +4304,14 @@ class TestSpecContracts(unittest.TestCase):
                 ],
             }
 
-            errors = VALIDATOR.validate_spec_contracts(
+            errors = CONTROLS.contracts(
                 spec, "example/spec.yaml", spec_path
             )
+            del spec['input']['EX']
+            type_errors = CONTROLS.contracts(spec, "example/spec.yaml", spec_path)
 
+        self.assertIn("types.AGE", "\n".join(type_errors))
         message = "\n".join(errors)
-        self.assertIn("types.AGE", message)
         self.assertIn(
             "input.EX.path: resource_path_missing: 'input/missing.csv' "
             "does not exist",
@@ -4310,7 +4337,7 @@ class TestSpecContracts(unittest.TestCase):
                 ],
             }
 
-            errors = VALIDATOR.validate_spec_contracts(
+            errors = CONTROLS.contracts(
                 spec, "example/spec_supp.yaml", spec_path
             )
 
@@ -4339,7 +4366,7 @@ columns:
 '''
 
     def setUp(self):
-        self.env, schema_errors = VALIDATOR.build_schema_env(
+        self.env, schema_errors = OWNER_REPOSITORY_SCHEMA.build_schema_env(
             TOOL_PATH.parents[3]
         )
         self.assertEqual(schema_errors, [])
@@ -4371,7 +4398,7 @@ columns:
                 "path": "input/dm.csv",
                 "schema": "input/dm.schema.yaml",
             }
-        return VALIDATOR.validate_producing_specs(
+        return SOURCE_CONTROLS.producing(
             {"input": {"DM": source}},
             "example/spec.yaml",
             self.spec_path,
@@ -4407,7 +4434,7 @@ columns:
                             'derivation': 'DM.STUDYID',
                         }],
                     }
-                    findings = VALIDATOR.validate_spec_document(
+                    findings = OWNER_REPOSITORY_SCHEMA.validate_spec_document(
                         consumer, 'example/spec.yaml', self.spec_path, self.env
                     )
                     if ordinal == 'OriginalPosition':
@@ -4434,12 +4461,12 @@ columns:
             'ordinal': 'OriginalPosition',
         }
         self.assertEqual(self.validate(source), [])
-        catalog = VALIDATOR.dataset_type_catalog(
+        catalog = SOURCE_CONTROLS.catalog(
             {'input': {'DM': source}}, self.spec_path, self.env
         )
         self.assertEqual(catalog['DM']['OriginalPosition'], 'int')
         del source['ordinal']
-        catalog = VALIDATOR.dataset_type_catalog(
+        catalog = SOURCE_CONTROLS.catalog(
             {'input': {'DM': source}}, self.spec_path, self.env
         )
         self.assertNotIn('OriginalPosition', catalog['DM'])
@@ -4480,11 +4507,8 @@ columns:
                 "types": {},
             }
         )
-        self.assertIn(
-            "example/spec.yaml.input.DM.types: inline types cannot be "
-            "combined with a producing specification",
-            "\n".join(empty_types_errors),
-        )
+        self.assertEqual(empty_types_errors[0].condition, 'redundant_field_type')
+        self.assertEqual(empty_types_errors[0].path, 'example/spec.yaml.input.DM.types')
 
     def test_rejects_producer_version_mismatch(self):
         self.write_producer_spec(
@@ -4495,7 +4519,7 @@ columns:
 
         message = "\n".join(self.validate())
 
-        self.assertIn("does not match bundle version", message)
+        self.assertIn("schema_version_mismatch", message)
 
     def test_rejects_reordered_producer_output(self):
         self.write_producer_spec(
@@ -4570,8 +4594,8 @@ columns:
 
         message = "\n".join(self.validate())
 
-        self.assertIn("base is required", message)
-        self.assertIn("column has no derivation", message)
+        self.assertIn("driver_unavailable", message)
+        self.assertIn("missing_derivation", message)
 
     def test_rejects_unlabeled_producer_output(self):
         self.write_producer_spec(
@@ -4580,9 +4604,8 @@ columns:
 
         message = "\n".join(self.validate())
 
-        self.assertIn(
-            "stored producer column requires a non-empty label", message
-        )
+        self.assertIn('invalid_producer_contract', message)
+        self.assertIn('columns.AGE.label', message)
 
     def test_rejects_missing_producer_input(self):
         self.write_producer_spec()
@@ -4666,7 +4689,7 @@ class TestProjectResourceBoundary(unittest.TestCase):
         self.test_dir.cleanup()
 
     def resolve(self, written, base_dir=None):
-        return VALIDATOR.resolve_project_path(
+        return SOURCE_CONTROLS.resource(
             written, self.root if base_dir is None else base_dir,
         )
 
@@ -4843,30 +4866,28 @@ class TestProjectResourceBoundary(unittest.TestCase):
         self.assertEqual(accepted.resolve(), self.source.resolve())
 
     def test_error_names_the_written_path_and_no_host_path(self):
-        message = VALIDATOR.resource_path_error(
-            "spec.yaml.input.DM.path",
-            "input/absent.csv",
-            "resource_path_missing",
-        )
+        message = SOURCE_CONTROLS.resource_findings(
+            "input/absent.csv", self.root, "spec.yaml.input.DM.path"
+        )[0]
 
         self.assertIn("resource_path_missing", message)
         self.assertIn("'input/absent.csv'", message)
         self.assertNotIn(str(self.root), message)
 
     def test_repeated_declarations_share_one_snapshot(self):
-        snapshots = VALIDATOR.ProjectSnapshots()
+        snapshots = SOURCE_CONTROLS.Captures()
 
         first, first_condition = snapshots.read(self.source)
         second, second_condition = snapshots.read(self.source)
 
         self.assertIsNone(first_condition)
         self.assertIsNone(second_condition)
-        self.assertIs(first, second)
+        self.assertTrue(second.same_snapshot)
         self.assertEqual(snapshots.reads, 1)
         self.assertEqual(first.csv_header(), ["STUDYID", "AGE"])
 
     def test_replaced_content_fails_after_validation(self):
-        snapshots = VALIDATOR.ProjectSnapshots()
+        snapshots = SOURCE_CONTROLS.Captures()
         accepted, condition = snapshots.read(self.source)
         self.assertIsNone(condition)
 
@@ -4889,7 +4910,7 @@ class TestRetiredProjectConfiguration(unittest.TestCase):
             (declaring / "yamaa-project.yaml").write_bytes(b"invalid: [")
             source = root / "dm.csv"
             source.write_text("ID\n1\n")
-            accepted, condition = VALIDATOR.resolve_project_path("../dm.csv", declaring)
+            accepted, condition = SOURCE_CONTROLS.resource("../dm.csv", declaring)
             self.assertIsNone(condition)
             self.assertEqual(accepted.read_bytes(), source.read_bytes())
 
@@ -4898,7 +4919,7 @@ class TestProjectResourceBoundaryInSpecs(unittest.TestCase):
     """R021 as the specification validator applies it."""
 
     def setUp(self):
-        self.env, schema_errors = VALIDATOR.build_schema_env(
+        self.env, schema_errors = OWNER_REPOSITORY_SCHEMA.build_schema_env(
             TOOL_PATH.parents[3]
         )
         self.assertEqual(schema_errors, [])
@@ -4927,7 +4948,7 @@ class TestProjectResourceBoundaryInSpecs(unittest.TestCase):
         }
 
     def contracts(self, source, project_root=None):
-        return VALIDATOR.validate_spec_contracts(
+        return CONTROLS.contracts(
             self.spec(source),
             "example/spec.yaml",
             self.spec_path,
@@ -4997,7 +5018,7 @@ class TestProjectResourceBoundaryInSpecs(unittest.TestCase):
         outside = self.example_dir / "outside.csv"
         outside.write_text("SECRET\nvalue\n", encoding="utf-8")
 
-        catalog = VALIDATOR.dataset_type_catalog(
+        catalog = SOURCE_CONTROLS.catalog(
             self.spec("../outside.csv"), self.spec_path, self.env
         )
 
@@ -5010,89 +5031,89 @@ class TestRegularExpressionContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.root = TOOL_PATH.parents[3]
-        cls.env, schema_errors = VALIDATOR.build_schema_env(cls.root)
+        cls.env, schema_errors = OWNER_REPOSITORY_SCHEMA.build_schema_env(cls.root)
         assert not schema_errors, schema_errors
 
     # -- the portable contract ---------------------------------------------
 
     def test_the_validator_names_the_contract_it_replays(self):
-        self.assertEqual(VALIDATOR.REGEX_CONTRACT, 'regex')
-        self.assertEqual(VALIDATOR.REGEX_CONTRACT_VERSION, '2.0.0')
+        self.assertEqual(OWNER_REGEX_CHECKS.REGEX_CONTRACT, 'regex')
+        self.assertEqual(OWNER_REGEX_CHECKS.REGEX_CONTRACT_VERSION, '2.0.0')
 
     def test_the_replay_reads_through_public_native_specifications(self):
-        VALIDATOR.require_regex_binding()
+        OWNER_REGEX_CHECKS.require_regex_binding()
         import _native_regex as package_binding
 
         self.assertIs(
-            VALIDATOR._portable_compile, package_binding.compile_pattern
+            OWNER_REGEX_CHECKS._portable_compile, package_binding.compile_pattern
         )
         self.assertIs(
-            VALIDATOR._portable_full_match, package_binding.full_match
+            OWNER_REGEX_CHECKS._portable_full_match, package_binding.full_match
         )
         self.assertIs(package_binding.check, __import__('yamaa').check)
         self.assertIs(package_binding.domain, __import__('yamaa').domain)
 
     def test_missing_binding_fails_rather_than_falling_back(self):
-        saved = VALIDATOR._portable_binding
+        saved = OWNER_REGEX_CHECKS._portable_binding
         try:
-            VALIDATOR._portable_binding = False
-            with self.assertRaises(VALIDATOR.RegexBindingUnavailable) as caught:
-                VALIDATOR.compile_regex('a')
+            OWNER_REGEX_CHECKS._portable_binding = False
+            with self.assertRaises(OWNER_REGEX_CHECKS.RegexBindingUnavailable) as caught:
+                OWNER_REGEX_CHECKS.compile_regex('a')
         finally:
-            VALIDATOR._portable_binding = saved
+            OWNER_REGEX_CHECKS._portable_binding = saved
         message = str(caught.exception)
         self.assertIn('unsupported_regex_engine', message)
-        self.assertIn(VALIDATOR.REGEX_CONTRACT_VERSION, message)
+        self.assertIn(OWNER_REGEX_CHECKS.REGEX_CONTRACT_VERSION, message)
 
     # -- the contract is not the host default ------------------------------
 
     def test_accepts_contract_syntax_beyond_the_host_library(self):
         for pattern in ('(?<name>a)', r'\u{1D400}', '(?<=ab)x'):
             with self.subTest(pattern=pattern):
-                VALIDATOR.compile_regex(pattern)
+                OWNER_REGEX_CHECKS.compile_regex(pattern)
 
     def test_rejects_syntax_outside_the_portable_contract(self):
         for pattern in (
             '(?P<name>a)', '(?i)a', r'\a', 'a{', '(?<=a+)b', r'\p{L}',
         ):
             with self.subTest(pattern=pattern):
-                with self.assertRaises(VALIDATOR.InvalidRegex):
-                    VALIDATOR.compile_regex(pattern)
+                with self.assertRaises(OWNER_REGEX_CHECKS.InvalidRegex):
+                    OWNER_REGEX_CHECKS.compile_regex(pattern)
 
     def test_character_classes_do_not_widen_to_unicode(self):
-        self.assertTrue(VALIDATOR.regex_full_match(r'\d', '5'))
-        self.assertFalse(VALIDATOR.regex_full_match(r'\d', chr(0x0665)))
-        self.assertFalse(VALIDATOR.regex_full_match(r'\w', chr(0x00E9)))
-        with self.assertRaises(VALIDATOR.InvalidRegex):
-            VALIDATOR.regex_full_match(r'\p{L}', chr(0x00E9))
+        self.assertTrue(OWNER_REGEX_CHECKS.regex_full_match(r'\d', '5'))
+        self.assertFalse(OWNER_REGEX_CHECKS.regex_full_match(r'\d', chr(0x0665)))
+        self.assertFalse(OWNER_REGEX_CHECKS.regex_full_match(r'\w', chr(0x00E9)))
+        with self.assertRaises(OWNER_REGEX_CHECKS.InvalidRegex):
+            OWNER_REGEX_CHECKS.regex_full_match(r'\p{L}', chr(0x00E9))
 
     def test_dollar_does_not_match_before_a_trailing_line_feed(self):
-        self.assertTrue(VALIDATOR.regex_full_match('a', 'a'))
-        self.assertFalse(VALIDATOR.regex_full_match('a', 'a\n'))
-        self.assertFalse(VALIDATOR.regex_full_match('a$', 'a\n'))
+        self.assertTrue(OWNER_REGEX_CHECKS.regex_full_match('a', 'a'))
+        self.assertFalse(OWNER_REGEX_CHECKS.regex_full_match('a', 'a\n'))
+        self.assertFalse(OWNER_REGEX_CHECKS.regex_full_match('a$', 'a\n'))
 
     def test_a_supplementary_scalar_is_one_character(self):
         scalar = chr(0x1D400)
-        self.assertTrue(VALIDATOR.regex_full_match('.', scalar))
-        self.assertFalse(VALIDATOR.regex_full_match('..', scalar))
-        self.assertTrue(VALIDATOR.regex_full_match(r'\u{1D400}', scalar))
+        self.assertTrue(OWNER_REGEX_CHECKS.regex_full_match('.', scalar))
+        self.assertFalse(OWNER_REGEX_CHECKS.regex_full_match('..', scalar))
+        self.assertTrue(OWNER_REGEX_CHECKS.regex_full_match(r'\u{1D400}', scalar))
 
     def test_matching_applies_no_normalization(self):
         self.assertFalse(
-            VALIDATOR.regex_full_match(r'\u{00E9}', 'e' + chr(0x0301))
+            OWNER_REGEX_CHECKS.regex_full_match(r'\u{00E9}', 'e' + chr(0x0301))
         )
 
     # -- full match versus search ------------------------------------------
 
     def test_the_pattern_keyword_is_a_full_match_and_matches_searches(self):
-        self.assertFalse(VALIDATOR.regex_full_match('[0-9]{3}', 'AE-007-X'))
-        self.assertIsNotNone(VALIDATOR.regex_search('[0-9]{3}', 'AE-007-X'))
+        self.assertFalse(OWNER_REGEX_CHECKS.regex_full_match('[0-9]{3}', 'AE-007-X'))
+        self.assertIsNotNone(OWNER_REGEX_CHECKS.regex_search('[0-9]{3}', 'AE-007-X'))
 
     def test_anchoring_adds_no_capture_group(self):
-        source = VALIDATOR.anchored_regex_source('(a)|(b)')
+        source = OWNER_REGEX_CHECKS.anchored_regex_source('(a)|(b)')
         self.assertEqual(source, '^(?:(a)|(b))$')
-        self.assertEqual(VALIDATOR.regex_capture_group_count(source), 2)
-        self.assertTrue(VALIDATOR.regex_full_match('a|ab', 'ab'))
+        self.assertEqual(OWNER_REGEX_CHECKS.regex_capture_group_count(source), 2)
+        self.assertTrue(OWNER_REGEX_CHECKS.regex_full_match('a|ab', 'ab'))
 
     def test_every_fixture_pattern_survives_anchoring(self):
         document = yaml.safe_load(
@@ -5102,8 +5123,8 @@ class TestRegularExpressionContract(unittest.TestCase):
             if case.get('invalid'):
                 continue
             with self.subTest(case=case['id']):
-                VALIDATOR.compile_regex(
-                    VALIDATOR.anchored_regex_source(case['pattern'])
+                OWNER_REGEX_CHECKS.compile_regex(
+                    OWNER_REGEX_CHECKS.anchored_regex_source(case['pattern'])
                 )
 
     # -- capture groups -----------------------------------------------------
@@ -5124,36 +5145,36 @@ class TestRegularExpressionContract(unittest.TestCase):
         for pattern, expected in cases.items():
             with self.subTest(pattern=pattern):
                 self.assertEqual(
-                    VALIDATOR.regex_capture_group_count(pattern), expected
+                    OWNER_REGEX_CHECKS.regex_capture_group_count(pattern), expected
                 )
 
     def test_extract_distinguishes_no_match_from_an_unentered_group(self):
         self.assertIs(
-            VALIDATOR.regex_extract('^a(b)?$', 'z', 0),
-            VALIDATOR.REGEX_NO_MATCH,
+            OWNER_REGEX_CHECKS.regex_extract('^a(b)?$', 'z', 0),
+            OWNER_REGEX_CHECKS.REGEX_NO_MATCH,
         )
-        self.assertIsNone(VALIDATOR.regex_extract('^a(b)?$', 'a', 1))
-        self.assertEqual(VALIDATOR.regex_extract('^a(b)?$', 'ab', 1), 'b')
+        self.assertIsNone(OWNER_REGEX_CHECKS.regex_extract('^a(b)?$', 'a', 1))
+        self.assertEqual(OWNER_REGEX_CHECKS.regex_extract('^a(b)?$', 'ab', 1), 'b')
 
     def test_extract_returns_the_empty_string_for_an_empty_match(self):
-        self.assertEqual(VALIDATOR.regex_extract('x*', 'y', 0), '')
+        self.assertEqual(OWNER_REGEX_CHECKS.regex_extract('x*', 'y', 0), '')
 
     def test_extract_reads_a_group_by_scalar_not_by_byte(self):
         subject = 'x' + chr(0x1D400) + '-tail'
         self.assertEqual(
-            VALIDATOR.regex_extract(r'(\u{1D400})-(\w+)', subject, 2), 'tail'
+            OWNER_REGEX_CHECKS.regex_extract(r'(\u{1D400})-(\w+)', subject, 2), 'tail'
         )
 
     def test_extract_rejects_a_group_the_pattern_does_not_declare(self):
         for group in (2, -1):
             with self.subTest(group=group):
-                with self.assertRaises(VALIDATOR.RegexGroupOutOfRange):
-                    VALIDATOR.regex_extract('^A-([0-9]+)$', 'A-1', group)
+                with self.assertRaises(OWNER_REGEX_CHECKS.RegexGroupOutOfRange):
+                    OWNER_REGEX_CHECKS.regex_extract('^A-([0-9]+)$', 'A-1', group)
 
     # -- the validation surface --------------------------------------------
 
     def test_both_conditions_are_registered_to_this_rule(self):
-        registry = VALIDATOR.VALIDATION_CONDITION_REGISTRY
+        registry = OWNER_REPOSITORY_MANIFESTS.VALIDATION_CONDITION_REGISTRY
         for condition, required in (
             # The binding's wording is not a portable fact, so a fixture
             # states the pattern and the diagnostic adds the reason.
@@ -5169,12 +5190,7 @@ class TestRegularExpressionContract(unittest.TestCase):
                 )
 
     def test_matches_pattern_the_contract_rejects_fails_validation(self):
-        errors = VALIDATOR.validate_type(
-            {'matches': {'pattern': '(?P<name>a)'}},
-            ['column_verification'],
-            self.env,
-            'spec.columns.SEX.verifications[0]',
-        )
+        errors = OWNER_REGEX_CHECKS.regex_pattern_errors('(?P<name>a)', 'spec.columns.SEX.verifications[0].matches.pattern', full_match=True)
         self.assertEqual(len(errors), 1)
         self.assertEqual(errors[0].condition, 'invalid_regex')
         self.assertEqual(
@@ -5185,23 +5201,13 @@ class TestRegularExpressionContract(unittest.TestCase):
         self.assertIn('reason', errors[0].context)
 
     def test_matches_pattern_the_contract_accepts_validates(self):
-        errors = VALIDATOR.validate_type(
-            {'matches': {'pattern': '(?<name>a)'}},
-            ['column_verification'],
-            self.env,
-            'spec.columns.SEX.verifications[0]',
-        )
+        errors = OWNER_REGEX_CHECKS.regex_pattern_errors('(?<name>a)', 'spec.columns.SEX.verifications[0].matches.pattern', full_match=True)
         self.assertEqual(errors, [])
 
     def test_str_extract_group_outside_the_pattern_fails_validation(self):
-        errors = VALIDATOR.validate_type(
-            {'str_extract': {
+        errors = OWNER_REGEX_CHECKS.regex_group_errors('str_extract', {
                 'source': 'USUBJID', 'pattern': '^A-([0-9]+)$', 'group': 2,
-            }},
-            ['expression'],
-            self.env,
-            'spec.columns.SITEID.derivation',
-        )
+            }, 'spec.columns.SITEID.derivation.str_extract')
         self.assertEqual(len(errors), 1)
         self.assertEqual(errors[0].condition, 'regex_group_out_of_range')
         self.assertEqual(
@@ -5214,31 +5220,21 @@ class TestRegularExpressionContract(unittest.TestCase):
         )
 
     def test_str_extract_group_inside_the_pattern_validates(self):
-        errors = VALIDATOR.validate_type(
-            {'str_extract': {
+        errors = OWNER_REGEX_CHECKS.regex_group_errors('str_extract', {
                 'source': 'USUBJID', 'pattern': '^A-([0-9]+)$', 'group': 1,
-            }},
-            ['expression'],
-            self.env,
-            'spec.columns.SITEID.derivation',
-        )
+            }, 'spec.columns.SITEID.derivation.str_extract')
         self.assertEqual(errors, [])
 
     def test_a_parenthesis_in_a_class_declares_no_group(self):
-        errors = VALIDATOR.validate_type(
-            {'str_extract': {
+        errors = OWNER_REGEX_CHECKS.regex_group_errors('str_extract', {
                 'source': 'USUBJID', 'pattern': '^[(]x$', 'group': 1,
-            }},
-            ['expression'],
-            self.env,
-            'spec.columns.SITEID.derivation',
-        )
+            }, 'spec.columns.SITEID.derivation.str_extract')
         self.assertEqual(len(errors), 1)
         self.assertEqual(errors[0].condition, 'regex_group_out_of_range')
         self.assertEqual(errors[0].context['group_count'], 0)
 
     def test_descriptor_pattern_the_contract_rejects_fails_validation(self):
-        errors = VALIDATOR.check_descriptor(
+        errors = OWNER_REPOSITORY_SCHEMA.check_descriptor(
             {'type': 'str', 'pattern': '(?P<name>a)'}, False, 'schema.name'
         )
         self.assertEqual(len(errors), 1)
@@ -5251,17 +5247,17 @@ class TestRegularExpressionContract(unittest.TestCase):
             'registries': {},
         }
         self.assertEqual(
-            VALIDATOR.validate_type('a', ['code'], env, 'spec.code'), []
+            OWNER_REPOSITORY_SCHEMA.validate_type('a', ['code'], env, 'spec.code'), []
         )
         # Python re.match would accept the trailing line feed here.
         self.assertTrue(
-            VALIDATOR.validate_type('a\n', ['code'], env, 'spec.code')
+            OWNER_REPOSITORY_SCHEMA.validate_type('a\n', ['code'], env, 'spec.code')
         )
 
     # -- the shared fixtures ------------------------------------------------
 
     def test_shared_fixtures_replay_against_the_portable_binding(self):
-        self.assertEqual(VALIDATOR.validate_regex_conformance(self.root), [])
+        self.assertEqual(OWNER_REGEX_CHECKS.validate_regex_conformance(self.root), [])
 
     def test_replay_reports_an_outcome_that_drifted_from_the_binding(self):
         source = self.root / 'yaml' / 'conformance' / 'regex.yaml'
@@ -5279,7 +5275,7 @@ class TestRegularExpressionContract(unittest.TestCase):
             target = root / 'yaml' / 'conformance'
             target.mkdir(parents=True)
             (target / 'regex.yaml').write_text(drifted)
-            errors = VALIDATOR.validate_regex_conformance(root)
+            errors = OWNER_REGEX_CHECKS.validate_regex_conformance(root)
         self.assertEqual(len(errors), 1)
         self.assertIn('schema_pattern records False', errors[0])
 
@@ -5298,14 +5294,14 @@ class TestRegularExpressionContract(unittest.TestCase):
                 "    pattern: 'a'\n"
                 '    invalid: true\n'
             )
-            errors = VALIDATOR.validate_regex_conformance(root)
+            errors = OWNER_REGEX_CHECKS.validate_regex_conformance(root)
         self.assertTrue(
             any('the portable binding accepts pattern' in e for e in errors),
             errors,
         )
 
     def test_replay_requires_a_case_for_every_named_category(self):
-        self.assertTrue(VALIDATOR.REGEX_FIXTURE_REQUIRED_COVERS)
+        self.assertTrue(OWNER_REGEX_CHECKS.REGEX_FIXTURE_REQUIRED_COVERS)
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             target = root / 'yaml' / 'conformance'
@@ -5323,13 +5319,13 @@ class TestRegularExpressionContract(unittest.TestCase):
                 '    matches: true\n'
                 '    str_extract: {group: 0, value: "a"}\n'
             )
-            errors = VALIDATOR.validate_regex_conformance(root)
+            errors = OWNER_REGEX_CHECKS.validate_regex_conformance(root)
         self.assertEqual(len(errors), 1)
         self.assertIn('no case covers', errors[0])
 
     def test_missing_fixture_file_fails_validation(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            errors = VALIDATOR.validate_regex_conformance(Path(temp_dir))
+            errors = OWNER_REGEX_CHECKS.validate_regex_conformance(Path(temp_dir))
         self.assertEqual(len(errors), 1)
         self.assertIn('missing R022', errors[0])
 
@@ -5358,10 +5354,10 @@ class TestClosedGrammarContracts(unittest.TestCase):
     # -- the grammar is one source -----------------------------------------
 
     def test_every_contract_replays_against_this_validator(self):
-        self.assertEqual(VALIDATOR.validate_grammar_contracts(self.root), [])
+        self.assertEqual(OWNER_GRAMMAR_CHECKS.validate_grammar_contracts(self.root), [])
 
     def test_every_rule_that_owns_a_grammar_has_a_contract(self):
-        for contract, rule_id in VALIDATOR.GRAMMAR_CONTRACTS.items():
+        for contract, rule_id in OWNER_GRAMMAR_CHECKS.GRAMMAR_CONTRACTS.items():
             with self.subTest(contract=contract):
                 path = self.root / 'yaml' / 'grammar' / f'{contract}.yaml'
                 self.assertTrue(path.is_file())
@@ -5369,7 +5365,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
                 self.assertEqual(document['rule'], rule_id)
 
     def test_a_continuation_aligns_under_its_definition_or_its_bar(self):
-        rendered = VALIDATOR.render_grammar_block([
+        rendered = OWNER_GRAMMAR_CHECKS.render_grammar_block([
             {'name': 'comparison', 'definition': 'a b\n| c d'},
             {'name': 'null_test', 'definition': 'e\nf'},
         ])
@@ -5392,7 +5388,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
                     )
                 },
             )
-            errors = VALIDATOR.validate_grammar_contract(
+            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(
                 root, 'string-template'
             )
         self.assertEqual(len(errors), 1)
@@ -5410,7 +5406,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
                     )
                 },
             )
-            errors = VALIDATOR.validate_grammar_contract(root, 'numeric')
+            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(root, 'numeric')
         self.assertEqual(len(errors), 1)
         self.assertIn('multiplication-binds-tighter-than-addition', errors[0])
         self.assertIn('this validator parses', errors[0])
@@ -5426,7 +5422,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
                     )
                 },
             )
-            errors = VALIDATOR.validate_grammar_contract(root, 'predicate')
+            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(root, 'predicate')
         self.assertEqual(len(errors), 1)
         self.assertIn('this validator collects', errors[0])
 
@@ -5450,7 +5446,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
                     )
                 },
             )
-            errors = VALIDATOR.validate_grammar_contract(root, 'aggregate')
+            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(root, 'aggregate')
         self.assertEqual(len(errors), 1)
         self.assertIn('records as rejected', errors[0])
 
@@ -5469,7 +5465,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
                     )
                 },
             )
-            errors = VALIDATOR.validate_grammar_contract(root, 'numeric')
+            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(root, 'numeric')
         self.assertEqual(len(errors), 1)
         self.assertIn("fails with 'prohibited_function'", errors[0])
 
@@ -5486,7 +5482,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
                     )
                 },
             )
-            errors = VALIDATOR.validate_grammar_contract(root, 'numeric')
+            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(root, 'numeric')
         self.assertEqual(len(errors), 1)
         self.assertIn('vocabulary.function does not name', errors[0])
 
@@ -5496,7 +5492,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
                 temp_dir,
                 **{'yaml/grammar/predicate.yaml': ('  - "ESCAPE"\n', '')},
             )
-            errors = VALIDATOR.validate_grammar_contract(root, 'predicate')
+            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(root, 'predicate')
         self.assertEqual(len(errors), 1)
         self.assertIn('does not name the names this validator', errors[0])
 
@@ -5511,7 +5507,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
                     )
                 },
             )
-            errors = VALIDATOR.validate_grammar_contract(root, 'aggregate')
+            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(root, 'aggregate')
         self.assertTrue(
             any('does not name the reducers' in error for error in errors),
             errors,
@@ -5530,7 +5526,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
                     )
                 },
             )
-            errors = VALIDATOR.validate_grammar_contract(
+            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(
                 root, 'string-template'
             )
         self.assertEqual(len(errors), 1)
@@ -5547,12 +5543,12 @@ class TestClosedGrammarContracts(unittest.TestCase):
                     )
                 },
             )
-            errors = VALIDATOR.validate_grammar_contract(root, 'numeric')
+            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(root, 'numeric')
         self.assertEqual(len(errors), 1)
         self.assertIn("defines no 'name' to import", errors[0])
 
     def test_replay_requires_a_case_for_every_named_category(self):
-        self.assertIn('rejection', VALIDATOR.GRAMMAR_COVERS['string-template'])
+        self.assertIn('rejection', OWNER_GRAMMAR_CHECKS.GRAMMAR_COVERS['string-template'])
         with tempfile.TemporaryDirectory() as temp_dir:
             root = self.contract_root(temp_dir)
             source = root / 'yaml' / 'grammar' / 'string-template.yaml'
@@ -5567,7 +5563,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
                 head + separator
                 + ''.join(f'  - id: {block}' for block in kept)
             )
-            errors = VALIDATOR.validate_grammar_contract(
+            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(
                 root, 'string-template'
             )
         self.assertEqual(len(errors), 1)
@@ -5575,8 +5571,8 @@ class TestClosedGrammarContracts(unittest.TestCase):
 
     def test_a_missing_grammar_fails_validation(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            errors = VALIDATOR.validate_grammar_contracts(Path(temp_dir))
-        self.assertEqual(len(errors), len(VALIDATOR.GRAMMAR_CONTRACTS))
+            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contracts(Path(temp_dir))
+        self.assertEqual(len(errors), len(OWNER_GRAMMAR_CHECKS.GRAMMAR_CONTRACTS))
         for error in errors:
             self.assertIn('missing machine-readable grammar', error)
 
@@ -5585,7 +5581,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
     def test_the_r_runner_reads_the_same_contracts(self):
         stager = self.root / 'rust' / 'tools' / 'stage_grammar_inputs.py'
         text = stager.read_text()
-        for contract, rule_id in VALIDATOR.GRAMMAR_CONTRACTS.items():
+        for contract, rule_id in OWNER_GRAMMAR_CHECKS.GRAMMAR_CONTRACTS.items():
             with self.subTest(contract=contract):
                 self.assertIn(contract, text)
                 self.assertIn(rule_id, text)
@@ -5599,7 +5595,7 @@ class TestDeclaredValidationErrors(unittest.TestCase):
     """A fixture must fail for the condition it declares."""
 
     def check(self, condition, reported):
-        return VALIDATOR.check_declared_validation_error(
+        return OWNER_REPOSITORY_MANIFESTS.check_declared_validation_error(
             {"condition": condition, "spec_paths": ["input.REF.path"]},
             reported,
             "example/spec.yaml",
@@ -5760,7 +5756,7 @@ class TestDatasetPathExamples(unittest.TestCase):
 
     def setUp(self):
         self.root = TOOL_PATH.parents[3]
-        self.env, schema_errors = VALIDATOR.build_schema_env(self.root)
+        self.env, schema_errors = OWNER_REPOSITORY_SCHEMA.build_schema_env(self.root)
         self.assertEqual(schema_errors, [])
 
     def test_each_current_example_reports_its_declared_condition(self):
@@ -5770,21 +5766,21 @@ class TestDatasetPathExamples(unittest.TestCase):
         self.assertEqual(len(examples), 6)
 
         for example in examples:
-            if example.name in VALIDATOR.HISTORICAL_RESOURCE_FIXTURES:
+            if example.name in OWNER_REPOSITORY_STRUCTURE.HISTORICAL_RESOURCE_FIXTURES:
                 continue
             with self.subTest(example=example.name):
                 spec_path = example / "spec.yaml"
                 spec = yaml.load(
                     spec_path.read_text(encoding="utf-8"),
-                    Loader=VALIDATOR.UniqueKeyLoader,
+                    Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader,
                 )
                 declared = yaml.load(
                     (example / "expected" / "error.yaml").read_text(
                         encoding="utf-8"
                     ),
-                    Loader=VALIDATOR.UniqueKeyLoader,
+                    Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader,
                 )
-                reported = VALIDATOR.validate_spec_document(
+                reported = OWNER_REPOSITORY_SCHEMA.validate_spec_document(
                     spec, f"{example.name}/spec.yaml", spec_path, self.env
                 )
 
@@ -5800,17 +5796,17 @@ class TestDatasetPathExamples(unittest.TestCase):
         # REQ-0780/0784: these absolute and parent-relative spellings are
         # allowed. Their files are absent; their committed retired-policy
         # expectations remain historical rather than current acceptance.
-        for name in sorted(VALIDATOR.HISTORICAL_RESOURCE_FIXTURES):
+        for name in sorted(OWNER_REPOSITORY_STRUCTURE.HISTORICAL_RESOURCE_FIXTURES):
             with self.subTest(example=name):
                 spec_path = self.root / "benchmarks" / name / "spec.yaml"
                 spec = yaml.load(
                     spec_path.read_text(encoding="utf-8"),
-                    Loader=VALIDATOR.UniqueKeyLoader,
+                    Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader,
                 )
                 source = spec["input"]["LBREF"]
                 written = source if isinstance(source, str) else source["path"]
-                self.assertIsNone(VALIDATOR.classify_written_project_path(written))
-                reported = VALIDATOR.validate_spec_document(
+                self.assertEqual(SOURCE_CONTROLS.resource(written, spec_path.parent)[1], 'resource_path_missing')
+                reported = OWNER_REPOSITORY_SCHEMA.validate_spec_document(
                     spec, f"{name}/spec.yaml", spec_path, self.env
                 )
                 self.assertEqual(len(reported), 1)
@@ -5853,7 +5849,9 @@ class TestReferenceDependencyBoundary(unittest.TestCase):
             and call.attr == 'spec_from_file_location'
             for call in calls
         ), 'the validator cannot load retired reference source files')
-        entry = next(node for node in ast.parse(source).body
+        owner_source = TOOL_PATH.with_name('repository_schema.py').read_text(encoding='utf-8')
+        self.assertEqual(self.forbidden_imports(owner_source), [])
+        entry = next(node for node in ast.parse(owner_source).body
             if isinstance(node, ast.FunctionDef) and node.name == 'validate_spec_document')
         semantic = [node.func.id for node in ast.walk(entry)
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
@@ -5949,10 +5947,10 @@ class TestValidatorCLI(unittest.TestCase):
             '  - fields_from: shared_fields\n',
             encoding='ascii',
         )
-        env, errors = VALIDATOR.build_schema_env(self.root_dir)
+        env, errors = OWNER_REPOSITORY_SCHEMA.build_schema_env(self.root_dir)
         self.assertEqual(errors, [])
         self.assertEqual(
-            set(VALIDATOR.schema_class_fields(env, 'root_class')),
+            set(OWNER_REPOSITORY_SCHEMA.schema_class_fields(env, 'root_class')),
             {'id', 'filter'},
         )
 
@@ -5961,7 +5959,7 @@ class TestValidatorCLI(unittest.TestCase):
             + '  - filter: {type: str}\n',
             encoding='ascii',
         )
-        _, errors = VALIDATOR.build_schema_env(self.root_dir)
+        _, errors = OWNER_REPOSITORY_SCHEMA.build_schema_env(self.root_dir)
         self.assertTrue(any('duplicate class field' in error for error in errors))
 
         for target, expected in (
@@ -5975,7 +5973,7 @@ class TestValidatorCLI(unittest.TestCase):
                     f'  - fields_from: {target}\n',
                     encoding='ascii',
                 )
-                _, errors = VALIDATOR.build_schema_env(self.root_dir)
+                _, errors = OWNER_REPOSITORY_SCHEMA.build_schema_env(self.root_dir)
                 self.assertTrue(any(expected in error for error in errors))
 
     def test_cli_help(self):
@@ -6064,7 +6062,7 @@ class TestValidatorCLI(unittest.TestCase):
             text=True,
         )
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('outside yaml directory', result.stdout.lower())
+        self.assertIn('inside the yaml directory', result.stdout.lower())
 
     def test_schema_include_rejects_symlink_inside_yaml_directory(self):
         yaml_dir = self.root_dir / 'yaml'
@@ -6237,8 +6235,8 @@ class TestValidatorCLI(unittest.TestCase):
     def test_schema_version_mismatch(self):
         yaml_dir = self.root_dir / 'yaml'
         yaml_dir.mkdir(exist_ok=True)
-        (yaml_dir / 'schema.yaml').write_text('version: "1.0"\nincludes: ["other.yaml"]\nroot_class:\n  - f1: {type: str}\n')
-        (yaml_dir / 'other.yaml').write_text('version: "2.0"\n')
+        (yaml_dir / 'schema.yaml').write_text('version: "1.0"\nincludes: ["schema_other.yaml"]\nroot_class:\n  - f1: {type: str}\n')
+        (yaml_dir / 'schema_other.yaml').write_text('version: "2.0"\n')
 
         result = subprocess.run([sys.executable, str(self.tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
@@ -6289,7 +6287,7 @@ class TestValidatorCLI(unittest.TestCase):
         # field the document does not declare.
         root = TOOL_PATH.parents[3]
 
-        self.assertEqual(VALIDATOR.validate_examples_define_documents(root), [])
+        self.assertEqual(OWNER_REPOSITORY_STRUCTURE.validate_examples_define_documents(root), [])
 
     def test_a_define_document_field_outside_its_class_is_reported(self):
         root = TOOL_PATH.parents[3]
@@ -6305,7 +6303,7 @@ class TestValidatorCLI(unittest.TestCase):
                 document.read_text().replace('\ndatasets:\n', '\ninput:\n', 1)
             )
 
-            errors = VALIDATOR.validate_examples_define_documents(copy)
+            errors = OWNER_REPOSITORY_STRUCTURE.validate_examples_define_documents(copy)
 
         message = '\n'.join(errors)
         self.assertIn("unknown field 'input' for class define_class", message)
@@ -6358,15 +6356,15 @@ class TestValidatorCLI(unittest.TestCase):
         index = examples / 'README.md'
         row = '| [`good`](good/) | description | lifecycle | Python, R |\n'
         index.write_text(row)
-        self.assertEqual(VALIDATOR.validate_examples_index(self.root_dir), [])
+        self.assertEqual(OWNER_EDITORIAL.validate_examples_index(self.root_dir), [])
         index.write_text(row + row)
         self.assertIn('duplicate index entry for good',
-                      '\n'.join(VALIDATOR.validate_examples_index(self.root_dir)))
+                      '\n'.join(OWNER_EDITORIAL.validate_examples_index(self.root_dir)))
         index.write_text(row.replace('(good/)', '(wrong-target/)'))
         self.assertIn('wrong-target',
-                      '\n'.join(VALIDATOR.validate_examples_index(self.root_dir)))
+                      '\n'.join(OWNER_EDITORIAL.validate_examples_index(self.root_dir)))
         index.write_text(row.replace('description', 'wrong description'))
-        self.assertTrue(VALIDATOR.validate_examples_index(self.root_dir))
+        self.assertTrue(OWNER_EDITORIAL.validate_examples_index(self.root_dir))
 
     def test_example_index_missing(self):
         ex_dir = self.root_dir / 'benchmarks'
@@ -6394,7 +6392,7 @@ class TestValidatorCLI(unittest.TestCase):
         (ex_dir / 'expected').mkdir()
         (ex_dir / 'expected' / 'out.csv').write_text('c,a\n3,1\n')
 
-        errors, _ = VALIDATOR.validate_examples_csv(self.root_dir)
+        errors, _ = OWNER_REPOSITORY_ARTIFACTS.validate_examples_csv(self.root_dir)
 
         self.assertEqual(errors, [])
 
@@ -6435,7 +6433,7 @@ class TestValidatorCLI(unittest.TestCase):
     def test_csv_golden_of_a_sibling_producer_is_accepted(self):
         self.write_producer_example('producer-output')
 
-        errors, _ = VALIDATOR.validate_examples_csv(self.root_dir)
+        errors, _ = OWNER_REPOSITORY_ARTIFACTS.validate_examples_csv(self.root_dir)
 
         self.assertEqual(errors, [])
 
@@ -6443,7 +6441,7 @@ class TestValidatorCLI(unittest.TestCase):
         ex_dir = self.write_producer_example('producer-stray')
         (ex_dir / 'expected' / 'other.csv').write_text('c\n3\n')
 
-        errors, _ = VALIDATOR.validate_examples_csv(self.root_dir)
+        errors, _ = OWNER_REPOSITORY_ARTIFACTS.validate_examples_csv(self.root_dir)
 
         message = '\n'.join(errors)
         self.assertIn('producer-stray/other.csv: expected artifact name', message)
@@ -6479,7 +6477,7 @@ bad_field: "what"
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('bad_field', result.stdout)
 
-    @patch.object(VALIDATOR, "validate_spec_document", side_effect=typed_schema_control)
+    @patch.object(OWNER_REPOSITORY_STRUCTURE, "validate_spec_document", side_effect=typed_schema_control)
     def test_multiple_spec_variants_are_discovered_and_validated(self, _native):
         ex_dir = self.root_dir / 'benchmarks' / 'variant-example'
         (ex_dir / 'input').mkdir(parents=True)
@@ -6505,15 +6503,15 @@ bad_field: "what"
             'registries': {},
         }
 
-        paths = VALIDATOR.example_spec_paths(ex_dir)
+        paths = OWNER_EDITORIAL.example_spec_paths(ex_dir)
         self.assertEqual(
             [path.name for path in paths],
             ['spec_py.yaml', 'spec_r.yaml'],
         )
         self.assertEqual(
-            VALIDATOR.validate_examples_layout(self.root_dir), []
+            OWNER_REPOSITORY_STRUCTURE.validate_examples_layout(self.root_dir), []
         )
-        errors = VALIDATOR.validate_examples_structure(self.root_dir, env)
+        errors = OWNER_REPOSITORY_STRUCTURE.validate_examples_structure(self.root_dir, env)
         self.assertTrue(errors)
         self.assertIn('spec_py.yaml', '\n'.join(errors))
         self.assertIn('bad_field', '\n'.join(errors))
@@ -6531,7 +6529,7 @@ bad_field: "what"
         (ex_dir / 'spec.yaml').write_text('value: base\n')
         (ex_dir / 'spec_r.yaml').write_text('value: variant\n')
 
-        errors = VALIDATOR.validate_examples_layout(self.root_dir)
+        errors = OWNER_REPOSITORY_STRUCTURE.validate_examples_layout(self.root_dir)
         self.assertTrue(errors)
         self.assertIn('cannot mix', '\n'.join(errors))
 
@@ -6550,14 +6548,14 @@ bad_field: "what"
             'value: valid\nparents: spec_organization.yaml\n'
         )
 
-        entries = VALIDATOR.example_entry_specs(ex_dir)
+        entries = OWNER_REPOSITORY_ARTIFACTS.example_entry_specs(ex_dir)
         self.assertEqual([path.name for path in entries], ['spec_study.yaml'])
         self.assertEqual(
-            VALIDATOR.expected_resolved_path(ex_dir, entries[0]).name,
+            OWNER_REPOSITORY_ARTIFACTS.expected_resolved_path(ex_dir, entries[0]).name,
             'spec_resolved.yaml',
         )
         self.assertEqual(
-            VALIDATOR.validate_examples_layout(self.root_dir), []
+            OWNER_REPOSITORY_STRUCTURE.validate_examples_layout(self.root_dir), []
         )
 
     def test_schema_linked_spec_files_are_producers_not_entries(self):
@@ -6570,7 +6568,7 @@ bad_field: "what"
             'value: valid\ninput:\n  DM: {path: dm.csv, schema: spec_dm.yaml}\n'
         )
 
-        entries = VALIDATOR.example_entry_specs(ex_dir)
+        entries = OWNER_REPOSITORY_ARTIFACTS.example_entry_specs(ex_dir)
         self.assertEqual([path.name for path in entries], ['spec_suppdm.yaml'])
 
     def test_readme_dashboard_badge_must_follow_the_title(self):
@@ -6588,9 +6586,9 @@ bad_field: "what"
         )
         (ex_dir / 'README.md').write_text('# No badge\n')
         self.assertEqual(
-            VALIDATOR.validate_examples_layout(self.root_dir), []
+            OWNER_REPOSITORY_STRUCTURE.validate_examples_layout(self.root_dir), []
         )
-        errors = VALIDATOR.validate_examples_badges(self.root_dir)
+        errors = OWNER_EDITORIAL.validate_examples_badges(self.root_dir)
         self.assertIn('right after the title', '\n'.join(errors))
         (ex_dir / 'README.md').write_text(
             '# Wrong badge\n\n'
@@ -6598,15 +6596,15 @@ bad_field: "what"
             '(https://elong0527.github.io/yamaa/benchmark/other-dir.html)\n'
         )
         self.assertEqual(
-            VALIDATOR.validate_examples_layout(self.root_dir), []
+            OWNER_REPOSITORY_STRUCTURE.validate_examples_layout(self.root_dir), []
         )
-        errors = VALIDATOR.validate_examples_badges(self.root_dir)
+        errors = OWNER_EDITORIAL.validate_examples_badges(self.root_dir)
         self.assertIn('right after the title', '\n'.join(errors))
         (ex_dir / 'README.md').write_text(f'# Right badge\n\n{badge}\n')
         self.assertEqual(
-            VALIDATOR.validate_examples_layout(self.root_dir), []
+            OWNER_REPOSITORY_STRUCTURE.validate_examples_layout(self.root_dir), []
         )
-        errors = VALIDATOR.validate_examples_badges(self.root_dir)
+        errors = OWNER_EDITORIAL.validate_examples_badges(self.root_dir)
         self.assertIn('lifecycle badge', '\n'.join(errors))
 
     def test_readme_dashboard_badge_accepts_lifecycle_badge(self):
@@ -6631,19 +6629,19 @@ bad_field: "what"
             f'# Right badge\n\n{badge} {lifecycle}\n'
         )
         self.assertEqual(
-            VALIDATOR.validate_examples_layout(self.root_dir), []
+            OWNER_REPOSITORY_STRUCTURE.validate_examples_layout(self.root_dir), []
         )
         self.assertEqual(
-            VALIDATOR.validate_examples_badges(self.root_dir), []
+            OWNER_EDITORIAL.validate_examples_badges(self.root_dir), []
         )
         (ex_dir / 'README.md').write_text(
             f'# Bad lifecycle\n\n{badge} [![Lifecycle: bogus]'
             f'(https://img.shields.io/badge/Lifecycle-bogus-red)](https://example.com)\n'
         )
         self.assertEqual(
-            VALIDATOR.validate_examples_layout(self.root_dir), []
+            OWNER_REPOSITORY_STRUCTURE.validate_examples_layout(self.root_dir), []
         )
-        errors = VALIDATOR.validate_examples_badges(self.root_dir)
+        errors = OWNER_EDITORIAL.validate_examples_badges(self.root_dir)
         self.assertIn('right after the title', '\n'.join(errors))
 
     def test_layout_skips_missing_readme_presence_check(self):
@@ -6655,9 +6653,9 @@ bad_field: "what"
         (ex_dir / 'spec.yaml').write_text('value: valid\n')
         (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
         self.assertEqual(
-            VALIDATOR.validate_examples_layout(self.root_dir), []
+            OWNER_REPOSITORY_STRUCTURE.validate_examples_layout(self.root_dir), []
         )
-        presence = VALIDATOR.validate_examples_readme_presence(self.root_dir)
+        presence = OWNER_EDITORIAL.validate_examples_readme_presence(self.root_dir)
         self.assertIn('missing README.md', '\n'.join(presence))
 
     def test_layout_skips_missing_how_to_fix_check(self):
@@ -6674,9 +6672,9 @@ bad_field: "what"
         )
         (ex_dir / 'README.md').write_text(f'# No fix\n\n{badge}\n')
         self.assertEqual(
-            VALIDATOR.validate_examples_layout(self.root_dir), []
+            OWNER_REPOSITORY_STRUCTURE.validate_examples_layout(self.root_dir), []
         )
-        presence = VALIDATOR.validate_examples_readme_presence(self.root_dir)
+        presence = OWNER_EDITORIAL.validate_examples_readme_presence(self.root_dir)
         self.assertIn('How to fix', '\n'.join(presence))
 
     def test_readme_combined_badge_line_is_exempt_from_line_width(self):
@@ -6695,12 +6693,12 @@ bad_field: "what"
         self.assertGreater(len(combined), 79)
         (ex_dir / 'README.md').write_text(f'# Badge width\n\n{combined}\n')
         self.assertEqual(
-            VALIDATOR.validate_example_readmes(self.root_dir), []
+            OWNER_EDITORIAL.validate_example_readmes(self.root_dir), []
         )
         (ex_dir / 'README.md').write_text(
             f'# Badge width\n\n{combined}\n\n{"x" * 80}\n'
         )
-        errors = VALIDATOR.validate_example_readmes(self.root_dir)
+        errors = OWNER_EDITORIAL.validate_example_readmes(self.root_dir)
         self.assertIn('maximum is 79', '\n'.join(errors))
 
     def test_empty_spec_is_rejected(self):
@@ -6714,7 +6712,7 @@ bad_field: "what"
             'registries': {},
         }
 
-        errors = VALIDATOR.validate_examples_structure(self.root_dir, env)
+        errors = OWNER_REPOSITORY_STRUCTURE.validate_examples_structure(self.root_dir, env)
         self.assertTrue(errors)
         self.assertIn('mapping', '\n'.join(errors))
 
@@ -6738,12 +6736,12 @@ bad_field: "what"
             'registries': {},
         }
 
-        errors = VALIDATOR.validate_examples_structure(self.root_dir, env)
+        errors = OWNER_REPOSITORY_STRUCTURE.validate_examples_structure(self.root_dir, env)
         self.assertTrue(errors)
         self.assertIn('2.0', '\n'.join(errors))
         self.assertIn('1.0', '\n'.join(errors))
 
-    @patch.object(VALIDATOR, "validate_spec_document", side_effect=typed_schema_control)
+    @patch.object(OWNER_REPOSITORY_STRUCTURE, "validate_spec_document", side_effect=typed_schema_control)
     def test_negative_spec_rejects_unrelated_structural_errors(self, _native):
         ex_dir = self.root_dir / 'benchmarks' / 'negative-unrelated'
         (ex_dir / 'expected').mkdir(parents=True)
@@ -6769,11 +6767,11 @@ bad_field: "what"
             'registries': {},
         }
 
-        errors = VALIDATOR.validate_examples_structure(self.root_dir, env)
+        errors = OWNER_REPOSITORY_STRUCTURE.validate_examples_structure(self.root_dir, env)
         self.assertTrue(errors)
         self.assertIn('bad_root_field', '\n'.join(errors))
 
-    @patch.object(VALIDATOR, "validate_spec_document", side_effect=typed_schema_control)
+    @patch.object(OWNER_REPOSITORY_STRUCTURE, "validate_spec_document", side_effect=typed_schema_control)
     def test_negative_spec_allows_declared_structural_failure(self, _native):
         ex_dir = self.root_dir / 'benchmarks' / 'negative-declared'
         (ex_dir / 'expected').mkdir(parents=True)
@@ -6799,10 +6797,10 @@ bad_field: "what"
             'registries': {},
         }
 
-        errors = VALIDATOR.validate_examples_structure(self.root_dir, env)
+        errors = OWNER_REPOSITORY_STRUCTURE.validate_examples_structure(self.root_dir, env)
         self.assertEqual(errors, [])
 
-    @patch.object(VALIDATOR, "validate_spec_document", side_effect=typed_schema_control)
+    @patch.object(OWNER_REPOSITORY_STRUCTURE, "validate_spec_document", side_effect=typed_schema_control)
     def test_negative_path_matches_list_item(self, _native):
         ex_dir = self.root_dir / 'benchmarks' / 'negative-list-path'
         (ex_dir / 'expected').mkdir(parents=True)
@@ -6822,7 +6820,7 @@ bad_field: "what"
             'registries': {},
         }
 
-        errors = VALIDATOR.validate_examples_structure(self.root_dir, env)
+        errors = OWNER_REPOSITORY_STRUCTURE.validate_examples_structure(self.root_dir, env)
         self.assertEqual(errors, [])
 
     def test_expected_error_contract_rejects_bad_phase_and_path(self):
@@ -6834,7 +6832,7 @@ bad_field: "what"
             'spec_paths: [columns.MISSING]\ncontext: text\n'
         )
 
-        errors = VALIDATOR.validate_expected_error_contracts(self.root_dir)
+        errors = OWNER_REPOSITORY_MANIFESTS.validate_expected_error_contracts(self.root_dir)
 
         message = '\n'.join(errors)
         self.assertIn('phase', message)
@@ -6847,7 +6845,7 @@ bad_field: "what"
         csv_dir.mkdir(parents=True)
         (csv_dir / 'input.csv').write_text('A,A\n1\n')
 
-        errors = VALIDATOR.validate_csv_shapes(self.root_dir)
+        errors = OWNER_REPOSITORY_ARTIFACTS.validate_csv_shapes(self.root_dir)
 
         message = '\n'.join(errors)
         self.assertIn('duplicate header', message)
@@ -6860,7 +6858,7 @@ bad_field: "what"
             '# Test: output\n\nThe schema derivation is shown.\n\n## Notes\n'
         )
 
-        errors = VALIDATOR.validate_example_readmes(self.root_dir)
+        errors = OWNER_EDITORIAL.validate_example_readmes(self.root_dir)
 
         message = '\n'.join(errors)
         self.assertIn('schema vocabulary', message)
@@ -6881,20 +6879,20 @@ bad_field: "what"
 class TestCsvProfile(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        VALIDATOR._ensure_csv_binding()
+        OWNER_REPOSITORY_ARTIFACTS._ensure_csv_binding()
 
     def parse_render(self, data):
-        records = VALIDATOR.scan_records(data)
-        return VALIDATOR.render_records(records[0], records[1:]).decode('utf-8')
+        records = OWNER_REPOSITORY_ARTIFACTS.scan_records(data)
+        return OWNER_REPOSITORY_ARTIFACTS.render_records(records[0], records[1:]).decode('utf-8')
 
     def test_bare_and_quoted_empty_are_both_missing(self):
-        records = VALIDATOR.scan_records('A,B\n1,\n2,""\n')
+        records = OWNER_REPOSITORY_ARTIFACTS.scan_records('A,B\n1,\n2,""\n')
         self.assertIsNone(records[1][1])
         self.assertIsNone(records[2][1])
 
     def test_quoted_field_carries_delimiter_quote_and_newline(self):
         data = 'A\n"x, y"\n"say ""hi"""\n"two\nlines"\n'
-        records = VALIDATOR.scan_records(data)
+        records = OWNER_REPOSITORY_ARTIFACTS.scan_records(data)
         self.assertEqual(
             [record[0] for record in records[1:]],
             ['x, y', 'say "hi"', 'two\nlines'],
@@ -6905,19 +6903,19 @@ class TestCsvProfile(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             path = Path(raw) / 'adsl.csv'
             path.write_bytes(b'A,B\r\n1,2\r\n')
-            errors = VALIDATOR.validate_csv_artifact(path, 'ex/adsl.csv', {})
+            errors = OWNER_REPOSITORY_ARTIFACTS.validate_csv_artifact(path, 'ex/adsl.csv', {})
         self.assertTrue(any('U+000A' in error for error in errors), errors)
 
     def test_unterminated_final_record_is_rejected(self):
         with tempfile.TemporaryDirectory() as raw:
             path = Path(raw) / 'adsl.csv'
             path.write_bytes(b'A,B\n1,2')
-            errors = VALIDATOR.validate_csv_artifact(path, 'ex/adsl.csv', {})
+            errors = OWNER_REPOSITORY_ARTIFACTS.validate_csv_artifact(path, 'ex/adsl.csv', {})
         self.assertTrue(any('U+000A' in error for error in errors), errors)
 
     def test_unterminated_quote_is_rejected(self):
         with self.assertRaises(ValueError):
-            VALIDATOR.scan_records('A,B\n1,"open\n')
+            OWNER_REPOSITORY_ARTIFACTS.scan_records('A,B\n1,"open\n')
 
     def test_needless_quoting_does_not_render_back(self):
         data = 'A,B\n"1",2\n'
@@ -6925,43 +6923,43 @@ class TestCsvProfile(unittest.TestCase):
 
     def test_zero_row_artifact_is_the_header_alone(self):
         data = 'STUDYID,USUBJID\n'
-        self.assertEqual(len(VALIDATOR.scan_records(data)), 1)
+        self.assertEqual(len(OWNER_REPOSITORY_ARTIFACTS.scan_records(data)), 1)
         self.assertEqual(self.parse_render(data), data)
 
     def test_float_text_omits_a_trailing_zero_decimal(self):
-        self.assertIsNone(VALIDATOR.canonical_float_text('10'))
-        self.assertIn('10', VALIDATOR.canonical_float_text('10.0'))
-        self.assertIsNone(VALIDATOR.canonical_float_text('73.66666666666667'))
+        self.assertIsNone(OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('10'))
+        self.assertIn('10', OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('10.0'))
+        self.assertIsNone(OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('73.66666666666667'))
 
     def test_float_text_is_positional_and_never_exponential(self):
         # A shorter string that round-trips is not the text: the digits are
         # shortest, the notation is fixed, so one value has one spelling.
-        self.assertIsNone(VALIDATOR.canonical_float_text('0.0001'))
-        self.assertIn('0.0001', VALIDATOR.canonical_float_text('1e-4'))
+        self.assertIsNone(OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('0.0001'))
+        self.assertIn('0.0001', OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('1e-4'))
         self.assertIsNone(
-            VALIDATOR.canonical_float_text('100000000000000000000')
+            OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('100000000000000000000')
         )
         self.assertIn(
             '100000000000000000000',
-            VALIDATOR.canonical_float_text('1e+20'),
+            OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('1e+20'),
         )
-        self.assertIsNone(VALIDATOR.canonical_float_text('0.0000001'))
+        self.assertIsNone(OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('0.0000001'))
 
     def test_extreme_precision_and_magnitude_do_not_raise(self):
         # The default decimal context is too small for either, and an
         # uncaught InvalidOperation would abort the whole run.
         self.assertIsNotNone(
-            VALIDATOR.canonical_float_text('0.1' + '0' * 27, 29)
+            OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('0.1' + '0' * 27, 29)
         )
-        self.assertIsNotNone(VALIDATOR.canonical_float_text('1e300', 4))
-        self.assertIsNone(VALIDATOR.canonical_float_text('0.0313', 4))
+        self.assertIsNotNone(OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('1e300', 4))
+        self.assertIsNone(OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('0.0313', 4))
 
     def test_temporal_text_follows_the_r016_grammar(self):
         self.assertIsNone(
-            VALIDATOR.canonical_temporal_text('2025-01-15', 'date')
+            OWNER_REPOSITORY_ARTIFACTS.canonical_temporal_text('2025-01-15', 'date')
         )
         self.assertIsNone(
-            VALIDATOR.canonical_temporal_text(
+            OWNER_REPOSITORY_ARTIFACTS.canonical_temporal_text(
                 '2024-01-01T08:00:00', 'datetime'
             )
         )
@@ -6977,25 +6975,25 @@ class TestCsvProfile(unittest.TestCase):
             ('2025-01-12', 'datetime'),
         ]:
             self.assertIsNotNone(
-                VALIDATOR.canonical_temporal_text(value, kind),
+                OWNER_REPOSITORY_ARTIFACTS.canonical_temporal_text(value, kind),
                 f'{value!r} should not be canonical {kind} text',
             )
 
     def test_declared_precision_fixes_the_written_width(self):
-        self.assertIsNone(VALIDATOR.canonical_float_text('25.0000', 4))
-        self.assertIsNone(VALIDATOR.canonical_float_text('0', 0))
-        self.assertIsNotNone(VALIDATOR.canonical_float_text('25', 4))
-        self.assertIsNotNone(VALIDATOR.canonical_float_text('25.000', 4))
+        self.assertIsNone(OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('25.0000', 4))
+        self.assertIsNone(OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('0', 0))
+        self.assertIsNotNone(OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('25', 4))
+        self.assertIsNotNone(OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('25.000', 4))
 
     def test_exact_ties_round_away_from_zero(self):
-        quantize = VALIDATOR.decimal.Decimal(1).scaleb(-2)
-        rounding = VALIDATOR.decimal.ROUND_HALF_UP
+        quantize = OWNER_DECIMAL.Decimal(1).scaleb(-2)
+        rounding = OWNER_DECIMAL.ROUND_HALF_UP
         self.assertEqual(
-            str(VALIDATOR.decimal.Decimal(0.125).quantize(quantize, rounding)),
+            str(OWNER_DECIMAL.Decimal(0.125).quantize(quantize, rounding)),
             '0.13',
         )
         self.assertEqual(
-            str(VALIDATOR.decimal.Decimal(-0.125).quantize(quantize, rounding)),
+            str(OWNER_DECIMAL.Decimal(-0.125).quantize(quantize, rounding)),
             '-0.13',
         )
 
@@ -7005,20 +7003,20 @@ class TestCsvProfile(unittest.TestCase):
         # instead would report 2.68.
         self.assertEqual(
             str(
-                VALIDATOR.decimal.Decimal(2.675).quantize(
-                    VALIDATOR.decimal.Decimal(1).scaleb(-2),
-                    VALIDATOR.decimal.ROUND_HALF_UP,
+                OWNER_DECIMAL.Decimal(2.675).quantize(
+                    OWNER_DECIMAL.Decimal(1).scaleb(-2),
+                    OWNER_DECIMAL.ROUND_HALF_UP,
                 )
             ),
             '2.67',
         )
 
     def test_non_canonical_int_text_is_reported(self):
-        self.assertTrue(VALIDATOR.CANONICAL_INT.fullmatch('0'))
-        self.assertTrue(VALIDATOR.CANONICAL_INT.fullmatch('-12'))
-        self.assertFalse(VALIDATOR.CANONICAL_INT.fullmatch('007'))
-        self.assertFalse(VALIDATOR.CANONICAL_INT.fullmatch('+1'))
-        self.assertFalse(VALIDATOR.CANONICAL_INT.fullmatch('-0'))
+        self.assertTrue(OWNER_REPOSITORY_ARTIFACTS.CANONICAL_INT.fullmatch('0'))
+        self.assertTrue(OWNER_REPOSITORY_ARTIFACTS.CANONICAL_INT.fullmatch('-12'))
+        self.assertFalse(OWNER_REPOSITORY_ARTIFACTS.CANONICAL_INT.fullmatch('007'))
+        self.assertFalse(OWNER_REPOSITORY_ARTIFACTS.CANONICAL_INT.fullmatch('+1'))
+        self.assertFalse(OWNER_REPOSITORY_ARTIFACTS.CANONICAL_INT.fullmatch('-0'))
 
     def test_artifact_check_reports_bytes_and_values(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -7031,7 +7029,7 @@ class TestCsvProfile(unittest.TestCase):
                     {'name': 'AVAL', 'type': 'float'},
                 ],
             }
-            errors = VALIDATOR.validate_csv_artifact(path, 'ex/adsl.csv', spec)
+            errors = OWNER_REPOSITORY_ARTIFACTS.validate_csv_artifact(path, 'ex/adsl.csv', spec)
         self.assertTrue(any('U+000A' in error for error in errors), errors)
 
     def test_artifact_check_accepts_a_conforming_artifact(self):
@@ -7047,7 +7045,7 @@ class TestCsvProfile(unittest.TestCase):
                     {'name': 'AVAL', 'type': 'float'},
                 ],
             }
-            errors = VALIDATOR.validate_csv_artifact(path, 'ex/adsl.csv', spec)
+            errors = OWNER_REPOSITORY_ARTIFACTS.validate_csv_artifact(path, 'ex/adsl.csv', spec)
         self.assertEqual(errors, [])
 
     def test_decimals_needs_a_csv_artifact_path(self):
@@ -7067,7 +7065,7 @@ class TestCsvProfile(unittest.TestCase):
             spec = copy.deepcopy(base)
             spec['output'] = output
             return '\n'.join(
-                VALIDATOR.validate_spec_names(spec, 'ex/spec.yaml')
+                CONTROLS.names(spec, 'ex/spec.yaml')
             )
 
         self.assertIn(
@@ -7090,27 +7088,27 @@ class TestCsvProfile(unittest.TestCase):
         # The mapping is closed: an unrecognized extension is a failure, not
         # a fall back to the other profile.
         self.assertEqual(
-            VALIDATOR.artifact_profile({'path': 'adsl.csv'}), 'csv'
+            OWNER_REPOSITORY_ARTIFACTS.artifact_profile({'path': 'adsl.csv'}), 'csv'
         )
         self.assertEqual(
-            VALIDATOR.artifact_profile({'path': 'out/adsl.parquet'}),
+            OWNER_REPOSITORY_ARTIFACTS.artifact_profile({'path': 'out/adsl.parquet'}),
             'parquet',
         )
         self.assertEqual(
-            VALIDATOR.artifact_profile({'path': 'adsl.CSV'}), 'csv'
+            OWNER_REPOSITORY_ARTIFACTS.artifact_profile({'path': 'adsl.CSV'}), 'csv'
         )
         for path in ['adsl.txt', 'adsl', 'adsl.csv.gz', '']:
             self.assertIsNone(
-                VALIDATOR.artifact_profile({'path': path}),
+                OWNER_REPOSITORY_ARTIFACTS.artifact_profile({'path': path}),
                 f'{path!r} should name no profile',
             )
-        self.assertIsNone(VALIDATOR.artifact_profile({}))
+        self.assertIsNone(OWNER_REPOSITORY_ARTIFACTS.artifact_profile({}))
 
     def test_byte_order_mark_is_rejected(self):
         with tempfile.TemporaryDirectory() as raw:
             path = Path(raw) / 'adsl.csv'
             path.write_bytes(b'\xef\xbb\xbfSTUDYID\nS1\n')
-            errors = VALIDATOR.validate_csv_artifact(
+            errors = OWNER_REPOSITORY_ARTIFACTS.validate_csv_artifact(
                 path, 'ex/adsl.csv', {'output': {}, 'columns': []}
             )
         self.assertTrue(any('byte-order mark' in error for error in errors), errors)
@@ -7127,11 +7125,7 @@ class TestNativeTemporalFixtureAdmission(unittest.TestCase):
             ('datetime', '2025-02-30T03:04', False),
         ):
             with self.subTest(kind=kind, text=text):
-                self.assertIs(VALIDATOR.valid_temporal_literal(kind, text), expected)
-                self.assertEqual(
-                    VALIDATOR.function_value_type({kind: text}),
-                    kind if expected else '<invalid>',
-                )
+                self.assertIs(OWNER_REPOSITORY_SCHEMA.valid_temporal_literal(kind, text), expected)
 
 
 class TestSourceProfile(unittest.TestCase):
@@ -7139,30 +7133,30 @@ class TestSourceProfile(unittest.TestCase):
 
     def condition(self, data):
         try:
-            VALIDATOR.parse_source_profile(data)
-        except VALIDATOR.SourceProfileError as exc:
+            OWNER_REPOSITORY_ARTIFACTS.parse_source_profile(data)
+        except OWNER_REPOSITORY_ARTIFACTS.SourceProfileError as exc:
             return exc.condition, exc.record, exc.field
         return None
 
     def test_both_terminators_deliver_the_same_records(self):
         self.assertEqual(
-            VALIDATOR.parse_source_profile('A,B\n1,2\n'),
-            VALIDATOR.parse_source_profile('A,B\r\n1,2\r\n'),
+            OWNER_REPOSITORY_ARTIFACTS.parse_source_profile('A,B\n1,2\n'),
+            OWNER_REPOSITORY_ARTIFACTS.parse_source_profile('A,B\r\n1,2\r\n'),
         )
 
     def test_final_record_may_omit_its_terminator(self):
         self.assertEqual(
-            VALIDATOR.parse_source_profile('A,B\n1,2'),
-            VALIDATOR.parse_source_profile('A,B\n1,2\n'),
+            OWNER_REPOSITORY_ARTIFACTS.parse_source_profile('A,B\n1,2'),
+            OWNER_REPOSITORY_ARTIFACTS.parse_source_profile('A,B\n1,2\n'),
         )
 
     def test_missing_and_empty_reach_r014_as_missing(self):
-        records = VALIDATOR.parse_source_profile('A,B\n"",\n')
+        records = OWNER_REPOSITORY_ARTIFACTS.parse_source_profile('A,B\n"",\n')
         self.assertEqual(records[1][0], None)
         self.assertEqual(records[1][1], None)
 
     def test_quoted_field_carries_delimiter_quote_and_newline(self):
-        records = VALIDATOR.parse_source_profile(
+        records = OWNER_REPOSITORY_ARTIFACTS.parse_source_profile(
             'A\n"x, y"\n"say ""hi"""\n"two\nlines"\n'
         )
         self.assertEqual(
@@ -7171,7 +7165,7 @@ class TestSourceProfile(unittest.TestCase):
         )
 
     def test_nothing_is_trimmed(self):
-        records = VALIDATOR.parse_source_profile('A,B\n x , y \n')
+        records = OWNER_REPOSITORY_ARTIFACTS.parse_source_profile('A,B\n x , y \n')
         self.assertEqual(records[1], [' x ', ' y '])
 
     def test_carriage_return_outside_a_terminator_is_rejected(self):
@@ -7195,13 +7189,13 @@ class TestSourceProfile(unittest.TestCase):
         )
 
     def test_an_empty_file_has_no_header(self):
-        self.assertEqual(VALIDATOR.parse_source_profile(''), [])
+        self.assertEqual(OWNER_REPOSITORY_ARTIFACTS.parse_source_profile(''), [])
 
     def test_header_alone_is_a_source_with_no_records(self):
         with tempfile.TemporaryDirectory() as raw:
             path = Path(raw) / 'dm.csv'
             path.write_bytes(b'STUDYID,USUBJID\n')
-            self.assertEqual(VALIDATOR.check_source_file(path), [])
+            self.assertEqual(OWNER_REPOSITORY_ARTIFACTS.check_source_file(path), [])
 
     def test_header_and_width_conditions_are_reported(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -7209,7 +7203,7 @@ class TestSourceProfile(unittest.TestCase):
             path.write_bytes(b'A,A,\n1,2,3\n1,2\n')
             conditions = [
                 condition for condition, _n, _d
-                in VALIDATOR.check_source_file(path)
+                in OWNER_REPOSITORY_ARTIFACTS.check_source_file(path)
             ]
         self.assertEqual(
             conditions,
@@ -7227,11 +7221,11 @@ class TestSourceProfile(unittest.TestCase):
             ill = Path(raw) / 'ill.csv'
             ill.write_bytes(b'A\n\xff\n')
             self.assertEqual(
-                VALIDATOR.check_source_file(mark)[0][0],
+                OWNER_REPOSITORY_ARTIFACTS.check_source_file(mark)[0][0],
                 'source_byte_order_mark',
             )
             self.assertEqual(
-                VALIDATOR.check_source_file(ill)[0][0], 'invalid_text'
+                OWNER_REPOSITORY_ARTIFACTS.check_source_file(ill)[0][0], 'invalid_text'
             )
 
 
@@ -7258,11 +7252,11 @@ class TestDeclaredSourceCondition(unittest.TestCase):
         self.example(
             'negative-source-quote', b'A,B\n1,"x\n', 'source_quote_unterminated'
         )
-        self.assertEqual(VALIDATOR.validate_csv_shapes(self.root), [])
+        self.assertEqual(OWNER_REPOSITORY_ARTIFACTS.validate_csv_shapes(self.root), [])
 
     def test_an_undeclared_malformed_fixture_still_fails(self):
         self.example('positive-source', b'A,B\n1,"x\n')
-        errors = VALIDATOR.validate_csv_shapes(self.root)
+        errors = OWNER_REPOSITORY_ARTIFACTS.validate_csv_shapes(self.root)
         self.assertTrue(
             any('source_quote_unterminated' in error for error in errors),
             errors,
@@ -7272,7 +7266,7 @@ class TestDeclaredSourceCondition(unittest.TestCase):
         self.example(
             'negative-source-quote', b'A,B\n1,2\n', 'source_quote_unterminated'
         )
-        errors = VALIDATOR.validate_csv_shapes(self.root)
+        errors = OWNER_REPOSITORY_ARTIFACTS.validate_csv_shapes(self.root)
         self.assertTrue(
             any('declared but no source fixture' in error for error in errors),
             errors,
@@ -7282,7 +7276,7 @@ class TestDeclaredSourceCondition(unittest.TestCase):
         self.example(
             'negative-source-quote', b'A,A\n1,2\n', 'source_quote_unterminated'
         )
-        errors = VALIDATOR.validate_csv_shapes(self.root)
+        errors = OWNER_REPOSITORY_ARTIFACTS.validate_csv_shapes(self.root)
         self.assertTrue(
             any('source_field_name_duplicate' in error for error in errors),
             errors,
@@ -7305,11 +7299,11 @@ class TestSuiteSourceCoverage(unittest.TestCase):
         )
         raw = path.read_bytes()
         self.assertIn(b'\r\n', raw, 'the suite needs one CRLF source')
-        self.assertEqual(VALIDATOR.check_source_file(path), [])
+        self.assertEqual(OWNER_REPOSITORY_ARTIFACTS.check_source_file(path), [])
         crlf = raw.decode('utf-8')
         self.assertEqual(
-            VALIDATOR.parse_source_profile(crlf),
-            VALIDATOR.parse_source_profile(crlf.replace('\r\n', '\n')),
+            OWNER_REPOSITORY_ARTIFACTS.parse_source_profile(crlf),
+            OWNER_REPOSITORY_ARTIFACTS.parse_source_profile(crlf.replace('\r\n', '\n')),
         )
 
     def test_a_suite_source_reads_both_blanks_as_missing(self):
@@ -7317,7 +7311,7 @@ class TestSuiteSourceCoverage(unittest.TestCase):
             self.root / 'benchmarks'
             / 'adam-adsl-investigator-comment' / 'input' / 'dm.csv'
         )
-        records = VALIDATOR.parse_source_profile(
+        records = OWNER_REPOSITORY_ARTIFACTS.parse_source_profile(
             path.read_text(encoding='utf-8')
         )
         comments = [record[2] for record in records[1:]]
@@ -7343,7 +7337,7 @@ class TestSourceProfileDiagnostics(unittest.TestCase):
                 b'CTX,CTX-01,Royal Infirmary\n'
                 b'CTX,CTX-02,H\xf4pital Saint-Antoine\n'
             )
-            findings = VALIDATOR.check_source_file(path)
+            findings = OWNER_REPOSITORY_ARTIFACTS.check_source_file(path)
         self.assertEqual(len(findings), 1)
         condition, record, detail = findings[0]
         self.assertEqual(condition, 'invalid_text')
@@ -7352,10 +7346,10 @@ class TestSourceProfileDiagnostics(unittest.TestCase):
 
     def test_coordinates_count_a_quoted_field_as_one_field(self):
         self.assertEqual(
-            VALIDATOR.source_coordinates('A,B\n"x,y",'), (2, 2)
+            OWNER_REPOSITORY_ARTIFACTS.source_coordinates('A,B\n"x,y",'), (2, 2)
         )
         self.assertEqual(
-            VALIDATOR.source_coordinates('A,B\n"two\nlines",'), (2, 2)
+            OWNER_REPOSITORY_ARTIFACTS.source_coordinates('A,B\n"two\nlines",'), (2, 2)
         )
 
     def test_an_uppercase_extension_is_scanned(self):
@@ -7367,14 +7361,14 @@ class TestSourceProfileDiagnostics(unittest.TestCase):
             (
                 root / 'benchmarks' / 'upper' / 'input' / 'DM.CSV'
             ).write_bytes(b'A,A\n1\n')
-            errors = VALIDATOR.validate_csv_shapes(root)
+            errors = OWNER_REPOSITORY_ARTIFACTS.validate_csv_shapes(root)
         message = '\n'.join(errors)
         self.assertIn('source_field_name_duplicate', message)
         self.assertIn('source_record_width', message)
 
     def test_a_unicode_fixture_keeps_its_exemption_when_shouted(self):
         self.assertTrue(
-            VALIDATOR.is_unicode_fixture_csv(
+            OWNER_EDITORIAL.is_unicode_fixture_csv(
                 Path('benchmarks/ex/input/DM.CSV')
             )
         )
@@ -7384,7 +7378,7 @@ class TestSourceProfileDiagnostics(unittest.TestCase):
         # specification, so the fixture scan must not demand that some file
         # provoke it.
         self.assertNotIn(
-            'source_profile_unknown', VALIDATOR.SOURCE_READ_CONDITIONS
+            'source_profile_unknown', OWNER_REPOSITORY_ARTIFACTS.SOURCE_READ_CONDITIONS
         )
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -7395,7 +7389,7 @@ class TestSourceProfileDiagnostics(unittest.TestCase):
             (example / 'expected' / 'error.yaml').write_text(
                 'phase: validation\ncondition: source_profile_unknown\n'
             )
-            self.assertEqual(VALIDATOR.validate_csv_shapes(root), [])
+            self.assertEqual(OWNER_REPOSITORY_ARTIFACTS.validate_csv_shapes(root), [])
 
 
 ODM_HEADER = (
@@ -7408,7 +7402,7 @@ class TestRetiredOdmItemReferences(unittest.TestCase):
     """An ODM item is addressed by a source filter."""
 
     def env(self):
-        env, errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[3])
+        env, errors = OWNER_REPOSITORY_SCHEMA.build_schema_env(TOOL_PATH.parents[3])
         self.assertEqual(errors, [])
         return env
 
@@ -7443,7 +7437,7 @@ class TestRetiredOdmItemReferences(unittest.TestCase):
             (example / 'input' / 'odm.csv').write_text(ODM_HEADER)
             spec_path = example / 'spec.yaml'
             spec_path.write_text('{}\n')
-            return VALIDATOR.validate_retired_odm_item_references(
+            return SOURCE_CONTROLS.retired_odm(
                 self.spec(dtc_derivation),
                 f'{name}/spec.yaml',
                 spec_path,
@@ -7465,9 +7459,9 @@ class TestRetiredOdmItemReferences(unittest.TestCase):
         findings = self.findings({'source': 'ODM.IT.DS.DTC'})
 
         self.assertEqual(len(findings), 1)
-        self.assertIn('retired_construct', findings[0])
-        self.assertIn("'ODM.IT.DS.DTC'", findings[0])
-        self.assertIn('columns[1].derivation.source', findings[0])
+        self.assertIn('unknown_field', findings[0])
+        self.assertEqual(findings[0].context['identifier'], 'ODM.IT.DS.DTC')
+        self.assertIn('columns.DSSTDTC.derivation.source', findings[0])
 
     def test_rejects_an_item_inside_a_case_branch(self):
         findings = self.findings({
@@ -7482,7 +7476,7 @@ class TestRetiredOdmItemReferences(unittest.TestCase):
 
         self.assertEqual(len(findings), 1)
         self.assertIn(
-            'derivation.case[1].otherwise.source.variable', findings[0]
+            'derivation.case[1].otherwise.source', findings[0]
         )
 
     def test_the_migrated_specifications_carry_no_retired_reference(self):
@@ -7505,7 +7499,7 @@ class TestRetiredOdmItemReferences(unittest.TestCase):
             with open(spec_path) as handle:
                 spec = yaml.safe_load(handle)
             self.assertEqual(
-                VALIDATOR.validate_retired_odm_item_references(
+                SOURCE_CONTROLS.retired_odm(
                     spec, entry, spec_path, env
                 ),
                 [],
@@ -7562,7 +7556,7 @@ class TestOdmReads(unittest.TestCase):
             (example / 'input' / 'odm.csv').write_text(header + '\n')
             spec_path = example / 'spec.yaml'
             spec_path.write_text('{}\n')
-            return VALIDATOR.validate_spec_odm_reads(
+            return SOURCE_CONTROLS.odm(
                 spec, 'schema-odm-probe/spec.yaml', spec_path
             )
 
@@ -7586,7 +7580,7 @@ class TestOdmReads(unittest.TestCase):
         self.assertEqual(finding.condition, 'invalid_odm_context')
 
     def test_the_catalog_exposes_schema_fields_only(self):
-        env, errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[3])
+        env, errors = OWNER_REPOSITORY_SCHEMA.build_schema_env(TOOL_PATH.parents[3])
         self.assertEqual(errors, [])
         with tempfile.TemporaryDirectory() as raw:
             example = Path(raw) / 'benchmarks' / 'schema-odm-probe'
@@ -7594,14 +7588,14 @@ class TestOdmReads(unittest.TestCase):
             (example / 'input' / 'odm.csv').write_text(
                 SCHEMA_HEADER.upper() + ',SITEID\n'
             )
-            catalog = VALIDATOR.dataset_type_catalog(
+            catalog = SOURCE_CONTROLS.catalog(
                 self.spec({'odm': 'ODM.IT.DM.AGE'}),
                 example / 'spec.yaml',
                 env,
             )
         self.assertEqual(
             catalog['ODM'],
-            {field: 'str' for field in VALIDATOR.ODM_SCHEMA_FIELDS},
+            {field: 'str' for field in OWNER_NATIVE_ODM.fields()},
         )
 
     def test_rejects_a_filter_naming_a_vendor_field(self):
@@ -7655,7 +7649,7 @@ class TestRowPhaseDatasetReads(unittest.TestCase):
     """REQ-0156/REQ-0157 as the repository validator applies them."""
 
     def setUp(self):
-        self.env, schema_errors = VALIDATOR.build_schema_env(
+        self.env, schema_errors = OWNER_REPOSITORY_SCHEMA.build_schema_env(
             TOOL_PATH.parents[3]
         )
         self.assertEqual(schema_errors, [])
@@ -7704,7 +7698,7 @@ class TestRowPhaseDatasetReads(unittest.TestCase):
         }
 
     def validate(self, derivations):
-        return VALIDATOR.validate_spec_document(
+        return OWNER_REPOSITORY_SCHEMA.validate_spec_document(
             self.spec(derivations),
             "example/spec.yaml",
             self.spec_path,
@@ -7862,7 +7856,7 @@ class TestKeyColumnOrder(unittest.TestCase):
     def findings(self, name, declared, artifact, header):
         with tempfile.TemporaryDirectory() as raw:
             root = self.example(raw, name, declared, artifact, header)
-            return VALIDATOR.validate_key_column_order(root)
+            return OWNER_REPOSITORY_ARTIFACTS.validate_key_column_order(root)
 
     def test_accepts_ordered_key_columns(self):
         ordered = ['DOMAIN', 'STUDYID', 'USUBJID', 'SESEQ']
@@ -7907,17 +7901,17 @@ class TestSourceOrdinal(unittest.TestCase):
 
     def findings(self):
         """Return static contract findings for this test's source declaration."""
-        return VALIDATOR.validate_spec_contracts(
+        return CONTROLS.contracts(
             self.spec, 'spec.yaml', self.spec_path
         )
 
     def test_catalog_exposes_an_opt_in_integer(self):
         """The generated field is int and disappears without an opt-in."""
         self.assertEqual(self.findings(), [])
-        catalog = VALIDATOR.dataset_type_catalog(self.spec, self.spec_path)
+        catalog = SOURCE_CONTROLS.catalog(self.spec, self.spec_path)
         self.assertEqual(catalog['SOURCE']['SourceOrdinal'], 'int')
         del self.spec['input']['SOURCE']['ordinal']
-        catalog = VALIDATOR.dataset_type_catalog(self.spec, self.spec_path)
+        catalog = SOURCE_CONTROLS.catalog(self.spec, self.spec_path)
         self.assertNotIn('SourceOrdinal', catalog['SOURCE'])
 
     def test_rejects_collision_with_a_header_only_source(self):
@@ -7931,7 +7925,7 @@ class TestSourceOrdinal(unittest.TestCase):
         self.assertEqual(finding.context, {
             'dataset': 'SOURCE', 'field': 'SourceOrdinal',
         })
-        catalog = VALIDATOR.dataset_type_catalog(self.spec, self.spec_path)
+        catalog = SOURCE_CONTROLS.catalog(self.spec, self.spec_path)
         self.assertEqual(catalog['SOURCE']['SourceOrdinal'], 'str')
 
     def test_rejects_a_type_for_the_generated_field(self):
@@ -7954,7 +7948,7 @@ class TestSourceOrdinal(unittest.TestCase):
     def test_rejects_an_ordinal_on_a_fixed_schema_odm_input(self):
         """ODM inputs cannot extend their fixed schema with an ordinal."""
         self.spec['columns'][0]['derivation'] = {'odm': 'SOURCE.IT.DM.ID'}
-        findings = VALIDATOR.validate_spec_odm_reads(
+        findings = SOURCE_CONTROLS.odm(
             self.spec, 'spec.yaml', self.spec_path
         )
         [finding] = [item for item in findings

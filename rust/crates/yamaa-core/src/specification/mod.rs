@@ -512,6 +512,16 @@ fn preflight(spec: &SpecificationDocument) -> Result<Vec<PreflightFinding>, Prep
         .iter()
         .map(|&id| text(d, field(d, id, "name")?))
         .collect::<Result<Vec<_>, _>>()?;
+    for (position, &name) in names.iter().enumerate() {
+        if names[..position].contains(&name) {
+            let mut finding = LookupFinding::new(
+                &format!("columns[{position}].name"),
+                crate::diagnostic::ConditionCode::PreflightDuplicateColumn,
+            );
+            finding.text("identifier", name);
+            findings.push(PreflightFinding::Scalar(finding.diagnostic()));
+        }
+    }
     let rows = d
         .field(root, "rows")
         .filter(|&id| !matches!(d.nodes()[id], N::Null))
@@ -587,8 +597,27 @@ fn preflight(spec: &SpecificationDocument) -> Result<Vec<PreflightFinding>, Prep
             domain: domain.into(),
         });
     }
-    for (position, &id) in sequence(d, field(d, root, "keys")?)?.iter().enumerate() {
+    let keys = sequence(d, field(d, root, "keys")?)?;
+    if keys.is_empty() {
+        let mut finding =
+            LookupFinding::new("keys", crate::diagnostic::ConditionCode::PreflightEmptyKeys);
+        finding.text("expected", "at least one key column");
+        finding.text("actual", "empty list");
+        findings.push(PreflightFinding::Scalar(finding.diagnostic()));
+    }
+    for (position, &id) in keys.iter().enumerate() {
         let name = text(d, id)?;
+        if keys[..position]
+            .iter()
+            .any(|&previous| text(d, previous).is_ok_and(|value| value == name))
+        {
+            let mut finding = LookupFinding::new(
+                &format!("keys[{position}]"),
+                crate::diagnostic::ConditionCode::PreflightDuplicateKey,
+            );
+            finding.text("identifier", name);
+            findings.push(PreflightFinding::Scalar(finding.diagnostic()));
+        }
         if !names.contains(&name) {
             findings.push(PreflightFinding::UndeclaredKey {
                 position,
@@ -904,6 +933,14 @@ impl PreparedSpecification {
         let mut findings = preflight(spec)?;
         findings.extend(odm::context_findings(spec)?);
         let columns = sequence(d, field(d, root, "columns")?)?;
+        if findings.iter().any(|finding| {
+            matches!(finding,
+                PreflightFinding::Scalar(diagnostic)
+                if diagnostic.code == crate::diagnostic::ConditionCode::PreflightDuplicateColumn
+            )
+        }) {
+            return Err(PrepareError::Invalid(findings));
+        }
         let output = TableSchema::new(
             columns
                 .iter()
@@ -2062,6 +2099,7 @@ impl PreparedSpecification {
                     }
                     static_types::numeric(
                         compiled,
+                        &bindings,
                         &self.intermediates,
                         &catalog,
                         &secondary,
