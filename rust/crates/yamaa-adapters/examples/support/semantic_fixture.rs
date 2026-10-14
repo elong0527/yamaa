@@ -1,4 +1,5 @@
 //! Observe the existing compiler/binder over independently authored metadata.
+//! Raw compilation and metadata inspection retain their separate native scopes.
 //! No cells, resolver callbacks, evaluator, or publication capability are created.
 use serde_json::{json, Value};
 use yamaa_adapters::{
@@ -166,7 +167,8 @@ pub fn observe(input: Value) -> Value {
             .expect("authored source fields are unique")
         })
         .collect::<Vec<_>>();
-    match prepared.bind_sources(&sources.iter().collect::<Vec<_>>()) {
+    let schemas = sources.iter().collect::<Vec<_>>();
+    match prepared.bind_sources(&schemas) {
         Ok(_) => (),
         Err(BindError::Invalid(findings)) => {
             for finding in findings {
@@ -182,6 +184,21 @@ pub fn observe(input: Value) -> Value {
             }
         }
         Err(error) => panic!("semantic fixture binder policy refused: {error:?}"),
+    }
+    // Both scopes are native facts: ordinary compilation preserves dependent
+    // failures; static inspection checks known types independently of cells.
+    // Exact duplicate observations alone are represented once.
+    for diagnostic in prepared
+        .metadata_source_findings(
+            &schemas,
+            yamaa_engine::source_metadata::Limits::default().findings,
+        )
+        .expect("native metadata inspection policy admitted")
+    {
+        let item = row(diagnostic);
+        if !issues.contains(&item) {
+            issues.push(item);
+        }
     }
     json!({"issues": issues, "driver": driver})
 }
