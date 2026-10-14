@@ -79,9 +79,9 @@ numerical and audit checks supply exact-head premerge evidence. Its audit record
 
 The shared-crates step also runs
 `cargo test --locked -p yamaa-engine --features test-support` on every selected
-Rust platform on main and qualification pushes. This enables both
-`project_preparation` and `test_support` integration binaries, which a plain
-default-feature test invocation omits.
+Rust platform on main and qualification pushes. This enables the engine's
+feature-gated preparation and port tests and the explicit `test_support`
+integration boundary, which a plain default-feature test invocation omits.
 
 Scripts locate repository data relative to their own files, so they can also
 run locally from any working directory. Keep tests and shared helpers beside
