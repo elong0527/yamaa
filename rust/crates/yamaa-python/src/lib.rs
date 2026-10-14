@@ -1,5 +1,6 @@
 //! Python composition roots and lossless public result conversion.
 use pyo3::prelude::*;
+mod arrow_input;
 mod define_entry;
 mod domain_entry;
 #[cfg(any(unix, windows))]

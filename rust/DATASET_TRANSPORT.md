@@ -1,4 +1,120 @@
-# Typed dataset bridge
+# Dataset transport
+
+## In-memory Arrow C Data Interface
+
+The current Python and R prepared-specification bindings accept in-memory tables
+through the Arrow C Stream Interface, which transports record batches using the
+Arrow C Data Interface. Input buffers go directly into Rust Arrow arrays; there
+is no input IPC byte stream, serialization, temporary file or IPC decoding.
+This path is additive to the existing CSV/Parquet source and IPC result paths.
+
+Both host crates enable `yamaa-adapters/arrow-c-data`. That feature enables
+`arrow-array/ffi` and `arrow-schema/ffi` on the pinned Arrow 60 dependencies.
+Arrow and unsafe foreign-buffer import remain in the adapter boundary; the core
+and engine continue to receive their storage-independent `TableAccess` port.
+Default adapter-only builds do not need the FFI feature. The canonical
+`Cargo.lock` includes the FFI feature dependencies and supports locked builds.
+
+These are the in-memory counterparts of the existing prepared-specification
+execution probes. `prepared` below is a Python `_Specification` or R prepared
+specification handle, with matching declared input names/types. They use the
+current original-specification compiler, rather than the retired `dataset/1`
+request entrypoints described in the historical section below.
+
+```python
+import pyarrow as pa
+import polars as pl
+
+source = pa.table({"ID": ["A", "B"], "VALUE": [1, 2]})
+table_ipc, outcome_json = prepared.execute_arrow(source)
+table_ipc, outcome_json = prepared.execute_arrow(
+    pl.DataFrame({"ID": ["A", "B"], "VALUE": [1, 2]})
+)
+
+# Every input, in authored input order, even when the driver is not first.
+table_ipc, outcome_json = prepared.execute_arrow_sources([source, other_source])
+```
+
+Python accepts objects implementing `__arrow_c_stream__`, including pyarrow
+tables, record batches/readers and Polars data frames. The exporter must return
+a capsule named `arrow_array_stream`. The consumer moves the stream out and
+empties the capsule's structure; reusing that capsule fails. A table can export
+fresh streams repeatedly; a reader represents its remaining batches and is
+consumed. Export exceptions propagate to the caller without retry or fallback.
+No raw integer pointer is accepted. The interpreter stays attached throughout
+import, execution and producer release callbacks.
+
+```r
+# These helpers belong to the existing internal prepared-handle API.
+result <- yamaa:::.execute_specification_arrow(
+  prepared, arrow::Table$create(ID = c("A", "B"), VALUE = c(1L, 2L))
+)
+stream <- nanoarrow::basic_array_stream(
+  list(data.frame(ID = c("A", "B"), VALUE = c(1L, 2L)))
+)
+result <- yamaa:::.execute_specification_arrow(prepared, stream)
+result <- yamaa:::.execute_specification_arrow_sources(
+  prepared, list(first_table, second_table)
+)
+```
+
+R requires the optional `nanoarrow` package for this path; `arrow` is required
+when supplying Arrow R objects. `as_nanoarrow_array_stream()` supplies the stream
+and `nanoarrow_pointer_export()` exports into initialized Rust-owned storage.
+Its destination address is passed as exact decimal text during a synchronous
+callback, without conversion through R doubles. Rust never casts a caller's
+external pointer into an Arrow object. Exported streams are moved and consumed;
+R errors and interrupts retain their original condition objects. Import,
+execution and all foreign releases stay on the calling R thread.
+
+The shared importer admits the following stored types:
+
+| Stored Arrow type | Engine type | Buffer handling |
+| --- | --- | --- |
+| UTF-8, large UTF-8, UTF-8 view | `str` | Shared offsets/views and text payloads, including Polars string views |
+| Signed int64 | `int` | Shared values and validity |
+| Signed int8/int16/int32 | `int` | Widened to int64 |
+| Float64 | `float` | Shared when all present values are finite |
+| Float32 | `float` | Widened to float64 |
+| Date32 | `date` | Shared day values; adds day-precision metadata |
+| Timestamp without timezone | `datetime` | Second values shared; other units converted only when exactly whole seconds |
+| Canonical `value`/`precision` temporal structs | `date`/`datetime` | Shared, retaining collected precision |
+
+Nonfinite floating values normalize to missing, allocating a replacement column
+when necessary. The compiled source empty-text policy changes validity alone,
+preserving string payloads. Declared source types must match supplied logical
+types; this API does not parse text columns into numbers. Dictionaries, unsigned
+integers, booleans, decimals, binary, arbitrary nested/extension types, timezone
+timestamps and fractional seconds are rejected. Fields keep their order; source
+ordinals are generated through the existing engine policy across all batches.
+
+Preparation and source-count/interpretation admission precede calling exporters.
+The initial path supports ordinary source interpretation; ODM sources must use
+their existing ingestion path. Schema admission precedes fetching batches.
+Shapes, retained buffers, logical text and values are checked before execution.
+Limits accumulate across every input: 524,288 rows, 2,097,152 cells, 256 batches
+(including empties), 16 MiB retained buffers and 16 MiB visible text. Each source
+has at most 64 columns; cumulative schema name/metadata text is at most 64 KiB.
+Shared buffers count conservatively each time they occur. These limits bound
+admitted data, not allocations or time spent inside a foreign producer.
+
+This is a trusted in-process FFI boundary: exporters must provide valid, aligned,
+immutable record-batch buffers (no parent struct nulls) and correct callbacks for
+the whole retained lifetime. Memory
+addresses cannot be validated like an IPC byte stream. Rust retains producer
+ownership through Arrow release callbacks and releases streams/arrays once on
+success, rejection and execution failure. No imported input is kept by the
+prepared handle after a call. The engine still owns constructed output values;
+only successful output is serialized using the existing canonical IPC format.
+Python returns `(table_ipc_or_none, outcome_json)` and R returns
+`list(table, outcome)` with an `execution/1` outcome, preserving existing
+verification, diagnostic and output-withholding behavior.
+
+## Historical typed dataset bridge
+
+The remainder records the retired `dataset/1` bridge. Its named host entrypoints
+and fixed capacities are historical and do not describe the current prepared
+specification API above.
 
 `dataset/1` is an explicit temporary typed-plan bridge for #1585 steps 5 and 7.
 It does not parse specifications, activate environments, select a backend, read

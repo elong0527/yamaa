@@ -87,6 +87,27 @@ impl Specification {
             result.outcome,
         ))
     }
+
+    /// Execute one in-memory Arrow producer through its C Stream capsule.
+    fn execute_arrow<'py>(
+        &self,
+        py: Python<'py>,
+        source: &Bound<'py, PyAny>,
+    ) -> PyResult<(Option<Bound<'py, PyBytes>>, String)> {
+        crate::arrow_input::execute(py, &self.inner, std::slice::from_ref(source))
+    }
+
+    /// Sources follow authored input order; count admission precedes export.
+    fn execute_arrow_sources<'py>(
+        &self,
+        py: Python<'py>,
+        sources: &Bound<'py, PyList>,
+    ) -> PyResult<(Option<Bound<'py, PyBytes>>, String)> {
+        yamaa_adapters::c_data_table::admit_sources(&self.inner, sources.len())
+            .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+        let sources = sources.iter().collect::<Vec<_>>();
+        crate::arrow_input::execute(py, &self.inner, &sources)
+    }
 }
 /// Capture host-provided raw modules and entry YAML. Limits precede owned copies.
 /// This prototype's error rendering is not yet a qualified frontend contract.
