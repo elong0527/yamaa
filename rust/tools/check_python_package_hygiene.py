@@ -27,18 +27,19 @@ RETIRED_IMPORTS = {
 def package_members(member: PurePosixPath, wheel: bool) -> tuple[str, ...]:
     """Locate Python package members without confusing retained Rust/test assets."""
     parts = member.parts
+    folded = tuple(part.casefold() for part in parts)
     if wheel:
-        if parts[:1] == ("yamaa",):
+        if folded[:1] == ("yamaa",):
             return parts[1:]
         # A wheel's data scheme can also install files into the import namespace.
         if (
             len(parts) >= 4
-            and parts[0].endswith(".data")
-            and parts[1] in {"purelib", "platlib"}
-            and parts[2] == "yamaa"
+            and folded[0].endswith(".data")
+            and folded[1] in {"purelib", "platlib"}
+            and folded[2] == "yamaa"
         ):
             return parts[3:]
-    elif parts[1:4] == ("python", "src", "yamaa"):
+    elif folded[1:4] == ("python", "src", "yamaa"):
         return parts[4:]
     return ()
 

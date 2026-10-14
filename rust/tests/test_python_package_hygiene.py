@@ -84,11 +84,30 @@ class PythonPackageHygiene(unittest.TestCase):
                 "yamaa-0.4.0.data/platlib/yamaa/_reference_domain.pyd",
                 "yamaa\\Runtime\\context.py",
                 "yamaa/regex.pyi",
+                "YAMAA/IO.py",
+                "YAMAA-0.4.0.DATA/PURELIB/YAMAA/IO.py",
+                "YAMAA-0.4.0.DATA/PLATLIB/YAMAA/_REFERENCE_DOMAIN.pyd",
+                "YAMAA-0.4.0.DATA\\PURELIB\\YAMAA\\VERIFICATION\\__init__.py",
             ):
                 with self.subTest(member=name):
                     write_archive(path, [name])
-                    with self.assertRaisesRegex(ValueError, "retired Python evaluator/API"):
+                    with self.assertRaisesRegex(ValueError, "retired Python evaluator/API") as finding:
                         module.check_archive(path)
+                    self.assertIn(name, str(finding.exception))
+
+    def test_source_archive_windows_prefix_aliases_preserve_the_original_finding(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "yamaa.tar.gz"
+            for name in (
+                "yamaa-0.4.0/PYTHON/SRC/YAMAA/IO.py",
+                "yamaa-0.4.0/Python/Src/Yamaa/Verification/__init__.py",
+                "yamaa-0.4.0\\PYTHON\\SRC\\YAMAA\\REGEX.PY",
+            ):
+                with self.subTest(member=name):
+                    write_archive(path, [name])
+                    with self.assertRaisesRegex(ValueError, "retired Python evaluator/API") as finding:
+                        module.check_archive(path)
+                    self.assertIn(name, str(finding.exception))
 
     def test_retained_helpers_and_independent_native_truth_are_allowed(self):
         with tempfile.TemporaryDirectory() as directory:
