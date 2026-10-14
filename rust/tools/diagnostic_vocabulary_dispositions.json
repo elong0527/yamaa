@@ -6,7 +6,7 @@
       "kind": "reserved",
       "phases": ["validation"],
       "reason": "Already an unused registration in the published prior source. Current function argument, result, conformance and original-exception contracts have their own closed causes; no removed assertion depended on this spelling.",
-      "owners": ["rust/crates/yamaa-core/src/project_function_result.rs", "rust/crates/yamaa-core/src/diagnostic.rs"],
+      "owners": ["rust/crates/yamaa-core/src/project_function_result.rs", "rust/crates/yamaa-core/src/diagnostic/mod.rs"],
       "controls": ["rust/crates/yamaa-core/tests/project_function_result.rs", "rust/crates/yamaa-engine/tests/function_invocation.rs"],
       "producer": null,
       "history": "Published prior source 845a91ff9ba4ab6599efbd79fafe1c4e1dd14255 registered the name without a producer; #1973 retires reference extension objects while retaining function semantics."

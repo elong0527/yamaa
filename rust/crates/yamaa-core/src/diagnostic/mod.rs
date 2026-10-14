@@ -10,40 +10,30 @@ use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
 use crate::{numeric_parser::SourceSpan, value::Value};
 
-#[path = "diagnostic_dataset.rs"]
 mod dataset;
 pub use dataset::DatasetFinding;
 
-#[path = "diagnostic_aggregate.rs"]
 mod aggregate;
 pub use aggregate::{AggregateContextCause, AggregateEmptyKey, AggregateFinding};
 
-#[path = "diagnostic_odm.rs"]
 mod odm;
 pub use odm::{OdmDeclared, OdmFinding, OdmLocation};
 
-#[path = "diagnostic_inheritance.rs"]
 mod inheritance;
 pub use inheritance::InheritanceFinding;
 
-#[path = "diagnostic_source.rs"]
 mod source;
 pub use source::{admit_source_diagnostics, ParquetFinding, SourceDiagnosticReport, SourceFinding};
 
-#[path = "diagnostic_inherited_dependencies.rs"]
 mod inherited_dependencies;
 pub use inherited_dependencies::inheritance_dependency_diagnostics;
 
-#[path = "diagnostic_grammar.rs"]
 mod grammar;
-#[path = "diagnostic_numeric.rs"]
 mod numeric;
-#[path = "diagnostic_predicate.rs"]
 mod predicate;
 pub use predicate::{
     PredicateDiagnosticError, PredicateGrammarDiagnosticError, MAX_PREDICATE_DIAGNOSTIC_BYTES,
 };
-#[path = "diagnostic_project_lock.rs"]
 mod project_lock;
 pub use project_lock::{
     lock_diagnostics, lock_diagnostics_with_limit, LockDiagnosticError, LockFinding, LockOrigins,
