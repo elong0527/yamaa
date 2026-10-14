@@ -646,7 +646,11 @@ fn activation_projection_refuses_partial_budget_and_forged_case_order_without_ef
     let reads = study.capture_reads();
     assert_eq!(
         activation_with_limit(&run, &attempt.activation, 1),
-        Err(Error::Limit)
+        Err(Error::Limit {
+            resource: "report_activation_bytes",
+            limit: 1,
+            actual: Some(152),
+        })
     );
     assert!(activation(&run, &attempt.activation).is_ok());
     attempt.activation.tests.swap(0, 1);
@@ -654,6 +658,55 @@ fn activation_projection_refuses_partial_budget_and_forged_case_order_without_ef
         activation(&run, &attempt.activation),
         Err(Error::InvalidObservation)
     );
+    assert_eq!(*host.trace.borrow(), trace);
+    assert_eq!(study.capture_reads(), reads);
+}
+
+#[test]
+fn activation_count_refusals_retain_the_applied_cap_in_project_reports() {
+    use yamaa_adapters::{project_activation_observations as activation, project_report};
+    let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
+    let (mut host, mut study) = ports();
+    let mut attempt = run.execute_with_ports(&mut host, &mut study);
+    let trace = host.trace.borrow().clone();
+    let reads = study.capture_reads();
+    let bindings = attempt.activation.bindings.clone();
+    for (resource, limit, actual) in [
+        ("report_activation_bindings", 1024, 1025),
+        ("report_activation_tests", 65_536, 65_537),
+    ] {
+        if resource == "report_activation_bindings" {
+            attempt.activation.bindings.resize(actual, bindings[0]);
+        } else {
+            attempt.activation.bindings = bindings.clone();
+            attempt.activation.tests.resize_with(actual, || {
+                yamaa_engine::project_activation::TestObservation {
+                    function: 0,
+                    case: 0,
+                    outcome: TestOutcome::Passed,
+                    invoked: true,
+                    actual: None,
+                }
+            });
+        }
+        assert_eq!(
+            activation::activation(&run, &attempt.activation),
+            Err(activation::Error::Limit {
+                resource,
+                limit,
+                actual: Some(actual),
+            })
+        );
+        let project_report::Error::Report(
+            yamaa_adapters::specification_report::Error::ResourceLimit(refusal),
+        ) = project_report::build_result(&run, &attempt, report_identity(), &[]).unwrap_err()
+        else {
+            panic!("typed activation report quota")
+        };
+        assert_eq!(refusal.resource, resource);
+        assert_eq!(refusal.limit, limit);
+        assert_eq!(refusal.actual, Some(actual));
+    }
     assert_eq!(*host.trace.borrow(), trace);
     assert_eq!(study.capture_reads(), reads);
 }

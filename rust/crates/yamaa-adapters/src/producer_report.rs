@@ -546,7 +546,16 @@ fn activation_prefix<E>(attempt: &NativeAttempt<E>, budget: &mut Budget) -> Resu
     let value =
         activation::activation_with_limit(held, observed, maximum).map_err(
             |error| match error {
-                activation::Error::Limit => Error::OutputLimit,
+                activation::Error::Limit {
+                    resource,
+                    limit,
+                    actual,
+                } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                    resource,
+                    limit,
+                    actual,
+                    Vec::new(),
+                )),
                 _ => Error::InvalidObservation,
             },
         )?;
