@@ -213,17 +213,22 @@ broader casing from a host or environment default.
 
 <a id="req-0796"></a>
 
-**REQ-0796.** The language admits regular expressions in exactly three places:
+**REQ-0796.** The language admits portable regular expressions in these places:
 
 - the `pattern` descriptor keyword [Schema language](../reference/schema-language.md) declares on a schema `str`;
 - `str_extract.pattern`;
-- the `pattern` of [Verification](../execution/verification.md)'s `matches` column verification.
+- the `pattern` of [Verification](../execution/verification.md)'s `matches` column verification;
+- `str_contains.pattern` ([REQ-1243](text.md#req-1243));
+- the pattern literal in the predicate call `str_contains(source, pattern)`
+  ([REQ-1244](predicates.md#req-1244)).
 
 <a id="req-0797"></a>
 
 **REQ-0797.** `regex` is the named schema type for `str_extract.pattern` and
-[Verification](../execution/verification.md)'s `matches` pattern. All requirements below apply to all three except
-where a section names one.
+`str_contains.pattern`, and for [Verification](../execution/verification.md)'s
+`matches` pattern. The schema descriptor and predicate pattern literal use
+the same portable pattern contract. All requirements below apply to every
+consumer except where a section names one.
 
 ### Regular expressions: Portable pattern contract
 
@@ -237,9 +242,10 @@ invalid.
 
 <a id="req-0799"></a>
 
-**REQ-0799.** Python uses the standard library `re` module. The R binding stays
-unpinned until the R consumer implements [Text operations](text.md). Repository validation uses the
-same Python binding. No consumer reads a pattern with a host default that
+**REQ-0799.** Python and R use the shared Rust portable matcher. Repository
+validation delegates regex semantics to that same matcher; Python's `re`
+module and R's host regex libraries do not define the binding. No consumer
+reads a pattern with a host default that
 violates the normalization below.
 
 <a id="req-0800"></a>
@@ -395,12 +401,13 @@ outcome for the same pattern and subject.
 <a id="req-0821"></a>
 
 **REQ-0821.** `conformance/regex.yaml` holds shared fixtures. Each case names
-the pattern, subject, and outcome for all three consumers, or records a
-rejected pattern. Repository validation replays the fixtures against the
-Python consumer. The replay proves that the Python consumer and fixtures
-agree. The shared conformance workflow proves executable parity with R when
-that workflow exists. A fixture file alone is not runtime evidence for an R
-runtime that has not run the workflow.
+the pattern, subject, and full-match, search, and extraction outcomes, or
+records a rejected pattern. The search outcome also governs both
+`str_contains` consumers. Repository validation replays the fixtures against
+the shared portable matcher. Installed-host qualification establishes that
+Python and R execute the same contract through that matcher; a fixture file
+or a shared-core replay alone is not evidence that either installed host has
+run its qualification checks.
 
 ### Regular expressions: Normalization
 
@@ -558,9 +565,13 @@ validation with `ambiguous_dictionary`.
 <a id="req-0827"></a>
 
 **REQ-0827.** A pattern the grammar or the normalization rejects, in any of
-  the three consumers: fail validation with `invalid_regex` and report the
-  declaring path and the rejection. A pattern is rejected the same way
-  whether its syntax is malformed or merely outside the portable grammar.
+  the schema descriptor, `str_extract`, `str_contains` expression, or
+  `matches` verification: fail validation with `invalid_regex` and report
+  the declaring path and the rejection. The `str_contains` predicate call
+  instead fails with `invalid_predicate` at parse time under
+  [REQ-1244](predicates.md#req-1244). Each consumer rejects a pattern with its
+  stated condition whether its syntax is malformed or merely outside the
+  portable grammar.
 
 <a id="req-0829"></a>
 
