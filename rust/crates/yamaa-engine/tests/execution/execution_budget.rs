@@ -124,6 +124,26 @@ fn source_shape_refusals_precede_reads_and_do_not_spend_future_budgets() {
 }
 
 #[test]
+fn bounded_column_width_admits_1024_and_refuses_1025_before_cell_reads() {
+    for width in [1_024, 1_025] {
+        let source = Source::new(1, width);
+        let result = plan(&source, 0)
+            .execute_with_budget(&source, &[], ExecutionBudget::bounded())
+            .result;
+        if width == 1_024 {
+            assert_eq!(
+                result.unwrap().dataset.rows(),
+                &[vec![Value::Int(0); 1_024]]
+            );
+            assert_eq!(source.reads.get(), 1_024);
+        } else {
+            assert!(matches!(*result.unwrap_err(), ExecutionError::Capacity));
+            assert_eq!(source.reads.get(), 0);
+        }
+    }
+}
+
+#[test]
 fn checked_multiplication_and_combined_addition_refuse_overflow_before_reads() {
     let mut budget = ExecutionBudget::longitudinal();
     budget.execution.source_rows = usize::MAX;

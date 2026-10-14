@@ -1,69 +1,148 @@
-# Boundary controls for the 1,024-column ceilings (#2185, #2288 item 2).
-# The shared compiler admits 1,024 declared columns, output columns and
-# typed source fields, and refuses 1,025 with a compiler-limit rejection.
+# Installed 1,024/1,025 controls for every width route (#2299).
 library(yamaa)
+stopifnot(requireNamespace("arrow", quietly = TRUE),
+          requireNamespace("nanoarrow", quietly = TRUE))
 
-write_case <- function(root, columns, typed_fields = 0L, declare_types = TRUE) {
+write_case <- function(root, columns = 1L, fields = 1L, typed = FALSE,
+                       source_format = "csv", selected = NULL) {
   dir.create(root, recursive = TRUE, showWarnings = FALSE)
   names <- c("ID", sprintf("C%04d", seq_len(columns - 1L)))
-  fields <- if (typed_fields > 1L) sprintf("F%04d", seq_len(typed_fields - 1L)) else character()
-  header <- paste(c("ID", fields), collapse = ",")
-  row <- paste(c("S-001", rep("x", length(fields))), collapse = ",")
-  writeLines(c(header, row), file.path(root, "input.csv"))
-  source <- "input.csv"
-  if (typed_fields > 0L && declare_types) {
-    types <- paste(sprintf("%s: str", c("ID", fields)), collapse = ", ")
-    source <- sprintf("{path: input.csv, types: {%s}}", types)
+  header <- c("ID", sprintf("F%04d", seq_len(fields - 1L)))
+  values <- as.data.frame(setNames(rep(list("x"), fields), header),
+                          stringsAsFactors = FALSE, check.names = FALSE)
+  values$ID <- "S-001"
+  source <- paste0("input.", source_format)
+  if (source_format == "parquet") {
+    arrow::write_parquet(values, file.path(root, source))
+  } else {
+    writeLines(c(paste(header, collapse = ","),
+                 paste(unlist(values, use.names = FALSE), collapse = ",")),
+               file.path(root, source))
+  }
+  if (typed) {
+    types <- paste(sprintf("%s: str", header), collapse = ", ")
+    source <- sprintf("{path: %s, types: {%s}}", source, types)
   }
   column_lines <- c(
     "  - {name: ID, type: str, label: ID, derivation: SRC.ID}",
-    if (length(names) > 1L) sprintf("  - {name: %s, type: str, label: Column, derivation: {literal: x}}", names[-1L])
+    sprintf("  - {name: %s, type: str, label: Column, derivation: {literal: x}}", names[-1L])
   )
+  if (is.null(selected)) selected <- names
   spec <- c(
-    "schema_version: '1.0'",
-    "domain: TEST",
-    "keys: [ID]",
-    sprintf("input: {SRC: %s}", source),
-    "columns:",
-    column_lines,
-    sprintf("output: {path: out.csv, columns: [%s]}", paste(names, collapse = ", "))
+    "schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+    sprintf("input: {SRC: %s}", source), "columns:", column_lines,
+    sprintf("output: {path: out.csv, columns: [%s]}", paste(selected, collapse = ", "))
   )
   path <- file.path(root, "spec.yaml")
   writeLines(spec, path)
   path
 }
 
-compiler_limit <- function(result) {
-  issues <- result$issues
-  nrow(issues) > 0L &&
-    any(issues$condition == "engine_rejected" &
-      grepl("compiler_limit", issues$context, fixed = TRUE))
+assert_build <- function(spec, width = 1L) {
+  stopifnot(nrow(yamaa_check(spec)$issues) == 0L)
+  built <- yamaa_domain(spec)
+  stopifnot(nrow(built$issues) == 0L, nrow(built$output) == 1L,
+            ncol(built$output) == width, identical(built$output$ID, "S-001"))
+  if (width > 1L) stopifnot(all(built$output[1L, -1L] == "x"))
 }
 
-root <- tempfile("yamaa-column-ceilings-")
-on.exit(unlink(root, recursive = TRUE))
+assert_refusal <- function(result, compiler = FALSE) {
+  issues <- result$issues
+  stopifnot(nrow(issues) > 0L, any(issues$condition == "engine_rejected"))
+  if (compiler) stopifnot(any(grepl('"code":"compiler_limit"', issues$context, fixed = TRUE)))
+  if (is.environment(result)) {
+    stopifnot(is.null(result$output),
+              inherits(tryCatch(result$save(), error = identity), "yamaa_domain_error"))
+  }
+}
 
-spec <- write_case(file.path(root, "admit-columns"), 1024L)
-stopifnot(nrow(yamaa_check(spec)$issues) == 0L)
-built <- yamaa_domain(spec)
-stopifnot(nrow(built$issues) == 0L, ncol(built$output) == 1024L)
-stopifnot(identical(built$output$ID, "S-001"), all(built$output[1L, -1L] == "x"))
+run_column_ceilings <- function() {
+  root <- tempfile("yamaa-column-ceilings-")
+  on.exit(unlink(root, recursive = TRUE))
+  path <- function(name) file.path(root, name)
 
-spec <- write_case(file.path(root, "refuse-columns"), 1025L)
-stopifnot(compiler_limit(yamaa_check(spec)))
+  # Narrow output isolates the declared-column ceiling from projection width.
+  assert_build(write_case(path("admit-columns"), 1024L, selected = "ID"))
+  spec <- write_case(path("refuse-columns"), 1025L, selected = "ID")
+  for (operation in list(yamaa_check, yamaa_domain)) assert_refusal(operation(spec), TRUE)
 
-spec <- write_case(file.path(root, "admit-types"), 1L, 1024L)
-stopifnot(nrow(yamaa_check(spec)$issues) == 0L)
-built <- yamaa_domain(spec)
-stopifnot(nrow(built$issues) == 0L, identical(built$output$ID, "S-001"))
+  assert_build(write_case(path("admit-output"), 1024L), 1024L)
+  names <- c("ID", sprintf("C%04d", seq_len(1023L)))
+  # Keep declarations in range: projection count refuses before the repeated
+  # output name is validated, independently of the declared-column cap.
+  spec <- write_case(path("refuse-output"), 1024L, selected = c(names, "ID"))
+  for (operation in list(yamaa_check, yamaa_domain)) assert_refusal(operation(spec), TRUE)
 
-spec <- write_case(file.path(root, "refuse-types"), 1L, 1025L)
-stopifnot(compiler_limit(yamaa_check(spec)))
+  assert_build(write_case(path("admit-types"), fields = 1024L, typed = TRUE))
+  spec <- write_case(path("refuse-types"), fields = 1025L, typed = TRUE)
+  for (operation in list(yamaa_check, yamaa_domain)) assert_refusal(operation(spec), TRUE)
 
-spec <- write_case(file.path(root, "admit-input"), 1L, 1024L, FALSE)
-built <- yamaa_domain(spec)
-stopifnot(nrow(built$issues) == 0L, identical(built$output$ID, "S-001"))
+  for (format in c("csv", "parquet")) {
+    assert_build(write_case(path(paste0("admit-", format)), fields = 1024L, source_format = format))
+    spec <- write_case(path(paste0("refuse-", format)), fields = 1025L, source_format = format)
+    assert_refusal(yamaa_domain(spec))
+  }
 
-spec <- write_case(file.path(root, "refuse-input"), 1L, 1025L, FALSE)
-built <- yamaa_domain(spec)
-stopifnot(is.null(built$output), any(built$issues$condition == "engine_rejected"))
+  for (width in c(1024L, 1025L)) {
+    producer <- write_case(path(paste0("producer-", width)), columns = width)
+    consumer <- file.path(dirname(producer), "consumer.yaml")
+    writeLines(c(
+      "schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+      "input: {SRC: {path: out.csv, schema: spec.yaml}}", "columns:",
+      "  - {name: ID, type: str, label: ID, derivation: SRC.ID}",
+      "output: {path: consumer.csv, columns: [ID]}"
+    ), consumer)
+    if (width == 1024L) {
+      assert_build(consumer)
+    } else {
+      for (operation in list(yamaa_check, yamaa_domain)) assert_refusal(operation(consumer))
+    }
+  }
+
+  # Keep producer metadata in range while its raw source crosses the runtime
+  # width ceiling; the Rust decoder control pins producer_source_fields itself.
+  for (width in c(1024L, 1025L)) {
+    producer <- write_case(path(paste0("producer-input-", width)), columns = 1024L, fields = width)
+    consumer <- file.path(dirname(producer), "consumer.yaml")
+    writeLines(c(
+      "schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+      "input: {SRC: {path: out.csv, schema: spec.yaml}}", "columns:",
+      "  - {name: ID, type: str, label: ID, derivation: SRC.ID}",
+      "output: {path: consumer.csv, columns: [ID]}"
+    ), consumer)
+    stopifnot(nrow(yamaa_check(consumer)$issues) == 0L)
+    if (width == 1024L) assert_build(consumer) else assert_refusal(yamaa_domain(consumer))
+  }
+
+  # Read an actual IPC source through the installed C Stream entry point.
+  no_io <- function(...) stop("in-memory execution entered file IO")
+  prepare <- get(".prepare_document", asNamespace("yamaa"))
+  execute <- get(".execute_specification_arrow", asNamespace("yamaa"))
+  spec <- write_case(path("ipc"))
+  source <- readBin(spec, "raw", n = file.info(spec)$size)
+  run <- prepare("memory.yaml", source, no_io, no_io, no_io)
+  header <- c("ID", sprintf("F%04d", seq_len(1023L)))
+  values <- as.data.frame(setNames(rep(list("x"), 1024L), header),
+                          stringsAsFactors = FALSE, check.names = FALSE)
+  values$ID <- "S-001"
+  ipc <- file.path(root, "input.arrow")
+  arrow::write_ipc_stream(values, ipc)
+  assert_ipc_build <- function() {
+    result <- execute(run, arrow::read_ipc_stream(ipc, as_data_frame = FALSE))
+    stopifnot(grepl('"status":"success"', result$outcome, fixed = TRUE))
+    output <- arrow::read_ipc_stream(arrow::BufferReader$create(result$table))
+    stopifnot(identical(names(output), "ID"), identical(output$ID, "S-001"))
+  }
+  assert_ipc_build()
+  values$EXCESS <- "x"
+  released <- 0L
+  overwide <- nanoarrow::array_stream_set_finalizer(
+    nanoarrow::basic_array_stream(list(values)), function() released <<- released + 1L)
+  failure <- tryCatch(execute(run, overwide), error = identity)
+  stopifnot(inherits(failure, "error"),
+            grepl("resource limit", conditionMessage(failure), fixed = TRUE),
+            released == 1L, !nanoarrow::nanoarrow_pointer_is_valid(overwide))
+  assert_ipc_build()
+}
+
+run_column_ceilings()

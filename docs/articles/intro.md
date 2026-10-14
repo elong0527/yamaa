@@ -88,6 +88,42 @@ derivation:
 "collected but unrecognised" are two conditions, answered by `missing` and
 `unmapped`. Write `null` as the answer to leave the value missing instead.
 
+## Programs in a study submission
+
+The sponsor chooses the program format and its location in the submission
+package with its submission team. The program can be the YAML specification
+with its R or Python driver, or a readable R or Python implementation,
+including code produced with AI assistance. The sponsor prepares and reviews
+any separate implementation as part of its own development process.
+
+Retain the exact inputs, specification and inherited files, codelists and
+other referenced resources, driver, project functions, and environment
+declarations used for the build. Record the yamaa version and the host and
+dependency versions. The sponsor determines which of these accompany the
+submitted programs alongside the datasets, define.xml and reviewer's guide.
+
+Verify a separate implementation independently against the yamaa results.
+Match records by their declared keys and compare every output cell, including
+missing values and types; state any numeric tolerance in the comparison
+record. Retain the comparison report and resolve discrepancies before using
+the implementation as the submitted program. Use a separately implemented
+derivation for this verification: the R and Python interfaces share an engine.
+
+The reviewer's guide can explain the approach with wording such as:
+
+> The YAML specifications state the dataset structure and each variable's
+> derivation. The accompanying driver runs those specifications with the
+> recorded yamaa version and environment. The program inventory identifies
+> the source files used for each dataset and the retained verification
+> evidence.
+
+Adapt this text to the chosen program format; for a separate R or Python
+implementation, identify its cell-level comparison evidence. The derivation
+descriptions and computational methods in define.xml should agree with the
+specification, and the reviewer's guide should explain where to find each.
+This guide documents no filed-study precedent or agency acceptance; the
+sponsor owns the submission decision and supporting evidence.
+
 ## Where to go next
 
 - Why one execution: [Principles](principles.md).
