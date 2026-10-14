@@ -9,6 +9,15 @@ from pathlib import Path
 import pytest
 import yaml
 
+# The native extension is optional for the test suite (see
+# test_package.py), but every test in this module exercises the compiled
+# `_prepare_document` / `_prepare_file_project` entry points, so there is
+# no pure-Python fallback: skip the whole module instead of erroring on
+# import during collection.
+pytest.importorskip(
+    "yamaa._native", reason="the compiled native extension is not installed"
+)
+
 from yamaa._native import _prepare_document, _prepare_file_project
 
 ROOT = Path(__file__).resolve().parents[3]
