@@ -34,4 +34,3 @@ path = "tests/service_tests.rs"
 name = "test_support"
 path = "tests/test_support.rs"
 required-features = ["test-support"]
-

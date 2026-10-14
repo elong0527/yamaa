@@ -47,4 +47,3 @@ path = "tests/diagnostics_tests.rs"
 [[test]]
 name = "portable_math_golden"
 path = "tests/portable_math_golden.rs"
-

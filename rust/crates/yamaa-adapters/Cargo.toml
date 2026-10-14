@@ -78,4 +78,3 @@ path = "tests/table_tests.rs"
 name = "c_data_table"
 path = "tests/c_data_table.rs"
 required-features = ["arrow-c-data"]
-
