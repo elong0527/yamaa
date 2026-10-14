@@ -115,12 +115,17 @@ class PublicPortableMath(unittest.TestCase):
                 self.assertEqual(result.output["VALUE"][0], expected)
                 observation = json.loads(result._native.observations())
                 self.assertEqual(
-                    [int(row["count"]) for row in observation["handler_counts"]],
-                    [calls],
+                    observation["handler_counts"],
+                    [
+                        {
+                            "count": calls,
+                            "handler": "unconvertible",
+                            "spec_path": "columns.VALUE.derivation.unconvertible",
+                        }
+                    ],
                 )
 
-    def test_exp_result_drives_predicates_rounding_verification_and_exact_csv(self):
-        specification = self.specification("EXP(A)", [1.0])
+    def assert_downstream(self, specification, value_bits, above, rounded_bits, csv):
         specification["columns"].extend(
             [
                 {
@@ -148,24 +153,75 @@ class PublicPortableMath(unittest.TestCase):
         specification["output"]["columns"] = ["ID", "VALUE", "ABOVE", "ROUNDED"]
         result = self.build(specification)
         self.assertTrue(result.issues.is_empty(), result.issues)
-        self.assertEqual(result.output["ABOVE"][0], 1)
+        self.assertEqual(result.output.columns, ["ID", "VALUE", "ABOVE", "ROUNDED"])
+        self.assertEqual(result.output.height, 1)
+        self.assertEqual(result.output["ID"][0], 1)
+        self.assertEqual(struct.pack(">d", result.output["VALUE"][0]).hex(), value_bits)
+        self.assertEqual(result.output["ABOVE"][0], above)
         self.assertEqual(
-            struct.pack(">d", result.output["ROUNDED"][0]).hex(), "4005bf0a8b14576b"
+            struct.pack(">d", result.output["ROUNDED"][0]).hex(), rounded_bits
         )
         self.assertTrue(result.save())
-        self.assertEqual(
-            (self.root / "result.csv").read_bytes(),
-            b"ID,VALUE,ABOVE,ROUNDED\n1,2.7182818284590455,1,2.718281828459046\n",
-        )
+        self.assertEqual((self.root / "result.csv").read_bytes(), csv)
         specification["verifications"] = [
-            {"assert": {"id": "exp-one-limit", "require": "VALUE <= 2.718281828459045"}}
+            {
+                "assert": {
+                    "id": "historical-exp-one-limit",
+                    "require": "VALUE <= 2.718281828459045",
+                }
+            }
         ]
         verified = self.build(specification)
-        self.assertEqual(verified.issues["condition"].to_list(), ["assert_failed"])
-        self.assertEqual(verified.issues["requirement"].to_list(), ["REQ-0384"])
-        context = json.loads(verified.issues["context"][0])
-        self.assertEqual(context["failure_count"], 1)
-        self.assertEqual(context["verification_id"], "exp-one-limit")
+        self.assertEqual(
+            verified.issues.to_dicts(),
+            [
+                {
+                    "phase": "verification",
+                    "condition": "assert_failed",
+                    "requirement": "REQ-0384",
+                    "spec_paths": ["verifications[0].assert"],
+                    "context": '{"failure_count":1,"keys":[{"ID":1}],'
+                    '"verification_id":"historical-exp-one-limit"}',
+                }
+            ]
+            if above
+            else [],
+        )
+
+    def test_exp_result_drives_predicates_rounding_verification_and_exact_csv(self):
+        self.assert_downstream(
+            self.specification("EXP(A)", [1.0]),
+            "4005bf0a8b14576a",
+            1,
+            "4005bf0a8b14576b",
+            b"ID,VALUE,ABOVE,ROUNDED\n1,2.7182818284590455,1,2.718281828459046\n",
+        )
+
+    def test_adjacent_declared_values_retain_both_downstream_controls(self):
+        # These authored controls were already exercised through the current
+        # public engine. Both values are source data, independent of EXP output.
+        for value_bits, above, rounded_bits, csv in (
+            (
+                "4005bf0a8b145769",
+                0,
+                "4005bf0a8b145769",
+                b"ID,VALUE,ABOVE,ROUNDED\n1,2.718281828459045,0,2.718281828459045\n",
+            ),
+            (
+                "4005bf0a8b14576a",
+                1,
+                "4005bf0a8b14576b",
+                b"ID,VALUE,ABOVE,ROUNDED\n1,2.7182818284590455,1,2.718281828459046\n",
+            ),
+        ):
+            with self.subTest(input_bits=value_bits):
+                self.assert_downstream(
+                    self.specification("A", [binary64(value_bits)]),
+                    value_bits,
+                    above,
+                    rounded_bits,
+                    csv,
+                )
 
 
 if __name__ == "__main__":
