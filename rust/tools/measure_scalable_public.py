@@ -63,7 +63,8 @@ def verify_workload(source, case_name, output):
     return case, regenerated / case_name
 
 
-def validate(case, authored, child, request, response, record, repository):
+def validate(case, authored, child, request, response, record, repository, *, origin_validator=None):
+    origin_validator = lifecycle.actual_origins if origin_validator is None else origin_validator
     if response.get("failure") is not None:
         raise ValueError("worker failed: " + str(response["failure"]))
     lifecycle.validate_duration(response["import_duration"], request["host"])
@@ -87,7 +88,7 @@ def validate(case, authored, child, request, response, record, repository):
                 "repetition failed or differs from declared input: "
                 + str(actual.get("failure"))
             )
-        lifecycle.actual_origins(actual["metadata"], record, repository)
+        origin_validator(actual["metadata"], record, repository)
         if (
             actual["native_call_order"] != ["public_build", "metadata_after_build"]
             or actual["unavailable"] != lifecycle.unavailable(request.get("phase_measurements", False))

@@ -773,6 +773,19 @@ class Pipeline(unittest.TestCase):
             self.collect()
         self.assertEqual(self.calls, [])
 
+    def test_both_original_timer_libraries_survive_runner_path_retirement(self):
+        record = copy.deepcopy(self.installed["r"])
+        retained = self.root / "retained-clock"
+        original = Path(record["clock_evidence"]["installed_library"]).read_bytes()
+        controller.clock_evidence(record, self.repo, retained)
+        Path(record["clock_evidence"]["installed_library"]).unlink()
+        self.assertEqual((retained / "built-library.bin").read_bytes(), original)
+        self.assertEqual((retained / "installed-library.bin").read_bytes(), original)
+        comparison = json.loads((retained / "library-byte-comparisons.json").read_text())
+        self.assertTrue(comparison["equal"])
+        self.assertEqual(comparison["bytes"], len(original))
+        self.assertTrue((retained / "build-config.txt").is_file())
+
 
 class Transports(unittest.TestCase):
     def test_real_synthetic_venv_isolated_subprocess_preserves_invocation_context(self):

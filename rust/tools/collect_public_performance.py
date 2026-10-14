@@ -78,8 +78,11 @@ def validate_root_invocation(actual, request, record, repository):
         raise ValueError("root-Build baseline published an artifact")
 
 
-def validate_reference(case, authored, child, request, response, record, repository):
+def validate_reference(case, authored, child, request, response, record, repository, *,
+                       origin_validator=None, root_invocation_validator=None):
     """Compare actual legacy public results; unavailable ledgers stay unavailable."""
+    origin_validator = lifecycle.actual_origins if origin_validator is None else origin_validator
+    root_invocation_validator = validate_root_invocation if root_invocation_validator is None else root_invocation_validator
     if response.get("failure"):
         raise ValueError("reference worker failed: " + str(response["failure"]))
     if request["host"] != "python":
@@ -91,7 +94,7 @@ def validate_reference(case, authored, child, request, response, record, reposit
     for actual, declaration in zip(response["repetitions"], request["repetitions"]):
         if actual["status"] != "success" or actual["declaration"] != declaration or actual["evidence_capture_failures"]:
             raise ValueError("reference repetition failed: " + str(actual.get("failure")))
-        lifecycle.actual_origins(actual["metadata"], record, repository)
+        origin_validator(actual["metadata"], record, repository)
         root_only = request.get("reference_root_build", False)
         boundaries = [name for name in lifecycle.BOUNDARIES[1:]
                       if not root_only or not name.startswith("held_save_")]
@@ -108,7 +111,7 @@ def validate_reference(case, authored, child, request, response, record, reposit
             raise ValueError("reference published before explicit Save; lifecycle baseline incompatible")
         if root_only:
             root_build_environment(case, authored)
-            validate_root_invocation(actual, request, record, repository)
+            root_invocation_validator(actual, request, record, repository)
             continue
         for stage in ("save_1", "save_2"):
             for artifact in case["expected_artifacts"]:
