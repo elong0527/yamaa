@@ -139,17 +139,10 @@ uv run --project python --no-sync python .github/scripts/commands/repository.py 
 
 Edit the root `README.md` for the site home and `rules/README.md` for its rules
 index. The MkDocs hook reads those canonical sources; no copied pages exist.
-Other site pages live in `docs/`. From the repository root:
-
-```sh
-python -m pip install -r docs/requirements.txt -r .github/scripts/benchmark-docs/requirements.txt
-make docs-test
-make docs
-```
-
-Set `DOCS_PYTHON=/path/to/docs-env/bin/python` when documentation dependencies
-are installed in another interpreter. `docs-build` requires generated dashboards;
-`docs` generates them before building. Deployment also renders the Quarto decks.
+Other site pages live in `docs/`. The
+[documentation command guide](https://github.com/elong0527/yamaa/blob/main/.github/scripts/docs/README.md)
+owns dependency setup, interpreter selection and the shared Make targets for
+tests and builds. Deployment also renders the Quarto decks.
 
 [CI guidance](https://github.com/elong0527/yamaa/blob/main/.github/ci.md)
 defines the scoped Linux PR smoke checks and full native qualification route.
