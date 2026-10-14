@@ -15,7 +15,9 @@ class PerformanceSelection(unittest.TestCase):
         source = (root / ".github/workflows/performance.yml").read_text()
         push = re.search(r"(?ms)^  push:\n(.*?)(?=^  \S|\Z)", source).group(1)
         branches = re.search(r"(?m)^    branches: \[(.*?)\]$", push).group(1)
-        self.assertEqual(branches, "qualification/issue-1998")
+        self.assertEqual(
+            branches, "qualification/issue-1998, qualification/issue-2142-frontier"
+        )
         patterns = [
             ast.literal_eval(value) for value in re.findall(r"(?m)^      - (.+)$", push)
         ]
@@ -53,6 +55,10 @@ class PerformanceSelection(unittest.TestCase):
             "rust/tools/public_lifecycle_r_worker.R",
             "rust/tools/public_lifecycle_worker_protocol.json",
             "rust/tools/performance_campaign.py",
+            "rust/tools/index_public_performance.py",
+            "rust/tools/retain_public_performance.py",
+            "rust/tools/replay_public_performance.py",
+            "rust/tools/audit_public_performance.py",
             "python/src/yamaa/_domain.py",
             "python/pyproject.toml",
             "python/uv.lock",
@@ -71,6 +77,8 @@ class PerformanceSelection(unittest.TestCase):
         for path in (
             "rust/measurements/accepted-matrix.json",
             "rust/measurements/1998-report.md",
+            "rust/qualification/performance-campaign.json",
+            "rust/qualification/performance-budgets.json",
             "rust/README.md",
             "python/README.md",
             "R/yamaa/README.md",

@@ -124,6 +124,34 @@ comparisons, 21 corpus-wide public inventories, six package build records, and t
 Every missing, expired, failed, stale, wrong-attempt or incomplete tuple remains
 visible. CI-script discovery runs independent fixture tests for this protocol.
 
+## Retained public performance campaign
+
+Push a reviewed, stable source to `qualification/issue-2142-frontier` to retain
+one independent-truth attempt for all 27 workloads on the 21 installed tuples.
+This route sets capacity tracing for the candidate children and retains original
+refusals; it does not establish timing budgets. The same source first needs its
+complete successful native run. Push `qualification/issue-1998` only after the
+runtime policy and harness stabilize to collect characterization: ten cold
+samples and thirty warm samples after three warm-ups, with same-machine prior
+Python 0.3.0 comparators built before any measurements. Workflow dispatch remains
+available for an explicit native run and purpose.
+
+Every attempt preserves its raw failures and partial collections. The independent
+replay job retains all 21 tuple slots, source and baseline histories in a Git
+bundle, original run/attempt/job/artifact identities, and a compact report. A
+missing or unapproved `rust/qualification/performance-budgets.json` leaves full
+acceptance unsuccessful; frontier correctness evidence still remains usable.
+Neither root-Build producer baselines nor cross-host Python comparators establish
+full-graph or R replacement ratios without an explicit scope disposition.
+
+Trusted qualification pushes also copy unchanged original Actions ZIPs into a
+new unpublished run/attempt evidence draft, verify their authenticated downloaded
+bytes, and retain `performance-retention/retention.json`. This storage extends
+beyond the 90-day Actions expiration. It never publishes a release, creates a Git
+tag, replaces an asset, or approves a budget. The compact current campaign index
+can link the resulting draft asset IDs and original Actions identities once the
+required evidence and decision exist.
+
 ## Harbor Oracle coverage
 
 PRs select changed Harbor benchmarks from their data, prompts, and reference
