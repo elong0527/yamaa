@@ -35,7 +35,16 @@ class NativeAdmission(unittest.TestCase):
             "conclusion": "success",
         }
         self.jobs = [
-            {"name": name, "status": "completed", "conclusion": "success"}
+            {
+                "name": name,
+                "status": "completed",
+                "conclusion": "success",
+                "run_id": 42,
+                "run_attempt": 2,
+                "head_sha": self.revision,
+                "started_at": "2026-10-13T12:00:00Z",
+                "completed_at": "2026-10-13T12:10:00Z",
+            }
             for name in admission.required_jobs()
         ]
         self.artifacts = [
@@ -43,7 +52,8 @@ class NativeAdmission(unittest.TestCase):
                 "name": name,
                 "expired": False,
                 "size_in_bytes": 10,
-                "workflow_run": {"head_sha": self.revision},
+                "workflow_run": {"id": 42, "head_sha": self.revision},
+                "created_at": "2026-10-13T12:05:00Z",
             }
             for name in admission.required_artifacts()
         ]
@@ -110,6 +120,58 @@ class NativeAdmission(unittest.TestCase):
         self.artifacts = original[1:]
         with self.assertRaisesRegex(ValueError, "native artifact"):
             self.validate()
+
+    def test_other_run_source_attempt_or_missing_job_identity_refuse(self):
+        original = copy.deepcopy(self.jobs)
+        for field, wrong in (
+            ("run_id", 43),
+            ("run_attempt", 1),
+            ("head_sha", "b" * 40),
+        ):
+            with self.subTest(field=field):
+                self.jobs = copy.deepcopy(original)
+                self.jobs[0][field] = wrong
+                with self.assertRaisesRegex(ValueError, "full native job"):
+                    self.validate()
+                self.jobs[0].pop(field)
+                with self.assertRaisesRegex(ValueError, "full native job"):
+                    self.validate()
+
+    def test_old_attempt_artifact_cannot_admit_a_same_source_rerun(self):
+        original = copy.deepcopy(self.artifacts)
+        for wrong in (
+            {"workflow_run": {"id": 43, "head_sha": self.revision}},
+            {"created_at": "2026-10-13T11:05:00Z"},
+            {"created_at": "2026-10-13T12:11:00Z"},
+        ):
+            with self.subTest(wrong=wrong):
+                self.artifacts = copy.deepcopy(original)
+                self.artifacts[0].update(wrong)
+                with self.assertRaisesRegex(ValueError, "native artifact"):
+                    self.validate()
+
+    def test_artifact_uses_its_producing_job_interval(self):
+        # A late cohort receipt cannot legitimize a distribution left over
+        # from an earlier attempt, even when both used the same source.
+        job = next(
+            job
+            for job in self.jobs
+            if job["name"] == "native-dist (ubuntu-24.04, 3.14)"
+        )
+        job.update(
+            started_at="2026-10-13T12:06:00Z", completed_at="2026-10-13T12:10:00Z"
+        )
+        with self.assertRaisesRegex(ValueError, "producing job attempt"):
+            self.validate()
+
+    def test_missing_or_unzoned_timestamps_refuse(self):
+        original = copy.deepcopy(self.jobs)
+        for wrong in (None, "2026-10-13T12:00:00"):
+            with self.subTest(wrong=wrong):
+                self.jobs = copy.deepcopy(original)
+                self.jobs[0]["started_at"] = wrong
+                with self.assertRaisesRegex((TypeError, ValueError), "timestamp"):
+                    self.validate()
 
     def test_failed_native_run_aborts_without_launching_measurements(self):
         with tempfile.TemporaryDirectory() as directory:
