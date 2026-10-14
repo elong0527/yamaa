@@ -1434,12 +1434,12 @@ mod log_tests {
         for logs in [false, true] {
             let study = Study::new();
             study.fixture(false, false, logs);
-            let columns = (0..65)
+            let columns = (0..1_025)
                 .map(|index| {
                     format!("  - {{name: C{index}, type: int, label: Column, derivation: A.ID}}\n")
                 })
                 .collect::<String>();
-            let names = (0..65)
+            let names = (0..1_025)
                 .map(|index| format!("C{index}"))
                 .collect::<Vec<_>>()
                 .join(", ");
@@ -1449,12 +1449,12 @@ mod log_tests {
                 ""
             };
             study.write("root.yaml",format!("schema_version: '1.0'\ndomain: TEST\nkeys: [C0]\nbase: A\ninput: {{A: {{path: generated/producer.csv, schema: producer.yaml}}}}\ncolumns:\n{columns}output: {{path: generated/root.csv, columns: [{names}]{sidecars}}}\n"));
-            // Production compilation caps columns at 64. Enlarge only this
-            // fixture's compiler admission to reach the real unchanged IPC
-            // 64-column boundary without fabricating a transport error.
+            // Production compilation caps columns at 1,024 (#2185). Enlarge
+            // only this fixture's compiler admission to reach the real IPC
+            // 1,024-column boundary without fabricating a transport error.
             let mut metadata = crate::producer_graph::Limits::default();
-            metadata.graph.metadata.compilation.columns = 128;
-            metadata.graph.metadata.compilation.projected_columns = 128;
+            metadata.graph.metadata.compilation.columns = 2_048;
+            metadata.graph.metadata.compilation.projected_columns = 2_048;
             let owned = FileGraph::prepare(
                 Resources::new(&study.path(), &study.path(), &[]).unwrap(),
                 "root.yaml",
