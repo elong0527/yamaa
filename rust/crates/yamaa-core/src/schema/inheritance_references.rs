@@ -50,6 +50,7 @@ struct Run<'a, 'b> {
     budget: &'b mut NormalizationBudget,
     active: Vec<(usize, usize)>,
     references: Vec<InheritanceReference>,
+    local_variables: Vec<String>,
 }
 
 impl Run<'_, '_> {
@@ -67,6 +68,16 @@ impl Run<'_, '_> {
     }
 
     fn add(&mut self, kind: InheritanceReferenceKind, name: &str) -> Result<(), Error> {
+        if kind == InheritanceReferenceKind::Variable {
+            self.budget.work(
+                self.local_variables
+                    .len()
+                    .saturating_mul(name.len().saturating_add(1)),
+            )?;
+            if self.local_variables.iter().any(|local| local == name) {
+                return Ok(());
+            }
+        }
         self.budget.work(
             self.references
                 .len()
@@ -83,6 +94,39 @@ impl Run<'_, '_> {
                 kind,
                 name: name.into(),
             });
+        }
+        Ok(())
+    }
+
+    fn binding_name(&mut self, binding: usize) -> Result<(), Error> {
+        self.budget.work(
+            self.input.nodes()[binding]
+                .length()
+                .unwrap_or(0)
+                .saturating_mul(5),
+        )?;
+        if let Some(name) = self.input.field(binding, "name") {
+            if let N::Text(name) = &self.input.nodes()[name] {
+                self.budget.reserve(name.len(), 1)?;
+                self.local_variables.push(name.clone());
+            }
+        }
+        Ok(())
+    }
+
+    fn aggregate_bindings(&mut self, aggregate: usize) -> Result<(), Error> {
+        self.budget.work(
+            self.input.nodes()[aggregate]
+                .length()
+                .unwrap_or(0)
+                .saturating_mul(7),
+        )?;
+        if let Some(derive) = self.input.field(aggregate, "derive") {
+            if let N::Sequence(bindings) = &self.input.nodes()[derive] {
+                for &binding in bindings {
+                    self.binding_name(binding)?;
+                }
+            }
         }
         Ok(())
     }
@@ -139,6 +183,12 @@ impl Run<'_, '_> {
             self.budget
                 .work(fields.len().saturating_mul(name.len().saturating_add(1)))?;
             if let Some(field) = fields.iter().find(|field| field.name == *name) {
+                let locals = self.local_variables.len();
+                // Reducers see every binding, regardless of YAML field order.
+                // Filters and matching still run outside the binding scope.
+                if owner == "aggregate_class" && name == "expr" {
+                    self.aggregate_bindings(value)?;
+                }
                 self.members(
                     self.schema.descriptors()[field.descriptor]
                         .descriptor
@@ -147,6 +197,7 @@ impl Run<'_, '_> {
                     Some((owner, name)),
                     depth + 1,
                 )?;
+                self.local_variables.truncate(locals);
             }
         }
         Ok(())
@@ -200,6 +251,10 @@ impl Run<'_, '_> {
                     for &child in items {
                         if self.matches(expression, *inner, child)? {
                             self.walk(expression, *inner, child, scope, depth + 1)?;
+                            if scope == Some(("aggregate_class", "derive")) {
+                                // A binding is visible only to later bindings.
+                                self.binding_name(child)?;
+                            }
                         }
                     }
                 }
@@ -393,6 +448,7 @@ impl SchemaStructure {
             budget,
             active: Vec::new(),
             references: Vec::new(),
+            local_variables: Vec::new(),
         };
         run.members(types, value, scope, 0)?;
         Ok(run.references)

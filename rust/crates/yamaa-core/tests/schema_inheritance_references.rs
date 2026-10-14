@@ -99,6 +99,21 @@ fn schema() -> SchemaStructure {
             "derivation",
             descriptor(List(vec![text("variable"), text("expression")])),
         ),
+        (
+            "aggregate_class",
+            List(vec![
+                field("expr", "aggregate_expression"),
+                field("filter", "predicate"),
+                field("derive", "list[derive_binding_class]"),
+            ]),
+        ),
+        (
+            "derive_binding_class",
+            List(vec![
+                field("name", "identifier"),
+                field("derivation", "derivation"),
+            ]),
+        ),
         ("variable", descriptor(text("str"))),
         ("identifier", descriptor(text("str"))),
         ("numeric_expression", descriptor(text("str"))),
@@ -119,7 +134,13 @@ fn schema() -> SchemaStructure {
             Map(vec![
                 ("source", descriptor(text("variable"))),
                 ("compute", descriptor(text("numeric_expression"))),
-                ("aggregate", descriptor(text("aggregate_expression"))),
+                (
+                    "aggregate",
+                    descriptor(List(vec![
+                        text("aggregate_expression"),
+                        text("aggregate_class"),
+                    ])),
+                ),
                 ("template", descriptor(text("string_template"))),
                 ("literal", descriptor(text("str"))),
                 (
@@ -915,5 +936,48 @@ fn inheritance_scheduler_storage_and_early_work_refusals_publish_no_document() {
             "name"
         ),
         vec!["A", "B"]
+    );
+}
+
+#[test]
+fn aggregate_binding_scope_preserves_filters_external_reads_and_invalid_forward_reads() {
+    let schema = schema();
+    let aggregate = Map(vec![(
+        "aggregate",
+        Map(vec![
+            ("expr", text("SUM(B)")),
+            ("filter", text("A > 0")),
+            (
+                "derive",
+                List(vec![
+                    Map(vec![("name", text("A")), ("derivation", text("DM.X"))]),
+                    Map(vec![
+                        ("name", text("B")),
+                        ("derivation", Map(vec![("compute", text("A + OFFSET"))])),
+                    ]),
+                ]),
+            ),
+        ]),
+    )]);
+    assert_eq!(
+        refs(&schema, aggregate, &["expression"], None, &mut budget()).unwrap(),
+        vec![variable("A"), variable("DM.X"), variable("OFFSET")]
+    );
+    let forward = Map(vec![(
+        "aggregate",
+        Map(vec![
+            (
+                "derive",
+                List(vec![
+                    Map(vec![("name", text("A")), ("derivation", text("B"))]),
+                    Map(vec![("name", text("B")), ("derivation", text("DM.X"))]),
+                ]),
+            ),
+            ("expr", text("SUM(A)")),
+        ]),
+    )]);
+    assert_eq!(
+        refs(&schema, forward, &["expression"], None, &mut budget()).unwrap(),
+        vec![variable("B"), variable("DM.X")]
     );
 }
