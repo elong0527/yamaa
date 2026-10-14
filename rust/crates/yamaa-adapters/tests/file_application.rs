@@ -94,7 +94,7 @@ fn changed_source_retains_original_snapshot_and_ingest_issue_and_refuses_both_sa
     assert!(file_preparation::public_opaque_resource_failure(&attempt).is_none());
     assert_eq!(prepared.capture_reads(), reads);
     assert_eq!(original.as_ref(), b"ID\n1\n");
-    let mut result =
+    let result =
         specification_report::build_result(prepared.run(), &attempt, identity(&path)).unwrap();
     assert!(result.output().is_none());
     assert_eq!(result.issues().len(), 1);
