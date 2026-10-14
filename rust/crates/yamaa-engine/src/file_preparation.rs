@@ -168,9 +168,8 @@ impl<P: NativePort> CapturePort for AliasCache<'_, P> {
         let source = self
             .port
             .canonicalize(declaring, written)
-            .map_err(|error| {
-                self.parent_failure = Self::parent_error(self.port, written, &error);
-                error
+            .inspect_err(|error| {
+                self.parent_failure = Self::parent_error(self.port, written, error);
             })?;
         self.remember(&source, declaring, written)?;
         Ok(source)
