@@ -9,14 +9,12 @@ import unittest
 from pathlib import Path
 
 from check_rule_rewrite import (
-    UniqueLoader,
     check,
+    load_schema,
     requirement_owners,
     schema_descriptions,
 )
 from generate_rule_reference import generated
-
-import yaml
 
 REPO = Path(__file__).resolve().parents[3]
 CHECKER = Path(__file__).resolve().with_name("check_rule_rewrite.py")
@@ -62,9 +60,7 @@ class RuleRewriteTests(unittest.TestCase):
         actual = {
             f"{path.name}:{field}": value
             for path in sorted((self.root / "yaml").glob("schema*.yaml"))
-            for field, value in schema_descriptions(
-                yaml.load(path.read_text(), Loader=UniqueLoader)
-            )
+            for field, value in schema_descriptions(load_schema(path))
         }
         return [
             f"schema navigation owner changed: {source}: expected {expected.get(source)!r}, got {actual.get(source)!r}"
@@ -179,7 +175,109 @@ class RuleRewriteTests(unittest.TestCase):
             'version: "1.0"\nversion: "1.0"',
         )
         errors, _ = check(self.root)
-        self.assertTrue(any("duplicate YAML key" in error for error in errors))
+        self.assertTrue(any("found duplicate key" in error for error in errors))
+
+    def test_present_non_string_description_fails_checker_and_generator(self):
+        path = self.root / "yaml/schema_shared.yaml"
+        original = path.read_text()
+        source = "schema_shared.yaml:literal_value.description"
+        for malformed in ("null", "true", "17", "[]", "{}"):
+            with self.subTest(value=malformed):
+                path.write_text(
+                    original.replace(
+                        "description: See REQ-1149.", f"description: {malformed}"
+                    )
+                )
+                error = f"schema description must be a string: {source}"
+                self.assert_rejected(error)
+                with self.assertRaisesRegex(ValueError, error):
+                    generated(self.root)
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(CHECKER.with_name("generate_rule_reference.py")),
+                        "--root",
+                        str(self.root),
+                        "--check",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(f"ERROR: {error}", result.stdout.splitlines())
+                self.assertEqual(result.stderr, "")
+
+    def test_description_without_descriptor_type_is_also_checked(self):
+        path = self.root / "yaml/schema_shared.yaml"
+        path.write_text(path.read_text() + "\nnavigation:\n    description: null\n")
+        error = "schema description must be a string: schema_shared.yaml:navigation.description"
+        self.assert_rejected(error)
+        with self.assertRaisesRegex(ValueError, error):
+            generated(self.root)
+
+    def test_schema_sources_share_strict_yaml_loader(self):
+        path = self.root / "yaml/schema_shared.yaml"
+        original = path.read_text()
+        cases = (
+            ("description: &owner See REQ-1149.", "YAML anchors are not allowed"),
+            ("description: *owner", "YAML aliases are not allowed"),
+            ("description: !!str See REQ-1149.", "explicit YAML tags are not allowed"),
+            (
+                "description: See REQ-1149.\n    <<: {}",
+                "YAML merge keys are not allowed",
+            ),
+        )
+        for replacement, message in cases:
+            with self.subTest(feature=message):
+                path.write_text(
+                    original.replace("description: See REQ-1149.", replacement)
+                )
+                errors, _ = check(self.root)
+                self.assertTrue(
+                    any(
+                        "schema_shared.yaml: invalid schema source:" in error
+                        and message in error
+                        for error in errors
+                    ),
+                    errors,
+                )
+                with self.assertRaisesRegex(ValueError, message):
+                    generated(self.root)
+
+    def test_malformed_verification_schema_does_not_hide_independent_errors(self):
+        self.replace(
+            self.root / "yaml/schema_verification.yaml",
+            'version: "1.0"',
+            'version: !!str "1.0"',
+        )
+        self.replace(
+            self.rules / "values/text.md", "status: normative", "status: proposed"
+        )
+        errors, _ = check(self.root)
+        self.assertIn(
+            "values/text.md: expected id, title, and normative status", errors
+        )
+        self.assertTrue(
+            any(
+                "schema_verification.yaml: invalid schema source:" in error
+                and "explicit YAML tags are not allowed" in error
+                for error in errors
+            ),
+            errors,
+        )
+        result = subprocess.run(
+            [sys.executable, str(CHECKER), "--root", str(self.root)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr, "")
+        with self.assertRaisesRegex(
+            ValueError, "schema_verification.yaml: invalid schema source"
+        ):
+            generated(self.root)
 
     def test_schema_prose_cannot_become_a_second_contract(self):
         path = self.root / "yaml/schema_shared.yaml"

@@ -11,6 +11,8 @@ import argparse
 import re
 from pathlib import Path
 
+from editorial import UniqueKeyLoader
+
 import yaml
 
 DEFINITION = re.compile(r"\*\*(REQ-[0-9]{4,})\.\*\*")
@@ -37,17 +39,19 @@ DEFINING_NAME = re.compile(
 )
 
 
-class UniqueLoader(yaml.SafeLoader):
-    """Reject duplicate keys in contracts and schema navigation."""
+class SchemaSourceError(ValueError):
+    """Invalid authored schema source or navigation metadata."""
 
-    def construct_mapping(self, node, deep=False):
-        result = {}
-        for key_node, value_node in node.value:
-            key = self.construct_object(key_node, deep=deep)
-            if key in result:
-                raise ValueError(f"duplicate YAML key: {key}")
-            result[key] = self.construct_object(value_node, deep=deep)
-        return result
+
+def load_schema(path):
+    """Parse contract-bearing schemas with the repository's strict source loader."""
+    try:
+        document = yaml.load(path.read_text(encoding="ascii"), Loader=UniqueKeyLoader)
+    except (OSError, yaml.YAMLError) as exc:
+        raise SchemaSourceError(f"{path.name}: invalid schema source: {exc}") from exc
+    if not isinstance(document, dict):
+        raise SchemaSourceError(f"{path.name}: expected schema mapping")
+    return document
 
 
 def contract_paths(root):
@@ -83,7 +87,10 @@ def verification_registry_errors(root):
     contract_path = root / "rules" / VERIFICATION_CONTRACT
     if not schema_path.is_file() or not contract_path.is_file():
         return []  # A partial root carries no verification vocabulary to match.
-    schema = yaml.load(schema_path.read_text(encoding="ascii"), Loader=UniqueLoader)
+    try:
+        schema = load_schema(schema_path)
+    except ValueError as exc:
+        return [str(exc)]
     classes = {name: value for name, value in schema.items() if isinstance(value, list)}
 
     def fields(definition):
@@ -125,16 +132,27 @@ def verification_registry_errors(root):
     return errors
 
 
-def schema_descriptions(node, parts=()):
+def schema_descriptions(node, parts=(), field_entry=False):
+    """Distinguish navigation metadata from a class field named description."""
     if isinstance(node, dict):
         for key, value in node.items():
-            if key == "description" and isinstance(value, str):
+            if key == "description" and not field_entry:
                 yield ".".join(parts) + ".description", value
             else:
                 yield from schema_descriptions(value, (*parts, key))
     elif isinstance(node, list):
         for value in node:
-            yield from schema_descriptions(value, parts)
+            yield from schema_descriptions(value, parts, field_entry=True)
+
+
+def description_requirement(source, value):
+    """Validate every present navigation description, including non-string values."""
+    if not isinstance(value, str):
+        raise SchemaSourceError(f"schema description must be a string: {source}")
+    pointer = re.fullmatch(r"See (REQ-[0-9]{4,})\.", value)
+    if pointer is None:
+        raise SchemaSourceError(f"schema description has no canonical owner: {source}")
+    return pointer[1]
 
 
 def check(root):
@@ -150,7 +168,7 @@ def check(root):
         try:
             body = path.read_text(encoding="ascii")
             match = re.match(r"---\n(.*?)\n---\n", body, re.DOTALL)
-            meta = yaml.load(match[1], Loader=UniqueLoader) if match else None
+            meta = yaml.load(match[1], Loader=UniqueKeyLoader) if match else None
         except (ValueError, yaml.YAMLError) as exc:
             errors.append(f"{label}: invalid contract source: {exc}")
             continue
@@ -199,14 +217,18 @@ def check(root):
             if pointer is None or pointer[1] not in found:
                 errors.append(f"schema comment has no canonical owner: {path.name}")
         try:
-            document = yaml.load(schema_text, Loader=UniqueLoader)
-        except (ValueError, yaml.YAMLError) as exc:
-            errors.append(f"{path.name}: invalid schema source: {exc}")
+            document = load_schema(path)
+        except ValueError as exc:
+            errors.append(str(exc))
             continue
         for field, value in schema_descriptions(document):
             source = f"{path.name}:{field}"
-            pointer = re.fullmatch(r"See (REQ-[0-9]{4,})\.", value)
-            if pointer is None or pointer[1] not in found:
+            try:
+                identifier = description_requirement(source, value)
+            except ValueError as exc:
+                errors.append(str(exc))
+                continue
+            if identifier not in found:
                 errors.append(f"schema description has no canonical owner: {source}")
     errors.extend(verification_registry_errors(root))
     return errors, found

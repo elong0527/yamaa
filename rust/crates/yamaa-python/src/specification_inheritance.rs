@@ -134,7 +134,8 @@ impl InheritancePort for Port<'_, '_> {
         )
     }
 }
-/// Callbacks supply identity, raw bytes and path authority to shared preparation.
+/// Entry identity and raw bytes are explicit inputs to shared preparation.
+/// Callbacks canonicalize source identities, capture bytes and rebase paths.
 #[pyfunction]
 pub fn _prepare_inherited_specification(
     modules: &Bound<'_, PyList>,

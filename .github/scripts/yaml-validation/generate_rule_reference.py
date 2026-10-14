@@ -3,12 +3,14 @@
 
 import argparse
 import json
-import re
 from pathlib import Path
 
-from check_rule_rewrite import UniqueLoader, requirement_owners
-
-import yaml
+from check_rule_rewrite import (
+    description_requirement,
+    load_schema,
+    requirement_owners,
+    schema_descriptions,
+)
 
 
 def descriptors(node, parts=(), classes=None, active=()):
@@ -47,9 +49,14 @@ def generated(root):
         "",
     ]
     documents = {
-        path: yaml.load(path.read_text(encoding="ascii"), Loader=UniqueLoader)
-        for path in sorted((root / "yaml").glob("schema*.yaml"))
+        path: load_schema(path) for path in sorted((root / "yaml").glob("schema*.yaml"))
     }
+    for path, document in documents.items():
+        for field, value in schema_descriptions(document):
+            source = f"{path.name}:{field}"
+            target = description_requirement(source, value)
+            if target not in owners:
+                raise ValueError(f"unknown requirement: {target} ({source})")
     classes = {
         name: definition
         for document in documents.values()
@@ -66,12 +73,13 @@ def generated(root):
             ]
         )
         for name, descriptor in descriptors(document, classes=classes):
-            pointer = re.fullmatch(
-                r"See (REQ-[0-9]{4,})\.", descriptor.get("description", "")
+            target = (
+                description_requirement(
+                    f"{path.name}:{name}.description", descriptor["description"]
+                )
+                if "description" in descriptor
+                else None
             )
-            target = pointer[1] if pointer else None
-            if target and target not in owners:
-                raise ValueError(f"unknown requirement: {target}")
             contract = (
                 f"[{target}](../{owners[target]}#{target.lower()})"
                 if target
@@ -116,7 +124,12 @@ def main():
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     stale = []
-    for path, text in generated(args.root).items():
+    try:
+        references = generated(args.root)
+    except ValueError as exc:
+        print(f"ERROR: {exc}")
+        return 1
+    for path, text in references.items():
         if args.check:
             if not path.exists() or path.read_text(encoding="ascii") != text:
                 stale.append(str(path.relative_to(args.root)))
