@@ -539,9 +539,10 @@ class PublicConformance(unittest.TestCase):
         )
         expectations = judge.load_metamorphic_expectations(ROOT.parent / "benchmarks")
         names = {e["name"] for e in corpus["examples"]}
-        # 47 as reviewed in #2291, minus three dependency-cycle entries fixed
-        # in #2293 and three empty-child first-issue entries fixed in #2292.
-        self.assertEqual(len(expectations), 41)
+        # #2190 fixes the 40 missing-handler empty children. The reviewed
+        # forward-reference ordering exception remains permanent.
+        self.assertEqual(len(expectations), 1)
+        self.assertTrue(expectations[("negative-forward-reference", "empty_child")]["permanent"])
         for (benchmark, check), item in expectations.items():
             self.assertIn(benchmark, names)
             self.assertIn(check, {"empty_child", "key_order"})
