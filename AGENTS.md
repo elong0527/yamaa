@@ -75,6 +75,12 @@ and `R/yamaa/README.md`. The declared API inventory is
 `rust/qualification/release-api.json`; check it from the repository root with
 `uv run --project python --no-sync python rust/tools/check_release_api.py`.
 
+Current REQ owners and generated references derive from `rules/` and `yaml/`.
+The independent schema-owner fixture is
+`.github/scripts/yaml-validation/fixtures/schema-navigation.tsv`; preserve its
+363 expectations when changing checkers. Run the rule/reference commands in
+`docs/development.md` with the repository Python environment.
+
 Portable math golden values live in
 `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv` and are shared by the
 Rust and Python tests. Run

@@ -148,6 +148,7 @@ The live inventory is:
 
 | Record | Reader and purpose |
 | --- | --- |
+| [Current rules](articles/rules.md) and [schema-navigation.tsv](https://github.com/elong0527/yamaa/blob/main/.github/scripts/yaml-validation/fixtures/schema-navigation.tsv) | `check_rule_rewrite.py` derives current normative ownership; `test_rule_rewrite.py` checks 363 independent schema owners. `generate_rule_reference.py` derives navigation from current contracts and schemas. |
 | [release-api.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/release-api.json) | `check_release_api.py` and its tests compare declared exports/dispositions. `retain_candidate` labels remain inventory classifications, not final acceptance. |
 | [public-conformance.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/public-conformance.json) | Public conformance runner/comparator and native workflow enforce the required case ratchet. |
 | [supplemental.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/supplemental.json) | Installed supplemental inventory and native audit enforce component/public obligations. |
@@ -160,8 +161,11 @@ to `rust/qualification/release-api.json` in #2161. Historical
 and [validator assertion](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/validator-assertion-disposition.json)
 maps are retrievable at their original revision; #2147 must reconcile every
 unique replacement with final installed evidence. Git retrieval proves map
-availability, not replay of external artifacts. Current normative ownership is
-in [rules/README.md](articles/rules.md).
+availability, not replay of external artifacts. Current normative ownership and
+schema navigation use [the current rules](articles/rules.md), schema sources and
+the independent owner controls above. No active reader requires the retired
+[migration map](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rules/migration.yaml);
+its former aliases, retirement decisions and prose provenance remain in Git.
 [#2154](https://github.com/elong0527/yamaa/issues/2154) owns physical history removal
 and durable replay. Raw `rust/measurements/` remains pending verified retention
 of its original external inputs; a scratch path or expiring Actions URL is not a
