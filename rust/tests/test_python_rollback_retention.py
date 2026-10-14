@@ -78,6 +78,8 @@ class PriorRetentionAdmission(unittest.TestCase):
             (["../escape"], False),
             (["/escape"], False),
             (["C:\\escape"], False),
+            (["C:/escape"], False),
+            (["C:escape"], False),
             (["same", "same"], False),
             (["link"], True),
         ):
@@ -85,6 +87,7 @@ class PriorRetentionAdmission(unittest.TestCase):
             with zipfile.ZipFile(data, "w") as archive:
                 for name in names:
                     info = zipfile.ZipInfo(name)
+                    info.filename = name
                     if symlink:
                         info.external_attr = 0o120777 << 16
                     archive.writestr(info, b"bytes")

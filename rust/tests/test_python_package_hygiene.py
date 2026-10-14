@@ -20,7 +20,11 @@ def write_archive(path, names):
     if path.suffix == ".whl":
         with zipfile.ZipFile(path, "w") as archive:
             for name in names:
-                archive.writestr(name, b"raise RuntimeError('do not import')\n")
+                member = zipfile.ZipInfo(name)
+                # ZipInfo normalizes the host separator on Windows. Restore the
+                # authored spelling to exercise actual noncanonical ZIP bytes.
+                member.filename = name
+                archive.writestr(member, b"raise RuntimeError('do not import')\n")
     else:
         with tarfile.open(path, "w:gz") as archive:
             for name in names:

@@ -21,7 +21,8 @@ class ActualChild(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             record = Path(directory) / "process.json"
             command = [sys.executable, "-I", "-c",
-                       "a=bytearray(64*1024*1024); raise SystemExit(7)"]
+                       "a=bytearray(64*1024*1024); "
+                       "a[::4096]=b'x'*(len(a)//4096); raise SystemExit(7)"]
             subprocess.run([sys.executable, "-I", str(TOOLS / "child_peak_rss.py"),
                             "--command", json.dumps(command), "--record", str(record)], check=True)
             actual = json.loads(record.read_text())

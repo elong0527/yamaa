@@ -11,7 +11,7 @@ import sys
 import urllib.error
 import urllib.request
 import zipfile
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 ROOT = Path(__file__).resolve().parents[2]
 RECORD = ROOT / "rust/qualification/prior-python-rollback-run.json"
@@ -34,6 +34,7 @@ def extract(data, destination):
             path = PurePosixPath(member.filename)
             require(
                 not path.is_absolute()
+                and not PureWindowsPath(member.filename).drive
                 and ".." not in path.parts
                 and "\\" not in member.filename,
                 "unsafe artifact member",
