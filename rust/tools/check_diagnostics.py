@@ -32,7 +32,7 @@ SEED = Path("rust/tools/diagnostic_literal_seed.json")
 ALLOWLIST = Path("rust/tools/diagnostic_literal_allowlist.json")
 CORE_SEED = Path("rust/tools/core_diagnostic_literal_seed.json")
 CORE_ALLOWLIST = Path("rust/tools/core_diagnostic_literal_allowlist.json")
-REGISTRY = Path("rust/crates/yamaa-core/src/diagnostic.rs")
+REGISTRY = Path("rust/crates/yamaa-core/src/diagnostic/mod.rs")
 SHIPPED_SCHEMA = Path("rust/crates/yamaa-adapters/src/shipped_schema_data.rs")
 CHECKER = Path("rust/tools/check_diagnostics.py")
 NULL_POLICY = Path("rules/execution/lifecycle.md")
@@ -416,7 +416,7 @@ def null_conditions(
 def registry_errors(
     root: Path, registered: dict[str, set[str]], nullable: set[tuple[str, str]]
 ) -> list[str]:
-    path = root / "rust/crates/yamaa-core/src/diagnostic.rs"
+    path = root / REGISTRY
     try:
         source = path.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as error:
@@ -491,7 +491,9 @@ def violations(root: Path, baseline_ref: str | None = None) -> list[str]:
         sites, active, site_errors = load_sites(root, seed_path, allowlist_path, crates)
         errors.extend(site_errors)
         if baseline_ref is not None:
-            errors.extend(baseline_errors(root, baseline_ref, seed_path, allowlist_path))
+            errors.extend(
+                baseline_errors(root, baseline_ref, seed_path, allowlist_path)
+            )
         namespaces[seed_path] = (sites, active, Counter(), allowlist_path)
     for path in sources:
         relative = path.relative_to(root).as_posix()

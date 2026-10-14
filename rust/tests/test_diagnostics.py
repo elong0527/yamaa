@@ -35,7 +35,7 @@ class DiagnosticGuardTests(unittest.TestCase):
             "  engine_rejected: {phases: [engine]}\n",
         )
         self.write(
-            "rust/crates/yamaa-core/src/diagnostic.rs",
+            "rust/crates/yamaa-core/src/diagnostic/mod.rs",
             'conditions! {\n    Invalid => ("validation", "invalid_value", Some("REQ-0001")),\n'
             '    Rejected => ("engine", "engine_rejected", None),\n}\n',
         )
@@ -74,7 +74,9 @@ class DiagnosticGuardTests(unittest.TestCase):
     def allow_core(self, relative, source, count=1):
         identifier = relative + ":1"
         self.core_seed[identifier] = {
-            "path": relative, "source": source.strip(), "occurrences": count
+            "path": relative,
+            "source": source.strip(),
+            "occurrences": count,
         }
         self.core_active[identifier] = count
         self.save_core_sites()
@@ -197,7 +199,7 @@ class DiagnosticGuardTests(unittest.TestCase):
         self.assertEqual(self.errors(), [])
 
     def test_new_null_language_cause_is_rejected(self):
-        path = self.root / "rust/crates/yamaa-core/src/diagnostic.rs"
+        path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
         path.write_text(path.read_text().replace('Some("REQ-0001")', "None"))
         self.assertTrue(
             any(
@@ -207,7 +209,7 @@ class DiagnosticGuardTests(unittest.TestCase):
         )
 
     def test_implementation_condition_must_retain_null(self):
-        path = self.root / "rust/crates/yamaa-core/src/diagnostic.rs"
+        path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
         path.write_text(path.read_text().replace("None", 'Some("REQ-0001")'))
         self.assertTrue(
             any("must retain a null requirement" in e for e in self.errors())
@@ -324,7 +326,9 @@ class DiagnosticGuardTests(unittest.TestCase):
             + "\n",
         )
         self.assertEqual(len(self.errors()), 2)
-        self.assertTrue(any("undefined requirement REQ-999999" in e for e in self.errors()))
+        self.assertTrue(
+            any("undefined requirement REQ-999999" in e for e in self.errors())
+        )
         self.assertTrue(any("outside canonical registry" in e for e in self.errors()))
 
     def test_comments_quoted_prose_and_character_literals_are_irrelevant(self):
@@ -447,7 +451,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         self.assertTrue(any("duplicate registration" in e for e in self.errors()))
 
     def test_unparseable_or_missing_registry_and_vocabulary_fail_closed(self):
-        path = self.root / "rust/crates/yamaa-core/src/diagnostic.rs"
+        path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
         path.write_text("conditions! {\n    malformed => (),\n}\n")
         self.assertTrue(any("unrecognized cause" in e for e in self.errors()))
         path.unlink()
@@ -478,10 +482,15 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         for crate in sorted(guard.CORE_CRATES):
             for source in sources:
                 with self.subTest(crate=crate, source=source):
-                    path = self.write(f"rust/crates/{crate}/src/errors.rs", source + "\n")
+                    path = self.write(
+                        f"rust/crates/{crate}/src/errors.rs", source + "\n"
+                    )
                     errors = self.errors()
                     self.assertEqual(len(errors), 1)
-                    self.assertIn("new diagnostic literal site outside canonical registry", errors[0])
+                    self.assertIn(
+                        "new diagnostic literal site outside canonical registry",
+                        errors[0],
+                    )
                     path.unlink()
 
     def test_core_exact_sites_cannot_move_duplicate_or_change(self):
@@ -511,7 +520,12 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         self.core_active[identifier] = 2
         self.save_core_sites()
         self.write(relative, source + "\n" + source + "\n")
-        self.assertTrue(any("literal allowlist grew from HEAD" in e for e in guard.violations(self.root, "HEAD")))
+        self.assertTrue(
+            any(
+                "literal allowlist grew from HEAD" in e
+                for e in guard.violations(self.root, "HEAD")
+            )
+        )
         self.core_active.clear()
         self.save_core_sites()
         self.write(relative, "// moved to canonical registry\n")
@@ -523,15 +537,25 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         self.assertEqual(guard.violations(self.root, "HEAD"), [])
         relative = "rust/crates/yamaa-core/src/errors.rs"
         self.allow_core(relative, '"REQ-0001"')
-        self.assertTrue(any(str(guard.CORE_SEED) + ": frozen literal seed changed" in e for e in guard.violations(self.root, "HEAD")))
+        self.assertTrue(
+            any(
+                str(guard.CORE_SEED) + ": frozen literal seed changed" in e
+                for e in guard.violations(self.root, "HEAD")
+            )
+        )
         self.allow("rust/crates/yamaa-core/src/host_seed.rs", '"REQ-0001"')
         self.allow_core("rust/crates/yamaa-adapters/src/core_seed.rs", '"REQ-0001"')
-        self.assertEqual(sum("invalid frozen literal site" in e for e in self.errors()), 2)
+        self.assertEqual(
+            sum("invalid frozen literal site" in e for e in self.errors()), 2
+        )
 
     def test_core_initial_introduction_is_separate_from_existing_host_guard(self):
         (self.root / guard.CORE_SEED).unlink()
         (self.root / guard.CORE_ALLOWLIST).unlink()
-        self.write(str(guard.CHECKER), f"# Requires {guard.SEED.name} and {guard.ALLOWLIST.name}\n")
+        self.write(
+            str(guard.CHECKER),
+            f"# Requires {guard.SEED.name} and {guard.ALLOWLIST.name}\n",
+        )
         self.commit_baseline()
         self.save_core_sites()
         self.assertEqual(guard.violations(self.root, "HEAD"), [])
@@ -542,19 +566,37 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
                 (self.root / guard.CORE_ALLOWLIST).unlink()
                 if not partial:
                     (self.root / guard.CORE_SEED).unlink()
-                self.write(str(guard.CHECKER), f"# Requires {guard.CORE_SEED.name} and {guard.CORE_ALLOWLIST.name}\n")
+                self.write(
+                    str(guard.CHECKER),
+                    f"# Requires {guard.CORE_SEED.name} and {guard.CORE_ALLOWLIST.name}\n",
+                )
                 self.commit_baseline()
                 self.save_core_sites()
                 errors = guard.violations(self.root, "HEAD")
-                expected = "incomplete seed and allowlist" if partial else "existing guard is missing"
+                expected = (
+                    "incomplete seed and allowlist"
+                    if partial
+                    else "existing guard is missing"
+                )
                 self.assertTrue(any(expected in e for e in errors), errors)
 
-    def test_core_comments_prose_and_generated_filename_are_not_registry_exemptions(self):
+    def test_core_comments_prose_and_generated_filename_are_not_registry_exemptions(
+        self,
+    ):
         relative = "rust/crates/yamaa-core/src/prose.rs"
-        self.write(relative, '// "REQ-999999"\n/* "invalid_value" */\nconst PROSE: &str = "about \\"invalid_value\\"";\n')
+        self.write(
+            relative,
+            '// "REQ-999999"\n/* "invalid_value" */\nconst PROSE: &str = "about \\"invalid_value\\"";\n',
+        )
         self.assertEqual(self.errors(), [])
-        self.write("rust/crates/yamaa-engine/src/diagnostic.rs", 'const REQ: &str = "REQ-0001";\n')
-        self.write("rust/crates/yamaa-core/src/shipped_schema_data.rs", 'const CONDITION: &str = "invalid_value";\n')
+        self.write(
+            "rust/crates/yamaa-engine/src/diagnostic.rs",
+            'const REQ: &str = "REQ-0001";\n',
+        )
+        self.write(
+            "rust/crates/yamaa-core/src/shipped_schema_data.rs",
+            'const CONDITION: &str = "invalid_value";\n',
+        )
         self.assertEqual(len(self.errors()), 2)
         self.assertTrue(all("outside canonical registry" in e for e in self.errors()))
 
@@ -574,7 +616,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         (self.root / "rules/values.md").unlink()
         self.assertEqual(self.errors(), ["no normative requirement definitions found"])
         self.write("rules/values.md", "**REQ-0001.** Required.\n")
-        (self.root / "rust/crates/yamaa-core/src/diagnostic.rs").unlink()
+        (self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs").unlink()
         self.assertEqual(self.errors(), ["no Rust crate sources found"])
 
 
