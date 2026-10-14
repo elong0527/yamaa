@@ -631,6 +631,25 @@ fn decoded_finding(
         push_diagnostic(budget, findings, diagnostic)?;
         return Ok(true);
     }
+    if let DecodeError::ResourceLimit {
+        resource,
+        limit,
+        actual,
+    } = error
+    {
+        let refusal = crate::resource_diagnostics::Refusal::new(
+            resource,
+            *limit,
+            *actual,
+            vec![format!("input.{}", source.name)],
+        );
+        push_diagnostic(
+            budget,
+            findings,
+            &refusal.diagnostic("ingest", "source_limit"),
+        )?;
+        return Ok(true);
+    }
     let DecodeError::Codec(error) = error else {
         return Ok(false);
     };
@@ -1309,5 +1328,44 @@ mod tests {
         assert!(
             matches!(&error, yamaa_engine::producer_build::DecodeError::Metadata(held) if held.spec_paths == ["input.P.schema", "input.P.path"])
         );
+    }
+
+    #[test]
+    fn pooled_source_refusal_keeps_global_bound_actual_and_owner() {
+        let source = yamaa_core::specification::SourceDeclaration {
+            name: "XW".into(),
+            path: "raw.csv".into(),
+            types: vec![],
+            profile: yamaa_core::specification::SourceProfile::Csv,
+            encoding: None,
+            empty_string_present: false,
+            ordinal: None,
+        };
+        for (resource, limit, actual) in [("rows", 8, Some(9)), ("cells", 15, Some(16))] {
+            let error = yamaa_engine::producer_build::DecodeError::ResourceLimit {
+                resource,
+                limit,
+                actual,
+            };
+            let mut findings = Vec::new();
+            assert!(matches!(
+                decoded_finding(&mut Budget::new(1), &mut findings, &source, &error),
+                Err(Error::ResourceLimit(refusal)) if refusal.resource == "report_retained_bytes"
+                    && refusal.limit == yamaa_engine::capacity::REPORT_RETAINED_FACTOR
+                    && refusal.actual.is_some_and(|actual| actual > refusal.limit)
+            ));
+            assert!(findings.is_empty());
+            assert!(
+                decoded_finding(&mut Budget::new(65_536), &mut findings, &source, &error).unwrap()
+            );
+            assert_eq!(findings.len(), 1);
+            assert_eq!(findings[0]["context"]["resource"], resource);
+            assert_eq!(findings[0]["context"]["limit"], serde_json::json!(limit));
+            assert_eq!(
+                findings[0]["context"]["actual"],
+                serde_json::json!(actual.unwrap())
+            );
+            assert_eq!(findings[0]["spec_paths"], serde_json::json!(["input.XW"]));
+        }
     }
 }
