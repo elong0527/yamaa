@@ -290,7 +290,7 @@ comparability argument intact.
 
 <a id="req-0577"></a>
 
-**REQ-0577.** A temporal value never enters arithmetic. [Numeric computation](../operations/computation.md)'s grammar is
+**REQ-0577.** A temporal value never enters `compute` arithmetic. [Numeric computation](../operations/computation.md)'s grammar is
 numeric. Named temporal operations perform differences and shifts under
 [Temporal operations](../operations/temporal.md), with explicit units and
 input contracts.

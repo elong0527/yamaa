@@ -2,13 +2,16 @@
 """Enforce benchmarks/vocabulary-coverage.yaml in CI.
 
 Every expression registered in yaml/schema_expression_*.yaml and every
-verification registered in yaml/schema_verification.yaml must name either
-the negative examples fixing its failure behavior or the open issue
-tracking the gap. A covered entry must point at real negative examples:
+verification registered in yaml/schema_verification.yaml must name negative
+examples, shared installed refusal cases, or the open issue tracking the gap.
+A benchmark entry must point at real negative examples:
 each directory exists, carries expected/error.yaml, and either the error
 spec_paths or the spec itself names the operation.
+Shared cases use the independent owner exercised by Rust, installed Python
+and R; successful cases cannot satisfy failure coverage.
 """
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -19,6 +22,44 @@ REPO = Path(__file__).resolve().parents[3]
 EXAMPLES = REPO / "benchmarks"
 COVERAGE = EXAMPLES / "vocabulary-coverage.yaml"
 GAP = re.compile(r"#[1-9][0-9]*$")
+SHARED = REPO / "rust/tests/host-fixtures/cases.json"
+
+
+def check_shared(operation, names):
+    """Use the existing independently authored Rust/Python/R refusal owner."""
+    label = f"coverage.{operation}.shared_cases"
+    if (
+        not isinstance(names, list)
+        or not names
+        or not all(isinstance(name, str) for name in names)
+    ):
+        return [f"ERROR: {label}: expected nonempty case names"]
+    try:
+        document = json.loads(SHARED.read_text(encoding="utf-8"))
+        if document["version"] != "1":
+            raise ValueError("unsupported shared fixture version")
+        cases = document["families"]["original-specifications"]["temporal_arithmetic"]
+        indexed = {case["name"]: case for case in cases}
+        if len(indexed) != len(cases):
+            raise ValueError("duplicate shared case names")
+    except (OSError, KeyError, TypeError, ValueError) as error:
+        return [f"ERROR: {label}: cannot read owned fixtures: {error}"]
+    errors = []
+    plain = operation.split(":", 1)[-1]
+    for name in names:
+        case = indexed.get(name)
+        if case is None:
+            errors.append(f"ERROR: {label}: missing {name}")
+            continue
+        finding = case.get("run_issue") or case.get("check_issue")
+        if case.get("csv") is not None or not isinstance(finding, dict) or not all(
+            isinstance(finding.get(field), str) and finding[field]
+            for field in ("phase", "condition", "requirement", "spec_path")
+        ):
+            errors.append(f"ERROR: {label}: {name} lacks a refusal contract")
+        elif plain not in finding["spec_path"] and plain not in case.get("spec", ""):
+            errors.append(f"ERROR: {label}: {name} never names {plain}")
+    return errors
 
 
 def registered_operations():
@@ -44,8 +85,10 @@ def check(operation, entry):
     elif isinstance(entry, dict) and set(entry) == {"gap"}:
         names = []
         gap = entry["gap"]
+    elif isinstance(entry, dict) and set(entry) == {"shared_cases"}:
+        return check_shared(operation, entry["shared_cases"])
     else:
-        return [f"ERROR: coverage.{operation}: expected a list or {{gap: '#N'}}"]
+        return [f"ERROR: coverage.{operation}: expected a list, shared_cases, or {{gap: '#N'}}"]
     if gap is not None:
         if not isinstance(gap, str) or GAP.fullmatch(gap) is None:
             errors.append(f"ERROR: coverage.{operation}.gap: expected '#N'")

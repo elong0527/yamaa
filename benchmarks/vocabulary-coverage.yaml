@@ -4,7 +4,8 @@ version: "1.0"
 # enters the vocabulary when an example needs it, a negative example fixes
 # its failure behavior, and R and Python can implement it the same way.
 # Every registered expression and verification names either the negative
-# examples that fix its failure behavior or the open issue tracking the
+# examples or shared installed conformance cases that fix its failure behavior,
+# or the open issue tracking the
 # gap. check_vocabulary_coverage.py enforces this file in CI.
 coverage:
   aggregate: [negative-sum-non-numeric]
@@ -20,8 +21,21 @@ coverage:
   date_impute: [negative-impute-bad-month,
     negative-impute-missing-month, negative-impute-unreachable-month]
   date_precision: [negative-precision-bad-source]
+  date_shift:
+    shared_cases: [date_shift_datetime_source, date_shift_float_days,
+      date_shift_upper_overflow, date_shift_lower_overflow]
+  datetime_diff:
+    shared_cases: [datetime_diff_date_source]
   datetime_impute: [negative-datetime-impute-bad-source]
   datetime_precision: [negative-datetime-precision-bad-source]
+  datetime_shift:
+    shared_cases: [datetime_shift_date_source, datetime_shift_text_amount,
+      datetime_shift_fractional_seconds, datetime_shift_upper_overflow,
+      datetime_shift_lower_overflow]
+  duration_value:
+    shared_cases: [duration_value_numeric_source, duration_invalid_without_handler]
+  duration_text:
+    shared_cases: [duration_text_temporal_source, duration_text_overflow]
   greatest: [negative-greatest-mixed]
   least: [negative-least-mixed]
   literal: [negative-literal-structure]
