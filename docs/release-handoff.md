@@ -6,6 +6,11 @@ Prepared on 2026-10-13 (America/New_York) for
 [release guide](release.md) owns policy and the B01-B19 register. This handoff
 owns final evidence reconciliation and the package selection for release.
 
+Reconciled on 2026-10-14 (UTC) against main
+`4bff6da202bdddbfd4955917873e5ee5e4650d9a`. The preparation source and historical
+evidence below retain their original identities; this reconciliation is not a
+new qualification result.
+
 **Transition acceptance is pending.** No final qualified source, passing complete
 performance/budget audit or publishable 0.4.0 package selection is asserted here.
 Removal and coordinated 0.4.0 version changes already merged before final
@@ -43,9 +48,16 @@ public/typed-native behavior through the retained supplemental inventory, source
 guards, package hygiene, complete independent conformance and native tests.
 The historical
 [validator disposition](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/validator-assertion-disposition.json)
-names 420 original controls. All 420 names remain in the current 426-control
-validator test inventory after #2171; renewed native routing and assertion
-behavior remain required.
+names 420 original controls. All 420 names remained among 426 named controls at
+the preparation source after #2171. At the reconciliation source, 410 original
+names remain among 426 named controls.
+Nine execution-manifest controls and the former execution-manifest blocker-loader
+control retired with that input. Six derived benchmark-inventory controls and the
+validation-only blocker-loader control exercise its current successors; nine
+further controls cover native static admission, aggregate bindings and example
+index validation. These 16 additions do not establish equivalence for every
+retired assertion. Final #2145/#2147 admission still reconciles the required
+behavior and renewed native routing against installed evidence.
 
 ### Source differences and evidence renewal
 
@@ -166,8 +178,16 @@ the release guide's PortableLibmV1 compatibility note before opting in: EXP/LN/
 POWER bits and dependent predicates, conversions and saved bytes may differ from
 historical Python platform behavior. Restore an entire prior release for rollback.
 
-Record item-11 transition acceptance only when every row above is supported by
-its final evidence. Then update #1994/#1999/#1973 and the completed child criteria
+Remaining closure evidence belongs to #2141/#2143 for retained harness/auditor
+replay, #2142 for adopted capacity, #2144 for all 567 campaign combinations and
+accepted item-10 budgets, and #2145 for final combined-main native audit and
+independent original-input replay. #2147 then reconciles retired assertions and
+actual tested package selection before recording item-11 transition acceptance.
+Earlier branch passes, merged repairs and historical rollback re-admission do
+not supply those remaining results. #2154 separately retains all 17 raw
+measurement files until durable original-byte retrieval and replay pass.
+
+After every entry gate passes, update #1994/#1999/#1973 and completed child criteria
 with durable links, close #2147 after its implementing PR merges, and close #1969
 last. Record package/tag publication independently. If 0.4.0 has been published
 before final selection, choose the next version deliberately and requalify the

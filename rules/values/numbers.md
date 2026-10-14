@@ -70,7 +70,9 @@ are `int`; the result is the binary64 quotient of those widened operands.
 Above `2^53`, this need not equal the exact integer quotient rounded once
 to binary64: `9007199254740993 / 3` returns `3002399751580330.5`, although the
 exact quotient `3002399751580331` is representable as a float. There is no
-integer division. Write `FLOOR(a / b)` for a floor-divided integer.
+integer division. `FLOOR(a / b)` floors this binary64 quotient and returns
+an integral `float` under [REQ-0423](numbers.md#req-0423); it need not equal
+the floor of the exact integer quotient.
 
 <a id="req-0422"></a>
 

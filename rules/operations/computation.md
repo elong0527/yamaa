@@ -190,7 +190,10 @@ non-integral value fails rather than being truncated.
 
 **REQ-0419.** `CEIL`, `FLOOR`, and `TRUNC` remain. They are not presentation
 rounding. They return an integral part, with no mode to choose.
-`FLOOR(a / b)` is how this grammar expresses integer division.
+`FLOOR(a / b)` floors the binary64 quotient under
+[REQ-0421](../values/numbers.md#req-0421) and returns an integral `float`
+under [REQ-0423](../values/numbers.md#req-0423). It need not equal the floor
+of the exact integer quotient.
 
 ### Types
 

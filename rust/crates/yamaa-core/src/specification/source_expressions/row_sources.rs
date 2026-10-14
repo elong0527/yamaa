@@ -31,10 +31,22 @@ pub(in crate::specification) fn bind(
         name.split_once('.')
             .is_none_or(|(owner, _)| owner != driver)
     }) {
-        let item = intermediates
-            .get(index)
-            .and_then(Option::as_ref)
-            .ok_or(BindError::Internal)?;
+        let Some(item) = intermediates.get(index).and_then(Option::as_ref) else {
+            // An earlier selector may be unavailable in this donor scope.
+            // Let the named-read owner report it at the authored operand path.
+            return row_intermediates::bind(
+                name,
+                path,
+                named,
+                secondary,
+                intermediates,
+                output,
+                catalog,
+                available,
+                edges,
+                findings,
+            );
+        };
         declaration.bind_row_filter(path, driver, catalog, named, findings)?;
         if declaration.absent.is_some()
             && !item.source.is_self()

@@ -272,17 +272,42 @@ pub(super) fn bind_row(
     available: Option<&[usize]>,
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
+    output: &TableSchema,
+    named: &intermediates::Declarations,
+    secondary: &[crate::dataset::SecondarySource],
+    intermediates: &[Option<crate::dataset::Intermediate>],
 ) -> Result<Option<Expression>, BindError> {
     let mut operands = Vec::new();
     for (index, source) in operation.sources().iter().enumerate() {
         let path = operation.operand_path(index).ok_or(BindError::Internal)?;
-        if let Some(expression) = rounding::bind_row_operand(
-            source, &path, catalog, driver, row, phase, available, edges, findings,
+        if let Some(expression) = self_relations::bind_operand(
+            source,
+            &path,
+            catalog,
+            driver,
+            row,
+            phase,
+            available,
+            edges,
+            findings,
+            output,
+            named,
+            secondary,
+            intermediates,
         )? {
-            let column_type = catalog
-                .type_of(source)
-                .map_err(BindError::Catalog)?
-                .ok_or(BindError::Internal)?;
+            let column_type = if let Expression::Intermediate { index, column } = &expression {
+                intermediates[*index]
+                    .as_ref()
+                    .and_then(|item| item.source_schema(secondary))
+                    .and_then(|schema| schema.columns().get(*column))
+                    .map(|column| column.kind)
+                    .ok_or(BindError::Internal)?
+            } else {
+                catalog
+                    .type_of(source)
+                    .map_err(BindError::Catalog)?
+                    .ok_or(BindError::Internal)?
+            };
             if column_type != ColumnType::Date {
                 let actual = match column_type {
                     ColumnType::Str => "str",

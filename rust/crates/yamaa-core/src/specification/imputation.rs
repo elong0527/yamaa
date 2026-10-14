@@ -339,6 +339,10 @@ pub(super) fn bind_row(
     available: Option<&[usize]>,
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
+    output: &TableSchema,
+    named: &intermediates::Declarations,
+    secondary: &[crate::dataset::SecondarySource],
+    intermediates: &[Option<crate::dataset::Intermediate>],
 ) -> Result<Option<Expression>, BindError> {
     let mut operands = Vec::new();
     for (name, field) in core::iter::once((operation.source(), "source")).chain(
@@ -347,8 +351,20 @@ pub(super) fn bind_row(
             .map(|source| (source, "not_before")),
     ) {
         let path = format!("{}.{}", operation.path(), field);
-        if let Some(expression) = rounding::bind_row_operand(
-            name, &path, catalog, driver, row, phase, available, edges, findings,
+        if let Some(expression) = self_relations::bind_operand(
+            name,
+            &path,
+            catalog,
+            driver,
+            row,
+            phase,
+            available,
+            edges,
+            findings,
+            output,
+            named,
+            secondary,
+            intermediates,
         )? {
             operands.push(Assignment {
                 column,
