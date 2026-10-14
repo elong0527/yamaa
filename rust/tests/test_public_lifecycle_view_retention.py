@@ -26,6 +26,10 @@ read_bytes <- function(path) {
   on.exit(close(con))
   readBin(con,"raw",n=1000000L)
 }
+read_stored_bytes <- function(path) {
+  con <- file(path,"rb"); on.exit(close(con))
+  readBin(con,"raw",n=1000000L)
+}
 encode <- function(value) jsonlite::toJSON(value,auto_unbox=TRUE,null="null",na="null",
                                          digits=NA,pretty=TRUE,force=TRUE)
 """
@@ -76,20 +80,24 @@ typed <- list(
 output <- list(columns=lapply(seq_along(typed),function(i) list(paste0("V",i),"typed")),
                row_count=1L,rows=list(typed),host_schema=list())
 checkpoints <- list(list(),list(output=output),list(output=output,issues=list(rows=list())),
+                    list(output=output,issues=list(rows=list()),verification_log=NULL),
                     list(output=output,issues=list(rows=list()),verification_log=NULL,warning_log=NULL))
-checkpoints <- c(checkpoints,rep(checkpoints[4],2),list(c(checkpoints[[4]],list(output_after_save_2=output))))
+# Match all eight reached worker checkpoints, including each log separately.
+checkpoints <- c(checkpoints,rep(checkpoints[5],2),list(c(checkpoints[[5]],list(output_after_save_2=output))))
 for(suffix in c("",".gz")) {
   cache <- new.env(parent=emptyenv()); count <- 0L
   counted <- function(value) { count <<- count+1L; encode(value) }
-  expected_counts <- c(0L,1L,2L,4L,4L,4L,5L)
+  expected_counts <- c(0L,1L,2L,3L,4L,4L,4L,5L)
   for(index in seq_along(checkpoints)) {
     old <- file.path(args[2],paste0("old-",index,".json",suffix))
     new <- file.path(args[2],paste0("new-",index,".json",suffix))
     e$write_json(old,checkpoints[[index]])
     e$write_views(new,checkpoints[[index]],cache,counted)
-    stopifnot(identical(read_bytes(old),read_bytes(new)),count==expected_counts[index])
+    stopifnot(identical(read_bytes(old),read_bytes(new)),
+              identical(read_stored_bytes(old),read_stored_bytes(new)),
+              count==expected_counts[index])
   }
-  changed <- checkpoints[[7]]
+  changed <- checkpoints[[8]]
   changed$output$rows[[1]][[1]]$value <- "9223372036854775807"
   e$write_json(old,changed); e$write_views(new,changed,cache,counted)
   stopifnot(identical(read_bytes(old),read_bytes(new)),count==6L)
@@ -97,7 +105,7 @@ for(suffix in c("",".gz")) {
   e$write_json(old,reordered); e$write_views(new,reordered,cache,counted)
   stopifnot(identical(read_bytes(old),read_bytes(new)),count==6L)
 }
-e$write_json(file.path(args[2],"control.json"),checkpoints[[7]])
+e$write_json(file.path(args[2],"control.json"),checkpoints[[8]])
 """)
         self.assertEqual(
             list(result),
