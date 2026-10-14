@@ -244,7 +244,7 @@ enum MappingKey<'a> {
 
 /// Match the reference constructor's deferred container order. A containing
 /// mapping's merge/unhashable/duplicate checks finish before nested containers.
-fn check_mappings(nodes: &[Node], root: usize) -> Result<(), DecodeFailure> {
+fn check_mappings(nodes: &[Node], root: usize, limit: usize) -> Result<(), DecodeFailure> {
     let mut queue = VecDeque::from([root]);
     while let Some(id) = queue.pop_front() {
         match &nodes[id].value {
@@ -266,15 +266,21 @@ fn check_mappings(nodes: &[Node], root: usize) -> Result<(), DecodeFailure> {
                         _ => {
                             return Err(invalid_yaml(
                                 nodes[key].start,
-                                "while constructing a mapping",
+                                "a mapping key must be a scalar",
                             ))
                         }
                     };
                     if !keys.insert(identity) {
-                        return Err(invalid_yaml(
-                            nodes[key].start,
-                            "while constructing a mapping",
-                        ));
+                        let mut text = Paths { used: 0, limit };
+                        let mut reason = String::new();
+                        text.append(&mut reason, "found duplicate key '")?;
+                        let label = text.key(&nodes[key])?;
+                        reason.push_str(&label);
+                        text.append(&mut reason, "'")?;
+                        return Err(DecodeFailure::InvalidYaml {
+                            position: nodes[key].start,
+                            reason,
+                        });
                     }
                     queue.push_back(value);
                 }
@@ -380,7 +386,7 @@ fn check_unicode(nodes: &[Node], root: usize, limit: usize) -> Result<(), Decode
 pub fn decode_yaml(source: &[u8], limits: DecodeLimits) -> Result<DecodedYaml, DecodeFailure> {
     let events = scan_strict(source, limits.scan)?;
     let (nodes, root) = build(events, limits)?;
-    check_mappings(&nodes, root)?;
+    check_mappings(&nodes, root, limits.diagnostic_bytes)?;
     check_unicode(&nodes, root, limits.diagnostic_bytes)?;
     let mut document_nodes = Vec::with_capacity(nodes.len());
     let mut locations = Vec::with_capacity(nodes.len());
