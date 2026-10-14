@@ -298,6 +298,7 @@ for (mode in c("metadata", "save", "secondary")) {
                                         output_name="out.csv", entry=file.path(work,"spec.yaml"))), unavailable=list())
   e$response <- list(repetitions=list(),failure=NULL)
   e$write_json <- function(path,value) assign(basename(path), value, envir=stores)
+  e$write_views <- function(path,value,cache) e$write_json(path,value)
   e$timed <- function(state,name,expr) {
     on.exit(state$durations[[name]] <- list(authored_reached_marker=TRUE))
     force(expr)
@@ -392,6 +393,7 @@ for (interrupted in c(FALSE, TRUE)) {
        !is.null(value$repetitions[[1]]$failure)) stop("independent secondary response transport failure")
     assign(basename(path),value,envir=stores)
   }
+  e$write_views <- function(path,value,cache) e$write_json(path,value)
   e$message <- function(...) messages$values <- c(messages$values,list(paste0(...,collapse="")))
   e$timed <- function(state,name,expr) {
     on.exit(state$durations[[name]] <- list(authored_reached_marker=TRUE))

@@ -52,6 +52,57 @@ write_json <- function(path, value) {
                           digits = NA, pretty = TRUE, force = TRUE)
   write_bytes(path, charToRaw(enc2utf8(paste0(json, "\n"))))
 }
+write_views <- function(path, value, cache, encode = function(member) {
+  jsonlite::toJSON(member, auto_unbox = TRUE, null = "null", na = "null",
+                  digits = NA, pretty = TRUE, force = TRUE)
+}) {
+  if (!length(value)) {
+    write_bytes(path, charToRaw("[]\n"))
+    return(invisible(NULL))
+  }
+  keys <- names(value)
+  if (is.null(keys) || anyNA(keys) || anyDuplicated(keys) || any(!nzchar(keys))) {
+    stop("captured views require unique named fields")
+  }
+  # Copied fields stay immutable during a repetition. Keep their original
+  # encodings and compare the copied values directly, never by a digest. If a
+  # field changes, encode it again rather than reuse stale captured bytes.
+  # Complete all new encoding before opening the checkpoint, preserving the
+  # previous reached file and refusing before the next Save on an encode error.
+  for (key in keys) {
+    member <- value[key]
+    previous <- cache[[key]]
+    if (is.null(previous) || !identical(previous$member, member)) {
+      raw <- charToRaw(enc2utf8(encode(member)))
+      if (length(raw) < 5L || !identical(raw[1:2], charToRaw("{\n")) ||
+          !identical(tail(raw, 2L), charToRaw("\n}"))) {
+        stop("captured view encoding lost its original object envelope")
+      }
+      cache[[key]] <- list(member = member, bytes = raw[seq.int(3L, length(raw) - 2L)])
+    }
+  }
+  target <- if (endsWith(path, ".gz")) gzfile(path, "wb", compression = 1L) else file(path, "wb")
+  reached_error <- tryCatch({
+    writeBin(charToRaw("{\n"), target)
+    for (index in seq_along(keys)) {
+      if (index > 1L) writeBin(charToRaw(",\n"), target)
+      bytes <- cache[[keys[[index]]]]$bytes
+      for (start in seq.int(1L, length(bytes), by = 1048576L)) {
+        end <- min(start + 1048575L, length(bytes))
+        writeBin(bytes[start:end], target)
+      }
+    }
+    writeBin(charToRaw("\n}\n"), target)
+    NULL
+  }, error = identity, interrupt = identity)
+  close_error <- tryCatch({ close(target); NULL }, error = identity, interrupt = identity)
+  if (!is.null(reached_error)) {
+    if (!is.null(close_error)) message("secondary view checkpoint close failure: ", conditionMessage(close_error))
+    stop(reached_error)
+  }
+  if (!is.null(close_error)) stop(close_error)
+  invisible(NULL)
+}
 failure <- function(error) {
   list(class = as.list(class(error)), message = conditionMessage(error),
        call = if (is.null(conditionCall(error))) NULL else paste(deparse(conditionCall(error)), collapse = "\n"))
@@ -183,13 +234,14 @@ for (declaration in request$repetitions) {
               measurements = list(), evidence_capture_failures = list(), host_view_access_counts = list(), callback_observation = NULL,
               views = paste0("rep-", declaration$index, "-views.json", if (isTRUE(request$compress_evidence)) ".gz" else ""))
   views <- list()
+  view_encodings <- new.env(parent = emptyenv())
   result <- NULL
   prefix <- paste0("rep-", declaration$index)
   slot <- length(response$repetitions) + 1L
   persist <- function() {
     row$durations <<- state$durations
     response$repetitions[[slot]] <<- row
-    write_json(file.path(output, row$views), views)
+    write_views(file.path(output, row$views), views, view_encodings)
     write_json(file.path(output, "response.json"), response)
   }
   persist()
