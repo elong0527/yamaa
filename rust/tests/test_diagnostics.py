@@ -358,7 +358,7 @@ class DiagnosticGuardTests(unittest.TestCase):
             'def require_binding():\n    raise RuntimeError("unsupported_regex_engine_bogus")\n',
             'def require_binding():\n    raise RuntimeError("bogus_unsupported_regex_engine")\n',
             'def require_binding():\n    raise RuntimeError("unsupported_regex_engine2")\n',
-            'def require_binding():\n    raise RuntimeError("éunsupported_regex_engine")\n',
+            'def require_binding():\n    raise RuntimeError("\u00e9unsupported_regex_engine")\n',
         ]:
             self.write(owner, source)
             self.assertEqual(
