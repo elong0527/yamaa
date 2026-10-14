@@ -98,7 +98,7 @@ jobs:
         working-directory: rust
         run: |
           cargo test --locked -p yamaa-core --test numeric_tests --test scalar_tests --test portable_math_golden
-          cargo test --locked -p yamaa-engine --features test-support --test project_preparation --test test_support --test specification_run
+          cargo test --locked -p yamaa-engine --features test-support --test preparation_tests --test test_support --test service_tests
           cargo test --locked -p yamaa-adapters --test project_run --test file_workflow --test public_table
 
   python:

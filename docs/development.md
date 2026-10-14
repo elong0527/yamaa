@@ -38,7 +38,13 @@ schema, project, source, diagnostics and the portable math golden suite. Their
 child modules live under matching `tests/` directories, and shared factories
 live in core's own `tests/support/`. `autotests = false` prevents helper files
 from becoming independent binaries; register new controls in the appropriate
-family's `mod.rs`. Engine and adapter tests retain their existing targets.
+family's `mod.rs`. Adapter tests retain their existing targets.
+
+Engine tests use four responsibility harnesses for execution, preparation,
+project and service contracts, plus the explicit `test_support` target gated
+by its required feature. Engine owns its test factories; tests consume core's
+public API instead of including core test source files. Run the engine suite
+with `--features test-support` to exercise every target.
 
 The [Python guide](https://github.com/elong0527/yamaa/blob/main/python/README.md)
 and [R guide](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md)
