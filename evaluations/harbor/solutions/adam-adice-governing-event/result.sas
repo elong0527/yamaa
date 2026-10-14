@@ -27,8 +27,10 @@ data ranked;
   format ASTDT GOVDT yymmdd10.;
 run;
 proc sql;
-  create table result as select STUDYID, USUBJID, ASEQ, ADECOD1, ASTDT,
-    ICEPRIO, ICERANK, GOVFL, SUPERFL, GOVTYPE, GOVDT, GOVSEQ
+  create table result as select STUDYID, USUBJID, ASEQ, ADECOD1,
+    put(ASTDT,yymmdd10.) as ASTDT,
+    ICEPRIO, ICERANK, GOVFL, SUPERFL, GOVTYPE,
+    put(GOVDT,yymmdd10.) as GOVDT, GOVSEQ
   from ranked order by STUDYID, USUBJID, ASEQ;
 quit;
 proc export data=result outfile="/app/output/adice.csv" dbms=csv replace;
