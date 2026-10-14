@@ -507,6 +507,13 @@ values, byte-boundary exhaustion and sink failures. IPC adversarial tests retain
 logical-text accounting across aliased buffers, batches and sources. These are
 capacity/correctness checks, not a performance or memory-size guarantee.
 
+A separate [10M-row ODM timing](measurements/dataset-odm-10m.md) records three
+release-mode executions with all eleven ODM fields, 10,000 subjects and key-scope
+AGE/SEX derivations. The median was 9.352 seconds for IPC decode, checked dataset
+execution and IPC export to a byte-count sink. The record states the hardware,
+raw trials, memory observation and excluded workflow stages; this does not time
+XML/CSV ingestion or establish a runtime for other ODM scopes or specifications.
+
 Shared fixtures encode committed ADLB source/expected values independently of the
 Rust engine and include duplicate keys, failed row count, conversion timing,
 empty input, temporal literals, integer overflow, and explicit true/false/unknown
