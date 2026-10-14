@@ -1,27 +1,35 @@
 # Development
 
-The Python and R packages execute the same Rust engine. The language contracts
-are in [rules](https://github.com/elong0527/yamaa/tree/main/rules), the written
-schema and grammar in [yaml](https://github.com/elong0527/yamaa/tree/main/yaml),
-and executable examples with independently authored expected results in
-[benchmarks](https://github.com/elong0527/yamaa/tree/main/benchmarks).
+yamaa uses one shared Rust engine for the Python and R packages. Start with
+[the language rules](articles/rules.md), then the
+[schema sources](https://github.com/elong0527/yamaa/tree/main/yaml) and
+[benchmarks](https://github.com/elong0527/yamaa/tree/main/benchmarks). Rules define
+behavior; independently authored expected files define executable test truth.
+Keep those files unchanged when fixing an implementation or moving tests.
 
-| Crate | Responsibility |
+## Where changes belong
+
+| Area | Source and responsibility |
 | --- | --- |
-| `yamaa-core` | Values, expressions, schema admission and specification compilation. |
-| `yamaa-engine` | Execution lifecycle, resource/function ports, verification and publication. |
-| `yamaa-adapters` | YAML, CSV, Parquet, files, project environments and submission rendering. |
-| `yamaa-python` | Python arguments, callbacks and owned result views. |
-| `yamaa-r` | R arguments, callbacks and owned result views. |
+| Language | `rules/`, `yaml/`: normative contracts, diagnostic registry and schemas. |
+| Shared semantics | `rust/crates/yamaa-core/`: values, expressions, admission and compilation. |
+| Shared lifecycle | `rust/crates/yamaa-engine/`: execution, resource/function ports, verification and publication. |
+| Storage and formats | `rust/crates/yamaa-adapters/`: YAML, CSV, Parquet, files, project environments and submission rendering. |
+| Host boundaries | `rust/crates/yamaa-python/`, `rust/crates/yamaa-r/`: arguments, callbacks, scalar conversions and owned result views. |
+| Host packages | `python/`, `R/yamaa/`: thin public facades, private style/ODM helpers and package builds. |
+| Installed qualification | `rust/tests/`, `R/yamaa/tests/`, `rust/qualification/`: installed contracts, independent fixtures and required coverage. |
+| Automation | `.github/workflows/`, `.github/scripts/`, `rust/tools/`: CI selection, staging, comparisons and evidence replay. |
 
-Core and engine are `no_std`; host, filesystem and table frameworks belong in
-adapters or bindings. Diagnostics use the shared registry. Resource paths retain
-their original declaring file. Builds compute held results; explicit Save
-publishes retained bytes, preserves original failures and stops on publication
-failure. Host interfaces own conversions and callbacks without a second evaluator.
+Core and engine remain `no_std` and exclude host/storage frameworks. Diagnostics
+belong to the shared registry. Host callbacks carry typed values; diagnostic
+JSON text does not introduce a callback request/reply protocol. Build computes
+and retains results; explicit Save publishes held bytes in the contract's order.
 The [Python guide](https://github.com/elong0527/yamaa/blob/main/python/README.md)
 and [R guide](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md)
-describe the public calls, installation and host representations.
+describe public usage and installation. The
+[Rust entry point](https://github.com/elong0527/yamaa/blob/main/rust/README.md)
+describes crate checks. [Release guidance](release.md) owns migration decisions
+and pending acceptance.
 
 ## Local checks
 

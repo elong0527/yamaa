@@ -1,247 +1,216 @@
-# Shared Rust release
+# Release and migration
 
-Reviewed on 2026-10-13 (America/New_York) against main
-`d8cb226a613f0ee26cac400e2baeecbbf2ba11cd`. This page is the current decision and gate home
-for [#1969](https://github.com/elong0527/yamaa/issues/1969). A merged change, a
-qualified source revision, an accepted decision and a published asset are
-different states.
+Reviewed 2026-10-13 (America/New_York) against main
+[`1b795ca4`](https://github.com/elong0527/yamaa/commit/1b795ca4), the current
+[#1969](https://github.com/elong0527/yamaa/issues/1969) and
+[#1973](https://github.com/elong0527/yamaa/issues/1973) gate records, retained
+qualification records and the authenticated GitHub release listing. This is the
+current narrative; qualification observations keep their own tested revisions.
 
-## Current state
+## State
 
-The shared language engine, Python/R domain/check/Define APIs, benchmark runners,
-native repository tooling and coordinated 0.4.0 source versions are merged.
-The old Python evaluator, probe/reference routes and R `cdiscbuilder` are removed.
-The performance harness in [#2137](https://github.com/elong0527/yamaa/pull/2137)
-is merged at `c6376e36`; complete installed campaign acceptance remains pending.
-Current main also merges the
-[#2167 exact-run/attempt admission fix](https://github.com/elong0527/yamaa/pull/2167),
-[#2164 R check dependencies](https://github.com/elong0527/yamaa/pull/2164),
-[#2165 dependency guard repair](https://github.com/elong0527/yamaa/pull/2165),
-[#2168 IPC adapter guard repair](https://github.com/elong0527/yamaa/pull/2168)
-and [#2166 exact downstream math controls](https://github.com/elong0527/yamaa/pull/2166).
-These repairs require current-source qualification; merging them does not
-establish a passing final campaign or combined-main audit.
-Removal and version changes landed **before** final item-10 budgets and item-11
-transition acceptance. Historical language work is complete; final evidence must
-qualify the actual combined source rather than relabel an earlier branch run.
-
-The active ratchet requires 316 of 318 authored cases in every installed tuple;
-the two explicit historical exclusions remain declared in
-[public-conformance.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/public-conformance.json).
-Its historical qualification is revision `2ba10418607933f92597f7c00ac363a3113a49db`,
-[run 38416920074](https://github.com/elong0527/yamaa/actions/runs/38416920074),
-attempt 1. It does not qualify today's 0.4.0 source. Final source/run/attempt,
-original artifact identities, independent replay and publication handoff belong
-to [#2145](https://github.com/elong0527/yamaa/issues/2145) and
-[#2147](https://github.com/elong0527/yamaa/issues/2147).
-
-GitHub release metadata checked on the review date shows published
-[Python 0.3.0](https://github.com/elong0527/yamaa/releases/tag/yamaa-py-0.3.0)
-(release 409220247, no attached binary assets). The retained Python packages
-and pre-cutover R 0.3.0 source candidate are **unpublished drafts**. No previous
-R release or shared 0.4.0 release is published. Source version numbers and green
-CI do not publish a release. Recheck release metadata and actual assets at handoff.
-
-## Approved policy
-
-[#1973](https://github.com/elong0527/yamaa/issues/1973) records decisions 1-9
-and 12-19, with the [approval comment](https://github.com/elong0527/yamaa/issues/1973#issuecomment-6112883568)
-and [original decision source](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/maintainer-decisions.md)
-as provenance. These approve target behavior; final installed qualification is
-separate.
-
-| Decision | Current policy |
+| State | Observed scope |
 | --- | --- |
-| 1/2: public APIs | Python `domain`, `check`, `define`, result/error types, version metadata and self-contained `read_odm`/`write_odm_parquet`; R `yamaa_domain`, `yamaa_check`, `yamaa_define`. Keep the style CLI with private implementation. Legacy/probe/`cdiscbuilder` APIs are retired. |
-| 3/4: host values and arguments | Lossless R i64/NUL carriers with separate missingness and preserve-or-error conversion. Python `environment` is keyword-only; wrong argument types raise `TypeError`. R argument errors are classed. A missing specification is an issue row. |
-| 5-7/9: transport and diagnostics | No JSON request/reply callback protocol; issue context remains JSON text. Registry-owned conditions and phases; only `unsupported_operation` and `engine_rejected` have reviewed null requirements. Assisted inventory/probe routes are retired. |
-| 8: qualification and ownership | Complete installed native matrix, including Windows R, before merging native/R/packaging/native CI changes. One current narrative and no new per-slice history ledgers. |
-| 12-14: resources and distribution | Resolve paths from the declaring file. First R distribution is a standalone GitHub source tarball; CRAN/r-universe are later work. No public resolved-spec producer; historical outputs were removed at cutover. |
-| 15-19: language truth | Finite strictly ascending `cut` breaks and one label per interval; registered CSV empty-string refusal; static greatest/least comparability and first-source type on ties; signed-i64 predicate overflow; row filters read their specified completed non-window/grouped derivations. Preserve independent expected truth. |
+| Implemented and merged | Shared language execution; Python/R domain/check/define; runner conversion; legacy evaluator/API/probe and R/cdiscbuilder removal; coordinated Python/R/Cargo 0.4.0 source versions. The performance harness is merged through PR #2137; subsequent native dependency/guard, portable-math control and performance admission repairs are merged through PRs #2164-#2168. |
+| Qualified at earlier revisions | Retained public-conformance ratchet: run 38416920074, attempt 1, source `2ba10418607933f92597f7c00ac363a3113a49db`; earlier rollback rehearsals below. Their results do not qualify current main or its 0.4.0 composition. |
+| Pending evidence/decisions | Final combined-main installed/numerical audit, adopted capacity bounds, complete performance campaign and item-10 budgets, item-11 transition acceptance and exact artifact handoff. |
+| Published | [Python source release 0.3.0](https://github.com/elong0527/yamaa/releases/tag/yamaa-py-0.3.0), source `845a91ff`, published 2026-10-11, with no package assets. No shared 0.4.0 release is listed. Prior source-built Python rollback packages and the pre-cutover R 0.3.0 candidate remain unpublished drafts. |
 
-The [API inventory](https://github.com/elong0527/yamaa/blob/main/rust/qualification/release-api.json)
-and `rust/tools/check_release_api.py` declare and check symbol dispositions;
-inventory entries marked candidate/internal do not promise independently supported
-private APIs. Host usage and installation are in the
+Removal and version changes landed **before** final evidence-based item-10/item-11
+acceptance. Planning removal in PR #2161 and math-record replacement in PR #2162
+also preceded this consolidated guide. Record the actual chronology; completed
+implementation, closed work packages and approved target policy do not imply
+transition approval. [#2147](https://github.com/elong0527/yamaa/issues/2147) records
+acceptance only after the remaining evidence passes. Publication/tagging/asset
+replacement is a separate operation.
+
+## Approved decisions
+
+[#1973](https://github.com/elong0527/yamaa/issues/1973) records items 1-9 and 12-19
+as decided. The [approval comment](https://github.com/elong0527/yamaa/issues/1973#issuecomment-6112883568)
+and [original decision source](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/maintainer-decisions.md)
+retain provenance. Their current policy is:
+
+- Retain Python `domain`/`check`/`define`, result/error types, version metadata and
+  `read_odm`/`write_odm_parquet`; retain R equivalents including `yamaa_define`.
+  Legacy evaluators, probes, resolved-spec/IO/authoring extensions and
+  `cdiscbuilder` are retired. The style CLI remains private and native-backed.
+- Keep Python `environment` keyword-only, wrong argument types as `TypeError`,
+  R argument failures as `yamaa_argument_error`, and missing specifications as
+  issue rows. Check returns issues, without a public resolved-spec producer.
+- Preserve full signed-i64 values and separate missingness, lossless R
+  `yamaa_int64_vector`/`yamaa_utf8_vector`, preserve-or-error conversions and
+  JSON-text diagnostic context. No JSON callback request/reply protocol remains.
+- Resolve resources from their original declaring file, with approved absolute
+  and parent-relative local paths and no project-root fallback. Preserve snapshots,
+  original failures, callback counts and producer-first publication order.
+- Keep normative diagnostics registry-owned, including the reviewed
+  `unsupported_operation` and `engine_rejected` null-requirement exceptions.
+  Cut breaks remain finite/strictly ascending; signed-i64 predicate overflow,
+  CSV empty-string refusal, greatest/least first-source ties and row-filter
+  behavior follow the normative rules and independent expected truth.
+- Use PortableLibmV1 and pinned libm 0.2.16. EXP/LN/POWER results, downstream
+  predicates, conversions and saved bytes may differ from historical platform
+  math. This promises neither universal correct rounding nor historical bit
+  compatibility. Current independent goldens live in
+  [portable_math.tsv](https://github.com/elong0527/yamaa/blob/main/rust/crates/yamaa-core/tests/fixtures/portable_math.tsv);
+  final qualification still requires all nine assessments and exact comparison.
+  The [original numerical decision](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/1740-math-decision.md)
+  and [witness report](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/qualification/math-decision-v1.json)
+  remain in Git. Current goldens do not replay the retired accuracy-certificate
+  tools or establish universal correctly rounded behavior.
+- Qualify CPython 3.12/3.13/3.14 wheel and independent source builds on Linux
+  x86_64, macOS arm64 and Windows x64 (18 tuples), plus R 4.6.1 source builds on
+  the same hosts (three tuples), each with strict `R CMD check` **Status: OK**.
+  Other runtimes/architectures, free-threaded Python, musl and R binary packages
+  are outside this first release. R distribution starts with a staged GitHub
+  source tarball; CRAN/r-universe are later work.
+- Keep canonical Cargo locking and unchanged source-package copies. Runtime,
+  contract, cache and resource identities use references/canonical forms/bytes;
+  only packaging-tool lockfiles carry their own checksum fields.
+
+These are target decisions, not qualification results. Host behavior and source
+installation commands have one home in the
 [Python](https://github.com/elong0527/yamaa/blob/main/python/README.md) and
 [R](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md) guides.
 
-### Numerical behavior
+## Remaining gates and owners
 
-The approved internal `PortableLibmV1` policy pins `libm` 0.2.16 with default
-features disabled for shared EXP/LN/POWER, Rust 1.90.0, binary64 operations,
-written association, round-to-nearest/ties-to-even and enabled subnormals.
-One locked yamaa release supplies one behavior; public APIs/YAML select no math
-policy or backend. Historical Python platform results can differ in exact bits,
-dependent predicates, conversions, handlers and saved bytes. Those compatibility
-changes were accepted; universal correct rounding or a global accuracy bound
-was not claimed. Changing the implementation/toolchain/target requires renewed
-qualification; observable contract changes require a release decision.
+The historical B01-B19 identifiers remain useful for reconciliation. Closed
+implementation owners are not reopened; the following owners renew final evidence.
 
-Current [portable math goldens](https://github.com/elong0527/yamaa/blob/main/rust/crates/yamaa-core/tests/fixtures/portable_math.tsv)
-are shared by Rust and Python checks. The original
-[numerical decision and witnesses](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/1740-math-decision.md)
-and its [retained evidence](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/qualification/math-decision-v1.json)
-remain in Git. Cleanup #2162 removed that old JSON and certificate readers from
-the active tree; the new golden test does not independently replay those old
-accuracy certificates. Final qualification still needs nine math assessments
-and their exact cross-platform comparison.
+| Gate | Current disposition and acceptance owner |
+| --- | --- |
+| B01 - active conformance | 316 active of 318 authored cases, with two explicit historical exclusions; final 21-tuple admission: [#2145](https://github.com/elong0527/yamaa/issues/2145). |
+| B02 - Python API | Shared facade merged; final signatures/results/arguments/helpers: #2145; export/archive reconciliation: [#2147](https://github.com/elong0527/yamaa/issues/2147). |
+| B03 - R API/scalars | Approved i64/NUL/error/Define surface merged; renew installed ownership/conversions: #2145. |
+| B04 - filesystem/platforms | Declaring-file paths and Windows controls merged; renew final installed source: #2145. |
+| B05 - probe/JSON retirement | Removal merged; reconcile unique retired assertions and retained consumers: #2147. |
+| B06 - route/environment selection | Unified composition merged; final full installed evidence: #2145. |
+| B07 - producers | Orchestration merged; final port/callback/failure/publication order: #2145. |
+| B08 - submission | Shared Define and registry ownership merged; final installed render/Save/default-version controls: #2145. |
+| B09 - language | Language families merged; renew complete active conformance and predicate/intermediate contracts: #2145. |
+| B10 - codecs/publication | Implemented; renew exact CSV/logical Parquet, original failures and held Saves: #2145. |
+| B11 - diagnostics | Shared ownership and null exceptions decided; final registry/installed controls: #2145. |
+| B12 - numerical | PortableLibmV1 decided; final public truth, nine assessments and exact comparison: #2145. |
+| B13 - builds/locks | Canonical locks and 0.4.0 versions merged; renew actual archive membership, byte equality, features/toolchains: #2145/#2147. |
+| B14 - content identity | Policy resolved by the lockfile exception above; build evidence belongs to B13. |
+| B15 - independent audit | Audit implemented; passing post-removal combined-main verdict and original-input offline replay: #2145. |
+| B16 - lifecycle/removal | Installed controls retained; final ownership/interruptions/reentrancy/repeated use/Save: #2145; removal reconciliation: #2147. |
+| B17 - performance/capacity | Harness merged, complete acceptance pending: [#2141](https://github.com/elong0527/yamaa/issues/2141) replay, [#2142](https://github.com/elong0527/yamaa/issues/2142) adopted bounds, [#2144](https://github.com/elong0527/yamaa/issues/2144) collection. |
+| B18 - numeric budgets | Item 10 remains unrecorded: [#2143](https://github.com/elong0527/yamaa/issues/2143) independent auditor and #2144 observations/budgets. |
+| B19 - transition/rollback | Concrete plan and earlier rollback receipts exist; item 11, final re-admission and artifact handoff: #2147. |
 
-### Platforms, capacity and budgets
+For [#1969](https://github.com/elong0527/yamaa/issues/1969), fixtures/language/API
+and installed/numerical gates map to #2145; performance/capacity to #2142-#2144;
+transition/removal/handoff to #2147. This guide is
+[#2146](https://github.com/elong0527/yamaa/issues/2146).
+[#1998](https://github.com/elong0527/yamaa/issues/1998) accepts performance,
+[#1999](https://github.com/elong0527/yamaa/issues/1999) accepts transition,
+[#1994](https://github.com/elong0527/yamaa/issues/1994) accepts the existing cutover
+and #1973 records items 10/11. Close #1969 last.
 
-Supported qualification is 18 CPython tuples: 3.12/3.13/3.14, wheel and independent
-source rebuild, on Linux x86_64, macOS arm64 and Windows x64; plus R 4.6.1 source
-installation and strict `R CMD check` **Status: OK** on the same three platforms.
-R sources declare Rust 1.90.0/Cargo and include the unchanged canonical lock; Windows
-requires Rtools45 and the GNU Rust target. Other runtime versions or Python
-implementations, free-threaded Python, other architectures, musl/Alpine and R
-binary distributions are explicitly excluded from this first release. The
-qualification images are Ubuntu 24.04/glibc, macOS 15/arm64 and Windows x64;
-record actual image/runtime versions rather than promising additional baselines.
-Only packaging-tool checksums in
-`python/uv.lock`, `rust/Cargo.lock` and unchanged staged copies are allowed;
-runtime/contract/cache/resource identity digests remain prohibited.
+Performance acceptance is 27 cases (nine dimension variants at 1k/10k/100k) on
+all 21 tuples: 567 combinations, ten cold and thirty warm samples after three
+retained warmups. Use independent typed/output truth, raw clocks/RSS/phases/callbacks,
+both Saves and the prior Python 0.3.0 baseline on the same machine without
+concurrent compilation. Capacity constants remain unapproved. Logical rows/cells/work, captured bytes,
+graph ownership, encoded reports and publication prefixes have separate bounded
+scopes. Retained admission counters are per owner and do not cap whole-process
+RSS. Refusals and
+unavailable/incomparable metrics require explicit dispositions; do not choose
+thresholds merely to make results pass.
 
-Capacity constants remain unapproved. [#2142](https://github.com/elong0527/yamaa/issues/2142)
-must justify adopted bounds, units, counters and actual refusal behavior using
-installed Python/R approved-size correctness and complete native qualification.
-Current bounds charge logical rows/cells/work, captured bytes, graph ownership,
-encoded reports and publication prefixes separately; they are not RSS guarantees.
-Item 10 remains undecided: [#2144](https://github.com/elong0527/yamaa/issues/2144)
-collects 27 cases across all 21 tuples at 1,000/10,000/100,000 rows, with 10 cold
-samples, 30 warm samples and three retained warmups. Same-machine previous
-release/reference baselines and original observations must support the chosen
-thresholds. [#2143](https://github.com/elong0527/yamaa/issues/2143) independently
-recomputes coverage/distributions and evaluates versioned budgets. A capacity
-refusal is a finding, and an unavailable/incomparable metric needs a reason;
-neither becomes a passing timing or memory sample.
+## Qualification and retained records
 
-### Rollback and transition
+Use [CI guidance](https://github.com/elong0527/yamaa/blob/main/.github/ci.md)
+for sampled PR coverage, the full native route and independent audit/replay.
+Ordinary dispatch supplies the installed matrix and component numeric checks;
+shared Rust, nine math assessments/comparison and audit require main or explicit
+qualification pushes. Main's audit is nonblocking: inspect its verdict and replay
+the original inputs. Branch qualification stays `reviewed-branch`; only genuine
+postmerge evidence is `combined-main`.
 
-Rollback restores compatible prior calling code, complete study locks and exact
-prior artifacts in a fresh environment, checks the installed version before any
-study input, then starts a new whole run. It never changes backend during a
-running build, callback or Save; earlier saved outputs retain their provenance.
+The live inventory is:
 
-[rollback-assets.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/rollback-assets.json)
-records byte-equality receipts and asset identities. Python source revision
-`845a91ff9ba4ab6599efbd79fafe1c4e1dd14255` is the published 0.3.0 source;
-its retained wheels are source-built rollback artifacts. All 18 prior Python
-wheel/source reinstalls passed in
-[run 38460509078](https://github.com/elong0527/yamaa/actions/runs/38460509078),
-attempt 1; [prior-python-rollback-run.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/prior-python-rollback-run.json)
-pins its exact preparation/source/artifact identities. Durable retention was
-verified in [run 38488955022](https://github.com/elong0527/yamaa/actions/runs/38488955022).
-The identical R source candidate at
-`a1a9c2d216075f331ac108aa4d3638573f103cea` passed all three fresh-library
-reinstalls in [run 38435902670](https://github.com/elong0527/yamaa/actions/runs/38435902670).
+| Record | Reader and purpose |
+| --- | --- |
+| [release-api.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/release-api.json) | `check_release_api.py` and its tests compare declared exports/dispositions. `retain_candidate` labels remain inventory classifications, not final acceptance. |
+| [public-conformance.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/public-conformance.json) | Public conformance runner/comparator and native workflow enforce the required case ratchet. |
+| [supplemental.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/supplemental.json) | Installed supplemental inventory and native audit enforce component/public obligations. |
+| [rollback-assets.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/rollback-assets.json) and [prior-python-rollback-run.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/prior-python-rollback-run.json) | Retention/rehearsal tools pin original packages, attempts, asset IDs and earlier receipts. |
+| [native-source-fixtures.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/native-source-fixtures.json) and [producer-cohort/](https://github.com/elong0527/yamaa/tree/main/rust/qualification/producer-cohort) | Staging and cohort comparison preserve independent fixture membership/truth. |
 
-The current durable source assets are Python release 411980272 / asset 637944563
-and R release 411979803 / asset 637944247. Python receipt bundle 638657402 retains
-the original 22 artifact ZIPs; R receipt asset 637944307 retains its earlier
-same-archive replay. Both releases remain drafts; public
-release-download URLs are not usable publication pins. Authorized review uses
-authenticated release-asset downloads and compares actual bytes with the retained
-receipts. The [original exact pin recipes](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/rollback-pins.md)
-remain in Git. Fetch the source bytes using an identity authorized to read drafts:
+No active reader uses `rust/planning/`: its live API inventory moved atomically
+to `rust/qualification/release-api.json` in #2161. Historical
+[Python retirement](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/python-retirement-inventory.json)
+and [validator assertion](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/validator-assertion-disposition.json)
+maps are retrievable at their original revision; #2147 must reconcile every
+unique replacement with final installed evidence. Git retrieval proves map
+availability, not replay of external artifacts. Current normative ownership is
+in [rules/README.md](articles/rules.md).
+[#2154](https://github.com/elong0527/yamaa/issues/2154) owns physical history removal
+and durable replay. Raw `rust/measurements/` remains pending verified retention
+of its original external inputs; a scratch path or expiring Actions URL is not a
+durable archive. Add evidence to PR/issues and this compact index, without new
+per-issue ledgers or rewriting previous observations.
+
+## Rollback and artifact handoff
+
+The retained receipt reports earlier Python 18-tuple rehearsal
+[38460509078](https://github.com/elong0527/yamaa/actions/runs/38460509078) and R
+same-archive three-host rehearsal
+[38435902670](https://github.com/elong0527/yamaa/actions/runs/38435902670).
+They keep their preparation/source identities and do not approve 0.4.0 transition.
+
+| Retained package | Identity and availability |
+| --- | --- |
+| Python 0.3.0 | Published source tag `yamaa-py-0.3.0`, exact source `845a91ff9ba4ab6599efbd79fafe1c4e1dd14255`. Draft release 411980272 retains source asset 637944563, three source-built platform wheels, original lock/dependency pins and raw receipt bundle 638657402. Those wheels were never published prior binaries. |
+| R 0.3.0 | Installed pre-cutover candidate at `a1a9c2d216075f331ac108aa4d3638573f103cea`, draft release 411979803, source asset 637944247 and receipt asset 637944307. No prior R release was published. |
+
+Authenticated review can fetch these unpublished source packages by asset ID:
 
 ```sh
 mkdir retained-prior-packages
 gh api repos/elong0527/yamaa/releases/assets/637944563 \
-  --header 'Accept: application/octet-stream' > retained-prior-packages/yamaa-0.3.0.tar.gz
+  --header 'Accept: application/octet-stream' \
+  > retained-prior-packages/yamaa-0.3.0.tar.gz
 gh api repos/elong0527/yamaa/releases/assets/637944247 \
-  --header 'Accept: application/octet-stream' > retained-prior-packages/yamaa_0.3.0.tar.gz
+  --header 'Accept: application/octet-stream' \
+  > retained-prior-packages/yamaa_0.3.0.tar.gz
 ```
 
-In a fresh compatible prior Python study checkout, preserve the calling code,
-`yamaa==0.3.0` and every other dependency pin, then select the verified archive:
+Use a GitHub identity authorized to read the drafts. Public release-download URLs
+for these drafts are unavailable. Preserve original bytes, API asset references,
+calling code and complete dependency locks. In a fresh compatible prior Python
+study checkout, keep `yamaa==0.3.0` and select the downloaded archive:
 
 ```toml
 [tool.uv.sources]
 yamaa = { path = "retained-prior-packages/yamaa-0.3.0.tar.gz" }
 ```
 
-Regenerate the selected source record with `uv lock`, then `uv sync --locked`;
-retain both the original and restored study locks. The source backend pins
-maturin 1.9.6; use Rust 1.90.0 and the unchanged prior Cargo lock. R restoration
-uses the compatible prior `renv.lock` and a fresh project library; authenticated
-review can install the fetched archive with `R CMD INSTALL --library=<fresh-library>`.
-Verify Python distribution version or R `packageVersion("yamaa")` equals `0.3.0`
-before reads or callbacks. Study-specific complete-lock restoration remains a
-separate check from the earlier package rehearsals.
-Published study-lock restoration, the full producer graph Save baseline and
-current asset accessibility still require acceptance under #2147/#1999.
+Then `uv lock` and `uv sync --locked`; keep original and restored locks. Use
+Rust 1.90.0, pinned maturin 1.9.6 and the prior Cargo lock. For R, use R 4.6.1
+and an empty library with `R CMD INSTALL --library=<fresh-library>` against the
+retained archive; Windows requires Rtools45 and `x86_64-pc-windows-gnu`.
+Study-specific complete renv/uv restoration remains a separate replay check.
+Before reading study data or invoking callbacks, verify the installed version:
 
-Item 11 remains pending. #2147 may record transition acceptance only after
-combined-main language/API/platform/math/reproducibility evidence, adopted
-capacity/budgets, rollback and exact artifact handoff pass. Record the actual
-removal-before-acceptance chronology; never backdate approval. Release tagging,
-package publication and asset replacement are separate operations.
+```python
+from importlib.metadata import version
+assert version("yamaa") == "0.3.0"
+```
 
-## Final gate ownership
+```r
+stopifnot(identical(as.character(packageVersion("yamaa")), "0.3.0"))
+```
 
-Implementation rows below are merged and require final-source renewal. Earlier
-qualified runs retain their own revision/attempt/scope. #2145 owns the genuine
-post-removal combined-main audit; #2147 reconciles final acceptance and closes
-#1969 last.
+Rollback starts a new whole run; earlier saved outputs retain their original
+provenance.
 
-| Gate | Current disposition and final owner |
-| --- | --- |
-| B01: language corpus | 316 active cases and two exclusions declared; final 21-tuple renewal: #2145. |
-| B02: domain/check API | Shared facades merged; complete installed contract renewal: #2145. |
-| B03: host surface/values | i64/NUL and helper/retirement policy decided; final surface/conversion renewal: #2145. |
-| B04: resources | Declaring-file paths, original failures and platform controls merged; final renewal: #2145. |
-| B05: probes/callbacks | Reference/probe/JSON protocols retired; assertion replacements and final contracts: #2145/#2147. |
-| B06: selection | Ordinary/environment/producer selection merged; final priority/admission renewal: #2145. |
-| B07: orchestration | Producer graph and failure/publication order merged; final renewal: #2145. |
-| B08: Define | Shared orchestration and submission ownership merged; final renewal: #2145. |
-| B09: language families | Original language WPs closed; final independent conformance renewal: #2145. |
-| B10: codecs/publication | File/CSV/Parquet/held-Save implementation merged; exact bytes/failures renewal: #2145. |
-| B11: diagnostics | Registry and reviewed null ownership merged; final corpus/guard renewal: #2145. |
-| B12: numerical policy | PortableLibmV1 approved; final math/public contract renewal: #2145. |
-| B13: package reproducibility | Canonical locking/staging merged; actual source membership, archive bytes and toolchains: #2145. |
-| B14: digest policy | Packaging-only exceptions decided and enforced; final build evidence: #2145. |
-| B15: installed audit | Exact final source/run/attempt/artifact independent audit pending: #2145, handoff #2147. |
-| B16: lifetime/failures | Owned results, interruption/reentrancy/repeated calls merged; installed renewal: #2145. |
-| B17: measurement/capacity | Harness merged; admission/replay #2141, adopted bounds #2142, full campaign #2144. |
-| B18: budgets | Item 10 undecided; independent auditor #2143, evidence and decision #2144. |
-| B19: transition/rollback | Prior artifacts retained in drafts; final entry gates/item 11/handoff #2147. |
-
-The parent gates map to B01-B12/B16 (fixtures/language/workflow/API),
-B12-B15 (installed matrix/numerics/builds), B17-B18 (performance/capacity),
-B19 (transition/rollback), B03/B05/B13 (removal) and B15/B19 (exact handoff).
-#2146 owns this narrative; #2147 updates it from final evidence afterward.
-
-## Current records and historical cleanup
-
-[#2154](https://github.com/elong0527/yamaa/issues/2154) must inventory live
-readers before further cleanup. #2161 already moved `release-api.json` and its
-checker/test to `rust/qualification/`, then removed `rust/planning/` and root
-Rust architecture/status documents. Retired Python/validator assertion maps have
-no current path readers; the original
-[Python retirement map](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/python-retirement-inventory.json)
-and [validator assertion map](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/validator-assertion-disposition.json)
-remain retrievable at revision 43bb4437. #2147 must reconcile every unique
-retired assertion replacement with the final installed evidence. Git retrieval
-establishes map availability, not access to external replay artifacts.
-Retirement verification now uses `test_python_package_hygiene.py`, the installed
-supplemental suites and source guards; restoring an old map would not qualify
-those replacements.
-
-| Live record | Current readers |
-| --- | --- |
-| `rust/qualification/release-api.json` | `check_release_api.py`, `test_release_api.py`; moved together in #2161. |
-| `rust/qualification/public-conformance.json` | Native Python/R conformance ratchets, runner migration tool and declared matrix tests. |
-| `rust/qualification/supplemental.json` | Supplemental runner/catalog checks, package staging and exact-source native audit. |
-| `rust/qualification/native-source-fixtures.json` | Source-package fixture staging and package membership/hygiene tests. |
-| `rust/qualification/producer-cohort/` | Staged installed inputs, public/producer comparators and native cohort selection. |
-| Rollback JSON records | R archive preparation, prior Python retention and independent receipt review. |
-| `rules/migration.yaml` | `check_rule_rewrite.py`, `check_requirement_registry.py`, `editorial.py`, generated references and their tests. |
-
-`rust/measurements/` still carries pending performance findings. Delete dated
-raw evidence only after durable original
-source/run/attempt/artifact inputs are retrievable and independently replayable.
-The [CI audit/replay instructions](https://github.com/elong0527/yamaa/blob/main/.github/ci.md)
-define exact-source evidence, including the nonblocking main audit's independent
-verdict. Git history preserves deleted prose; it does not establish access to
-expired Actions artifacts or final acceptance.
+After #2141-#2145 pass, #2147 re-admits rollback, records evidence-backed item-11
+acceptance without backdating, and hands off the exact final source, run/attempt,
+package names/bytes and artifact identities. Renew evidence affected by later
+changes. The 0.4.0 source filenames and install templates identify preparation;
+qualified download URLs and publication identities remain pending.

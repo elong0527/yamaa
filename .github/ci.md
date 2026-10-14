@@ -40,9 +40,9 @@ strict `R CMD check`; a successful installation alone does not establish
 Benchmark Markdown changes trigger documentation checks without rebuilding
 the Python/native runtimes. Top-level Rust Markdown is also excluded by native
 path filters; nested Rust Markdown fixtures still select native coverage, as do
-specifications, input, expected outputs and SDK changes. Docs/hook/workflow-only
-changes need their relevant scoped checks. Native selectors and packaging changes
-need full native qualification. The audit stays nonblocking on main and must pass
+specifications, input, expected outputs and SDK changes. Documentation and its
+site hook/workflow use relevant scoped checks. Native workflows, selectors and
+packaging require full native qualification. The audit stays nonblocking on main and must pass
 on qualification branches; inspect its own verdict even when a main workflow is
 green. Current migration decisions and final gate ownership live in the
 [release guide](../docs/release.md).
