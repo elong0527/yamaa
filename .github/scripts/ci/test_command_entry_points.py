@@ -1,6 +1,7 @@
 """Exercise command boundaries that protect installed context and retained evidence."""
 
 import ast
+import importlib.util
 import json
 import os
 import re
@@ -9,12 +10,39 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
 COMMANDS = ROOT / ".github/scripts/commands"
 
 
 class CommandEntryPoints(unittest.TestCase):
+    def test_shared_rust_command_discovers_both_feature_gated_suites(self):
+        spec = importlib.util.spec_from_file_location(
+            "rust_test_commands", COMMANDS / "rust_tests.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with patch.object(module.subprocess, "run") as run:
+            module.main()
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(len(commands), 4)
+        for command in commands:
+            self.assertEqual(command[0], "cargo")
+            self.assertEqual(command[2:4], ["test", "--locked"])
+        for arguments in (
+            ["-p", "yamaa-engine", "--features", "test-support"],
+            [
+                "-p",
+                "yamaa-adapters",
+                "--features",
+                "arrow-c-data",
+                "--test",
+                "c_data_table",
+            ],
+        ):
+            self.assertIn(arguments, [command[4:] for command in commands])
+
     def command(self, name, *arguments, **kwargs):
         return subprocess.run(
             [sys.executable, str(COMMANDS / name), *map(str, arguments)],

@@ -1,4 +1,4 @@
-"""Replay the locked debug, engine test-support and optimized Rust test suites."""
+"""Replay locked debug, engine/Arrow feature and optimized Rust test suites."""
 
 import subprocess
 from pathlib import Path
@@ -14,6 +14,14 @@ def main():
     for arguments in (
         [],
         ["-p", "yamaa-engine", "--features", "test-support"],
+        [
+            "-p",
+            "yamaa-adapters",
+            "--features",
+            "arrow-c-data",
+            "--test",
+            "c_data_table",
+        ],
         [
             "-p",
             "yamaa-core",
