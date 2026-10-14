@@ -201,8 +201,8 @@
       ],
       "alias_context_json": "{\"dataset\":\"SRC\",\"path\":\"alias.csv\"}",
       "lookup_paths": {
-        "AE": "input/ae.csv",
         "DM": "input/dm.csv",
+        "AE": "input/ae.csv",
         "MEDDRA": "input/meddict.csv"
       }
     },

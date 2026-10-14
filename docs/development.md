@@ -51,6 +51,12 @@ projects, files and tables, plus the `c_data_table` target requiring
 `arrow-c-data`. Factories belong to the adapter crate and use public core APIs.
 Run with `--features arrow-c-data` to include transport ownership controls.
 
+Paired installed Python/R suites read their repeated inputs and expected bytes
+from `rust/tests/host-fixtures/cases.json`. The two readers only decode authored
+data. Keep host-specific conversion, callback, interruption and publication
+assertions in each suite; stage the shared fixtures with the installed controls
+using `make stage-python` or `make stage-r-tests`.
+
 The [Python guide](https://github.com/elong0527/yamaa/blob/main/python/README.md)
 and [R guide](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md)
 describe public usage and installation. The

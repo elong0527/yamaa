@@ -75,5 +75,5 @@ resources, with no checkout fallback.
 The R codec is the already pinned jsonlite 2.0.0 test dependency. The native
 workflow installs it before supplemental R tests; production R does not import
 it. Successful local codec/source checks do not qualify an installed R runtime.
-The final consolidated PR must pass the actual full Python/R platform matrix,
+The reviewed combined source must pass the actual full Python/R platform matrix,
 including installed suites, public conformance and the existing release audit.
