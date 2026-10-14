@@ -181,7 +181,7 @@ fn collect_calls(
         let branches = sequence(d, case)?;
         if branches.len() > 1024 {
             return Err(PrepareError::limit(
-                "function_calls",
+                "case_branches",
                 1024,
                 Some(branches.len()),
                 None,

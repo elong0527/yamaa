@@ -26,7 +26,7 @@ PROMPTED = sorted(p.parent.name for p in build.PROMPTS.glob("*/full.md"))
 CONFIDENT = sorted(set(PROMPTED) - set(build.OPENSAS_EXCLUSIONS))
 
 
-def test_opensas_selection_builds_all_134_native_input_cases(tmp_path):
+def test_opensas_selection_builds_all_135_native_input_cases(tmp_path):
     tasks, skipped = build.build_selection(
         PROMPTED,
         languages=["opensas"],
@@ -35,7 +35,7 @@ def test_opensas_selection_builds_all_134_native_input_cases(tmp_path):
         commit="test",
         strict=False,
     )
-    assert len(tasks) == len(CONFIDENT) == 134
+    assert len(tasks) == len(CONFIDENT) == 135
     assert sorted(t.name for t in tasks) == sorted(
         f"{name}-opensas" for name in CONFIDENT
     )
@@ -64,13 +64,18 @@ def test_explicit_unsupported_opensas_case_fails_instead_of_silently_staging(
 
 
 def test_every_opensas_board_ranks_the_same_confident_set():
-    for tier in build.TIERS:
-        suffix = "opensas" if tier == "full" else f"{tier}-opensas"
-        board = yaml.safe_load(
-            (HARBOR / "leaderboards" / f"sdtm-adam-v4-{suffix}.yaml").read_text()
-        )
+    populations = json.loads(
+        (HARBOR / "leaderboards/task-populations.json").read_text()
+    )
+    for path in sorted((HARBOR / "leaderboards").glob("*-opensas.yaml")):
+        parts = path.stem.split("-")
+        version, tier = parts[2], parts[3] if len(parts) == 5 else "full"
+        board = yaml.safe_load(path.read_text())
+        population = set(populations[version])
+        confident = population - set(build.OPENSAS_EXCLUSIONS)
+        assert confident <= set(CONFIDENT)
         assert sorted(board["tasks"]) == sorted(
-            build.task_name(n, "opensas", tier) for n in CONFIDENT
+            build.task_name(n, "opensas", tier) for n in confident
         )
         assert board["image_reference"] == build.AGENT_IMAGES["opensas"]
         assert board["package"] == build.dataset_name(

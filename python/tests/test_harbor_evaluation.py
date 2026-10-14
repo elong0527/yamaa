@@ -97,7 +97,7 @@ def test_every_sdtm_and_adam_benchmark_has_its_prompts_with_the_evaluation():
     # a real benchmark. The allowed prefixes stay explicit so a future
     # negative-* benchmark with a prompt directory fails loudly instead
     # of slipping through.
-    prompted_prefixes = ("sdtm-", "adam-", "bimo-")
+    prompted_prefixes = ("sdtm-", "adam-", "bimo-", "ars-")
     assert all(name.startswith(prompted_prefixes) for name in PROMPTED)
     assert set(positive) <= set(PROMPTED)
     assert set(PROMPTED) <= {p.name for p in benchmarks.iterdir() if p.is_dir()}
@@ -609,8 +609,15 @@ def _board_name(language: str, tier: str) -> str:
 
 def test_each_language_has_a_board_per_prompt_tier():
     boards = {b["harbor"]["name"]: b for b in leaderboard.load_leaderboards()}
+    populations = json.loads(
+        (HARBOR / "leaderboards/task-populations.json").read_text()
+    )
+    versions = {name.split("-")[2] for name in boards}
+    assert versions == set(populations)
+    assert "v4" in versions
     assert set(boards) == {
-        _board_name(language, tier)
+        _board_name(language, tier).replace("-v4-", f"-{version}-")
+        for version in versions
         for language in build.LANGUAGES
         for tier in build.TIERS
     }
@@ -621,13 +628,21 @@ def test_each_language_has_a_board_per_prompt_tier():
         except build.BuildError:
             continue
         buildable.append(benchmark)
-    for language in LANGUAGES:
-        for tier in build.TIERS:
-            board = boards[_board_name(language, tier)]
-            assert sorted(board["tasks"]) == sorted(
-                build.task_name(b, language, tier) for b in buildable
-            )
-            assert board["harbor"]["rank_by"][0]["accessor"] == "metrics.reward"
+    # A board's task list is immutable. Newly admitted benchmarks can be
+    # evaluated before a successor board is assembled; they do not change
+    # the historical boards' populations or their scores.
+    for version in versions:
+        population = set(populations[version])
+        assert len(population) == len(populations[version])
+        assert population <= set(buildable)
+        for language in LANGUAGES:
+            for tier in build.TIERS:
+                name = _board_name(language, tier).replace("-v4-", f"-{version}-")
+                board = boards[name]
+                assert sorted(board["tasks"]) == sorted(
+                    build.task_name(b, language, tier) for b in population
+                )
+                assert board["harbor"]["rank_by"][0]["accessor"] == "metrics.reward"
 
 
 def _on(run: dict, board: dict) -> dict:
