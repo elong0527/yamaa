@@ -142,7 +142,8 @@ impl PreparedSpecification {
             if let Some(filter) = &self.root_filter {
                 filter.check_findings(findings)?;
             }
-            self.intermediates.check_findings(findings)?;
+            self.intermediates
+                .check_findings(&self.sources, &self.output, findings)?;
             for declaration in &self.declarations {
                 operation(&declaration.operation, &declaration.path, findings)?;
             }
@@ -189,8 +190,16 @@ impl PreparedSpecification {
     }
 
     pub fn check_declaration_diagnostics(&self) -> Vec<Diagnostic> {
-        self.check_declaration_findings()
+        // Output-declaration findings are intrinsically known too, so `check`
+        // reports the same findings `domain` reaches at its output stage.
+        // They follow the declaration findings, matching build order: output
+        // declaration checks come after derivation, key checks and
+        // verification, so a first issue agrees between the two routes.
+        let mut diagnostics = self
+            .check_declaration_findings()
             .map(VerificationDeclarationFinding::diagnostic)
-            .collect()
+            .collect::<Vec<_>>();
+        diagnostics.extend(self.output_findings().iter().map(OutputFinding::diagnostic));
+        diagnostics
     }
 }

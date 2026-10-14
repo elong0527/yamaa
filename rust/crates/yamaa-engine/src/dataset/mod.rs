@@ -1370,6 +1370,15 @@ impl Executor<'_> {
                 .handlers
                 .register(&declaration.handler.spec_path, HandlerKind::Unconvertible);
         }
+        for intermediate in self.plan.intermediates() {
+            if let Some(derived) = &intermediate.derivations {
+                for declaration in derived.plan.conversion_handlers() {
+                    observations
+                        .handlers
+                        .register(&declaration.handler.spec_path, HandlerKind::Unconvertible);
+                }
+            }
+        }
         for assignment in self
             .plan
             .templates()

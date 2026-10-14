@@ -117,7 +117,7 @@ intermediate_class:
         required: false
         description: See REQ-1048.
     - derivations:
-        type: "dict[identifier, derivation]"
+        type: "dict[identifier, intermediate_derivation]"
         required: false
         description: See REQ-1185.
     - verifications:

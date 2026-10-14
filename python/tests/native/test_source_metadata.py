@@ -418,8 +418,36 @@ def test_original_declaration_and_type_truth_needs_no_cells_or_activation(fixtur
     original = yaml.safe_load((directory / "spec.yaml").read_text())
     truth = yaml.safe_load((directory / "expected/error.yaml").read_text())
     prepared = owner(original)
-    # Existing public static Check and original Build checkpoints are unchanged.
-    assert json.loads(prepared.check_issues()) == []
+    # The public static Check reports no issue for these bind-time truths,
+    # except the output-declaration benchmarks: since #2295 Check runs the
+    # output-declaration validation too, so it reports the same finding
+    # the original Build checkpoint reports.
+    check_issues = json.loads(prepared.check_issues())
+    if fixture in {
+        "negative-output-transport",
+        "negative-keys-internal",
+        "negative-order-repeated",
+        "negative-order-unknown-column",
+    }:
+        assert len(check_issues) == 1
+        (found,) = check_issues
+        assert (
+            found["phase"],
+            found["condition"],
+            found["requirement"],
+            found["spec_paths"],
+        ) == (
+            truth["phase"],
+            truth["condition"],
+            truth["requirement"],
+            truth["spec_paths"],
+        )
+        observed_check = json.loads(found["context"])
+        assert {key: observed_check[key] for key in truth["context"]} == truth[
+            "context"
+        ]
+    else:
+        assert check_issues == []
     import csv
 
     metadata = []

@@ -1582,6 +1582,38 @@ class ParquetOriginalOutput(unittest.TestCase):
 
 
 class PublicDomains(unittest.TestCase):
+    def test_public_typed_intermediate_derivations(self):
+        import yamaa
+
+        for case in TRUTH["typed_intermediates"]:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                entry = root / "spec.yaml"
+                entry.write_text(case["spec"], encoding="utf-8")
+                # Static findings must precede access to absent study data.
+                checked = yamaa.check(entry)
+                conditions = checked.issues["condition"].to_list()
+                if case["check_condition"] is None:
+                    self.assertEqual(conditions, [])
+                else:
+                    self.assertIn(case["check_condition"], conditions)
+                for name, content in case["inputs"].items():
+                    (root / name).write_text(content, encoding="utf-8")
+                result = yamaa.domain(entry)
+                conditions = result.issues["condition"].to_list()
+                if case["run_condition"] is None:
+                    self.assertEqual(conditions, [])
+                    self.assertTrue(result.save())
+                    self.assertEqual((root / "result.csv").read_bytes(), case["csv"].encode("utf-8"))
+                else:
+                    self.assertIn(case["run_condition"], conditions)
+                    self.assertIsNone(result.output)
+                observations = result._native.observations()
+                if observations is not None:
+                    counts = json.loads(observations)["handler_counts"]
+                    reached = sum(item["count"] for item in counts if item["handler"] == "unconvertible")
+                    self.assertEqual(reached, case["unconvertible_count"])
+
     def record_public_report(self, result, name, entry):
         destination = os.environ.get("YAMAA_PUBLIC_REPORT_DIR")
         if not destination:

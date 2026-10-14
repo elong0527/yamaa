@@ -417,7 +417,36 @@ surviving records counts one `multiple_matches` handling, and a declared
 
 **REQ-1185.** An intermediate may declare `derivations:`, a map of names to
 derivations written in the same expression language as row-template
-`derivations:`. The derivations evaluate in declaration order: a derivation
+`derivations:`. Each entry is either an untyped expression (including its
+`{value: <expression>}` wrapper) or a typed binding
+`{type: <column_type>, derivation: <expression>, unconvertible: <literal>?}`.
+An untyped entry retains its raw result and cannot declare `unconvertible`;
+the formerly accepted untyped handler wrapper fails schema validation.
+A typed entry converts each result to its declared type under
+[REQ-0009](../values/types.md#req-0009) and
+[REQ-0010](../values/types.md#req-0010), before any later derivation, filter,
+match, ordering or verification reads it. Missing stays missing. A conversion
+failure is fatal without `unconvertible`; a declared literal replacement
+converts to the same type and is counted under
+[REQ-0358](../execution/handlers.md#req-0358) and
+[REQ-0359](../execution/handlers.md#req-0359). The conversion boundary is the
+binding's result; expressions still never convert implicitly
+([REQ-0004](../values/types.md#req-0004)). For example:
+
+```yaml
+derivations:
+  VISITN:
+    type: int
+    derivation: {str_extract: {source: VISIT, pattern: '^WEEK ([0-9]+)$', group: 1}}
+    unconvertible: null
+```
+
+`WEEK 02` thus yields the integer `2` before numeric matching. `check`
+reports incompatible key types under
+[REQ-0323](../values/types.md#req-0323) when the declared source types and
+derivation result types establish the mismatch without reading data.
+
+The derivations evaluate in declaration order: a derivation
 may read the dataset's stored fields plus the derivations declared before
 it. A bare name reads the dataset's stored field or an earlier derived
 name. A qualified name may read the intermediate's dataset, the current
