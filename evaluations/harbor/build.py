@@ -783,6 +783,7 @@ def build_task(
         for path in golden:
             shutil.copyfile(path, directory / path.name)
     shutil.copyfile(HERE / "grade.py", task / "tests" / "grade.py")
+    shutil.copyfile(HERE / "measurements.json", task / "tests" / "measurements.json")
     # The sandbox runs the agent's script as an unprivileged user, restores
     # these original inputs before every rerun, and keeps /tests private.
     shutil.copyfile(HERE / "sandbox.py", task / "tests" / "sandbox.py")
@@ -803,7 +804,7 @@ def build_task(
     (task / "tests" / "Dockerfile").write_text(
         f"FROM {verifier_image}\n"
         "COPY --chmod=755 test.sh /tests/test.sh\n"
-        "COPY grade.py sandbox.py contract.json task.toml /tests/\n"
+        "COPY grade.py sandbox.py measurements.json contract.json task.toml /tests/\n"
         "COPY input/ /tests/input/\n"
         "COPY expected/ /tests/expected/\n"
         "COPY reference/ /tests/reference/\n"

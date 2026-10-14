@@ -77,6 +77,74 @@ def test_reference_derives_renamed_subject_inputs(tmp_path, language):
     assert result["checked"] and result["passed"], result
 
 
+MAP_GROUP = ROOT / "benchmarks" / "adam-advs-map"
+
+
+def _map_challenge(tmp_path: Path, script: str | None = None):
+    """Run the submitted and reference scripts on the AVAL-declared benchmark."""
+    app = _app(tmp_path, MAP_GROUP)
+    contract = build.contract_for(MAP_GROUP, "python")
+    reference = tmp_path / "reference" / contract["script"]
+    reference.parent.mkdir()
+    text = (build.SOLUTIONS / MAP_GROUP.name / contract["script"]).read_text()
+    reference.write_text(text.replace("/app/", f"{app.as_posix()}/"))
+    submitted = app / "output" / contract["script"]
+    submitted.write_text((script or text).replace("/app/", f"{app.as_posix()}/"))
+    return grade.challenge_rerun(
+        contract, MAP_GROUP / "expected", app / "output", reference, _run("python")
+    )
+
+
+def test_reference_derives_declared_measurement_inputs(tmp_path):
+    result = _map_challenge(tmp_path)
+    assert result["checked"] and result["passed"], result
+    assert any("AVAL" in change["columns"] for change in result["value_changes"]), (
+        result
+    )
+
+
+def test_a_value_keyed_lookup_fails_declared_measurement_challenge(tmp_path):
+    # The lookup answers each visit's MAP from the original SYSBP/DIABP value
+    # pair. It reproduces the golden on the original inputs, but the declared
+    # AVAL scaling changes every pair, so its answers miss on changed inputs.
+    _, inputs = grade.read_rows(MAP_GROUP / "input" / "advs.csv")
+    _, golden = grade.read_rows(MAP_GROUP / "expected" / "advs.csv")
+    pairs = {}
+    for row in inputs:
+        pairs.setdefault((row["USUBJID"], row["VISIT"]), {})[row["PARAMCD"]] = row[
+            "AVAL"
+        ]
+    lookup = {}
+    for row in golden:
+        if row["PARAMCD"] == "MAP":
+            pair = pairs[(row["USUBJID"], row["VISIT"])]
+            lookup[(pair["SYSBP"], pair["DIABP"])] = row["AVAL"]
+    script = f"""import csv
+LOOKUP = {lookup!r}
+rows = list(csv.DictReader(open('/app/input/advs.csv')))
+out = [dict(r, DTYPE='') for r in rows]
+pairs = {{}}
+for r in rows:
+    pairs.setdefault((r['USUBJID'], r['VISIT']), {{}})[r['PARAMCD']] = r['AVAL']
+for (subj, visit), d in pairs.items():
+    if 'SYSBP' in d and 'DIABP' in d:
+        out.append({{
+            'STUDYID': rows[0]['STUDYID'], 'USUBJID': subj, 'PARAMCD': 'MAP',
+            'PARAM': 'Mean Arterial Pressure (mmHg)',
+            'AVAL': LOOKUP.get((d['SYSBP'], d['DIABP']), ''),
+            'VISIT': visit, 'DTYPE': 'CALCULATION',
+        }})
+with open('/app/output/advs.csv', 'w', newline='') as h:
+    writer = csv.DictWriter(
+        h, fieldnames=['STUDYID', 'USUBJID', 'PARAMCD', 'PARAM', 'AVAL', 'VISIT', 'DTYPE']
+    )
+    writer.writeheader()
+    writer.writerows(out)
+"""
+    result = _map_challenge(tmp_path, script=script)
+    assert result["checked"] and not result["passed"], result
+
+
 def test_a_subject_keyed_task_requires_the_changed_input_challenge(tmp_path):
     assert build.contract_for(AGE_GROUP, "r")["challenge_required"]
     task = build.build_task(AGE_GROUP, tmp_path, None, "test", "r")
