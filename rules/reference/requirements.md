@@ -1224,3 +1224,8 @@ Active IDs identify requirements independently of file paths.
 | [REQ-1295](../storage/ingestion.md#req-1295) | `storage/ingestion.md` |
 | [REQ-1296](../submission/metadata.md#req-1296) | `submission/metadata.md` |
 | [REQ-1297](../execution/lifecycle.md#req-1297) | `execution/lifecycle.md` |
+| [REQ-1298](../operations/temporal.md#req-1298) | `operations/temporal.md` |
+| [REQ-1299](../operations/temporal.md#req-1299) | `operations/temporal.md` |
+| [REQ-1300](../operations/temporal.md#req-1300) | `operations/temporal.md` |
+| [REQ-1301](../operations/temporal.md#req-1301) | `operations/temporal.md` |
+| [REQ-1302](../operations/temporal.md#req-1302) | `operations/temporal.md` |

@@ -39,6 +39,9 @@ The `original-specifications.typed_intermediates` cases additionally share
 authored conversion inputs, expected CSV bytes, refusal conditions and reached
 handler counts with the Rust adapter execution controls. Python and R exercise
 the same typed bindings through their installed public entry points.
+The `original-specifications.temporal_arithmetic` vectors likewise share
+PK relative times, civil shifts, duration parsing/formatting, static refusals,
+range failures and reached `invalid` handler counts across Rust, Python and R.
 
 ## Public conformance mapping
 

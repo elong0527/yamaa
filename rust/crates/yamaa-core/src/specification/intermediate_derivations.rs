@@ -129,8 +129,21 @@ fn prepare_kind(
                 .map(|id| value_kind(&d.nodes()[id]))
                 .unwrap_or(Some(ColumnType::Str)),
         ),
-        "date_impute" | "to_date" => Kind::Literal(Some(ColumnType::Date)),
-        "datetime_impute" => Kind::Literal(Some(ColumnType::DateTime)),
+        "date_impute" | "to_date" | "date_shift" => Kind::Literal(Some(ColumnType::Date)),
+        "datetime_impute" | "datetime_shift" => Kind::Literal(Some(ColumnType::DateTime)),
+        "datetime_diff" => {
+            Kind::Literal(Some(if text(d, field(d, payload, "unit")?)? == "second" {
+                ColumnType::Int
+            } else {
+                ColumnType::Float
+            }))
+        }
+        "duration_value" => Kind::Literal(if text(d, field(d, payload, "unit")?)? == "second" {
+            None
+        } else {
+            Some(ColumnType::Float)
+        }),
+        "duration_text" => Kind::Literal(Some(ColumnType::Str)),
         "round_half_away_from_zero" => Kind::Literal(Some(ColumnType::Float)),
         "row_value" | "previous_non_missing" | "locf" => {
             Kind::Reference(text(d, field(d, payload, "source")?)?.into())

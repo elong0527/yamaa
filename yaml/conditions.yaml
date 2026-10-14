@@ -67,6 +67,7 @@ conditions:
   invalid_declaration: {phases: [validation]}
   # REQ-1189, REQ-1191 and REQ-1242
   invalid_derive_step: {phases: [validation]}
+  invalid_duration_text: {phases: [impute]}
   invalid_field_type: {phases: [validation]}
   invalid_function_argument: {phases: [derivation, validation]}
   invalid_function_result: {phases: [derivation]}

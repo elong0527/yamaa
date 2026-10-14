@@ -1,6 +1,37 @@
 //! Complete-date declarations share operand binding with other scalar operations.
 use super::*;
-use crate::dataset::{CalendarUnit, DateBounds, Temporal, TemporalKind};
+use crate::dataset::{CalendarUnit, DateBounds, ElapsedUnit, Temporal, TemporalKind};
+
+pub(super) const OPERATIONS: &[&str] = &[
+    "date_diff",
+    "study_day",
+    "to_epoch_day",
+    "date_shift",
+    "datetime_diff",
+    "datetime_shift",
+    "duration_value",
+    "duration_text",
+];
+
+fn elapsed_unit(d: &Document, payload: usize) -> Result<ElapsedUnit, PrepareError> {
+    Ok(match text(d, field(d, payload, "unit")?)? {
+        "second" => ElapsedUnit::Second,
+        "minute" => ElapsedUnit::Minute,
+        "hour" => ElapsedUnit::Hour,
+        "day" => ElapsedUnit::Day,
+        _ => return Err(PrepareError::Internal),
+    })
+}
+
+pub(super) fn fields(operation: &str) -> &'static [&'static str] {
+    match operation {
+        "date_diff" | "datetime_diff" => &["start", "end"],
+        "study_day" => &["date", "reference"],
+        "date_shift" => &["source", "days"],
+        "datetime_shift" => &["source", "amount"],
+        _ => &["source"],
+    }
+}
 
 fn kind(d: &Document, payload: usize, operation: &str) -> Result<TemporalKind, PrepareError> {
     Ok(match operation {
@@ -26,6 +57,19 @@ fn kind(d: &Document, payload: usize, operation: &str) -> Result<TemporalKind, P
         },
         "study_day" => TemporalKind::StudyDay,
         "to_epoch_day" => TemporalKind::EpochDay,
+        "date_shift" => TemporalKind::DateShift,
+        "datetime_diff" => TemporalKind::DateTimeDifference {
+            unit: elapsed_unit(d, payload)?,
+        },
+        "datetime_shift" => TemporalKind::DateTimeShift {
+            unit: elapsed_unit(d, payload)?,
+        },
+        "duration_value" => TemporalKind::DurationValue {
+            unit: elapsed_unit(d, payload)?,
+        },
+        "duration_text" => TemporalKind::DurationText {
+            unit: elapsed_unit(d, payload)?,
+        },
         _ => return Err(PrepareError::Internal),
     })
 }
@@ -82,7 +126,7 @@ pub(super) fn declaration_findings(
         if depth > 64 || prefix.len() > 65_536 {
             return Err(PrepareError::Limit("case_depth"));
         }
-        for op in ["date_diff", "study_day", "to_epoch_day"] {
+        for &op in OPERATIONS {
             if let Some(payload) = d.field(value, op) {
                 let operation = kind(d, payload, op)?;
                 let path = format!("{prefix}.{op}");
@@ -100,26 +144,59 @@ pub(super) fn declaration_findings(
                         });
                     }
                 }
-                for field_name in operation.fields() {
-                    let source = text(d, field(d, payload, field_name)?)?;
+                // Bounds and operand types are independent declaration findings.
+                let witness_kind = match operation {
+                    TemporalKind::Difference { unit, .. } => TemporalKind::Difference {
+                        unit,
+                        bounds: DateBounds::Exclusive,
+                    },
+                    other => other,
+                };
+                let witness = Temporal::new(
+                    witness_kind,
+                    operation
+                        .fields()
+                        .iter()
+                        .map(|name| {
+                            let id = field(d, payload, name)?;
+                            Ok(match &d.nodes()[id] {
+                                N::Text(source) => source.clone(),
+                                _ => String::from(*name),
+                            })
+                        })
+                        .collect::<Result<Vec<_>, PrepareError>>()?,
+                    path.clone(),
+                )
+                .map_err(|_| PrepareError::Limit("temporal_diagnostics"))?;
+                for (index, field_name) in operation.fields().iter().enumerate() {
+                    let id = field(d, payload, field_name)?;
+                    let N::Text(source) = &d.nodes()[id] else {
+                        if matches!(d.nodes()[id], N::Float(_)) && witness.expected(index) == "int"
+                        {
+                            findings.push(PreflightFinding::Scalar(
+                                witness.operand_diagnostic(index, "float"),
+                            ));
+                        }
+                        continue;
+                    };
                     let declared = if source.contains('.') {
                         declared_source_type(d, source)?
                     } else if !rows {
                         output
                             .columns()
                             .iter()
-                            .find(|item| item.name == source)
+                            .find(|item| item.name == *source)
                             .map(|item| item.kind)
                     } else {
                         None
                     };
-                    if let Some(declared) = declared.filter(|&kind| kind != ColumnType::Date) {
+                    if let Some(declared) = declared.filter(|&kind| !witness.accepts(index, kind)) {
                         let actual = match declared {
                             ColumnType::Str => "str",
                             ColumnType::Int => "int",
                             ColumnType::Float => "float",
                             ColumnType::DateTime => "datetime",
-                            ColumnType::Date => unreachable!(),
+                            ColumnType::Date => "date",
                         };
                         let path = format!("{path}.{field_name}");
                         *bytes = bytes
@@ -127,11 +204,9 @@ pub(super) fn declaration_findings(
                             .and_then(|n| n.checked_add(source.len()))
                             .filter(|&n| n <= 16_777_216)
                             .ok_or(PrepareError::Limit("temporal_diagnostics"))?;
-                        findings.push(PreflightFinding::TemporalInput {
-                            path,
-                            source: source.into(),
-                            actual,
-                        });
+                        findings.push(PreflightFinding::Scalar(
+                            witness.operand_diagnostic(index, actual),
+                        ));
                     }
                 }
             }
@@ -196,17 +271,43 @@ pub(super) fn prepare(
     for &(name, _) in mapping(d, payload)? {
         let name = text(d, name)?;
         if !(kind.fields().contains(&name)
-            || op == "date_diff" && ["unit", "bounds"].contains(&name))
+            || op == "date_diff" && ["unit", "bounds"].contains(&name)
+            || [
+                "datetime_diff",
+                "datetime_shift",
+                "duration_value",
+                "duration_text",
+            ]
+            .contains(&op)
+                && name == "unit"
+            || op == "duration_value" && name == "invalid")
         {
             reject(extra, name, format!("{path}.{name}"));
         }
     }
     for field_name in kind.fields() {
-        let source = text(d, field(d, payload, field_name)?)?;
-        sources.push(source.into());
+        let id = field(d, payload, field_name)?;
+        sources.push(match &d.nodes()[id] {
+            N::Text(source) => source.clone(),
+            _ => String::from(*field_name),
+        });
     }
     match Temporal::new(kind, sources, path.into()) {
-        Ok(operation) => Ok(operation),
+        Ok(mut operation) => {
+            for (index, field_name) in kind.fields().iter().enumerate() {
+                let id = field(d, payload, field_name)?;
+                if !matches!(d.nodes()[id], N::Text(_)) {
+                    operation = operation
+                        .with_literal(index, literal(d, id, &format!("{path}.{field_name}"))?);
+                }
+            }
+            if let Some(id) = d.field(payload, "invalid") {
+                operation = operation
+                    .with_invalid(literal(d, id, &format!("{path}.invalid"))?)
+                    .map_err(|_| PrepareError::Limit("temporal_diagnostics"))?;
+            }
+            Ok(operation)
+        }
         Err(crate::dataset::InvalidTemporal::Limit) => {
             Err(PrepareError::Limit("temporal_diagnostics"))
         }
@@ -235,6 +336,14 @@ pub(super) fn bind(
     let mut operands = Vec::new();
     for (index, source) in operation.sources().iter().enumerate() {
         let path = operation.operand_path(index).ok_or(BindError::Internal)?;
+        if let Some(value) = operation.literal(index) {
+            operands.push(Assignment {
+                column,
+                expression: Expression::Literal(value.clone()),
+                path,
+            });
+            continue;
+        }
         if let Some(expression) = rounding::bind_operand(
             source,
             &path,
@@ -247,6 +356,24 @@ pub(super) fn bind(
             edges,
             findings,
         )? {
+            if let Some(actual) =
+                static_types::kind(source, declarations, catalog, secondary, intermediates)?
+            {
+                let (kind, name) = match actual {
+                    crate::value::ValueType::Str => (ColumnType::Str, "str"),
+                    crate::value::ValueType::Int => (ColumnType::Int, "int"),
+                    crate::value::ValueType::Float => (ColumnType::Float, "float"),
+                    crate::value::ValueType::Date => (ColumnType::Date, "date"),
+                    crate::value::ValueType::DateTime => (ColumnType::DateTime, "datetime"),
+                    _ => return Err(BindError::Internal),
+                };
+                if !operation.accepts(index, kind) {
+                    findings.push(BindFinding::Temporal(
+                        operation.operand_diagnostic(index, name),
+                    ));
+                    continue;
+                }
+            }
             operands.push(Assignment {
                 column,
                 expression,
@@ -280,6 +407,14 @@ pub(super) fn bind_row(
     let mut operands = Vec::new();
     for (index, source) in operation.sources().iter().enumerate() {
         let path = operation.operand_path(index).ok_or(BindError::Internal)?;
+        if let Some(value) = operation.literal(index) {
+            operands.push(Assignment {
+                column,
+                expression: Expression::Literal(value.clone()),
+                path,
+            });
+            continue;
+        }
         if let Some(expression) = self_relations::bind_operand(
             source,
             &path,
@@ -308,17 +443,17 @@ pub(super) fn bind_row(
                     .map_err(BindError::Catalog)?
                     .ok_or(BindError::Internal)?
             };
-            if column_type != ColumnType::Date {
+            if !operation.accepts(index, column_type) {
                 let actual = match column_type {
                     ColumnType::Str => "str",
                     ColumnType::Int => "int",
                     ColumnType::Float => "float",
                     ColumnType::DateTime => "datetime",
-                    ColumnType::Date => unreachable!(),
+                    ColumnType::Date => "date",
                 };
-                findings.push(BindFinding::Temporal(Temporal::input_diagnostic(
-                    source, &path, actual,
-                )));
+                findings.push(BindFinding::Temporal(
+                    operation.operand_diagnostic(index, actual),
+                ));
                 continue;
             }
             operands.push(Assignment {

@@ -15,6 +15,7 @@ mod rounding;
 mod scalar_language;
 mod sqrt;
 mod temporal;
+mod temporal_arithmetic;
 mod text_case;
 mod text_extract;
 mod text_pad;

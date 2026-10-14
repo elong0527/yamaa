@@ -791,19 +791,56 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
     } = &assignment.expression
     {
         state.budget.work(1, 1)?;
-        let mut dates = Vec::with_capacity(operands.len());
+        let mut values = Vec::with_capacity(operands.len());
         for (index, operand) in operands.iter().enumerate() {
             let value = evaluate_raw(table, operand, candidate, plan, row, limits, state)?;
-            dates.push(
-                operation
-                    .operand(index, ValueRef::from(&value))
-                    .expect("dataset admission fixes operand index")
-                    .map_err(|diagnostic| Box::new(ExecutionError::ScalarDiagnostic(diagnostic)))?,
-            );
+            operation
+                .validate_operand(index, &value)
+                .expect("admitted operand index")
+                .map_err(|diagnostic| Box::new(ExecutionError::ScalarDiagnostic(diagnostic)))?;
+            if let Value::Str(text) = &value {
+                state.budget.work(1, text.len())?;
+                if matches!(operation.kind(), TemporalKind::DurationValue { .. }) {
+                    // Decimal components use exact integers. Charge a conservative
+                    // quadratic bound before constructing arbitrary-width values.
+                    state
+                        .budget
+                        .work(1, text.len().saturating_mul(text.len()))?;
+                }
+                state.budget.scalar_text(text.len())?;
+            }
+            values.push(value);
         }
-        return Ok(operation
-            .apply(&dates)
-            .expect("dataset admission fixes temporal arity"));
+        let result = operation
+            .apply_values(&values)
+            .expect("admitted temporal arity")
+            .map_err(|diagnostic| {
+                if diagnostic.definition().phase == "validation" {
+                    Box::new(ExecutionError::ScalarDiagnostic(diagnostic))
+                } else {
+                    retained_diagnostic(diagnostic, true, candidate, plan, row, state.budget)
+                }
+            })?;
+        let value = match result {
+            yamaa_core::dataset::TemporalStep::Value(value) => value,
+            yamaa_core::dataset::TemporalStep::Invalid => {
+                state
+                    .handlers
+                    .record(
+                        &alloc::format!("{}.invalid", operation.path()),
+                        HandlerKind::Invalid,
+                    )
+                    .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
+                operation
+                    .invalid_handler()
+                    .expect("declared recovery")
+                    .clone()
+            }
+        };
+        if let Value::Str(text) = &value {
+            state.budget.scalar_text(text.len())?;
+        }
+        return Ok(value);
     }
     if let Expression::Compute(expression) = &assignment.expression {
         return numeric::evaluate(expression, table, candidate, plan, row, assignment, state);

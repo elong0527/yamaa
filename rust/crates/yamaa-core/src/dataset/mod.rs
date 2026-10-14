@@ -61,12 +61,17 @@ pub use imputation::{
     date_policy, DatePolicyError, DayDeclaration, DayRule, Imputation, ImputationKind,
     ImputationStep, PartialDate, TimeRule, MAX_IMPUTATION_POLICY_BYTES,
 };
+mod duration;
 mod temporal;
+mod temporal_arithmetic;
 pub use crate::text_case::StringCase;
 pub use crate::text_extract::StringExtract;
 pub use crate::text_pad::StringPad;
 pub use crate::text_template::StringTemplate;
-pub use temporal::{CalendarUnit, DateBounds, InvalidTemporal, Temporal, TemporalKind};
+pub use temporal::{
+    CalendarUnit, DateBounds, ElapsedUnit, InvalidTemporal, Temporal, TemporalKind,
+};
+pub use temporal_arithmetic::TemporalStep;
 mod selection;
 pub use selection::{FirstAvailable, SelectionRead, SelectionSource};
 mod row_stages;

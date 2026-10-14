@@ -335,6 +335,388 @@
           "run_condition": null,
           "unconvertible_count": 0
         }
+      ],
+      "temporal_arithmetic": [
+        {
+          "name": "pk_relative_times_and_vomiting_window",
+          "spec": "schema_version: '1.0'\ndomain: ADPC\nbase: PC\nkeys:\n- USUBJID\n- PCSEQ\ninput:\n  PC:\n    path: pc.csv\n    types:\n      PCSEQ: int\n      PCDTC: datetime\n  EX:\n    path: ex.csv\n    types:\n      EXSTDTC: datetime\noutput:\n  path: result.csv\n  columns:\n  - USUBJID\n  - PCSEQ\n  - AFRLT\n  - SECONDS\n  - PLAN\n  - CANON\n  - INWIN\n  decimals: 2\nintermediates:\n- id: FIRSTDOSE\n  dataset: EX\n  order_by:\n  - EX.EXSTDTC\n  keep: first\ncolumns:\n- name: USUBJID\n  type: str\n  label: Subject\n  derivation: PC.USUBJID\n- name: PCSEQ\n  type: int\n  label: Sequence\n  derivation: PC.PCSEQ\n- name: ADTM\n  type: datetime\n  label: Sample\n  derivation: PC.PCDTC\n- name: FANLDTM\n  type: datetime\n  label: First dose\n  derivation: FIRSTDOSE.EXSTDTC\n- name: PLTS\n  type: int\n  label: Planned seconds\n  derivation:\n    duration_value:\n      source: PC.PCELTM\n      unit: second\n- name: WINDOW\n  type: datetime\n  label: Window end\n  derivation:\n    datetime_shift:\n      source: FANLDTM\n      amount: 4\n      unit: hour\n- name: AFRLT\n  type: float\n  label: Relative hours\n  derivation:\n    datetime_diff:\n      start: FANLDTM\n      end: ADTM\n      unit: hour\n- name: SECONDS\n  type: int\n  label: Relative seconds\n  derivation:\n    datetime_diff:\n      start: FANLDTM\n      end: ADTM\n      unit: second\n- name: PLAN\n  type: datetime\n  label: Planned sample\n  derivation:\n    datetime_shift:\n      source: FANLDTM\n      amount: PLTS\n      unit: second\n- name: CANON\n  type: str\n  label: Planned elapsed text\n  derivation:\n    duration_text:\n      source: PLTS\n      unit: second\n- name: INWIN\n  type: str\n  label: Within four hours\n  derivation:\n    flag:\n      condition: ADTM >= FANLDTM and ADTM <= WINDOW\n      false_value: N\n      missing: null\n",
+          "inputs": {
+            "pc.csv": "USUBJID,PCSEQ,PCDTC,PCELTM\nS01,1,2030-01-01T07:45:00,-PT15M\nS01,2,2030-01-01T10:00:00,PT2H\nS01,3,2030-01-02T09:30:00,P1DT1H30M\n",
+            "ex.csv": "USUBJID,EXSTDTC\nS01,2030-01-01T08:00:00\nS01,2030-01-02T08:00:00\n"
+          },
+          "csv": "USUBJID,PCSEQ,AFRLT,SECONDS,PLAN,CANON,INWIN\nS01,1,-0.25,-900,2030-01-01T07:45:00,-PT15M,N\nS01,2,2.00,7200,2030-01-01T10:00:00,PT2H,Y\nS01,3,25.50,91800,2030-01-02T09:30:00,P1DT1H30M,N\n",
+          "check_issue": null,
+          "run_issue": null,
+          "invalid_count": 0
+        },
+        {
+          "name": "calendar_boundaries_and_missing_inputs",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: date\n      DT: datetime\n      DAYS: int\n      AMOUNT: float\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - DATEOUT\n  - DTOUT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: DATEOUT\n  type: date\n  label: DATEOUT\n  derivation:\n    date_shift:\n      source: RAW.DATE\n      days: RAW.DAYS\n- name: DTOUT\n  type: datetime\n  label: DTOUT\n  derivation:\n    datetime_shift:\n      source: RAW.DT\n      amount: RAW.AMOUNT\n      unit: minute\n",
+          "inputs": {
+            "input.csv": "ID,DATE,DT,DAYS,AMOUNT\n1,2024-02-28,2024-02-28T23:59:59,1,0.025\n2,2024-12-31,2024-12-31T23:59:58,1,0.025\n3,2025-01-01,2025-01-01T00:00:00,-1,-0.025\n4,9999-12-30,9999-12-31T00:00:01,1,0.025\n5,,,1,1\n6,2030-01-01,2030-01-01T00:00:00,,\n"
+          },
+          "csv": "ID,DATEOUT,DTOUT\n1,2024-02-29,2024-02-29T00:00:00\n2,2025-01-01,2025-01-01T00:00:00\n3,2024-12-31,2024-12-31T23:59:58\n4,9999-12-31,9999-12-31T00:00:02\n5,,\n6,,\n",
+          "check_issue": null,
+          "run_issue": null,
+          "invalid_count": 0
+        },
+        {
+          "name": "fixed_length_duration_forms_and_invalid_handler",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECONDS\n  - HOURS\n  - CANON\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: SECONDS\n  type: float\n  label: SECONDS\n  derivation:\n    duration_value:\n      source: RAW.TEXT\n      unit: second\n      invalid: null\n- name: HOURS\n  type: float\n  label: HOURS\n  derivation:\n    duration_value:\n      source: RAW.TEXT\n      unit: hour\n      invalid: null\n- name: CANON\n  type: str\n  label: CANON\n  derivation:\n    duration_text:\n      source: SECONDS\n      unit: second\n",
+          "inputs": {
+            "input.csv": "ID,TEXT\n1,-PT15M\n2,P1DT2H3M\n3,P2W\n4,PT0.5H\n5,PT0.1S\n6,-P7D\n7,PT0S\n8,\n9,P1M\n10,P1Y\n11,garbled\n12,\"PT0,5H\"\n"
+          },
+          "csv": "ID,SECONDS,HOURS,CANON\n1,-900.00,-0.25,-PT15M\n2,93780.00,26.05,P1DT2H3M\n3,1209600.00,336.00,P14D\n4,1800.00,0.50,PT30M\n5,0.10,0.00,PT0.1S\n6,-604800.00,-168.00,-P7D\n7,0.00,0.00,PT0S\n8,,,\n9,,,\n10,,,\n11,,,\n12,1800.00,0.50,PT30M\n",
+          "check_issue": null,
+          "run_issue": null,
+          "invalid_count": 6
+        },
+        {
+          "name": "duration_integer_boundaries_roundtrip",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      SECONDS: int\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - CANON\n  - ROUNDTRIP\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: CANON\n  type: str\n  label: CANON\n  derivation:\n    duration_text:\n      source: RAW.SECONDS\n      unit: second\n- name: ROUNDTRIP\n  type: int\n  label: ROUNDTRIP\n  derivation:\n    duration_value:\n      source: CANON\n      unit: second\n",
+          "inputs": {
+            "input.csv": "ID,SECONDS\n1,9223372036854775807\n2,-9223372036854775808\n3,9007199254740993\n"
+          },
+          "csv": "ID,CANON,ROUNDTRIP\n1,P106751991167300DT15H30M7S,9223372036854775807\n2,-P106751991167300DT15H30M8S,-9223372036854775808\n3,P104249991374DT7H36M33S,9007199254740993\n",
+          "check_issue": null,
+          "run_issue": null,
+          "invalid_count": 0
+        },
+        {
+          "name": "date_literal_days_and_phase_dates",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - PHASEEND\n  - FOLLOWUP\n  - PRIOR\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: PHASEEND\n  type: date\n  label: PHASEEND\n  derivation:\n    date_shift:\n      source: RAW.DATE\n      days: 28\n- name: FOLLOWUP\n  type: date\n  label: FOLLOWUP\n  derivation:\n    date_shift:\n      source: RAW.DATE\n      days: 29\n- name: PRIOR\n  type: date\n  label: PRIOR\n  derivation:\n    date_shift:\n      source: RAW.DATE\n      days: -1\n",
+          "inputs": {
+            "input.csv": "ID,DATE\n1,2030-01-31\n"
+          },
+          "csv": "ID,PHASEEND,FOLLOWUP,PRIOR\n1,2030-02-28,2030-03-01,2030-01-30\n",
+          "check_issue": null,
+          "run_issue": null,
+          "invalid_count": 0
+        },
+        {
+          "name": "row_and_intermediate_bindings",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DT: datetime\n      OFFSET: int\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SHIFTED\n  - HOURS\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: SHIFTED\n  type: datetime\n  label: SHIFTED\n  derivation:\n    datetime_shift:\n      source: SHIFT.SHIFTDT\n      amount: RAW.OFFSET\n      unit: hour\n- name: HOURS\n  type: float\n  label: HOURS\n  derivation:\n    datetime_diff:\n      start: RAW.DT\n      end: SHIFTED\n      unit: hour\nintermediates:\n- id: SHIFT\n  dataset: RAW\n  derivations:\n    SHIFTDT:\n      type: datetime\n      derivation:\n        datetime_shift:\n          source: DT\n          amount: 12\n          unit: hour\nrows:\n- id: doses\n  dataset: RAW\n  derivations: {}\n",
+          "inputs": {
+            "input.csv": "ID,DT,OFFSET\n1,2030-01-01T08:00:00,0\n2,2030-01-01T08:00:00,12\n3,2030-01-01T08:00:00,24\n"
+          },
+          "csv": "ID,SHIFTED,HOURS\n1,2030-01-01T20:00:00,12.00\n2,2030-01-02T08:00:00,24.00\n3,2030-01-02T20:00:00,36.00\n",
+          "check_issue": null,
+          "run_issue": null,
+          "invalid_count": 0
+        },
+        {
+          "name": "aggregate_derivation",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      START: datetime\n      END: datetime\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - HOURS\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: HOURS\n  type: float\n  label: HOURS\n  derivation:\n    aggregate:\n      key:\n      - ID\n      derive:\n      - name: H\n        type: float\n        derivation:\n          datetime_diff:\n            start: RAW.START\n            end: RAW.END\n            unit: hour\n      expr: ONLY(H)\n",
+          "inputs": {
+            "input.csv": "ID,START,END\n1,2030-01-01T08:00:00,2030-01-01T10:00:00\n"
+          },
+          "csv": "ID,HOURS\n1,2.00\n",
+          "check_issue": null,
+          "run_issue": null,
+          "invalid_count": 0
+        },
+        {
+          "name": "date_shift_datetime_source",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: datetime\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: date\n  label: RESULT\n  derivation:\n    date_shift:\n      source: RAW.DATE\n      days: 1\n",
+          "inputs": {
+            "input.csv": "ID,DATE,DAYS,START,END,TEXT,SECONDS\n"
+          },
+          "csv": null,
+          "check_issue": {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-1298",
+            "spec_path": "columns.RESULT.derivation.date_shift.source"
+          },
+          "run_issue": {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-1298",
+            "spec_path": "columns.RESULT.derivation.date_shift.source"
+          },
+          "invalid_count": 0
+        },
+        {
+          "name": "date_shift_float_days",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: date\n      DAYS: float\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: date\n  label: RESULT\n  derivation:\n    date_shift:\n      source: RAW.DATE\n      days: RAW.DAYS\n",
+          "inputs": {
+            "input.csv": "ID,DATE,DAYS,START,END,TEXT,SECONDS\n"
+          },
+          "csv": null,
+          "check_issue": {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-1298",
+            "spec_path": "columns.RESULT.derivation.date_shift.days"
+          },
+          "run_issue": {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-1298",
+            "spec_path": "columns.RESULT.derivation.date_shift.days"
+          },
+          "invalid_count": 0
+        },
+        {
+          "name": "datetime_diff_date_source",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      START: date\n      END: datetime\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: float\n  label: RESULT\n  derivation:\n    datetime_diff:\n      start: RAW.START\n      end: RAW.END\n      unit: hour\n",
+          "inputs": {
+            "input.csv": "ID,DATE,DAYS,START,END,TEXT,SECONDS\n"
+          },
+          "csv": null,
+          "check_issue": {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-1299",
+            "spec_path": "columns.RESULT.derivation.datetime_diff.start"
+          },
+          "run_issue": {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-1299",
+            "spec_path": "columns.RESULT.derivation.datetime_diff.start"
+          },
+          "invalid_count": 0
+        },
+        {
+          "name": "datetime_shift_date_source",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: datetime\n  label: RESULT\n  derivation:\n    datetime_shift:\n      source: RAW.DATE\n      amount: 1\n      unit: hour\n",
+          "inputs": {
+            "input.csv": "ID,DATE,DAYS,START,END,TEXT,SECONDS\n"
+          },
+          "csv": null,
+          "check_issue": {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-1300",
+            "spec_path": "columns.RESULT.derivation.datetime_shift.source"
+          },
+          "run_issue": {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-1300",
+            "spec_path": "columns.RESULT.derivation.datetime_shift.source"
+          },
+          "invalid_count": 0
+        },
+        {
+          "name": "datetime_shift_text_amount",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: datetime\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: datetime\n  label: RESULT\n  derivation:\n    datetime_shift:\n      source: RAW.DATE\n      amount: RAW.TEXT\n      unit: hour\n",
+          "inputs": {
+            "input.csv": "ID,DATE,DAYS,START,END,TEXT,SECONDS\n"
+          },
+          "csv": null,
+          "check_issue": {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-1300",
+            "spec_path": "columns.RESULT.derivation.datetime_shift.amount"
+          },
+          "run_issue": {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-1300",
+            "spec_path": "columns.RESULT.derivation.datetime_shift.amount"
+          },
+          "invalid_count": 0
+        },
+        {
+          "name": "datetime_shift_fractional_seconds",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: datetime\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: datetime\n  label: RESULT\n  derivation:\n    datetime_shift:\n      source: RAW.DATE\n      amount: 1.5\n      unit: second\n",
+          "inputs": {
+            "input.csv": "ID,DATE,DAYS,START,END,TEXT,SECONDS\n"
+          },
+          "csv": null,
+          "check_issue": {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-1300",
+            "spec_path": "columns.RESULT.derivation.datetime_shift.amount"
+          },
+          "run_issue": {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-1300",
+            "spec_path": "columns.RESULT.derivation.datetime_shift.amount"
+          },
+          "invalid_count": 0
+        },
+        {
+          "name": "duration_value_numeric_source",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      TEXT: int\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: int\n  label: RESULT\n  derivation:\n    duration_value:\n      source: RAW.TEXT\n      unit: second\n",
+          "inputs": {
+            "input.csv": "ID,DATE,DAYS,START,END,TEXT,SECONDS\n"
+          },
+          "csv": null,
+          "check_issue": {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-1301",
+            "spec_path": "columns.RESULT.derivation.duration_value.source"
+          },
+          "run_issue": {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-1301",
+            "spec_path": "columns.RESULT.derivation.duration_value.source"
+          },
+          "invalid_count": 0
+        },
+        {
+          "name": "duration_text_temporal_source",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      SECONDS: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: str\n  label: RESULT\n  derivation:\n    duration_text:\n      source: RAW.SECONDS\n      unit: second\n",
+          "inputs": {
+            "input.csv": "ID,DATE,DAYS,START,END,TEXT,SECONDS\n"
+          },
+          "csv": null,
+          "check_issue": {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-1302",
+            "spec_path": "columns.RESULT.derivation.duration_text.source"
+          },
+          "run_issue": {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-1302",
+            "spec_path": "columns.RESULT.derivation.duration_text.source"
+          },
+          "invalid_count": 0
+        },
+        {
+          "name": "date_shift_upper_overflow",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: date\n  label: RESULT\n  derivation:\n    date_shift:\n      source: RAW.DATE\n      days: 1\n",
+          "inputs": {
+            "input.csv": "ID,DATE\n1,9999-12-31\n"
+          },
+          "csv": null,
+          "check_issue": null,
+          "run_issue": {
+            "phase": "convert",
+            "condition": "conversion_failed",
+            "requirement": "REQ-1298",
+            "spec_path": "columns.RESULT.derivation.date_shift"
+          },
+          "invalid_count": 0
+        },
+        {
+          "name": "date_shift_lower_overflow",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: date\n  label: RESULT\n  derivation:\n    date_shift:\n      source: RAW.DATE\n      days: -1\n",
+          "inputs": {
+            "input.csv": "ID,DATE\n1,0001-01-01\n"
+          },
+          "csv": null,
+          "check_issue": null,
+          "run_issue": {
+            "phase": "convert",
+            "condition": "conversion_failed",
+            "requirement": "REQ-1298",
+            "spec_path": "columns.RESULT.derivation.date_shift"
+          },
+          "invalid_count": 0
+        },
+        {
+          "name": "datetime_shift_upper_overflow",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: datetime\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: datetime\n  label: RESULT\n  derivation:\n    datetime_shift:\n      source: RAW.DATE\n      amount: 1\n      unit: second\n",
+          "inputs": {
+            "input.csv": "ID,DATE\n1,9999-12-31T23:59:59\n"
+          },
+          "csv": null,
+          "check_issue": null,
+          "run_issue": {
+            "phase": "convert",
+            "condition": "conversion_failed",
+            "requirement": "REQ-1300",
+            "spec_path": "columns.RESULT.derivation.datetime_shift"
+          },
+          "invalid_count": 0
+        },
+        {
+          "name": "datetime_shift_lower_overflow",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: datetime\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: datetime\n  label: RESULT\n  derivation:\n    datetime_shift:\n      source: RAW.DATE\n      amount: -1\n      unit: second\n",
+          "inputs": {
+            "input.csv": "ID,DATE\n1,0001-01-01T00:00:00\n"
+          },
+          "csv": null,
+          "check_issue": null,
+          "run_issue": {
+            "phase": "convert",
+            "condition": "conversion_failed",
+            "requirement": "REQ-1300",
+            "spec_path": "columns.RESULT.derivation.datetime_shift"
+          },
+          "invalid_count": 0
+        },
+        {
+          "name": "duration_text_overflow",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      SECONDS: float\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: str\n  label: RESULT\n  derivation:\n    duration_text:\n      source: RAW.SECONDS\n      unit: day\n",
+          "inputs": {
+            "input.csv": "ID,SECONDS\n1,1.7976931348623157e308\n"
+          },
+          "csv": null,
+          "check_issue": null,
+          "run_issue": {
+            "phase": "convert",
+            "condition": "conversion_failed",
+            "requirement": "REQ-1302",
+            "spec_path": "columns.RESULT.derivation.duration_text"
+          },
+          "invalid_count": 0
+        },
+        {
+          "name": "duration_invalid_without_handler",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: float\n  label: RESULT\n  derivation:\n    duration_value:\n      source: RAW.TEXT\n      unit: hour\n",
+          "inputs": {
+            "input.csv": "ID,TEXT\n1,P1M\n"
+          },
+          "csv": null,
+          "check_issue": null,
+          "run_issue": {
+            "phase": "impute",
+            "condition": "invalid_duration_text",
+            "requirement": "REQ-1301",
+            "spec_path": "columns.RESULT.derivation.duration_value"
+          },
+          "invalid_count": 0
+        },
+        {
+          "name": "duration_literal_handler_and_missing",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: float\n  label: RESULT\n  derivation:\n    duration_value:\n      source: RAW.TEXT\n      unit: hour\n      invalid: 17\n",
+          "inputs": {
+            "input.csv": "ID,TEXT\n1,P1M\n2,\n3,PT2H\n"
+          },
+          "csv": "ID,RESULT\n1,17.00\n2,\n3,2.00\n",
+          "check_issue": null,
+          "run_issue": null,
+          "invalid_count": 1
+        },
+        {
+          "name": "numeric_literal_duration_text",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: str\n  label: RESULT\n  derivation:\n    duration_text:\n      source: 2.5\n      unit: hour\n",
+          "inputs": {
+            "input.csv": "ID\n1\n"
+          },
+          "csv": "ID,RESULT\n1,PT2H30M\n",
+          "check_issue": null,
+          "run_issue": null,
+          "invalid_count": 0
+        },
+        {
+          "name": "date_shift_overflow_is_not_output_conversion",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: date\n  label: RESULT\n  derivation:\n    value:\n      date_shift:\n        source: RAW.DATE\n        days: 1\n    unconvertible: null\n",
+          "inputs": {
+            "input.csv": "ID,DATE\n1,9999-12-31\n"
+          },
+          "csv": null,
+          "check_issue": null,
+          "run_issue": {
+            "phase": "convert",
+            "condition": "conversion_failed",
+            "requirement": "REQ-1298",
+            "spec_path": "columns.RESULT.derivation.date_shift"
+          },
+          "invalid_count": 0
+        }
       ]
     },
     "file-resources": {
