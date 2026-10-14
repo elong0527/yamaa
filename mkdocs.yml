@@ -72,6 +72,13 @@ markdown_extensions:
 plugins:
   - search
 
+hooks:
+  - .github/scripts/docs/canonical_pages.py
+
+watch:
+  - README.md
+  - rules/README.md
+
 nav:
   - Home: index.md
   - Start:
