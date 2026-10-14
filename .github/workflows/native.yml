@@ -685,7 +685,7 @@ jobs:
       - name: Independently replay the original inputs without network access
         if: ${{ !cancelled() }}
         run: |
-          python rust/tools/audit_native_run.py \
+          sudo unshare --net -- "$(command -v python)" rust/tools/audit_native_run.py \
             --input "${RUNNER_TEMP}/native-run-audit/input" \
             --output "${RUNNER_TEMP}/native-run-audit/replay" --check
           cmp "${RUNNER_TEMP}/native-run-audit/qualification.json" \

@@ -12,6 +12,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import pr_changes
+
 ROOT = Path(__file__).resolve().parents[3]
 COMMANDS = ROOT / ".github/scripts/commands"
 
@@ -163,6 +165,10 @@ class CommandEntryPoints(unittest.TestCase):
         self.assertNotRegex(native, r"(?m)^  pull_request:")
         smoke = (ROOT / ".github/workflows/pr.yml").read_text()
         self.assertRegex(smoke, r"(?m)^  pull_request:")
+        for path in ("Makefile", ".github/scripts/commands/rust_tests.py"):
+            self.assertEqual(
+                pr_changes.coverage([path]), {"rust": True, "python": True}
+            )
         deploy = (ROOT / ".github/workflows/deploy-docs.yml").read_text()
         self.assertIn("- '.github/scripts/commands/docs.py'", deploy)
 
