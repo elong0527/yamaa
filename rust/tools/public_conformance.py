@@ -958,7 +958,17 @@ def compare(fixtures, observed, output, ratchet=None):
     write_json(output, inventory)
     print(
         json.dumps(
-            {"runtime": runtime, **counts, "ratchet": inventory["ratchet"]}, indent=2
+            {
+                "runtime": runtime,
+                **counts,
+                "ratchet": inventory["ratchet"],
+                "failures": [
+                    {"example": r["example"], "verdict": r["verdict"], "findings": r["findings"]}
+                    for r in results
+                    if r["verdict"] not in ("pass", "excluded")
+                ],
+            },
+            indent=2,
         )
     )
     return status
