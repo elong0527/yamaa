@@ -6,7 +6,8 @@ use yamaa_core::{
         Document, DocumentLimits, DocumentNode as N, SpecificationDocument, ValidationBudget,
     },
     specification::{
-        BindError, BindFinding, CompilationLimits, PrepareError, PreparedSpecification,
+        BindError, BindFinding, CompilationLimits, PreflightFinding, PrepareError,
+        PreparedSpecification,
     },
     value::{ColumnType, Value},
 };
@@ -651,15 +652,19 @@ fn scalar_column_leaves_use_the_common_compiled_literal_expression() {
 }
 
 #[test]
-fn unrepresented_literal_integers_remain_unsupported_before_binding() {
-    let Err(PrepareError::Unsupported(features)) =
+fn out_of_range_literal_integers_fail_validation_before_binding() {
+    let Err(PrepareError::Invalid(findings)) =
         PreparedSpecification::prepare(&literal_document(N::Integer("9223372036854775808".into())))
     else {
         panic!("wide integer must not narrow")
     };
-    assert_eq!(features.len(), 1);
-    assert_eq!(features[0].operation, "wide_integer_literal");
-    assert_eq!(features[0].path, "columns.VALUE.derivation.literal");
+    assert_eq!(
+        findings,
+        [PreflightFinding::IntegerLiteralOverflow {
+            path: "columns.VALUE.derivation.literal".into(),
+            value: "9223372036854775808".into(),
+        }]
+    );
 }
 
 #[test]
@@ -711,19 +716,23 @@ fn column_recovery_compiles_present_null_and_text_handlers_without_dependencies(
 }
 
 #[test]
-fn wide_recovery_literal_remains_unsupported_before_source_binding() {
+fn wide_recovery_literal_fails_validation_before_source_binding() {
     let document = operation_document_with_handler(
         "literal",
         Tree::Scalar(N::Boolean(true)),
         "input.csv",
         Some(N::Integer("9223372036854775808".into())),
     );
-    let Err(PrepareError::Unsupported(features)) = PreparedSpecification::prepare(&document) else {
+    let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare(&document) else {
         panic!("wide handler must not narrow")
     };
-    assert_eq!(features.len(), 1);
-    assert_eq!(features[0].operation, "wide_integer_literal");
-    assert_eq!(features[0].path, "columns.VALUE.derivation.unconvertible");
+    assert_eq!(
+        findings,
+        [PreflightFinding::IntegerLiteralOverflow {
+            path: "columns.VALUE.derivation.unconvertible".into(),
+            value: "9223372036854775808".into(),
+        }]
+    );
 }
 
 fn recovery_rows(value: N, count: usize) -> Tree<'static> {
@@ -788,7 +797,7 @@ fn row_recovery_binds_only_effective_handlers_in_row_order_and_shares_defaults()
 }
 
 #[test]
-fn wide_row_recovery_is_unsupported_at_its_authored_path_before_binding() {
+fn wide_row_recovery_fails_validation_at_its_authored_path_before_binding() {
     let document = operation_document_with_rows(
         "literal",
         Tree::Scalar(N::Boolean(true)),
@@ -796,12 +805,16 @@ fn wide_row_recovery_is_unsupported_at_its_authored_path_before_binding() {
         None,
         Some(recovery_rows(N::Integer("9223372036854775808".into()), 1)),
     );
-    let Err(PrepareError::Unsupported(features)) = PreparedSpecification::prepare(&document) else {
+    let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare(&document) else {
         panic!("wide row handler must not narrow")
     };
-    assert_eq!(features.len(), 1);
-    assert_eq!(features[0].operation, "wide_integer_literal");
-    assert_eq!(features[0].path, "rows[0].derivations.VALUE.unconvertible");
+    assert_eq!(
+        findings,
+        [PreflightFinding::IntegerLiteralOverflow {
+            path: "rows[0].derivations.VALUE.unconvertible".into(),
+            value: "9223372036854775808".into(),
+        }]
+    );
 }
 
 #[test]

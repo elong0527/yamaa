@@ -111,6 +111,10 @@ impl Default for CompilationLimits {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum PreflightFinding {
+    IntegerLiteralOverflow {
+        path: String,
+        value: String,
+    },
     Odm(crate::diagnostic::Diagnostic),
     Scalar(crate::diagnostic::Diagnostic),
     TextExtract(crate::diagnostic::Diagnostic),
@@ -439,9 +443,9 @@ fn literal(d: &Document, id: usize, path: &str) -> Result<crate::value::Value, P
         N::Boolean(value) => Value::Bool(*value),
         N::Float(value) => Value::float(*value),
         N::Integer(value) => Value::Int(value.parse().map_err(|_| {
-            PrepareError::Unsupported(vec![UnsupportedFeature {
-                operation: "wide_integer_literal".into(),
+            PrepareError::Invalid(vec![PreflightFinding::IntegerLiteralOverflow {
                 path: path.into(),
+                value: value.clone(),
             }])
         })?),
         _ => {

@@ -28,6 +28,10 @@ impl PreflightFinding {
     pub fn visit_diagnostic_text(&self, mut visit: impl FnMut(&str)) {
         use super::FunctionCause;
         match self {
+            Self::IntegerLiteralOverflow { path, value } => {
+                visit(path);
+                visit(value);
+            }
             Self::Log(finding) => finding.visit_text(visit),
             Self::Odm(diagnostic)
             | Self::Imputation(diagnostic)
@@ -152,6 +156,15 @@ impl PreflightFinding {
     /// perform validation again, consult a source, or choose a host representation.
     pub fn diagnostic(&self) -> Diagnostic {
         let (code, paths, context): (C, Vec<String>, Context) = match self {
+            Self::IntegerLiteralOverflow { path, value } => (
+                C::LiteralIntegerOverflow,
+                vec![path.clone()],
+                context([
+                    ("actual", V::Integer(value.clone())),
+                    ("minimum", V::Scalar(Value::Int(i64::MIN))),
+                    ("maximum", V::Scalar(Value::Int(i64::MAX))),
+                ]),
+            ),
             Self::Log(finding) => return finding.diagnostic(),
             Self::Odm(diagnostic)
             | Self::Imputation(diagnostic)

@@ -56,7 +56,7 @@ conditions:
   incompatible_input_type: {phases: [validation]}
   incomplete_output_row: {phases: [derivation]}
   inheritance_cycle: {phases: [validation]}
-  integer_overflow: {phases: [derivation, parse]}
+  integer_overflow: {phases: [derivation, parse, validation]}
   internal_column_in_keys: {phases: [validation]}
   invalid_aggregate_context: {phases: [validation]}
   invalid_aggregate_expression: {phases: [validation]}
