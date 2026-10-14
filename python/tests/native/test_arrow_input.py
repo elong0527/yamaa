@@ -91,7 +91,7 @@ def test_schema_only_empty_and_nonfinite_values():
 def test_timestamp_units_preserve_whole_seconds_and_reject_fractional_values():
     run = prepared({"ID": "str", "VALUE": "datetime"})
     # Engine timestamps are civil values without a timezone.
-    value = datetime.datetime(1969, 12, 31, 23, 59, 59)  # noqa: DTZ001
+    value = datetime.datetime(1969, 12, 31, 23, 59, 59)
     source = pa.table({"ID": ["a"], "VALUE": pa.array([value], pa.timestamp("us"))})
     assert output(run.execute_arrow(source))["VALUE"] == [
         {"value": value, "precision": 1}
