@@ -1342,20 +1342,21 @@ fn current_record_read(
             AggregateRelation::CurrentGroup => include_raw,
             AggregateRelation::Matched { keys, .. } => {
                 scope != RecordReadScope::Driver
-                    && (keys
-                        .iter()
-                        .filter_map(|key| key.value.read())
-                        .any(|read| matches!(read, MatchRead::Record { .. }))
-                        || aggregate.range().is_some_and(|range| {
-                            matches!(range.current().read, CurrentRead::Record { .. })
-                        })
-                        || aggregate.derivations().iter().any(|binding| {
-                            current_record_read(
-                                &binding.assignment.expression,
-                                intermediates,
-                                RecordReadScope::PrimaryMatching,
-                            )
-                        }))
+                    && (keys.iter().filter_map(|key| key.value.read()).any(|read| {
+                        matches!(read, MatchRead::Record { .. })
+                            || (scope == RecordReadScope::All
+                                && matches!(read, MatchRead::Driver { .. }))
+                    }) || aggregate.range().is_some_and(|range| {
+                        matches!(range.current().read, CurrentRead::Record { .. })
+                            || (scope == RecordReadScope::All
+                                && matches!(range.current().read, CurrentRead::Driver { .. }))
+                    }) || aggregate.derivations().iter().any(|binding| {
+                        current_record_read(
+                            &binding.assignment.expression,
+                            intermediates,
+                            RecordReadScope::PrimaryMatching,
+                        )
+                    }))
             }
             AggregateRelation::Output { .. } => false,
         },
@@ -1370,10 +1371,16 @@ fn current_record_read(
                     item.keys
                         .iter()
                         .filter_map(|key| key.value.read())
-                        .any(|read| matches!(read, MatchRead::Record { .. }))
-                        || item
-                            .current_fields()
-                            .any(|field| matches!(field.read, CurrentRead::Record { .. }))
+                        .any(|read| {
+                            matches!(read, MatchRead::Record { .. })
+                                || (scope == RecordReadScope::All
+                                    && matches!(read, MatchRead::Driver { .. }))
+                        })
+                        || item.current_fields().any(|field| {
+                            matches!(field.read, CurrentRead::Record { .. })
+                                || (scope == RecordReadScope::All
+                                    && matches!(field.read, CurrentRead::Driver { .. }))
+                        })
                 })
         }
         Expression::SourceBinding { source, .. } => {
@@ -1644,6 +1651,14 @@ impl DatasetPlan {
                             }
                         }
                         if let Read::Intermediate { index, column } = binding.read {
+                            relation_predicates::validate_named_read(
+                                index,
+                                &intermediates,
+                                template.mode.source_index(),
+                                &template.mode,
+                                &available,
+                                0,
+                            )?;
                             let item = intermediates
                                 .get(index)
                                 .ok_or(PlanError::InvalidIntermediate)?;
@@ -1659,7 +1674,7 @@ impl DatasetPlan {
                             for field in item.current_fields() {
                                 field.validate_context(
                                     template.mode.source_index(),
-                                    mode,
+                                    &template.mode,
                                     &available,
                                 )?;
                             }

@@ -274,6 +274,37 @@ pub(super) fn prepare(
     }
     Ok(result)
 }
+impl Derivation {
+    pub(super) fn driver_type(
+        &self,
+        lookup: &impl Fn(&str) -> Option<ColumnType>,
+    ) -> Option<ColumnType> {
+        self.driver_kind.infer(lookup)
+    }
+}
+/// Build independently inferred fields without changing augmentation execution.
+pub(super) fn driver_schema(
+    declarations: &[Derivation],
+    stored: &TableSchema,
+    owner: usize,
+    kinds: &BTreeMap<(usize, usize), ColumnType>,
+) -> Result<TableSchema, BindError> {
+    let mut fields = stored.columns().to_vec();
+    for (index, declaration) in declarations.iter().enumerate() {
+        if fields.iter().any(|field| field.name == declaration.name) {
+            continue; // The normal augmentation binder owns duplicate findings.
+        }
+        fields.push(Column {
+            name: declaration.name.clone(),
+            kind: kinds
+                .get(&(owner, index))
+                .copied()
+                .unwrap_or(ColumnType::Str),
+        });
+    }
+    TableSchema::new(fields).map_err(|_| BindError::Internal)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn bind(
     declarations: &[Derivation],
@@ -820,6 +851,7 @@ fn rebase(
                     .position(|field| field.name == outer.columns()[column].name)
                     .ok_or(BindError::Internal)?,
             ),
+            CurrentRead::Driver { .. } => return Err(BindError::Internal),
             CurrentRead::Intermediate { index, column } => {
                 CurrentRead::Intermediate { index, column }
             }
@@ -866,6 +898,7 @@ fn rebase(
                 .any(|field| field.name == outer.columns()[column].name))
             .then(|| field.identifier.clone()),
             CurrentRead::Intermediate { index, .. } => unavailable.get(&index).cloned(),
+            CurrentRead::Driver { .. } => Some(field.identifier.clone()),
             CurrentRead::Record { .. } => None,
         });
         if let Some(identifier) = missing {
@@ -954,6 +987,12 @@ fn rebase(
             }
             if let Some(read) = key.value.read().cloned() {
                 let read = match read {
+                    crate::dataset::MatchRead::Driver { .. } => {
+                        key.value = crate::dataset::MatchValue::Contextual(
+                            key.value.contextual().ok_or(BindError::Internal)?,
+                        );
+                        continue;
+                    }
                     crate::dataset::MatchRead::Output { column, identifier } => {
                         let name = &outer.columns()[column].name;
                         let Some(column) = output

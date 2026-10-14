@@ -219,6 +219,26 @@ pub(super) fn validate(
         if matches!(&item.source,IntermediateSource::SelfRows {columns,..} if columns.is_empty()) {
             return Err(PlanError::InvalidIntermediate);
         }
+        for key in &item.keys {
+            if let Some(MatchRead::Driver {
+                index: owner,
+                column,
+                column_type,
+                ..
+            }) = key.value.read()
+            {
+                let driver = items.get(*owner).ok_or(PlanError::InvalidIntermediate)?;
+                if driver.source.is_self()
+                    || !driver.admits_column(*column)
+                    || driver
+                        .source_schema(sources)
+                        .and_then(|schema| schema.columns().get(*column))
+                        .is_none_or(|field| field.kind != *column_type)
+                {
+                    return Err(PlanError::InvalidIntermediate);
+                }
+            }
+        }
         match_values::validate_declaration(
             &item.keys,
             primary,
@@ -252,6 +272,13 @@ pub(super) fn validate(
                 .current()
                 .validate(primary, sources, output, items, index)?;
             let current_kind = match range.current().read {
+                CurrentRead::Driver { index, column } => {
+                    items[index]
+                        .source_schema(sources)
+                        .ok_or(PlanError::InvalidIntermediate)?
+                        .columns()[column]
+                        .kind
+                }
                 CurrentRead::Record { source: 0, column } => primary.columns()[column].kind,
                 CurrentRead::Record { source, column } => {
                     sources[source - 1].schema.columns()[column].kind
@@ -371,7 +398,7 @@ pub(super) fn validate_context_read(
             .keys
             .iter()
             .filter_map(|key| key.value.read())
-            .any(|read| matches!(read, MatchRead::Record { column, .. } if !keys.contains(column)))
+            .any(|read| matches!(read, MatchRead::Record { column, .. } | MatchRead::Driver { column, .. } if !keys.contains(column)))
         {
             return Err(PlanError::NonGroupSource);
         }

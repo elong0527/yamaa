@@ -1639,12 +1639,25 @@ impl Rows {
             });
         }
         for template in &templates {
+            let filter_reads = template
+                .filter
+                .iter()
+                .flat_map(|filter| filter.bindings())
+                .filter_map(|binding| {
+                    if let Read::Intermediate { index, column } = binding.read {
+                        Some(Expression::Intermediate { index, column })
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
             relation_predicates::admit_reads(
                 template
                     .assignments
                     .iter()
                     .chain(&columns)
-                    .map(|assignment| &assignment.expression),
+                    .map(|assignment| &assignment.expression)
+                    .chain(filter_reads.iter()),
                 &intermediates,
                 template.mode.source_index(),
                 &template.mode,

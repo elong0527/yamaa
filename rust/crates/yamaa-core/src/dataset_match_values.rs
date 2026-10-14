@@ -8,6 +8,12 @@ use crate::{
 /// The current candidate owns these reads, independently of the donor record.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MatchRead {
+    Driver {
+        index: usize,
+        column: usize,
+        column_type: ColumnType,
+        identifier: String,
+    },
     Output {
         column: usize,
         identifier: String,
@@ -26,7 +32,8 @@ pub enum MatchRead {
 impl MatchRead {
     pub fn identifier(&self) -> &str {
         match self {
-            Self::Output { identifier, .. }
+            Self::Driver { identifier, .. }
+            | Self::Output { identifier, .. }
             | Self::Record { identifier, .. }
             | Self::SecondaryRecord { identifier, .. } => identifier,
         }
@@ -48,6 +55,7 @@ impl MatchRead {
             return Err(PlanError::InvalidIntermediate);
         }
         let column = match self {
+            Self::Driver { column_type, .. } => return Ok(*column_type),
             Self::Output { column, .. } => {
                 if !available.get(*column).copied().unwrap_or(false) {
                     return Err(PlanError::InvalidLookup);

@@ -25,6 +25,7 @@ struct Declaration {
     unique: UniqueDeclarations,
     derivations: Vec<intermediate_derivations::Derivation>,
     driver_prohibited: Vec<String>,
+    row_driver: bool,
 }
 #[derive(Debug, Default)]
 pub(super) struct Declarations(alloc::sync::Arc<Vec<Declaration>>, Option<String>);
@@ -473,9 +474,96 @@ impl Declarations {
                     unique,
                     derivations,
                     driver_prohibited,
+                    row_driver: d
+                        .field(d.root(), "rows")
+                        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                        .map(|rows| sequence(d, rows))
+                        .transpose()?
+                        .is_some_and(|rows| {
+                            rows.iter().any(|&row| {
+                                d.field(row, "dataset").is_some_and(|id| {
+                                    text(d, id).is_ok_and(|driver| driver == name)
+                                })
+                            })
+                        }),
                 });
         }
         Ok(result)
+    }
+    fn driver_types(
+        &self,
+        sources: &[SourceDeclaration],
+        schemas: &[&TableSchema],
+    ) -> BTreeMap<(usize, usize), ColumnType> {
+        let mut kinds = BTreeMap::new();
+        // Within one map fields are inferred in order. Across named relations,
+        // each pass resolves another level of the admitted dependency graph.
+        for _ in 0..self.0.len().max(1) {
+            let before = kinds.len();
+            for (owner, item) in self.0.iter().enumerate() {
+                let self_relations::Relation::Input(source) = item.source else {
+                    continue;
+                };
+                for (index, declaration) in item.derivations.iter().enumerate() {
+                    if kinds.contains_key(&(owner, index)) {
+                        continue;
+                    }
+                    let lookup = |reference: &str| {
+                        let (dataset, field) = reference
+                            .split_once('.')
+                            .unwrap_or((sources[source].name.as_str(), reference));
+                        if dataset == sources[source].name {
+                            schemas[source]
+                                .columns()
+                                .iter()
+                                .find(|column| column.name == field)
+                                .map(|column| column.kind)
+                                .or_else(|| {
+                                    item.derivations[..index]
+                                        .iter()
+                                        .position(|declaration| declaration.name == field)
+                                        .and_then(|index| kinds.get(&(owner, index)).copied())
+                                })
+                        } else {
+                            let (other, field) = self.reference(reference)?;
+                            if other == owner {
+                                return None;
+                            }
+                            let other_item = &self.0[other];
+                            if other_item
+                                .columns
+                                .as_ref()
+                                .is_some_and(|columns| !columns.iter().any(|name| name == field))
+                            {
+                                return None;
+                            }
+                            let self_relations::Relation::Input(source) = other_item.source else {
+                                return None;
+                            };
+                            schemas[source]
+                                .columns()
+                                .iter()
+                                .find(|column| column.name == field)
+                                .map(|column| column.kind)
+                                .or_else(|| {
+                                    other_item
+                                        .derivations
+                                        .iter()
+                                        .position(|declaration| declaration.name == field)
+                                        .and_then(|index| kinds.get(&(other, index)).copied())
+                                })
+                        }
+                    };
+                    if let Some(kind) = declaration.driver_type(&lookup) {
+                        kinds.insert((owner, index), kind);
+                    }
+                }
+            }
+            if kinds.len() == before {
+                break;
+            }
+        }
+        kinds
     }
     #[allow(clippy::too_many_arguments)]
     pub fn bind(
@@ -506,6 +594,38 @@ impl Declarations {
                 schema: (**schema).clone(),
             })
             .collect::<Vec<_>>();
+        intermediate_sources::admit(self.0.iter().filter(|item| item.row_driver).filter_map(
+            |item| match item.source {
+                self_relations::Relation::Input(index) => {
+                    Some((schemas[index], item.name.as_str()))
+                }
+                self_relations::Relation::SelfRows => None,
+            },
+        ))?;
+        let driver_types = self.driver_types(sources, schemas);
+        let drivers = self
+            .0
+            .iter()
+            .enumerate()
+            .filter(|(_, item)| item.row_driver)
+            .filter_map(|(index, item)| match item.source {
+                self_relations::Relation::Input(source) => Some((index, item, source)),
+                self_relations::Relation::SelfRows => None,
+            })
+            .map(|(index, item, source)| {
+                Ok(row_drivers::Named {
+                    index,
+                    name: item.name.clone(),
+                    schema: intermediate_derivations::driver_schema(
+                        &item.derivations,
+                        schemas[source],
+                        index,
+                        &driver_types,
+                    )?,
+                    columns: item.columns.clone(),
+                })
+            })
+            .collect::<Result<Vec<_>, BindError>>()?;
         let mut result = Vec::new();
         for item in self.0.iter() {
             let mut failed = false;
@@ -627,7 +747,19 @@ impl Declarations {
             for (field, declaration) in pairs_declared {
                 if let (Some(donor), Some(expected)) = (
                     schema.columns().iter().find(|column| column.name == *field),
-                    declaration.result_type(&catalog)?,
+                    declaration.result_type(&catalog)?.or_else(|| {
+                        declaration
+                            .reference()
+                            .and_then(|reference| row_drivers::named_read(&drivers, reference))
+                            .and_then(|read| {
+                                if let crate::dataset::MatchRead::Driver { column_type, .. } = read
+                                {
+                                    Some(column_type.into())
+                                } else {
+                                    None
+                                }
+                            })
+                    }),
                 ) {
                     if !crate::key_relation::comparable(expected, donor.kind.into()) {
                         findings.push(BindFinding::Lookup(LookupFinding::key_type(
@@ -674,7 +806,12 @@ impl Declarations {
                 } else {
                     format!("{}.key.{field}", item.path)
                 };
-                let value = if contextual_reader {
+                let value = if let Some(read) = declaration
+                    .reference()
+                    .and_then(|reference| row_drivers::named_read(&drivers, reference))
+                {
+                    declaration.bind_driver(read, findings)
+                } else if contextual_reader {
                     declaration.bind_deferred(&path, &item.name, &catalog, findings)?
                 } else {
                     declaration.bind(&path, &item.name, &catalog, findings)?
@@ -708,6 +845,7 @@ impl Declarations {
                         sources,
                         schemas,
                         driver,
+                        &drivers,
                         findings,
                     )?;
                     if filter.is_none() {

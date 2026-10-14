@@ -51,10 +51,18 @@ fn resolve_one<T: TableAccess + ?Sized>(
             }
             Ok(value.clone())
         }
-        MatchRead::Record { column, identifier }
+        MatchRead::Driver {
+            column, identifier, ..
+        }
+        | MatchRead::Record { column, identifier }
         | MatchRead::SecondaryRecord {
             column, identifier, ..
         } => {
+            if let MatchRead::Driver { index, .. } = read {
+                if !candidate.template.and_then(|index| plan.templates().get(index)).is_some_and(|template| matches!(&template.mode, RowMode::IntermediateDriver { index: owner, .. } if owner == index)) {
+                    return Err(Box::new(ExecutionError::SchemaMismatch));
+                }
+            }
             if let MatchRead::SecondaryRecord { source, .. } = read {
                 let current = candidate
                     .template
@@ -147,7 +155,9 @@ pub(crate) fn ordinary<'a, T: TableAccess + ?Sized>(
             };
             if matches!(
                 read,
-                MatchRead::Record { .. } | MatchRead::SecondaryRecord { .. }
+                MatchRead::Driver { .. }
+                    | MatchRead::Record { .. }
+                    | MatchRead::SecondaryRecord { .. }
             ) == record
             {
                 keys.push((

@@ -222,6 +222,15 @@ impl BoundAggregate {
                 keys,
                 group_by,
             } => {
+                // Named current-driver ownership is admitted by lookup reads.
+                // Aggregate matching has no such authored scope or proof.
+                if keys
+                    .iter()
+                    .filter_map(|key| key.value.read())
+                    .any(|read| matches!(read, MatchRead::Driver { .. }))
+                {
+                    return Err(PlanError::InvalidLookup);
+                }
                 let donor = match source {
                     AggregateSource::Primary => primary,
                     AggregateSource::Secondary(index) => {
@@ -274,6 +283,9 @@ impl BoundAggregate {
             }
         }
         if let Some(range) = &self.range {
+            if matches!(range.current().read, CurrentRead::Driver { .. }) {
+                return Err(PlanError::InvalidSource);
+            }
             if !matches!(self.relation, AggregateRelation::Matched { .. }) {
                 return Err(PlanError::InvalidSource);
             }
@@ -294,7 +306,8 @@ impl BoundAggregate {
                     .get(source - 1)
                     .and_then(|source| source.schema.columns().get(column))
                     .map(|field| field.kind),
-                CurrentRead::Intermediate { index, column } => intermediates
+                CurrentRead::Driver { index, column }
+                | CurrentRead::Intermediate { index, column } => intermediates
                     .get(index)
                     .and_then(|item| item.source_schema(secondary))
                     .and_then(|schema| schema.columns().get(column))
@@ -375,5 +388,92 @@ impl BoundAggregate {
                 .map_err(PlanError::Filter)?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod named_driver_admission {
+    use super::*;
+    use crate::table::Column;
+
+    #[test]
+    fn aggregate_matching_rejects_named_driver_coordinates_without_lookup_scope() {
+        let schema = TableSchema::new(vec![Column {
+            name: "ID".into(),
+            kind: ColumnType::Int,
+        }])
+        .unwrap();
+        for driver_key in [false, true] {
+            let key = if driver_key {
+                MatchValue::Variable(MatchRead::Driver {
+                    index: usize::MAX,
+                    column: usize::MAX,
+                    column_type: ColumnType::Int,
+                    identifier: "DRIVER.ID".into(),
+                })
+            } else {
+                MatchValue::Literal(Value::Int(1))
+            };
+            let aggregate = BoundAggregate::new(
+                crate::aggregate_compiler::compile_aggregate(
+                    "COUNT(SRC.*)",
+                    "aggregate.expr",
+                    Default::default(),
+                )
+                .unwrap(),
+                AggregateRelation::Matched {
+                    source: AggregateSource::Primary,
+                    keys: vec![IntermediateKey {
+                        source_column: 0,
+                        path: "aggregate.key".into(),
+                        value: key,
+                    }],
+                    group_by: vec![],
+                },
+                vec![],
+                None,
+                AggregatePhase::RowConstruction,
+                None,
+                "aggregate",
+            )
+            .unwrap();
+            let aggregate = if driver_key {
+                aggregate
+            } else {
+                aggregate.with_record_operations(
+                    Some(
+                        RelationRange::new(
+                            "aggregate.between".into(),
+                            CurrentField {
+                                identifier: "DRIVER.ID".into(),
+                                read: CurrentRead::Driver {
+                                    index: usize::MAX,
+                                    column: usize::MAX,
+                                },
+                            },
+                            Some(ColumnType::Int.into()),
+                            Some(RelationRangeBound {
+                                column: 0,
+                                identifier: "ID".into(),
+                                kind: Some(ColumnType::Int.into()),
+                            }),
+                            None,
+                            1024,
+                        )
+                        .unwrap(),
+                    ),
+                    vec![],
+                    None,
+                )
+            };
+            assert_eq!(
+                aggregate.validate(&schema, &[], &[], &schema, &[true], &RowMode::Records),
+                Err(if driver_key {
+                    PlanError::InvalidLookup
+                } else {
+                    PlanError::InvalidSource
+                })
+            );
+        }
     }
 }

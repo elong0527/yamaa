@@ -36,6 +36,29 @@ pub(super) fn resolve_current<T: TableAccess + ?Sized>(
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
     match field.read {
+        CurrentRead::Driver { index, column } => {
+            if !candidate.template.and_then(|index| plan.templates().get(index)).is_some_and(|template| matches!(&template.mode, RowMode::IntermediateDriver { index: owner, .. } if *owner == index)) {
+                return Err(Box::new(ExecutionError::SchemaMismatch));
+            }
+            state.budget.work(candidate.members.len(), 1)?;
+            key_grain::collect_bound(
+                table,
+                key_grain::Collection {
+                    column,
+                    identifier: &field.identifier,
+                    filter: None,
+                    selection: None,
+                },
+                key_grain::CollectionContext {
+                    path,
+                    candidate,
+                    plan,
+                    row,
+                },
+                state.budget,
+                state.handlers,
+            )
+        }
         CurrentRead::Record { source, column } => {
             state.budget.work(candidate.members.len(), 1)?;
             let table = if source == 0 {

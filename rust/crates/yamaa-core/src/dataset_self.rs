@@ -79,7 +79,8 @@ fn aggregate_reads(aggregate: &BoundAggregate) -> bool {
                     MatchValue::Variable(read)
                     | MatchValue::Source(read)
                     | MatchValue::StrPad { read, .. } => match read {
-                        MatchRead::Record { .. }
+                        MatchRead::Driver { .. }
+                        | MatchRead::Record { .. }
                         | MatchRead::SecondaryRecord { .. }
                         | MatchRead::Output { .. } => false,
                     },

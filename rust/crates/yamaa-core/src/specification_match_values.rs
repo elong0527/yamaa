@@ -118,6 +118,27 @@ impl Declaration {
         };
         match_value::result_type(catalog, expression).map_err(BindError::Catalog)
     }
+    pub(super) fn bind_driver(
+        &self,
+        read: MatchRead,
+        findings: &mut Vec<BindFinding>,
+    ) -> Option<MatchValue> {
+        if let Self::StrPad(operation) = self {
+            str_pad::declaration_findings(operation, findings);
+        }
+        Some(match self {
+            Self::Variable(_) => MatchValue::Variable(read),
+            Self::Source(_) => MatchValue::Source(read),
+            Self::StrPad(operation) => MatchValue::StrPad {
+                read,
+                operation: match operation {
+                    str_pad::Declaration::Valid(operation) => Some(operation.clone()),
+                    str_pad::Declaration::WidthError { .. } => None,
+                },
+            },
+            Self::Literal(_) => return None,
+        })
+    }
     pub(super) fn bind(
         &self,
         path: &str,

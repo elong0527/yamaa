@@ -16,6 +16,7 @@ pub(super) fn bind(
     sources: &[SourceDeclaration],
     schemas: &[&TableSchema],
     driver: usize,
+    drivers: &[row_drivers::Named],
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<RelationPredicate>, BindError> {
     let before = findings.len();
@@ -40,6 +41,20 @@ pub(super) fn bind(
         let read = if let Some(column) = donor_column {
             Some(Read::Source(column))
         } else if own.is_none() {
+            if let Some(crate::dataset::MatchRead::Driver { index, column, .. }) =
+                row_drivers::named_read(drivers, name)
+            {
+                let slot = current.len();
+                current.push(CurrentField {
+                    identifier: name.into(),
+                    read: CurrentRead::Driver { index, column },
+                });
+                bindings.push(Binding {
+                    name: name.into(),
+                    read: Read::Column(slot),
+                });
+                continue;
+            }
             name.split_once('.')
                 .filter(|(dataset, _)| *dataset != donor_name)
                 .and_then(|(dataset, field)| {
@@ -123,6 +138,21 @@ pub(super) fn admit_reads<'a>(
                 return;
             };
             for key in &item.keys {
+                if let Some(crate::dataset::MatchRead::Driver { index, column, .. }) =
+                    key.value.read()
+                {
+                    if !matches!(mode, RowMode::IntermediateDriver { index: owner, .. } if owner == index)
+                        || matches!(mode.local_mode(), RowMode::Groups(keys) if !keys.contains(column))
+                    {
+                        findings.push(BindFinding::Lookup(LookupFinding::reference(
+                            &key.path,
+                            key.value.read().unwrap().identifier(),
+                            Some(&item.identifier),
+                            ReferenceCause::OutputKey,
+                            None,
+                        )));
+                    }
+                }
                 if let crate::dataset::MatchValue::Contextual(declaration) = &key.value {
                     findings.push(BindFinding::Lookup(LookupFinding::reference(
                         &key.path,
@@ -153,6 +183,19 @@ pub(super) fn admit_reads<'a>(
                 return;
             };
             for field in filter.current() {
+                if let CurrentRead::Driver { index, column } = field.read {
+                    if !matches!(mode, RowMode::IntermediateDriver { index: owner, .. } if *owner == index)
+                        || matches!(mode.local_mode(), RowMode::Groups(keys) if !keys.contains(&column))
+                    {
+                        findings.push(BindFinding::Lookup(LookupFinding::reference(
+                            filter.plan().spec_path(),
+                            &field.identifier,
+                            Some(&item.identifier),
+                            ReferenceCause::Selection,
+                            None,
+                        )));
+                    }
+                }
                 if let CurrentRead::Record {
                     source: driver,
                     column,

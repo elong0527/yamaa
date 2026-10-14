@@ -204,3 +204,33 @@ pub(super) fn admit_reads(
     names.extend(matching);
     Ok(())
 }
+
+/// Named-driver coordinates are distinct from reselecting that intermediate.
+pub(super) struct Named {
+    pub index: usize,
+    pub name: String,
+    pub schema: TableSchema,
+    pub columns: Option<Vec<String>>,
+}
+pub(super) fn named_read(drivers: &[Named], reference: &str) -> Option<crate::dataset::MatchRead> {
+    let (owner, field) = reference.split_once('.')?;
+    let driver = drivers.iter().find(|driver| driver.name == owner)?;
+    if driver
+        .columns
+        .as_ref()
+        .is_some_and(|columns| !columns.iter().any(|column| column == field))
+    {
+        return None;
+    }
+    let column = driver
+        .schema
+        .columns()
+        .iter()
+        .position(|column| column.name == field)?;
+    Some(crate::dataset::MatchRead::Driver {
+        index: driver.index,
+        column,
+        column_type: driver.schema.columns()[column].kind,
+        identifier: reference.into(),
+    })
+}

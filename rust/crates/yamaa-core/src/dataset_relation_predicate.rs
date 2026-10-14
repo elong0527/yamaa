@@ -5,6 +5,11 @@ use crate::bound_expression::Binding;
 /// Explicit current-side ownership shared by correlated relation operations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CurrentRead {
+    /// The current record exposed by a named intermediate row driver.
+    Driver {
+        index: usize,
+        column: usize,
+    },
     /// Zero identifies the original driver; positive indices identify secondary inputs.
     Record {
         source: usize,
@@ -34,6 +39,17 @@ impl CurrentField {
             return Err(PlanError::InvalidIntermediate);
         }
         match self.read {
+            CurrentRead::Driver { index, column } => {
+                if !items.get(index).is_some_and(|item| {
+                    !item.source.is_self()
+                        && item.admits_column(column)
+                        && item
+                            .source_schema(secondary)
+                            .is_some_and(|schema| column < schema.columns().len())
+                }) {
+                    return Err(PlanError::InvalidIntermediate);
+                }
+            }
             CurrentRead::Record { source, column } => {
                 let schema = if source == 0 {
                     primary
@@ -73,6 +89,15 @@ impl CurrentField {
         available: &[bool],
     ) -> Result<(), PlanError> {
         match self.read {
+            CurrentRead::Driver { index, column } => {
+                if !matches!(mode, RowMode::IntermediateDriver { index: owner, .. } if *owner == index)
+                {
+                    return Err(PlanError::InvalidIntermediate);
+                }
+                if matches!(mode.local_mode(), RowMode::Groups(keys) if !keys.contains(&column)) {
+                    return Err(PlanError::NonGroupSource);
+                }
+            }
             CurrentRead::Record { source: driver, .. } if driver != source => {
                 return Err(PlanError::InvalidIntermediate)
             }
@@ -294,6 +319,14 @@ pub(super) fn validate_named_read(
     }
     let item = items.get(index).ok_or(PlanError::InvalidIntermediate)?;
     for key in &item.keys {
+        if let Some(MatchRead::Driver { index, column, .. }) = key.value.read() {
+            if !matches!(mode, RowMode::IntermediateDriver { index: owner, .. } if owner == index) {
+                return Err(PlanError::InvalidIntermediate);
+            }
+            if matches!(mode.local_mode(), RowMode::Groups(keys) if !keys.contains(column)) {
+                return Err(PlanError::NonGroupSource);
+            }
+        }
         if let Some(MatchRead::Record { column, .. }) = key.value.read() {
             if source != 0 {
                 return Err(PlanError::InvalidIntermediate);
