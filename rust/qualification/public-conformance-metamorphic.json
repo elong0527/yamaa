@@ -1,0 +1,241 @@
+{
+  "protocol": "public-conformance-metamorphic/1",
+  "expected_failures": [
+    {
+      "benchmark": "adam-adae-death",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "adam-adae-post-index",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "adam-adae-prior-serious-event",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "adam-adae-query-flags",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "adam-adcm-atc-classes",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "adam-adlb-end-of-treatment",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "adam-adlb-supplb-padded-key",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "adam-adqs-missed-visit-locf",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "adam-adrs-best-response",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "adam-adrs-measurable-disease",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "adam-adsl-completion-flag",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "adam-adsl-disposition",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "adam-adtte-first-ae",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "adam-adtte-os",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "adam-adtte-pfs",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "adam-adtte-pro-deterioration",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "adam-advs-carryforward",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "adam-advs-locf-record",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "adam-advs-percentiles",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "adam-advs-window-table",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "adam-advs-windows",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "negative-lookup-rename-intermediate",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "negative-sdtm-lb-unit-conversion",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "schema-lookup",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "schema-lookup-filters",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "schema-lookup-intermediate-correlated-derive",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "schema-lookup-intermediate-derived-filter",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "schema-lookup-intermediate-unique",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "sdtm-ae-meddra-hierarchy",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "sdtm-cm-whodrug-coding",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "sdtm-dm-dates",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "sdtm-dm-death",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "sdtm-ex-from-ec",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "sdtm-fa-event-findings",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "sdtm-lb-lab-specific-ranges",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "sdtm-lb-last-observation-before-exposure",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "sdtm-lb-ranges",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "sdtm-vs-epoch-from-subject-elements",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "sdtm-vs-planned-time-points",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "sdtm-vs-study-day",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2190"
+    },
+    {
+      "benchmark": "negative-lookup-mismatched",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2292"
+    },
+    {
+      "benchmark": "negative-odm-context",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2292"
+    },
+    {
+      "benchmark": "negative-review-unknown-date",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2292"
+    },
+    {
+      "benchmark": "negative-adlb-computed-param",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2293"
+    },
+    {
+      "benchmark": "negative-first-available-self",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2293"
+    },
+    {
+      "benchmark": "negative-row-value-self",
+      "check": "empty_child",
+      "issue": "https://github.com/elong0527/yamaa/issues/2293"
+    },
+    {
+      "benchmark": "negative-forward-reference",
+      "check": "empty_child",
+      "reason": "by design: REQ-0643 orders composed columns, so the empty child builds instead of reporting the parent's forward reference",
+      "permanent": true
+    }
+  ]
+}

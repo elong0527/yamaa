@@ -146,9 +146,36 @@ def main(argv=None):
             "table_encoding": "str:utf8-hex,float:ieee754-be,int:decimal,date:epoch-days,datetime:epoch-seconds",
         },
     )
+
+    def build(case, entry, specification):
+        environment = entry["environment"]
+        if environment is not None:
+            lock = case / Path(environment).parent / "uv.lock"
+            if not lock.exists():
+                shutil.copyfile(args.python_lock, lock)
+        built = yamaa.domain(
+            case / specification,
+            environment=None if environment is None else case / environment,
+        )
+        tables = {
+            slot: table(getattr(built, slot))
+            for slot in ("output", "verification_log", "warning_log")
+        }
+        saved = False if built.issues.height else built.save()
+        issues = built.issues.to_dicts()
+        for issue in issues:
+            issue["context"] = json.loads(issue["context"])
+        return {
+            "specification": specification,
+            "environment": environment,
+            "issues": issues,
+            "tables": tables,
+            "saved": saved,
+        }
+
     for example in plan["examples"]:
         name = example["name"]
-        record = {"example": name, "builds": [], "error": None}
+        record = {"example": name, "builds": [], "variants": [], "error": None}
         try:
             if not example["excluded"]:
                 case = output / "work" / name
@@ -160,27 +187,32 @@ def main(argv=None):
                         "expected", "run.py", "run.R", "README.md"
                     ),
                 )
+                staged = args.plan / "variants" / name
+                if staged.is_dir():
+                    for source in sorted(staged.rglob("*")):
+                        if source.is_file():
+                            target = case / source.relative_to(staged)
+                            target.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.copyfile(source, target)
                 for entry in example["entries"]["python"]:
-                    environment = entry["environment"]
-                    if environment is not None:
-                        lock = case / Path(environment).parent / "uv.lock"
-                        if not lock.exists():
-                            shutil.copyfile(args.python_lock, lock)
-                    built = yamaa.domain(
-                        case / entry["specification"],
-                        environment=None if environment is None else case / environment,
-                    )
-                    tables = {
-                        slot: table(getattr(built, slot))
-                        for slot in ("output", "verification_log", "warning_log")
-                    }
-                    saved = False if built.issues.height else built.save()
-                    issues = built.issues.to_dicts()
-                    for issue in issues:
-                        issue["context"] = json.loads(issue["context"])
-                    record["builds"].append(
-                        {**entry, "issues": issues, "tables": tables, "saved": saved}
-                    )
+                    record["builds"].append(build(case, entry, entry["specification"]))
+                variants = example.get("variants", {}).get("python", [])
+                if variants:
+                    # Variants declare the same output paths as their entry, so
+                    # build them in a copy of the staged case: a variant's
+                    # save() must not overwrite the entry's saved files, whose
+                    # bytes the comparator checks against independent truth.
+                    variant_case = output / "work" / (name + "__variants")
+                    shutil.copytree(case, variant_case, symlinks=True)
+                    for variant in variants:
+                        entry = example["entries"]["python"][variant["entry"]]
+                        record["variants"].append(
+                            {
+                                "kind": variant["kind"],
+                                "entry": variant["entry"],
+                                **build(variant_case, entry, variant["specification"]),
+                            }
+                        )
         except Exception as error:  # noqa: BLE001 -- retain one record for every benchmark
             record["error"] = f"{type(error).__name__}: {error}"
         write_json(output / "records" / (name + ".json"), record)

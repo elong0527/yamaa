@@ -86,9 +86,21 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
     platform=R.version$platform, package_form=Sys.getenv("PUBLIC_CONFORMANCE_PACKAGE_FORM", "installed"),
     evidence=paste0(Sys.getenv("GITHUB_SERVER_URL"), "/", Sys.getenv("GITHUB_REPOSITORY"), "/actions/runs/", Sys.getenv("GITHUB_RUN_ID")),
     table_encoding="str:utf8-hex,float:ieee754-be,int:decimal,date:epoch-days,datetime:epoch-seconds"))
+  build_one <- function(case, specification, environment) {
+    built <- yamaa_domain(file.path(case, specification),
+      environment=if(is.null(environment)) NULL else file.path(case, environment))
+    issues <- issue_rows(built$issues)
+    tables <- list(output=public_table(built$output), verification_log=public_table(built$verification_log),
+      warning_log=public_table(built$warning_log))
+    saved <- if(length(issues)) FALSE else built$save()
+    issues <- issue_rows(built$issues)
+    list(specification=specification, environment=environment, issues=issues, tables=tables, saved=saved)
+  }
   for (name in unique(plan$example)) {
-    entries <- plan[plan$example == name, , drop=FALSE]
-    record <- list(example=name, builds=list(), error=NULL)
+    all_rows <- plan[plan$example == name, , drop=FALSE]
+    entries <- all_rows[!nzchar(all_rows$variant), , drop=FALSE]
+    variant_rows <- all_rows[nzchar(all_rows$variant), , drop=FALSE]
+    record <- list(example=name, builds=list(), error=NULL, variants=list())
     record <- tryCatch({
       if (!nzchar(entries$excluded[[1L]])) {
         case <- file.path(output, "work", name)
@@ -96,15 +108,27 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
         for (index in seq_len(nrow(entries))) {
           entry <- entries[index, , drop=FALSE]
           environment <- if(nzchar(entry$environment[[1L]])) entry$environment[[1L]] else NULL
-          built <- yamaa_domain(file.path(case, entry$specification[[1L]]),
-            environment=if(is.null(environment)) NULL else file.path(case, environment))
-          issues <- issue_rows(built$issues)
-          tables <- list(output=public_table(built$output), verification_log=public_table(built$verification_log),
-            warning_log=public_table(built$warning_log))
-          saved <- if(length(issues)) FALSE else built$save()
-          issues <- issue_rows(built$issues)
-          record$builds[[length(record$builds)+1L]] <- list(specification=entry$specification[[1L]],
-            environment=environment, issues=issues, tables=tables, saved=saved)
+          record$builds[[length(record$builds)+1L]] <- build_one(case, entry$specification[[1L]], environment)
+        }
+        variant_case <- case
+        if (nrow(variant_rows)) {
+          # Variants declare the same output paths as their entry, so build
+          # them in a copy of the staged case: a variant's save() must not
+          # overwrite the entry's saved files, whose bytes the comparator
+          # checks against independent truth.
+          variant_case <- file.path(output, "work", paste0(name, "__variants"))
+          dir.create(variant_case, recursive=TRUE, showWarnings=FALSE)
+          copied <- file.copy(list.files(case, full.names=TRUE, all.files=TRUE, no..=TRUE),
+            variant_case, recursive=TRUE)
+          if (!all(copied)) stop("could not copy staged case for variant builds: ", name)
+        }
+        for (index in seq_len(nrow(variant_rows))) {
+          vrow <- variant_rows[index, , drop=FALSE]
+          environment <- if(nzchar(vrow$environment[[1L]])) vrow$environment[[1L]] else NULL
+          variant <- build_one(variant_case, vrow$specification[[1L]], environment)
+          variant$kind <- vrow$variant[[1L]]
+          variant$entry <- as.character(vrow$entry[[1L]])
+          record$variants[[length(record$variants)+1L]] <- variant
         }
       }
       record

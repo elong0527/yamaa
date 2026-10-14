@@ -48,6 +48,21 @@ Use absolute script, fixture and lock paths when running outside the checkout.
 The comparator needs the pinned YAML and Arrow dependencies in `python/uv.lock`;
 the R runner needs base R and the installed package.
 
+The plan also generates two metamorphic variants of each entry, built by the
+same runners on staged copies and judged by the comparator against the entry's
+own build rather than against `expected/`: an empty child
+(`{schema_version: "1.0", parents: <entry>}`, REQ-0627) must reproduce its
+parent, and for eligible positive entries (no `rows`, no `parents`, at least
+two key columns reading one input field or a literal) a JSON control copy and
+a copy with the key columns moved to the front in reverse key order must agree
+(REQ-0060, REQ-0062, REQ-0220). Positive variants must report no issues with
+equal output and log tables; negative variants must report the same first
+issue (phase, condition, requirement and spec paths). Known differences are
+listed in `public-conformance-metamorphic.json`, each linked to its tracking
+issue or marked permanent with a by-design reason; a listed difference that
+stops occurring fails the run as stale, and an unlisted difference fails it as
+a mismatch.
+
 `tools/seed_public_conformance.py` derives passing observations from successful full
 matrix runs. It replays saved observations against expected files, requires
 every platform/interpreter/package tuple from the same revision and refuses
