@@ -289,7 +289,13 @@ def _wrap(document: Document, line: int) -> str | None:
             continue
         if not start.line <= line <= end.line:
             continue
-        if document.lines[end.line][end.column :].strip():
+        # A block scalar at the end of the file has its end mark on the
+        # line after the last written line (see `last_line`), so there is
+        # no line to read trailing text from there.
+        if (
+            end.line < len(document.lines)
+            and document.lines[end.line][end.column :].strip()
+        ):
             continue
         if isinstance(node, yaml.SequenceNode) and node.flow_style:
             return _wrap_sequence(document, node, column)

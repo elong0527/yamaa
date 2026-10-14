@@ -396,6 +396,19 @@ def test_a_long_comment_is_reported_and_left_to_its_author(tmp_path: Path) -> No
     assert remaining == ["line_width"]
 
 
+def test_a_long_block_scalar_at_the_end_is_left_to_its_author(
+    tmp_path: Path,
+) -> None:
+    # A block scalar's end mark sits on the line after the file's last
+    # written line; wrapping must refuse the edit, not index past the end.
+    text = CANONICAL + "\nmetadata:\n  note: |\n    " + "x" * 100 + "\n"
+    path = _spec(tmp_path, text)
+    assert _names(path) == ["line_width"]
+    after, remaining = _fix(path)
+    assert after == text
+    assert remaining == ["line_width"]
+
+
 def test_literal_and_source_spellings(tmp_path: Path) -> None:
     path = _spec(
         tmp_path,
