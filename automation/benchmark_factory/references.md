@@ -141,6 +141,14 @@ Conventions used below:
 
 ## CDISC standards
 
+- **CDISC Analysis Results Standard v1.0** (19 April 2024) -
+  https://www.cdisc.org/standards/foundational/analysis-results-standard/analysis-results-standard-v1-0 -
+  Standard-name and version citation only; model text is not reproduced.
+  TA: cross-TA (analysis results). Grounding: `ars-ae-incidence-results`
+  demonstrates a flat analysis definition linked to a discrete value for
+  each grouping level and operation. It is an ARS-style dataset, not a
+  serialized ARS reporting-event document.
+
 - **ADaM Basic Data Structure for Time-to-Event Analyses v1.0** (CDISC, 2012) -
   https://www.cdisc.org/standards/foundational/adam -
   Time-to-Event example (p. 19): PFS records with CNSR/EVNTDESC/CNSDTDSC,
