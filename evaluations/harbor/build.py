@@ -589,12 +589,12 @@ never enter the agent's container.
   Column and row order are not graded.
 - `/app/output/{script}`, rerun by the verifier with `{runner}` after its
   output is deleted, writes the same data again.
-- Held out: rerun on the inputs without every third subject, it writes the
-  expected data of the subjects kept, so a script that writes its rows
-  literally fails. This applies when the reference solution, rerun the
-  same way, writes exactly that data, as it does when the derivation is
-  per subject; a reference that crashes is a verifier error, not an
-  exemption.
+- Held out: rerun on inputs without selected subjects and recompute the
+  answer. Use the golden restricted to the kept subjects when the reference
+  agrees; otherwise use the reference's validated answer on the reduced
+  inputs. The reference must first match the original golden. A check that
+  does not discriminate is recorded and skipped; a reference crash or
+  invalid output is a verifier error.
 - Changed inputs: when the output carries subjects, rerun with identifiers
   renamed and supported ages, measurements and complete dates changed, it
   writes the data the reference computes from those inputs. The seed and

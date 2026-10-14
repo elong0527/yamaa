@@ -79,15 +79,15 @@ How to write a prompt is in
 - **Grading.** Reward 1 when every requested dataset has the golden's
   columns, keys, and cell values, and the script, rerun by the verifier
   from a clean state (its datasets deleted first), writes datasets that
-  match too. Then the held-out rerun: with every third subject (by
-  `USUBJID`) dropped from the inputs, the script must write the golden
-  restricted to the subjects kept, so a script that writes its rows
-  literally fails. Every task ships its reference solution (`solutions/`,
-  copied into the verifier's `tests/reference/`), and the check applies
-  when that reference, rerun the same way, writes exactly the restricted
-  golden; it is skipped with a note when the reference's data differs (a
-  derivation across subjects, or inputs without `USUBJID`), and a
-  reference that crashes is a verifier error, never an exemption. Then,
+  match too. Then the held-out rerun: with selected subjects dropped from
+  the inputs, the script must recompute the answer. Every task ships its
+  reference solution (`solutions/`, copied into `tests/reference/`). The
+  reference must first match the original golden. Per-subject derivations
+  use the golden restricted to the subjects kept when the reference agrees;
+  aggregate or cross-subject derivations use its validated recomputed answer.
+  The grade records which expected source was used. A check that cannot
+  discriminate is skipped with a note, and a reference crash or invalid
+  answer is a verifier error. Then,
   when an output carries `USUBJID`, the changed-input challenge: every
   subject identifier in the inputs is renamed and supported ages,
   measurements and complete dates are changed. The reference computes the

@@ -1122,13 +1122,13 @@ def test_the_held_out_rerun_is_skipped_without_a_reference(tmp_path):
     assert "held_out" not in result["reward"]
 
 
-def test_the_held_out_rerun_is_skipped_when_the_reference_is_not_per_subject(
+def test_the_held_out_rerun_records_a_nondiscriminating_reference(
     tmp_path,
 ):
     # A reference that ignores its inputs cannot write the restricted golden.
     result = _held_out_case(tmp_path, "reference", "hardcode")
     assert not result["held_out"]["checked"] and result["passed"]
-    assert "not per subject" in result["held_out"]["notes"][0]
+    assert "does not discriminate" in result["held_out"]["notes"][0]
 
 
 def test_a_script_that_bridges_to_the_other_language_fails(tmp_path):
