@@ -237,6 +237,11 @@ def admit_installation(directory, plan, lane, role, repository, scratch):
         record["package_form"] == form,
         "package form differs from tuple/supported baseline",
     )
+    require(
+        role == "candidate"
+        or (record["host"] == "python" and record["package_version"] == "0.3.0"),
+        "baseline must be the approved prior Python 0.3.0 package",
+    )
     runtime = lane["python"] + "." if lane["host"] == "python" else "4.6.1"
     require(
         record["runtime_version"].startswith(runtime)
@@ -467,6 +472,10 @@ def admit_case(directory, plan, row, case, authored, record, role, repository):
             and process["pid"] == response["pid"],
             "failed child/PID association",
         )
+        require(
+            process["launcher"] == "fresh small broker; controller fork RSS excluded",
+            "original child RSS broker association differs",
+        )
         child_peak_rss.validate(process["peak_rss"], record["system"])
         require(
             math.isfinite(process["peak_rss"]["bytes"])
@@ -479,6 +488,21 @@ def admit_case(directory, plan, row, case, authored, record, role, repository):
         )
         original_child = original_path(request["output"], record["system"])
         require(original_child.name == name, "worker output identity differs")
+        original_collection = original_path(
+            plan["measurement_campaign"]["collection"], record["system"]
+        )
+        require(
+            original_collection.name == "collection.json"
+            and original_child == original_collection.parent / name,
+            "worker belongs to another campaign collection",
+        )
+        require(
+            request["reference_schema"] is None
+            if role == "candidate"
+            else original_path(request["reference_schema"], record["system"])
+            == original_collection.parent / "reference-schema",
+            "original reference schema scope differs",
+        )
         for declaration, expected_declaration in zip(
             request["repetitions"], declarations
         ):
@@ -527,6 +551,12 @@ def admit_case(directory, plan, row, case, authored, record, role, repository):
                         "original input/specification bytes changed",
                     )
         for repetition in response["repetitions"]:
+            require(repetition["failure"] is None, "original raw repetition failed")
+            lifecycle.assert_equal(
+                repetition["host_view_access_counts"],
+                {"output": 2, "issues": 1, "verification_log": 1, "warning_log": 1},
+                "actual host getter counts",
+            )
             for group in ("reports", "measurements"):
                 for filename in repetition.get(group, {}).values():
                     relative(child, filename)
@@ -754,6 +784,32 @@ def admit_collection(
     record = admit_installation(
         directory, plan, measurement_lane, role, repository, scratch
     )
+    if role != "candidate":
+        source_paths = lifecycle.git_paths(
+            repository, record["source_revision"], "yaml"
+        )
+        require(bool(source_paths), "original reference schema source absent")
+        expected_paths = {
+            Path(path).relative_to("yaml").as_posix() for path in source_paths
+        }
+        schema_root = relative(directory, "reference-schema")
+        require(
+            {
+                path.relative_to(schema_root).as_posix()
+                for path in schema_root.rglob("*")
+                if path.is_file()
+            }
+            == expected_paths,
+            "missing/unexpected original reference schema member",
+        )
+        for path in source_paths:
+            require(
+                relative(
+                    schema_root, Path(path).relative_to("yaml").as_posix()
+                ).read_bytes()
+                == lifecycle.git_bytes(repository, record["source_revision"], path),
+                "original reference schema bytes differ",
+            )
     harness = directory / "harness"
     for member in harness.iterdir():
         if member.is_file():

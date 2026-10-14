@@ -52,6 +52,7 @@ class Replay(unittest.TestCase):
             "provenance": self.record,
             "evaluator": "public",
             "phase_measurements_required": False,
+            "measurement_campaign": {"collection": "/vanished/runner/collection.json"},
         }
         self.row = {
             "case": self.case["name"],
@@ -173,6 +174,13 @@ class Replay(unittest.TestCase):
                     {
                         "declaration": staged[-1],
                         "status": "success",
+                        "failure": None,
+                        "host_view_access_counts": {
+                            "output": 2,
+                            "issues": 1,
+                            "verification_log": 1,
+                            "warning_log": 1,
+                        },
                         "evidence_capture_failures": [],
                         "metadata": metadata,
                         "native_call_order": ["public_build", "metadata_after_build"],
@@ -211,6 +219,7 @@ class Replay(unittest.TestCase):
                 "phase_measurements": False,
                 "observe_callbacks": False,
                 "reference_root_build": False,
+                "reference_schema": None,
                 "repetitions": staged,
             }
             write(child / "request.json", request)
@@ -230,6 +239,7 @@ class Replay(unittest.TestCase):
                 {
                     "pid": 123,
                     "exit_code": 0,
+                    "launcher": "fresh small broker; controller fork RSS excluded",
                     "peak_rss": {
                         "provider": "os.wait4(child_pid).ru_maxrss",
                         "raw": 100,
@@ -321,6 +331,30 @@ class Replay(unittest.TestCase):
     def test_collector_cannot_hide_original_failures(self):
         self.row["children"][1]["failure"] = {"message": "failed originally"}
         with self.assertRaisesRegex(ValueError, "original failed attempt"):
+            self.replay()
+
+    def test_raw_failure_wrong_getter_counts_and_campaign_child_cannot_be_hidden(self):
+        original = auditor.read(self.cold / "response.json")
+        changed = copy.deepcopy(original)
+        changed["repetitions"][0]["failure"] = {
+            "class": "DomainError",
+            "message": "original failed attempt",
+        }
+        write(self.cold / "response.json", changed)
+        with self.assertRaisesRegex(ValueError, "original raw repetition failed"):
+            self.replay()
+        changed = copy.deepcopy(original)
+        changed["repetitions"][0]["host_view_access_counts"]["output"] = 1
+        write(self.cold / "response.json", changed)
+        with self.assertRaisesRegex(ValueError, "host getter counts"):
+            self.replay()
+        write(self.cold / "response.json", original)
+        self.change(
+            self.cold,
+            "request.json",
+            lambda value: value.update(output="/another-attempt/" + self.cold.name),
+        )
+        with self.assertRaisesRegex(ValueError, "another campaign collection"):
             self.replay()
 
     def test_absent_raw_member_and_traversal_refuse(self):
@@ -827,6 +861,20 @@ class InstallationAdmission(unittest.TestCase):
         self,
     ):
         self.assertEqual(self.replay(), self.record)
+
+    def test_only_approved_prior_python_version_can_be_a_baseline(self):
+        with self.assertRaisesRegex(ValueError, "prior Python 0.3.0"):
+            auditor.admit_installation(
+                self.root,
+                {
+                    "provenance": self.record,
+                    "source_revision": self.record["source_revision"],
+                },
+                auditor.tuples()[0],
+                "baseline",
+                self.repository,
+                self.root / "scratch",
+            )
 
     def test_changed_native_package_version_or_pinned_core_version_refuse(self):
         self.wheel("other-package", "0.4.0")
