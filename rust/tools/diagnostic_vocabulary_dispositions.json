@@ -7,7 +7,7 @@
       "phases": ["validation"],
       "reason": "Already an unused registration in the published prior source. Current function argument, result, conformance and original-exception contracts have their own closed causes; no removed assertion depended on this spelling.",
       "owners": ["rust/crates/yamaa-core/src/project_function_result.rs", "rust/crates/yamaa-core/src/diagnostic/mod.rs"],
-      "controls": ["rust/crates/yamaa-core/tests/project_function_result.rs", "rust/crates/yamaa-engine/tests/function_invocation.rs"],
+      "controls": ["rust/crates/yamaa-core/tests/project/project_function_result.rs", "rust/crates/yamaa-engine/tests/function_invocation.rs"],
       "producer": null,
       "history": "Published prior source 845a91ff9ba4ab6599efbd79fafe1c4e1dd14255 registered the name without a producer; #1973 retires reference extension objects while retaining function semantics."
     },
@@ -16,7 +16,7 @@
       "phases": ["derivation"],
       "reason": "The reference executor checked mutable candidate dictionaries and completed-column sets. Those Python objects and extension hooks are retired. Complete typed output schema, dependency admission and original output truth remain required; this is not permission to produce incomplete rows.",
       "owners": ["rust/crates/yamaa-core/src/dataset/mod.rs", "rust/crates/yamaa-core/src/table.rs"],
-      "controls": ["rust/crates/yamaa-core/tests/dataset_model.rs", "rust/crates/yamaa-engine/tests/dataset.rs", "rust/tests/installed_original_specifications.py"],
+      "controls": ["rust/crates/yamaa-core/tests/relations/dataset_model.rs", "rust/crates/yamaa-engine/tests/dataset.rs", "rust/tests/installed_original_specifications.py"],
       "producer": null,
       "history": "845a91ff9ba4ab6599efbd79fafe1c4e1dd14255:python/src/yamaa/runtime/executor.py; retirement map and scope authority retained at 43bb4437d9c0890ec7877ec7575a517c771a8147."
     },
@@ -61,7 +61,7 @@
       "phases": ["derivation"],
       "reason": "This reference-executor guard protected mutable candidate/column-enrichment lengths. Those Python planner/model objects retire; typed row construction, completed dependencies, cardinality and independent output ordering/count assertions remain required.",
       "owners": ["rust/crates/yamaa-core/src/dataset/mod.rs", "rust/crates/yamaa-core/src/dataset/row_stages.rs"],
-      "controls": ["rust/crates/yamaa-core/tests/dataset_model.rs", "rust/crates/yamaa-engine/tests/row_derivations.rs", "rust/tests/installed_original_specifications.py"],
+      "controls": ["rust/crates/yamaa-core/tests/relations/dataset_model.rs", "rust/crates/yamaa-engine/tests/row_derivations.rs", "rust/tests/installed_original_specifications.py"],
       "producer": null,
       "history": "845a91ff9ba4ab6599efbd79fafe1c4e1dd14255:python/tests/runtime/test_executor.py:test_column_enrichment_keeps_the_constructed_row_count; assertion replacement map at 43bb4437d9c0890ec7877ec7575a517c771a8147."
     },
@@ -79,7 +79,7 @@
       "phases": ["mapping"],
       "reason": "Already unused in the published prior source and absent from its semantic assertions. Current normative present-but-unlisted mapping failures use unmapped_value; missing_input stays distinct, with handler and case-fold behavior preserved.",
       "owners": ["rules/execution/handlers.md", "rust/crates/yamaa-core/src/mapping_cut.rs"],
-      "controls": ["rust/crates/yamaa-core/tests/mapping_cut.rs", "rust/crates/yamaa-core/tests/diagnostic/mapping_cut.rs"],
+      "controls": ["rust/crates/yamaa-core/tests/source/mapping_cut.rs", "rust/crates/yamaa-core/tests/diagnostics/diagnostic/mapping_cut.rs"],
       "producer": null,
       "history": "Published prior source 845a91ff9ba4ab6599efbd79fafe1c4e1dd14255 registered this unused spelling; no removed producer or unique condition assertion is claimed."
     },
@@ -106,7 +106,7 @@
       "phases": ["validation"],
       "reason": "REQ-0030 remains a conditional capability obligation, not retirement. There is no current literal emitter or alternate native text-contract selector. Fixed core text/scalar owners must preserve the contract; final installed Unicode/NUL and ordering qualification must prove supported capability, with no host-default fallback. This disposition does not invent an executable refusal path.",
       "owners": ["rules/values/text.md", "rust/crates/yamaa-core/src/value.rs", "rust/crates/yamaa-core/src/text_case.rs"],
-      "controls": ["rust/crates/yamaa-core/tests/values.rs", "rust/crates/yamaa-core/tests/text_case.rs", "rust/tests/installed_public_contract.py", "R/yamaa/tests/scalars.R"],
+      "controls": ["rust/crates/yamaa-core/tests/scalar/values.rs", "rust/crates/yamaa-core/tests/scalar/text_case.rs", "rust/tests/installed_public_contract.py", "R/yamaa/tests/scalars.R"],
       "producer": null,
       "history": "Current normative REQ-0030 and fixed-contract source/control ownership. The absence of an emitter is explicit; successful static disposition is not unavailable-capability replay or migration acceptance."
     },
@@ -115,7 +115,7 @@
       "phases": ["output"],
       "reason": "The retired build_artifact(TypedTable, ...) API accepted mutable Polars objects and rejected invalid dtype, subsecond/timezone datetime and calendar values here. Closed finite/temporal values and typed Arrow boundaries now refuse those representations before held output. REQ-0763 preserve-or-error and immutable Save semantics remain required, not retired.",
       "owners": ["rules/storage/publication.md", "rust/crates/yamaa-core/src/value.rs", "rust/crates/yamaa-core/src/temporal.rs", "rust/crates/yamaa-adapters/src/arrow_table.rs"],
-      "controls": ["rust/crates/yamaa-adapters/tests/arrow_table.rs", "rust/crates/yamaa-core/tests/temporal.rs", "rust/tests/installed_public_contract.py"],
+      "controls": ["rust/crates/yamaa-adapters/tests/arrow_table.rs", "rust/crates/yamaa-core/tests/scalar/temporal.rs", "rust/tests/installed_public_contract.py"],
       "producer": null,
       "history": "Three invalid host-object artifact assertions at 845a91ff9ba4ab6599efbd79fafe1c4e1dd14255:python/tests/io/test_artifact.py remain mapped by 43bb4437d9c0890ec7877ec7575a517c771a8147; direct IO/typed-object extension API retirement under #1973."
     }

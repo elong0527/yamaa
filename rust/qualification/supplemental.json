@@ -332,8 +332,8 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-core/tests/arithmetic.rs",
-        "rust/crates/yamaa-core/tests/evaluation.rs"
+        "rust/crates/yamaa-core/tests/scalar/arithmetic.rs",
+        "rust/crates/yamaa-core/tests/scalar/evaluation.rs"
       ]
     },
     {
@@ -341,7 +341,7 @@
       "family": "dependencies",
       "level": "compile",
       "consumers": [
-        "rust/crates/yamaa-core/tests/column_dependencies.rs"
+        "rust/crates/yamaa-core/tests/relations/column_dependencies.rs"
       ]
     },
     {
@@ -349,7 +349,7 @@
       "family": "types",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-core/tests/conversion.rs"
+        "rust/crates/yamaa-core/tests/scalar/conversion.rs"
       ]
     },
     {
@@ -357,7 +357,7 @@
       "family": "dependencies",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-core/tests/dependency_analysis.rs"
+        "rust/crates/yamaa-core/tests/relations/dependency_analysis.rs"
       ]
     },
     {
@@ -365,7 +365,7 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-core/tests/evaluation.rs"
+        "rust/crates/yamaa-core/tests/scalar/evaluation.rs"
       ]
     },
     {
@@ -373,7 +373,7 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-core/tests/evaluation.rs"
+        "rust/crates/yamaa-core/tests/scalar/evaluation.rs"
       ]
     },
     {
@@ -381,7 +381,7 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-core/tests/numeric_compiler.rs"
+        "rust/crates/yamaa-core/tests/numeric/numeric_compiler.rs"
       ]
     },
     {
@@ -389,7 +389,7 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-core/tests/evaluation.rs"
+        "rust/crates/yamaa-core/tests/scalar/evaluation.rs"
       ]
     },
     {
@@ -397,7 +397,7 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-core/tests/evaluation.rs"
+        "rust/crates/yamaa-core/tests/scalar/evaluation.rs"
       ]
     },
     {
@@ -405,7 +405,7 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-core/tests/evaluation.rs"
+        "rust/crates/yamaa-core/tests/scalar/evaluation.rs"
       ]
     },
     {
@@ -413,7 +413,7 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-core/tests/evaluation.rs"
+        "rust/crates/yamaa-core/tests/scalar/evaluation.rs"
       ]
     },
     {
@@ -421,7 +421,7 @@
       "family": "predicate",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-core/tests/predicate.rs"
+        "rust/crates/yamaa-core/tests/scalar/predicate.rs"
       ]
     },
     {
@@ -429,7 +429,7 @@
       "family": "aggregates",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-core/tests/reduction.rs"
+        "rust/crates/yamaa-core/tests/scalar/reduction.rs"
       ]
     },
     {

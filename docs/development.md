@@ -33,6 +33,13 @@ Start at each family's `mod.rs` and follow its ordinary `mod` declarations.
 The sole production `#[path]` exception selects the Windows implementation of
 `file_publication` while preserving its existing public and private namespace.
 
+Core integration tests use eight explicit targets: numeric, scalar, relations,
+schema, project, source, diagnostics and the portable math golden suite. Their
+child modules live under matching `tests/` directories, and shared factories
+live in core's own `tests/support/`. `autotests = false` prevents helper files
+from becoming independent binaries; register new controls in the appropriate
+family's `mod.rs`. Engine and adapter tests retain their existing targets.
+
 The [Python guide](https://github.com/elong0527/yamaa/blob/main/python/README.md)
 and [R guide](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md)
 describe public usage and installation. The
