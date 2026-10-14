@@ -152,16 +152,13 @@ class CommandEntryPoints(unittest.TestCase):
 
     def test_command_changes_select_native_and_docs_workflows(self):
         native = (ROOT / ".github/workflows/native.yml").read_text()
-        for event in ("push",):
-            section = re.search(rf"(?ms)^  {event}:\n(.*?)(?=^  \S|\Z)", native).group(
-                1
-            )
-            patterns = [
-                ast.literal_eval(value)
-                for value in re.findall(r"(?m)^      - (.+)$", section)
-            ]
-            self.assertIn(".github/scripts/commands/**", patterns)
-            self.assertIn("Makefile", patterns)
+        section = re.search(r"(?ms)^  push:\n(.*?)(?=^  \S|\Z)", native).group(1)
+        patterns = [
+            ast.literal_eval(value)
+            for value in re.findall(r"(?m)^      - (.+)$", section)
+        ]
+        self.assertIn(".github/scripts/commands/**", patterns)
+        self.assertIn("Makefile", patterns)
         self.assertNotRegex(native, r"(?m)^  pull_request:")
         smoke = (ROOT / ".github/workflows/pr.yml").read_text()
         self.assertRegex(smoke, r"(?m)^  pull_request:")
@@ -170,9 +167,10 @@ class CommandEntryPoints(unittest.TestCase):
             ".github/scripts/commands/rust_tests.py",
             ".github/scripts/commands/installed.py",
         ):
-            self.assertEqual(
-                pr_changes.coverage([path]), {"rust": True, "python": True}
-            )
+            with self.subTest(path=path):
+                self.assertEqual(
+                    pr_changes.coverage([path]), {"rust": True, "python": True}
+                )
         deploy = (ROOT / ".github/workflows/deploy-docs.yml").read_text()
         self.assertIn("- '.github/scripts/commands/docs.py'", deploy)
 
