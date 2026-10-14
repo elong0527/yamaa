@@ -78,6 +78,13 @@ class PriorRetentionAdmission(unittest.TestCase):
             (["../escape"], False),
             (["/escape"], False),
             (["C:\\escape"], False),
+            (["C:/escape"], False),
+            (["c:escape"], False),
+            (["nested/C:escape"], False),
+            (["nested/C:/escape"], False),
+            (["//server/share/escape"], False),
+            (["\\\\server\\share\\escape"], False),
+            (["safe\x00hidden"], False),
             (["same", "same"], False),
             (["link"], True),
         ):
@@ -85,11 +92,48 @@ class PriorRetentionAdmission(unittest.TestCase):
             with zipfile.ZipFile(data, "w") as archive:
                 for name in names:
                     info = zipfile.ZipInfo(name)
+                    info.filename = name
                     if symlink:
                         info.external_attr = 0o120777 << 16
                     archive.writestr(info, b"bytes")
-            with tempfile.TemporaryDirectory() as root, self.assertRaises(ValueError):
+            with (
+                self.subTest(names=names, symlink=symlink),
+                tempfile.TemporaryDirectory() as root,
+                self.assertRaises(ValueError),
+            ):
                 module.extract(data.getvalue(), Path(root))
+
+    def test_original_backslashes_are_refused_after_host_zipinfo_normalization(self):
+        name = "nested\\receipt.json"
+        data = io.BytesIO()
+        with mock.patch.object(zipfile.os, "sep", "\\"):
+            with zipfile.ZipFile(data, "w") as archive:
+                member = zipfile.ZipInfo(name)
+                member.filename = name
+                archive.writestr(member, b"original bytes")
+            self.assertIn(name.encode(), data.getvalue())
+            with zipfile.ZipFile(io.BytesIO(data.getvalue())) as archive:
+                member = archive.infolist()[0]
+                self.assertEqual(member.orig_filename, name)
+                self.assertEqual(member.filename, "nested/receipt.json")
+            with (
+                tempfile.TemporaryDirectory() as root,
+                self.assertRaisesRegex(ValueError, "unsafe artifact member"),
+            ):
+                module.extract(data.getvalue(), Path(root))
+
+    def test_relative_regular_members_keep_exact_payload_bytes(self):
+        payload = b"original\x00rollback\xffbytes\n"
+        data = io.BytesIO()
+        with zipfile.ZipFile(data, "w") as archive:
+            archive.writestr("nested/", b"")
+            archive.writestr("nested/receipt.json", payload)
+        with tempfile.TemporaryDirectory() as root:
+            destination = Path(root)
+            module.extract(data.getvalue(), destination)
+            self.assertEqual(
+                (destination / "nested/receipt.json").read_bytes(), payload
+            )
 
     def test_upload_guard_refuses_pr_context_before_network_or_mutation(self):
         prior = mock.Mock()
