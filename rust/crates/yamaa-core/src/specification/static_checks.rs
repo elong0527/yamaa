@@ -142,7 +142,8 @@ impl PreparedSpecification {
             if let Some(filter) = &self.root_filter {
                 filter.check_findings(findings)?;
             }
-            self.intermediates.check_findings(findings)?;
+            self.intermediates
+                .check_findings(&self.sources, &self.output, findings)?;
             for declaration in &self.declarations {
                 operation(&declaration.operation, &declaration.path, findings)?;
             }

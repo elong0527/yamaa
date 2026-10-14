@@ -28,3 +28,4 @@ mod row_filter_paths;
 mod row_intermediate_operands;
 mod scoped_windows_checks;
 mod specification_run;
+mod typed_intermediate_derivations;

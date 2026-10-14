@@ -87,6 +87,32 @@ impl HandlerCounter {
         &self.counts
     }
 
+    /// Preserve selected nested observations, including before a donor failure.
+    pub(crate) fn transfer_selected(
+        &mut self,
+        target: &mut Self,
+        select: impl Fn(&HandlerCount) -> bool,
+    ) -> Result<(), HandlerCountOverflow> {
+        for entry in self.counts.iter_mut().filter(|entry| select(entry)) {
+            target.register(&entry.spec_path, entry.handler);
+            let destination = target
+                .counts
+                .iter_mut()
+                .find(|other| other.spec_path == entry.spec_path && other.handler == entry.handler)
+                .expect("registered nested handler");
+            destination.count =
+                destination
+                    .count
+                    .checked_add(entry.count)
+                    .ok_or_else(|| HandlerCountOverflow {
+                        spec_path: entry.spec_path.clone(),
+                        handler: entry.handler,
+                    })?;
+            entry.count = 0;
+        }
+        Ok(())
+    }
+
     /// Count one selected replacement before its conversion; do not retry or overflow.
     pub(crate) fn record(
         &mut self,

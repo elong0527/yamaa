@@ -243,14 +243,9 @@ pub(super) fn prepare(
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
             {
                 for &(name, handled) in mapping(d, derived)? {
-                    collect_calls(
-                        d,
-                        field(d, handled, "value")?,
-                        &format!("intermediates[{index}].derivations.{}", text(d, name)?),
-                        0,
-                        true,
-                        &mut requests,
-                    )?;
+                    let path = format!("intermediates[{index}].derivations.{}", text(d, name)?);
+                    let (value, path) = intermediate_derivations::value(d, handled, &path)?;
+                    collect_calls(d, value, &path, 0, true, &mut requests)?;
                 }
             }
         }

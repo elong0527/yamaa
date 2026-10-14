@@ -2198,6 +2198,32 @@ local({
   cat("independent completed-row selected assertions retain exact records, effects and Save bytes without Python\n")
 })
 
+local({
+  for (truth in host_truth[["typed_intermediates"]]) {
+    directory <- tempfile("yamaa-typed-intermediate-"); dir.create(directory)
+    entry <- file.path(directory,"spec.yaml")
+    writeBin(charToRaw(truth$spec),entry)
+    # Static checks must not access the CSV files, which do not exist yet.
+    checked <- yamaa_check(entry)$issues
+    if (is.null(truth$check_condition)) stopifnot(nrow(checked)==0L)
+    else stopifnot(truth$check_condition %in% checked$condition)
+    for (name in names(truth$inputs)) writeBin(charToRaw(truth$inputs[[name]]),file.path(directory,name))
+    result <- yamaa_domain(entry)
+    if (is.null(truth$run_condition)) {
+      stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),
+        identical(rawfile(file.path(directory,"result.csv")),charToRaw(truth$csv)))
+    } else stopifnot(truth$run_condition %in% result$issues$condition,is.null(result$output))
+    observations <- get(".domain_observations",asNamespace("yamaa"))(result)
+    if (!is.null(observations)) {
+      counts <- jsonlite::fromJSON(rawToChar(observations),simplifyVector=FALSE)$handler_counts
+      reached <- sum(vapply(counts,function(item) if(item$handler=="unconvertible") item$count else 0,numeric(1)))
+      stopifnot(reached==truth$unconvertible_count)
+    }
+    unlink(directory,recursive=TRUE)
+  }
+  cat("typed intermediate results convert before numeric matching and retain conversion handlers without Python\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

@@ -189,6 +189,152 @@
         "negative-invalid-sex",
         "negative-sex-code",
         "negative-matches-bad-pattern"
+      ],
+      "typed_intermediates": [
+        {
+          "name": "padded-visit",
+          "spec": "schema_version: '1.0'\ndomain: ADVS\nkeys: [USUBJID, VSSEQ]\nbase: VS\ninput:\n  VS: {path: vs.csv, types: {VSSEQ: int, AVISITN: int}}\n  QS: {path: qs.csv, types: {QSSTRESN: int}}\noutput: {path: result.csv, columns: [USUBJID, VSSEQ, AVISITN, QSTOT]}\nintermediates:\n  - id: QSV\n    dataset: QS\n    key: {USUBJID: VS.USUBJID, QSVISITN: VS.AVISITN}\n    derivations:\n      QSVISITN: {type: int, derivation: {str_extract: {source: VISIT, pattern: '^WEEK ([0-9]+)$', group: 1}}, unconvertible: null}\n    no_match: null\ncolumns:\n  - {name: USUBJID, type: str, derivation: VS.USUBJID}\n  - {name: VSSEQ, type: int, derivation: VS.VSSEQ}\n  - {name: AVISITN, type: int, derivation: VS.AVISITN}\n  - {name: QSTOT, type: int, derivation: QSV.QSSTRESN}\n",
+          "inputs": {
+            "vs.csv": "USUBJID,VSSEQ,AVISITN\nS01,1,2\nS01,2,4\nS02,1,2\n",
+            "qs.csv": "USUBJID,VISIT,QSSTRESN\nS01,WEEK 2,10\nS01,WEEK 4,20\nS02,WEEK 02,40\n"
+          },
+          "csv": "USUBJID,VSSEQ,AVISITN,QSTOT\nS01,1,2,10\nS01,2,4,20\nS02,1,2,40\n",
+          "check_condition": null,
+          "run_condition": null,
+          "unconvertible_count": 0
+        },
+        {
+          "name": "float-visit",
+          "spec": "schema_version: '1.0'\ndomain: ADVS\nkeys: [USUBJID, VSSEQ]\nbase: VS\ninput:\n  VS: {path: vs.csv, types: {VSSEQ: int, AVISITN: int}}\n  QS: {path: qs.csv, types: {QSSTRESN: int}}\noutput: {path: result.csv, columns: [USUBJID, VSSEQ, AVISITN, QSTOT]}\nintermediates:\n  - id: QSV\n    dataset: QS\n    key: {USUBJID: VS.USUBJID, QSVISITN: VS.AVISITN}\n    derivations:\n      QSVISITN: {type: float, derivation: {str_extract: {source: VISIT, pattern: '^WEEK ([0-9]+)$', group: 1}}}\n    no_match: null\ncolumns:\n  - {name: USUBJID, type: str, derivation: VS.USUBJID}\n  - {name: VSSEQ, type: int, derivation: VS.VSSEQ}\n  - {name: AVISITN, type: int, derivation: VS.AVISITN}\n  - {name: QSTOT, type: int, derivation: QSV.QSSTRESN}\n",
+          "inputs": {
+            "vs.csv": "USUBJID,VSSEQ,AVISITN\nS01,1,2\nS01,2,4\nS02,1,2\n",
+            "qs.csv": "USUBJID,VISIT,QSSTRESN\nS01,WEEK 2,10\nS01,WEEK 4,20\nS02,WEEK 02,40\n"
+          },
+          "csv": "USUBJID,VSSEQ,AVISITN,QSTOT\nS01,1,2,10\nS01,2,4,20\nS02,1,2,40\n",
+          "check_condition": null,
+          "run_condition": null,
+          "unconvertible_count": 0
+        },
+        {
+          "name": "conversion-handled",
+          "spec": "schema_version: '1.0'\ndomain: ADVS\nkeys: [USUBJID, VSSEQ]\nbase: VS\ninput:\n  VS: {path: vs.csv, types: {VSSEQ: int, AVISITN: int}}\n  QS: {path: qs.csv, types: {QSSTRESN: int}}\noutput: {path: result.csv, columns: [USUBJID, VSSEQ, AVISITN, QSTOT]}\nintermediates:\n  - id: QSV\n    dataset: QS\n    key: {USUBJID: VS.USUBJID, QSVISITN: VS.AVISITN}\n    derivations:\n      QSVISITN: {type: int, derivation: VISIT, unconvertible: null}\n    no_match: null\ncolumns:\n  - {name: USUBJID, type: str, derivation: VS.USUBJID}\n  - {name: VSSEQ, type: int, derivation: VS.VSSEQ}\n  - {name: AVISITN, type: int, derivation: VS.AVISITN}\n  - {name: QSTOT, type: int, derivation: QSV.QSSTRESN}\n",
+          "inputs": {
+            "vs.csv": "USUBJID,VSSEQ,AVISITN\nS01,1,2\nS01,2,4\nS02,1,2\n",
+            "qs.csv": "USUBJID,VISIT,QSSTRESN\nS01,02,10\nS01,4,20\nS02,bad,40\n"
+          },
+          "csv": "USUBJID,VSSEQ,AVISITN,QSTOT\nS01,1,2,10\nS01,2,4,20\nS02,1,2,\n",
+          "check_condition": null,
+          "run_condition": null,
+          "unconvertible_count": 1
+        },
+        {
+          "name": "conversion-fatal",
+          "spec": "schema_version: '1.0'\ndomain: ADVS\nkeys: [USUBJID, VSSEQ]\nbase: VS\ninput:\n  VS: {path: vs.csv, types: {VSSEQ: int, AVISITN: int}}\n  QS: {path: qs.csv, types: {QSSTRESN: int}}\noutput: {path: result.csv, columns: [USUBJID, VSSEQ, AVISITN, QSTOT]}\nintermediates:\n  - id: QSV\n    dataset: QS\n    key: {USUBJID: VS.USUBJID, QSVISITN: VS.AVISITN}\n    derivations:\n      QSVISITN: {type: int, derivation: VISIT}\n    no_match: null\ncolumns:\n  - {name: USUBJID, type: str, derivation: VS.USUBJID}\n  - {name: VSSEQ, type: int, derivation: VS.VSSEQ}\n  - {name: AVISITN, type: int, derivation: VS.AVISITN}\n  - {name: QSTOT, type: int, derivation: QSV.QSSTRESN}\n",
+          "inputs": {
+            "vs.csv": "USUBJID,VSSEQ,AVISITN\nS01,1,2\nS01,2,4\nS02,1,2\n",
+            "qs.csv": "USUBJID,VISIT,QSSTRESN\nS01,02,10\nS01,4,20\nS02,bad,40\n"
+          },
+          "csv": null,
+          "check_condition": null,
+          "run_condition": "conversion_failed",
+          "unconvertible_count": 0
+        },
+        {
+          "name": "replacement-converted",
+          "spec": "schema_version: '1.0'\ndomain: ADVS\nkeys: [USUBJID, VSSEQ]\nbase: VS\ninput:\n  VS: {path: vs.csv, types: {VSSEQ: int, AVISITN: int}}\n  QS: {path: qs.csv, types: {QSSTRESN: int}}\noutput: {path: result.csv, columns: [USUBJID, VSSEQ, AVISITN, QSTOT]}\nintermediates:\n  - id: QSV\n    dataset: QS\n    key: {USUBJID: VS.USUBJID, QSVISITN: VS.AVISITN}\n    derivations:\n      QSVISITN: {type: int, derivation: VISIT, unconvertible: \"02\"}\n    no_match: null\ncolumns:\n  - {name: USUBJID, type: str, derivation: VS.USUBJID}\n  - {name: VSSEQ, type: int, derivation: VS.VSSEQ}\n  - {name: AVISITN, type: int, derivation: VS.AVISITN}\n  - {name: QSTOT, type: int, derivation: QSV.QSSTRESN}\n",
+          "inputs": {
+            "vs.csv": "USUBJID,VSSEQ,AVISITN\nS01,1,2\nS01,2,4\nS02,1,2\n",
+            "qs.csv": "USUBJID,VISIT,QSSTRESN\nS01,02,10\nS01,4,20\nS02,bad,40\n"
+          },
+          "csv": "USUBJID,VSSEQ,AVISITN,QSTOT\nS01,1,2,10\nS01,2,4,20\nS02,1,2,40\n",
+          "check_condition": null,
+          "run_condition": null,
+          "unconvertible_count": 1
+        },
+        {
+          "name": "replacement-fatal",
+          "spec": "schema_version: '1.0'\ndomain: ADVS\nkeys: [USUBJID, VSSEQ]\nbase: VS\ninput:\n  VS: {path: vs.csv, types: {VSSEQ: int, AVISITN: int}}\n  QS: {path: qs.csv, types: {QSSTRESN: int}}\noutput: {path: result.csv, columns: [USUBJID, VSSEQ, AVISITN, QSTOT]}\nintermediates:\n  - id: QSV\n    dataset: QS\n    key: {USUBJID: VS.USUBJID, QSVISITN: VS.AVISITN}\n    derivations:\n      QSVISITN: {type: int, derivation: VISIT, unconvertible: bad}\n    no_match: null\ncolumns:\n  - {name: USUBJID, type: str, derivation: VS.USUBJID}\n  - {name: VSSEQ, type: int, derivation: VS.VSSEQ}\n  - {name: AVISITN, type: int, derivation: VS.AVISITN}\n  - {name: QSTOT, type: int, derivation: QSV.QSSTRESN}\n",
+          "inputs": {
+            "vs.csv": "USUBJID,VSSEQ,AVISITN\nS01,1,2\nS01,2,4\nS02,1,2\n",
+            "qs.csv": "USUBJID,VISIT,QSSTRESN\nS01,02,10\nS01,4,20\nS02,bad,40\n"
+          },
+          "csv": null,
+          "check_condition": null,
+          "run_condition": "conversion_failed",
+          "unconvertible_count": 1
+        },
+        {
+          "name": "missing-preserved",
+          "spec": "schema_version: '1.0'\ndomain: ADVS\nkeys: [USUBJID, VSSEQ]\nbase: VS\ninput:\n  VS: {path: vs.csv, types: {VSSEQ: int, AVISITN: int}}\n  QS: {path: qs.csv, types: {QSSTRESN: int}}\noutput: {path: result.csv, columns: [USUBJID, VSSEQ, AVISITN, QSTOT]}\nintermediates:\n  - id: QSV\n    dataset: QS\n    key: {USUBJID: VS.USUBJID, QSVISITN: VS.AVISITN}\n    derivations:\n      QSVISITN: {type: int, derivation: VISIT, unconvertible: 2}\n    no_match: null\ncolumns:\n  - {name: USUBJID, type: str, derivation: VS.USUBJID}\n  - {name: VSSEQ, type: int, derivation: VS.VSSEQ}\n  - {name: AVISITN, type: int, derivation: VS.AVISITN}\n  - {name: QSTOT, type: int, derivation: QSV.QSSTRESN}\n",
+          "inputs": {
+            "vs.csv": "USUBJID,VSSEQ,AVISITN\nS01,1,2\nS01,2,4\nS02,1,2\n",
+            "qs.csv": "USUBJID,VISIT,QSSTRESN\nS01,02,10\nS01,4,20\nS02,,40\n"
+          },
+          "csv": "USUBJID,VSSEQ,AVISITN,QSTOT\nS01,1,2,10\nS01,2,4,20\nS02,1,2,\n",
+          "check_condition": null,
+          "run_condition": null,
+          "unconvertible_count": 0
+        },
+        {
+          "name": "untyped-key-mismatch",
+          "spec": "schema_version: '1.0'\ndomain: ADVS\nkeys: [USUBJID, VSSEQ]\nbase: VS\ninput:\n  VS: {path: vs.csv, types: {VSSEQ: int, AVISITN: int}}\n  QS: {path: qs.csv, types: {QSSTRESN: int}}\noutput: {path: result.csv, columns: [USUBJID, VSSEQ, AVISITN, QSTOT]}\nintermediates:\n  - id: QSV\n    dataset: QS\n    key: {USUBJID: VS.USUBJID, QSVISITN: VS.AVISITN}\n    derivations:\n      QSVISITN: {str_extract: {source: VISIT, pattern: '^WEEK ([0-9]+)$', group: 1}}\n    no_match: null\ncolumns:\n  - {name: USUBJID, type: str, derivation: VS.USUBJID}\n  - {name: VSSEQ, type: int, derivation: VS.VSSEQ}\n  - {name: AVISITN, type: int, derivation: VS.AVISITN}\n  - {name: QSTOT, type: int, derivation: QSV.QSSTRESN}\n",
+          "inputs": {
+            "vs.csv": "USUBJID,VSSEQ,AVISITN\nS01,1,2\nS01,2,4\nS02,1,2\n",
+            "qs.csv": "USUBJID,VISIT,QSSTRESN\nS01,WEEK 2,10\nS01,WEEK 4,20\nS02,WEEK 02,40\n"
+          },
+          "csv": null,
+          "check_condition": "incompatible_input_type",
+          "run_condition": "incompatible_input_type",
+          "unconvertible_count": 0
+        },
+        {
+          "name": "ineffective-untyped-handler",
+          "spec": "schema_version: '1.0'\ndomain: ADVS\nkeys: [USUBJID, VSSEQ]\nbase: VS\ninput:\n  VS: {path: vs.csv, types: {VSSEQ: int, AVISITN: int}}\n  QS: {path: qs.csv, types: {QSSTRESN: int}}\noutput: {path: result.csv, columns: [USUBJID, VSSEQ, AVISITN, QSTOT]}\nintermediates:\n  - id: QSV\n    dataset: QS\n    key: {USUBJID: VS.USUBJID, QSVISITN: VS.AVISITN}\n    derivations:\n      QSVISITN: {value: {str_extract: {source: VISIT, pattern: '^WEEK ([0-9]+)$', group: 1}}, unconvertible: null}\n    no_match: null\ncolumns:\n  - {name: USUBJID, type: str, derivation: VS.USUBJID}\n  - {name: VSSEQ, type: int, derivation: VS.VSSEQ}\n  - {name: AVISITN, type: int, derivation: VS.AVISITN}\n  - {name: QSTOT, type: int, derivation: QSV.QSSTRESN}\n",
+          "inputs": {
+            "vs.csv": "USUBJID,VSSEQ,AVISITN\nS01,1,2\nS01,2,4\nS02,1,2\n",
+            "qs.csv": "USUBJID,VISIT,QSSTRESN\nS01,WEEK 2,10\nS01,WEEK 4,20\nS02,WEEK 02,40\n"
+          },
+          "csv": null,
+          "check_condition": "invalid_operation_count",
+          "run_condition": "invalid_operation_count",
+          "unconvertible_count": 0
+        },
+        {
+          "name": "converted-before-later-expression",
+          "spec": "schema_version: '1.0'\ndomain: ADVS\nkeys: [USUBJID, VSSEQ]\nbase: VS\ninput:\n  VS: {path: vs.csv, types: {VSSEQ: int, AVISITN: int}}\n  QS: {path: qs.csv, types: {QSSTRESN: int}}\noutput: {path: result.csv, columns: [USUBJID, VSSEQ, AVISITN, QSTOT]}\nintermediates:\n  - id: QSV\n    dataset: QS\n    key: {USUBJID: VS.USUBJID, QSVISITN: VS.AVISITN}\n    derivations:\n      QSVISITN: {type: int, derivation: {str_extract: {source: VISIT, pattern: '^WEEK ([0-9]+)$', group: 1}}}\n      NEXT: {compute: {expr: \"QSVISITN + 1\"}}\n    filter: QS.NEXT > 2\n    no_match: null\ncolumns:\n  - {name: USUBJID, type: str, derivation: VS.USUBJID}\n  - {name: VSSEQ, type: int, derivation: VS.VSSEQ}\n  - {name: AVISITN, type: int, derivation: VS.AVISITN}\n  - {name: QSTOT, type: int, derivation: QSV.QSSTRESN}\n",
+          "inputs": {
+            "vs.csv": "USUBJID,VSSEQ,AVISITN\nS01,1,2\nS01,2,4\nS02,1,2\n",
+            "qs.csv": "USUBJID,VISIT,QSSTRESN\nS01,WEEK 2,10\nS01,WEEK 4,20\nS02,WEEK 02,40\n"
+          },
+          "csv": "USUBJID,VSSEQ,AVISITN,QSTOT\nS01,1,2,10\nS01,2,4,20\nS02,1,2,40\n",
+          "check_condition": null,
+          "run_condition": null,
+          "unconvertible_count": 0
+        },
+        {
+          "name": "nested-conversion-ledger",
+          "spec": "schema_version: '1.0'\ndomain: ADVS\nkeys: [USUBJID, VSSEQ]\nbase: VS\ninput:\n  VS: {path: vs.csv, types: {VSSEQ: int, AVISITN: int}}\n  QS: {path: qs.csv, types: {QSSTRESN: int}}\noutput: {path: result.csv, columns: [USUBJID, VSSEQ, AVISITN, QSTOT]}\nintermediates:\n  - id: FIRST\n    dataset: VS\n    key: {USUBJID: QS.USUBJID}\n    derivations:\n      PICK: {type: int, derivation: {literal: bad}, unconvertible: 2}\n    order_by: [VS.VSSEQ]\n    keep: first\n  - id: QSV\n    dataset: QS\n    key: {USUBJID: VS.USUBJID, QSVISITN: VS.AVISITN}\n    derivations:\n      QSVISITN: {type: int, derivation: {str_extract: {source: VISIT, pattern: '^WEEK ([0-9]+)$', group: 1}}, unconvertible: null}\n      PICK: FIRST.PICK\n    filter: QS.PICK = 2\n    no_match: null\ncolumns:\n  - {name: USUBJID, type: str, derivation: VS.USUBJID}\n  - {name: VSSEQ, type: int, derivation: VS.VSSEQ}\n  - {name: AVISITN, type: int, derivation: VS.AVISITN}\n  - {name: QSTOT, type: int, derivation: QSV.QSSTRESN}\n",
+          "inputs": {
+            "vs.csv": "USUBJID,VSSEQ,AVISITN\nS01,1,2\nS01,2,4\nS02,1,2\n",
+            "qs.csv": "USUBJID,VISIT,QSSTRESN\nS01,WEEK 2,10\nS01,WEEK 4,20\nS02,WEEK 02,40\n"
+          },
+          "csv": "USUBJID,VSSEQ,AVISITN,QSTOT\nS01,1,2,10\nS01,2,4,20\nS02,1,2,40\n",
+          "check_condition": null,
+          "run_condition": null,
+          "unconvertible_count": 3
+        },
+        {
+          "name": "scalar-types",
+          "spec": "schema_version: '1.0'\ndomain: ADVS\nkeys: [USUBJID, VSSEQ]\nbase: VS\ninput:\n  VS: {path: vs.csv, types: {VSSEQ: int, AVISITN: int}}\n  QS: {path: qs.csv, types: {QSSTRESN: int}}\noutput: {path: result.csv, columns: [USUBJID, VSSEQ, AVISITN, QSTOT, TEXT, DATE, TIME]}\nintermediates:\n  - id: QSV\n    dataset: QS\n    key: {USUBJID: VS.USUBJID, QSVISITN: VS.AVISITN}\n    derivations:\n      QSVISITN: {type: int, derivation: {str_extract: {source: VISIT, pattern: '^WEEK ([0-9]+)$', group: 1}}, unconvertible: null}\n      TEXT: {type: str, derivation: QSVISITN}\n      DATE: {type: date, derivation: {literal: '2026-10-14'}}\n      TIME: {type: datetime, derivation: {literal: '2026-10-14T12:34:56'}}\n    no_match: null\ncolumns:\n  - {name: USUBJID, type: str, derivation: VS.USUBJID}\n  - {name: VSSEQ, type: int, derivation: VS.VSSEQ}\n  - {name: AVISITN, type: int, derivation: VS.AVISITN}\n  - {name: QSTOT, type: int, derivation: QSV.QSSTRESN}\n  - {name: TEXT, type: str, derivation: QSV.TEXT}\n  - {name: DATE, type: date, derivation: QSV.DATE}\n  - {name: TIME, type: datetime, derivation: QSV.TIME}\n",
+          "inputs": {
+            "vs.csv": "USUBJID,VSSEQ,AVISITN\nS01,1,2\nS01,2,4\nS02,1,2\n",
+            "qs.csv": "USUBJID,VISIT,QSSTRESN\nS01,WEEK 2,10\nS01,WEEK 4,20\nS02,WEEK 02,40\n"
+          },
+          "csv": "USUBJID,VSSEQ,AVISITN,QSTOT,TEXT,DATE,TIME\nS01,1,2,10,2,2026-10-14,2026-10-14T12:34:56\nS01,2,4,20,4,2026-10-14,2026-10-14T12:34:56\nS02,1,2,40,2,2026-10-14,2026-10-14T12:34:56\n",
+          "check_condition": null,
+          "run_condition": null,
+          "unconvertible_count": 0
+        }
       ]
     },
     "file-resources": {

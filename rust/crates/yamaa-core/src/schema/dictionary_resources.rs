@@ -212,7 +212,10 @@ impl Run<'_, '_> {
             }
             TypeNode::Name(_) => {
                 if let Some(class) = self.schema.class_named(kind) {
-                    if kind == "handled_expression_class" {
+                    if matches!(
+                        kind,
+                        "handled_expression_class" | "intermediate_expression_class"
+                    ) {
                         if let Some(child) = self.field(value, "value")? {
                             let field = class
                                 .fields
