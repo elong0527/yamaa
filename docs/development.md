@@ -24,6 +24,11 @@ Core and engine remain `no_std` and exclude host/storage frameworks. Diagnostics
 belong to the shared registry. Host callbacks carry typed values; diagnostic
 JSON text does not introduce a callback request/reply protocol. Build computes
 and retains results; explicit Save publishes held bytes in the contract's order.
+Production module names follow their directory and file names. Core groups
+dataset, specification, diagnostic and predicate responsibilities; engine groups
+dataset execution and intermediates; adapters group schema capture and file
+Define. The Windows publication module retains one explicit path because it
+implements the platform boundary in the existing private module namespace.
 The [Python guide](https://github.com/elong0527/yamaa/blob/main/python/README.md)
 and [R guide](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md)
 describe public usage and installation. The

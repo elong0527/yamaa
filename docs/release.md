@@ -70,8 +70,12 @@ retain provenance. Their current policy is:
   final qualification still requires all nine assessments and exact comparison.
   The [original numerical decision](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/1740-math-decision.md)
   and [witness report](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/qualification/math-decision-v1.json)
-  remain in Git. Current goldens do not replay the retired accuracy-certificate
-  tools or establish universal correctly rounded behavior.
+  remain in Git. Replaying the unchanged archived certificate algorithm against
+  that self-contained report reproduces all 2,304 original certificate objects
+  (2,246 union and 58 boundary cases), including exclusions and mathematically
+  different results. The 26 unchanged archived controls also pass. This bounded
+  historical replay establishes neither universal correct rounding nor current
+  installed qualification; the latter requires the complete final-source matrix.
 - Qualify CPython 3.12/3.13/3.14 wheel and independent source builds on Linux
   x86_64, macOS arm64 and Windows x64 (18 tuples), plus R 4.6.1 source builds on
   the same hosts (three tuples), each with strict `R CMD check` **Status: OK**.
