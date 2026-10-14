@@ -107,15 +107,22 @@ and are never `UNKNOWN`.
 
 <a id="req-0167"></a>
 
-**REQ-0167.** No operand is converted. Two non-missing operands compare only
+**REQ-0167.** Two non-missing operands compare only
 when [REQ-0005](../values/types.md#req-0005) makes their runtime types mutually comparable:
 
 | Types | Order |
 |---|---|
-| `int` and `float`, in any combination | Numeric after [Numeric values](../values/numbers.md) promotion |
+| `int` with `int` | Exact integer order |
+| `float` with `float` | Binary64 numeric order |
+| Mixed `int` and `float` | Widen the integer to binary64 under [REQ-0017](../values/numbers.md#req-0017), then compare |
 | `str` with `str` | [Text values](../values/text.md) text order |
 | `date` with `date` | Chronological under [Temporal values](../values/temporal.md) |
 | `datetime` with `datetime` | Chronological under [Temporal values](../values/temporal.md) |
+
+No other operand conversion occurs. Above `2^53`, widening can make a
+neighboring integer equal to a float: `9007199254740993 = 9007199254740992.0`
+is `TRUE`. The same pair remains unequal in the exact comparison consumers
+listed in [REQ-0005](../values/types.md#req-0005).
 
 <a id="req-0168"></a>
 
