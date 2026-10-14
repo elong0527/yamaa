@@ -8,6 +8,7 @@ API observations are retained without artifact digest fields.
 from __future__ import annotations
 
 import argparse
+import datetime
 import itertools
 import json
 import os
@@ -51,6 +52,31 @@ def required_artifacts():
     }
 
 
+def artifact_job(name):
+    if name == "native-run-audit":
+        return "native-run-evidence-audit"
+    if name == "native-public-cohort":
+        return "public-cohort-complete-runs"
+    for host in PLATFORMS:
+        if name == f"native-python-{host}-3.14":
+            return f"native-dist ({host}, 3.14)"
+        if name in {f"native-r-{host}", f"native-r-qualification-{host}"}:
+            return f"native-r ({host})"
+        for version, form in itertools.product(PYTHONS, FORMS):
+            if name == f"native-qualification-{host}-{version}-{form}":
+                return f"native-qualify ({host}, {version}, {form})"
+    raise ValueError("unknown required native artifact: " + name)
+
+
+def timestamp(value):
+    if not isinstance(value, str):
+        raise TypeError("missing native evidence timestamp")
+    result = datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if result.tzinfo is None:
+        raise ValueError("native evidence timestamp lacks timezone")
+    return result
+
+
 def validate(run, jobs, artifacts, repository, revision, branch):
     if (
         run["repository"]["full_name"] != repository
@@ -61,16 +87,29 @@ def validate(run, jobs, artifacts, repository, revision, branch):
         or run["event"] not in {"push", "workflow_dispatch"}
         or run["status"] != "completed"
         or run["conclusion"] != "success"
+        or type(run.get("id")) is not int
+        or run["id"] <= 0
+        or type(run.get("run_attempt")) is not int
+        or run["run_attempt"] <= 0
     ):
         raise ValueError("native run does not qualify the exact trusted source")
+    admitted_jobs = {}
     for name in required_jobs():
         matches = [job for job in jobs if job["name"] == name]
         if (
             len(matches) != 1
             or matches[0]["status"] != "completed"
             or matches[0]["conclusion"] != "success"
+            or matches[0].get("run_id") != run["id"]
+            or matches[0].get("run_attempt") != run["run_attempt"]
+            or matches[0].get("head_sha") != revision
         ):
             raise ValueError("missing or unsuccessful full native job: " + name)
+        if timestamp(matches[0].get("started_at")) > timestamp(
+            matches[0].get("completed_at")
+        ):
+            raise ValueError("native job has an invalid attempt interval: " + name)
+        admitted_jobs[name] = matches[0]
     for name in required_artifacts():
         matches = [item for item in artifacts if item["name"] == name]
         if (
@@ -78,9 +117,23 @@ def validate(run, jobs, artifacts, repository, revision, branch):
             or matches[0]["expired"]
             or matches[0]["size_in_bytes"] <= 0
             or matches[0].get("workflow_run", {}).get("head_sha") != revision
+            or matches[0].get("workflow_run", {}).get("id") != run["id"]
         ):
             raise ValueError(
                 "missing, expired or different-source native artifact: " + name
+            )
+        # Artifact metadata has no run_attempt. Its creation must fall inside
+        # the exact producing job's selected attempt, rather than an older
+        # successful attempt on the same source revision.
+        job = admitted_jobs[artifact_job(name)]
+        created = timestamp(matches[0].get("created_at"))
+        if (
+            not timestamp(job["started_at"])
+            <= created
+            <= timestamp(job["completed_at"])
+        ):
+            raise ValueError(
+                "native artifact is outside its producing job attempt: " + name
             )
 
 
