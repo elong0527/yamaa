@@ -100,7 +100,7 @@ fn native_uneven_csv_and_parquet_graphs_fit_ten_and_exact_eight_source_rows() {
             "ID,VALUE\n1,1\n1,2\n1,3\n1,4\n1,5\n1,6\n1,7\n",
         );
         study.write("producer/p.yaml", format!("schema_version: '1.0'\ndomain: COUNTED\nkeys: [ID]\ninput: {{RAW: {{path: ../raw/raw.csv, types: {{ID: int, VALUE: int}}}}}}\nrows:\n  - id: counted\n    dataset: RAW\n    group_by: [RAW.ID]\n    derivations: {{ID: RAW.ID, VALUE: {{aggregate: 'COUNT(RAW.*)'}}}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier}}\n  - {{name: VALUE, type: int, label: Count}}\noutput: {{path: ../generated/producer.{format}, columns: [ID, VALUE]}}\n"));
-        study.write("consumer/root.yaml", format!("schema_version: '1.0'\ndomain: ROOT\nkeys: [ID]\ninput: {{FIRST: {{path: ../generated/producer.{format}, schema: ../producer/p.yaml}}}}\nrows:\n  - id: counted\n    dataset: FIRST\n    group_by: [FIRST.ID]\n    derivations: {{ID: FIRST.ID, VALUE: {{aggregate: 'COUNT(FIRST.*)'}}}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier}}\n  - {{name: VALUE, type: int, label: Count}}\noutput: {{path: ../generated/root.csv, columns: [ID, VALUE]}}\n"));
+        study.write("consumer/root.yaml", format!("schema_version: '1.0'\ndomain: ROOT\nkeys: [ID]\ninput: {{FIRST: {{path: ../generated/producer.{format}, schema: ../producer/p.yaml}}}}\nrows:\n  - id: counted\n    dataset: FIRST\n    group_by: [FIRST.ID, FIRST.VALUE]\n    derivations: {{ID: FIRST.ID, SOURCE_COUNT: FIRST.VALUE, VALUE: {{aggregate: 'COUNT(FIRST.*)'}}}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier}}\n  - {{name: SOURCE_COUNT, type: int, label: Original source count}}\n  - {{name: VALUE, type: int, label: Count}}\noutput: {{path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}}\n"));
         let mut build = study.build(Language::Python);
         let mut activation = Activation::new(&study, Mode::Lock);
         for rows in [10, 8, 7] {
@@ -110,7 +110,7 @@ fn native_uneven_csv_and_parquet_graphs_fit_ten_and_exact_eight_source_rows() {
             limits.engine.source_storage_bytes = 4_096;
             limits.engine.decode_work_bytes = 4_096;
             limits.engine.execution.output_rows = 2;
-            limits.engine.execution.output_cells = 4;
+            limits.engine.execution.output_cells = 5;
             let attempt = build.build(&mut activation, &mut Report::default(), limits);
             assert_eq!(
                 attempt.accepted(),
@@ -120,7 +120,7 @@ fn native_uneven_csv_and_parquet_graphs_fit_ten_and_exact_eight_source_rows() {
             );
             assert!(activation.trace.is_empty());
             if rows >= 8 {
-                assert_eq!(artifact(&attempt, 1), b"ID,VALUE\n1,1\n");
+                assert_eq!(artifact(&attempt, 1), b"ID,SOURCE_COUNT,VALUE\n1,7,1\n");
                 let producer = attempt.graph.nodes[0]
                     .dataset
                     .result

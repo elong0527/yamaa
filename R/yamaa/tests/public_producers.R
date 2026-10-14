@@ -459,11 +459,12 @@ cat("R absent environment graphs capture no environment and repeat Save from hel
 
 # Paired public graph witness: seven independently authored records become one
 # counted producer row, then one consumer row, through each artifact profile.
+# REQ-0047 makes the copied producer count an explicit scalar group key.
 for(profile in c("csv","parquet")) {
   work <- study()
   write(work,"raw/raw.csv",paste0("ID,VALUE\n",paste0("1,",1:7,"\n",collapse="")))
   write(work,"producer/p.yaml",paste0("schema_version: '1.0'\ndomain: COUNTED\nkeys: [ID]\ninput: {RAW: {path: ../raw/raw.csv, types: {ID: int, VALUE: int}}}\nrows:\n  - id: counted\n    dataset: RAW\n    group_by: [RAW.ID]\n    derivations: {ID: RAW.ID, VALUE: {aggregate: 'COUNT(RAW.*)'}}\ncolumns:\n  - {name: ID, type: int, label: Identifier}\n  - {name: VALUE, type: int, label: Count}\noutput: {path: ../generated/producer.",profile,", columns: [ID, VALUE]}\n"))
-  write(work,"consumer/root.yaml",paste0("schema_version: '1.0'\ndomain: ROOT\nkeys: [ID]\ninput: {FIRST: {path: ../generated/producer.",profile,", schema: ../producer/p.yaml}}\nrows:\n  - id: counted\n    dataset: FIRST\n    group_by: [FIRST.ID]\n    derivations: {ID: FIRST.ID, SOURCE_COUNT: FIRST.VALUE, VALUE: {aggregate: 'COUNT(FIRST.*)'}}\ncolumns:\n  - {name: ID, type: int, label: Identifier}\n  - {name: SOURCE_COUNT, type: int, label: Original source count}\n  - {name: VALUE, type: int, label: Count}\noutput: {path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}\n"))
+  write(work,"consumer/root.yaml",paste0("schema_version: '1.0'\ndomain: ROOT\nkeys: [ID]\ninput: {FIRST: {path: ../generated/producer.",profile,", schema: ../producer/p.yaml}}\nrows:\n  - id: counted\n    dataset: FIRST\n    group_by: [FIRST.ID, FIRST.VALUE]\n    derivations: {ID: FIRST.ID, SOURCE_COUNT: FIRST.VALUE, VALUE: {aggregate: 'COUNT(FIRST.*)'}}\ncolumns:\n  - {name: ID, type: int, label: Identifier}\n  - {name: SOURCE_COUNT, type: int, label: Original source count}\n  - {name: VALUE, type: int, label: Count}\noutput: {path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}\n"))
   result <- yamaa_domain(file.path(work,"consumer/root.yaml"))
   stopifnot(nrow(result$issues)==0L,nrow(result$output)==1L,
     identical(names(result$output),c("ID","SOURCE_COUNT","VALUE")),
