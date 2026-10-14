@@ -693,7 +693,7 @@ fn count_dependency_pruning_keeps_complete_normalized_application_model() {
 }
 
 #[test]
-fn explicit_null_handler_and_raw_origin_remain_distinct_from_inherited_clear() {
+fn standalone_null_handler_retains_its_raw_origin() {
     let mut authored = window();
     authored["intermediates"] = json!([{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":null}]);
     let source = source(authored.to_string().into_bytes());
@@ -775,6 +775,87 @@ fn explicit_null_handler_and_raw_origin_remain_distinct_from_inherited_clear() {
             .nodes()[prepared.origins()[nulls].node],
         N::Text("last".into())
     );
+}
+
+#[test]
+fn introducing_null_handler_survives_explicit_composition_and_empty_child() {
+    let mut parent = window();
+    parent["intermediates"] = json!([{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":null}]);
+    parent["columns"][4]["derivation"] = json!("LOOK.VAL");
+    for empty_child in [false, true] {
+        let mut host = new_host(parent.to_string().as_bytes());
+        let authored = if empty_child {
+            json!({"schema_version":"1.0","parents":"parent.yaml"})
+        } else {
+            let mut authored = parent.clone();
+            authored["parents"] = json!([]);
+            authored
+        };
+        let prepared = shipped_schema::prepare(
+            source(authored.to_string().into_bytes()),
+            "entry.yaml".into(),
+            &mut host,
+        )
+        .unwrap_or_else(|_| panic!("introducing null is a value"));
+        let document = prepared.model().document();
+        let intermediate = sequence(document, path(document, &["intermediates"]))[0];
+        assert_eq!(
+            document.nodes()[document.field(intermediate, "no_match").unwrap()],
+            N::Null
+        );
+        assert_eq!(
+            prepared.declaring_source("intermediates.LOOK.no_match"),
+            Some(if empty_child {
+                "parent.yaml"
+            } else {
+                "entry.yaml"
+            })
+        );
+    }
+}
+
+#[test]
+fn inherited_null_or_literal_handler_is_still_cleared() {
+    for inherited in [json!(null), json!("UNKNOWN")] {
+        let mut parent = window();
+        parent["intermediates"] =
+            json!([{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":inherited}]);
+        parent["columns"][4]["derivation"] = json!("LOOK.VAL");
+        let mut host = new_host(parent.to_string().as_bytes());
+        let child = json!({"schema_version":"1.0","parents":"parent.yaml","intermediates":[{"id":"LOOK","no_match":null}]});
+        let prepared = shipped_schema::prepare(
+            source(child.to_string().into_bytes()),
+            "entry.yaml".into(),
+            &mut host,
+        )
+        .unwrap_or_else(|_| panic!("valid optional clear"));
+        let document = prepared.model().document();
+        let intermediate = sequence(document, path(document, &["intermediates"]))[0];
+        assert!(document.field(intermediate, "no_match").is_none());
+    }
+}
+
+#[test]
+fn introduced_invalid_nulls_keep_their_schema_constraints() {
+    for (field, condition) in [("label", "invalid_field_type"), ("type", "invalid_clear")] {
+        let mut authored = window();
+        authored["parents"] = json!([]);
+        authored["columns"][0][field] = json!(null);
+        let mut host = new_host(b"unused");
+        let error = shipped_schema::prepare(
+            source(authored.to_string().into_bytes()),
+            "entry.yaml".into(),
+            &mut host,
+        )
+        .err()
+        .expect("invalid column field");
+        let report = outcome(error);
+        assert_eq!(report["outcome"]["diagnostics"][0]["condition"], condition);
+        assert_eq!(
+            report["outcome"]["diagnostics"][0]["spec_paths"][0],
+            format!("columns.ID.{field}")
+        );
+    }
 }
 
 #[test]

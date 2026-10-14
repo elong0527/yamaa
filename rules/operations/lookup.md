@@ -341,7 +341,10 @@ a stated bound is ineligible rather than open-ended.
 **REQ-0129.** Yielding nothing is answered by the intermediate's `no_match`
 handler, its absence policy. With `no_match` declared, every column reading
 the intermediate receives its literal, and `no_match: null` answers with
-missing. The answer is recorded under [Local handlers](../execution/handlers.md)'s `no_match` handler.
+missing when it first declares the field. It retains that meaning when an
+empty child inherits the specification. A later layer's null over an inherited
+`no_match` clears the handler under
+[REQ-0632](../specification/composition.md#req-0632). The answer is recorded under [Local handlers](../execution/handlers.md)'s `no_match` handler.
 Without `no_match`, the read fails as `unmatched_key` ([REQ-0124](lookup.md#req-0124)).
 
 <a id="req-0130"></a>

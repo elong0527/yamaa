@@ -61,13 +61,18 @@ fn schema() -> SchemaStructure {
                         field("intermediates", "list[intermediate_class]"),
                         field("windows", "dict[str, window_class]"),
                         field("metadata", "dict[str, str]"),
+                        field("literal", "literal"),
                         field("keys", "list[str]"),
                         required("output", "dict"),
                     ]),
                 ),
                 (
                     "dataset_class",
-                    List(vec![field("path", "str"), field("types", "dict[str, str]")]),
+                    List(vec![
+                        field("path", "str"),
+                        field("types", "dict[str, str]"),
+                        field("missing", "literal"),
+                    ]),
                 ),
                 (
                     "column_class",
@@ -75,6 +80,7 @@ fn schema() -> SchemaStructure {
                         required("name", "str"),
                         required("type", "str"),
                         field("label", "str"),
+                        field("missing", "literal"),
                         field("mandatory", "required_options"),
                         field("options", "options_class"),
                         field("metadata", "dict[str, str]"),
@@ -86,6 +92,7 @@ fn schema() -> SchemaStructure {
                     List(vec![
                         required("id", "str"),
                         field("options", "options_class"),
+                        field("missing", "literal"),
                     ]),
                 ),
                 (
@@ -93,6 +100,7 @@ fn schema() -> SchemaStructure {
                     List(vec![
                         required("id", "str"),
                         field("options", "options_class"),
+                        field("no_match", "literal"),
                     ]),
                 ),
                 (
@@ -120,6 +128,10 @@ fn schema() -> SchemaStructure {
                 ),
                 ("required_options", List(vec![required("one", "str")])),
                 ("match_key", Map(vec![("type", Text("dict[str, str]"))])),
+                (
+                    "literal",
+                    Map(vec![("type", List(vec![Text("str"), Text("null")]))]),
+                ),
                 ("expression", Map(vec![("registry", Text("operations"))])),
                 (
                     "operations",
@@ -512,7 +524,7 @@ fn layers_keep_keyed_order_replace_ordinary_fields_and_track_written_provenance(
 }
 
 #[test]
-fn missing_and_required_clears_fail_in_contribution_order_even_for_new_members() {
+fn introduced_invalid_null_values_and_required_clears_fail_in_contribution_order() {
     let layers = vec![document(Map(vec![
         ("metadata", Null),
         (
@@ -536,18 +548,172 @@ fn missing_and_required_clears_fail_in_contribution_order_even_for_new_members()
             ))
             .collect::<Vec<_>>(),
         vec![
-            ("metadata", "invalid_clear", Some("REQ-0660")),
-            ("columns.NEW.label", "invalid_clear", Some("REQ-0660")),
-            ("keys", "invalid_clear", Some("REQ-0660")),
+            ("metadata", "invalid_field_type", Some("REQ-0287")),
+            ("columns.NEW.label", "invalid_field_type", Some("REQ-0287")),
+            ("keys", "invalid_field_type", Some("REQ-0287")),
             ("output", "invalid_clear", Some("REQ-0660")),
         ]
     );
     check(
         &result.document,
-        Map(vec![(
+        Map(vec![
+            ("metadata", Null),
+            (
+                "columns",
+                List(vec![Map(vec![("name", Text("NEW")), ("label", Null)])]),
+            ),
+            ("keys", Null),
+        ]),
+    );
+}
+
+#[test]
+fn introducing_null_values_survive_all_boundaries_and_empty_children() {
+    let first = document(Map(vec![
+        ("literal", Null),
+        ("input", Map(vec![("SRC", Map(vec![("missing", Null)]))])),
+        (
             "columns",
-            List(vec![Map(vec![("name", Text("NEW"))])]),
-        )]),
+            List(vec![Map(vec![("name", Text("A")), ("missing", Null)])]),
+        ),
+        (
+            "rows",
+            List(vec![Map(vec![("id", Text("R")), ("missing", Null)])]),
+        ),
+        (
+            "intermediates",
+            List(vec![Map(vec![("id", Text("LOOK")), ("no_match", Null)])]),
+        ),
+    ]));
+    let child = document(Map(vec![("schema_version", Text("1.0"))]));
+    let result = schema()
+        .compose_layer_fragments(&[first.clone(), child], &mut budget())
+        .unwrap();
+    assert!(result.diagnostics.is_empty());
+    for path in [
+        "literal",
+        "input.SRC.missing",
+        "columns.A.missing",
+        "rows.R.missing",
+        "intermediates.LOOK.no_match",
+    ] {
+        assert_eq!(
+            result
+                .provenance
+                .iter()
+                .find(|p| p.path == path)
+                .unwrap()
+                .layer,
+            0,
+            "{path}"
+        );
+    }
+    let same_member = document(Map(vec![(
+        "intermediates",
+        List(vec![Map(vec![("id", Text("LOOK"))])]),
+    )]));
+    let result = schema()
+        .compose_layer_fragments(&[same_member, first], &mut budget())
+        .unwrap();
+    assert!(result.diagnostics.is_empty());
+    assert_eq!(
+        result
+            .provenance
+            .iter()
+            .find(|p| p.path == "intermediates.LOOK.no_match")
+            .unwrap()
+            .layer,
+        1
+    );
+}
+
+#[test]
+fn inherited_literal_or_null_handler_is_cleared_and_can_be_introduced_again() {
+    for inherited in [Text("UNKNOWN"), Null] {
+        let first = document(Map(vec![(
+            "intermediates",
+            List(vec![Map(vec![
+                ("id", Text("LOOK")),
+                ("no_match", inherited),
+            ])]),
+        )]));
+        let next = document(Map(vec![(
+            "intermediates",
+            List(vec![Map(vec![("id", Text("LOOK")), ("no_match", Null)])]),
+        )]));
+        let result = schema()
+            .compose_layer_fragments(&[first.clone(), next.clone()], &mut budget())
+            .unwrap();
+        assert!(result.diagnostics.is_empty());
+        check(
+            &result.document,
+            Map(vec![(
+                "intermediates",
+                List(vec![Map(vec![("id", Text("LOOK"))])]),
+            )]),
+        );
+        assert!(!result
+            .provenance
+            .iter()
+            .any(|p| p.path == "intermediates.LOOK.no_match"));
+        let result = schema()
+            .compose_layer_fragments(&[first, next.clone(), next], &mut budget())
+            .unwrap();
+        assert!(result.diagnostics.is_empty());
+        check(
+            &result.document,
+            Map(vec![(
+                "intermediates",
+                List(vec![Map(vec![("id", Text("LOOK")), ("no_match", Null)])]),
+            )]),
+        );
+        assert_eq!(
+            result
+                .provenance
+                .iter()
+                .find(|p| p.path == "intermediates.LOOK.no_match")
+                .unwrap()
+                .layer,
+            2
+        );
+    }
+}
+
+#[test]
+fn invalid_introduced_null_collections_keep_value_findings_when_later_replaced() {
+    let first = document(Map(vec![
+        ("windows", Null),
+        ("rows", Null),
+        ("intermediates", Null),
+    ]));
+    let result = schema()
+        .compose_layer_fragments(core::slice::from_ref(&first), &mut budget())
+        .unwrap();
+    assert_eq!(result.diagnostics.len(), 3);
+    for (finding, path) in result
+        .diagnostics
+        .iter()
+        .zip(["windows", "rows", "intermediates"])
+    {
+        assert_eq!(finding.definition().condition, "invalid_field_type");
+        assert_eq!(finding.path, path);
+    }
+    let next = document(Map(vec![
+        ("windows", Map(vec![])),
+        ("rows", List(vec![])),
+        ("intermediates", List(vec![])),
+    ]));
+    let result = schema()
+        .compose_layer_fragments(&[first, next], &mut budget())
+        .unwrap();
+    assert_eq!(result.diagnostics.len(), 3);
+    check(
+        &result.document,
+        Map(vec![
+            ("windows", Map(vec![])),
+            ("rows", List(vec![])),
+            ("intermediates", List(vec![])),
+        ]),
     );
 }
 
@@ -668,7 +834,7 @@ fn complete_composition_materializes_defaults_once_and_keeps_written_provenance(
 #[test]
 fn materialization_failure_precedes_collected_clear_diagnostics_without_partial_output() {
     let layers = [document(Map(vec![
-        ("metadata", Null),
+        ("output", Null),
         (
             "columns",
             List(vec![Map(vec![
@@ -690,7 +856,7 @@ fn materialization_failure_precedes_collected_clear_diagnostics_without_partial_
         "missing_required_field"
     );
     assert_eq!(diagnostics[0].path, "<normalization>.one");
-    let layers = [document(Map(vec![("metadata", Null)]))];
+    let layers = [document(Map(vec![("output", Null)]))];
     let Err(yamaa_core::schema::LayerCompositionError {
         error: NormalizationError::Invalid(diagnostics),
         ..
@@ -699,5 +865,5 @@ fn materialization_failure_precedes_collected_clear_diagnostics_without_partial_
         panic!("expected clear failure")
     };
     assert_eq!(diagnostics[0].definition().condition, "invalid_clear");
-    assert_eq!(diagnostics[0].path, "metadata");
+    assert_eq!(diagnostics[0].path, "output");
 }
