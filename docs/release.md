@@ -1,7 +1,7 @@
 # Release and migration
 
 Reviewed 2026-10-13 (America/New_York) against main
-[`d8cb226a`](https://github.com/elong0527/yamaa/commit/d8cb226a), the current
+[`1b795ca4`](https://github.com/elong0527/yamaa/commit/1b795ca4), the current
 [#1969](https://github.com/elong0527/yamaa/issues/1969) and
 [#1973](https://github.com/elong0527/yamaa/issues/1973) gate records, retained
 qualification records and the authenticated GitHub release listing. This is the
@@ -27,7 +27,9 @@ replacement is a separate operation.
 ## Approved decisions
 
 [#1973](https://github.com/elong0527/yamaa/issues/1973) records items 1-9 and 12-19
-as decided. Their current policy is:
+as decided. The [approval comment](https://github.com/elong0527/yamaa/issues/1973#issuecomment-6112883568)
+and [original decision source](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/maintainer-decisions.md)
+retain provenance. Their current policy is:
 
 - Retain Python `domain`/`check`/`define`, result/error types, version metadata and
   `read_odm`/`write_odm_parquet`; retain R equivalents including `yamaa_define`.
@@ -53,6 +55,10 @@ as decided. Their current policy is:
   compatibility. Current independent goldens live in
   [portable_math.tsv](https://github.com/elong0527/yamaa/blob/main/rust/crates/yamaa-core/tests/fixtures/portable_math.tsv);
   final qualification still requires all nine assessments and exact comparison.
+  The [original numerical decision](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/1740-math-decision.md)
+  and [witness report](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/qualification/math-decision-v1.json)
+  remain in Git. Current goldens do not replay the retired accuracy-certificate
+  tools or establish universal correctly rounded behavior.
 - Qualify CPython 3.12/3.13/3.14 wheel and independent source builds on Linux
   x86_64, macOS arm64 and Windows x64 (18 tuples), plus R 4.6.1 source builds on
   the same hosts (three tuples), each with strict `R CMD check` **Status: OK**.
@@ -108,7 +114,10 @@ Performance acceptance is 27 cases (nine dimension variants at 1k/10k/100k) on
 all 21 tuples: 567 combinations, ten cold and thirty warm samples after three
 retained warmups. Use independent typed/output truth, raw clocks/RSS/phases/callbacks,
 both Saves and the prior Python 0.3.0 baseline on the same machine without
-concurrent compilation. Capacity constants remain unapproved. Refusals and
+concurrent compilation. Capacity constants remain unapproved. Logical rows/cells/work, captured bytes,
+graph ownership, encoded reports and publication prefixes have separate bounded
+scopes. Retained admission counters are per owner and do not cap whole-process
+RSS. Refusals and
 unavailable/incomparable metrics require explicit dispositions; do not choose
 thresholds merely to make results pass.
 
