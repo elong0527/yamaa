@@ -118,6 +118,7 @@ publication are later distribution work.
 - New here? [Introduction](https://elong0527.github.io/yamaa/articles/intro/) explains the model in five minutes.
 - Coming from Excel specs? [Excel to yamaa](https://elong0527.github.io/yamaa/articles/excel/) translates what you already know.
 - Looking for worked examples? [Benchmarks](https://elong0527.github.io/yamaa/benchmark/) illustrate the ideas.
+- Developing the engine? [Development](docs/development.md) describes the shared architecture and checks; [release guidance](docs/release.md) records migration gates and publication state.
 
 ## License
 

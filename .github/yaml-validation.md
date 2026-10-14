@@ -1,250 +1,71 @@
-# Repository Validation
+# Repository validation
 
-This document describes the validation scope and rules for the `yamaa`
-specification repository. The repository provides a validation tool to ensure
-examples, schemas, and directories are structurally consistent and well-formed.
-
-During migration #2002, `_reference_checks.py` is the single temporary boundary
-for reference regex, predicate, window, CSV/Parquet, ODM and scalar bindings,
-including the standalone CSV source-profile loader. The validator's source guard
-allows the public `yamaa.check` and native project metadata interfaces. Semantic
-checks will move to the installed shared engine as its language families qualify;
-the temporary boundary must be deleted before reference removal in #1994.
+The YAML Validation workflow checks authored specifications, schemas, rules,
+fixtures, style and documentation. The validator uses the installed shared Rust
+engine through public `yamaa.check` and bounded native project metadata services.
+Native CSV/Parquet/ODM/regex and grammar fixtures replace the deleted
+`_reference_checks.py` boundary. Repository schema/layout/editorial checks remain
+in Python. See [development](../docs/development.md) for architecture and
+[release](../docs/release.md) for final installed migration acceptance.
 
 ## Scope
-The validation ensures:
-1. **Text source**: Repository-authored source files are ASCII-only. Unicode
-   data remains valid in input and expected-output CSV fixtures.
-2. **YAML syntax**: YAML 1.2 core scalar resolution, no duplicate mapping keys,
-   anchors, aliases, merge keys, explicit tags, or syntax errors across any
-   repository `.yaml` files outside `.github/`.
-3. **Schema integrity**: `schema.yaml` is required, and included files must
-   stay inside `yaml/` and resolve without cycles. Custom types (`list[T]`,
-   `dict[K,V]`, unions, classes, aliases, and registries) must resolve. The
-   validator also enforces `values`, `pattern`, `min_length`, and `size`
-   constraints. Every maintained rule must declare `status: normative`, match
-   its stable file ID, and carry the same status in the rule index.
-4. **Example specs**: Every `spec.yaml` or `spec_<variant>.yaml` validates
-   against the schemas, checking required fields, unknown fields, and registry
-   payload shapes. An entry with `parents` first resolves its ordered local
-   inheritance graph under R017. Resolution validates partial layers, rejects
-   remote or missing parents, cycles, version mismatches, duplicate layer-local
-   identifiers, and invalid clears; rebases inherited dataset and output
-   paths; composes shallow keyed members; prunes unreachable
-   declarations; and stably orders columns by dependency. Every predicate is
-   parsed under R004, its identifiers are resolved for the predicate site, and
-   statically known operand types are checked without implicit conversion.
-   Every R010 numeric expression is parsed into a source-spanned syntax tree;
-   function names and argument counts, identifier scope, and numeric input
-   types are validated without executing the formula. The spans are zero-based
-   half-open character offsets into the expression leaf.
-   R012 string templates are scanned under their brace and placeholder grammar,
-   and R013 aggregate expressions are parsed with their closed reducer
-   vocabulary, relation, key, context, and operand-type rules. Static
-   operation checks also enforce mapping pairs and folded-key uniqueness,
-   comparable extremes and lookup ranges, nonzero row offsets, cut structure,
-   temporal input types and literal ranges, and column dependency cycles.
-   Cross-field validation also rejects
-   duplicate or unresolved dataset, lookup, column, key, output-column, and row
-   names, including namespace conflicts. A grouped row must declare a non-empty,
-   duplicate-free `group_by` whose variables are qualified to that row's driver.
-   Static
-   cross-field checks enforce base selection, complete and exclusive
-   derivation coverage, record-lookup field pairing, verification bounds and
-   IDs, and declared CSV fields. Every declared source path and producing
-   specification is resolved under R021 from its original declaring file
-   (REQ-0780), with no root/configuration discovery or fallback. Absolute local
-   paths and `../`/`.` segments are allowed (REQ-0774/0778); URI schemes,
-   backslashes, empty segments and trailing separators are rejected. Components
-   below the selected declaring directory or filesystem anchor must not be
-   symbolic links, and the target must exist and be a regular file. The old
-   `negative-path-absolute` and `negative-path-parent-escape` containment verdicts
-   and four resolved-spec YAML outputs are explicitly reference-only history;
-   structural checks still cover their authored files and expected contracts. A dataset
-   path whose extension names no R023 profile is rejected from the written
-   path, before the source is read. Each accepted physical file is read once
-   as one immutable byte snapshot, shared by every declaration that reaches
-   it, so a header is never re-read from a path that may since have
-   changed. Source-producing
-   specifications linked through `schema` validate recursively
-   against `root_class`; producer source paths must resolve, derivation coverage
-   must be complete, workflow dependencies must be acyclic, every stored
-   producer column must have a non-empty label, and the stored CSV header must
-   match the producer's ordered `output.columns` exactly. A producing
-   specification cannot be combined with inline `types`.
-   Negative examples (folders prefixed with `negative-`) are structurally
-   validated. For fixtures with `phase: validation`,
-   `benchmarks/validation-manifest.yaml` registers every negative example
-   whose
-   expected phase is `validation`, its owning rule, primary condition, exact
-   specification paths, and implemented validator family or open blocking
-   issue. An implemented fixture passes only when that condition is emitted at
-   every declared path; unrelated diagnostics still fail validation. A blocked
-   entry fails when its expected diagnostic becomes complete, and CI also
-   rejects a blocking issue that is no longer open.
-   Each positive inherited example must provide an exact
-   `expected/resolved[_<variant>].yaml` data-tree fixture.
-5. **Layout**: All examples have `README.md`, one `spec.yaml` or one or more
-   `spec_<variant>.yaml` files, `input/`, and `expected/`. A base spec cannot
-   be mixed with variants. Negative examples must provide `expected/error.yaml`
-   and exactly one `## How to fix` section. Positive examples must not provide
-   `expected/error.yaml`. Error contracts use the closed phase vocabulary,
-   snake-case conditions, existing specification paths, and an optional
-   mapping context.
-6. **CSV consistency**: Every input and expected fixture whose extension is
-   `.csv` in any case is read under R023's source profile, which preserves
-   quoting, so a bare empty field stays distinct from a quoted empty one
-   rather than being normalized to the same text. A fixture must decode as
-   UTF-8, carry no byte-order mark, terminate its records with `U+000A` or
-   `U+000D U+000A`, close every quoted field,
-   name each field of a unique, non-empty header, and carry the header's
-   field count in every record. A negative example may carry the fixture that
-   provokes the source condition its `expected/error.yaml` declares, and must
-   actually provoke it: a malformed fixture no example declares is an error,
-   and so is a declared source condition no fixture reports. Expected output
-   headers must match exactly the `output.columns` sequence declared by the
-   specification. `output.path` names the file the specification produces and
-   its extension must be one R020 maps; the expected artifact carries that
-   name. An artifact whose path resolves to the `csv` profile must also carry
-   that profile's bytes: no byte-order mark,
-   `U+000A` terminating every record including the last, and R020's exact
-   quoting condition, which distinguishes a missing value from a collected
-   empty string. An `int` column must carry canonical integer text, and a
-   `float` column the shortest round-trip text, or exactly the width
-   `output.decimals` declares. Static validation checks the form of a golden
-   value, not that a derivation would produce it.
-7. **Example Index**: `benchmarks/README.md` must accurately list all
-   example directories in alphabetical order without stale entries. The
-   descriptions must match the contract defined by the first line of the
-   example's `README.md`.
-8. **Example documentation**: Data contracts must stay within 79 columns,
-   avoid schema vocabulary, describe each non-key expected column, and use
-   only the remediation or specification-variant sections allowed by
-   `benchmarks/agents.md`.
-9. **Regular expressions**: Every pattern the language admits -- a schema
-   `pattern` descriptor, `str_extract.pattern`, and a `matches` verification
-   -- is compiled by the one ECMA-262 engine R022 pins, with the Unicode flag
-   set. A pattern that engine rejects fails as `invalid_regex` at its
-   declaring path, and a `str_extract` selecting a group its pattern does not
-   declare fails as `regex_group_out_of_range`. The validator replays
-   `yaml/conformance/regex.yaml` against the same engine, so a fixture whose
-   recorded outcome drifts from the engine, or a fixture set that stops
-   covering one of R022's named categories, fails validation. The pinned
-   engine is a required dependency: without it the validator refuses to run
-   rather than falling back to Python `re`.
 
-10. **Closed grammars**: `yaml/grammar/` defines the predicate (R004),
-    numeric (R010), string template (R012), and aggregate (R013) grammars
-    once. The validator renders each rule's grammar block from its grammar
-    file and fails when the rule carries a different block, compares each
-    closed vocabulary with the constants the parsers use, checks that every
-    non-terminal a production names is defined or imported, and replays every
-    vector: an accepted text must parse into the recorded shape and bind the
-    recorded identifiers, and a rejected text must fail with the recorded
-    condition. A vector set that stops covering one of a contract's named
-    categories fails the same way. The R parser replays the same files in the
-    R package workflow, which also runs on shared grammar changes.
+| Check | Current responsibility |
+| --- | --- |
+| Sources and YAML | ASCII repository source, valid Unicode data, YAML 1.2 core resolution, duplicate-key/tag/anchor/alias refusal. `.github/` YAML is outside the repository YAML scan. |
+| Schemas | Included files stay within `yaml/`, types/registries/constraints resolve and entry points validate. |
+| Specifications | Native admission, inherited declarations, static bindings, original declaring-file paths, closed source metadata and producer contracts. Metadata capture does not grant project activation, derivation execution or Save authority. |
+| Fixture diagnostics | `benchmarks/validation-manifest.yaml` declares negative cases, conditions, paths and blockers. Every implemented expected validation condition must appear at its declared paths; unrelated findings fail. |
+| Sources and artifacts | Native source-profile checks, CSV quoting/missingness/header/field contracts, expected output names/types/representation and key order. Expected golden values are authored truth, not regenerated results. |
+| Layout and prose | Required example files, negative remediation sections, variant layout, benchmark index, badges, line width, described columns and rule metadata. |
+| Grammar and regex | Shared grammar/vocabulary vectors and pinned R022 regex conformance through native bindings. Missing bindings fail rather than falling back. |
+| Environments and Define | `environment_class` and `define_class` schema validation for authored documents. Complete generation and saved-byte comparison belong to installed public suites. |
+| Rules and references | Normative ownership, requirement registry, generated references and the existing `rules/migration.yaml` provenance checks. Live readers must move before that record is removed. |
 
-11. **Study documents**: `yaml/schema_define.yaml` is the study-document
-    entry point R026 defines. Its own YAML syntax, and the syntax of every
-    `define.yaml` beside an example, are checked with every other repository
-    YAML file. Nothing yet validates a `define.yaml` against
-    `define_class`, resolves its standard, codelist, and document
-    identifiers, applies the family-dependent requirements R024 defers to
-    composition, or compares a generated document with the committed
-    `expected/define.xml`. R024, R025, and R026 state those requirements and
-    the checks follow in a later pass.
+The historical `negative-path-absolute` and `negative-path-parent-escape` cases
+remain explicit public-conformance exclusions. Four old resolved-spec expected
+outputs were removed; no public resolved-spec API or required expected resolved
+artifact remains. The validator does not execute clinical derivations or prove
+golden output values. Full installed domain/check/Define, R grammar and
+cross-platform parity evidence belongs to the native workflow and its independent
+audit, not a repository-validation pass.
 
-## Explicit Non-Goals
-The validator ensures structural correctness and the static cross-field checks
-listed above. At this time, it **does not**:
-- Execute clinical derivations.
-- Materialize shorthand canonical forms for specifications without `parents`.
-  Inherited specifications are canonicalized as part of producing their
-  resolved data tree.
-- Reproduce golden output values in the `.csv` files.
-- Generate or compare a Define-XML document. `expected/define.xml` is a golden
-  fixture the repository carries; no check yet produces it from `define.yaml`
-  and the specifications that document names.
-- Prove that a regular expression behaves identically in R and Python. R022
-  pins the engine both runtimes must bind and this validator replays the
-  shared fixtures on the Python side, but executable R parity waits on the
-  dual-runtime conformance workflow in issue #101. The four closed grammars
-  are the exception: both runtimes already replay `yaml/grammar/`.
+## Local commands
 
-## Local Commands
-From the repository root, use a Python 3.14 environment to match CI. Install
-the dependencies, run the tests, and validate the repository:
+Run from the repository root. CI uses Python 3.14 and Rust 1.90.0:
 
-```bash
-uv sync --project python --locked
+```sh
+uv sync --project python --extra test --locked
 uv run --project python --no-sync python .github/scripts/yaml-validation/test_validate_repository.py
 uv run --project python --no-sync python .github/scripts/yaml-validation/validate_repository.py --root .
+uv run --project python --no-sync python .github/scripts/yaml-validation/check_documentation.py
+uv run --project python --no-sync python .github/scripts/yaml-validation/check_rule_rewrite.py
+uv run --project python --no-sync python .github/scripts/yaml-validation/check_requirement_registry.py
 ```
 
-By default, the script infers the repository root relative to its own path.
+The script infers the repository root from its location when `--root` is omitted.
+It returns nonzero for errors; warnings print without failing unless
+`--warnings-as-errors` is selected.
 
-Shared grammar replay needs Rust 1.90.0 and `py-yaml12==0.2.0` for the typed
-core check. The R command uses the installed staged `yamaa` source package and
-its unchanged authored grammar fixtures:
+[Specification style](../rules/specification/style.md) is a separate authoring
+check. It fixes field order, spacing, line width and accepted written spellings;
+semantic authoring advice has no automatic fix. Layout fixes are kept only after
+shared admission/equality accepts them and comments remain unchanged:
 
-```bash
-python rust/tools/check_shared_grammar.py
-Rscript --vanilla R/yamaa/tests/public_grammar.R
-```
-
-Specification style is a separate step. The
-[style contract](../rules/specification/style.md) fixes one written form of
-a specification: field order, blank lines, a 79-column line width, the
-canonical `{literal: X}` and bare-string source spellings, and three
-authoring lints (a uniform row-template derivation that belongs at column
-level, a named intermediate equivalent to the implicit join, and an output
-column without a label). CI fails on any
-style finding in a benchmark specification, and `--fix` applies the layout
-fixes it can prove leave the parsed value and the comments unchanged.
-Authoring lints rewrite the specification value to preserve derivation
-behavior, so their authors correct them; no fix is offered:
-
-```bash
+```sh
 uv run --project python --no-sync python -m yamaa.style benchmarks/*/spec*.yaml
 uv run --project python --no-sync python -m yamaa.style --fix benchmarks/<name>/spec.yaml
 ```
 
-Rule ownership is a separate step as well. `check_rule_rewrite.py` resolves
-every requirement to one owning contract and its provenance, and requires the
-verification contract and `yaml/schema_verification.yaml` to name the same
-checks: a requirement that opens with a check no registry declares fails, and
-so does a registered check that opens no requirement:
+Shared grammar checks use the installed native package and pinned YAML reader:
 
-```bash
-uv run --project python --no-sync python .github/scripts/yaml-validation/check_rule_rewrite.py
+```sh
+uv run --project python --no-sync python rust/tools/check_shared_grammar.py
+Rscript --vanilla R/yamaa/tests/public_grammar.R
 ```
 
-Column labels are checked by `validate_repository.py`
-(`validate_column_labels`, covering plain and inherited specs alike),
-so there is no separate label-check step anymore.
-
-## Exit Behavior
-- Returns `0` if the repository structure is completely valid (no errors).
-- Returns non-zero (e.g. `1`) if any errors are encountered.
-
-## Warning Policy
-Warnings are printed to standard output but do not fail validation. The Python
-validator checks column labels for every resolved specification, orders
-inherited columns by dependency, and enforces declaration order, output
-contracts, and dependency cycles for every example, so no second semantic
-scan owns those policies.
-
-To treat warnings as errors, run with the `--warnings-as-errors` flag:
-
-```bash
-python3 .github/scripts/yaml-validation/validate_repository.py --warnings-as-errors
-```
-
-CI additionally checks that every `blocked_by` issue in the validation manifest
-remains open. With GitHub credentials available, run the same check locally:
-
-```bash
-GITHUB_REPOSITORY=elong0527/yamaa \
-  python3 .github/scripts/yaml-validation/check_validation_blockers.py
-```
+CI also runs execution/vocabulary/metadata checks, generated-reference freshness,
+requirement and prose tests, and authenticated validation-blocker issue reads.
+The [workflow](workflows/yaml-validation.yml) is the complete command list;
+[CI guidance](ci.md) describes canonical-page tests, scoped dashboard previews
+and native qualification. No README copy-synchronization step exists.

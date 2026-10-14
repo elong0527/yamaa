@@ -58,7 +58,9 @@ canonical source file. Build and test commands live in
 
 ## Rust and host APIs
 
-`rust/README.md` describes the crate boundaries and local verification commands.
+`docs/development.md` describes the crate boundaries and local verification
+commands; `rust/README.md` is the Rust entry point. `docs/release.md` owns current
+API/math/platform/rollback decisions and pending migration gates.
 Language contracts live in `rules/`, and host usage lives in `python/README.md`
 and `R/yamaa/README.md`. The declared API inventory is
 `rust/qualification/release-api.json`; check it from the repository root with
