@@ -58,7 +58,8 @@ def complete(specification, sources=None, *, fill_derivations=True):
     return spec, sources
 
 
-def observation(specification, sources=None, *, fill_derivations=True, bind=True):
+def observation(specification, sources=None, *, fill_derivations=True, bind=True,
+        output=False):
     spec, sources = complete(specification, sources,
         fill_derivations=fill_derivations)
     source = _native_schema.bytes_for(spec)
@@ -72,15 +73,15 @@ def observation(specification, sources=None, *, fill_derivations=True, bind=True
     spec = _native_schema.decode_document(_schema().normalize(
         source, ['root_class'], True))
     return _typed_fixtures.observe('semantic', json.dumps({
-        'specification': spec, 'sources': sources, 'bind': bind,
+        'specification': spec, 'sources': sources, 'bind': bind, 'output': output,
         'source': source.decode('ascii'),
         'schema_modules': [(name, raw.decode('utf-8')) for name, raw in _modules()]}))
 
 
-def declarations(specification, label='spec', *, fill_derivations=True):
+def declarations(specification, label='spec', *, fill_derivations=True, output=False):
     """Observe complete native declaration rows without source binding authority."""
     return findings(observation(specification,
-        fill_derivations=fill_derivations, bind=False), label)
+        fill_derivations=fill_derivations, bind=False, output=output), label)
 
 
 def driver(specification):

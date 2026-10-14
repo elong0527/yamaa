@@ -129,6 +129,14 @@ pub fn observe(input: Value) -> Value {
         .into_iter()
         .map(row)
         .collect::<Vec<_>>();
+    if input["output"].as_bool() == Some(true) {
+        issues.extend(
+            prepared
+                .output_findings()
+                .into_iter()
+                .map(|finding| row(finding.diagnostic())),
+        );
+    }
     if input["bind"].as_bool() == Some(false) {
         return json!({"issues":issues, "driver":driver});
     }
