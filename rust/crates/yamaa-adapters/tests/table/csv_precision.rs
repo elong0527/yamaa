@@ -1,7 +1,7 @@
 use crate::support::ipc_snapshot;
 use std::{convert::Infallible, sync::Arc};
 use yamaa_adapters::{
-    specification_report::{self, Error, Identity},
+    specification_report::{self, Identity},
     specification_run::PreparedRun,
     specification_source::Source,
 };
@@ -118,6 +118,13 @@ fn whole_result_keeps_unrounded_derivation_and_prepares_exact_saved_bytes_once()
 fn output_precision_rejection_follows_original_execution_failure_and_denies_publication() {
     for (precision, path, expression, condition) in [
         ("-1", "output.csv", "VALUE + VALUE", "invalid_field_type"),
+        ("19", "output.csv", "VALUE + VALUE", "invalid_field_type"),
+        (
+            "999999999999999999999999999999",
+            "output.csv",
+            "VALUE + VALUE",
+            "invalid_field_type",
+        ),
         (
             "2",
             "output.parquet",
@@ -125,6 +132,7 @@ fn output_precision_rejection_follows_original_execution_failure_and_denies_publ
             "decimals_not_applicable",
         ),
         ("-1", "output.csv", "1 / 0", "division_by_zero"),
+        ("19", "output.csv", "1 / 0", "division_by_zero"),
     ] {
         let run = prepared(precision, path, expression);
         let attempt = run.execute_with_port(&mut Study(0));
@@ -140,16 +148,6 @@ fn output_precision_rejection_follows_original_execution_failure_and_denies_publ
         ));
         assert_eq!(publisher.calls, 0);
     }
-    let run = prepared(
-        "999999999999999999999999999999",
-        "output.csv",
-        "VALUE + VALUE",
-    );
-    let attempt = run.execute_with_port(&mut Study(0));
-    assert!(matches!(
-        specification_report::build_result(&run, &attempt, identity()),
-        Err(Error::OutputLimit)
-    ));
 }
 
 #[test]

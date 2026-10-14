@@ -140,8 +140,14 @@ fn failed_save_publishes_only_retained_verification_and_preserves_primary_and_wa
 #[test]
 fn primary_encoding_limit_retains_completed_verification_without_warning_authority() {
     let study = Study::new();
-    fs::write(study.0.join("input/input.csv"), "ID,VALUE\n1,0.125\n").unwrap();
-    let mut result = study.build("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input/input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE], decimals: 999999999999999999999999999999, warning_log: warnings.csv, verification_log: checks.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: float\n    derivation: SRC.VALUE\n    verifications:\n      - not_missing: {}\n      - range: {max: 0, severity: warning}\n");
+    // Valid precision can still exceed the artifact byte budget: each large
+    // finite float needs 309 whole digits plus the declared 18 fractional digits.
+    let mut input = String::from("ID,VALUE\n");
+    for id in 1..=26_000 {
+        input.push_str(&format!("{id},1e308\n"));
+    }
+    fs::write(study.0.join("input/input.csv"), input).unwrap();
+    let mut result = study.build("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input/input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE], decimals: 18, warning_log: warnings.csv, verification_log: checks.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: float\n    derivation: SRC.VALUE\n    verifications:\n      - not_missing: {}\n      - range: {max: 0, severity: warning}\n");
     assert!(result.output().is_none());
     assert!(result.warning_log().is_none());
     assert_eq!(result.log_table(false).unwrap().rows(), 2);

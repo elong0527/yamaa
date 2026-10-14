@@ -195,7 +195,7 @@ fn check_matches_domain_on_the_issue_rows() {
         (
             "decimals-negative",
             "{path: out.csv, columns: [USUBJID, N], decimals: -1}",
-            serde_json::json!({"phase":"validation","condition":"invalid_field_type","requirement":"REQ-0744","spec_paths":["output.decimals"],"context":{"expected":"a non-negative integer","actual":-1}}),
+            serde_json::json!({"phase":"validation","condition":"invalid_field_type","requirement":"REQ-0744","spec_paths":["output.decimals"],"context":{"expected":"an integer from 0 through 18","actual":-1}}),
         ),
     ];
     for (name, output, oracle) in rows {
@@ -214,6 +214,114 @@ fn check_matches_domain_on_the_issue_rows() {
                 "{name} ({runtime}): check/domain first issue"
             );
             assert_eq!(checked, oracle, "{name} ({runtime}): first issue");
+        }
+    }
+}
+
+fn precision_specification(decimals: Option<&str>, kind: &str) -> String {
+    let precision = decimals.map_or(String::new(), |n| format!(", decimals: {n}"));
+    format!(
+        "schema_version: '1.0'\ndomain: ADSL\nkeys: [USUBJID]\ninput: {{DM: input.csv}}\noutput: {{path: out.csv, columns: [USUBJID, N]{precision}}}\ncolumns:\n  - {{name: USUBJID, type: str, derivation: DM.USUBJID}}\n  - {{name: N, type: {kind}, derivation: DM.VALUE}}\n"
+    )
+}
+
+#[test]
+fn csv_precision_range_is_validated_for_empty_and_non_float_outputs_in_both_hosts() {
+    let oracle: serde_json::Value =
+        serde_json::from_str(include_str!("../fixtures/csv_precision_limit.json")).unwrap();
+    let huge = format!("1{}", "0".repeat(400));
+    for decimals in [
+        "-1",
+        "19",
+        "400",
+        "5000",
+        "10000000",
+        "9223372036854775807",
+        "9223372036854775808",
+        "18446744073709551616",
+        huge.as_str(),
+    ] {
+        let mut expected = oracle.clone();
+        expected["context"]["actual"] = serde_json::from_str(decimals).unwrap();
+        for (kind, input) in [
+            ("float", "USUBJID,VALUE\nS-001,0.125\n"),
+            ("float", "USUBJID,VALUE\n"),
+            ("int", "USUBJID,VALUE\nS-001,34\n"),
+        ] {
+            let fixture = Fixture::new("precision-limit");
+            fs::write(
+                fixture.0.join("spec.yaml"),
+                precision_specification(Some(decimals), kind),
+            )
+            .unwrap();
+            fs::write(fixture.0.join("input.csv"), input).unwrap();
+            let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
+            for runtime in ["python", "r"] {
+                let (checked, built) = first_issues(&specification, "precision-limit", runtime);
+                assert_eq!(checked, expected, "check {runtime}: {decimals}/{kind}");
+                assert_eq!(built, expected, "domain {runtime}: {decimals}/{kind}");
+            }
+            assert!(!fixture.0.join("out.csv").exists());
+            // The static finding does not require study data to exist.
+            fs::remove_file(fixture.0.join("input.csv")).unwrap();
+            for runtime in ["python", "r"] {
+                let issues = file_application::check(
+                    Request {
+                        specification: &specification,
+                        environment: None,
+                    },
+                    identity(runtime, "precision-limit", &specification),
+                );
+                assert_eq!(issues.len(), 1);
+                assert_eq!(issue(&issues[0]), expected);
+            }
+        }
+    }
+}
+
+#[test]
+fn csv_precision_endpoints_and_omission_keep_exact_saved_bytes() {
+    for (decimals, expected) in [
+        (Some("0"), "USUBJID,N\nS-001,0\nS-002,0\n"),
+        (
+            Some("18"),
+            "USUBJID,N\nS-001,0.125000000000000000\nS-002,-0.125000000000000000\n",
+        ),
+        (None, "USUBJID,N\nS-001,0.125\nS-002,-0.125\n"),
+    ] {
+        let fixture = Fixture::new("precision-endpoints");
+        fs::write(
+            fixture.0.join("spec.yaml"),
+            precision_specification(decimals, "float"),
+        )
+        .unwrap();
+        fs::write(
+            fixture.0.join("input.csv"),
+            "USUBJID,VALUE\nS-001,0.125\nS-002,-0.125\n",
+        )
+        .unwrap();
+        let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
+        for runtime in ["python", "r"] {
+            let request = || Request {
+                specification: &specification,
+                environment: None,
+            };
+            assert!(file_application::check(
+                request(),
+                identity(runtime, "precision-endpoints", &specification)
+            )
+            .is_empty());
+            let mut domain = file_application::domain(
+                request(),
+                identity(runtime, "precision-endpoints", &specification),
+            )
+            .unwrap();
+            assert!(domain.issues().is_empty(), "{:?}", domain.issues());
+            assert!(domain.save().unwrap());
+            assert_eq!(
+                fs::read_to_string(fixture.0.join("out.csv")).unwrap(),
+                expected
+            );
         }
     }
 }

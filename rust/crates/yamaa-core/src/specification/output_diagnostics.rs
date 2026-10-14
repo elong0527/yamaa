@@ -1,5 +1,5 @@
 //! Output-declaration findings retain their validation vocabulary at the cause.
-use super::OutputFinding;
+use super::{OutputFinding, MAX_OUTPUT_DECIMALS};
 use crate::{
     diagnostic::{ConditionCode as C, ContextValue as V, Diagnostic},
     value::Value,
@@ -33,7 +33,9 @@ impl OutputFinding {
                 vec![
                     (
                         "expected",
-                        V::Scalar(Value::Str("a non-negative integer".into())),
+                        V::Scalar(Value::Str(format!(
+                            "an integer from 0 through {MAX_OUTPUT_DECIMALS}"
+                        ))),
                     ),
                     ("actual", V::Integer(value.clone())),
                 ],

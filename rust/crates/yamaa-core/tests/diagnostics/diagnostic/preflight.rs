@@ -148,7 +148,7 @@ pub(super) fn output_reached() -> BTreeSet<ConditionCode> {
             "invalid_field_type",
             "REQ-0744",
             vec![
-                ("expected", text("a non-negative integer")),
+                ("expected", text("an integer from 0 through 18")),
                 ("actual", V::Integer("-9223372036854775809".into())),
             ],
         ),
@@ -423,6 +423,26 @@ fn base<'a>(
 pub(super) fn reached() -> BTreeSet<ConditionCode> {
     let mut log_codes = BTreeSet::new();
     for (columns, keys, expected) in [
+        (
+            vec![column(
+                "ID",
+                Some(Map(vec![(
+                    "value",
+                    Map(vec![("literal", Integer("9223372036854775808"))]),
+                )])),
+            )],
+            vec![Text("ID")],
+            (
+                "integer_overflow",
+                Some("REQ-0014"),
+                vec!["columns.ID.derivation.literal"],
+                vec![
+                    ("actual", V::Integer("9223372036854775808".into())),
+                    ("minimum", V::Scalar(Value::Int(-9223372036854775808))),
+                    ("maximum", V::Scalar(Value::Int(9223372036854775807))),
+                ],
+            ),
+        ),
         (
             vec![column("ID", Some(source()))],
             vec![],

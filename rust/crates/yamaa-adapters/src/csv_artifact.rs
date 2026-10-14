@@ -59,9 +59,9 @@ pub fn render<T: TableAccess>(
     render_with_decimals(table, projection, None, maximum)
 }
 
-/// The compiler retains arbitrary-width precision integers. A declaration that
-/// cannot fit this trusted output budget refuses before any cell authority;
-/// it does not become a new language maximum. Precision affects floats only.
+/// Specification validation admits the REQ-0744 precision range. Rendering
+/// separately charges the trusted output byte budget before cell authority.
+/// Precision affects floats only.
 pub fn render_with_decimals<T: TableAccess>(
     table: &T,
     projection: &[usize],

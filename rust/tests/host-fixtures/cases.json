@@ -766,6 +766,16 @@
         "outputs"
       ],
       "rounded_callback_csv": "ID,VALUE,DOUBLE,EMPTY,INT\n1,0.13,0.25,\"\",7\n2,-0.13,-0.25,\"\",-7\n3,2.67,5.35,\"\",0\n4,0.00,-0.01,\"\",9\n5,1.23,2.47,\"\",1\n6,2.35,4.69,\"\",2\n7,,,\"\",3\n8,25.00,50.00,\"\",4\n",
+      "csv_precision_maximum": "18",
+      "maximum_precision_csv": "ID,VALUE,DOUBLE,EMPTY,INT\n1,0.125000000000000000,0.250000000000000000,\"\",7\n",
+      "invalid_csv_precision": [
+        "-1",
+        "19",
+        "5000",
+        "9223372036854775808",
+        "999999999999999999999999999999"
+      ],
+      "csv_precision_expected": "an integer from 0 through 18",
       "invalid_significant_digits": [
         "true",
         "2.0",

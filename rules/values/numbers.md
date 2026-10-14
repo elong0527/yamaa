@@ -15,6 +15,14 @@ status: normative
 before any consumer can use them.
 An integer literal in a predicate outside this range fails during parsing with
 `integer_overflow`; it does not introduce an arbitrary-width integer value.
+An integer scalar used as a runtime literal outside this range fails validation
+with `integer_overflow` at its specification path. This includes derivation and
+replacement literals, `allowed_values` entries, and length or value bounds.
+Declaring a `float` or `str` result does not widen the integer literal's range.
+Quote a numeric identifier as text, or write a floating-point literal when that
+is the intended value. Declaration integers such as mathematical row-count
+bounds under [REQ-1152](../execution/verification.md#req-1152) retain their own
+contracts and are not runtime integer values.
 
 <a id="req-0015"></a>
 

@@ -181,18 +181,26 @@ unlink("rounded.csv")
 precision_study(NULL)
 ordinary <- yamaa_domain("spec.yaml", environment = "environment.yaml")
 stopifnot(nrow(ordinary$issues) == 0L, identical(ordinary$output, rounded$output))
-precision_study("5000")
+precision_study(host_truth[["csv_precision_maximum"]])
 writeLines(c("ID,VALUE,INT", "1,0.125,7"), "input.csv")
-large <- yamaa_domain("spec.yaml", environment = "environment.yaml")
-expected <- charToRaw(paste0('ID,VALUE,DOUBLE,EMPTY,INT\n1,0.125', strrep("0", 4997L),
-  ',0.25', strrep("0", 4998L), ',"",7\n'))
-stopifnot(nrow(large$issues) == 0L, isTRUE(large$save()), identical(rawfile("rounded.csv"), expected))
+maximum <- yamaa_domain("spec.yaml", environment = "environment.yaml")
+expected <- fixture_bytes(host_truth[["maximum_precision_csv"]])
+stopifnot(nrow(maximum$issues) == 0L, isTRUE(maximum$save()), identical(rawfile("rounded.csv"), expected))
 unlink("rounded.csv")
-precision_study("999999999999999999999999999999")
-stopifnot(nrow(yamaa_check("spec.yaml", environment = "environment.yaml")$issues) == 0L)
-failed <- yamaa_domain("spec.yaml", environment = "environment.yaml")
-stopifnot(is.null(failed$output), identical(failed$issues$condition, "engine_rejected"),
-  inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"), !file.exists("rounded.csv"))
+for (precision in fixture_strings(host_truth[["invalid_csv_precision"]])) {
+  precision_study(precision)
+  checked <- yamaa_check("spec.yaml", environment = "environment.yaml")
+  failed <- yamaa_domain("spec.yaml", environment = "environment.yaml")
+  stopifnot(is.null(failed$output), nrow(failed$issues) == 1L,
+    identical(checked$issues, failed$issues),
+    identical(failed$issues$phase, "validation"),
+    identical(failed$issues$condition, "invalid_field_type"),
+    identical(failed$issues$requirement, "REQ-0744"),
+    identical(failed$issues$spec_paths, list("output.decimals")),
+    grepl(paste0('"actual":', precision), failed$issues$context, fixed = TRUE),
+    grepl(host_truth[["csv_precision_expected"]], failed$issues$context, fixed = TRUE),
+    inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"), !file.exists("rounded.csv"))
+}
 for (case in list(c("-9223372036854775809", "rounded.csv", "invalid_field_type", "REQ-0744"),
                   c("2", "rounded.parquet", "decimals_not_applicable", "REQ-0762"))) {
   precision_study(case[[1L]], case[[2L]])

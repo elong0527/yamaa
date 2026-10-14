@@ -232,6 +232,7 @@ conditions! {
     CutDeclaration => ("validation", "invalid_field_type", Some("REQ-1118")),
     TemporalBounds => ("validation", "value_not_permitted", Some("REQ-0613")),
     IntegerOverflow => ("derivation", "integer_overflow", Some("REQ-0434")),
+    LiteralIntegerOverflow => ("validation", "integer_overflow", Some("REQ-0014")),
     DivisionByZero => ("derivation", "division_by_zero", Some("REQ-0430")),
     SqrtOfNegative => ("derivation", "sqrt_of_negative", Some("REQ-0431")),
     LnOfNonpositive => ("derivation", "ln_of_nonpositive", Some("REQ-0432")),
