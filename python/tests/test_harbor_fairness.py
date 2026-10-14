@@ -488,3 +488,229 @@ def test_site_parse_reference_still_exercises_four_digit_subjects(tmp_path):
         == 4
     )
     assert any(row["SITEID"] == "UCLA" for row in changed)
+
+
+def test_measurement_challenges_keep_standardized_results_and_groups_consistent(
+    tmp_path,
+):
+    import random
+
+    (tmp_path / "vs.csv").write_text(
+        "USUBJID,VSORRES,VSSTRESN,VSSTRESC,AGE,AGEGR1,HEIGHTBL,WEIGHTBL\n"
+        "S-001,70.0,70.0,70.0,64,<65,170,70\n"
+        "S-002,180,81.6,81.6,70,>=65,180,81.6\n"
+        "S-003,,,,,,,\n"
+    )
+    (tmp_path / "dm.csv").write_text("USUBJID,AGE\nS-001,64\n")
+    changes = grade._perturb_values(tmp_path, random.Random(1))
+    assert changes[0]["file"] == "vs.csv"
+    assert set(changes[0]["columns"]) == {
+        "VSORRES",
+        "VSSTRESN",
+        "VSSTRESC",
+        "HEIGHTBL",
+        "WEIGHTBL",
+    }
+    _, rows = grade.read_rows(tmp_path / "vs.csv")
+    assert rows[0]["VSORRES"] == rows[0]["VSSTRESN"] == rows[0]["VSSTRESC"] == "70.7"
+    assert rows[1]["VSSTRESN"] == rows[1]["VSSTRESC"] == "82.416"
+    assert rows[0]["AGE"] == "64" and rows[0]["AGEGR1"] == "<65"
+    assert grade.read_rows(tmp_path / "dm.csv")[1][0]["AGE"] == "64"
+    assert rows[2]["VSSTRESN"] == ""
+
+
+def test_measurement_challenge_keeps_numeric_codes_and_text_results(tmp_path):
+    import random
+
+    (tmp_path / "lb.csv").write_text(
+        "USUBJID,LBORRES,LBSTRESN,LBSTRESC,QSSTRESN,AVAL,EXDOSE,Value\n"
+        "S-001,10,10,POSITIVE,2,1,2,1\n"
+    )
+    changes = grade._perturb_values(tmp_path, random.Random(1))
+    assert changes[0]["columns"] == {"LBORRES": 1, "LBSTRESN": 1}
+    _, rows = grade.read_rows(tmp_path / "lb.csv")
+    assert rows[0]["LBSTRESC"] == "POSITIVE"
+    assert [rows[0][c] for c in ("QSSTRESN", "AVAL", "EXDOSE", "Value")] == [
+        "2",
+        "1",
+        "2",
+        "1",
+    ]
+
+
+def test_a_measurement_keyed_bmi_lookup_fails_changed_inputs(tmp_path):
+    benchmark = build.BENCHMARKS / "adam-advs-bmi"
+    app = _app(tmp_path, benchmark)
+    contract = build.contract_for(benchmark, "python")
+    fingerprint = """def fingerprints(folder):
+    vs = list(csv.DictReader(open(folder + '/vs.csv', newline='')))
+    height = {r['USUBJID']: r['HEIGHTBL'] for r in csv.DictReader(open(folder + '/adsl.csv', newline=''))}
+    values = {}
+    for row in vs:
+        values.setdefault(row['USUBJID'], []).append([row['VSTESTCD'], row['VISIT'], row['VSSTRESN']])
+    return {json.dumps([height.get(u, ''), sorted(v)]): u for u, v in values.items()}
+"""
+    _, subjects = grade.read_rows(benchmark / "input/adsl.csv")
+    heights = {row["USUBJID"]: row["HEIGHTBL"] for row in subjects}
+    _, readings = grade.read_rows(benchmark / "input/vs.csv")
+    values = {}
+    for row in readings:
+        values.setdefault(row["USUBJID"], []).append(
+            [row["VSTESTCD"], row["VISIT"], row["VSSTRESN"]]
+        )
+    known = {
+        json.dumps([heights.get(subject, ""), sorted(results)]): subject
+        for subject, results in values.items()
+    }
+    golden = (benchmark / "expected/advs.csv").read_text()
+    script = f"""import csv, json
+{fingerprint}
+known = {known!r}
+golden = list(csv.DictReader({golden!r}.splitlines()))
+with open('/app/output/advs.csv', 'w', newline='') as handle:
+    writer = csv.DictWriter(handle, fieldnames=list(golden[0]))
+    writer.writeheader()
+    for key, subject in fingerprints('/app/input').items():
+        writer.writerows({{**row, 'USUBJID': subject}} for row in golden if row['USUBJID'] == known.get(key))
+"""
+    submitted = app / "output/result.py"
+    submitted.write_text(script.replace("/app/", f"{app.as_posix()}/"))
+    reference = tmp_path / "reference.py"
+    reference.write_text(
+        (build.SOLUTIONS / benchmark.name / "result.py")
+        .read_text()
+        .replace("/app/", f"{app.as_posix()}/")
+    )
+    run = _run("python")
+    assert run([sys.executable, str(submitted)], app, 60)[0] == 0
+    result = grade.grade(
+        contract,
+        benchmark / "expected",
+        app / "output",
+        tmp_path / "none.json",
+        rerun=True,
+        run=run,
+        reference=reference,
+    )
+    assert result["outputs"][0]["passed"] and result["held_out"]["passed"]
+    assert result["challenge"]["checked"] and not result["challenge"]["passed"]
+    assert result["reward"]["reward"] == 0
+    assert any(
+        "VSSTRESN" in item["columns"] for item in result["challenge"]["value_changes"]
+    )
+
+
+@pytest.mark.parametrize("domain", ["LB", "VS"])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_small_csv_measurements_keep_nonzero_values_and_matching_text(
+    tmp_path, domain, reverse
+):
+    import random
+    from decimal import Decimal
+
+    numeric, textual = domain + "STRESN", domain + "STRESC"
+    columns = [numeric, textual] if not reverse else [textual, numeric]
+    originals = ["0.0000004", "-0.0000004", "1e-20", "-1e-20", "0", ""]
+    _write(
+        tmp_path / "measurements.csv",
+        columns,
+        [{numeric: value, textual: value} for value in originals],
+    )
+    changes = grade._perturb_values(tmp_path, random.Random(1))
+    _, rows = grade.read_rows(tmp_path / "measurements.csv")
+    assert changes == [
+        {"file": "measurements.csv", "columns": {column: 4 for column in columns}}
+    ]
+    for original, row in zip(originals[:4], rows[:4], strict=True):
+        assert Decimal(row[numeric]) == Decimal(original) * Decimal("1.01")
+        assert row[textual] == row[numeric]
+    assert rows[4] == {numeric: "0", textual: "0"}
+    assert rows[5] == {numeric: "", textual: ""}
+
+
+@pytest.mark.parametrize("domain", ["LB", "VS"])
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("kind", ["int8", "int64", "uint8", "uint64"])
+def test_integer_parquet_measurements_change_within_schema_and_match_text(
+    tmp_path, domain, reverse, kind
+):
+    import random
+
+    arrow = pytest.importorskip("pyarrow")
+    parquet = pytest.importorskip("pyarrow.parquet")
+    numeric, textual = domain + "STRESN", domain + "STRESC"
+    dtype = getattr(arrow, kind)()
+    unsigned = kind.startswith("u")
+    upper = (1 << (dtype.bit_width - int(not unsigned))) - 1
+    originals = [70, 1, 0, upper, None]
+    expected = [71, 2, 0, upper - 1, None]
+    if not unsigned:
+        lower = -(1 << (dtype.bit_width - 1))
+        originals += [-70, -1, lower]
+        expected += [-71, -2, lower + 1]
+    arrays = {
+        numeric: arrow.array(originals, type=dtype),
+        textual: arrow.array(
+            [str(value) if value is not None else None for value in originals]
+        ),
+    }
+    if reverse:
+        arrays = dict(reversed(list(arrays.items())))
+    table = arrow.table(arrays)
+    path = tmp_path / "measurements.parquet"
+    parquet.write_table(table, path)
+    changes = grade._perturb_values(tmp_path, random.Random(1))
+    actual = parquet.read_table(path)
+    assert actual.schema == table.schema
+    assert actual[numeric].to_pylist() == expected
+    assert actual[textual].to_pylist() == [
+        str(value) if value is not None else None for value in expected
+    ]
+    assert changes == [
+        {
+            "file": path.name,
+            "columns": {column: len(originals) - 2 for column in arrays},
+        }
+    ]
+
+
+@pytest.mark.parametrize("domain", ["LB", "VS"])
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("kind", ["float32", "float64"])
+def test_small_parquet_measurements_match_the_float_value_actually_written(
+    tmp_path, domain, reverse, kind
+):
+    import random
+
+    arrow = pytest.importorskip("pyarrow")
+    parquet = pytest.importorskip("pyarrow.parquet")
+    numeric, textual = domain + "STRESN", domain + "STRESC"
+    dtype = getattr(arrow, kind)()
+    numbers = arrow.array([0.0000004, -0.0000004, 1e-20, -1e-20, 0, None], dtype)
+    original = numbers.to_pylist()
+    arrays = {
+        numeric: numbers,
+        textual: arrow.array(
+            [str(value) if value is not None else None for value in original]
+        ),
+    }
+    if reverse:
+        arrays = dict(reversed(list(arrays.items())))
+    table = arrow.table(arrays)
+    path = tmp_path / "measurements.parquet"
+    parquet.write_table(table, path)
+    changes = grade._perturb_values(tmp_path, random.Random(1))
+    actual = parquet.read_table(path)
+    assert actual.schema == table.schema
+    for before, after, text in zip(
+        original[:4],
+        actual[numeric].to_pylist()[:4],
+        actual[textual].to_pylist()[:4],
+        strict=True,
+    ):
+        assert abs(after) > abs(before) > 0
+        assert after == pytest.approx(before * 1.01, rel=1e-6)
+        assert float(text) == after
+    assert actual[numeric].to_pylist()[4:] == [0, None]
+    assert actual[textual].to_pylist()[4:] == ["0.0", None]
+    assert changes == [{"file": path.name, "columns": {column: 4 for column in arrays}}]
