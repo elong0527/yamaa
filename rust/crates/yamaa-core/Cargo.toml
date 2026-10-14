@@ -1,4 +1,5 @@
 [package]
+autotests = false
 name = "yamaa-core"
 version.workspace = true
 edition.workspace = true
@@ -13,3 +14,37 @@ ryu = { version = "=1.0.20", default-features = false }
 libm = { version = "=0.2.16", default-features = false }
 # Bounded exact decimal rounding intermediates; no std, random or serde features.
 num-bigint = { version = "=0.5.1", default-features = false }
+
+# Integration targets are finite and explicit; support files are never discovered as binaries.
+[[test]]
+name = "numeric_tests"
+path = "tests/numeric_tests.rs"
+
+[[test]]
+name = "evaluation_tests"
+path = "tests/evaluation_tests.rs"
+
+[[test]]
+name = "relations_tests"
+path = "tests/relations_tests.rs"
+
+[[test]]
+name = "schema_tests"
+path = "tests/schema_tests.rs"
+
+[[test]]
+name = "project_tests"
+path = "tests/project_tests.rs"
+
+[[test]]
+name = "source_tests"
+path = "tests/source_tests.rs"
+
+[[test]]
+name = "diagnostics_tests"
+path = "tests/diagnostics_tests.rs"
+
+[[test]]
+name = "portable_math_golden"
+path = "tests/portable_math_golden.rs"
+

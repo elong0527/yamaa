@@ -1,0 +1,39 @@
+//! Finite factories and observers owned by the yamaa-core integration suite.
+use yamaa_core::{
+    table::{Column, TableSchema},
+    value::ColumnType,
+};
+
+pub mod producer;
+pub mod producer_graph;
+pub mod project_call_compiler;
+pub mod project_codelist_compiler;
+
+/// Construct an ordered schema independently of plan compilation.
+pub fn table_schema(columns: &[(&str, ColumnType)]) -> TableSchema {
+    TableSchema::new(
+        columns
+            .iter()
+            .map(|&(name, kind)| Column {
+                name: name.into(),
+                kind,
+            })
+            .collect(),
+    )
+    .unwrap()
+}
+
+pub fn int_schema(names: &[&str]) -> TableSchema {
+    table_schema(
+        &names
+            .iter()
+            .map(|&name| (name, ColumnType::Int))
+            .collect::<Vec<_>>(),
+    )
+}
+pub fn id_source_schema() -> TableSchema {
+    int_schema(&["ID"])
+}
+pub fn id_value_schema() -> TableSchema {
+    int_schema(&["ID", "V"])
+}
