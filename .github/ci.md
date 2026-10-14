@@ -162,7 +162,9 @@ complete successful native run. Push `qualification/issue-1998` only after the
 runtime policy and harness stabilize to collect characterization: ten cold
 samples and thirty warm samples after three warm-ups, with same-machine prior
 Python 0.3.0 comparators built before any measurements. Workflow dispatch remains
-available for an explicit native run and purpose.
+available for an explicit native run and purpose. Reusable workflow calls are
+not a campaign entry point: their caller context does not identify this exact
+performance workflow run.
 
 Every attempt preserves its raw failures and partial collections. The independent
 replay job retains all 21 tuple slots, source and baseline histories in a Git

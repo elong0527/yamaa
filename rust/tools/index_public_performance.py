@@ -65,7 +65,7 @@ def manifest(run, artifacts, repository, revision, attempt, native=False):
         or run["head_sha"] != revision
         or run["run_attempt"] != attempt
         or run["path"] != ".github/workflows/performance.yml"
-        or run["event"] not in {"push", "workflow_dispatch", "workflow_call"}
+        or run["event"] not in {"push", "workflow_dispatch"}
     ):
         raise ValueError("performance run differs from the exact source/attempt")
     entries = []

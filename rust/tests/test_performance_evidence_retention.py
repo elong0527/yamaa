@@ -59,7 +59,8 @@ class RetainedIndex(unittest.TestCase):
 
     def test_different_source_or_attempt_never_becomes_the_original_run(self):
         for field, value in (("head_sha", "b" * 40), ("run_attempt", 2),
-                             ("event", "pull_request"), ("path", ".github/workflows/native.yml")):
+                             ("event", "pull_request"), ("event", "workflow_call"),
+                             ("path", ".github/workflows/native.yml")):
             run = selected_run()
             run[field] = value
             with self.subTest(field=field), self.assertRaisesRegex(ValueError, "exact source/attempt"):
