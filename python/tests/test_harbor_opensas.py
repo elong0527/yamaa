@@ -70,7 +70,6 @@ def test_every_opensas_board_ranks_the_same_confident_set():
     for path in sorted((HARBOR / "leaderboards").glob("*-opensas.yaml")):
         parts = path.stem.split("-")
         version, tier = parts[2], parts[3] if len(parts) == 5 else "full"
-        suffix = "opensas" if tier == "full" else f"{tier}-opensas"
         board = yaml.safe_load(path.read_text())
         population = set(populations[version])
         confident = population - set(build.OPENSAS_EXCLUSIONS)
