@@ -112,6 +112,7 @@ pub fn observe(request: Value) -> Value {
                 path: path.clone(),
                 types,
                 profile: SourceProfile::from_path(&path).expect("authored closed profile"),
+                encoding: None,
                 empty_string_present: false,
                 ordinal: text("ordinal"),
             };

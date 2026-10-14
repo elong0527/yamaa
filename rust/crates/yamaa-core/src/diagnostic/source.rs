@@ -33,6 +33,11 @@ pub enum ParquetFinding<'a> {
 /// A classified failure borrows the original error, declaration and codec spelling.
 #[derive(Clone, Copy, Debug)]
 pub enum SourceFinding<'a> {
+    Sas {
+        dataset: &'a str,
+        path: &'a str,
+        cause: &'a str,
+    },
     Odm {
         dataset: &'a str,
         finding: &'a crate::odm_source::SchemaError,
@@ -83,6 +88,7 @@ fn kind(value: ColumnType) -> &'static str {
 impl SourceFinding<'_> {
     fn code(self) -> C {
         match self {
+            Self::Sas { .. } => C::SasInvalid,
             Self::Odm { dataset, finding } => finding.finding(dataset).code(),
             Self::OdmValues { dataset, finding } => finding.finding(dataset).code(),
             Self::Csv { cause, .. } => cause.code(),
@@ -119,6 +125,7 @@ impl SourceFinding<'_> {
             | Self::UnknownField { dataset, .. }
             | Self::FieldParse { dataset, .. }
             | Self::Parquet { dataset, .. } => dataset,
+            Self::Sas { dataset, .. } => dataset,
             Self::OrdinalCollision { dataset, .. } => dataset,
         };
         // Charge each component of the constructed specification path before formatting.
@@ -126,6 +133,11 @@ impl SourceFinding<'_> {
         budget.text(dataset)?;
         budget.field("dataset", dataset)?;
         match self {
+            Self::Sas { path, cause, .. } => {
+                budget.text(".path")?;
+                budget.field("path", path)?;
+                budget.field("cause", cause)?;
+            }
             Self::OrdinalCollision { field, .. } => {
                 budget.text(".ordinal")?;
                 budget.field("field", field)?;
@@ -212,10 +224,16 @@ impl SourceFinding<'_> {
             | Self::UnknownField { dataset, .. }
             | Self::FieldParse { dataset, .. }
             | Self::Parquet { dataset, .. } => dataset,
+            Self::Sas { dataset, .. } => dataset,
             Self::OrdinalCollision { dataset, .. } => dataset,
         };
         let mut context = Context::from([("dataset".into(), text(dataset))]);
         let spec_path = match self {
+            Self::Sas { path, cause, .. } => {
+                context.insert("path".into(), text(path));
+                context.insert("cause".into(), text(cause));
+                format!("input.{dataset}.path")
+            }
             Self::OrdinalCollision { field, .. } => {
                 context.insert("field".into(), text(field));
                 format!("input.{dataset}.ordinal")

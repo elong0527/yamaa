@@ -92,6 +92,8 @@ pub fn input_rows(inputs: Vec<yamaa_adapters::source_metadata::InputMetadata>) -
             let profile = match input.profile {
                 yamaa_adapters::source_metadata::Profile::Csv => "csv",
                 yamaa_adapters::source_metadata::Profile::Parquet => "parquet",
+                yamaa_adapters::source_metadata::Profile::Xport => "xpt",
+                yamaa_adapters::source_metadata::Profile::Sas7bdat => "sas7bdat",
             };
             (
                 input.owner,

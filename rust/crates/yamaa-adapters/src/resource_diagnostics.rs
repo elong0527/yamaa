@@ -157,6 +157,11 @@ pub(crate) fn source(error: &Error, source: &SourceDeclaration) -> Option<Refusa
             resource,
             limit,
             actual,
+        })
+        | Error::SasSource(crate::sas_source::Error::Limit {
+            resource,
+            limit,
+            actual,
         }) => (*resource, *limit, *actual),
         Error::Source(TextTableError::Csv(crate::csv_source::Error::Limit { resource, limit })) => {
             (*resource, *limit, None)
@@ -287,11 +292,56 @@ mod tests {
             name: "XW".into(),
             path: "xw.csv".into(),
             profile: yamaa_core::specification::SourceProfile::Csv,
+            encoding: None,
             types: Vec::new(),
             ordinal: None,
             empty_string_present: false,
         }
     }
+    #[test]
+    fn actual_sas_reader_quota_keeps_its_bound_and_input_owner() {
+        let mut declaration = input();
+        declaration.path = "v5.xpt".into();
+        declaration.profile = yamaa_core::specification::SourceProfile::Xport;
+        declaration.encoding = Some("windows-1252".into());
+        let failure = crate::sas_source::parse(
+            include_bytes!("../tests/fixtures/sas/v5.xpt"),
+            &declaration,
+            crate::sas_source::Limits {
+                source_bytes: 1_048_576,
+                work_bytes: 4_194_304,
+                retained_bytes: 4_194_304,
+            },
+            crate::arrow_table::TableLimits {
+                max_rows: 1,
+                max_columns: 1024,
+                max_cells: 1024,
+                max_batches: 1,
+            },
+        )
+        .unwrap_err();
+        let failure = Error::SasSource(failure);
+        let refusal = source(&failure, &declaration).unwrap();
+        assert_eq!(refusal.resource, "rows");
+        assert_eq!(refusal.limit, 1);
+        assert_eq!(refusal.actual, Some(2));
+        assert_eq!(refusal.spec_paths, ["input.XW"]);
+        let projected: Value = serde_json::from_str(&crate::specification_diagnostics::failure(
+            &failure,
+            Some(&declaration),
+        ))
+        .unwrap();
+        assert_eq!(projected["outcome"]["stage"], "ingest");
+        assert_eq!(projected["outcome"]["code"], "sas_limit");
+        assert_eq!(projected["outcome"]["resource"], "rows");
+        assert_eq!(projected["outcome"]["limit"], 1);
+        assert_eq!(projected["outcome"]["actual"], 2);
+        assert_eq!(
+            projected["outcome"]["spec_paths"],
+            serde_json::json!(["input.XW"])
+        );
+    }
+
     #[test]
     fn column_refusal_projects_the_source_coordinate_with_a_non_first_driver() {
         let sources = ["FIRST", "DRIVER", "LAST"].map(|name| SourceDeclaration {

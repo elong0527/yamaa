@@ -46,6 +46,7 @@ fn source() -> SourceDeclaration {
         path: "source.csv".into(),
         types: vec![],
         profile: SourceProfile::Csv,
+        encoding: None,
         empty_string_present: false,
         ordinal: None,
     }

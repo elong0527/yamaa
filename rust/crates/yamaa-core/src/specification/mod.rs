@@ -298,6 +298,7 @@ pub struct SourceDeclaration {
     pub path: String,
     pub types: Vec<(String, ColumnType)>,
     pub profile: SourceProfile,
+    pub encoding: Option<String>,
     pub empty_string_present: bool,
     pub ordinal: Option<String>,
 }
@@ -306,6 +307,8 @@ pub struct SourceDeclaration {
 pub enum SourceProfile {
     Csv,
     Parquet,
+    Xport,
+    Sas7bdat,
 }
 /// Core-selected semantic source interpretation, independent of storage profile.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -324,6 +327,10 @@ impl SourceProfile {
             Some(Self::Csv)
         } else if extension.eq_ignore_ascii_case("parquet") {
             Some(Self::Parquet)
+        } else if extension.eq_ignore_ascii_case("xpt") {
+            Some(Self::Xport)
+        } else if extension.eq_ignore_ascii_case("sas7bdat") {
+            Some(Self::Sas7bdat)
         } else {
             None
         }
@@ -1147,6 +1154,27 @@ impl PreparedSpecification {
                 continue;
             }
             let profile = SourceProfile::from_path(text(d, field(d, id, "path")?)?);
+            let sas = matches!(
+                profile,
+                Some(SourceProfile::Xport | SourceProfile::Sas7bdat)
+            );
+            let encoding = d
+                .field(id, "encoding")
+                .filter(|&id| !matches!(d.nodes()[id], N::Null));
+            if sas != encoding.is_some() {
+                source_findings.push(PreflightFinding::Scalar(crate::diagnostic::Diagnostic {
+                    code: crate::diagnostic::ConditionCode::SasSourceEncoding,
+                    spec_paths: vec![format!("{prefix}.encoding")],
+                    context: crate::diagnostic::Context::from([(
+                        "dataset".into(),
+                        crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(
+                            text(d, name)?.into(),
+                        )),
+                    )]),
+                    source_span: None,
+                    operand_route: None,
+                }));
+            }
             if profile == Some(SourceProfile::Csv)
                 && d.field(id, "empty_string")
                     .is_some_and(|id| !matches!(&d.nodes()[id],N::Text(v) if v=="missing"))
@@ -1267,6 +1295,11 @@ impl PreparedSpecification {
                 // Unsupported formats never produce an accepted plan.
                 profile: SourceProfile::from_path(text(d, field(d, selected, "path")?)?)
                     .unwrap_or(SourceProfile::Csv),
+                encoding: d
+                    .field(selected, "encoding")
+                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                    .map(|id| text(d, id).map(String::from))
+                    .transpose()?,
                 empty_string_present: d.field(selected, "empty_string").is_some_and(
                     |id| matches!(&d.nodes()[id], N::Text(value) if value == "present"),
                 ),

@@ -338,7 +338,12 @@ mod resource_tests {
         assert_eq!(plain.len(), 1);
         let issue = &plain[0];
         assert_eq!(issue.phase, "engine");
-        assert_eq!(issue.condition, "engine_rejected");
+        assert_eq!(
+            issue.condition,
+            yamaa_core::diagnostic::ConditionCode::ApplicationRejected
+                .definition()
+                .condition
+        );
         assert_eq!(issue.requirement, None);
         assert_eq!(
             serde_json::from_str::<serde_json::Value>(&issue.context).unwrap(),

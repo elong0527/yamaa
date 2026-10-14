@@ -19,6 +19,7 @@ pub enum Error {
     Source(TextTableError),
     TypedSource(crate::typed_csv::Error),
     ParquetSource(crate::parquet_source::Error),
+    SasSource(crate::sas_source::Error),
     Ordinal(yamaa_engine::source_ingestion::Error),
     OdmFields(Vec<yamaa_core::odm_source::SchemaError>),
     OdmValues(Vec<yamaa_core::odm_source::MissingValues>),
@@ -228,6 +229,9 @@ impl application::SourceDecoder for SourceDecoder {
                         | crate::parquet_source::Error::Value { .. }
                 )
                 | Error::OdmFields(_)
+                | Error::SasSource(
+                    crate::sas_source::Error::Invalid(_) | crate::sas_source::Error::Typing(_)
+                )
                 | Error::OdmValues(_)
         )
     }
@@ -279,6 +283,31 @@ pub(crate) fn decode_interpreted(
     };
     let table = if source.profile == yamaa_core::specification::SourceProfile::Parquet {
         decode_parquet(source, bytes, bounded, odm)?
+    } else if matches!(
+        source.profile,
+        yamaa_core::specification::SourceProfile::Xport
+            | yamaa_core::specification::SourceProfile::Sas7bdat
+    ) {
+        let table = crate::sas_source::parse(
+            bytes,
+            source,
+            crate::sas_source::Limits {
+                source_bytes: csv_source::Limits::default().bytes,
+                work_bytes: bounded.map_or(64 * 1024 * 1024, |limits| {
+                    limits.work_bytes.min(64 * 1024 * 1024)
+                }),
+                retained_bytes: bounded.map_or(64 * 1024 * 1024, |limits| {
+                    limits.storage_bytes.min(64 * 1024 * 1024)
+                }),
+            },
+            table_limits,
+        )
+        .map_err(Error::SasSource)?;
+        if odm {
+            project_odm(table, table_limits)?
+        } else {
+            table
+        }
     } else {
         let csv_limits = bounded.map_or_else(csv_source::Limits::default, bounded_csv_limits);
         if odm {
@@ -350,6 +379,56 @@ pub(crate) fn typed_source_error(error: crate::typed_csv::Error) -> Error {
         crate::typed_csv::Error::Table(error) => Error::Source(TextTableError::Table(error)),
         error => Error::TypedSource(error),
     }
+}
+
+fn project_odm(table: ArrowTable, table_limits: TableLimits) -> Result<ArrowTable, Error> {
+    use yamaa_core::table::{Column, TableAccess, TableSchema};
+    let fields = table
+        .schema()
+        .columns()
+        .iter()
+        .map(|column| yamaa_core::odm_source::StoredField {
+            name: column.name.as_str(),
+            kind: Some(column.kind),
+        })
+        .collect::<Vec<_>>();
+    let binding = yamaa_core::odm_source::bind_fields(&fields)
+        .map_err(|_| {
+            Error::SasSource(crate::sas_source::Error::Limit {
+                resource: "odm_metadata",
+                limit: 1_048_576,
+                actual: None,
+            })
+        })?
+        .map_err(Error::OdmFields)?;
+    let schema = TableSchema::new(
+        yamaa_core::odm_source::FIELDS
+            .iter()
+            .map(|name| Column {
+                name: (*name).into(),
+                kind: yamaa_core::value::ColumnType::Str,
+            })
+            .collect(),
+    )
+    .map_err(|_| Error::SasSource(crate::sas_source::Error::Internal))?;
+    let batches = table
+        .batches()
+        .iter()
+        .map(|batch| {
+            batch
+                .project(binding.stored())
+                .map_err(|_| Error::SasSource(crate::sas_source::Error::Internal))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    ArrowTable::try_new(
+        schema,
+        batches,
+        TableLimits {
+            max_columns: 11,
+            ..table_limits
+        },
+    )
+    .map_err(|_| Error::SasSource(crate::sas_source::Error::Internal))
 }
 pub(crate) fn bounded_csv_limits(
     limits: yamaa_engine::producer_build::DecodeLimits,
@@ -489,6 +568,7 @@ mod width_tests {
             path: "input.parquet".into(),
             types: vec![],
             profile: SourceProfile::Parquet,
+            encoding: None,
             empty_string_present: false,
             ordinal: None,
         };
@@ -543,6 +623,7 @@ mod width_tests {
                     vec![]
                 },
                 profile: SourceProfile::Csv,
+                encoding: None,
                 empty_string_present: false,
                 ordinal: None,
             };

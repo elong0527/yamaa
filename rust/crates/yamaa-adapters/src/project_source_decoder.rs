@@ -191,6 +191,7 @@ mod tests {
                 ("VALUE".into(), ColumnType::Int),
             ],
             profile: SourceProfile::Csv,
+            encoding: None,
             empty_string_present: false,
             ordinal: None,
         };

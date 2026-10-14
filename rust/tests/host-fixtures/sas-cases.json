@@ -1,0 +1,3274 @@
+{
+  "version": "1",
+  "accepted": [
+    {
+      "id": "xpt-v5-default",
+      "file": "v5.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "v5.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "ID",
+            "type": "float",
+            "label": "ID",
+            "derivation": "SRC.ID"
+          },
+          {
+            "name": "TEXT",
+            "type": "str",
+            "label": "TEXT",
+            "derivation": "SRC.TEXT"
+          },
+          {
+            "name": "NUM",
+            "type": "float",
+            "label": "NUM",
+            "derivation": "SRC.NUM"
+          },
+          {
+            "name": "DAY",
+            "type": "float",
+            "label": "DAY",
+            "derivation": "SRC.DAY"
+          },
+          {
+            "name": "STAMP",
+            "type": "float",
+            "label": "STAMP",
+            "derivation": "SRC.STAMP"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "ID",
+            "TEXT",
+            "NUM",
+            "DAY",
+            "STAMP"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "ID",
+          "type": "float"
+        },
+        {
+          "name": "TEXT",
+          "type": "str"
+        },
+        {
+          "name": "NUM",
+          "type": "float"
+        },
+        {
+          "name": "DAY",
+          "type": "float"
+        },
+        {
+          "name": "STAMP",
+          "type": "float"
+        }
+      ],
+      "rows": [
+        [
+          "1",
+          2.0,
+          " café",
+          1.5,
+          0.0,
+          0.0
+        ],
+        [
+          "2",
+          1.0,
+          null,
+          null,
+          3653.0,
+          -1.0
+        ],
+        [
+          "3",
+          3.0,
+          ".",
+          -2.0,
+          -1.0,
+          1.0
+        ]
+      ],
+      "csv": "RECORD,ID,TEXT,NUM,DAY,STAMP\n1,2.00, café,1.50,0.00,0.00\n2,1.00,,,3653.00,-1.00\n3,3.00,.,-2.00,-1.00,1.00\n"
+    },
+    {
+      "id": "xpt-v8-default",
+      "file": "v8.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "v8.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD",
+            "empty_string": "present"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "ID",
+            "type": "float",
+            "label": "ID",
+            "derivation": "SRC.ID"
+          },
+          {
+            "name": "LONG_TEXT_NAME",
+            "type": "str",
+            "label": "LONG_TEXT_NAME",
+            "derivation": "SRC.LONG_TEXT_NAME"
+          },
+          {
+            "name": "NUM",
+            "type": "float",
+            "label": "NUM",
+            "derivation": "SRC.NUM"
+          },
+          {
+            "name": "DAY",
+            "type": "float",
+            "label": "DAY",
+            "derivation": "SRC.DAY"
+          },
+          {
+            "name": "STAMP",
+            "type": "float",
+            "label": "STAMP",
+            "derivation": "SRC.STAMP"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "ID",
+            "LONG_TEXT_NAME",
+            "NUM",
+            "DAY",
+            "STAMP"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "ID",
+          "type": "float"
+        },
+        {
+          "name": "LONG_TEXT_NAME",
+          "type": "str"
+        },
+        {
+          "name": "NUM",
+          "type": "float"
+        },
+        {
+          "name": "DAY",
+          "type": "float"
+        },
+        {
+          "name": "STAMP",
+          "type": "float"
+        }
+      ],
+      "rows": [
+        [
+          "1",
+          2.0,
+          " café",
+          1.5,
+          0.0,
+          0.0
+        ],
+        [
+          "2",
+          1.0,
+          "",
+          null,
+          3653.0,
+          -1.0
+        ],
+        [
+          "3",
+          3.0,
+          ".",
+          -2.0,
+          -1.0,
+          1.0
+        ]
+      ],
+      "csv": "RECORD,ID,LONG_TEXT_NAME,NUM,DAY,STAMP\n1,2.00, café,1.50,0.00,0.00\n2,1.00,\"\",,3653.00,-1.00\n3,3.00,.,-2.00,-1.00,1.00\n"
+    },
+    {
+      "id": "xpt-utf8",
+      "file": "utf8.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "utf8.xpt",
+            "encoding": "utf-8",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "ID",
+            "type": "float",
+            "label": "ID",
+            "derivation": "SRC.ID"
+          },
+          {
+            "name": "TEXT",
+            "type": "str",
+            "label": "TEXT",
+            "derivation": "SRC.TEXT"
+          },
+          {
+            "name": "NUM",
+            "type": "float",
+            "label": "NUM",
+            "derivation": "SRC.NUM"
+          },
+          {
+            "name": "DAY",
+            "type": "float",
+            "label": "DAY",
+            "derivation": "SRC.DAY"
+          },
+          {
+            "name": "STAMP",
+            "type": "float",
+            "label": "STAMP",
+            "derivation": "SRC.STAMP"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "ID",
+            "TEXT",
+            "NUM",
+            "DAY",
+            "STAMP"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "ID",
+          "type": "float"
+        },
+        {
+          "name": "TEXT",
+          "type": "str"
+        },
+        {
+          "name": "NUM",
+          "type": "float"
+        },
+        {
+          "name": "DAY",
+          "type": "float"
+        },
+        {
+          "name": "STAMP",
+          "type": "float"
+        }
+      ],
+      "rows": [
+        [
+          "1",
+          2.0,
+          " café",
+          1.5,
+          0.0,
+          0.0
+        ],
+        [
+          "2",
+          1.0,
+          null,
+          null,
+          3653.0,
+          -1.0
+        ],
+        [
+          "3",
+          3.0,
+          ".",
+          -2.0,
+          -1.0,
+          1.0
+        ]
+      ],
+      "csv": "RECORD,ID,TEXT,NUM,DAY,STAMP\n1,2.00, café,1.50,0.00,0.00\n2,1.00,,,3653.00,-1.00\n3,3.00,.,-2.00,-1.00,1.00\n"
+    },
+    {
+      "id": "xpt-v5-narrowed",
+      "file": "v5.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "v5.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD",
+            "types": {
+              "ID": "int",
+              "DAY": "date",
+              "STAMP": "datetime"
+            },
+            "empty_string": "present"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "ID",
+            "type": "int",
+            "label": "ID",
+            "derivation": "SRC.ID"
+          },
+          {
+            "name": "TEXT",
+            "type": "str",
+            "label": "TEXT",
+            "derivation": "SRC.TEXT"
+          },
+          {
+            "name": "NUM",
+            "type": "float",
+            "label": "NUM",
+            "derivation": "SRC.NUM"
+          },
+          {
+            "name": "DAY",
+            "type": "date",
+            "label": "DAY",
+            "derivation": "SRC.DAY"
+          },
+          {
+            "name": "STAMP",
+            "type": "datetime",
+            "label": "STAMP",
+            "derivation": "SRC.STAMP"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "ID",
+            "TEXT",
+            "NUM",
+            "DAY",
+            "STAMP"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "ID",
+          "type": "int"
+        },
+        {
+          "name": "TEXT",
+          "type": "str"
+        },
+        {
+          "name": "NUM",
+          "type": "float"
+        },
+        {
+          "name": "DAY",
+          "type": "date"
+        },
+        {
+          "name": "STAMP",
+          "type": "datetime"
+        }
+      ],
+      "rows": [
+        [
+          "1",
+          "2",
+          " café",
+          1.5,
+          "1960-01-01",
+          "1960-01-01T00:00:00"
+        ],
+        [
+          "2",
+          "1",
+          "",
+          null,
+          "1970-01-01",
+          "1959-12-31T23:59:59"
+        ],
+        [
+          "3",
+          "3",
+          ".",
+          -2.0,
+          "1959-12-31",
+          "1960-01-01T00:00:01"
+        ]
+      ],
+      "csv": "RECORD,ID,TEXT,NUM,DAY,STAMP\n1,2, café,1.50,1960-01-01,1960-01-01T00:00:00\n2,1,\"\",,1970-01-01,1959-12-31T23:59:59\n3,3,.,-2.00,1959-12-31,1960-01-01T00:00:01\n"
+    },
+    {
+      "id": "xpt-v8-narrowed",
+      "file": "v8.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "v8.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD",
+            "types": {
+              "ID": "int",
+              "DAY": "date",
+              "STAMP": "datetime"
+            },
+            "empty_string": "missing"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "ID",
+            "type": "int",
+            "label": "ID",
+            "derivation": "SRC.ID"
+          },
+          {
+            "name": "LONG_TEXT_NAME",
+            "type": "str",
+            "label": "LONG_TEXT_NAME",
+            "derivation": "SRC.LONG_TEXT_NAME"
+          },
+          {
+            "name": "NUM",
+            "type": "float",
+            "label": "NUM",
+            "derivation": "SRC.NUM"
+          },
+          {
+            "name": "DAY",
+            "type": "date",
+            "label": "DAY",
+            "derivation": "SRC.DAY"
+          },
+          {
+            "name": "STAMP",
+            "type": "datetime",
+            "label": "STAMP",
+            "derivation": "SRC.STAMP"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "ID",
+            "LONG_TEXT_NAME",
+            "NUM",
+            "DAY",
+            "STAMP"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "ID",
+          "type": "int"
+        },
+        {
+          "name": "LONG_TEXT_NAME",
+          "type": "str"
+        },
+        {
+          "name": "NUM",
+          "type": "float"
+        },
+        {
+          "name": "DAY",
+          "type": "date"
+        },
+        {
+          "name": "STAMP",
+          "type": "datetime"
+        }
+      ],
+      "rows": [
+        [
+          "1",
+          "2",
+          " café",
+          1.5,
+          "1960-01-01",
+          "1960-01-01T00:00:00"
+        ],
+        [
+          "2",
+          "1",
+          null,
+          null,
+          "1970-01-01",
+          "1959-12-31T23:59:59"
+        ],
+        [
+          "3",
+          "3",
+          ".",
+          -2.0,
+          "1959-12-31",
+          "1960-01-01T00:00:01"
+        ]
+      ],
+      "csv": "RECORD,ID,LONG_TEXT_NAME,NUM,DAY,STAMP\n1,2, café,1.50,1960-01-01,1960-01-01T00:00:00\n2,1,,,1970-01-01,1959-12-31T23:59:59\n3,3,.,-2.00,1959-12-31,1960-01-01T00:00:01\n"
+    },
+    {
+      "id": "exact-signed-integers",
+      "file": "integer-bounds.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "integer-bounds.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD",
+            "types": {
+              "NUM": "int"
+            }
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "NUM",
+            "type": "int",
+            "label": "NUM",
+            "derivation": "SRC.NUM"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "NUM"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "NUM",
+          "type": "int"
+        }
+      ],
+      "rows": [
+        [
+          "1",
+          "-9223372036854775808"
+        ],
+        [
+          "2",
+          "0"
+        ],
+        [
+          "3",
+          "9007199254740992"
+        ],
+        [
+          "4",
+          "9223372036854774784"
+        ]
+      ],
+      "csv": "RECORD,NUM\n1,-9223372036854775808\n2,0\n3,9007199254740992\n4,9223372036854774784\n"
+    },
+    {
+      "id": "all-numeric-missing-float",
+      "file": "missing.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "missing.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "NUM",
+            "type": "float",
+            "label": "NUM",
+            "derivation": "SRC.NUM"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "NUM"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "NUM",
+          "type": "float"
+        }
+      ],
+      "rows": [
+        [
+          "1",
+          null
+        ],
+        [
+          "2",
+          null
+        ],
+        [
+          "3",
+          null
+        ],
+        [
+          "4",
+          null
+        ],
+        [
+          "5",
+          null
+        ],
+        [
+          "6",
+          null
+        ],
+        [
+          "7",
+          null
+        ],
+        [
+          "8",
+          null
+        ],
+        [
+          "9",
+          null
+        ],
+        [
+          "10",
+          null
+        ],
+        [
+          "11",
+          null
+        ],
+        [
+          "12",
+          null
+        ],
+        [
+          "13",
+          null
+        ],
+        [
+          "14",
+          null
+        ],
+        [
+          "15",
+          null
+        ],
+        [
+          "16",
+          null
+        ],
+        [
+          "17",
+          null
+        ],
+        [
+          "18",
+          null
+        ],
+        [
+          "19",
+          null
+        ],
+        [
+          "20",
+          null
+        ],
+        [
+          "21",
+          null
+        ],
+        [
+          "22",
+          null
+        ],
+        [
+          "23",
+          null
+        ],
+        [
+          "24",
+          null
+        ],
+        [
+          "25",
+          null
+        ],
+        [
+          "26",
+          null
+        ],
+        [
+          "27",
+          null
+        ],
+        [
+          "28",
+          null
+        ]
+      ],
+      "csv": "RECORD,NUM\n1,\n2,\n3,\n4,\n5,\n6,\n7,\n8,\n9,\n10,\n11,\n12,\n13,\n14,\n15,\n16,\n17,\n18,\n19,\n20,\n21,\n22,\n23,\n24,\n25,\n26,\n27,\n28,\n"
+    },
+    {
+      "id": "all-numeric-missing-int",
+      "file": "missing.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "missing.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD",
+            "types": {
+              "NUM": "int"
+            }
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "NUM",
+            "type": "int",
+            "label": "NUM",
+            "derivation": "SRC.NUM"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "NUM"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "NUM",
+          "type": "int"
+        }
+      ],
+      "rows": [
+        [
+          "1",
+          null
+        ],
+        [
+          "2",
+          null
+        ],
+        [
+          "3",
+          null
+        ],
+        [
+          "4",
+          null
+        ],
+        [
+          "5",
+          null
+        ],
+        [
+          "6",
+          null
+        ],
+        [
+          "7",
+          null
+        ],
+        [
+          "8",
+          null
+        ],
+        [
+          "9",
+          null
+        ],
+        [
+          "10",
+          null
+        ],
+        [
+          "11",
+          null
+        ],
+        [
+          "12",
+          null
+        ],
+        [
+          "13",
+          null
+        ],
+        [
+          "14",
+          null
+        ],
+        [
+          "15",
+          null
+        ],
+        [
+          "16",
+          null
+        ],
+        [
+          "17",
+          null
+        ],
+        [
+          "18",
+          null
+        ],
+        [
+          "19",
+          null
+        ],
+        [
+          "20",
+          null
+        ],
+        [
+          "21",
+          null
+        ],
+        [
+          "22",
+          null
+        ],
+        [
+          "23",
+          null
+        ],
+        [
+          "24",
+          null
+        ],
+        [
+          "25",
+          null
+        ],
+        [
+          "26",
+          null
+        ],
+        [
+          "27",
+          null
+        ],
+        [
+          "28",
+          null
+        ]
+      ],
+      "csv": "RECORD,NUM\n1,\n2,\n3,\n4,\n5,\n6,\n7,\n8,\n9,\n10,\n11,\n12,\n13,\n14,\n15,\n16,\n17,\n18,\n19,\n20,\n21,\n22,\n23,\n24,\n25,\n26,\n27,\n28,\n"
+    },
+    {
+      "id": "sas-display-formats-do-not-infer",
+      "file": "datetime.sas7bdat",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "datetime.sas7bdat",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "VAR1",
+            "type": "float",
+            "label": "VAR1",
+            "derivation": "SRC.VAR1"
+          },
+          {
+            "name": "VAR2",
+            "type": "float",
+            "label": "VAR2",
+            "derivation": "SRC.VAR2"
+          },
+          {
+            "name": "VAR3",
+            "type": "float",
+            "label": "VAR3",
+            "derivation": "SRC.VAR3"
+          },
+          {
+            "name": "VAR4",
+            "type": "float",
+            "label": "VAR4",
+            "derivation": "SRC.VAR4"
+          },
+          {
+            "name": "VAR5",
+            "type": "float",
+            "label": "VAR5",
+            "derivation": "SRC.VAR5"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "VAR1",
+            "VAR2",
+            "VAR3",
+            "VAR4",
+            "VAR5"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "VAR1",
+          "type": "float"
+        },
+        {
+          "name": "VAR2",
+          "type": "float"
+        },
+        {
+          "name": "VAR3",
+          "type": "float"
+        },
+        {
+          "name": "VAR4",
+          "type": "float"
+        },
+        {
+          "name": "VAR5",
+          "type": "float"
+        }
+      ],
+      "first_row": [
+        "1",
+        1738507332.0,
+        20121.0,
+        20121.0,
+        20121.0,
+        52932.0
+      ]
+    },
+    {
+      "id": "sas-explicit-temporal-types",
+      "file": "datetime.sas7bdat",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "datetime.sas7bdat",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD",
+            "types": {
+              "VAR1": "datetime",
+              "VAR2": "date",
+              "VAR3": "date",
+              "VAR4": "date",
+              "VAR5": "int"
+            }
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "VAR1",
+            "type": "datetime",
+            "label": "VAR1",
+            "derivation": "SRC.VAR1"
+          },
+          {
+            "name": "VAR2",
+            "type": "date",
+            "label": "VAR2",
+            "derivation": "SRC.VAR2"
+          },
+          {
+            "name": "VAR3",
+            "type": "date",
+            "label": "VAR3",
+            "derivation": "SRC.VAR3"
+          },
+          {
+            "name": "VAR4",
+            "type": "date",
+            "label": "VAR4",
+            "derivation": "SRC.VAR4"
+          },
+          {
+            "name": "VAR5",
+            "type": "int",
+            "label": "VAR5",
+            "derivation": "SRC.VAR5"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "VAR1",
+            "VAR2",
+            "VAR3",
+            "VAR4",
+            "VAR5"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "VAR1",
+          "type": "datetime"
+        },
+        {
+          "name": "VAR2",
+          "type": "date"
+        },
+        {
+          "name": "VAR3",
+          "type": "date"
+        },
+        {
+          "name": "VAR4",
+          "type": "date"
+        },
+        {
+          "name": "VAR5",
+          "type": "int"
+        }
+      ],
+      "first_row": [
+        "1",
+        "2015-02-02T14:42:12",
+        "2015-02-02",
+        "2015-02-02",
+        "2015-02-02",
+        "52932"
+      ]
+    },
+    {
+      "id": "default-float-keeps-rounded-ibm-number",
+      "file": "precision.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "precision.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "NUM",
+            "type": "float",
+            "label": "NUM",
+            "derivation": "SRC.NUM"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "NUM"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "NUM",
+          "type": "float"
+        }
+      ],
+      "rows": [
+        [
+          "1",
+          9007199254740992.0
+        ]
+      ],
+      "csv": "RECORD,NUM\n1,9007199254740992.00\n"
+    },
+    {
+      "id": "ordinary-decimal-float",
+      "file": "decimal.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "decimal.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "NUM",
+            "type": "float",
+            "label": "NUM",
+            "derivation": "SRC.NUM"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "NUM"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "NUM",
+          "type": "float"
+        }
+      ],
+      "rows": [
+        [
+          "1",
+          0.1
+        ]
+      ],
+      "csv": "RECORD,NUM\n1,0.10\n"
+    },
+    {
+      "id": "transport-member-marker-is-ordinary-text",
+      "file": "member-text.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "member-text.xpt",
+            "encoding": "ascii",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "TEXT",
+            "type": "str",
+            "label": "TEXT",
+            "derivation": "SRC.TEXT"
+          },
+          {
+            "name": "NUM",
+            "type": "float",
+            "label": "NUM",
+            "derivation": "SRC.NUM"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "TEXT",
+            "NUM"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "TEXT",
+          "type": "str"
+        },
+        {
+          "name": "NUM",
+          "type": "float"
+        }
+      ],
+      "rows": [
+        [
+          "1",
+          "HEADER RECORD*******MEMBER  HEADER RECORD!!!!!!!000000000000000000000000000000",
+          1.0
+        ]
+      ],
+      "csv": "RECORD,TEXT,NUM\n1,HEADER RECORD*******MEMBER  HEADER RECORD!!!!!!!000000000000000000000000000000,1.00\n"
+    },
+    {
+      "id": "right-nul-padding-preserves-text",
+      "file": "v5.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "v5.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "ID",
+            "type": "float",
+            "label": "ID",
+            "derivation": "SRC.ID"
+          },
+          {
+            "name": "TEXT",
+            "type": "str",
+            "label": "TEXT",
+            "derivation": "SRC.TEXT"
+          },
+          {
+            "name": "NUM",
+            "type": "float",
+            "label": "NUM",
+            "derivation": "SRC.NUM"
+          },
+          {
+            "name": "DAY",
+            "type": "float",
+            "label": "DAY",
+            "derivation": "SRC.DAY"
+          },
+          {
+            "name": "STAMP",
+            "type": "float",
+            "label": "STAMP",
+            "derivation": "SRC.STAMP"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "ID",
+            "TEXT",
+            "NUM",
+            "DAY",
+            "STAMP"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "ID",
+          "type": "float"
+        },
+        {
+          "name": "TEXT",
+          "type": "str"
+        },
+        {
+          "name": "NUM",
+          "type": "float"
+        },
+        {
+          "name": "DAY",
+          "type": "float"
+        },
+        {
+          "name": "STAMP",
+          "type": "float"
+        }
+      ],
+      "rows": [
+        [
+          "1",
+          2.0,
+          " café",
+          1.5,
+          0.0,
+          0.0
+        ],
+        [
+          "2",
+          1.0,
+          null,
+          null,
+          3653.0,
+          -1.0
+        ],
+        [
+          "3",
+          3.0,
+          ".",
+          -2.0,
+          -1.0,
+          1.0
+        ]
+      ],
+      "csv": "RECORD,ID,TEXT,NUM,DAY,STAMP\n1,2.00, café,1.50,0.00,0.00\n2,1.00,,,3653.00,-1.00\n3,3.00,.,-2.00,-1.00,1.00\n",
+      "mutation": {
+        "replace_hex": [
+          "20636166e92020202020202020202020",
+          "20636166e90000000000000000000000"
+        ]
+      }
+    }
+  ],
+  "refusals": [
+    {
+      "id": "fractional.xpt-int",
+      "file": "fractional.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "fractional.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD",
+            "types": {
+              "NUM": "int"
+            }
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "NUM",
+            "type": "int",
+            "label": "NUM",
+            "derivation": "SRC.NUM"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "NUM"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "NUM",
+          "type": "int"
+        }
+      ],
+      "condition": "field_parse_failed",
+      "phase": "ingest",
+      "context_fields": {
+        "dataset": "SRC",
+        "field": "NUM",
+        "type": "int"
+      },
+      "spec_paths": [
+        "input.SRC.types.NUM"
+      ]
+    },
+    {
+      "id": "fractional.xpt-date",
+      "file": "fractional.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "fractional.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD",
+            "types": {
+              "NUM": "date"
+            }
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "NUM",
+            "type": "date",
+            "label": "NUM",
+            "derivation": "SRC.NUM"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "NUM"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "NUM",
+          "type": "date"
+        }
+      ],
+      "condition": "field_parse_failed",
+      "phase": "ingest",
+      "context_fields": {
+        "dataset": "SRC",
+        "field": "NUM",
+        "type": "date"
+      },
+      "spec_paths": [
+        "input.SRC.types.NUM"
+      ]
+    },
+    {
+      "id": "fractional.xpt-datetime",
+      "file": "fractional.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "fractional.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD",
+            "types": {
+              "NUM": "datetime"
+            }
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "NUM",
+            "type": "datetime",
+            "label": "NUM",
+            "derivation": "SRC.NUM"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "NUM"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "NUM",
+          "type": "datetime"
+        }
+      ],
+      "condition": "field_parse_failed",
+      "phase": "ingest",
+      "context_fields": {
+        "dataset": "SRC",
+        "field": "NUM",
+        "type": "datetime"
+      },
+      "spec_paths": [
+        "input.SRC.types.NUM"
+      ]
+    },
+    {
+      "id": "precision.xpt-int",
+      "file": "precision.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "precision.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD",
+            "types": {
+              "NUM": "int"
+            }
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "NUM",
+            "type": "int",
+            "label": "NUM",
+            "derivation": "SRC.NUM"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "NUM"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "NUM",
+          "type": "int"
+        }
+      ],
+      "condition": "field_parse_failed",
+      "phase": "ingest",
+      "context_fields": {
+        "dataset": "SRC",
+        "field": "NUM",
+        "type": "int"
+      },
+      "spec_paths": [
+        "input.SRC.types.NUM"
+      ]
+    },
+    {
+      "id": "precision.xpt-date",
+      "file": "precision.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "precision.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD",
+            "types": {
+              "NUM": "date"
+            }
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "NUM",
+            "type": "date",
+            "label": "NUM",
+            "derivation": "SRC.NUM"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "NUM"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "NUM",
+          "type": "date"
+        }
+      ],
+      "condition": "field_parse_failed",
+      "phase": "ingest",
+      "context_fields": {
+        "dataset": "SRC",
+        "field": "NUM",
+        "type": "date"
+      },
+      "spec_paths": [
+        "input.SRC.types.NUM"
+      ]
+    },
+    {
+      "id": "precision.xpt-datetime",
+      "file": "precision.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "precision.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD",
+            "types": {
+              "NUM": "datetime"
+            }
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "NUM",
+            "type": "datetime",
+            "label": "NUM",
+            "derivation": "SRC.NUM"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "NUM"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "NUM",
+          "type": "datetime"
+        }
+      ],
+      "condition": "field_parse_failed",
+      "phase": "ingest",
+      "context_fields": {
+        "dataset": "SRC",
+        "field": "NUM",
+        "type": "datetime"
+      },
+      "spec_paths": [
+        "input.SRC.types.NUM"
+      ]
+    },
+    {
+      "id": "signed-integer-overflow",
+      "file": "integer-overflow.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "integer-overflow.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD",
+            "types": {
+              "NUM": "int"
+            }
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "NUM",
+            "type": "int",
+            "label": "NUM",
+            "derivation": "SRC.NUM"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "NUM"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "NUM",
+          "type": "int"
+        }
+      ],
+      "condition": "field_parse_failed",
+      "phase": "ingest",
+      "context_fields": {
+        "dataset": "SRC",
+        "field": "NUM",
+        "type": "int"
+      },
+      "spec_paths": [
+        "input.SRC.types.NUM"
+      ]
+    },
+    {
+      "id": "multiple-v5-members",
+      "file": "multi-v5.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "multi-v5.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "ID",
+            "type": "float",
+            "label": "ID",
+            "derivation": "SRC.ID"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "ID"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "ID",
+          "type": "float"
+        }
+      ],
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "causes": [
+        "members"
+      ]
+    },
+    {
+      "id": "multiple-v8-members",
+      "file": "multi-v8.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "multi-v8.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "ID",
+            "type": "float",
+            "label": "ID",
+            "derivation": "SRC.ID"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "ID"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "ID",
+          "type": "float"
+        }
+      ],
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "causes": [
+        "members"
+      ]
+    },
+    {
+      "id": "cp1252-is-not-utf8",
+      "file": "v5.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "v5.xpt",
+            "encoding": "utf-8",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "ID",
+            "type": "float",
+            "label": "ID",
+            "derivation": "SRC.ID"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "ID"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "ID",
+          "type": "float"
+        }
+      ],
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "causes": [
+        "encoding"
+      ]
+    },
+    {
+      "id": "cp1252-is-not-ascii",
+      "file": "v5.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "v5.xpt",
+            "encoding": "ascii",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "ID",
+            "type": "float",
+            "label": "ID",
+            "derivation": "SRC.ID"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "ID"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "ID",
+          "type": "float"
+        }
+      ],
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "causes": [
+        "encoding"
+      ]
+    },
+    {
+      "id": "undefined-cp1252",
+      "file": "v5.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "v5.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "ID",
+            "type": "float",
+            "label": "ID",
+            "derivation": "SRC.ID"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "ID"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "ID",
+          "type": "float"
+        }
+      ],
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "causes": [
+        "encoding"
+      ],
+      "mutation": {
+        "replace_hex": [
+          "20636166e9",
+          "2063616681"
+        ]
+      }
+    },
+    {
+      "id": "invalid-utf8",
+      "file": "utf8.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "utf8.xpt",
+            "encoding": "utf-8",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "ID",
+            "type": "float",
+            "label": "ID",
+            "derivation": "SRC.ID"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "ID"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "ID",
+          "type": "float"
+        }
+      ],
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "causes": [
+        "encoding"
+      ],
+      "mutation": {
+        "replace_hex": [
+          "20636166c3a9",
+          "20636166c3ff"
+        ]
+      }
+    },
+    {
+      "id": "empty-transport",
+      "file": "v5.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "v5.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "ID",
+            "type": "float",
+            "label": "ID",
+            "derivation": "SRC.ID"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "ID"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "ID",
+          "type": "float"
+        }
+      ],
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "causes": [
+        "framing"
+      ],
+      "mutation": {
+        "truncate": 0
+      }
+    },
+    {
+      "id": "partial-transport-record",
+      "file": "v5.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "v5.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "ID",
+            "type": "float",
+            "label": "ID",
+            "derivation": "SRC.ID"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "ID"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "ID",
+          "type": "float"
+        }
+      ],
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "causes": [
+        "framing"
+      ],
+      "mutation": {
+        "truncate": -1
+      }
+    },
+    {
+      "id": "malformed-sas",
+      "file": "datetime.sas7bdat",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "datetime.sas7bdat",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "VAR1",
+            "type": "float",
+            "label": "VAR1",
+            "derivation": "SRC.VAR1"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "VAR1"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "VAR1",
+          "type": "float"
+        }
+      ],
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "causes": [
+        "malformed"
+      ],
+      "mutation": {
+        "bytes_hex": "6d616c666f726d6564"
+      }
+    },
+    {
+      "id": "truncated-sas-header",
+      "file": "datetime.sas7bdat",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "datetime.sas7bdat",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "VAR1",
+            "type": "float",
+            "label": "VAR1",
+            "derivation": "SRC.VAR1"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "VAR1"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "VAR1",
+          "type": "float"
+        }
+      ],
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "causes": [
+        "malformed",
+        "truncated"
+      ],
+      "mutation": {
+        "truncate": 31
+      }
+    },
+    {
+      "id": "truncated-sas-page",
+      "file": "datetime.sas7bdat",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "datetime.sas7bdat",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "VAR1",
+            "type": "float",
+            "label": "VAR1",
+            "derivation": "SRC.VAR1"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "VAR1"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "VAR1",
+          "type": "float"
+        }
+      ],
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "causes": [
+        "malformed",
+        "truncated"
+      ],
+      "mutation": {
+        "truncate": -1
+      }
+    },
+    {
+      "id": "unsupported-compression",
+      "file": "unsupported-compression.sas7bdat",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "unsupported-compression.sas7bdat",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "Column1",
+            "type": "float",
+            "label": "Column1",
+            "derivation": "SRC.Column1"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "Column1"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "Column1",
+          "type": "float"
+        }
+      ],
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "causes": [
+        "compression"
+      ]
+    },
+    {
+      "id": "corrupt-rle",
+      "file": "rle.sas7bdat",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "rle.sas7bdat",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "Column1",
+            "type": "float",
+            "label": "Column1",
+            "derivation": "SRC.Column1"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "Column1"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "Column1",
+          "type": "float"
+        }
+      ],
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "causes": [
+        "malformed"
+      ],
+      "mutation": {
+        "set_byte": [
+          120765,
+          16
+        ]
+      }
+    },
+    {
+      "id": "corrupt-rdc",
+      "file": "rdc.sas7bdat",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "rdc.sas7bdat",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "Column1",
+            "type": "float",
+            "label": "Column1",
+            "derivation": "SRC.Column1"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "Column1"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "Column1",
+          "type": "float"
+        }
+      ],
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "causes": [
+        "malformed"
+      ],
+      "mutation": {
+        "set_byte": [
+          118170,
+          184
+        ]
+      }
+    },
+    {
+      "id": "character-cannot-be-int",
+      "file": "v5.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "v5.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD",
+            "types": {
+              "TEXT": "int"
+            }
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "TEXT",
+            "type": "int",
+            "label": "TEXT",
+            "derivation": "SRC.TEXT"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "TEXT"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "TEXT",
+          "type": "int"
+        }
+      ],
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "causes": [
+        "field_type"
+      ]
+    },
+    {
+      "id": "numeric-cannot-be-str",
+      "file": "v5.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "v5.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD",
+            "types": {
+              "NUM": "str"
+            }
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "NUM",
+            "type": "str",
+            "label": "NUM",
+            "derivation": "SRC.NUM"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "NUM"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "NUM",
+          "type": "str"
+        }
+      ],
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "causes": [
+        "field_type"
+      ]
+    },
+    {
+      "id": "unknown-authored-field",
+      "file": "v5.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "v5.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD",
+            "types": {
+              "ABSENT": "int"
+            }
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "ID",
+            "type": "float",
+            "label": "ID",
+            "derivation": "SRC.ID"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "ID"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "ID",
+          "type": "float"
+        }
+      ],
+      "condition": "unknown_field",
+      "phase": "validation",
+      "context_fields": {
+        "dataset": "SRC",
+        "field": "ABSENT"
+      },
+      "spec_paths": [
+        "input.SRC.types.ABSENT"
+      ]
+    },
+    {
+      "id": "embedded-nul-is-refused",
+      "file": "v5.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "v5.xpt",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "ID",
+            "type": "float",
+            "label": "ID",
+            "derivation": "SRC.ID"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "ID"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "ID",
+          "type": "float"
+        }
+      ],
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "causes": [
+        "encoding"
+      ],
+      "mutation": {
+        "replace_hex": [
+          "20636166e9",
+          "20630066e9"
+        ]
+      }
+    }
+  ],
+  "static_refusals": [
+    {
+      "id": "encoding-required",
+      "file": "v5.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "v5.xpt",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "ID",
+            "type": "float",
+            "label": "ID",
+            "derivation": "SRC.ID"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "ID"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "ID",
+          "type": "float"
+        }
+      ],
+      "condition": "source_encoding_required"
+    },
+    {
+      "id": "unsupported-encoding-token",
+      "file": "v5.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "v5.xpt",
+            "ordinal": "RECORD",
+            "encoding": "utf-16"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "ID",
+            "type": "float",
+            "label": "ID",
+            "derivation": "SRC.ID"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "ID"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "ID",
+          "type": "float"
+        }
+      ],
+      "condition": "value_not_permitted"
+    },
+    {
+      "id": "encoding-on-csv",
+      "file": "v5.xpt",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "input.csv",
+            "ordinal": "RECORD",
+            "encoding": "utf-8"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "ID",
+            "type": "float",
+            "label": "ID",
+            "derivation": "SRC.ID"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "ID"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "ID",
+          "type": "float"
+        }
+      ],
+      "condition": "source_encoding_required"
+    }
+  ],
+  "compressed": {
+    "files": [
+      "rle.sas7bdat",
+      "rdc.sas7bdat",
+      "rdc-big-endian.sas7bdat"
+    ],
+    "truth": "compressed-truth.csv",
+    "text_columns": [
+      "Column2",
+      "Column6",
+      "Column10",
+      "Column14",
+      "Column18",
+      "Column22",
+      "Column26",
+      "Column30",
+      "Column34",
+      "Column38",
+      "Column42",
+      "Column46",
+      "Column50",
+      "Column54",
+      "Column58",
+      "Column62",
+      "Column66",
+      "Column70",
+      "Column74",
+      "Column78",
+      "Column82",
+      "Column86",
+      "Column90",
+      "Column94",
+      "Column98"
+    ]
+  },
+  "snapshot_case": "xpt-v5-narrowed"
+}

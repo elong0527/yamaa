@@ -165,6 +165,8 @@ conditions:
   source_field_value_invalid: {phases: [ingest]}
   source_header_absent: {phases: [ingest]}
   source_parquet_invalid: {phases: [ingest]}
+  source_encoding_required: {phases: [validation]}
+  source_sas_invalid: {phases: [ingest]}
   source_profile_unknown: {phases: [validation]}
   source_quote_in_bare_field: {phases: [ingest]}
   source_quote_unterminated: {phases: [ingest]}

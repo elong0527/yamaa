@@ -65,6 +65,10 @@ model!(
     [
         required!("path", Text),
         optional!("types", Dictionary(&COLUMN_TYPE)),
+        optional!(
+            "encoding",
+            Enum(&["utf-8", "windows-1252", "iso-8859-1", "ascii"])
+        ),
         optional!("schema", Text),
         field!("empty_string", Enum(&["missing", "present"])),
         optional!("ordinal", Ordinal),
