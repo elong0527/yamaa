@@ -72,7 +72,9 @@ def observation(specification, sources=None, *, fill_derivations=True, bind=True
     spec = _native_schema.decode_document(_schema().normalize(
         source, ['root_class'], True))
     return _typed_fixtures.observe('semantic', json.dumps({
-        'specification': spec, 'sources': sources, 'bind': bind}))
+        'specification': spec, 'sources': sources, 'bind': bind,
+        'source': source.decode('ascii'),
+        'schema_modules': [(name, raw.decode('utf-8')) for name, raw in _modules()]}))
 
 
 def declarations(specification, label='spec', *, fill_derivations=True):
@@ -89,6 +91,11 @@ def driver(specification):
 @lru_cache(maxsize=1)
 def _schema():
     return _native_schema.capture(Path(__file__).resolve().parents[3] / 'yaml')
+
+
+@lru_cache(maxsize=1)
+def _modules():
+    return _native_schema.capture_modules(Path(__file__).resolve().parents[3] / 'yaml')
 
 
 def document(specification, label='spec', path=None, _environment=None, *, sources=None,

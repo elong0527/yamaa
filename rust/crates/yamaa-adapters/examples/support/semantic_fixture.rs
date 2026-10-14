@@ -1,7 +1,11 @@
 //! Observe the existing compiler/binder over independently authored metadata.
 //! No cells, resolver callbacks, evaluator, or publication capability are created.
 use serde_json::{json, Value};
-use yamaa_adapters::{issue_rows::Issue, yaml_decode::decode_yaml};
+use yamaa_adapters::{
+    issue_rows::Issue,
+    specification_source::{CapturedSchema, Source},
+    yaml_decode::decode_yaml,
+};
 use yamaa_core::{
     diagnostic::Diagnostic,
     schema::{SpecificationDocument, ValidationBudget},
@@ -55,12 +59,61 @@ pub fn observe(input: Value) -> Value {
         Default::default(),
     )
     .expect("authored semantic fixture decodes");
-    let document = SpecificationDocument::admit(
+    let document = match SpecificationDocument::admit(
         document.document,
         &mut ValidationBudget::new(Default::default()),
     )
     .expect("bounded model admission")
-    .expect("complete normalized semantic fixture");
+    {
+        Ok(document) => document,
+        Err(_) => {
+            // The actual retained schema/source gate owns model finding causes,
+            // requirements and context. Never invent rows from a failed arena.
+            let modules = input["schema_modules"]
+                .as_array()
+                .expect("explicit captured schema modules")
+                .iter()
+                .map(|module| Source {
+                    identity: module[0].as_str().expect("schema identity").into(),
+                    bytes: module[1]
+                        .as_str()
+                        .expect("captured schema text")
+                        .as_bytes()
+                        .into(),
+                })
+                .collect();
+            let captured = CapturedSchema::admit(modules, 0, Default::default())
+                .expect("actual captured fixture schema");
+            let source = Source {
+                identity: "fixture.yaml".into(),
+                bytes: input["source"]
+                    .as_str()
+                    .expect("authored fixture source")
+                    .as_bytes()
+                    .into(),
+            };
+            let Err(error) = captured.prepare_standalone(source) else {
+                panic!("native model gate and captured source gate disagree");
+            };
+            let response: Value = serde_json::from_str(
+                &yamaa_adapters::specification_diagnostics::capture_failure(&error),
+            )
+            .expect("canonical captured model diagnostic response");
+            let outcome = &response["outcome"];
+            assert_eq!(
+                outcome["status"], "invalid",
+                "native fixture model policy refused"
+            );
+            let mut issues = outcome["diagnostics"]
+                .as_array()
+                .expect("canonical captured model rows")
+                .clone();
+            for issue in &mut issues {
+                issue["span"] = Value::Null;
+            }
+            return json!({"issues":issues, "driver":Value::Null});
+        }
+    };
     let driver = document.default_driver().map(str::to_owned);
     let prepared = match PreparedSpecification::prepare(&document) {
         Ok(prepared) => prepared,
