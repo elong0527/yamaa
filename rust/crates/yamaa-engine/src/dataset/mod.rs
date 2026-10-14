@@ -3,14 +3,10 @@
 //! This is an internal bridge target, not a specification parser or public backend.
 //! Unsupported syntax must be rejected by a compiler before creating this plan.
 
-#[path = "dataset_diagnostics.rs"]
 mod diagnostics;
 
-#[path = "dataset_conversion.rs"]
 mod conversion;
-#[path = "dataset_intermediates.rs"]
 mod intermediates;
-#[path = "dataset_relation_predicate.rs"]
 mod relation_predicates;
 pub use yamaa_core::dataset::{
     AggregateBinding, AggregateBindingError, AggregateDerivation, AggregatePhase,
@@ -30,51 +26,30 @@ pub use yamaa_core::dataset::{
     StringCase, StringExtract, StringPad, StringTemplate, Temporal, TemporalKind, TimeRule,
     ValueCodelist, Verification, VerificationSeverity, Window, WindowKind,
 };
-#[path = "dataset_case_predicate.rs"]
 mod case_predicates;
-#[path = "dataset_flag.rs"]
 mod flags;
-#[path = "dataset_functions.rs"]
 mod functions;
 pub use crate::function_invocation::FunctionPort;
 pub(crate) fn unavailable_functions<E>() -> impl FunctionPort<Error = E> {
     crate::function_invocation::NoFunctions::new()
 }
-#[path = "dataset_aggregate.rs"]
 mod aggregates;
-#[path = "dataset_temporal_imputation.rs"]
 mod imputation;
-#[path = "dataset_joined.rs"]
 mod joined;
-#[path = "dataset_keys.rs"]
 mod key_grain;
-#[path = "dataset_lookup.rs"]
 mod lookup;
-#[path = "dataset_mapping.rs"]
 mod mapping_cut;
-#[path = "dataset_numeric.rs"]
 mod numeric;
-#[path = "dataset_odm.rs"]
 mod odm;
-#[path = "dataset_ordering.rs"]
 mod ordering;
-#[path = "dataset_row_drivers.rs"]
 mod row_drivers;
-#[path = "dataset_row_windows.rs"]
 mod row_windows;
-#[path = "dataset_scalar.rs"]
 mod scalar;
-#[path = "dataset_self.rs"]
 mod self_relations;
-#[path = "dataset_text_case.rs"]
 mod str_case;
-#[path = "dataset_text_extract.rs"]
 mod str_extract;
-#[path = "dataset_text_pad.rs"]
 mod str_pad;
-#[path = "dataset_text_template.rs"]
 mod str_template;
-#[path = "dataset_windows.rs"]
 mod windows;
 
 use crate::{
@@ -2493,7 +2468,6 @@ fn failure_identity<E>(
     }))
 }
 
-#[path = "dataset_verification.rs"]
 mod verification;
 
 use verification::CompletedRows;
