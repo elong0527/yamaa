@@ -22,6 +22,8 @@ use yamaa_core::{
 };
 
 const FUNCTION:&str="function: project.constant\ndescription: Constant.\nparams: []\nreturns: int\ntests: [{id: ordinary, covers: [normal, boundary], args: {}, result: 7}]\n";
+// Independently authored context for the retired names rejected under REQ-1080/1083.
+const ENVIRONMENT_HINT: &str = "replace the retired environment format with language, lock and functions definitions containing function, description, params, returns and tests (REQ-1080, REQ-1083); see benchmarks/adam-adsl-bmi";
 const CODELIST: &str = "codelists: [{id: SEX, name: Sex, items: [{value: F}, {value: M}]}]\n";
 fn source(name: &str, text: &str) -> Source {
     Source {
@@ -132,8 +134,8 @@ fn live_root_full_reports_preserve_original_source_and_stop_before_every_depende
         ("schema_version: '99.0'\nparents: [parent.yaml]\nfunctions: {bad: bad.yaml}\n",schema_requirement_expectations::reconciled(&json!([{ "phase":"validation","condition":"schema_version_mismatch","requirement":null,"spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":"study/environment.yaml","entry":"study/environment.yaml","environment_path":"$"}}]).to_string(), false)),
         ("schema_version: '1.0'\nparents: [base.yaml]\nruntime: {language: python}\nversion: old\n",schema_requirement_expectations::reconciled(&json!([
             {"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["parents"],"context":{"field":"parents","class":"environment_class","source":"study/environment.yaml","entry":"study/environment.yaml","environment_path":"$"}},
-            {"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["runtime"],"context":{"field":"runtime","class":"environment_class","source":"study/environment.yaml","entry":"study/environment.yaml","environment_path":"$"}},
-            {"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["version"],"context":{"field":"version","class":"environment_class","source":"study/environment.yaml","entry":"study/environment.yaml","environment_path":"$"}}
+            {"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["runtime"],"context":{"field":"runtime","class":"environment_class","source":"study/environment.yaml","entry":"study/environment.yaml","environment_path":"$","retired":true,"suggestion":ENVIRONMENT_HINT}},
+            {"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["version"],"context":{"field":"version","class":"environment_class","source":"study/environment.yaml","entry":"study/environment.yaml","environment_path":"$","retired":true,"suggestion":ENVIRONMENT_HINT}}
         ]).to_string(), false)),
     ] {
         let entry=source("study/environment.yaml",text);let bytes=entry.bytes.as_ptr();let identity=entry.identity.as_ptr();let mut port=Metadata::new(vec![]);
@@ -330,7 +332,7 @@ fn external_findings_keep_full_original_provenance_and_collect_later_live_source
         issues(diagnostics::schema_sources(&rejected).unwrap()),
         schema_requirement_expectations::reconciled(&json!([
             {"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["<normalization>.contract_version"],"context":{"field":"contract_version","class":"function_definition_class","source":"held/bad.yaml","entry":"study/environment.yaml","environment_path":"functions.bad"}},
-            {"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["<normalization>.binding"],"context":{"field":"binding","class":"function_definition_class","source":"held/bad.yaml","entry":"study/environment.yaml","environment_path":"functions.bad"}}
+            {"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["<normalization>.binding"],"context":{"field":"binding","class":"function_definition_class","source":"held/bad.yaml","entry":"study/environment.yaml","environment_path":"functions.bad","retired":true,"suggestion":ENVIRONMENT_HINT}}
         ]).to_string(), false)
     );
 }
@@ -458,7 +460,7 @@ fn root_and_named_complete_reports_keep_unbounded_integer_context_and_compatibil
         schema_requirement_expectations::reconciled(&json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[
             {"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["<normalization>.schema_version"],"context":{"field":"schema_version","class":"function_definition_class"}},
             {"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["<normalization>.contract_version"],"context":{"field":"contract_version","class":"function_definition_class"}},
-            {"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["<normalization>.binding"],"context":{"field":"binding","class":"function_definition_class"}}
+            {"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["<normalization>.binding"],"context":{"field":"binding","class":"function_definition_class","retired":true,"suggestion":ENVIRONMENT_HINT}}
         ]}}).to_string(), false)
     );
 }
