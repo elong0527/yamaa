@@ -8,6 +8,12 @@ Native CSV/Parquet/ODM/regex and grammar fixtures replace the deleted
 in Python. See [development](../docs/development.md) for architecture and
 [release](../docs/release.md) for final installed migration acceptance.
 
+Automatic PR feedback uses the lightweight repository checks in
+[`pr.yml`](workflows/pr.yml), plus selected Rust/Python smoke tests. Complete
+semantic validation and deterministic dashboard generation run on main pushes
+or manual `yaml-validation.yml` dispatches. The full scope below describes that
+separate qualification workflow.
+
 ## Scope
 
 | Check | Current responsibility |

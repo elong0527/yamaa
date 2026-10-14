@@ -2,26 +2,6 @@ name: Native numerical and syntax obligations
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - 'rust/tools/check_*grammar.py'
-      - 'rust/tools/check_*syntax.py'
-      - 'rust/tools/native_syntax_checks.py'
-      - 'rust/tools/assess_regex_reference.py'
-      - 'rust/tools/check_regex.py'
-      - 'rust/tools/assess_rounding.py'
-      - 'rust/tools/check_rounding.py'
-      - 'rust/tools/native-numeric-tool-assertions.json'
-      - 'rust/crates/yamaa-core/**'
-      - 'rust/crates/yamaa-adapters/examples/**'
-      - 'rust/crates/yamaa-adapters/tests/fixtures/**'
-      - 'rust/qualification/**'
-      - 'yaml/conformance/**'
-      - 'rust/tests/test_native_numeric_tools.py'
-      - 'rust/tests/test_portable_math.py'
-      - 'rust/tests/test_predicate_syntax_encoding.py'
-      - 'rust/tests/test_*rounding*.py'
-      - '.github/workflows/native-numeric-tools.yml'
   push:
     branches: [main]
     paths:

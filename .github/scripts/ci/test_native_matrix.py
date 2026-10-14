@@ -1,4 +1,4 @@
-"""Check sampled PR and complete main/issue qualification coverage."""
+"""Check complete main, dispatch and issue qualification coverage."""
 
 import ast
 import fnmatch
@@ -18,7 +18,7 @@ import native_matrix
 
 class NativeCoverage(unittest.TestCase):
     def test_actions_outputs_are_valid_matrices_and_plain_runner_names(self):
-        for event in ("pull_request", "push", "workflow_dispatch"):
+        for event in ("push", "workflow_dispatch"):
             with tempfile.TemporaryDirectory() as directory:
                 output = Path(directory) / "output"
                 summary = Path(directory) / "summary"
@@ -39,14 +39,14 @@ class NativeCoverage(unittest.TestCase):
                     line.split("=", 1) for line in output.read_text().splitlines()
                 )
                 self.assertIn(values["compare-os"], native_matrix.PLATFORMS)
-                self.assertEqual(values["full"], str(event != "pull_request").lower())
+                self.assertEqual(values["full"], "true")
                 self.assertEqual(values["run-rust"], str(event == "push").lower())
                 self.assertEqual(
                     len(json.loads(values["qualify"])["include"]),
-                    4 if event == "pull_request" else 18,
+                    18,
                 )
                 self.assertIn(
-                    "PR native coverage" if event == "pull_request" else "Full",
+                    "Full",
                     summary.read_text(),
                 )
 
@@ -160,31 +160,6 @@ class NativeCoverage(unittest.TestCase):
                         event == "push" and conclusion != "cancelled",
                     )
 
-    def test_pr_checks_both_installation_forms_on_linux_and_python_endpoints(self):
-        coverage = native_matrix.plan("pull_request")
-        self.assertEqual(
-            {
-                (row["os"], row["python"], row["form"])
-                for row in coverage["qualify"]["include"]
-            },
-            {
-                ("ubuntu-24.04", "3.12", "wheel"),
-                ("ubuntu-24.04", "3.12", "source"),
-                ("ubuntu-24.04", "3.14", "wheel"),
-                ("ubuntu-24.04", "3.14", "source"),
-            },
-        )
-        self.assertEqual(len(coverage["qualify"]["include"]), 4)
-        self.assertEqual(
-            coverage["build"]["include"],
-            [{"os": "ubuntu-24.04", "python": "3.14"}],
-        )
-        self.assertEqual(coverage["compare-os"], "ubuntu-24.04")
-        self.assertFalse(coverage["full"])
-        self.assertEqual(coverage["r"]["os"], ["ubuntu-24.04"])
-        self.assertTrue(coverage["run-r"])
-        self.assertFalse(coverage["run-rust"])
-
     def test_comparison_uses_only_selected_evidence_and_requires_r_on_every_os(self):
         for platform in native_matrix.PLATFORMS:
             matrix = {"include": [{"os": platform, "python": "3.13", "form": "source"}]}
@@ -275,7 +250,7 @@ args.output.mkdir(parents=True)
                     self.assertEqual(python["route"]["os"], r["os"])
 
     def test_failed_cohort_comparison_fails_the_job(self):
-        matrix = native_matrix.plan("pull_request")["qualify"]
+        matrix = native_matrix.plan("workflow_dispatch")["qualify"]
         with (
             patch(
                 "native_matrix.subprocess.run",
@@ -286,8 +261,9 @@ args.output.mkdir(parents=True)
             native_matrix.compare_cohorts(matrix, Path("/repo"), "revision")
 
     def test_unknown_event_cannot_silently_reduce_coverage(self):
-        with self.assertRaises(ValueError):
-            native_matrix.plan("schedule")
+        for event in ("pull_request", "schedule"):
+            with self.subTest(event=event), self.assertRaises(ValueError):
+                native_matrix.plan(event)
 
 
 if __name__ == "__main__":

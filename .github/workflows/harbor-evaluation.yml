@@ -23,16 +23,7 @@ on:
       - 'python/pyproject.toml'
       - 'python/uv.lock'
       - '.github/workflows/harbor-evaluation.yml'
-  pull_request:
-    paths:
-      - 'benchmarks/**'
-      - 'evaluations/harbor/**'
-      - 'python/tests/test_harbor_evaluation.py'
-      - 'python/tests/test_harbor_reference_edges.py'
-      - 'python/tests/test_harbor_opensas.py'
-      - 'python/pyproject.toml'
-      - 'python/uv.lock'
-      - '.github/workflows/harbor-evaluation.yml'
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

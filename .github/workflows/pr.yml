@@ -1,0 +1,141 @@
+name: PR checks
+
+on:
+  pull_request:
+  # Refresh smoke-test caches on the default branch for new PRs.
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  RUSTUP_TOOLCHAIN: 1.90.0
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG: '0'
+  CARGO_INCREMENTAL: '0'
+
+jobs:
+  repository:
+    # Keep the existing required repository check name.
+    name: repository-validation (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: .github/scripts/ci/requirements-pr.txt
+      - name: Install static check dependencies
+        run: python -m pip install -r .github/scripts/ci/requirements-pr.txt
+      - name: Check canonical site pages, Python formatting and lint
+        run: |
+          python -m unittest discover -s .github/scripts/docs -p 'test_*.py'
+          ruff format --check python/src/yamaa python/tests .github/scripts/ci .github/scripts/docs
+          ruff check python/src/yamaa python/tests .github/scripts/ci .github/scripts/docs
+      - name: Test CI selection and evidence readers
+        run: python -m unittest discover -s .github/scripts/ci -p 'test_*.py'
+      - name: Check documentation, rule metadata and generated references
+        run: |
+          python .github/scripts/yaml-validation/check_vocabulary_coverage.py
+          python .github/scripts/yaml-validation/check_rule_metadata.py
+          python .github/scripts/yaml-validation/check_documentation.py
+          python .github/scripts/yaml-validation/test_rule_rewrite.py
+          python .github/scripts/yaml-validation/generate_rule_reference.py --check
+          python .github/scripts/yaml-validation/test_rationale_phrases.py
+          python .github/scripts/yaml-validation/check_rationale_phrases.py
+          python .github/scripts/yaml-validation/test_requirement_registry.py
+          python .github/scripts/yaml-validation/check_requirement_registry.py
+          python rust/tools/check_shared_release_versions.py
+
+  rust:
+    name: pr-rust-smoke
+    runs-on: ubuntu-24.04
+    # Warm-cache PRs target five minutes; cold toolchain/dependency builds get
+    # headroom so a missing cache cannot masquerade as successful coverage.
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The synthetic PR merge commit and both parents suffice for the diff.
+          fetch-depth: 2
+      - name: Select runtime smoke coverage
+        id: changes
+        run: python3 .github/scripts/ci/pr_changes.py
+      - name: Install Rust tools
+        if: steps.changes.outputs.rust == 'true'
+        run: rustup toolchain install 1.90.0 --profile minimal --component rustfmt
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        if: steps.changes.outputs.rust == 'true'
+        with:
+          workspaces: rust
+          shared-key: pr-rust-smoke
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Check formatting and shared library tests
+        if: steps.changes.outputs.rust == 'true'
+        working-directory: rust
+        run: |
+          cargo fmt --all --check
+          python3 tools/check_dependencies.py
+          cargo test --locked --lib -p yamaa-core -p yamaa-engine -p yamaa-adapters
+      - name: Check parser and public execution boundaries
+        if: steps.changes.outputs.rust == 'true'
+        working-directory: rust
+        run: |
+          cargo test --locked -p yamaa-core --test numeric_parser --test aggregate_parser --test predicate_parser --test rounding --test regex --test math_policy --test portable_math_golden
+          cargo test --locked -p yamaa-engine --features test-support --test project_preparation --test test_support --test specification_run
+          cargo test --locked -p yamaa-adapters --test project_run --test file_workflow --test public_table
+
+  python:
+    name: pr-python-smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Select runtime smoke coverage
+        id: changes
+        run: python3 .github/scripts/ci/pr_changes.py
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: steps.changes.outputs.python == 'true'
+        with:
+          python-version: '3.12'
+      - name: Install locked build tools
+        if: steps.changes.outputs.python == 'true'
+        run: |
+          rustup toolchain install 1.90.0 --profile minimal
+          python -m pip install uv==0.11.6
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        if: steps.changes.outputs.python == 'true'
+        with:
+          workspaces: rust
+          shared-key: pr-python-smoke
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install locked Python package without release optimization
+        if: steps.changes.outputs.python == 'true'
+        # Build one installed dev-profile wheel. Release wheels and source
+        # archives are checked by the full native installation workflow.
+        run: uv sync --project python --extra test --locked --no-editable --config-setting build-args=--profile=dev
+      - name: Test retained Python APIs and the installed native binding
+        if: steps.changes.outputs.python == 'true'
+        run: |
+          uv run --project python --no-sync python -c 'from yamaa import _native; assert callable(_native._prepare_file_project)'
+          uv run --project python --no-sync pytest -q python/tests/native python/tests/functions python/tests/style python/tests/odm python/tests/test_build_backend.py python/tests/test_package.py
+          uv run --project python --no-sync pytest -q python/tests/test_harbor_images.py python/tests/test_harbor_hardening.py python/tests/test_harbor_fairness.py
+          uv run --project python --no-sync python -m yamaa.style benchmarks/*/spec*.yaml
