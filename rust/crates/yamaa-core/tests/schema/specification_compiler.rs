@@ -1507,6 +1507,17 @@ fn column_ceilings_admit_1024_and_refuse_1025() {
     };
     assert_eq!(resource, "columns");
 
+    let Err(PrepareError::Limit(resource)) = PreparedSpecification::prepare_with_limits(
+        &wide_document(1_025, 0),
+        CompilationLimits {
+            columns: 1_025,
+            ..limits
+        },
+    ) else {
+        panic!("1,025 projected columns must hit their own compiler limit");
+    };
+    assert_eq!(resource, "projected_columns");
+
     // Typed fields carry their own ceiling, independent of the column count.
     PreparedSpecification::prepare(&wide_document(2, 1_024)).unwrap();
     let Err(PrepareError::Limit(resource)) =
