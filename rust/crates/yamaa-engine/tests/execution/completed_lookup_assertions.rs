@@ -9,7 +9,7 @@ use yamaa_core::{
         RowMode, RowTemplate, SecondarySource, SourceSchemas, Verification,
     },
     predicate_compiler,
-    table::{CellError, Column, TableAccess, TableSchema, ValueRef},
+    table::{CellError, TableAccess, TableSchema, ValueRef},
     value::{ColumnType as T, Value},
 };
 use yamaa_engine::{

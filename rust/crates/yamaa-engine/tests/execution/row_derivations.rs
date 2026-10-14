@@ -6,7 +6,7 @@ use yamaa_core::{
         Assignment, CaseBranch, DatasetPlan, Expression, FirstAvailable, OrderTerm, RowMode,
         RowTemplate, SecondarySource, SelectionRead, SelectionSource, Window, WindowKind,
     },
-    table::{CellError, Column, TableAccess, TableSchema, ValueRef},
+    table::{CellError, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
 };
 use yamaa_engine::dataset::{DatasetExecution, ExecutionError, Limits};

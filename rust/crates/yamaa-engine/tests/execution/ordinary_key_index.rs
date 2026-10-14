@@ -9,7 +9,7 @@ use yamaa_core::{
         RelationPredicate, RowMode, RowTemplate, SecondarySource, SourceSchemas, SourceSelection,
     },
     predicate_compiler,
-    table::{CellError, Column, TableAccess, TableSchema, ValueRef},
+    table::{CellError, TableAccess, TableSchema, ValueRef},
     value::{ColumnType as T, Value},
 };
 use yamaa_engine::dataset::{DatasetExecution, ExecutionError, Limits, Resource};

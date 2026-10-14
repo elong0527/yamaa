@@ -11,7 +11,7 @@ use yamaa_core::{
     dataset::{DatasetPlan, Expression, RowMode, WindowKind},
     schema::DocumentNode as N,
     specification::{PrepareError, PreparedSpecification},
-    table::{Column, TableSchema},
+    table::TableSchema,
     value::ColumnType as T,
 };
 use yamaa_engine::inheritance::{Source as Identity, SourceError};

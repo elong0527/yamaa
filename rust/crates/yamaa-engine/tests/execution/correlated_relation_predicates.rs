@@ -11,7 +11,7 @@ use yamaa_core::{
         IntermediateKey, IntermediateSource, Keep, MatchRead, MatchValue, OrderTerm,
         RelationPredicate, RowMode, RowTemplate, SecondarySource, SourceSchemas, SourceSelection,
     },
-    table::{CellError, Column, TableAccess, TableSchema, ValueRef},
+    table::{CellError, TableAccess, TableSchema, ValueRef},
     value::{ColumnType as T, Value},
 };
 use yamaa_engine::dataset::{DatasetExecution, Limits};

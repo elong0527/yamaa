@@ -7,7 +7,7 @@ use yamaa_core::{
     text_extract::StringExtract,
     text_pad::StringPad,
     text_template::StringTemplate,
-    value::{ColumnType as T, Value},
+    value::Value,
 };
 use yamaa_engine::{
     dataset::{DatasetExecution, ExecutionError, Limits, Resource},

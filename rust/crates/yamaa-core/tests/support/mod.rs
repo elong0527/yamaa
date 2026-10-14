@@ -24,12 +24,16 @@ pub fn table_schema(columns: &[(&str, ColumnType)]) -> TableSchema {
 }
 
 pub fn int_schema(names: &[&str]) -> TableSchema {
-    table_schema(
-        &names
+    TableSchema::new(
+        names
             .iter()
-            .map(|&name| (name, ColumnType::Int))
-            .collect::<Vec<_>>(),
+            .map(|name| Column {
+                name: (*name).into(),
+                kind: ColumnType::Int,
+            })
+            .collect(),
     )
+    .unwrap()
 }
 pub fn id_source_schema() -> TableSchema {
     int_schema(&["ID"])

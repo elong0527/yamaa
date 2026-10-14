@@ -9,7 +9,6 @@ use yamaa_core::{
         Document, DocumentLimits, DocumentNode as N, SpecificationDocument, ValidationBudget,
     },
     specification::{BindError, PrepareError, PreparedSpecification},
-    table::TableSchema,
     value::{ColumnType as T, Value},
 };
 enum Tree<'a> {

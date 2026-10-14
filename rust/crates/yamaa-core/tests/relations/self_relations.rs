@@ -6,8 +6,7 @@ use yamaa_core::{
         IntermediateSource, MatchRead, MatchValue, PlanError, RowMode, RowTemplate, SelectionRead,
         SelectionSource, SourceSchemas,
     },
-    table::TableSchema,
-    value::{ColumnType, Value},
+    value::Value,
 };
 fn assign(column: usize, expression: Expression) -> Assignment {
     Assignment {

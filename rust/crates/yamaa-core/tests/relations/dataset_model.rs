@@ -5,7 +5,7 @@ use yamaa_core::{
         Assignment, Check, DatasetPlan, Expression, PlanError, RowMode, RowTemplate, Verification,
     },
     reduction::NumericReducer,
-    table::{Column, TableSchema},
+    table::Column,
     value::{ColumnType, Value},
 };
 

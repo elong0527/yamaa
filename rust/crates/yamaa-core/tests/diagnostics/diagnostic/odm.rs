@@ -132,7 +132,8 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         &mut reached,
     );
     for location in [
-        yamaa_core::diagnostic::OdmLocation::yamaa_core::diagnostic::OdmLocation::Row,
+        yamaa_core::diagnostic::OdmLocation::Column,
+        yamaa_core::diagnostic::OdmLocation::Row,
         yamaa_core::diagnostic::OdmLocation::Intermediate,
         yamaa_core::diagnostic::OdmLocation::Derive,
     ] {

@@ -8,7 +8,7 @@ use yamaa_core::{
         MatchValue, OrderTerm, PlanError, RelationRange, RelationRangeBound, RowMode, RowTemplate,
         SecondarySource, SourceSchemas, Window, WindowKind,
     },
-    table::{Column, TableSchema},
+    table::Column,
     value::{ColumnType as T, Value, ValueType},
 };
 fn item(identifier: &str, current: CurrentRead) -> Intermediate {

@@ -5,7 +5,6 @@ use yamaa_core::{
     diagnostic::{ConditionCode, ContextValue, Diagnostic},
     schema::{Document, DocumentNode as N, SpecificationDocument, ValidationBudget},
     specification::{BindError, PrepareError, PreparedSpecification},
-    table::TableSchema,
     value::{ColumnType as T, Value},
 };
 enum Tree<'a> {

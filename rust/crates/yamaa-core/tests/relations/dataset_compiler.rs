@@ -10,7 +10,7 @@ use yamaa_core::{
     },
     function_signature::{FunctionIdentity, InvocationPlan, Parameter, Presence},
     numeric_compiler::CompileError,
-    table::{Column, TableSchema},
+    table::Column,
     value::{ColumnType, Value, ValueType},
 };
 

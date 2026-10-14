@@ -8,7 +8,7 @@ use yamaa_core::{
         RowMode, RowTemplate, SecondarySource, SourceSchemas,
     },
     predicate_compiler,
-    table::{Column, TableSchema},
+    table::Column,
     value::Value,
 };
 fn assignment(column: usize, expression: Expression) -> Assignment {
