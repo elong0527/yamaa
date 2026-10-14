@@ -168,7 +168,8 @@ Every attempt preserves its raw failures and partial collections. The independen
 replay job retains all 21 tuple slots, source and baseline histories in a Git
 bundle, original run/attempt/job/artifact identities, and a compact report. A
 missing or unapproved `rust/qualification/performance-budgets.json` leaves full
-acceptance unsuccessful; frontier correctness evidence still remains usable.
+acceptance unsuccessful. Frontier preserves its index and independent truth or
+refusals, and skips the timing auditor instead of claiming timing acceptance.
 Neither root-Build producer baselines nor cross-host Python comparators establish
 full-graph or R replacement ratios without an explicit scope disposition.
 
