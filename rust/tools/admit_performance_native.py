@@ -207,7 +207,7 @@ def admit(args):
                         os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8"
                     ) as output:
                         output.write(
-                            f"run-id={run['id']}\nrevision={run['head_sha']}\n"
+                            f"run-id={run['id']}\nrun-attempt={run['run_attempt']}\nrevision={run['head_sha']}\n"
                         )
                 print(
                     "Admitted complete exact-source native run " + run["html_url"],
