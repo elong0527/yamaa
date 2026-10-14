@@ -305,7 +305,7 @@ pub fn capture_failure(error: &crate::specification_source::Error) -> String {
     }
     let resource = match error {
         Error::Normalize(error) => crate::schema_outcomes::normalization(error.clone()).ok(),
-        Error::Validation(error) => crate::schema_outcomes::validation(error.clone()).ok(),
+        Error::Validation(error) => crate::schema_outcomes::validation(*error).ok(),
         _ => None,
     };
     if let Some(mut outcome) = resource.filter(|outcome| outcome["status"] == "resource_limit") {
