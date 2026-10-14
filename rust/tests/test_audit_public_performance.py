@@ -1435,7 +1435,7 @@ class Segments(unittest.TestCase):
 
         @contextlib.contextmanager
         def provider(entry, manifest_root):
-            self.assertEqual(manifest_root, self.root)
+            self.assertEqual(manifest_root, self.root.resolve())
             self.assertEqual(
                 entry["tuple"]["host"], "r" if "variant" in entry else "python"
             )
@@ -1987,6 +1987,390 @@ class InstallationAdmission(unittest.TestCase):
             (self.root / "independent/callback-10-1/python/uv.lock").read_bytes(),
             b"original lock fixture\n",
         )
+
+
+class RWorkerProvenance(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.child = Path(temporary.name)
+        self.source = b"\n# authored independent probe fixture\n"
+        self.helper = b"R_ORIGIN_PROBE = " + repr(self.source.decode()).encode()
+        self.original_child = r"D:\evidence\candidate-evidence\lookup-1000-1-truth-0"
+        self.command = [
+            r"C:\R\bin\Rscript.exe",
+            "--vanilla",
+            r"D:\evidence\candidate-evidence\harness\public_lifecycle_r_worker.R",
+            self.original_child + r"\request.json",
+        ]
+        self.identity = {
+            "system": "Windows",
+            "runtime_version": "4.6.1",
+            "jsonlite_version": "2.0.0",
+            "private_libraries": [r"C:\private\candidate", r"C:\private\collectors"],
+            "jsonlite_origin": r"C:\private\collectors\jsonlite",
+        }
+        self.record = {
+            "host": "r",
+            "system": "Windows",
+            "runtime_version": "4.6.1",
+            "installed_origins": {"package": r"C:\private\candidate\yamaa"},
+            "collectors": {
+                "jsonlite": {
+                    "version": "2.0.0",
+                    "origin": self.identity["jsonlite_origin"],
+                },
+                "microbenchmark": {
+                    "version": "1.5.0",
+                    "origin": r"C:\private\collectors\microbenchmark",
+                },
+            },
+        }
+        self.plan = {
+            "harness_checkout_head": "a" * 40,
+            "measurement_campaign": {
+                "collection": r"D:\evidence\candidate-evidence\collection.json"
+            },
+        }
+        origin = {
+            "pid": 200,
+            "runtime_version": "4.6.1",
+            "home": "C:/R",
+            "bin": "C:/R/bin/x64",
+            "architecture": "x86_64",
+            "r_arch": "x64",
+            "jsonlite_version": "2.0.0",
+            "private_libraries": ["C:/private/candidate", "C:/private/collectors"],
+            "codec_origin": "C:/private/collectors/jsonlite",
+            "direct_executable": "C:/R/bin/x64/Rscript.exe",
+        }
+        self.resolution = {
+            "protocol": "r-worker-resolution/1",
+            "system": "Windows",
+            "requested_executable": self.command[0],
+            "requested_command": self.command,
+            "observed_executable": origin["direct_executable"],
+            "observed_command": [origin["direct_executable"], *self.command[1:]],
+            "private_library_environment": ";".join(self.identity["private_libraries"]),
+            "resolution": "installed R architecture executable",
+        }
+        for label, key, executable, launcher_pid in (
+            ("requested", "requested_origin", self.command[0], 100),
+            ("direct", "observed_origin", origin["direct_executable"], 200),
+        ):
+            self.resolution[key] = {
+                "command": [
+                    executable,
+                    "--vanilla",
+                    self.original_child + r"\r-worker-origin-probe.R",
+                    self.original_child + "\\r-worker-" + label + "-origin.json",
+                ],
+                "source": "r-worker-origin-probe.R",
+                "stdout": "r-worker-" + label + "-stdout.txt",
+                "stderr": "r-worker-" + label + "-stderr.txt",
+                "response": "r-worker-" + label + "-origin.json",
+                "launcher_pid": launcher_pid,
+                "exit_code": 0,
+                "origin": copy.deepcopy(origin),
+            }
+        self.process = {"pid": 300, "exit_code": 0, "r_worker": self.resolution}
+        self.retain()
+
+    def retain(self):
+        write(self.child / "r-worker-resolution.json", self.resolution)
+        (self.child / "r-worker-origin-probe.R").write_bytes(self.source)
+        for label, key in (
+            ("requested", "requested_origin"),
+            ("direct", "observed_origin"),
+        ):
+            probe = self.resolution[key]
+            write(self.child / ("r-worker-" + label + "-probe.json"), probe)
+            write(self.child / probe["response"], probe["origin"])
+            for name in ("stdout", "stderr"):
+                (self.child / probe[name]).write_bytes(b"")
+
+    def admit(self):
+        auditor.admit_r_resolution(
+            self.child, self.process, self.command, self.identity, self.helper
+        )
+
+    def test_wrapper_and_direct_probe_pids_are_separate_from_measured_worker(self):
+        self.admit()
+        self.assertNotEqual(
+            self.resolution["requested_origin"]["launcher_pid"],
+            self.resolution["requested_origin"]["origin"]["pid"],
+        )
+        self.assertNotEqual(
+            self.process["pid"], self.resolution["observed_origin"]["origin"]["pid"]
+        )
+        with mock.patch.object(
+            auditor.lifecycle, "git_bytes", return_value=self.helper
+        ):
+            auditor.admit_r_worker(
+                self.child,
+                self.process,
+                {"command": self.command},
+                {"output": self.original_child},
+                self.plan,
+                self.record,
+                self.child,
+            )
+
+    def test_original_probe_bytes_come_from_pinned_helper_not_current_reader(self):
+        (self.child / "r-worker-origin-probe.R").write_bytes(b"different script\n")
+        with self.assertRaisesRegex(ValueError, "Git-pinned helper"):
+            self.admit()
+        (self.child / "r-worker-origin-probe.R").write_bytes(self.source)
+        with self.assertRaisesRegex(ValueError, "Git-pinned helper"):
+            auditor.admit_r_resolution(
+                self.child,
+                self.process,
+                self.command,
+                self.identity,
+                b"R_ORIGIN_PROBE = 'different original source'",
+            )
+
+    def test_missing_or_changed_original_raw_receipt_is_refused(self):
+        for filename in (
+            "r-worker-resolution.json",
+            "r-worker-direct-probe.json",
+            "r-worker-requested-origin.json",
+            "r-worker-direct-stdout.txt",
+            "r-worker-requested-stderr.txt",
+            "r-worker-origin-probe.R",
+        ):
+            with self.subTest(filename=filename):
+                path = self.child / filename
+                original = path.read_bytes()
+                path.unlink()
+                with self.assertRaises(auditor.EVIDENCE_ERRORS):
+                    self.admit()
+                path.write_bytes(original)
+        changed = copy.deepcopy(self.resolution["requested_origin"]["origin"])
+        changed["pid"] += 1
+        write(self.child / "r-worker-requested-origin.json", changed)
+        with self.assertRaisesRegex(ValueError, "probe/PID association"):
+            self.admit()
+
+    def test_self_consistent_origin_tampering_cannot_override_declared_identity(self):
+        original = copy.deepcopy(self.resolution)
+        for field, value in (
+            ("runtime_version", "4.6.2"),
+            ("jsonlite_version", "9.0.0"),
+            ("private_libraries", ["C:/private/collectors", "C:/private/candidate"]),
+            ("codec_origin", "C:/elsewhere/jsonlite"),
+            ("architecture", "i386"),
+            ("direct_executable", "C:/elsewhere/Rscript.exe"),
+            ("home", "C:/another-R"),
+        ):
+            with self.subTest(field=field):
+                self.resolution.clear()
+                self.resolution.update(copy.deepcopy(original))
+                for key in ("requested_origin", "observed_origin"):
+                    self.resolution[key]["origin"][field] = value
+                self.retain()
+                with self.assertRaises(ValueError):
+                    self.admit()
+        self.resolution.clear()
+        self.resolution.update(copy.deepcopy(original))
+        self.resolution["private_library_environment"] = ";".join(
+            reversed(self.identity["private_libraries"])
+        )
+        self.retain()
+        with self.assertRaisesRegex(ValueError, "library environment"):
+            self.admit()
+
+    def test_direct_pid_and_probe_success_must_be_original_integer_observations(self):
+        original = copy.deepcopy(self.resolution)
+        for key, field, value in (
+            ("observed_origin", "launcher_pid", 999),
+            ("observed_origin", "launcher_pid", True),
+            ("requested_origin", "launcher_pid", 0),
+            ("requested_origin", "exit_code", False),
+            ("observed_origin", "exit_code", 7),
+        ):
+            with self.subTest(field=field, value=value):
+                self.resolution.clear()
+                self.resolution.update(copy.deepcopy(original))
+                self.resolution[key][field] = value
+                self.retain()
+                with self.assertRaises(ValueError):
+                    self.admit()
+
+    def test_consistent_replacement_home_cannot_override_original_installed_command(
+        self,
+    ):
+        direct = "C:/another-R/bin/x64/Rscript.exe"
+        for key in ("requested_origin", "observed_origin"):
+            self.resolution[key]["origin"].update(
+                home="C:/another-R",
+                bin="C:/another-R/bin/x64",
+                direct_executable=direct,
+            )
+        self.resolution["observed_executable"] = direct
+        self.resolution["observed_command"][0] = direct
+        self.resolution["observed_origin"]["command"][0] = direct
+        self.retain()
+        with self.assertRaisesRegex(ValueError, "installed architecture executable"):
+            self.admit()
+
+    def test_probe_paths_and_worker_command_cannot_move_to_another_child(self):
+        original = copy.deepcopy(self.resolution)
+        for index in (2, 3):
+            self.resolution.clear()
+            self.resolution.update(copy.deepcopy(original))
+            self.resolution["observed_origin"]["command"][index] = self.resolution[
+                "observed_origin"
+            ]["command"][index].replace("D:", "E:")
+            self.retain()
+            with self.assertRaisesRegex(ValueError, "probe argv/path"):
+                self.admit()
+        self.resolution.clear()
+        self.resolution.update(copy.deepcopy(original))
+        self.retain()
+        with mock.patch.object(
+            auditor.lifecycle, "git_bytes", return_value=self.helper
+        ):
+            for observation in (
+                {},
+                {"command": [*self.command[:3], self.command[3].replace("D:", "E:")]},
+            ):
+                with (
+                    self.subTest(observation=observation),
+                    self.assertRaises(ValueError),
+                ):
+                    auditor.admit_r_worker(
+                        self.child,
+                        self.process,
+                        observation,
+                        {"output": self.original_child},
+                        self.plan,
+                        self.record,
+                        self.child,
+                    )
+        self.resolution["observed_command"][-1] = r"D:\another-child\request.json"
+        self.retain()
+        with self.assertRaisesRegex(ValueError, "worker argv"):
+            self.admit()
+
+    def test_legacy_and_plain_unix_records_preserve_their_original_scopes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            child = Path(temporary)
+            auditor.admit_r_resolution(
+                child, {"pid": 123}, None, {"system": "Linux"}, b"# legacy helper\n"
+            )
+            with self.assertRaisesRegex(ValueError, "missing original R resolution"):
+                auditor.admit_r_resolution(
+                    child, {"pid": 123}, None, {"system": "Linux"}, self.helper
+                )
+            for system in ("Linux", "Darwin"):
+                command = [
+                    "/r/bin/Rscript",
+                    "--vanilla",
+                    "/evidence/harness/worker.R",
+                    "/evidence/child/request.json",
+                ]
+                resolution = {
+                    "protocol": "r-worker-resolution/1",
+                    "system": system,
+                    "requested_executable": command[0],
+                    "requested_command": command,
+                    "observed_executable": command[0],
+                    "observed_command": command,
+                    "private_library_environment": "/private/candidate:/private/collectors",
+                    "resolution": "plain Unix Rscript",
+                }
+                write(child / "r-worker-resolution.json", resolution)
+                auditor.admit_r_resolution(
+                    child,
+                    {"r_worker": resolution},
+                    command,
+                    {
+                        "system": system,
+                        "private_libraries": [
+                            "/private/candidate",
+                            "/private/collectors",
+                        ],
+                    },
+                    self.helper,
+                )
+                resolution["observed_executable"] = "/another-R/bin/Rscript"
+                resolution["observed_command"] = [
+                    resolution["observed_executable"],
+                    *command[1:],
+                ]
+                write(child / "r-worker-resolution.json", resolution)
+                with self.assertRaisesRegex(ValueError, "Unix R worker"):
+                    auditor.admit_r_resolution(
+                        child,
+                        {"r_worker": resolution},
+                        command,
+                        {
+                            "system": system,
+                            "private_libraries": [
+                                "/private/candidate",
+                                "/private/collectors",
+                            ],
+                        },
+                        self.helper,
+                    )
+
+    def test_new_resolution_cannot_hide_as_legacy_or_attach_to_python(self):
+        with self.assertRaisesRegex(ValueError, "original pinned helper"):
+            auditor.admit_r_resolution(
+                self.child,
+                self.process,
+                self.command,
+                self.identity,
+                b"# legacy helper\n",
+            )
+        with self.assertRaisesRegex(ValueError, "another host"):
+            auditor.admit_r_worker(
+                self.child, self.process, {}, {}, {}, {"host": "python"}, self.child
+            )
+        with (
+            mock.patch.object(
+                auditor.lifecycle, "git_bytes", return_value=b"# legacy helper\n"
+            ),
+            self.assertRaisesRegex(ValueError, "unassociated"),
+        ):
+            auditor.admit_r_worker(
+                self.child, {"pid": 1}, {}, {}, self.plan, self.record, self.child
+            )
+        with (
+            mock.patch.object(auditor.lifecycle, "git_bytes", return_value=self.helper),
+            self.assertRaisesRegex(ValueError, "missing original R resolution"),
+        ):
+            auditor.admit_r_worker(
+                self.child,
+                {"pid": 1},
+                {"command": self.command},
+                {"output": self.original_child},
+                self.plan,
+                self.record,
+                self.child,
+            )
+
+
+class SingleObservationStatistics(unittest.TestCase):
+    def test_one_warm_child_keeps_one_observation_and_degenerate_quartiles(self):
+        for value, unit in ((137494528, "bytes"), (123.5, "nanoseconds")):
+            with self.subTest(unit=unit):
+                result = auditor.stats([value], unit)
+                self.assertEqual(result["count"], 1)
+                self.assertEqual(result["raw"], [value])
+                self.assertEqual(result["median"], value)
+                self.assertEqual(result["min"], value)
+                self.assertEqual(result["max"], value)
+                self.assertEqual(result["quartiles"], [value, value, value])
+                self.assertEqual(result["unit"], unit)
+
+    def test_multiple_original_observations_keep_inclusive_quartiles(self):
+        result = auditor.stats([1, 2, 3, 4], "nanoseconds")
+        self.assertEqual(result["count"], 4)
+        self.assertEqual(result["raw"], [1, 2, 3, 4])
+        self.assertEqual(result["quartiles"], [1.75, 2.5, 3.25])
+        self.assertEqual(result["median"], 2.5)
 
 
 class CollectionRefusals(unittest.TestCase):
