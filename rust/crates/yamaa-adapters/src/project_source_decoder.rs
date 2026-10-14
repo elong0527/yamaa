@@ -226,6 +226,7 @@ mod tests {
             profile: SourceProfile::Csv,
             empty_string_present: false,
             ordinal: None,
+            encoding: None,
         }
     }
 
@@ -465,6 +466,59 @@ mod tests {
                 .decode_bounded_interpreted(&source, &bytes, None, exact, SourceInterpretation::Odm)
                 .unwrap();
             assert_eq!(decoder.usage().unwrap(), usage);
+        }
+    }
+
+    #[test]
+    fn both_sas_source_profiles_use_receipts_and_preserve_exact_caller_caps() {
+        for (profile, bytes) in [
+            (
+                SourceProfile::Xport,
+                include_bytes!("../tests/fixtures/sas/fractional.xpt").as_slice(),
+            ),
+            (
+                SourceProfile::Sas7bdat,
+                include_bytes!("../tests/fixtures/sas/datetime.sas7bdat").as_slice(),
+            ),
+        ] {
+            let mut source = csv_source();
+            source.profile = profile;
+            source.encoding = Some("windows-1252".into());
+            let limits = DecodeLimits {
+                rows: 1000,
+                cells: 100_000,
+                storage_bytes: 4_194_304,
+                work_bytes: 4_194_304,
+            };
+            let mut decoder = Decoder::<std::convert::Infallible>::default();
+            let table = decoder
+                .decode_bounded(&source, bytes, None, limits)
+                .unwrap();
+            assert!(table.row_count() > 0);
+            let usage = decoder
+                .usage()
+                .expect("successful supported SAS profile is accounted");
+            assert!(usage.storage_bytes > 0 && usage.work_bytes > 0);
+            let exact = DecodeLimits {
+                storage_bytes: usage.storage_bytes,
+                work_bytes: usage.work_bytes,
+                ..limits
+            };
+            let repeated = decoder.decode_bounded(&source, bytes, None, exact).unwrap();
+            assert_eq!(repeated.row_count(), table.row_count());
+            assert_eq!(decoder.usage().unwrap(), usage);
+            assert!(decoder
+                .decode_bounded(
+                    &source,
+                    bytes,
+                    None,
+                    DecodeLimits {
+                        storage_bytes: usage.storage_bytes - 1,
+                        ..exact
+                    }
+                )
+                .is_err());
+            assert!(decoder.usage().unwrap().storage_bytes < usage.storage_bytes);
         }
     }
 

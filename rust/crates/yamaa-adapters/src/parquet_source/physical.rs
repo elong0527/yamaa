@@ -236,16 +236,20 @@ mod tests {
         writer.write(&batch).unwrap();
         writer.close().unwrap();
         for (limit, actual) in [(31, 32), (32, 64), (63, 64)] {
+            let mut remaining = limit;
             assert_eq!(
-                read(&bytes, &[true], limit, &schema).unwrap_err(),
+                read(&bytes, &[true], &mut remaining, &schema).unwrap_err(),
                 Error::ResourceLimit {
                     resource: "retained_bytes",
                     limit,
                     actual: Some(actual),
                 }
             );
+            assert_eq!(remaining, limit - if limit >= 32 { 32 } else { 0 });
         }
-        let result = read(&bytes, &[true], 64, &schema).unwrap();
+        let mut remaining = 64;
+        let result = read(&bytes, &[true], &mut remaining, &schema).unwrap();
+        assert_eq!(remaining, 0);
         assert!(matches!(&result[0], Column::Int64(values) if values == &[Some(1), Some(2)]));
     }
 }

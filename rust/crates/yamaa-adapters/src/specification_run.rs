@@ -315,33 +315,30 @@ fn decode_interpreted_inner(
         yamaa_core::specification::SourceProfile::Xport
             | yamaa_core::specification::SourceProfile::Sas7bdat
     ) {
-        let table = crate::sas_source::parse(
-            bytes,
-            source,
-            crate::sas_source::Limits {
-                source_bytes: csv_source::Limits::default().bytes,
-                work_bytes: bounded.map_or(
-                    yamaa_engine::capacity::SOURCE_STORAGE_BYTES,
-                    |limits| {
-                        limits
-                            .work_bytes
-                            .min(yamaa_engine::capacity::SOURCE_STORAGE_BYTES)
-                    },
-                ),
-                retained_bytes: bounded.map_or(
-                    yamaa_engine::capacity::SOURCE_STORAGE_BYTES,
-                    |limits| {
-                        limits
-                            .storage_bytes
-                            .min(yamaa_engine::capacity::SOURCE_STORAGE_BYTES)
-                    },
-                ),
-            },
-            table_limits,
-        )
+        let sas_limits = crate::sas_source::Limits {
+            source_bytes: csv_source::Limits::default().bytes,
+            work_bytes: bounded.map_or(yamaa_engine::capacity::SOURCE_STORAGE_BYTES, |limits| {
+                limits
+                    .work_bytes
+                    .min(yamaa_engine::capacity::SOURCE_STORAGE_BYTES)
+            }),
+            retained_bytes: bounded.map_or(
+                yamaa_engine::capacity::SOURCE_STORAGE_BYTES,
+                |limits| {
+                    limits
+                        .storage_bytes
+                        .min(yamaa_engine::capacity::SOURCE_STORAGE_BYTES)
+                },
+            ),
+        };
+        let table = if let Some(usage) = usage.as_deref_mut() {
+            crate::sas_source::parse_with_usage(bytes, source, sas_limits, table_limits, usage)
+        } else {
+            crate::sas_source::parse(bytes, source, sas_limits, table_limits)
+        }
         .map_err(Error::SasSource)?;
         if odm {
-            project_odm(table, table_limits)?
+            project_odm(source, table, table_limits)?
         } else {
             table
         }
@@ -444,7 +441,11 @@ pub(crate) fn typed_source_error(error: crate::typed_csv::Error) -> Error {
     }
 }
 
-fn project_odm(table: ArrowTable, table_limits: TableLimits) -> Result<ArrowTable, Error> {
+fn project_odm(
+    source: &SourceDeclaration,
+    table: ArrowTable,
+    table_limits: TableLimits,
+) -> Result<ArrowTable, Error> {
     use yamaa_core::table::{Column, TableAccess, TableSchema};
     let fields = table
         .schema()
@@ -456,12 +457,18 @@ fn project_odm(table: ArrowTable, table_limits: TableLimits) -> Result<ArrowTabl
         })
         .collect::<Vec<_>>();
     let binding = yamaa_core::odm_source::bind_fields(&fields)
-        .map_err(|_| {
-            Error::SasSource(crate::sas_source::Error::Limit {
-                resource: "odm_metadata",
-                limit: 1_048_576,
-                actual: None,
-            })
+        .map_err(|error| {
+            let yamaa_core::odm_source::AdmissionError::MetadataLimit {
+                resource,
+                limit,
+                actual,
+            } = error;
+            Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                resource,
+                limit,
+                actual,
+                vec![format!("input.{}", source.name)],
+            ))
         })?
         .map_err(Error::OdmFields)?;
     let schema = TableSchema::new(
@@ -491,7 +498,7 @@ fn project_odm(table: ArrowTable, table_limits: TableLimits) -> Result<ArrowTabl
             ..table_limits
         },
     )
-    .map_err(|_| Error::SasSource(crate::sas_source::Error::Internal))
+    .map_err(|error| Error::Source(TextTableError::Table(error)))
 }
 pub(crate) fn bounded_csv_limits(
     limits: yamaa_engine::producer_build::DecodeLimits,
