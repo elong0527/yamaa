@@ -24,6 +24,7 @@ import uuid
 import zipfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
+import admit_performance_native as native_admission
 import application_measurement_evidence as phases
 import child_peak_rss
 import collect_public_performance as collector
@@ -1148,6 +1149,85 @@ def admit_artifact(entry, artifacts, run, jobs):
     return artifact, job
 
 
+def native_inputs(payload, root, performance_run):
+    keys = ("native_run", "native_jobs", "native_artifacts")
+    if not all(key in payload for key in keys):
+        return {
+            "status": "incomplete",
+            "reason": "original native source/run/attempt/artifact metadata absent",
+        }
+    try:
+        run, jobs, artifacts = [read(relative(root, payload[key])) for key in keys]
+        jobs = jobs["jobs"] if isinstance(jobs, dict) else jobs
+        artifacts = artifacts["artifacts"] if isinstance(artifacts, dict) else artifacts
+        nonempty(performance_run["head_branch"], "original source branch")
+        # Reuse #2137's full native admission, including exact producing-job
+        # attempts and original artifact creation intervals.
+        native_admission.validate(
+            run,
+            jobs,
+            artifacts,
+            payload["repository"],
+            payload["source_revision"],
+            performance_run["head_branch"],
+        )
+        ids = [item["id"] for item in artifacts]
+        require(
+            all(type(value) is int and value > 0 for value in ids)
+            and len(ids) == len(set(ids)),
+            "duplicate/invalid original native artifact ID",
+        )
+        return {"status": "pass", "run": run, "jobs": jobs, "artifacts": artifacts}
+    except EVIDENCE_ERRORS as error:
+        return {"status": "fail", "reason": str(error)}
+
+
+def native_collection(directory, lane, native):
+    require(
+        native["status"] == "pass",
+        native.get("reason", "native source admission incomplete"),
+    )
+    original = read(relative(directory.parent, "native-run.json"))
+    for key in (
+        "id",
+        "run_attempt",
+        "head_sha",
+        "head_branch",
+        "path",
+        "event",
+        "status",
+        "conclusion",
+        "repository",
+        "head_repository",
+    ):
+        lifecycle.assert_equal(
+            original[key], native["run"][key], "original native run/attempt: " + key
+        )
+    name = (
+        f"native-python-{lane['os']}-3.14"
+        if lane["host"] == "python"
+        else f"native-r-{lane['os']}"
+    )
+    (artifact,) = [item for item in native["artifacts"] if item["name"] == name]
+    record = read(relative(directory, "collection.json"))["provenance"]
+    filename = original_path(record["artifact_path"], record["system"]).name
+    reference = f"github-actions:{original['id']}/attempt-{original['run_attempt']}/{name}/{filename}"
+    require(
+        record["artifact_reference"] == reference
+        and record["source_revision"] == original["head_sha"],
+        "candidate package/source/native attempt reference differs",
+    )
+    return {
+        "run_id": original["id"],
+        "run_attempt": original["run_attempt"],
+        "source_revision": original["head_sha"],
+        "artifact_id": artifact["id"],
+        "artifact_name": name,
+        "artifact_reference": reference,
+        "association": "original native metadata and retained build/installation attestation; archive/installed bytes re-admitted separately",
+    }
+
+
 @contextlib.contextmanager
 def entry_root(root, entry, scratch, entry_provider):
     """Only one original ZIP is expanded at a time; original bytes stay intact."""
@@ -1205,7 +1285,17 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
     exact(
         payload,
         ("protocol", "repository", "source_revision", "run", "artifacts", "entries")
-        + tuple(key for key in ("source_bundle", "jobs") if key in payload),
+        + tuple(
+            key
+            for key in (
+                "source_bundle",
+                "jobs",
+                "native_run",
+                "native_jobs",
+                "native_artifacts",
+            )
+            if key in payload
+        ),
         "audit input",
     )
     nonempty(payload["repository"], "repository identity")
@@ -1224,6 +1314,7 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
     validate_run(run, payload)
     jobs = read(relative(root, payload["jobs"])) if "jobs" in payload else []
     jobs = jobs["jobs"] if isinstance(jobs, dict) else jobs
+    native = native_inputs(payload, root, run)
     budget_error = None
     try:
         budgets = (
@@ -1309,6 +1400,11 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
                             )
                             local = entry_scratch / collection["role"]
                             local.mkdir(parents=True)
+                            association = (
+                                native_collection(directory, lane, native)
+                                if collection["role"] == "candidate"
+                                else None
+                            )
                             values = admit_collection(
                                 directory,
                                 lane,
@@ -1319,6 +1415,8 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
                                 local,
                             )
                             for case, result in values.items():
+                                if association is not None:
+                                    result["native_package_association"] = association
                                 identity = (key, case, collection["role"])
                                 require(
                                     identity not in accepted,
@@ -1353,6 +1451,15 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
         "run_id": run["id"],
         "run_attempt": run["run_attempt"],
         "harness_correctness": {"status": correctness, "errors": errors},
+        "native_source_admission": (
+            {"status": native["status"], "reason": native.get("reason")}
+            if native["status"] != "pass"
+            else {
+                "status": "pass",
+                "run_id": native["run"]["id"],
+                "run_attempt": native["run"]["run_attempt"],
+            }
+        ),
         "coverage": {
             "status": "pass" if passed == 567 and not errors else "incomplete",
             "required": 567,

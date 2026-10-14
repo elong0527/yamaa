@@ -245,6 +245,15 @@
           "items": {
             "$ref": "#/$defs/entry"
           }
+        },
+        "native_run": {
+          "$ref": "#/$defs/path"
+        },
+        "native_jobs": {
+          "$ref": "#/$defs/path"
+        },
+        "native_artifacts": {
+          "$ref": "#/$defs/path"
         }
       },
       "required": [
@@ -255,7 +264,7 @@
         "artifacts",
         "entries"
       ],
-      "description": "run/artifacts/jobs contain original Actions API snapshots for the selected performance.yml run attempt, with digest fields omitted. Successful actual producing jobs and artifact/campaign timestamps bind the attempt. An in-progress workflow snapshot is admitted only when its named producers have succeeded. Missing jobs fail admission. source_bundle is a self-contained Git bundle containing candidate, baseline, harness and generator truth revisions; otherwise --repository supplies pinned source."
+      "description": "run/artifacts/jobs contain original Actions API snapshots for the selected performance.yml run attempt, with digest fields omitted. Successful actual producing jobs and artifact/campaign timestamps bind the attempt. An in-progress workflow snapshot is admitted only when its named producers have succeeded. Missing jobs fail admission. source_bundle is a self-contained Git bundle containing candidate, baseline, harness and generator truth revisions; otherwise --repository supplies pinned source. Full Actions admission requires native_run/native_jobs/native_artifacts original API snapshots for the exact successful native attempt. The auditor reuses the full native admission protocol, verifies each tuple native-run.json and the existing github-actions:<run>/attempt-<attempt>/<artifact>/<filename> reference, and records original native artifact IDs. Absent native proof remains unavailable and cannot pass; local raw-collection sample replay makes no Actions qualification claim."
     },
     "rule": {
       "type": "object",

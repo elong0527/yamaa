@@ -25,6 +25,59 @@ def write(path, value):
     path.write_text(json.dumps(value), encoding="utf-8")
 
 
+def native_fixture(root, payload, branch="main"):
+    run = {
+        "id": 321,
+        "run_attempt": 2,
+        "head_sha": payload["source_revision"],
+        "head_branch": branch,
+        "repository": {"full_name": payload["repository"]},
+        "head_repository": {"full_name": payload["repository"]},
+        "path": ".github/workflows/native.yml",
+        "event": "push",
+        "status": "completed",
+        "conclusion": "success",
+    }
+    jobs = [
+        {
+            "name": name,
+            "status": "completed",
+            "conclusion": "success",
+            "run_id": 321,
+            "run_attempt": 2,
+            "head_sha": payload["source_revision"],
+            "started_at": "2026-10-13T01:00:00Z",
+            "completed_at": "2026-10-13T01:20:00Z",
+        }
+        for name in sorted(auditor.native_admission.required_jobs())
+    ]
+    artifacts = [
+        {
+            "id": number + 1000,
+            "name": name,
+            "expired": False,
+            "size_in_bytes": 100,
+            "workflow_run": {"id": 321, "head_sha": payload["source_revision"]},
+            "created_at": "2026-10-13T01:10:00Z",
+        }
+        for number, name in enumerate(
+            sorted(auditor.native_admission.required_artifacts())
+        )
+    ]
+    payload.update(
+        native_run="native-run.json",
+        native_jobs="native-jobs.json",
+        native_artifacts="native-artifacts.json",
+    )
+    for key, value in (
+        ("native_run", run),
+        ("native_jobs", jobs),
+        ("native_artifacts", artifacts),
+    ):
+        write(root / payload[key], value)
+    return run, jobs, artifacts
+
+
 class Replay(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -588,6 +641,7 @@ class ActionsAdmission(unittest.TestCase):
         self.run = {
             "id": 123,
             "run_attempt": 2,
+            "head_branch": "main",
             "head_sha": "a" * 40,
             "repository": {"full_name": "elong0527/yamaa"},
             "head_repository": {"full_name": "elong0527/yamaa"},
@@ -712,6 +766,12 @@ class ActionsAdmission(unittest.TestCase):
                     "measurement_scope": "full-lifecycle",
                     "source_revision": "a" * 40,
                     "measurement_campaign": {},
+                    "provenance": {
+                        "artifact_path": "/vanished/yamaa.whl",
+                        "system": "Linux",
+                        "source_revision": "a" * 40,
+                        "artifact_reference": "github-actions:321/attempt-2/native-python-ubuntu-24.04-3.14/yamaa.whl",
+                    },
                 },
             )
             entry = dict(
@@ -729,6 +789,8 @@ class ActionsAdmission(unittest.TestCase):
                 jobs="jobs.json",
                 entries=[entry],
             )
+            native_run, _, _ = native_fixture(root, payload)
+            write(root / name / "native-run.json", native_run)
             write(root / "input.json", payload)
             write(root / "run.json", self.run)
             write(root / "artifacts.json", [self.artifact])
@@ -758,7 +820,81 @@ class ActionsAdmission(unittest.TestCase):
             self.assertEqual(report["harness_correctness"]["status"], "fail")
             self.assertEqual(len(report["cells"]), 567)
             self.assertEqual(report["coverage"]["missing"], 567)
+            self.assertIn(
+                "replace", report["harness_correctness"]["errors"][0]["reason"]
+            )
             self.assertTrue((root / "report/performance-audit.md").is_file())
+
+
+class NativeSourceBinding(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.payload = {"repository": "elong0527/yamaa", "source_revision": "a" * 40}
+        self.run, self.jobs, self.artifacts = native_fixture(self.root, self.payload)
+        self.performance_run = {"head_branch": "main"}
+        self.directory = (
+            self.root
+            / "performance-python-ubuntu-24.04-3.12-wheel"
+            / "candidate-evidence"
+        )
+        self.directory.mkdir(parents=True)
+        write(self.directory.parent / "native-run.json", self.run)
+        self.record = {
+            "artifact_path": "/vanished/yamaa.whl",
+            "system": "Linux",
+            "source_revision": "a" * 40,
+            "artifact_reference": "github-actions:321/attempt-2/native-python-ubuntu-24.04-3.14/yamaa.whl",
+        }
+        write(self.directory / "collection.json", {"provenance": self.record})
+
+    def inputs(self):
+        return auditor.native_inputs(self.payload, self.root, self.performance_run)
+
+    def test_original_full_native_attempt_and_candidate_reference_re_admit(self):
+        native = self.inputs()
+        self.assertEqual(native["status"], "pass")
+        result = auditor.native_collection(self.directory, auditor.tuples()[0], native)
+        self.assertEqual(result["run_attempt"], 2)
+        self.assertEqual(
+            result["artifact_reference"], self.record["artifact_reference"]
+        )
+        self.assertIn(
+            result["artifact_id"], [artifact["id"] for artifact in self.artifacts]
+        )
+
+    def test_absent_and_failed_native_metadata_never_admit(self):
+        self.payload.pop("native_jobs")
+        self.assertEqual(self.inputs()["status"], "incomplete")
+        self.payload["native_jobs"] = "native-jobs.json"
+        self.jobs[0]["run_attempt"] = 1
+        write(self.root / "native-jobs.json", self.jobs)
+        self.assertEqual(self.inputs()["status"], "fail")
+
+    def test_outer_native_attempt_and_unattempted_or_wrong_candidate_references_refuse(
+        self,
+    ):
+        native = self.inputs()
+        write(self.directory.parent / "native-run.json", dict(self.run, run_attempt=1))
+        with self.assertRaisesRegex(ValueError, "original native run/attempt"):
+            auditor.native_collection(self.directory, auditor.tuples()[0], native)
+        write(self.directory.parent / "native-run.json", self.run)
+        for reference in (
+            "github-actions:321/native-python-ubuntu-24.04-3.14/yamaa.whl",
+            "github-actions:321/attempt-1/native-python-ubuntu-24.04-3.14/yamaa.whl",
+        ):
+            write(
+                self.directory / "collection.json",
+                {"provenance": dict(self.record, artifact_reference=reference)},
+            )
+            with self.assertRaisesRegex(ValueError, "native attempt reference"):
+                auditor.native_collection(self.directory, auditor.tuples()[0], native)
+
+    def test_invalid_or_duplicate_original_native_artifact_ids_refuse(self):
+        self.artifacts[0]["id"] = self.artifacts[1]["id"]
+        write(self.root / "native-artifacts.json", self.artifacts)
+        self.assertEqual(self.inputs()["status"], "fail")
 
 
 class Archives(unittest.TestCase):
