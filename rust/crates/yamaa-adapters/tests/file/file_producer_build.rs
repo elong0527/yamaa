@@ -1540,8 +1540,9 @@ fn public_root_result_refuses_limited_or_contradictory_whole_attempts_before_out
     assert!(matches!(
         producer_result::prepare_classified(&attempt, report_id(), 1, &[]),
         Err(producer_result::Error::Report(ProjectionError::Report(
-            Error::OutputLimit
-        )))
+            Error::ResourceLimit(refusal)
+        ))) if refusal.resource == "report_retained_bytes"
+            && refusal.limit == 6 && refusal.actual == Some(8192)
     ));
     attempt.graph.nodes.swap(0, 1);
     assert!(matches!(
@@ -1730,8 +1731,10 @@ fn classified_graph_reports_keep_actual_host_causes_and_authored_origins_without
         assert!(matches!(
             attempt_report_classified(&attempt, report_id(), 1, &facts),
             Err(ProjectionError::Report(
-                yamaa_adapters::specification_report::Error::OutputLimit
-            ))
+                yamaa_adapters::specification_report::Error::ResourceLimit(refusal)
+            )) if refusal.resource == "report_retained_bytes"
+                && refusal.limit == 6
+                && refusal.actual == Some(if facts.is_empty() { 8192 } else { 128 * facts.len() })
         ));
     }
 }
@@ -2225,7 +2228,10 @@ fn report_context_pointer_and_table_count_admission_precede_table_authority_and_
     };
     assert!(matches!(
         report.select(node, &fake, 16_777_216),
-        Err(Error::OutputLimit)
+        Err(Error::ResourceLimit(refusal))
+            if refusal.resource == "report_cells"
+                && refusal.limit == yamaa_engine::capacity::REPORT_CELLS
+                && refusal.actual.is_none()
     ));
     assert_eq!(reads.get(), 0);
     assert!(matches!(report.failure(), Err(Error::InvalidObservation)));
@@ -2307,8 +2313,10 @@ fn caller_report_quota_refuses_borrowed_identity_before_formatter_copy() {
     assert!(matches!(
         attempt.graph.nodes[0].output,
         Err(CompleteError::Report(
-            yamaa_adapters::specification_report::Error::OutputLimit
-        ))
+            yamaa_adapters::specification_report::Error::ResourceLimit(ref refusal)
+        )) if refusal.resource == "report_retained_bytes"
+            && refusal.limit == 49_152
+            && refusal.actual == Some(54_228)
     ));
     assert_eq!(
         attempt.graph.nodes[0].dataset.sources[0]
