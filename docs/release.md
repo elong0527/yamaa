@@ -7,6 +7,11 @@ Reviewed 2026-10-13 (America/New_York) against main
 qualification records and the authenticated GitHub release listing. This is the
 current narrative; qualification observations keep their own tested revisions.
 
+The [final release handoff](release-handoff.md) reconciles every entry gate,
+independently re-admitted rollback receipts, measured-source renewal and exact
+package selection. Transition acceptance and the final package selection remain
+pending there until all evidence gates pass.
+
 ## State
 
 | State | Observed scope |
