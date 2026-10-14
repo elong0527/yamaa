@@ -53,7 +53,113 @@ class NativeAudit(unittest.TestCase):
                     if name.endswith("yaml")
                     else "independent source bytes\n"
                 )
+        # Original retained snapshots carry the then-current authored manifest.
+        # Replaying them must not acquire current checkout inventory metadata.
+        legacy = self.directory / "source/benchmarks/execution-manifest.yaml"
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        legacy.write_text("examples:\n  independently-authored:\n")
         self.auditor = audit.Audit(self.directory)
+
+    def test_retained_snapshot_replays_original_corpus_without_current_config(self):
+        (self.directory / "source/rust/tools/public_conformance.py").unlink()
+        self.assertEqual(
+            self.auditor.public_corpus(), ({"independently-authored"}, None)
+        )
+        self.auditor.check_source()
+        (self.directory / "source/benchmarks/execution-manifest.yaml").write_text(
+            "examples:\n  independently-authored:\n  independently-authored:\n"
+        )
+        with self.assertRaisesRegex(ValueError, "duplicate retained"):
+            self.auditor.public_corpus()
+
+    def test_current_snapshot_uses_exact_source_paths_and_exclusion_config(self):
+        self.auditor.source["benchmark_spec_paths"] = [
+            "benchmarks/independently-authored/spec.yaml",
+            "benchmarks/excluded-case/spec.yaml",
+        ]
+        (self.directory / "source/rust/tools/public_conformance.py").write_text(
+            "EXCLUDED = {'excluded-case': 'original reviewed reason'}\n"
+        )
+        (self.directory / "source/benchmarks/execution-manifest.yaml").unlink()
+        self.assertEqual(
+            self.auditor.public_corpus(),
+            (
+                {"independently-authored", "excluded-case"},
+                {"excluded-case": "original reviewed reason"},
+            ),
+        )
+        self.auditor.check_source()
+        self.auditor.source["benchmark_spec_paths"].append(
+            "benchmarks/independently-authored/spec.yaml"
+        )
+        with self.assertRaisesRegex(ValueError, "invalid exact source"):
+            self.auditor.public_corpus()
+        self.auditor.source["benchmark_spec_paths"] = None
+        with self.assertRaisesRegex(ValueError, "invalid exact source"):
+            self.auditor.public_corpus()
+
+    def test_current_snapshot_rejects_exclusions_without_authored_case(self):
+        self.auditor.source["benchmark_spec_paths"] = [
+            "benchmarks/independently-authored/spec.yaml"
+        ]
+        (self.directory / "source/rust/tools/public_conformance.py").write_text(
+            "EXCLUDED = {'absent': 'reviewed reason'}\n"
+        )
+        with self.assertRaisesRegex(ValueError, "exclusions invalid"):
+            self.auditor.public_corpus()
+
+    def test_current_public_inventory_rejects_missing_duplicate_unexpected_and_changed_exclusions(
+        self,
+    ):
+        self.auditor.source["benchmark_spec_paths"] = [
+            "benchmarks/independently-authored/spec.yaml",
+            "benchmarks/excluded-case/spec.yaml",
+        ]
+        (self.directory / "source/rust/tools/public_conformance.py").write_text(
+            "EXCLUDED = {'excluded-case': 'original reviewed reason'}\n"
+        )
+        root = self.artifact("public-conformance-python-macos-15-3.14-wheel")
+        value = {
+            "protocol": "public-conformance/1",
+            "runtime": "python",
+            "runtime_version": "3.14.7",
+            "host_package_version": "0.3.0",
+            "engine_version": "0.1.0",
+            "platform": "macOS-15.7-arm64",
+            "source_revision": self.auditor.source["sha"],
+            "evidence": self.auditor.run["html_url"],
+            "package_form": "wheel",
+            "benchmarks": [
+                {"example": "independently-authored", "verdict": "unsupported"},
+                {
+                    "example": "excluded-case",
+                    "verdict": "excluded",
+                    "reason": "original reviewed reason",
+                },
+            ],
+            "summary": {"unsupported": 1, "excluded": 1},
+            "unsupported_operations": {},
+        }
+        audit.write(root / "inventory.json", value)
+        self.assertEqual(
+            self.auditor.public_inventory("macos-15", "python", "3.14", "wheel")[
+                "summary"
+            ],
+            {"unsupported": 1, "excluded": 1},
+        )
+        for defect in ("missing", "duplicate", "unexpected", "changed reason"):
+            changed = copy.deepcopy(value)
+            if defect == "missing":
+                changed["benchmarks"].pop()
+            elif defect == "duplicate":
+                changed["benchmarks"][1] = changed["benchmarks"][0]
+            elif defect == "unexpected":
+                changed["benchmarks"][0]["example"] = "unexpected"
+            else:
+                changed["benchmarks"][1]["reason"] = "current checkout reason"
+            audit.write(root / "inventory.json", changed)
+            with self.subTest(defect=defect), self.assertRaises(ValueError):
+                self.auditor.public_inventory("macos-15", "python", "3.14", "wheel")
 
     def artifact(self, name):
         path = self.directory / "artifacts" / name

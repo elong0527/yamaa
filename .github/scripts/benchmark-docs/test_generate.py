@@ -133,6 +133,13 @@ class DashboardContent(HTMLParser):
 
 
 class DashboardTests(unittest.TestCase):
+    def test_public_host_metadata_and_reviewed_exclusions_are_visible(self):
+        active = generate.render_benchmark(generate.BENCHMARKS / "sdtm-dm-basic").decode("ascii")
+        self.assertIn("Public entries: Python and R.", active)
+        self.assertIn("Passing coverage requires an installed inventory.", active)
+        excluded = generate.render_benchmark(generate.BENCHMARKS / "negative-path-absolute").decode("ascii")
+        self.assertIn("Public conformance excluded: reference-only path history (#1905)", excluded)
+
     def test_mapping_uses_define_document_beside_the_benchmark(self):
         benchmark = generate.BENCHMARKS / "sdtm-dm-metadata"
         page = generate.render_benchmark(benchmark).decode("ascii")

@@ -61,8 +61,9 @@ feedback until it is accepted or rejected.
    `full.md`) for positive `sdtm-*`/`adam-*` benchmarks, then
    `conventions.md` by hand from it. State what each value is, never
    how to compute it.
-7. **Add the index row** to `benchmarks/README.md`: the `Derives`
-   column copies the README title.
+7. **Regenerate the index** with
+   `python .github/scripts/benchmark-docs/build_index.py`. The directory and
+   README determine its row; public conformance derives the host entries.
 8. **Run `./factory.sh validate <name>`** and fix everything it
    reports before declaring the draft done.
 

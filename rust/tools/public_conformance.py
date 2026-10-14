@@ -104,11 +104,18 @@ def r_entries(path):
     return [{"specification": c.group(1), "environment": c.group(2)} for c in calls]
 
 
+def benchmark_directories(fixtures):
+    """Authored cases, independent of runtime labels or qualification results."""
+    return [
+        case
+        for case in sorted(fixtures.iterdir())
+        if case.is_dir() and list(case.glob("spec*.yaml"))
+    ]
+
+
 def plan(fixtures):
     examples = []
-    for case in sorted(fixtures.iterdir()):
-        if not case.is_dir() or not list(case.glob("spec*.yaml")):
-            continue
+    for case in benchmark_directories(fixtures):
         entries = {}
         for runtime, filename, extractor in (
             ("python", "run.py", python_entries),
@@ -555,6 +562,12 @@ def compare(fixtures, observed, output, ratchet=None):
         raise ValueError("unknown runner protocol/runtime")
     runtime = meta["runtime"]
     payload = plan(fixtures)
+    authored = {entry["name"] for entry in payload["examples"]}
+    unexpected = {p.stem for p in (observed / "records").glob("*.json")} - authored
+    if unexpected:
+        raise ValueError(
+            "unexpected installed runner cases: " + ", ".join(sorted(unexpected))
+        )
     results = []
     for example in payload["examples"]:
         try:
@@ -588,12 +601,19 @@ def compare(fixtures, observed, output, ratchet=None):
     }
     status = 0
     if ratchet:
-        required = set(read_json(ratchet)[runtime])
+        # The current directories/exclusions define both hosts' mandatory set.
+        # Prior passing observations identify new passes; they are not a runtime registry.
+        previous = read_json(ratchet)[runtime]
+        if len(previous) != len(set(previous)):
+            raise ValueError(f"duplicate observed {runtime} case")
+        required = {
+            entry["name"] for entry in payload["examples"] if not entry["excluded"]
+        }
         passed = {r["example"] for r in results if r["verdict"] == "pass"}
         inventory["ratchet"] = {
             "mode": "gate",
             "regressions": sorted(required - passed),
-            "new_passes": sorted(passed - required),
+            "new_passes": sorted(passed - set(previous)),
         }
         status = int(bool(required - passed))
     write_json(output, inventory)
