@@ -69,12 +69,14 @@ class RCheckpointRetention(unittest.TestCase):
     def test_every_plain_and_gzip_checkpoint_matches_original_bytes_and_field_order(
         self,
     ):
-        result = self.run_control(r"""
+        # Keep the original UTF-8 R literal bytes while this Python source stays ASCII.
+        result = self.run_control(
+            r"""
 typed <- list(
   list(type="int",value="-9223372036854775808"),
   list(type="int",value="9223372036854775807"),
   list(type="raw",value=as.raw(c(108,101,102,116,0,114,105,103,104,116))),
-  list(type="str",value="é \\\" quoted"),
+  list(type="str",value="\u00e9 \\\" quoted"),
   list(type="float",value="3fb999999999999a"),
   list(type="float",value="8000000000000000"),
   list(type="float",value="0000000000000000"),
@@ -110,7 +112,8 @@ for(suffix in c("",".gz")) {
   stopifnot(identical(read_bytes(old),read_bytes(new)),count==6L)
 }
 e$write_json(file.path(args[2],"control.json"),checkpoints[[8]])
-""")
+""".replace(r"\u00e9", "\u00e9")
+        )
         self.assertEqual(
             list(result),
             [
@@ -128,7 +131,7 @@ e$write_json(file.path(args[2],"control.json"),checkpoints[[8]])
             [
                 "-9223372036854775808",
                 "9223372036854775807",
-                'é \\" quoted',
+                '\u00e9 \\" quoted',
                 "3fb999999999999a",
                 "8000000000000000",
                 "0000000000000000",
