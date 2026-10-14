@@ -19,6 +19,20 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
                 register(&source.expression, counter);
             }
         }
+        Expression::Temporal {
+            operands,
+            operation,
+        } => {
+            if operation.invalid_handler().is_some() {
+                counter.register(
+                    &alloc::format!("{}.invalid", operation.path()),
+                    HandlerKind::Invalid,
+                );
+            }
+            for source in operands {
+                register(&source.expression, counter);
+            }
+        }
         Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::StrContains { source, .. }
@@ -27,7 +41,6 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
         | Expression::Round { source, .. } => register(&source.expression, counter),
         Expression::Extreme { operands, .. }
         | Expression::StrConcat { operands, .. }
-        | Expression::Temporal { operands, .. }
         | Expression::StrTemplate { operands, .. } => {
             for source in operands {
                 register(&source.expression, counter);

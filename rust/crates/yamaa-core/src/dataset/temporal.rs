@@ -28,6 +28,36 @@ pub enum TemporalKind {
     },
     StudyDay,
     EpochDay,
+    DateShift,
+    DateTimeDifference {
+        unit: ElapsedUnit,
+    },
+    DateTimeShift {
+        unit: ElapsedUnit,
+    },
+    DurationValue {
+        unit: ElapsedUnit,
+    },
+    DurationText {
+        unit: ElapsedUnit,
+    },
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ElapsedUnit {
+    Second,
+    Minute,
+    Hour,
+    Day,
+}
+impl ElapsedUnit {
+    pub fn seconds(self) -> u32 {
+        match self {
+            Self::Second => 1,
+            Self::Minute => 60,
+            Self::Hour => 3600,
+            Self::Day => 86400,
+        }
+    }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InvalidTemporal {
@@ -35,11 +65,13 @@ pub enum InvalidTemporal {
     Bounds,
     Limit,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Temporal {
-    kind: TemporalKind,
-    sources: Vec<String>,
-    path: String,
+    pub(super) kind: TemporalKind,
+    pub(super) sources: Vec<String>,
+    pub(super) path: String,
+    pub(super) literals: Vec<Option<Value>>,
+    pub(super) invalid: Option<Value>,
 }
 impl Temporal {
     pub fn new(
@@ -67,6 +99,8 @@ impl Temporal {
         }
         Ok(Self {
             kind,
+            literals: vec![None; sources.len()],
+            invalid: None,
             sources,
             path,
         })
@@ -170,15 +204,18 @@ impl Temporal {
                 }
             }
             TemporalKind::EpochDay => ordinal(first) - 719_163,
+            _ => return None,
         }))
     }
 }
 impl TemporalKind {
     pub fn fields(self) -> &'static [&'static str] {
         match self {
-            Self::Difference { .. } => &["start", "end"],
+            Self::Difference { .. } | Self::DateTimeDifference { .. } => &["start", "end"],
             Self::StudyDay => &["date", "reference"],
-            Self::EpochDay => &["source"],
+            Self::DateShift => &["source", "days"],
+            Self::DateTimeShift { .. } => &["source", "amount"],
+            Self::EpochDay | Self::DurationValue { .. } | Self::DurationText { .. } => &["source"],
         }
     }
 }
@@ -199,7 +236,7 @@ fn month_length(year: i64, month: i64) -> i64 {
         _ => unreachable!("admitted month"),
     }
 }
-fn ordinal(date: Date) -> i64 {
+pub(super) fn ordinal(date: Date) -> i64 {
     let (year, month, day) = date.fields();
     let year = i64::from(year);
     let previous = year - 1;

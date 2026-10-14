@@ -37,6 +37,7 @@ import repository_structure as OWNER_REPOSITORY_STRUCTURE
 import validation_diagnostics as OWNER_VALIDATION_DIAGNOSTICS
 import _native_specification as OWNER_NATIVE_SPECIFICATION
 import repository_schema as OWNER_REPOSITORY_SCHEMA
+import check_vocabulary_coverage as OWNER_VOCABULARY
 
 BLOCKER_PATH = Path(__file__).parent / 'check_validation_blockers.py'
 BLOCKER_SPEC = importlib.util.spec_from_file_location(
@@ -2162,6 +2163,31 @@ class TestDerivedBenchmarkInventory(unittest.TestCase):
     def test_unknown_protocol_is_rejected(self):
         self.assertEqual(EXECUTION_CHECK.check_inventory({}, []),
                          ['unknown benchmark inventory protocol'])
+
+
+class TestVocabularyCoverage(unittest.TestCase):
+    def test_shared_refusals_cover_the_declared_operation(self):
+        self.assertEqual(OWNER_VOCABULARY.check('date_shift', {
+            'shared_cases': ['date_shift_float_days', 'date_shift_upper_overflow']
+        }), [])
+
+    def test_successful_shared_case_cannot_cover_a_failure_contract(self):
+        errors = OWNER_VOCABULARY.check('date_shift', {
+            'shared_cases': ['date_literal_days_and_phase_dates']
+        })
+        self.assertTrue(any('lacks a refusal contract' in error for error in errors))
+
+    def test_missing_and_unrelated_shared_cases_are_refused(self):
+        errors = OWNER_VOCABULARY.check('duration_value', {
+            'shared_cases': ['absent_case', 'date_shift_upper_overflow']
+        })
+        self.assertTrue(any('missing absent_case' in error for error in errors))
+        self.assertTrue(any('never names duration_value' in error for error in errors))
+
+    def test_original_benchmark_refusal_owner_is_preserved(self):
+        self.assertEqual(OWNER_VOCABULARY.check('date_diff', [
+            'negative-date-diff-endpoints', 'negative-date-diff-units'
+        ]), [])
 
 
 class TestConditionRegistry(unittest.TestCase):

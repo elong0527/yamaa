@@ -103,6 +103,67 @@ expressions:
             required: true
             description: See REQ-1188.
 
+    date_shift: # See REQ-1298.
+        - source:
+            type: variable
+            required: true
+            description: See REQ-1298.
+        - days:
+            type: [variable, int]
+            required: true
+            description: See REQ-1298.
+    datetime_diff: # See REQ-1299.
+        - start:
+            type: variable
+            required: true
+            description: See REQ-1299.
+        - end:
+            type: variable
+            required: true
+            description: See REQ-1299.
+        - unit:
+            type: str
+            required: true
+            values: [second, minute, hour, day]
+            description: See REQ-1299.
+    datetime_shift: # See REQ-1300.
+        - source:
+            type: variable
+            required: true
+            description: See REQ-1300.
+        - amount:
+            type: [variable, int, float]
+            required: true
+            description: See REQ-1300.
+        - unit:
+            type: str
+            required: true
+            values: [second, minute, hour, day]
+            description: See REQ-1300.
+    duration_value: # See REQ-1301.
+        - source:
+            type: variable
+            required: true
+            description: See REQ-1301.
+        - unit:
+            type: str
+            required: true
+            values: [second, minute, hour, day]
+            description: See REQ-1301.
+        - invalid:
+            type: literal_value
+            description: See REQ-1301.
+    duration_text: # See REQ-1302.
+        - source:
+            type: [variable, int, float]
+            required: true
+            description: See REQ-1302.
+        - unit:
+            type: str
+            required: true
+            values: [second, minute, hour, day]
+            description: See REQ-1302.
+
 day_rule:
     type: str
     values: [first, last]

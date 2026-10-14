@@ -13,7 +13,8 @@ status: normative
 <a id="req-0309"></a>
 
 **REQ-0309.** `date_diff`, `study_day`, `date_impute`, `date_precision`,
-`datetime_impute`, `datetime_precision`, and `to_date` use the input contracts
+`datetime_impute`, `datetime_precision`, `to_date`, `date_shift`,
+`datetime_diff`, `datetime_shift`, `duration_value`, and `duration_text` use the input contracts
 below; [Temporal values](../values/temporal.md) defines the values themselves.
 
 ### Partial collected dates
@@ -129,6 +130,11 @@ nests these operations. Their input and result types are:
 | `datetime_precision` | `source` is complete date or datetime text, or `datetime` | `str` |
 | `to_date` | `source` is `datetime`, ISO 8601 date text, or ISO 8601 datetime text | `date` with collected precision `day` |
 | `to_epoch_day` | `source` is `date` | `int` days since 1970-01-01 |
+| `date_shift` | `source` is `date`; `days` is `int` | `date` |
+| `datetime_diff` | `start` and `end` are `datetime`; declared elapsed unit | `int` seconds or `float` minutes, hours or days |
+| `datetime_shift` | `source` is `datetime`; numeric `amount`; declared elapsed unit | `datetime` |
+| `duration_value` | `source` is duration text; declared elapsed unit | `int` whole seconds or `float` |
+| `duration_text` | numeric `source`; declared elapsed unit | `str` |
 
 <a id="req-1187"></a>
 
@@ -168,11 +174,127 @@ position, and is rejected where the specification is read.
 
 **REQ-0593.** A `datetime` is produced by converting datetime text or by
 `datetime_impute`, which completes a date source under its declared time rule.
-It is consumed by comparisons, `datetime_precision`, or `to_date`, which copies
+It is also produced by `datetime_shift` and consumed by `datetime_diff`,
+`datetime_shift`, comparisons, `datetime_precision`, or `to_date`, which copies
 calendar fields and drops time fields. ISO 8601 datetime text parses as a
 `datetime` first, so `to_date` truncates it by the same field copy. The
 truncation is never a timezone conversion: the `datetime` value space is
 zone-free.
+
+### Civil arithmetic and fixed-length durations
+
+<a id="req-1298"></a>
+
+**REQ-1298.** `date_shift` adds a signed whole-day count to a complete date
+on the proleptic Gregorian calendar and returns a date. It crosses month,
+year and leap-day boundaries without clamping. The result preserves the
+source's collected precision. A missing source or day count returns missing.
+A datetime or text source, or a non-integer day count, fails validation as
+`incompatible_input_type`. A result outside years 0001 through 9999 fails
+at build as `conversion_failed` on the `convert` stage; no local handler
+answers the arithmetic overflow.
+
+| Field | Meaning |
+| --- | --- |
+| `expressions.date_shift.source` | Complete date to move. |
+| `expressions.date_shift.days` | Signed integer literal or integer variable; a negative count moves backward. |
+| `Result` | Date moved by the declared whole days, with the source's collected precision. |
+
+<a id="req-1299"></a>
+
+**REQ-1299.** `datetime_diff` returns `end` minus `start` in the declared
+elapsed unit. Both inputs must be datetimes; other input types, including
+dates, fail validation as `incompatible_input_type`. Missing either input
+returns missing. In `second` the exact signed whole-second difference is
+an `int`. In `minute`, `hour` or `day` it is a `float`, obtained by dividing
+that difference by 60, 3600 or 86400 under
+[Numeric computation](computation.md), without rounding. The datetimes
+are zone-free civil values: there is no timezone or daylight-saving
+adjustment. A sample before the dose therefore has a negative relative time.
+
+| Field | Meaning |
+| --- | --- |
+| `expressions.datetime_diff.start` | Starting civil datetime. |
+| `expressions.datetime_diff.end` | Ending civil datetime. |
+| `expressions.datetime_diff.unit` | Elapsed unit: second, minute, hour or day. A day is 86400 seconds. |
+| `Result` | Signed elapsed time in the declared unit. |
+
+<a id="req-1300"></a>
+
+**REQ-1300.** `datetime_shift` adds a signed elapsed amount to a complete
+civil datetime and returns a datetime. `second` requires an integer amount;
+`minute`, `hour` and `day` admit integer or float amounts. Other input
+types fail validation as `incompatible_input_type`. A missing source or
+amount returns missing. Integer amounts are scaled exactly. Float amounts
+are multiplied by 60, 3600 or 86400 as binary64; the resulting civil datetime
+is rounded to the nearest whole second, with a halfway result choosing the
+even second. Rounding applies to the result: an odd source second plus half
+a second moves to the next even second. No timezone or daylight-saving
+adjustment occurs. The source's collected precision is preserved. A rounded
+result outside years 0001 through 9999 fails at build as `conversion_failed`
+on the `convert` stage; no local handler answers arithmetic overflow.
+
+| Field | Meaning |
+| --- | --- |
+| `expressions.datetime_shift.source` | Complete civil datetime to move. |
+| `expressions.datetime_shift.amount` | Signed numeric literal or variable; an integer is required with unit second. |
+| `expressions.datetime_shift.unit` | Elapsed unit: second, minute, hour or day. A day is 86400 seconds. |
+| `Result` | Moved civil datetime, rounded to a whole second and preserving collected precision. |
+
+<a id="req-1301"></a>
+
+**REQ-1301.** `duration_value` reads ISO 8601 fixed-length duration text
+`[-]PnW` or `[-]P[nD][T[nH][nM][nS]]` into a number in the declared elapsed
+unit. At least one component is required, components appear once in the
+stated order, and `T`, when present, requires a time component. Weeks are a
+separate form and cannot be combined with other components. Decimal fractions
+(use a dot or comma) are permitted only on the last written component.
+Whitespace, a leading plus sign, component signs, exponent notation,
+years and calendar months are invalid. `PT1M` is one minute; `P1M` is a
+calendar month and is invalid. A week is seven days and a day is 86400 seconds.
+A missing source returns missing without invoking `invalid`. A non-text
+source fails validation as `incompatible_input_type`.
+
+Decimal components are combined exactly before conversion. In `second`,
+a whole-second duration returns an `int`; a fractional-second duration
+returns a `float`. In other units, the seconds are converted to binary64
+and divided by 60, 3600 or 86400 under
+[Numeric computation](computation.md). Text outside the resulting numeric
+range is invalid: whole seconds must fit the signed integer range, and
+float results must be finite. Invalid text invokes the literal `invalid`
+handler; without it, the condition `invalid_duration_text` is fatal on the
+`impute` stage. A declared handler is counted only when reached.
+
+| Field | Meaning |
+| --- | --- |
+| `expressions.duration_value.source` | ISO 8601 fixed-length duration text. |
+| `expressions.duration_value.unit` | Numeric result unit: second, minute, hour or day. |
+| `expressions.duration_value.invalid` | Literal result for invalid or out-of-range duration text; null gives missing. |
+| `Result` | Signed numeric duration in the declared elapsed unit. |
+
+<a id="req-1302"></a>
+
+**REQ-1302.** `duration_text` writes a numeric duration as canonical ISO 8601
+text. The declared elapsed unit gives the meaning of the input number.
+Integer inputs are scaled exactly; float inputs are scaled to seconds as
+binary64 and use that result's shortest round-trip decimal spelling, expanded
+without exponent notation. Split the seconds into days, hours, minutes and
+seconds with days as the largest unit, omit zero components, and omit `T`
+when there is no time component. Zero, including negative zero, is `PT0S`.
+A negative duration has a single leading `-`. Fractional seconds use a dot
+and omit trailing zeros. For example, 93780 seconds is `P1DT2H3M`, 26 hours
+is `P1DT2H`, and -0.25 hours is `-PT15M`. Reading the written duration in
+its original unit preserves whole-second inputs within the numeric range.
+No duration column type or calendar-year/month interpretation is introduced.
+A missing source returns missing; a non-numeric source fails validation as
+`incompatible_input_type`. A float whose scaling is non-finite fails at
+build as `conversion_failed` on the `convert` stage.
+
+| Field | Meaning |
+| --- | --- |
+| `expressions.duration_text.source` | Signed numeric literal or variable to format. |
+| `expressions.duration_text.unit` | Input number's elapsed unit: second, minute, hour or day. |
+| `Result` | Canonical ISO 8601 duration text with days as the largest unit. |
 
 ### Whole calendar units
 

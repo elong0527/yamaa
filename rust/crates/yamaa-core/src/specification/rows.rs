@@ -269,14 +269,12 @@ fn default_reads(
             }
         }
         "round_half_away_from_zero" => reference(text(d, field(d, payload, "source")?)?),
-        "date_diff" | "study_day" | "to_epoch_day" => {
-            let fields: &[&str] = match operation {
-                "date_diff" => &["start", "end"],
-                "study_day" => &["date", "reference"],
-                _ => &["source"],
-            };
-            for &name in fields {
-                reference(text(d, field(d, payload, name)?)?);
+        "date_diff" | "study_day" | "to_epoch_day" | "date_shift" | "datetime_diff"
+        | "datetime_shift" | "duration_value" | "duration_text" => {
+            for &name in temporal::fields(operation) {
+                if let N::Text(source) = &d.nodes()[field(d, payload, name)?] {
+                    reference(source);
+                }
             }
         }
         "function" => {

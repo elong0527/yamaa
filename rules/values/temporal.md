@@ -63,7 +63,7 @@ of day, producing a complete datetime whose collected precision remains `day`.
 <a id="req-0546"></a>
 
 **REQ-0546.** Where a value gets its collected precision is fixed by where the
-value came from. Only five origins exist:
+value came from. Their origins are:
 
 | Origin | Collected precision |
 |---|---|
@@ -72,6 +72,7 @@ value came from. Only five origins exist:
 | `datetime_impute` | `day` for a date source; `second` for a datetime source |
 | `to_date` | `day` |
 | selecting an existing value | unchanged; property follows selected value |
+| `date_shift` or `datetime_shift` | unchanged from the source temporal value |
 
 <a id="req-0547"></a>
 
@@ -162,8 +163,9 @@ either is rejected rather than normalized.
 
 <a id="req-0560"></a>
 
-**REQ-0560.** A datetime is never shifted. Nothing normalizes it into another
-zone, so the held value carries the fields of the parsed text.
+**REQ-0560.** A datetime is never implicitly shifted into another zone.
+Parsing retains the fields of the text. An explicit `datetime_shift` moves
+the civil value under [Temporal operations](../operations/temporal.md).
 
 ### Whole seconds
 
@@ -288,9 +290,10 @@ comparability argument intact.
 
 <a id="req-0577"></a>
 
-**REQ-0577.** A temporal value never enters arithmetic. [Numeric computation](../operations/computation.md)'s grammar is
-numeric, and a difference between two values is `date_diff` or `study_day`
-below.
+**REQ-0577.** A temporal value never enters `compute` arithmetic. [Numeric computation](../operations/computation.md)'s grammar is
+numeric. Named temporal operations perform differences and shifts under
+[Temporal operations](../operations/temporal.md), with explicit units and
+input contracts.
 
 ### Ingestion
 

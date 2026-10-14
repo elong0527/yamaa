@@ -551,6 +551,15 @@ pub(super) fn operand_references(
             }
         }
     }
+    for &op in temporal::OPERATIONS {
+        if let Some(payload) = d.field(value, op) {
+            for &field_name in temporal::fields(op) {
+                if let N::Text(source) = &d.nodes()[field(d, payload, field_name)?] {
+                    names.push(source.clone());
+                }
+            }
+        }
+    }
     for op in [
         "str_contains",
         "str_case",
@@ -562,7 +571,6 @@ pub(super) fn operand_references(
         "date_precision",
         "datetime_precision",
         "to_date",
-        "to_epoch_day",
     ] {
         if let Some(payload) = d.field(value, op) {
             names.push(text(d, field(d, payload, "source")?)?.into());

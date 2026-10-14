@@ -30,6 +30,7 @@ unless its behavior says otherwise:
 | template | `missing` | Any placeholder value is missing |
 | impute | `date_impute.missing`, `date_precision.missing`, `datetime_impute.missing`, `datetime_precision.missing` | See [Temporal values](../values/temporal.md) |
 | impute | `date_impute.invalid`, `date_precision.invalid`, `datetime_impute.invalid`, `datetime_precision.invalid` | See [Temporal values](../values/temporal.md) |
+| impute | `duration_value.invalid` | Invalid fixed-length duration text ([REQ-1301](../operations/temporal.md#req-1301)) |
 | convert | `unconvertible` | Failed output conversion |
 
 <a id="req-0343"></a>

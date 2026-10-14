@@ -2230,6 +2230,39 @@ local({
   cat("typed intermediate results convert before numeric matching and retain conversion handlers without Python\n")
 })
 
+local({
+  assert_temporal_issues <- function(actual, expected) {
+    if (is.null(expected)) stopifnot(nrow(actual)==0L)
+    else stopifnot(any(vapply(seq_len(nrow(actual)),function(i)
+      actual$phase[i]==expected$phase && actual$condition[i]==expected$condition &&
+      actual$requirement[i]==expected$requirement &&
+      identical(actual$spec_paths[[i]],expected$spec_path),logical(1))))
+  }
+  for (truth in host_truth[["temporal_arithmetic"]]) {
+    directory <- tempfile("yamaa-temporal-"); dir.create(directory)
+    entry <- file.path(directory,"spec.yaml")
+    writeBin(charToRaw(truth$spec),entry)
+    assert_temporal_issues(yamaa_check(entry)$issues,truth$check_issue)
+    for (name in names(truth$inputs)) writeBin(charToRaw(truth$inputs[[name]]),file.path(directory,name))
+    result <- yamaa_domain(entry)
+    assert_temporal_issues(result$issues,truth$run_issue)
+    if (!is.null(truth$csv)) stopifnot(identical(result$save(),TRUE),
+      identical(rawfile(file.path(directory,"result.csv")),charToRaw(truth$csv)))
+    else {
+      stopifnot(is.null(result$output),inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        !file.exists(file.path(directory,"result.csv")))
+    }
+    observations <- get(".domain_observations",asNamespace("yamaa"))(result)
+    if (!is.null(observations)) {
+      counts <- jsonlite::fromJSON(rawToChar(observations),simplifyVector=FALSE)$handler_counts
+      reached <- sum(vapply(counts,function(item) if(item$handler=="invalid") item$count else 0,numeric(1)))
+      stopifnot(reached==truth$invalid_count)
+    }
+    unlink(directory,recursive=TRUE)
+  }
+  cat("shared temporal arithmetic conformance preserves civil values and duration handlers without Python\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)
