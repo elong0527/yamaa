@@ -166,6 +166,15 @@ def test_invalid_lock_syntax_and_shape_precede_metadata(raw):
     assert trace == []
 
 
+def test_deeply_nested_lock_syntax_is_an_invalid_lock():
+    depth = sys.getrecursionlimit() * 2
+    raw = f"version = 1\nx = {'[' * depth}{']' * depth}\npackage = []\n".encode()
+    trace = []
+    with pytest.raises(m.InvalidLock, match="invalid uv lock syntax"):
+        verify(raw, ["project.run"], {}, {}, trace)
+    assert trace == []
+
+
 def test_invalid_markers_and_missing_versions_do_not_become_installed_version_choices():
     for raw in [
         lock(("yamaa", "0.2.0", ["not a marker"])),
