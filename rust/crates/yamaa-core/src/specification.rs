@@ -1,4 +1,4 @@
-//! Bounded original-specification compiler prototype: declared typed sources,
+//! Bounded original-specification compiler: declared typed sources,
 //! implicit key grain, source columns and checked numeric computations.
 //! Admission never reads study data; binding consumes only the captured source schema.
 use crate::{

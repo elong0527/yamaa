@@ -82,9 +82,10 @@ values (`case`), never predicates.
   made anywhere else fails validation. Add a vector for every behavior the
   change decides.
 - Give every requirement a permanent global `REQ-NNNN` ID and list its
-  owning contract in `rules/README.md`. Preserve IDs across moves; update
-  `rules/migration.yaml` and regenerate the reference tables. Keep legacy
-  aliases in that map rather than in duplicate normative paragraphs.
+  owning contract in `rules/README.md`. Preserve IDs across moves and
+  regenerate the reference tables from current contracts and schema navigation.
+  Allocate new IDs above the largest assigned number; never reuse retired IDs.
+  Historical citations and retirement records remain in Git history.
 - Keep repository-authored source ASCII-only. Spell non-ASCII characters by
   code point in rules, documentation, schemas, specifications, and tests;
   literal Unicode belongs only in input and expected-output data fixtures.

@@ -34,12 +34,10 @@ and pending acceptance.
 ## Local checks
 
 Read [AGENTS.md](https://github.com/elong0527/yamaa/blob/main/AGENTS.md) before
-editing. [#2153](https://github.com/elong0527/yamaa/issues/2153) owns consolidation
-of the existing tool recipes into a root Makefile in
-[PR #2178](https://github.com/elong0527/yamaa/pull/2178), with `make help` as its
-target/prerequisite entry point. That interface is still under review. Until it
-lands, use the current recipes below and the package guides. Installed checks
-require a separate noneditable package outside the checkout.
+editing. Run `make help` from the repository root for supported targets and
+prerequisites. The Makefile and CI call the same owned Python command runners.
+The recipes below describe component checks; package guides describe installation.
+Installed checks require a separate noneditable package outside the checkout.
 
 Use Rust 1.90.0 and the canonical `rust/Cargo.lock`. Python and R source archives
 stage the unchanged workspace and lock. From the repository root:
@@ -72,6 +70,18 @@ packages. Their commands and comparison rules are in
 [qualification](https://github.com/elong0527/yamaa/blob/main/rust/qualification/README.md).
 Expected benchmark files and Parquet fixtures are independent truth; do not
 regenerate them to accommodate implementation changes.
+
+Normative rule checks derive current REQ owners from `rules/` and schema
+navigation from `yaml/`. The generated requirement and schema-field indexes follow
+those sources. Independent owner expectations live in
+[schema-navigation.tsv](https://github.com/elong0527/yamaa/blob/main/.github/scripts/yaml-validation/fixtures/schema-navigation.tsv);
+`test_rule_rewrite.py` checks all 363 owners without regenerating this fixture.
+Run from the repository root:
+
+```sh
+uv run --project python --no-sync python .github/scripts/commands/repository.py rule-references
+uv run --project python --no-sync python .github/scripts/commands/repository.py rules
+```
 
 ## Documentation and CI
 

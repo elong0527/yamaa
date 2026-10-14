@@ -26,7 +26,7 @@ separate qualification workflow.
 | Layout and prose | Required example files, negative remediation sections, variant layout, benchmark index, badges, line width, described columns and rule metadata. |
 | Grammar and regex | Shared grammar/vocabulary vectors and pinned R022 regex conformance through native bindings. Missing bindings fail rather than falling back. |
 | Environments and Define | `environment_class` and `define_class` schema validation for authored documents. Complete generation and saved-byte comparison belong to installed public suites. |
-| Rules and references | Normative ownership, requirement registry, generated references and the existing `rules/migration.yaml` provenance checks. Live readers must move before that record is removed. |
+| Rules and references | Current normative contracts and schema navigation determine requirement ownership, citations and generated references. `test_rule_rewrite.py` checks the 363 independent owners in [schema-navigation.tsv](scripts/yaml-validation/fixtures/schema-navigation.tsv); historical mappings remain in Git. |
 
 The historical `negative-path-absolute` and `negative-path-parent-escape` cases
 remain explicit public-conformance exclusions. Four old resolved-spec expected
@@ -45,7 +45,9 @@ uv sync --project python --extra test --locked
 uv run --project python --no-sync python .github/scripts/yaml-validation/test_validate_repository.py
 uv run --project python --no-sync python .github/scripts/yaml-validation/validate_repository.py --root .
 uv run --project python --no-sync python .github/scripts/yaml-validation/check_documentation.py
+uv run --project python --no-sync python .github/scripts/yaml-validation/test_rule_rewrite.py
 uv run --project python --no-sync python .github/scripts/yaml-validation/check_rule_rewrite.py
+uv run --project python --no-sync python .github/scripts/yaml-validation/generate_rule_reference.py --check
 uv run --project python --no-sync python .github/scripts/yaml-validation/check_requirement_registry.py
 ```
 

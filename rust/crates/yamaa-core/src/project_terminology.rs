@@ -1,4 +1,4 @@
-//! Pure static codelist admission and binding for environment sources (#1757).
+//! Pure static codelist admission and binding for environment sources.
 //! Source bytes, schema admission and storage budgets belong to captured inputs.
 use crate::project_limits::{AdmissionError, Budget, Limit, Limits};
 use crate::value::{compare_present, ColumnType, Value};
