@@ -323,9 +323,13 @@ pub(super) fn bind_row(
     available: Option<&[usize]>,
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
+    output: &TableSchema,
+    named: &intermediates::Declarations,
+    secondary: &[crate::dataset::SecondarySource],
+    intermediates: &[Option<crate::dataset::Intermediate>],
 ) -> Result<Option<Expression>, BindError> {
     let start = findings.len();
-    let source = rounding::bind_row_operand(
+    let source = self_relations::bind_operand(
         operation.source(),
         &format!("{}.source", operation.path()),
         catalog,
@@ -335,6 +339,10 @@ pub(super) fn bind_row(
         available,
         edges,
         findings,
+        output,
+        named,
+        secondary,
+        intermediates,
     )?;
     finish(operation, source, start, catalog, findings, column)
 }

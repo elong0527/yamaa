@@ -245,8 +245,7 @@ pub(super) fn wrap(rounding: &Rounding, column: usize, source: Expression) -> Ex
 }
 
 /// Reuse the core scope/catalog services for each admitted row's driver and
-/// completed outputs. Row/intermediate composition is rejected by its existing
-/// compiler gate before this function, never widened by the scalar operation.
+/// completed outputs, including named intermediate selections.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn bind_row(
     rounding: &Rounding,
@@ -258,8 +257,12 @@ pub(super) fn bind_row(
     available: Option<&[usize]>,
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
+    output: &TableSchema,
+    named: &intermediates::Declarations,
+    secondary: &[crate::dataset::SecondarySource],
+    intermediates: &[Option<crate::dataset::Intermediate>],
 ) -> Result<Option<Expression>, BindError> {
-    bind_row_operand(
+    self_relations::bind_operand(
         rounding.source(),
         &format!("{}.source", rounding.path()),
         catalog,
@@ -269,6 +272,10 @@ pub(super) fn bind_row(
         available,
         edges,
         findings,
+        output,
+        named,
+        secondary,
+        intermediates,
     )
     .map(|source| source.map(|source| wrap(rounding, column, source)))
 }

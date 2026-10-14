@@ -493,9 +493,25 @@ pub(super) fn bind_row_contains(
     available: Option<&[usize]>,
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
+    output: &TableSchema,
+    named: &intermediates::Declarations,
+    secondary: &[crate::dataset::SecondarySource],
+    intermediates: &[Option<crate::dataset::Intermediate>],
 ) -> Result<Option<Expression>, BindError> {
     Ok(str_extract::bind_row(
-        operation, column, catalog, driver, row, phase, available, edges, findings,
+        operation,
+        column,
+        catalog,
+        driver,
+        row,
+        phase,
+        available,
+        edges,
+        findings,
+        output,
+        named,
+        secondary,
+        intermediates,
     )?
     .map(|expression| match expression {
         Expression::StrExtract { source, operation } => {
