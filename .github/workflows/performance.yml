@@ -296,6 +296,11 @@ jobs:
               archive.write_bytes(source.read())
           with tarfile.open(archive) as source:
               source.extractall(root/'timer-source', filter='data')
+          codec=root/'jsonlite_2.0.0.tar.gz'
+          with urllib.request.urlopen('https://codeload.github.com/cran/jsonlite/tar.gz/refs/tags/2.0.0') as source:
+              codec.write_bytes(source.read())
+          with tarfile.open(codec) as source:
+              source.extractall(root/'codec-source', filter='data')
           with open(os.environ['GITHUB_ENV'],'a') as env:
               env.write('CANDIDATE_REVISION='+run['head_sha']+'\n')
               env.write('R_LIBS='+str(root/'performance-r-library')+'\n')
@@ -304,7 +309,7 @@ jobs:
           if [ "${{ runner.os }}" = Windows ]; then
             rustup target add --toolchain 1.90.0 x86_64-pc-windows-gnu
           fi
-          Rscript --vanilla -e 'install.packages("jsonlite", repos="https://cloud.r-project.org", lib=Sys.getenv("R_LIBS"))'
+          R CMD INSTALL --library="${R_LIBS}" "${RUNNER_TEMP}/codec-source/jsonlite-2.0.0" 2>&1 | tee "${RUNNER_TEMP}/jsonlite-install.log"
           R CMD INSTALL --library="${R_LIBS}" "${RUNNER_TEMP}/timer-source/microbenchmark" 2>&1 | tee "${RUNNER_TEMP}/timer-build.log"
           if [ "${{ runner.os }}" = Windows ]; then
             r_include=$(Rscript --vanilla -e 'cat(R.home("include"))')
@@ -329,6 +334,37 @@ jobs:
         run: |
           artifact=$(python -c 'from pathlib import Path; import os; print(next((Path(os.environ["RUNNER_TEMP"])/"candidate-distribution").glob("*.tar.gz")))')
           python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "${CANDIDATE_REVISION}" --host r --executable "$(command -v Rscript)" --artifact "${artifact}" --artifact-reference "github-actions:${NATIVE_RUN_ID}/attempt-${NATIVE_RUN_ATTEMPT}/native-r-${{ matrix.os }}/$(basename "${artifact}")" --form source --build-association "completed native workflow source archive; rebuilt before collection; candidate-build.log retained" --clock-config "${TIMER_CONFIG}" --clock-library "${TIMER_LIBRARY}" --output "${RUNNER_TEMP}/candidate-installation"
+      - name: Require actual R checkpoint bytes and original failure ordering without skips
+        run: |
+          python - <<'PY' 2>&1 | tee "${RUNNER_TEMP}/r-retention-controls.log"
+          import json, os, shutil, subprocess, sys, unittest
+          from pathlib import Path
+          executable=shutil.which('Rscript')
+          record={'scope':'authored actual-R checkpoint controls; no timing samples',
+                  'rscript':executable,'private_library':os.environ['R_LIBS'],
+                  'tests_run':0,'skipped':[],'success':False}
+          destination=Path(os.environ['RUNNER_TEMP'])/'r-retention-controls.json'
+          preflight=subprocess.run([executable,'--vanilla','-e',
+              'root <- normalizePath(Sys.getenv("R_LIBS"), winslash="/", mustWork=TRUE); '
+              'library(jsonlite, lib.loc=root); '
+              'stopifnot(as.character(packageVersion("jsonlite")) == "2.0.0"); '
+              'stopifnot(dirname(normalizePath(find.package("jsonlite"), winslash="/")) == root)'],
+              capture_output=True,text=True) if executable else None
+          record['private_namespace_preflight']=preflight.returncode if preflight else None
+          if preflight is None or preflight.returncode:
+              destination.write_text(json.dumps(record,indent=2)+'\n')
+              if preflight: print(preflight.stderr)
+              raise SystemExit(1)
+          suite=unittest.defaultTestLoader.discover('rust/tests',pattern='test_public_lifecycle_view_retention.py')
+          expected=suite.countTestCases()
+          result=unittest.TextTestRunner(verbosity=2).run(suite)
+          record.update(tests_expected=expected,tests_run=result.testsRun,
+              skipped=[{'test':str(test),'reason':reason} for test,reason in result.skipped],
+              failures=[str(test) for test,_ in result.failures],errors=[str(test) for test,_ in result.errors])
+          record['success']=expected>=3 and result.testsRun==expected and result.wasSuccessful() and not result.skipped
+          destination.write_text(json.dumps(record,indent=2)+'\n')
+          raise SystemExit(0 if record['success'] else 1)
+          PY
       - name: Secure and install previous-release Python reference on the R runner
         env:
           BASELINE_REF: ${{ inputs.baseline_ref || 'yamaa-py-0.3.0' }}
@@ -415,10 +451,15 @@ jobs:
             ${{ runner.temp }}/candidate-distribution
             ${{ runner.temp }}/candidate-build.log
             ${{ runner.temp }}/timer-build.log
+            ${{ runner.temp }}/jsonlite_2.0.0.tar.gz
+            ${{ runner.temp }}/jsonlite-install.log
+            ${{ runner.temp }}/codec-source
             ${{ runner.temp }}/timer-windows-macros.txt
             ${{ runner.temp }}/microbenchmark_1.5.0.tar.gz
             ${{ runner.temp }}/timer-source
             ${{ runner.temp }}/candidate-installation
+            ${{ runner.temp }}/r-retention-controls.json
+            ${{ runner.temp }}/r-retention-controls.log
             ${{ runner.temp }}/candidate-evidence
             ${{ runner.temp }}/previous-release.tar.gz
             ${{ runner.temp }}/baseline-revision.txt

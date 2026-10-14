@@ -174,6 +174,9 @@ independently bound original artifact segments. No individual case distribution
 is split across runners. The auditor rejects unexpected, overlapping, duplicate
 or missing segments/cases; the required counts remain 567 candidate cells and
 504 prior lifecycle/root-Build comparator cells.
+Before collection, every R job uses pinned jsonlite 2.0.0 in its actual private
+library to require the focused checkpoint byte/failure controls with zero skips.
+Its test count, verdict and original log remain separate from timing samples.
 
 Every attempt preserves its raw failures and partial collections. The independent
 replay job retains all 21 tuple slots, source and baseline histories in a Git

@@ -27,6 +27,15 @@ class PerformanceSelection(unittest.TestCase):
             ],
         )
         self.assertIn("variant_cases(os.environ['PERFORMANCE_VARIANT'])", r_job)
+        self.assertIn("pattern='test_public_lifecycle_view_retention.py'", r_job)
+        self.assertIn(
+            "result.testsRun==expected and result.wasSuccessful() and not result.skipped",
+            r_job,
+        )
+        self.assertIn("library(jsonlite, lib.loc=root)", r_job)
+        self.assertIn('packageVersion("jsonlite")) == "2.0.0"', r_job)
+        self.assertIn("jsonlite/tar.gz/refs/tags/2.0.0", r_job)
+        self.assertIn("r-retention-controls.json", r_job)
         self.assertEqual(r_job.count('--cases "${case_args[@]}"'), 3)
         self.assertIn(
             "name: performance-r-${{ matrix.os }}-source-${{ matrix.variant }}", r_job
