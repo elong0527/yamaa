@@ -293,12 +293,22 @@ pub(crate) fn decode_interpreted(
             source,
             crate::sas_source::Limits {
                 source_bytes: csv_source::Limits::default().bytes,
-                work_bytes: bounded.map_or(64 * 1024 * 1024, |limits| {
-                    limits.work_bytes.min(64 * 1024 * 1024)
-                }),
-                retained_bytes: bounded.map_or(64 * 1024 * 1024, |limits| {
-                    limits.storage_bytes.min(64 * 1024 * 1024)
-                }),
+                work_bytes: bounded.map_or(
+                    yamaa_engine::capacity::SOURCE_STORAGE_BYTES,
+                    |limits| {
+                        limits
+                            .work_bytes
+                            .min(yamaa_engine::capacity::SOURCE_STORAGE_BYTES)
+                    },
+                ),
+                retained_bytes: bounded.map_or(
+                    yamaa_engine::capacity::SOURCE_STORAGE_BYTES,
+                    |limits| {
+                        limits
+                            .storage_bytes
+                            .min(yamaa_engine::capacity::SOURCE_STORAGE_BYTES)
+                    },
+                ),
             },
             table_limits,
         )
@@ -576,6 +586,7 @@ mod width_tests {
             path: "input.parquet".into(),
             types: vec![],
             profile: SourceProfile::Parquet,
+            encoding: None,
             empty_string_present: false,
             ordinal: None,
         };

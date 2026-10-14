@@ -13,9 +13,11 @@ pub const IDENTITY_CELLS: usize = 640_000_000;
 pub const OUTPUT_TEXT_BYTES: usize = 512 * 1024 * 1024;
 pub const IDENTITY_TEXT_BYTES: usize = 1024 * 1024 * 1024;
 
-/// Physical Parquet values and canonical conversion charge 32 bytes per cell.
-/// Payload and encoded/header storage each retain their own source allowance.
-pub const SOURCE_STORAGE_BYTES: usize = 32 * SOURCE_CELLS + 2 * SOURCE_BYTES + 64 * 1024 * 1024;
+/// Source values charge 32 bytes per cell and row owners charge 24 bytes.
+/// Text conversion/ownership has a three-times-source reserve. Compressed
+/// decoded text still has to fit this enforced modeled storage allowance.
+pub const SOURCE_STORAGE_BYTES: usize =
+    32 * SOURCE_CELLS + 24 * SOURCE_ROWS + 3 * SOURCE_BYTES + 64 * 1024 * 1024;
 /// Internal public Arrow/Option/IPC projections charge 64 bytes per typed cell.
 /// This is separate from the authored output artifact's 1 GiB byte policy.
 pub const OUTPUT_STORAGE_BYTES: usize = 64 * OUTPUT_CELLS + OUTPUT_TEXT_BYTES + 64 * 1024 * 1024;
