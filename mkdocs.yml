@@ -95,3 +95,6 @@ nav:
   - Engine:
       - Python engine: https://github.com/elong0527/yamaa/tree/main/python
       - R engine: https://github.com/elong0527/yamaa/tree/main/R/yamaa
+  - Development:
+      - Architecture and checks: development.md
+      - Rust migration and release: release.md
