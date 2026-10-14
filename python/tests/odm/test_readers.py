@@ -162,8 +162,12 @@ def test_comment_or_pi_inside_item_data_is_ignored(
     [
         (ODM_13, "1.3junk"),
         (ODM_13, "1.31"),
+        (ODM_13, "1.3.junk"),
+        (ODM_13, "1.3."),
         (ODM_20, "2.0junk"),
         (ODM_20, "2.01"),
+        (ODM_20, "2.0.x"),
+        (ODM_20, "2.0.1a"),
     ],
 )
 def test_odm_version_with_junk_suffix_is_rejected(
@@ -171,7 +175,7 @@ def test_odm_version_with_junk_suffix_is_rejected(
 ) -> None:
     # A bare startswith check accepts any string that merely begins with
     # the expected version; the version must be exact or a dotted
-    # sub-version of it.
+    # sub-version of it, and every sub-version component must be numeric.
     source = tmp_path / "bad-version.xml"
     base_version = "1.3" if document is ODM_13 else "2.0"
     source.write_text(
@@ -189,6 +193,7 @@ def test_odm_version_with_junk_suffix_is_rejected(
         (ODM_13, "1.3.1"),
         (ODM_13, "1.3.2"),
         (ODM_20, "2.0.1"),
+        (ODM_20, "2.0.1.2"),
     ],
 )
 def test_odm_dotted_sub_version_is_accepted(

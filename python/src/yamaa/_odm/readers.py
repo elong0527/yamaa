@@ -307,8 +307,13 @@ def iter_odm_records(
                             "1.3" if odm_namespace == ODM_13_NAMESPACE else "2.0"
                         )
                         odm_version = element.get("ODMVersion") or expected_version
-                        if odm_version != expected_version and not (
-                            odm_version.startswith(expected_version + ".")
+                        sub_version = odm_version.removeprefix(expected_version + ".")
+                        if odm_version != expected_version and (
+                            sub_version == odm_version
+                            or not all(
+                                part.isascii() and part.isdigit()
+                                for part in sub_version.split(".")
+                            )
                         ):
                             raise ODMError(
                                 f"ODMVersion {odm_version!r} conflicts with namespace"
