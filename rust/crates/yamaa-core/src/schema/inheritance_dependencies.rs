@@ -359,7 +359,7 @@ impl<'a> Run<'a, '_> {
                             continue;
                         }
                         let refs =
-                            self.refs_field(member.node, "intermediate_class", name, false)?;
+                            self.refs_field(member.node, "intermediate_class", name, true)?;
                         changed |= self.mark_all(refs)?;
                     }
                 }
