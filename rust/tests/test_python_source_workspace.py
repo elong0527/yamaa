@@ -32,6 +32,163 @@ def write_archive(path, values):
 
 
 class PythonSourceWorkspaceTests(unittest.TestCase):
+    def patch_fixture(self, root):
+        workspace = root / "rust"
+        workspace.mkdir()
+        (workspace / "Cargo.toml").write_text(
+            "[workspace]\nmembers = []\n[patch.crates-io]\n"
+            'witness = {path = "vendor/witness"}\n'
+        )
+        (workspace / "Cargo.lock").write_bytes(b"canonical lock")
+        (workspace / "rust-toolchain.toml").write_bytes(b"canonical toolchain")
+        package = workspace / "vendor/witness"
+        for name, payload in {
+            "Cargo.toml": b'[package]\nname = "witness"\nversion = "0.1.0"\n',
+            "src/lib.rs": b"pub fn witness() {}\n",
+            "LICENSE": b"two upstream authors\n",
+            ".licenses/first-MIT": b"first notice\n",
+            ".licenses/second-MIT": b"second notice\n",
+            "README.md": b"released readme\n",
+            "PROVENANCE.md": b"release plus narrow source patch\n",
+            "compact-flow-pairs.patch": b"independent source patch\n",
+        }.items():
+            source = package / name
+            source.parent.mkdir(parents=True, exist_ok=True)
+            source.write_bytes(payload)
+        archive = root / "yamaa.tar.gz"
+        write_archive(
+            archive,
+            [
+                ("yamaa/rust/Cargo.toml", (workspace / "Cargo.toml").read_bytes()),
+                ("yamaa/rust/Cargo.lock", (workspace / "Cargo.lock").read_bytes()),
+            ],
+        )
+        return workspace, package, archive
+
+    def test_pruned_local_patch_sources_and_both_notices_are_restored_and_guarded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace, _, archive = self.patch_fixture(Path(directory))
+            sources = [
+                (source.relative_to(workspace).as_posix(), source.read_bytes())
+                for source in backend.local_patch_sources(workspace)
+            ]
+            lock = (workspace / "Cargo.lock").read_bytes()
+            manifest = (workspace / "Cargo.toml").read_bytes()
+            with self.assertRaisesRegex(ValueError, "regular local Cargo patch"):
+                guard.check_archive(archive, lock, manifest, patch_sources=sources)
+            backend.preserve_workspace(archive, workspace)
+            guard.check_archive(archive, lock, manifest, patch_sources=sources)
+            with tarfile.open(archive) as restored:
+                for relative, payload in sources:
+                    self.assertEqual(
+                        restored.extractfile("yamaa/rust/" + relative).read(), payload
+                    )
+
+    def test_changed_local_patch_refuses_atomically_and_archive_guard_refuses_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace, _, archive = self.patch_fixture(Path(directory))
+            source = "vendor/witness/src/lib.rs"
+            values = [
+                ("yamaa/rust/Cargo.toml", (workspace / "Cargo.toml").read_bytes()),
+                ("yamaa/rust/Cargo.lock", (workspace / "Cargo.lock").read_bytes()),
+                ("yamaa/rust/" + source, b"changed parser source"),
+            ]
+            write_archive(archive, values)
+            original = archive.read_bytes()
+            with self.assertRaisesRegex(ValueError, "changed a local Cargo patch"):
+                backend.preserve_workspace(archive, workspace)
+            self.assertEqual(archive.read_bytes(), original)
+            with self.assertRaisesRegex(ValueError, "differs from canonical bytes"):
+                guard.check_archive(
+                    archive,
+                    (workspace / "Cargo.lock").read_bytes(),
+                    (workspace / "Cargo.toml").read_bytes(),
+                    patch_sources=[(source, (workspace / source).read_bytes())],
+                )
+
+    def test_local_patch_symlinks_and_escaping_declarations_refuse_before_staging(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace, package, _ = self.patch_fixture(Path(directory))
+            notice = package / ".licenses/second-MIT"
+            notice.unlink()
+            try:
+                notice.symlink_to(package / ".licenses/first-MIT")
+            except OSError as error:
+                self.skipTest(f"local patch symlink control is unavailable: {error}")
+            with self.assertRaisesRegex(ValueError, "must not be symlinks"):
+                list(backend.local_patch_sources(workspace))
+            for path in ("../outside", "vendor/../outside", "/outside"):
+                (workspace / "Cargo.toml").write_text(
+                    "[workspace]\nmembers = []\n[patch.crates-io]\n"
+                    f'witness = {{path = "{path}"}}\n'
+                )
+                with self.assertRaisesRegex(ValueError, "vendor/package paths"):
+                    list(backend.local_patch_sources(workspace))
+
+    def test_extra_local_patch_build_script_cannot_enter_a_source_archive(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace, _, archive = self.patch_fixture(Path(directory))
+            sources = [
+                (source.relative_to(workspace).as_posix(), source.read_bytes())
+                for source in backend.local_patch_sources(workspace)
+            ]
+            with tarfile.open(archive) as original:
+                values = [
+                    (entry.name, original.extractfile(entry).read())
+                    for entry in original
+                ]
+            values.append(("yamaa/rust/vendor/witness/build.rs", b"fn main() {}"))
+            write_archive(archive, values)
+            original = archive.read_bytes()
+            with self.assertRaisesRegex(
+                ValueError, "unexpected local Cargo patch file"
+            ):
+                backend.preserve_workspace(archive, workspace)
+            self.assertEqual(archive.read_bytes(), original)
+            with self.assertRaisesRegex(
+                ValueError, "unexpected local Cargo patch file"
+            ):
+                guard.check_archive(
+                    archive,
+                    (workspace / "Cargo.lock").read_bytes(),
+                    (workspace / "Cargo.toml").read_bytes(),
+                    patch_sources=sources,
+                )
+
+    def test_archive_local_patch_directory_links_refuse_before_restoration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace, _, archive = self.patch_fixture(Path(directory))
+            sources = [
+                (source.relative_to(workspace).as_posix(), source.read_bytes())
+                for source in backend.local_patch_sources(workspace)
+            ]
+            with tarfile.open(archive) as original:
+                values = [
+                    (entry.name, original.extractfile(entry).read())
+                    for entry in original
+                ]
+            for kind in (tarfile.SYMTYPE, tarfile.LNKTYPE):
+                with tarfile.open(archive, "w:gz") as target:
+                    for name, payload in values:
+                        entry = tarfile.TarInfo(name)
+                        entry.size = len(payload)
+                        target.addfile(entry, io.BytesIO(payload))
+                    link = tarfile.TarInfo("yamaa/rust/vendor/witness")
+                    link.type = kind
+                    link.linkname = "yamaa/rust/another-package"
+                    target.addfile(link)
+                original = archive.read_bytes()
+                with self.assertRaisesRegex(ValueError, "must not contain links"):
+                    backend.preserve_workspace(archive, workspace)
+                self.assertEqual(archive.read_bytes(), original)
+                with self.assertRaisesRegex(ValueError, "must not contain links"):
+                    guard.check_archive(
+                        archive,
+                        (workspace / "Cargo.lock").read_bytes(),
+                        (workspace / "Cargo.toml").read_bytes(),
+                        patch_sources=sources,
+                    )
+
     def compile_fixture(self, root, declared=True):
         workspace = root / "rust"
         name = "benchmarks/original/expected/out.csv"

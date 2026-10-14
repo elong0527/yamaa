@@ -1102,6 +1102,20 @@
   ],
   "suites": [
     {
+      "id": "python/compact-yaml",
+      "runtime": "python",
+      "path": "rust/tests/installed_compact_yaml.py",
+      "staged_path": "installed_compact_yaml.py",
+      "level": "shared_run"
+    },
+    {
+      "id": "r/compact-yaml",
+      "runtime": "r",
+      "path": "R/yamaa/tests/compact_yaml.R",
+      "staged_path": "compact_yaml.R",
+      "level": "shared_run"
+    },
+    {
       "id": "r/scalars",
       "runtime": "r",
       "path": "R/yamaa/tests/scalars.R",

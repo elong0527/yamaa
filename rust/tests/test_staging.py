@@ -40,6 +40,23 @@ class StagingTests(unittest.TestCase):
                     self.assertFalse(copied.is_symlink())
                     self.assertEqual(source.read_bytes(), copied.read_bytes())
             self.assertTrue((embedded / "rust-toolchain.toml").is_file())
+            for source in (staging.WORKSPACE / "vendor").rglob("*"):
+                if source.is_file():
+                    copied = embedded / source.relative_to(staging.WORKSPACE)
+                    self.assertFalse(copied.is_symlink())
+                    self.assertEqual(source.read_bytes(), copied.read_bytes())
+            self.assertEqual(
+                (destination / "inst/LICENSE-YAML.txt").read_bytes(),
+                (staging.REPOSITORY / "python/LICENSE-YAML.txt").read_bytes(),
+            )
+            for author in ("ChenYuheng", "Ethiraric"):
+                self.assertIn(
+                    (
+                        staging.WORKSPACE
+                        / f"vendor/saphyr-parser/.licenses/{author}-MIT"
+                    ).read_bytes(),
+                    (destination / "inst/LICENSE-YAML.txt").read_bytes(),
+                )
             self.assertFalse((embedded / "target").exists())
             grammar = destination / "inst/grammar-original/grammar"
             for source in (staging.REPOSITORY / "yaml/grammar").glob("*.yaml"):
@@ -108,6 +125,7 @@ class StagingTests(unittest.TestCase):
                     json.loads((original / "expected" / (name + ".json")).read_text()),
                     json.loads(truth.read_text()),
                 )
+
             # Historical preparation expectations keep facts unchanged; only the
             # approved citation-only sidecar may fill a missing requirement.
             def changes(before, after):
@@ -159,8 +177,9 @@ class StagingTests(unittest.TestCase):
     def test_missing_lock_refuses_before_staging(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            with mock.patch.object(staging, "WORKSPACE", root), self.assertRaisesRegex(
-                FileNotFoundError, "canonical Cargo.lock"
+            with (
+                mock.patch.object(staging, "WORKSPACE", root),
+                self.assertRaisesRegex(FileNotFoundError, "canonical Cargo.lock"),
             ):
                 staging.stage(root / "destination")
             self.assertFalse((root / "destination").exists())

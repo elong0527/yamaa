@@ -47,7 +47,15 @@ later are sufficient to read the help inventory; individual checks need the
 tools listed there.
 
 Use Rust 1.90.0 and the canonical `rust/Cargo.lock`. Python and R source archives
-stage the unchanged workspace and lock. From the repository root:
+stage the unchanged workspace and lock.
+
+The local crates.io patch in `rust/vendor/saphyr-parser` retains the released
+0.2.1 library with a narrow compact flow pair scanner fix. Its provenance,
+source diff, regression controls and both authors' licenses travel with Python
+and R source packages; archive guards compare the original bytes. Python wheels
+and installed R packages retain both MIT notices in `LICENSE-YAML.txt`.
+
+From the repository root:
 
 ```sh
 make help

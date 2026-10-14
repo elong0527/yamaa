@@ -1,0 +1,24 @@
+[package]
+name = "saphyr-parser"
+version = "0.2.1"
+edition = "2024"
+rust-version = "1.85.0"
+authors = ["Ethiraric <ethiraric@gmail.com>", "David Aguilar <davvid@gmail.com>", "Yuheng Chen <yuhengchen@sensetime.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/saphyr-rs/saphyr"
+description = "A fully YAML 1.2 compliant YAML library"
+readme = "README.md"
+publish = false
+build = false
+autobins = false
+
+[lib]
+name = "saphyr_parser"
+path = "src/lib.rs"
+
+[features]
+debug_prints = []
+
+[dependencies]
+arraydeque = { version = "0.5.1", default-features = false }
+thiserror = { version = "2.0.20", default-features = false }

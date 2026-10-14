@@ -14,6 +14,16 @@ pending there until all evidence gates pass.
 
 ## State
 
+Compact flow verifications such as
+`verifications: [row_count: {min: 3, max: 3}]` use a local crates.io patch of
+saphyr-parser 0.2.1. Collection-local scanner state preserves nested mappings,
+independent of preceding flow mappings; explicit and block spellings retain the
+same behavior. The vendored release sources, narrow patch and original licenses
+are documented in `rust/vendor/saphyr-parser/PROVENANCE.md`. Both native source
+package routes retain and verify those bytes. Installed Python/R controls cover
+equal output and saved CSV bytes, both bounds and malformed closers. This repair
+does not qualify the complete release matrix described below.
+
 | State | Observed scope |
 | --- | --- |
 | Implemented and merged | Shared language execution; Python/R domain/check/define; runner conversion; legacy evaluator/API/probe and R/cdiscbuilder removal; coordinated Python/R/Cargo 0.4.0 source versions. The performance harness is merged through PR #2137; subsequent native dependency/guard, portable-math control and performance admission repairs are merged through PRs #2164-#2168. |
