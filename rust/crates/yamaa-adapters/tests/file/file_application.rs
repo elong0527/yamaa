@@ -584,3 +584,72 @@ fn compiler_refusals_retain_the_same_capacity_on_plain_and_environment_routes() 
         }
     }
 }
+
+#[test]
+fn inherited_and_decoder_refusals_keep_resource_phase_on_both_public_routes() {
+    use serde_json::json;
+    for (resource, limit, phase, stage) in [
+        ("depth", 64, "inheritance", "prepare"),
+        ("numeric_digits", 4096, "yaml_decode", "capture"),
+    ] {
+        let study = Study::new();
+        if resource == "depth" {
+            fs::write(study.0.join("base.yaml"), VALID).unwrap();
+            for index in 0..65 {
+                let parent = if index < 64 {
+                    format!("layer-{}.yaml", index + 1)
+                } else {
+                    "base.yaml".into()
+                };
+                fs::write(
+                    study.0.join(format!("layer-{index}.yaml")),
+                    format!("schema_version: '1.0'\nparents: [{parent}]\n"),
+                )
+                .unwrap();
+            }
+            fs::write(
+                study.0.join("spec.yaml"),
+                "schema_version: '1.0'\nparents: [layer-0.yaml]\n",
+            )
+            .unwrap();
+        } else {
+            fs::write(
+                study.0.join("spec.yaml"),
+                format!("value: {}\n", "9".repeat(4097)),
+            )
+            .unwrap();
+        }
+        fs::write(
+            study.0.join("environment.yaml"),
+            "schema_version: '1.0'\nlanguage: python\n",
+        )
+        .unwrap();
+        let spec = study.text("spec.yaml");
+        let environment = study.text("environment.yaml");
+        for environment in [None, Some(environment.as_str())] {
+            let request = || Request {
+                specification: &spec,
+                environment,
+            };
+            for issues in [
+                file_application::check(request(), identity(&spec)),
+                file_application::domain(request(), identity(&spec))
+                    .err()
+                    .unwrap(),
+            ] {
+                assert_eq!(issues.len(), 1, "{resource}, {environment:?}");
+                assert_eq!(issues[0].phase, "engine");
+                assert_eq!(issues[0].condition, "engine_rejected");
+                assert_eq!(issues[0].requirement, None);
+                let mut expected = json!({"code":"resource_limit","stage":stage,"phase":phase,"resource":resource,"limit":limit});
+                if resource == "numeric_digits" {
+                    expected["actual"] = json!(4097);
+                }
+                assert_eq!(
+                    serde_json::from_str::<serde_json::Value>(&issues[0].context).unwrap(),
+                    expected
+                );
+            }
+        }
+    }
+}

@@ -137,9 +137,13 @@ pub(crate) fn preparation_failure(message: String) -> Failure {
             }
             issues
         }
-        Some("rejected") => {
+        Some("rejected" | "resource_limit") => {
             let stage = outcome["stage"].as_str().unwrap_or("prepare");
-            let code = outcome["code"].as_str().unwrap_or("preparation_boundary");
+            let code = if outcome["status"] == "resource_limit" {
+                "resource_limit"
+            } else {
+                outcome["code"].as_str().unwrap_or("preparation_boundary")
+            };
             let (Some(resource), Some(limit)) =
                 (outcome["resource"].as_str(), outcome["limit"].as_u64())
             else {
@@ -163,7 +167,15 @@ pub(crate) fn preparation_failure(message: String) -> Failure {
             let Some(paths) = paths else {
                 return rejected("prepare", "issue_projection");
             };
-            let issues = resource_rejected(stage, code, resource, limit, actual, paths);
+            let mut issues = resource_rejected(stage, code, resource, limit, actual, paths);
+            if let Some(phase) = outcome["phase"].as_str() {
+                for issue in &mut issues {
+                    let mut context: Value =
+                        serde_json::from_str(&issue.context).expect("resource context");
+                    context["phase"] = serde_json::json!(phase);
+                    issue.context = context.to_string();
+                }
+            }
             if !crate::issue_rows::within_limit(
                 &issues,
                 crate::specification_check::MAX_ISSUE_BYTES,

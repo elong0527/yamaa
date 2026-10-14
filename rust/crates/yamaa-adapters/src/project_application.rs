@@ -286,7 +286,17 @@ fn preparation_boundary(
 ) -> Failure {
     use crate::specification_source::{Error as S, InheritanceError as I};
     let I::Entry(source) = error else {
-        return refused("prepare");
+        let Ok(message) = crate::specification_diagnostics::inheritance_failure_ref(error) else {
+            return refused("prepare");
+        };
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&message) else {
+            return refused("prepare");
+        };
+        return if value["outcome"]["status"] == "resource_limit" {
+            file_application::preparation_failure(message)
+        } else {
+            refused("prepare")
+        };
     };
     if matches!(source, S::Findings(_) | S::Decode { .. }) {
         // Decode semantic rows are handled by the bounded static projection;
@@ -305,4 +315,41 @@ fn preparation_boundary(
     crate::specification_diagnostics::inheritance_failure_ref(error)
         .map(file_application::preparation_failure)
         .unwrap_or_else(|_| refused("prepare"))
+}
+
+#[cfg(test)]
+mod resource_tests {
+    use super::*;
+    #[test]
+    fn layered_validation_work_refusal_keeps_its_preparation_outcome_on_both_routes() {
+        use yamaa_core::schema::{ConstraintError, ValidationError};
+        let error = crate::specification_source::InheritanceError::<crate::file_resources::Error>::Preparation {
+            schema: crate::shipped_schema::capture().unwrap(),
+            error: Box::new(yamaa_engine::inheritance_preparation::Error::Validation(
+                ValidationError::Constraint(ConstraintError::Work { limit: 7 }),
+            )),
+            captured_parents: Vec::new(),
+        };
+        let plain = file_application::preparation_failure(
+            crate::specification_diagnostics::inheritance_failure_ref(&error).unwrap(),
+        );
+        let project = preparation_boundary(&error);
+        assert_eq!(plain, project);
+        assert_eq!(plain.len(), 1);
+        let issue = &plain[0];
+        assert_eq!(issue.phase, "engine");
+        assert_eq!(
+            issue.condition,
+            yamaa_core::diagnostic::ConditionCode::ApplicationRejected
+                .definition()
+                .condition
+        );
+        assert_eq!(issue.requirement, None);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&issue.context).unwrap(),
+            serde_json::json!({
+                "code":"resource_limit", "stage":"prepare", "phase":"validation", "resource":"work", "limit":7,
+            })
+        );
+    }
 }

@@ -172,3 +172,44 @@ def test_compiler_refusal_details_on_check_and_domain(
             "limit": limit,
             "actual": actual,
         }
+
+
+@pytest.mark.parametrize("environment", [False, True])
+@pytest.mark.parametrize("resource", ["depth", "numeric_digits"])
+def test_preparation_and_yaml_resource_refusals_preserve_bound_and_phase(
+    tmp_path, environment, resource
+):
+    spec = write_case(tmp_path, columns=1)
+    if resource == "depth":
+        (tmp_path / "base.yaml").write_text(spec.read_text())
+        for index in range(65):
+            parent = f"layer-{index + 1}.yaml" if index < 64 else "base.yaml"
+            (tmp_path / f"layer-{index}.yaml").write_text(
+                f"schema_version: '1.0'\nparents: [{parent}]\n"
+            )
+        spec.write_text("schema_version: '1.0'\nparents: [layer-0.yaml]\n")
+        limit, phase, stage = 64, "inheritance", "prepare"
+    else:
+        spec.write_text("value: " + "9" * 4097 + "\n")
+        limit, phase, stage = 4096, "yaml_decode", "capture"
+    kwargs = {}
+    if environment:
+        env = tmp_path / "environment.yaml"
+        env.write_text("schema_version: '1.0'\nlanguage: python\n")
+        kwargs["environment"] = env
+    for operation in (yamaa.check, yamaa.domain):
+        result = operation(spec, **kwargs)
+        assert result.issues.height == 1
+        issue = result.issues.row(0, named=True)
+        assert issue["phase"] == "engine"
+        assert issue["condition"] == "engine_rejected"
+        assert issue["requirement"] is None
+        context = json.loads(issue["context"])
+        assert context == {
+            "code": "resource_limit",
+            "stage": stage,
+            "phase": phase,
+            "resource": resource,
+            "limit": limit,
+            **({"actual": 4097} if resource == "numeric_digits" else {}),
+        }

@@ -35,7 +35,9 @@ requirement. Its context names `code: compiler_limit`, `stage: prepare`,
 `resource`, integer `limit` and `actual` when counted; `spec_paths` identifies
 the refused declaration. The same facts are returned by check and build,
 with or without an environment. Numeric policy refusals retain their applicable
-resource bound under `code: numeric_policy`.
+resource bound under `code: numeric_policy`. Layered preparation and YAML
+resource refusals use `code: resource_limit` and retain the preparation or
+decoder `phase` alongside the resource bound in context.
 
 Numeric operations use PortableLibmV1 with pinned libm 0.2.16;
 the [numeric implementation](../rust/crates/yamaa-core/src/numeric.rs) defines
