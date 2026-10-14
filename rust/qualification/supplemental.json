@@ -1249,6 +1249,13 @@
       "level": "component"
     },
     {
+      "id": "python/column-ceilings",
+      "runtime": "python",
+      "path": "rust/tests/installed_column_ceilings.py",
+      "staged_path": "installed_column_ceilings.py",
+      "level": "shared_run"
+    },
+    {
       "id": "r/column-ceilings",
       "runtime": "r",
       "path": "R/yamaa/tests/column_ceilings.R",
