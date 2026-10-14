@@ -1,0 +1,117 @@
+{
+  "run_id": 38460509078,
+  "head": "7acd9bce2fd7943083ad9afe748d31a97fe97aef",
+  "run_attempt": 1,
+  "artifacts": [
+    {
+      "id": 11853363677,
+      "name": "prior-python-rollback-summary",
+      "bytes": 760
+    },
+    {
+      "id": 11848624132,
+      "name": "prior-rollback-macos-15-3.12-source",
+      "bytes": 222150
+    },
+    {
+      "id": 11851071116,
+      "name": "prior-rollback-macos-15-3.12-wheel",
+      "bytes": 222151
+    },
+    {
+      "id": 11850794690,
+      "name": "prior-rollback-macos-15-3.13-source",
+      "bytes": 222157
+    },
+    {
+      "id": 11851323717,
+      "name": "prior-rollback-macos-15-3.13-wheel",
+      "bytes": 222163
+    },
+    {
+      "id": 11852004549,
+      "name": "prior-rollback-macos-15-3.14-source",
+      "bytes": 222163
+    },
+    {
+      "id": 11853970143,
+      "name": "prior-rollback-macos-15-3.14-wheel",
+      "bytes": 222166
+    },
+    {
+      "id": 11852583223,
+      "name": "prior-rollback-ubuntu-24.04-3.12-source",
+      "bytes": 222127
+    },
+    {
+      "id": 11852826936,
+      "name": "prior-rollback-ubuntu-24.04-3.12-wheel",
+      "bytes": 221625
+    },
+    {
+      "id": 11850617707,
+      "name": "prior-rollback-ubuntu-24.04-3.13-source",
+      "bytes": 222129
+    },
+    {
+      "id": 11851558627,
+      "name": "prior-rollback-ubuntu-24.04-3.13-wheel",
+      "bytes": 221624
+    },
+    {
+      "id": 11848703217,
+      "name": "prior-rollback-ubuntu-24.04-3.14-source",
+      "bytes": 222124
+    },
+    {
+      "id": 11848249280,
+      "name": "prior-rollback-ubuntu-24.04-3.14-wheel",
+      "bytes": 221624
+    },
+    {
+      "id": 11847874759,
+      "name": "prior-rollback-windows-latest-3.12-source",
+      "bytes": 222161
+    },
+    {
+      "id": 11851487231,
+      "name": "prior-rollback-windows-latest-3.12-wheel",
+      "bytes": 222164
+    },
+    {
+      "id": 11850759535,
+      "name": "prior-rollback-windows-latest-3.13-source",
+      "bytes": 222162
+    },
+    {
+      "id": 11848425833,
+      "name": "prior-rollback-windows-latest-3.13-wheel",
+      "bytes": 222164
+    },
+    {
+      "id": 11852908334,
+      "name": "prior-rollback-windows-latest-3.14-source",
+      "bytes": 222162
+    },
+    {
+      "id": 11848722443,
+      "name": "prior-rollback-windows-latest-3.14-wheel",
+      "bytes": 222164
+    },
+    {
+      "id": 11847311043,
+      "name": "prior-wheel-macos-15",
+      "bytes": 6276868
+    },
+    {
+      "id": 11846521832,
+      "name": "prior-wheel-ubuntu-24.04",
+      "bytes": 6940625
+    },
+    {
+      "id": 11847571998,
+      "name": "prior-wheel-windows-latest",
+      "bytes": 6246373
+    }
+  ]
+}
