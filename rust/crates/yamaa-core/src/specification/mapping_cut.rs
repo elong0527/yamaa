@@ -101,6 +101,17 @@ pub(super) fn prepare(
             None => false,
             _ => return Err(PrepareError::Internal),
         };
+        let findings = admission(Cut::declaration_findings(
+            &source.variable,
+            path,
+            &breaks,
+            &labels,
+        ))?;
+        if !findings.is_empty() {
+            return Err(PrepareError::Invalid(
+                findings.into_iter().map(PreflightFinding::Scalar).collect(),
+            ));
+        }
         MappingCut::Cut(admission(Cut::new(
             source.variable.clone(),
             path.into(),

@@ -56,6 +56,7 @@ pub use joined::JoinedRead;
 mod rounding;
 pub use rounding::{InvalidDigits, Rounding};
 mod imputation;
+pub(crate) use imputation::date_policy_findings;
 pub use imputation::{
     date_policy, DatePolicyError, DayDeclaration, DayRule, Imputation, ImputationKind,
     ImputationStep, PartialDate, TimeRule, MAX_IMPUTATION_POLICY_BYTES,

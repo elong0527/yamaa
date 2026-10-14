@@ -87,6 +87,19 @@ pub(super) fn bind(
             });
         }
     }
+    let kinds = plan
+        .identifiers()
+        .into_iter()
+        .map(|name| {
+            static_types::kind(name, &spec.intermediates, catalog, secondary, intermediates)
+                .map(|kind| (name, kind))
+        })
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
+    findings.extend(
+        static_types::predicate_kinds(plan, |name| kinds.get(name).copied().flatten())?
+            .into_iter()
+            .map(BindFinding::Predicate),
+    );
     if findings.len() != start {
         return Ok(None);
     }

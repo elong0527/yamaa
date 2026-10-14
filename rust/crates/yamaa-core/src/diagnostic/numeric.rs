@@ -95,6 +95,17 @@ impl NumericCondition {
         }
     }
 
+    /// Static operand kinds use the same cause and context as numeric evaluation.
+    pub(crate) fn static_diagnostic(&self, spec_path: &str, expression: &str) -> Diagnostic {
+        Diagnostic {
+            code: self.diagnostic_code(),
+            spec_paths: vec![spec_path.into()],
+            context: self.diagnostic_context(expression),
+            source_span: None,
+            operand_route: None,
+        }
+    }
+
     fn diagnostic_context(&self, expression: &str) -> Context {
         let mut context = Context::from([("expr".into(), text(expression))]);
         match self {

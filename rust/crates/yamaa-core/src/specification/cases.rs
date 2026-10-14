@@ -483,6 +483,14 @@ pub(super) fn bind(
                         }),
                     }
                 }
+                static_types::numeric(
+                    compiled,
+                    &spec.intermediates,
+                    catalog,
+                    secondary,
+                    intermediates,
+                    findings,
+                )?;
                 if findings.len() == start {
                     Some(Expression::Compute(
                         BoundNumeric::new(compiled.clone(), bindings)

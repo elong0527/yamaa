@@ -26,6 +26,7 @@ mod lookup_diagnostics;
 mod match_values;
 mod relation_predicates;
 mod static_checks;
+mod static_types;
 pub use lookup_diagnostics::LookupFinding;
 use lookup_diagnostics::ReferenceCause;
 mod output_diagnostics;
@@ -2055,6 +2056,14 @@ impl PreparedSpecification {
                             });
                         }
                     }
+                    static_types::numeric(
+                        compiled,
+                        &self.intermediates,
+                        &catalog,
+                        &secondary,
+                        &intermediates,
+                        &mut findings,
+                    )?;
                     if findings.len() == start {
                         Some(Expression::Compute(
                             BoundNumeric::new(compiled.clone(), bindings)

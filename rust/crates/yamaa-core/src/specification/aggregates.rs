@@ -770,6 +770,33 @@ pub(super) fn bind(
             }
         }
     }
+    let kind = |name: &str| {
+        bindings
+            .iter()
+            .find(|binding| binding.name == name)
+            .and_then(|binding| {
+                donor_schema
+                    .columns()
+                    .get(binding.column)
+                    .map(|column| column.kind.into())
+                    .or_else(|| {
+                        declaration
+                            .derive
+                            .as_ref()
+                            .and_then(|derive| {
+                                derive.get(
+                                    binding.column.saturating_sub(donor_schema.columns().len()),
+                                )
+                            })
+                            .map(|derive| derive.kind.into())
+                    })
+            })
+    };
+    findings.extend(
+        static_types::aggregate_kinds(compiled, kind)?
+            .into_iter()
+            .map(BindFinding::AggregateDiagnostic),
+    );
     let filter = match &declaration.filter {
         Some((_, Ok(plan))) => {
             let mut bound = Vec::new();

@@ -33,6 +33,23 @@ pub fn date_policy(
     minimum: DatePrecision,
     path: &str,
 ) -> Result<ImputationKind, DatePolicyError> {
+    date_policy_findings(month, day, minimum, path)?.map_err(|findings| {
+        DatePolicyError::Diagnostic(
+            findings
+                .into_iter()
+                .next()
+                .expect("invalid policy has a finding"),
+        )
+    })
+}
+
+/// Retain independent written month/day findings in declaration order.
+pub(crate) fn date_policy_findings(
+    month: Option<&str>,
+    day: DayDeclaration<'_>,
+    minimum: DatePrecision,
+    path: &str,
+) -> Result<Result<ImputationKind, alloc::vec::Vec<Diagnostic>>, DatePolicyError> {
     let day_text = match day {
         DayDeclaration::Number(value) | DayDeclaration::Position(value) => value,
     };
@@ -64,8 +81,8 @@ pub fn date_policy(
             .parse::<i64>()
             .map_or_else(|_| V::Integer(value.into()), |n| V::Scalar(Value::Int(n)))
     }
-    fn error(code: C, path: &str, fields: alloc::vec::Vec<(&str, V)>) -> DatePolicyError {
-        DatePolicyError::Diagnostic(Diagnostic {
+    fn error(code: C, path: &str, fields: alloc::vec::Vec<(&str, V)>) -> Diagnostic {
+        Diagnostic {
             code,
             spec_paths: vec![path.into()],
             context: fields
@@ -74,84 +91,80 @@ pub fn date_policy(
                 .collect(),
             source_span: None,
             operand_route: None,
-        })
+        }
     }
     let month = match (minimum, month) {
-        (DatePrecision::Month, Some(value)) => {
-            return Err(error(
-                C::ImputationMonthNotPermitted,
-                &format!("{path}.month"),
-                vec![("month", number(value))],
-            ))
-        }
-        (DatePrecision::Year, None) => {
-            return Err(error(
-                C::ImputationMonthRequired,
-                &format!("{path}.month"),
-                vec![(
-                    "minimum_source_precision",
-                    V::Scalar(Value::Str("year".into())),
-                )],
-            ))
-        }
-        (_, Some(value)) => Some(
-            value
-                .parse::<u8>()
-                .ok()
-                .filter(|n| (1..=12).contains(n))
-                .ok_or_else(|| {
-                    error(
-                        C::ImputationMonthRange,
-                        &format!("{path}.month"),
-                        vec![("month", number(value))],
-                    )
-                })?,
-        ),
-        (_, None) => None,
+        (DatePrecision::Month, Some(value)) => Err(error(
+            C::ImputationMonthNotPermitted,
+            &format!("{path}.month"),
+            vec![("month", number(value))],
+        )),
+        (DatePrecision::Year, None) => Err(error(
+            C::ImputationMonthRequired,
+            &format!("{path}.month"),
+            vec![(
+                "minimum_source_precision",
+                V::Scalar(Value::Str("year".into())),
+            )],
+        )),
+        (_, Some(value)) => value
+            .parse::<u8>()
+            .ok()
+            .filter(|n| (1..=12).contains(n))
+            .map(Some)
+            .ok_or_else(|| {
+                error(
+                    C::ImputationMonthRange,
+                    &format!("{path}.month"),
+                    vec![("month", number(value))],
+                )
+            }),
+        (_, None) => Ok(None),
     };
     let day = match day {
-        DayDeclaration::Position("first") => DayRule::First,
-        DayDeclaration::Position("last") => DayRule::Last,
-        DayDeclaration::Position(value) => {
-            return Err(error(
-                C::ImputationDayRule,
-                &format!("{path}.day"),
-                vec![
-                    ("value", V::Scalar(Value::Str(value.into()))),
-                    (
-                        "permitted",
-                        V::Sequence(vec![
-                            V::Scalar(Value::Str("first".into())),
-                            V::Scalar(Value::Str("last".into())),
-                        ]),
-                    ),
-                ],
-            ))
-        }
-        DayDeclaration::Number(value) => DayRule::Number(
-            value
-                .parse::<u8>()
-                .ok()
-                .filter(|n| (1..=31).contains(n))
-                .ok_or_else(|| {
-                    error(
-                        C::ImputationDayRange,
-                        path,
-                        vec![
-                            ("field", V::Scalar(Value::Str("day".into()))),
-                            ("value", number(value)),
-                            ("permitted", V::Scalar(Value::Str("1 to 31".into()))),
-                        ],
-                    )
-                })?,
-        ),
+        DayDeclaration::Position("first") => Ok(DayRule::First),
+        DayDeclaration::Position("last") => Ok(DayRule::Last),
+        DayDeclaration::Position(value) => Err(error(
+            C::ImputationDayRule,
+            &format!("{path}.day"),
+            vec![
+                ("value", V::Scalar(Value::Str(value.into()))),
+                (
+                    "permitted",
+                    V::Sequence(vec![
+                        V::Scalar(Value::Str("first".into())),
+                        V::Scalar(Value::Str("last".into())),
+                    ]),
+                ),
+            ],
+        )),
+        DayDeclaration::Number(value) => value
+            .parse::<u8>()
+            .ok()
+            .filter(|n| (1..=31).contains(n))
+            .map(DayRule::Number)
+            .ok_or_else(|| {
+                error(
+                    C::ImputationDayRange,
+                    path,
+                    vec![
+                        ("field", V::Scalar(Value::Str("day".into()))),
+                        ("value", number(value)),
+                        ("permitted", V::Scalar(Value::Str("1 to 31".into()))),
+                    ],
+                )
+            }),
     };
-    Ok(ImputationKind::Date {
-        month,
-        day,
-        minimum,
-    })
+    match (month, day) {
+        (Ok(month), Ok(day)) => Ok(Ok(ImputationKind::Date {
+            month,
+            day,
+            minimum,
+        })),
+        (month, day) => Ok(Err(month.err().into_iter().chain(day.err()).collect())),
+    }
 }
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TimeRule {
     First,

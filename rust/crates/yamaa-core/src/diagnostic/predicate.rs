@@ -94,6 +94,21 @@ impl<E> EvaluationError<E> {
             ErrorKind::Limit(limit) => return Err(PredicateDiagnosticError::Resource(limit)),
             ErrorKind::Condition(condition) => condition,
         };
+        condition
+            .static_diagnostic_with_limit(&self.spec_path, &self.route, maximum)
+            .map_err(|_| PredicateDiagnosticError::OutputLimit)
+    }
+}
+
+impl Condition {
+    /// Project a retained condition and structural route without running a predicate.
+    pub(crate) fn static_diagnostic_with_limit(
+        &self,
+        spec_path: &str,
+        route: &[Route],
+        maximum: usize,
+    ) -> Result<Diagnostic, PredicateGrammarDiagnosticError> {
+        let condition = self;
         let mut budget = Budget(maximum.min(MAX_PREDICATE_DIAGNOSTIC_BYTES));
         let d = condition.diagnostic_code().definition();
         for s in [
@@ -104,15 +119,19 @@ impl<E> EvaluationError<E> {
             "requirement",
             d.requirement.unwrap_or(""),
             "spec_paths",
-            self.spec_path.as_str(),
+            spec_path,
             "context",
             "operand_route",
         ] {
-            budget.text(s)?;
+            budget
+                .text::<()>(s)
+                .map_err(|_| PredicateGrammarDiagnosticError::OutputLimit)?;
         }
         // A route label contains at most twenty usize digits plus fixed text.
-        for _ in &self.route {
-            budget.text("01234567890123456789012345678901")?;
+        for _ in route {
+            budget
+                .text::<()>("01234567890123456789012345678901")
+                .map_err(|_| PredicateGrammarDiagnosticError::OutputLimit)?;
         }
         let fields = match condition {
             Condition::UnknownField { identifier } => [
@@ -134,8 +153,12 @@ impl<E> EvaluationError<E> {
         };
         for (key, value) in fields {
             if let (Some(key), Some(value)) = (key, value) {
-                budget.text(key)?;
-                budget.text(value)?;
+                budget
+                    .text::<()>(key)
+                    .map_err(|_| PredicateGrammarDiagnosticError::OutputLimit)?;
+                budget
+                    .text::<()>(value)
+                    .map_err(|_| PredicateGrammarDiagnosticError::OutputLimit)?;
             }
         }
         let context: Context = fields
@@ -144,10 +167,10 @@ impl<E> EvaluationError<E> {
             .collect();
         Ok(Diagnostic {
             code: condition.diagnostic_code(),
-            spec_paths: vec![self.spec_path.clone()],
+            spec_paths: vec![spec_path.into()],
             context,
             source_span: None,
-            operand_route: Some(self.route.iter().map(|r| r.diagnostic_label()).collect()),
+            operand_route: Some(route.iter().map(|r| r.diagnostic_label()).collect()),
         })
     }
 }

@@ -1,7 +1,9 @@
 //! Original imputation declarations retain literal handlers and named operand scope.
 use super::*;
 use crate::{
-    dataset::{date_policy, DatePolicyError, DayDeclaration, Imputation, ImputationKind, TimeRule},
+    dataset::{
+        date_policy_findings, DatePolicyError, DayDeclaration, Imputation, ImputationKind, TimeRule,
+    },
     temporal::DatePrecision,
 };
 const OPERATIONS: &[&str] = &[
@@ -87,13 +89,22 @@ pub(super) fn prepare(
                 N::Integer(value) => DayDeclaration::Number(value),
                 _ => return Err(PrepareError::Internal),
             };
-            date_policy(month, day, minimum, path).map_err(|error| match error {
-                DatePolicyError::Diagnostic(diagnostic) => {
-                    PrepareError::Invalid(vec![PreflightFinding::Imputation(diagnostic)])
-                }
-                DatePolicyError::Limit => PrepareError::Limit("imputation_metadata"),
-                DatePolicyError::Shape => PrepareError::Internal,
-            })?
+            date_policy_findings(month, day, minimum, path)
+                .map_err(|error| match error {
+                    DatePolicyError::Diagnostic(diagnostic) => {
+                        PrepareError::Invalid(vec![PreflightFinding::Imputation(diagnostic)])
+                    }
+                    DatePolicyError::Limit => PrepareError::Limit("imputation_metadata"),
+                    DatePolicyError::Shape => PrepareError::Internal,
+                })?
+                .map_err(|findings| {
+                    PrepareError::Invalid(
+                        findings
+                            .into_iter()
+                            .map(PreflightFinding::Imputation)
+                            .collect(),
+                    )
+                })?
         }
         "date_precision" => ImputationKind::DatePrecision,
         "datetime_impute" => ImputationKind::DateTime {
