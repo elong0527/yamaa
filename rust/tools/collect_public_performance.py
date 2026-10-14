@@ -10,10 +10,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import platform
 import shutil
 import statistics
-import subprocess
 from pathlib import Path
 
 import application_measurement_evidence as phases
@@ -21,6 +19,38 @@ import child_peak_rss
 import measure_public_lifecycle as lifecycle
 import measure_scalable_public as scalable
 import prepare_public_workloads as workloads
+
+FULL_MATRIX = "full-matrix"
+LINUX_INSTALLED = "linux-installed"
+COLLECTION_SCOPES = (FULL_MATRIX, LINUX_INSTALLED)
+
+
+def validate_collection_scope(args, record):
+    """The #2288 scope keeps all authored cases and the original sampling."""
+    scope = getattr(args, "collection_scope", FULL_MATRIX)
+    if scope not in COLLECTION_SCOPES:
+        raise ValueError("unsupported performance collection scope")
+    if scope == LINUX_INSTALLED:
+        admitted = (
+            args.purpose == "characterization"
+            and args.evaluator == "public"
+            and args.scope == "full-lifecycle"
+            and args.cases is None
+            and args.families is None
+            and sum(len(workloads.DIMENSIONS[family]) * len(workloads.DEFAULT_ROWS)
+                    for family in workloads.FAMILIES) == 27
+            and record["host"] == args.host
+            and record["system"] == "Linux"
+            and (
+                (args.host == "python" and record["package_form"] == "wheel"
+                 and record["runtime_version"].startswith("3.12."))
+                or (args.host == "r" and record["package_form"] == "source"
+                    and record["runtime_version"] == "4.6.1")
+            )
+        )
+        if not admitted:
+            raise ValueError("linux-installed requires all 27 public cases on installed Linux Python 3.12 wheel or R 4.6.1 source")
+    return scope
 
 
 def normalized_report(path, work):
@@ -125,6 +155,8 @@ def collect(args):
     output = args.output.resolve()
     if any(output.is_relative_to(root) for root in lifecycle.checkout_roots(repository)):
         raise ValueError("evidence must be outside all checkouts")
+    record = lifecycle.read_json(args.provenance)
+    collection_scope = validate_collection_scope(args, record)
     output.mkdir(parents=True, exist_ok=False)
     manifest = workloads.prepare(output / "workloads")
     harness = output / "harness"
@@ -133,7 +165,6 @@ def collect(args):
                  "measure_scalable_public.py", "prepare_public_workloads.py",
                  "public_lifecycle_worker_protocol.json", "application_measurement_evidence.py", *lifecycle.WORKERS.values()):
         shutil.copyfile(lifecycle.HERE / name, harness / name)
-    record = lifecycle.read_json(args.provenance)
     phase_measurements = bool(getattr(args, "phase_measurements", False))
     if phase_measurements and args.evaluator != "public":
         raise ValueError("phase measurements require the instrumented public candidate")
@@ -156,6 +187,8 @@ def collect(args):
         "graph_save_baseline": None if root_only else "complete declared artifacts",
         "memory_comparison_with_full_graph_lifecycle": None if root_only else "same declared lifecycle required",
     }
+    if collection_scope != FULL_MATRIX:
+        plan["collection_scope"] = collection_scope
     lifecycle.write_json(output / "collection.json", plan)
     # Frontier admission retains origin/archive observations but does not admit
     # R clocks or make performance claims. Characterization uses full provenance.
@@ -294,7 +327,7 @@ def collect(args):
                             for boundary, duration in repetition["durations"].items():
                                 samples.append({"mode": mode, "boundary": boundary,
                                     "duration_ns": lifecycle.validate_duration(duration, args.host)})
-            except Exception as error:
+            except Exception as error:  # noqa: BLE001 - retain every reached collection refusal
                 observation["accepted"] = False
                 observation["counts_toward_timing"] = False
                 observation["failure"] = {"class": type(error).__name__, "message": str(error)}
@@ -330,6 +363,7 @@ def collect(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--phase-measurements", action="store_true")
+    parser.add_argument("--collection-scope", choices=COLLECTION_SCOPES, default=FULL_MATRIX)
     parser.add_argument("--repository", type=Path, required=True)
     parser.add_argument("--cases", nargs="+")
     parser.add_argument("--families", nargs="+", choices=workloads.FAMILIES)
