@@ -59,6 +59,54 @@ fn ordered_converted_bindings_reduce_only_matched_filtered_inclusive_records() {
     assert_eq!(fixture.save(), b"ID,CUT,TOTAL\na,3,7\nb,2,0\nc,,\nd,1,\n");
 }
 #[test]
+fn aggregate_bindings_admit_extractions_and_templates_before_binding() {
+    for (derivation, kind, expression) in [
+        (
+            "{str_extract: {source: B.V, pattern: '([0-9]+)$', group: 1}}",
+            "int",
+            "MAX(V)",
+        ),
+        (
+            "{case: [{when: \"B.USE = 'Y'\", then: {str_extract: {source: B.V, pattern: '([0-9]+)$', group: 1}}}, {otherwise: {literal: 0}}]}",
+            "int",
+            "MAX(V)",
+        ),
+        ("{str_template: '{B.V}!'}", "str", "COUNT(V)"),
+    ] {
+        let fixture = Fixture::new();
+        fs::write(fixture.0.join("a.csv"), b"ID,CUT\na,3\nb,2\n").unwrap();
+        fs::write(
+            fixture.0.join("b.csv"),
+            b"ID,N,V,USE\na,1,PERIOD 1,Y\na,2,PERIOD 2,Y\nb,1,PERIOD 1,Y\n",
+        )
+        .unwrap();
+        fs::write(
+            fixture.0.join("spec.yaml"),
+            specification(&format!(
+                "        derive:\n          - {{name: V, type: {kind}, derivation: {derivation}}}\n        expr: {expression}\n"
+            )),
+        )
+        .unwrap();
+        let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
+        let issues = file_application::check(
+            Request {
+                specification: &specification,
+                environment: None,
+            },
+            Identity {
+                runtime: "test",
+                runtime_version: "test",
+                engine_version: yamaa_core::VERSION,
+                example: "test",
+                specification: &specification,
+                base_directory: ".",
+            },
+        );
+        assert!(issues.is_empty(), "{derivation}: {issues:?}");
+        assert_eq!(fixture.save(), b"ID,CUT,TOTAL\na,3,2\nb,2,1\n", "{derivation}");
+    }
+}
+#[test]
 fn original_public_aggregate_fixtures_preserve_frozen_csv_bytes() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks");
     fn copy(from: &Path, to: &Path) {
