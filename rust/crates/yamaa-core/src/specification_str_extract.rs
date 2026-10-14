@@ -61,8 +61,8 @@ impl Prepared {
                     path: format!("{path}.pattern"),
                 }]),
             })?;
-            // Row availability/group scope belongs to binding. Bare declared
-            // column sources have complete static types in the no-rows model.
+            // Row availability/group scope belongs to binding. Declared columns
+            // and CSV fields have complete static types in the no-rows model.
             let known_output = if rows {
                 None
             } else {
@@ -79,7 +79,7 @@ impl Prepared {
                 findings.push(PreflightFinding::TextExtract(
                     operation.input_diagnostic(kind_name(kind)),
                 ));
-            } else if known_output.is_some() {
+            } else if kind == Some(ColumnType::Str) {
                 if let Some(diagnostic) = operation.declaration_diagnostic() {
                     findings.push(PreflightFinding::TextExtract(diagnostic.clone()));
                 }
