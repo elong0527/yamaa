@@ -27,7 +27,23 @@ pub(crate) fn append(
     else {
         return Ok(table);
     };
-    let physical = arrow_table::physical_schema(ordinal.schema());
+    // Imported large/view strings retain their physical types and shared buffers.
+    let physical = if let Some(batch) = table.batches().first() {
+        let mut fields = batch.schema().fields().to_vec();
+        fields.push(std::sync::Arc::new(arrow_schema::Field::new(
+            &ordinal
+                .schema()
+                .columns()
+                .last()
+                .expect("generated ordinal")
+                .name,
+            arrow_schema::DataType::Int64,
+            true,
+        )));
+        Arc::new(arrow_schema::Schema::new(fields))
+    } else {
+        arrow_table::physical_schema(ordinal.schema())
+    };
     let mut start = 0usize;
     let mut batches = Vec::with_capacity(table.batches().len());
     for batch in table.batches() {
@@ -44,6 +60,6 @@ pub(crate) fn append(
         );
         start = end;
     }
-    ArrowTable::try_new(ordinal.schema().clone(), batches, limits)
+    ArrowTable::try_new_with_schema(ordinal.schema().clone(), batches, limits, physical)
         .map_err(|error| Error::Source(TextTableError::Table(error)))
 }

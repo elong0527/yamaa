@@ -102,6 +102,8 @@
         "_Specification.build",
         "_Specification.check_issues",
         "_Specification.check_source_metadata",
+        "_Specification.execute_arrow",
+        "_Specification.execute_arrow_sources",
         "_Specification.execute_csv",
         "_Specification.failure_report",
         "_Specification.input_metadata",

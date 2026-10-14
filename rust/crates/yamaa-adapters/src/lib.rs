@@ -7,6 +7,9 @@ mod windows_file;
 pub mod application_measurements;
 pub mod arrow_table;
 mod arrow_temporal;
+#[cfg(feature = "arrow-c-data")]
+#[allow(unsafe_code)]
+pub mod c_data_table;
 #[cfg(any(unix, windows))]
 pub mod file_define;
 pub mod public_table;

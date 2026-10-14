@@ -1203,6 +1203,13 @@
       "level": "shared_run"
     },
     {
+      "id": "r/arrow-input",
+      "runtime": "r",
+      "path": "R/yamaa/tests/arrow_input.R",
+      "staged_path": "arrow_input.R",
+      "level": "component"
+    },
+    {
       "id": "python/retained-odm-helpers",
       "runtime": "python",
       "path": "rust/tests/installed_odm_helpers.py",

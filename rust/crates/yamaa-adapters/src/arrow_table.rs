@@ -6,8 +6,9 @@
 
 use crate::arrow_temporal::{date_days, date_from_days, datetime_from_seconds, datetime_seconds};
 use arrow_array::{
-    Array, ArrayRef, Date32Array, Float64Array, Int64Array, RecordBatch, RecordBatchOptions,
-    StringArray, StructArray, TimestampSecondArray, UInt8Array,
+    Array, ArrayRef, Date32Array, Float64Array, Int64Array, LargeStringArray, RecordBatch,
+    RecordBatchOptions, StringArray, StringViewArray, StructArray, TimestampSecondArray,
+    UInt8Array,
 };
 use arrow_buffer::NullBuffer;
 use arrow_schema::{ArrowError, DataType, Field, Fields, Schema, SchemaRef, TimeUnit};
@@ -189,6 +190,26 @@ impl ArrowTable {
         batches: Vec<RecordBatch>,
         limits: TableLimits,
     ) -> Result<Self, TableError> {
+        Self::try_new_inner(schema, batches, limits, None)
+    }
+
+    /// The C Data adapter also admits large/view strings without copying their
+    /// payloads. Other columns retain the canonical physical representation.
+    pub(crate) fn try_new_with_schema(
+        schema: TableSchema,
+        batches: Vec<RecordBatch>,
+        limits: TableLimits,
+        expected: SchemaRef,
+    ) -> Result<Self, TableError> {
+        Self::try_new_inner(schema, batches, limits, Some(expected))
+    }
+
+    fn try_new_inner(
+        schema: TableSchema,
+        batches: Vec<RecordBatch>,
+        limits: TableLimits,
+        expected: Option<SchemaRef>,
+    ) -> Result<Self, TableError> {
         let columns = limit("columns", Some(schema.columns().len()), limits.max_columns)?;
         limit("batches", Some(batches.len()), limits.max_batches)?;
         let mut rows = 0_usize;
@@ -198,7 +219,7 @@ impl ArrowTable {
             ends.push(rows);
         }
         limit("cells", rows.checked_mul(columns), limits.max_cells)?;
-        let expected = physical_schema(&schema);
+        let expected = expected.unwrap_or_else(|| physical_schema(&schema));
         let mut normalized = Vec::with_capacity(batches.len());
         for (batch_index, batch) in batches.into_iter().enumerate() {
             if batch.schema().as_ref() != expected.as_ref() {
@@ -256,7 +277,15 @@ impl ArrowTable {
 /// cannot retain mutable/custom behavior in the admitted snapshot.
 fn normalize_array(array: &ArrayRef, kind: ColumnType) -> Option<ArrayRef> {
     Some(match kind {
-        ColumnType::Str => Arc::new(array.as_any().downcast_ref::<StringArray>()?.clone()),
+        ColumnType::Str => {
+            if let Some(values) = array.as_any().downcast_ref::<StringArray>() {
+                Arc::new(values.clone())
+            } else if let Some(values) = array.as_any().downcast_ref::<LargeStringArray>() {
+                Arc::new(values.clone())
+            } else {
+                Arc::new(array.as_any().downcast_ref::<StringViewArray>()?.clone())
+            }
+        }
         ColumnType::Int => Arc::new(array.as_any().downcast_ref::<Int64Array>()?.clone()),
         ColumnType::Float => {
             let values = array.as_any().downcast_ref::<Float64Array>()?;
@@ -386,11 +415,17 @@ impl TableAccess for ArrowTable {
         }
         Ok(match self.schema.columns()[column].kind {
             ColumnType::Str => ValueRef::Str(
-                array
-                    .as_any()
-                    .downcast_ref::<StringArray>()
-                    .expect("validated text")
-                    .value(local_row),
+                if let Some(values) = array.as_any().downcast_ref::<StringArray>() {
+                    values.value(local_row)
+                } else if let Some(values) = array.as_any().downcast_ref::<LargeStringArray>() {
+                    values.value(local_row)
+                } else {
+                    array
+                        .as_any()
+                        .downcast_ref::<StringViewArray>()
+                        .expect("validated text")
+                        .value(local_row)
+                },
             ),
             ColumnType::Int => ValueRef::Int(
                 array

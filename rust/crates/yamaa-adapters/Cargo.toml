@@ -6,6 +6,10 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[features]
+# In-process host transport only; Arrow remains outside the core and engine.
+arrow-c-data = ["arrow-array/ffi", "arrow-schema/ffi"]
+
 [dependencies]
 yamaa-core = { path = "../yamaa-core" }
 yamaa-engine = { path = "../yamaa-engine" }
