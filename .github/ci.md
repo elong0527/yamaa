@@ -10,6 +10,17 @@ Keep workflow definitions in `workflows/` and their supporting code in
 - `scripts/ci/`: PR smoke selection, native matrix selection, cohort
   orchestration, and dashboard change detection, with their unit tests.
 - `scripts/docs/`: canonical site page hooks and their tests.
+- `scripts/commands/`: owned repository, Rust, documentation and installed-host
+  commands shared by the root Makefile and full repository/native CI jobs.
+
+Run `make help` at the repository root for supported targets and prerequisites;
+the [development guide](../docs/development.md#local-checks) explains their
+contexts. `make check-fast` provides formatting/lint and selection controls;
+`make check-repository` runs repository/rule guards. Full repository and native
+CI call the shared command scripts directly instead of the root Makefile.
+Windows native R jobs require GNU make for their build and check environment.
+Automatic PR feedback uses the scoped smoke route below; these feedback checks
+do not establish installed qualification.
 
 ## PR feedback
 
@@ -18,8 +29,8 @@ Keep workflow definitions in `workflows/` and their supporting code in
 - `repository-validation (ubuntu-latest)` tests the canonical site page hook,
   Python formatting and lint, CI selection tests, documentation,
   rule metadata and generated references, and shared release versions. It
-  installs only PyYAML, Ruff and MkDocs. README and rule pages retain one source;
-  no copied landing pages are required.
+  installs PyYAML, Ruff, MkDocs and Material. README and rule pages retain one
+  source; no copied landing pages are required.
 - `pr-rust-smoke` checks Rust formatting and dependency direction, shared library
   unit tests, parser and numerical tests, feature-enabled project preparation,
   and selected public execution boundaries. It uses the development profile.
@@ -89,9 +100,9 @@ When dispatch access is unavailable, push the reviewed head to an explicit
 numerical and audit checks supply exact-head premerge evidence. Its audit records
 `qualification_scope: reviewed-branch`; renew combined-main evidence after merge.
 
-The shared-crates step also runs
-`cargo test --locked -p yamaa-engine --features test-support` on every selected
-Rust platform on main and qualification pushes. This enables the feature-gated
+The shared-crates step and `make test-rust` both call
+`scripts/commands/rust_tests.py` for locked debug, engine `test-support` and
+optimized `release-test` tests. The engine feature enables the feature-gated
 project-preparation and test-support coverage omitted by a default-feature test
 invocation, including the explicit `test_support` integration suite.
 
@@ -127,17 +138,25 @@ To audit a completed main run locally, authenticate `gh` for
 repository and Actions reads, then use a fresh output directory:
 
 ```sh
-python rust/tools/audit_native_run.py --run-id <run-id> \
-  --repository elong0527/yamaa --output /tmp/yamaa-native-audit --check
+make audit-native RUN_ID="$YAMAA_RUN_ID" REPOSITORY=elong0527/yamaa OUTPUT=/tmp/yamaa-native-audit
 ```
 
+Set `YAMAA_RUN_ID` to the completed run's ID first.
+`PYTHON` must select an interpreter with the locked independent reader
+dependencies from `python/uv.lock`; it need not contain the candidate engine.
 Manual dispatches retain installed package and cohort evidence. Auditing one
 with the same tool reports the missing shared Rust and math evidence; use the
 main run for the complete acceptance check.
 
-To replay downloaded evidence without network access, pass the retained `input`
-directory using `--input /tmp/yamaa-native-audit/input` and another fresh
-`--output`. This snapshot contains `run.json`, `source.json`, `jobs.json`,
+To replay downloaded evidence without network access, use the retained `input`
+directory and another fresh output directory:
+
+```sh
+make audit-replay AUDIT_INPUT=/tmp/yamaa-native-audit/input OUTPUT=/tmp/yamaa-native-replay
+```
+
+Both Make targets call `rust/tools/audit_native_run.py` with `--check`.
+This snapshot contains `run.json`, `source.json`, `jobs.json`,
 `artifacts.json`, canonical files under `source/`, and artifact directories under
 `artifacts/` using their Actions artifact names. An artifact-only directory also produces a
 record: missing metadata and exact source remain unavailable, and no tuple can

@@ -10,6 +10,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pr_changes
+
 ROOT = Path(__file__).resolve().parents[3]
 COMMANDS = ROOT / ".github/scripts/commands"
 
@@ -122,16 +124,18 @@ class CommandEntryPoints(unittest.TestCase):
 
     def test_command_changes_select_native_and_docs_workflows(self):
         native = (ROOT / ".github/workflows/native.yml").read_text()
-        for event in ("push", "pull_request"):
-            section = re.search(rf"(?ms)^  {event}:\n(.*?)(?=^  \S|\Z)", native).group(
-                1
-            )
-            patterns = [
-                ast.literal_eval(value)
-                for value in re.findall(r"(?m)^      - (.+)$", section)
-            ]
-            self.assertIn(".github/scripts/commands/**", patterns)
-            self.assertIn("Makefile", patterns)
+        section = re.search(r"(?ms)^  push:\n(.*?)(?=^  \S|\Z)", native).group(1)
+        patterns = [
+            ast.literal_eval(value)
+            for value in re.findall(r"(?m)^      - (.+)$", section)
+        ]
+        self.assertIn(".github/scripts/commands/**", patterns)
+        self.assertIn("Makefile", patterns)
+        for path in (".github/scripts/commands/installed.py", "Makefile"):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    pr_changes.coverage([path]), {"rust": True, "python": True}
+                )
         deploy = (ROOT / ".github/workflows/deploy-docs.yml").read_text()
         self.assertIn("- '.github/scripts/commands/docs.py'", deploy)
 
