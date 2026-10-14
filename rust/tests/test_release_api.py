@@ -13,7 +13,7 @@ spec.loader.exec_module(module)
 class ReleaseApiInventory(unittest.TestCase):
     def test_actual_checkout_has_explicit_dispositions(self):
         root = Path(__file__).resolve().parents[2]
-        module.check(root, json.loads((root / 'rust/planning/release-api.json').read_text()))
+        module.check(root, json.loads((root / 'rust/qualification/release-api.json').read_text()))
 
     def test_inspection_never_imports_the_package(self):
         with tempfile.TemporaryDirectory() as directory:

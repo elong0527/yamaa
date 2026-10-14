@@ -71,7 +71,6 @@ class PerformanceSelection(unittest.TestCase):
         for path in (
             "rust/measurements/accepted-matrix.json",
             "rust/measurements/1998-report.md",
-            "rust/planning/maintainer-decisions.md",
             "rust/README.md",
             "python/README.md",
             "R/yamaa/README.md",

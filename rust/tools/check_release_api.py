@@ -103,7 +103,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[2])
     args = parser.parse_args()
-    inventory = json.loads((args.root / 'rust/planning/release-api.json').read_text())
+    inventory = json.loads((args.root / 'rust/qualification/release-api.json').read_text())
     check(args.root, inventory)
     print('PASS: declared API names and migration dispositions reconcile.')
     return 0

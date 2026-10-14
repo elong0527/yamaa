@@ -11,7 +11,6 @@ on:
       - 'rust/**'
       # Prose is checked by repository validation; Markdown fixtures still run.
       - '!rust/*.md'
-      - '!rust/planning/**/*.md'
       - 'R/yamaa/**'
       - 'python/**'
       - 'benchmarks/**'
@@ -24,7 +23,6 @@ on:
     paths:
       - 'rust/**'
       - '!rust/*.md'
-      - '!rust/planning/**/*.md'
       - 'R/yamaa/**'
       - 'python/**'
       - 'benchmarks/**'
