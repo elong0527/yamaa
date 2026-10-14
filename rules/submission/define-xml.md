@@ -352,8 +352,9 @@ which states why a planned dataset holds no records.
 
 `KeySequence` describes the non-missing row identity asserted by `keys`
 ([REQ-0221](../storage/publication.md#req-0221)). It is not independently
-declarable. Sponsor variables used for `output.order_by` or a `unique`
-verification do not acquire `KeySequence`; the
+declarable. Membership in `keys` determines `KeySequence`; using a sponsor
+variable in `output.order_by` or a `unique` verification does not independently
+assign it. The
 [output identity example](../storage/publication.md#req-0221) shows how to use
 those variables when some values may be missing.
 
