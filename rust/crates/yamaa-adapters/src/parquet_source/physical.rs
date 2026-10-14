@@ -104,9 +104,10 @@ fn collect<T: DataType>(
 pub(super) fn read(
     bytes: &[u8],
     keep: &[bool],
-    retained_bytes: usize,
+    budget: &mut usize,
     schema: &arrow_schema::Schema,
 ) -> Result<Vec<Column>, Error> {
+    let retained_bytes = *budget;
     let reader = SerializedFileReader::new(bytes::Bytes::copy_from_slice(bytes))
         .map_err(|_| Error::Malformed)?;
     let descriptors = reader.metadata().file_metadata().schema_descr().columns();
@@ -115,7 +116,6 @@ pub(super) fn read(
         return Err(Error::Malformed);
     }
     let mut result: Vec<_> = descriptors.iter().map(|_| Column::Discard).collect();
-    let mut budget = retained_bytes;
     for group in 0..reader.num_row_groups() {
         let group = reader.get_row_group(group).map_err(|_| Error::Malformed)?;
         let rows = usize::try_from(group.metadata().num_rows()).map_err(|_| Error::Malformed)?;
@@ -134,7 +134,7 @@ pub(super) fn read(
                         $reader,
                         descriptor,
                         (rows, levels, keep[index]),
-                        &mut budget,
+                        budget,
                         retained_bytes,
                         &shapes[index],
                         $size,
@@ -160,7 +160,7 @@ pub(super) fn read(
                         reader,
                         descriptor,
                         (rows, levels, false),
-                        &mut budget,
+                        budget,
                         retained_bytes,
                         &shapes[index],
                         |_| 0,
@@ -171,7 +171,7 @@ pub(super) fn read(
                         reader,
                         descriptor,
                         (rows, levels, false),
-                        &mut budget,
+                        budget,
                         retained_bytes,
                         &shapes[index],
                         |_| 0,
@@ -182,7 +182,7 @@ pub(super) fn read(
                         reader,
                         descriptor,
                         (rows, levels, false),
-                        &mut budget,
+                        budget,
                         retained_bytes,
                         &shapes[index],
                         |_| 0,
@@ -193,7 +193,7 @@ pub(super) fn read(
                         reader,
                         descriptor,
                         (rows, levels, false),
-                        &mut budget,
+                        budget,
                         retained_bytes,
                         &shapes[index],
                         |_| 0,

@@ -162,3 +162,30 @@ pub fn parse_odm(
         table::Error::Table(error) => Error::Table(error),
     })
 }
+
+/// Internal sequential decoder receipt; public codec entry points keep their
+/// existing admission behavior and signatures.
+pub(crate) fn parse_with_usage(
+    content: &[u8],
+    limits: Limits,
+    table_limits: TableLimits,
+    odm: bool,
+    usage: &mut crate::source_decode_usage::Usage,
+) -> Result<ArrowTable, Error> {
+    let mut copied = 0;
+    crate::source_decode_usage::charge(
+        &mut copied,
+        content.len(),
+        limits.retained_bytes,
+        "retained_bytes",
+    )
+    .map_err(Error::Table)?;
+    usage.storage(copied);
+    let decoded = reader::read_with_usage(content, limits, odm, Some(usage))?;
+    table::convert_with_usage(decoded, limits.retained_bytes, table_limits, Some(usage)).map_err(
+        |error| match error {
+            table::Error::Invalid => Error::Malformed,
+            table::Error::Table(error) => Error::Table(error),
+        },
+    )
+}

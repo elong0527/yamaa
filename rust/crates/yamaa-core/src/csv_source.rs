@@ -160,7 +160,7 @@ pub fn parse(content: &[u8], limits: Limits) -> Result<CsvSource, Error> {
 
 /// Admit modeled retained ownership before each scanner allocation. The callback
 /// charges field slots (32 bytes), record owners (24 bytes), and copied text.
-/// It may refuse a request without changing CSV semantic admission order.
+/// A refusal is request policy, independent of CSV semantic findings.
 pub fn parse_with_admission(
     content: &[u8],
     limits: Limits,

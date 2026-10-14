@@ -1285,6 +1285,7 @@ mod tests {
                 bytes,
                 Some(&contract),
                 DecodeLimits {
+                    rows: 100,
                     cells: 100,
                     storage_bytes: 4096,
                     work_bytes: 4096,
