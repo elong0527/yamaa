@@ -150,6 +150,27 @@ uv run --project python --no-sync python .github/scripts/commands/repository.py 
 uv run --project python --no-sync python .github/scripts/commands/repository.py rules
 ```
 
+Repository validation has focused owners under `.github/scripts/yaml-validation/`.
+`validate_repository.py` orchestrates them and presents their findings. Installed
+shared Rust owns schema admission, inheritance, defaults, normalization, language
+expressions, dependency graphs and source binding. Missing native installation or
+transport fails explicitly. Repository code captures bounded source bytes and
+formats native findings; it does not supply a second language evaluator.
+
+| Check family | Current owner and independent controls |
+| --- | --- |
+| Schema, descriptors, inheritance and defaults | `repository_schema.py` and `_native_schema.py` transport installed shared facts; `TestTypeValidation`, `TestSpecificationInheritance` and the date/window schema classes retain authored controls. `test_native_schema.py` checks lossless scalars, confined captures, limits and failed-owner reuse. |
+| Expressions, dependencies and row phases | `_native_specification.py` uses installed preparation; test-only typed fixtures expose shared compilation facts. Predicate, numeric, aggregate, template, static-contract and row-phase classes in `test_validate_repository.py` retain their independent operands and diagnostic assertions. |
+| Sources, producer contracts and resources | Installed preparation and source metadata own admission; producing-specification, resource-boundary, source-profile, ordinal and ODM classes retain independent paths, expected fields and refusal assertions. |
+| Repository layout and editorial rules | `repository_structure.py` and `editorial.py` own directory/file membership, labels and source text; the dataset-path, CLI, text-boundary and key-order classes check them. |
+| Expected artifacts and diagnostic manifests | `repository_artifacts.py`, `repository_manifests.py` and `validation_diagnostics.py` compare authored expected bytes, shapes and registered findings. CSV-profile, declared-error, manifest and condition-registry controls keep their expected truth. |
+| Closed grammar and regex observations | `grammar_checks.py` and `regex_checks.py` transport shared syntax/regex observations; closed-grammar and regex classes retain every authored positive, negative and poisoned observation. |
+
+The immutable retired assertion map linked in [release guidance](release.md)
+remains the original inventory. PR evidence records each assertion's current
+replacement and any explicit disposition; test-only witnesses do not become
+runtime APIs or derive expected truth from the implementation under test.
+
 ## Documentation and CI
 
 Edit the root `README.md` for the site home and `rules/README.md` for its rules
