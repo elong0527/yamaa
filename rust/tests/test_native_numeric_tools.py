@@ -97,7 +97,7 @@ class NativeToolConsumers(unittest.TestCase):
             patch.object(regex, "check", return_value=None),
         ):
             report = regex.assess()
-        self.assertEqual(len(report["cases"]), 55)
+        self.assertEqual(len(report["cases"]), 58)
         self.assertEqual(report["mismatches"], 0)
         self.assertEqual(report["qualification"], "not-qualified")
         with patch.object(
