@@ -1,0 +1,169 @@
+schema_version: "1.0"
+domain: ADEG
+keys: [STUDYID, USUBJID, PARAMCD, APERIOD, APERDAY, ATPTN]
+input:
+  ADEG_RAW:
+    path: input/adeg_raw.csv
+    types:
+      APERIOD: int
+      APERDAY: int
+      ATPTN: float
+      AVAL: float
+      BASE: float
+      CHG: float
+  ADPC:
+    path: input/adpc.csv
+    types: {APERIOD: int, APERDAY: int, ATPTN: float, AVAL: float}
+base: ADEG_RAW
+
+output:
+  path: adeg.csv
+  columns: [STUDYID, USUBJID, TRTA, PARAMCD, PARAM, APERIOD, APERDAY, ATPT,
+            ATPTN, AVAL, AVALU, ABLFL, BASE, CHG, BASETYPE, ECGPCFL, PKCONC,
+            CQTANLFL]
+
+# The parent drug's sample of the same subject, period, period day and
+# nominal time point: an exact nominal match, never the nearest sample, and
+# never the metabolite measured in the same sample. SAMPLED tells a sample
+# whose result is below the limit of quantification (no AVAL) from no
+# sample at all, which reads 0.
+intermediates:
+  - id: PARENT_PK
+    dataset: ADPC
+    key: [STUDYID, USUBJID, APERIOD, APERDAY, ATPTN]
+    filter: "ADPC.PARAMCD = 'DRGX'"
+    columns: [AVAL, SAMPLED]
+    no_match: 0
+    derivations:
+      SAMPLED: {literal: 1}
+    verifications:
+      - unique: [STUDYID, USUBJID, APERIOD, APERDAY, ATPTN]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ADEG_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ADEG_RAW.USUBJID
+
+  - name: TRTA
+    type: str
+    label: Actual Treatment
+    derivation: ADEG_RAW.TRTA
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: ADEG_RAW.PARAMCD
+
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation: ADEG_RAW.PARAM
+
+  - name: APERIOD
+    type: int
+    label: Period
+    derivation: ADEG_RAW.APERIOD
+
+  - name: APERDAY
+    type: int
+    label: Analysis Nominal Period Day
+    derivation: ADEG_RAW.APERDAY
+
+  - name: ATPT
+    type: str
+    label: Analysis Time Point
+    derivation: ADEG_RAW.ATPT
+
+  - name: ATPTN
+    type: float
+    label: Analysis Time Point (N)
+    derivation: ADEG_RAW.ATPTN
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: ADEG_RAW.AVAL
+
+  - name: AVALU
+    type: str
+    label: Analysis Value Unit
+    derivation: ADEG_RAW.AVALU
+
+  - name: ABLFL
+    type: str
+    label: Baseline Record Flag
+    derivation: ADEG_RAW.ABLFL
+
+  - name: BASE
+    type: float
+    label: Baseline Value
+    derivation: ADEG_RAW.BASE
+
+  - name: CHG
+    type: float
+    label: Change from Baseline
+    derivation: ADEG_RAW.CHG
+
+  - name: BASETYPE
+    type: str
+    label: Baseline Type
+    derivation: ADEG_RAW.BASETYPE
+
+  # A time-matched sample exists, whatever its result.
+  - name: ECGPCFL
+    type: str
+    label: ECG Matching PK Flag
+    derivation:
+      flag: "PARENT_PK.SAMPLED = 1"
+    verifications:
+      allowed_values:
+        values: [Y]
+
+  # The parent drug's result as recorded; nothing is imputed for a result
+  # below the limit or a missing sample, except that a placebo record
+  # without a quantified result has no drug: 0.
+  - name: PKCONC
+    type: float
+    label: Time-Matched Plasma Concentration
+    derivation:
+      case:
+        - when: "PARENT_PK.SAMPLED = 1 AND PARENT_PK.AVAL IS NOT NULL"
+          then: PARENT_PK.AVAL
+        - when: "TRTA = 'Placebo'"
+          then: {literal: 0.0}
+
+  # Used in the concentration-QT analysis: a change from baseline paired
+  # with a concentration.
+  - name: CQTANLFL
+    type: str
+    label: Concentration QT Analysis Flag
+    derivation:
+      flag: "CHG IS NOT NULL AND PKCONC IS NOT NULL"
+    verifications:
+      allowed_values:
+        values: [Y]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD, APERIOD, APERDAY, ATPTN]
+  - row_count:
+      min: 16
+      max: 16
+  - assert:
+      id: no-analysis-flag-on-the-baseline-day
+      when: "ABLFL = 'Y'"
+      require: "CQTANLFL IS NULL"
+  - assert:
+      id: placebo-record-has-a-concentration
+      when: "TRTA = 'Placebo'"
+      require: "PKCONC IS NOT NULL"
+  - assert:
+      id: active-concentration-needs-a-matched-sample
+      when: "TRTA <> 'Placebo' AND PKCONC IS NOT NULL"
+      require: "ECGPCFL = 'Y'"
