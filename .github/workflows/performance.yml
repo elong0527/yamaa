@@ -512,6 +512,21 @@ jobs:
             ${{ runner.temp }}/performance-audit/performance-audit.md
           if-no-files-found: error
 
+      - name: Preserve separately downloadable numeric report and exact original identities
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: performance-audit-record
+          retention-days: 90
+          path: |
+            ${{ runner.temp }}/performance-input/manifest.json
+            ${{ runner.temp }}/performance-input/run.json
+            ${{ runner.temp }}/performance-input/jobs.json
+            ${{ runner.temp }}/performance-input/artifacts.json
+            ${{ runner.temp }}/performance-audit/performance-audit.json
+            ${{ runner.temp }}/performance-audit/performance-audit.md
+          if-no-files-found: error
+
   retain:
     needs: [native, python, r, index, audit]
     if: always() && github.event_name == 'push' && (github.ref == 'refs/heads/qualification/issue-1998' || github.ref == 'refs/heads/qualification/issue-2142-frontier')
