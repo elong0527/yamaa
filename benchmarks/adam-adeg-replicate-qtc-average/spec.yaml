@@ -1,0 +1,134 @@
+schema_version: "1.0"
+domain: ADEG
+keys: [STUDYID, USUBJID, PARAMCD, ATPTN]
+input:
+  EG:
+    path: input/eg.csv
+    types: {EGSEQ: int, EGREPNUM: int, EGSTRESN: float, EGTPTNUM: float}
+
+output:
+  path: adeg.csv
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, ATPT, ATPTN, DTYPE, AVAL]
+  order_by: [STUDYID, USUBJID, PARAMCD, ATPTN]
+
+intermediates:
+  # The RR record of one ECG: same subject, planned time point and
+  # replicate number, whatever the collection date-time. An ECG with no RR
+  # record reads 0, which the QTcF formula below treats as no result.
+  - id: RR
+    dataset: EG
+    key: [STUDYID, USUBJID, EGTPTNUM, EGREPNUM]
+    filter: "EG.EGTESTCD = 'RRAG'"
+    columns: [EGSTRESN]
+    no_match: 0
+    verifications:
+      - unique: [STUDYID, USUBJID, EGTPTNUM, EGREPNUM]
+
+  # The QT records, each carrying the RR result of its own ECG.
+  - id: QT
+    dataset: EG
+    filter: "EG.EGTESTCD = 'QTAG'"
+    derivations:
+      RRPAIR: RR.EGSTRESN
+    verifications:
+      - unique: [STUDYID, USUBJID, EGTPTNUM, EGREPNUM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    verifications:
+      allowed_values:
+        values: [QTAG, RRAG, QTCF]
+
+  - name: PARAM
+    type: str
+    label: Parameter
+
+  - name: ATPT
+    type: str
+    label: Analysis Timepoint
+
+  - name: ATPTN
+    type: float
+    label: Analysis Timepoint (N)
+    verifications:
+      not_missing: {}
+
+  - name: DTYPE
+    type: str
+    label: Derivation Type
+    derivation: {literal: AVERAGE}
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    verifications:
+      not_missing: {}
+
+# One average record per subject, planned time point and parameter, over
+# the ECGs of that time point that have a value for the parameter. A
+# parameter with no value at a time point has no record there.
+rows:
+  - id: qt_average
+    dataset: EG
+    group_by: [EG.STUDYID, EG.USUBJID, EG.EGTPTNUM, EG.EGTPT]
+    filter: "AVAL IS NOT NULL"
+    derivations:
+      STUDYID: EG.STUDYID
+      USUBJID: EG.USUBJID
+      PARAMCD: {literal: QTAG}
+      PARAM: {literal: "QT Interval, Aggregate (msec)"}
+      ATPT: EG.EGTPT
+      ATPTN: EG.EGTPTNUM
+      AVAL:
+        aggregate:
+          filter: "EG.EGTESTCD = 'QTAG'"
+          expr: "MEAN(EG.EGSTRESN)"
+
+  - id: rr_average
+    dataset: EG
+    group_by: [EG.STUDYID, EG.USUBJID, EG.EGTPTNUM, EG.EGTPT]
+    filter: "AVAL IS NOT NULL"
+    derivations:
+      STUDYID: EG.STUDYID
+      USUBJID: EG.USUBJID
+      PARAMCD: {literal: RRAG}
+      PARAM: {literal: "RR Interval, Aggregate (msec)"}
+      ATPT: EG.EGTPT
+      ATPTN: EG.EGTPTNUM
+      AVAL:
+        aggregate:
+          filter: "EG.EGTESTCD = 'RRAG'"
+          expr: "MEAN(EG.EGSTRESN)"
+
+  # Fridericia's correction of each ECG (QT over the cube root of RR in
+  # seconds), then the mean of those values: an ECG lacking either result
+  # has no corrected value and adds nothing to the mean.
+  - id: qtcf_average
+    dataset: QT
+    group_by: [QT.STUDYID, QT.USUBJID, QT.EGTPTNUM, QT.EGTPT]
+    filter: "AVAL IS NOT NULL"
+    derivations:
+      STUDYID: QT.STUDYID
+      USUBJID: QT.USUBJID
+      PARAMCD: {literal: QTCF}
+      PARAM: {literal: "QTcF Interval, Aggregate (msec)"}
+      ATPT: QT.EGTPT
+      ATPTN: QT.EGTPTNUM
+      AVAL:
+        aggregate:
+          expr: >-
+            MEAN(QT.EGSTRESN / POWER(NULLIF(QT.RRPAIR, 0) / 1000, 1 / 3))
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD, ATPTN]
