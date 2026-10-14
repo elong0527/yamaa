@@ -9,7 +9,7 @@ import sys
 import tempfile
 import unittest
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from unittest import mock
 
 TOOLS = Path(__file__).resolve().parents[1] / "tools"
@@ -188,7 +188,9 @@ class Replay(unittest.TestCase):
             staged, repetitions = [], []
             for declaration in declarations:
                 original = (
-                    Path("/vanished/runner") / name / f"work-{declaration['index']}"
+                    PurePosixPath("/vanished/runner")
+                    / name
+                    / f"work-{declaration['index']}"
                 )
                 local = child / f"work-{declaration['index']}"
                 local.mkdir()
@@ -267,7 +269,7 @@ class Replay(unittest.TestCase):
                 "child": name,
                 "host": "python",
                 "provenance": self.record,
-                "output": str(Path("/vanished/runner") / name),
+                "output": str(PurePosixPath("/vanished/runner") / name),
                 "evaluator": "public",
                 "phase_measurements": False,
                 "observe_callbacks": False,

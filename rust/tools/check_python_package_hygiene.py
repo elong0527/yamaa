@@ -39,6 +39,8 @@ def package_members(member: PurePosixPath, wheel: bool) -> tuple[str, ...]:
             and folded[2] == "yamaa"
         ):
             return parts[3:]
+    elif folded[1:3] == ("src", "yamaa"):
+        return parts[3:]
     elif folded[1:4] == ("python", "src", "yamaa"):
         return parts[4:]
     return ()
@@ -48,7 +50,9 @@ def check_archive(path: Path) -> int:
     wheel = path.suffix == ".whl"
     if wheel:
         with zipfile.ZipFile(path) as archive:
-            names = archive.namelist()
+            # Preserve the archive spelling in findings on Windows, where
+            # ZipInfo.filename normalizes authored backslashes to slashes.
+            names = [member.orig_filename for member in archive.infolist()]
     elif path.name.endswith(".tar.gz"):
         with tarfile.open(path, "r:gz") as archive:
             names = archive.getnames()
@@ -58,7 +62,10 @@ def check_archive(path: Path) -> int:
     generated = []
     retired = []
     for name in names:
-        member = PurePosixPath(name.replace("\\", "/"))
+        # ZIP readers terminate names at NUL; analyze that installed spelling
+        # while retaining the full original archive name in the finding.
+        installed = name.split("\x00", 1)[0] if wheel else name
+        member = PurePosixPath(installed.replace("\\", "/"))
         if "__pycache__" in member.parts or member.suffix.lower() in {".pyc", ".pyo"}:
             generated.append(name)
         package = package_members(member, wheel)
@@ -83,7 +90,9 @@ def check_distributions(directory: Path) -> None:
         raise ValueError("expected exactly one wheel and one source archive")
     for path in wheels + sources:
         count = check_archive(path)
-        print(f"{path.name}: {count} members, no generated caches or retired evaluator/API members")
+        print(
+            f"{path.name}: {count} members, no generated caches or retired evaluator/API members"
+        )
 
 
 if __name__ == "__main__":
