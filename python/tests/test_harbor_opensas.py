@@ -64,15 +64,15 @@ def test_explicit_unsupported_opensas_case_fails_instead_of_silently_staging(
 
 
 def test_every_opensas_board_ranks_the_same_confident_set():
+    populations = json.loads(
+        (HARBOR / "leaderboards/task-populations.json").read_text()
+    )
     for path in sorted((HARBOR / "leaderboards").glob("*-opensas.yaml")):
         parts = path.stem.split("-")
         version, tier = parts[2], parts[3] if len(parts) == 5 else "full"
         suffix = "opensas" if tier == "full" else f"{tier}-opensas"
         board = yaml.safe_load(path.read_text())
-        reference = yaml.safe_load(
-            (HARBOR / "leaderboards" / f"sdtm-adam-{version}-r.yaml").read_text()
-        )
-        population = {task.removesuffix("-r") for task in reference["tasks"]}
+        population = set(populations[version])
         confident = population - set(build.OPENSAS_EXCLUSIONS)
         assert confident <= set(CONFIDENT)
         assert sorted(board["tasks"]) == sorted(

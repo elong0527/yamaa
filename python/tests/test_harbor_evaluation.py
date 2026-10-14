@@ -609,7 +609,11 @@ def _board_name(language: str, tier: str) -> str:
 
 def test_each_language_has_a_board_per_prompt_tier():
     boards = {b["harbor"]["name"]: b for b in leaderboard.load_leaderboards()}
+    populations = json.loads(
+        (HARBOR / "leaderboards/task-populations.json").read_text()
+    )
     versions = {name.split("-")[2] for name in boards}
+    assert versions == set(populations)
     assert "v4" in versions
     assert set(boards) == {
         _board_name(language, tier).replace("-v4-", f"-{version}-")
@@ -628,8 +632,8 @@ def test_each_language_has_a_board_per_prompt_tier():
     # evaluated before a successor board is assembled; they do not change
     # the historical boards' populations or their scores.
     for version in versions:
-        reference = boards[f"sdtm-adam-{version}-r"]
-        population = {task.removesuffix("-r") for task in reference["tasks"]}
+        population = set(populations[version])
+        assert len(population) == len(populations[version])
         assert population <= set(buildable)
         for language in LANGUAGES:
             for tier in build.TIERS:
