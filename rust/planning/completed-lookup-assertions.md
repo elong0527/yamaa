@@ -69,9 +69,10 @@ and numerical qualification head remain unchanged by this assertion work.
 | `verification_numeric_bound` | The same column/row report suites and the case-position controls exercise numeric range bounds after completed construction. Finite exponent-form bounds are admitted. Full-range signed-i64 behavior and the invalid-carrier disposition remain separate explicit contracts. |
 | `str_extract_pattern` | `text_extract_reference.json` preserves 24 independent extraction witnesses. `declarative_text_extract.rs` exercises original positive/negative artifacts, captures, missing/no-match handlers, empty captures, nested cases, row extraction and failure order. `declarative_case_predicates.rs` executes lookbehind/lookahead capture in column cases, record defaults, explicit records and groups. |
 
-All fixture paths in this table are relative to
-`rust/crates/yamaa-adapters/tests/fixtures/`, and Rust test paths are relative to
-`rust/crates/`, unless otherwise specified. Earlier slice descriptions remain
+Fixture filenames in this table are in
+`rust/crates/yamaa-adapters/tests/fixtures/`. Paths beginning `yamaa-` are
+relative to `rust/crates/`; unqualified Rust test filenames are in
+`rust/crates/yamaa-adapters/tests/`. Earlier slice descriptions remain
 historical: their former unsupported lists do not describe the merged engine.
 
 ## Installed hosts and unchanged truth
