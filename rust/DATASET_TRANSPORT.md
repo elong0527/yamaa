@@ -391,7 +391,7 @@ cell or IPC-byte ceiling. Zero quotas refuse that resource; `batch_rows` uses
 | `max_sources` | 8 | 64 |
 | `max_ipc_bytes`: aggregate encoded input and logical decoded string bytes | 8 MiB | 1 GiB |
 | `execution.source_rows`: combined input rows | 524,288 | 10,000,000 |
-| `max_decoded_cells`: combined input rows × each source's width | 2,097,152 | 640,000,000 |
+| `max_decoded_cells`: combined input rows x each source's width | 2,097,152 | 640,000,000 |
 | `max_columns`: source/output width | 64 | 64 |
 | `max_batches`: combined input batches / exported batches | 256 | 65,536 |
 | `execution.output_rows` | 131,072 | 10,000,000 |
@@ -407,7 +407,7 @@ cell or IPC-byte ceiling. Zero quotas refuse that resource; `batch_rows` uses
 The longitudinal profile covers ten million records within its independent byte,
 width, work and text quotas. Wider records, large strings or expensive plans may
 require higher quotas. Raising only the row limit does not bypass any other limit.
-All additions and rows × columns calculations are checked for overflow. Source
+All additions and rows x columns calculations are checked for overflow. Source
 counts, aggregate rows/cells/batches and encoded bytes apply across primary and
 secondary inputs, including empty batches. Logical string accounting also applies
 across sources so buffer aliases cannot evade the byte quota.
