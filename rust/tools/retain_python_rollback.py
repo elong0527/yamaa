@@ -11,7 +11,7 @@ import sys
 import urllib.error
 import urllib.request
 import zipfile
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 ROOT = Path(__file__).resolve().parents[2]
 RECORD = ROOT / "rust/qualification/prior-python-rollback-run.json"
@@ -28,14 +28,19 @@ def require(condition, message):
 def extract(data, destination):
     """Read only regular, uniquely named, relative members from hosted artifacts."""
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
-        names = archive.namelist()
+        names = [member.orig_filename for member in archive.infolist()]
         require(len(names) == len(set(names)), "duplicate artifact member")
         for member in archive.infolist():
-            path = PurePosixPath(member.filename)
+            # Admit the original ZIP spelling before host-specific normalization;
+            # any component with a Windows drive can reset joinpath's destination.
+            name = member.orig_filename
+            path = PurePosixPath(name)
             require(
                 not path.is_absolute()
                 and ".." not in path.parts
-                and "\\" not in member.filename,
+                and "\\" not in name
+                and "\x00" not in name
+                and not any(PureWindowsPath(part).drive for part in path.parts),
                 "unsafe artifact member",
             )
             require(
