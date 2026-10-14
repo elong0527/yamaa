@@ -1,0 +1,22 @@
+STUDYID,USUBJID,COHORT,TRTA,PARAMCD,PARAM,APERIOD,APERDAY,ATPT,ATPTN,AVAL,AVALU,ABLFL,BASE,CHG,BASETYPE,ACOMPFL,COMP,COMPBASE,COMPCHG,CCOMPCHG,COMPTYPE
+SAD-01,SAD-01-S01,Cohort 1,Drug 10 mg,QTCF,QTcF Interval,1,-1,1 h,1,398.333,msec,Y,398.333,,Period 1 Baseline Day 1 h,,,,,,
+SAD-01,SAD-01-S01,Cohort 1,Drug 10 mg,QTCF,QTcF Interval,1,-1,2 h,2,401,msec,Y,401,,Period 1 Baseline Day 2 h,,,,,,
+SAD-01,SAD-01-S01,Cohort 1,Drug 10 mg,QTCF,QTcF Interval,1,-1,4 h,4,396.667,msec,Y,396.667,,Period 1 Baseline Day 4 h,,,,,,
+SAD-01,SAD-01-S01,Cohort 1,Drug 10 mg,QTCF,QTcF Interval,1,1,1 h,1,404.667,msec,,398.333,6.334,Period 1 Baseline Day 1 h,,401.22200000000004,397.167,1.9994999999999998,4.3345,Placebo group at 1 h
+SAD-01,SAD-01-S01,Cohort 1,Drug 10 mg,QTCF,QTcF Interval,1,1,2 h,2,409.333,msec,,401,8.333,Period 1 Baseline Day 2 h,,,,,,Placebo group at 2 h
+SAD-01,SAD-01-S01,Cohort 1,Drug 10 mg,QTCF,QTcF Interval,1,1,4 h,4,403,msec,,396.667,6.333,Period 1 Baseline Day 4 h,,402,398,3.333,3,Placebo group at 4 h
+SAD-01,SAD-01-S02,Cohort 1,Drug 10 mg,QTCF,QTcF Interval,1,1,1 h,1,412.333,msec,,,,Period 1 Baseline Day 1 h,,401.22200000000004,397.167,1.9994999999999998,,Placebo group at 1 h
+SAD-01,SAD-01-S03,Cohort 1,Placebo,QTCF,QTcF Interval,1,-1,1 h,1,393.667,msec,Y,393.667,,Period 1 Baseline Day 1 h,,,,,,
+SAD-01,SAD-01-S03,Cohort 1,Placebo,QTCF,QTcF Interval,1,-1,4 h,4,391.333,msec,Y,391.333,,Period 1 Baseline Day 4 h,,,,,,
+SAD-01,SAD-01-S03,Cohort 1,Placebo,QTCF,QTcF Interval,1,1,1 h,1,396.333,msec,,393.667,2.666,Period 1 Baseline Day 1 h,Y,401.22200000000004,397.167,1.9994999999999998,,Placebo group at 1 h
+SAD-01,SAD-01-S04,Cohort 1,Placebo,QTCF,QTcF Interval,1,1,1 h,1,405.333,msec,,,,Period 1 Baseline Day 1 h,Y,401.22200000000004,397.167,1.9994999999999998,,Placebo group at 1 h
+SAD-01,SAD-01-S04,Cohort 1,Placebo,QTCF,QTcF Interval,1,1,4 h,4,402.667,msec,,,,Period 1 Baseline Day 4 h,Y,402,398,3.333,,Placebo group at 4 h
+SAD-01,SAD-01-S05,Cohort 2,Drug 30 mg,QTCF,QTcF Interval,1,-1,1 h,1,389,msec,Y,389,,Period 1 Baseline Day 1 h,,,,,,
+SAD-01,SAD-01-S05,Cohort 2,Drug 30 mg,QTCF,QTcF Interval,1,-1,4 h,4,387.333,msec,Y,387.333,,Period 1 Baseline Day 4 h,,,,,,
+SAD-01,SAD-01-S05,Cohort 2,Drug 30 mg,QTCF,QTcF Interval,1,1,1 h,1,399.667,msec,,389,10.667,Period 1 Baseline Day 1 h,,401.22200000000004,397.167,1.9994999999999998,8.6675,Placebo group at 1 h
+SAD-01,SAD-01-S05,Cohort 2,Drug 30 mg,QTCF,QTcF Interval,1,1,4 h,4,396,msec,,387.333,8.667,Period 1 Baseline Day 4 h,,402,398,3.333,5.334,Placebo group at 4 h
+SAD-01,SAD-01-S06,Cohort 2,Placebo,QTCF,QTcF Interval,1,-1,1 h,1,400.667,msec,Y,400.667,,Period 1 Baseline Day 1 h,,,,,,
+SAD-01,SAD-01-S06,Cohort 2,Placebo,QTCF,QTcF Interval,1,-1,2 h,2,403.333,msec,Y,403.333,,Period 1 Baseline Day 2 h,,,,,,
+SAD-01,SAD-01-S06,Cohort 2,Placebo,QTCF,QTcF Interval,1,-1,4 h,4,398,msec,Y,398,,Period 1 Baseline Day 4 h,,,,,,
+SAD-01,SAD-01-S06,Cohort 2,Placebo,QTCF,QTcF Interval,1,1,1 h,1,402,msec,,400.667,1.333,Period 1 Baseline Day 1 h,Y,401.22200000000004,397.167,1.9994999999999998,,Placebo group at 1 h
+SAD-01,SAD-01-S06,Cohort 2,Placebo,QTCF,QTcF Interval,1,1,4 h,4,401.333,msec,,398,3.333,Period 1 Baseline Day 4 h,Y,402,398,3.333,,Placebo group at 4 h
