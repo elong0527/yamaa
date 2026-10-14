@@ -141,7 +141,7 @@
         "rust/tools/assess_rounding.py rational_round/cases",
         "rust/tools/check_rounding.py",
         "rust/crates/yamaa-core/examples/rounding_probe.rs",
-        "rust/crates/yamaa-core/tests/evaluation/rounding.rs",
+        "rust/crates/yamaa-core/tests/scalar/rounding.rs",
         "rust/tests/test_rounding_assessment.py",
         "rust/tests/test_rounding_check.py",
         "rust/crates/yamaa-adapters/tests/scalar/declarative_rounding.rs",

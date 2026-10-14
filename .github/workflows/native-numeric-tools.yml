@@ -58,7 +58,7 @@ jobs:
           python -m pip install uv==0.11.6
       - name: Preserve original spans, parser precedence and numerical policy truth
         working-directory: rust
-        run: cargo test --locked -p yamaa-core --test numeric_tests --test evaluation_tests --test portable_math_golden
+        run: cargo test --locked -p yamaa-core --test numeric_tests --test scalar_tests --test portable_math_golden
       - name: Replay independent syntax and numeric checks
         working-directory: rust
         run: |

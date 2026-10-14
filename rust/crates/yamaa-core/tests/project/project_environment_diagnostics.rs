@@ -1,5 +1,4 @@
-#[path = "../diagnostics/diagnostic/project_environment.rs"]
-mod support;
+use crate::support::project_environment as support;
 use yamaa_core::{
     diagnostic::ContextValue,
     project_environment::{self, Draft, Finding, LockKind, LockReference},

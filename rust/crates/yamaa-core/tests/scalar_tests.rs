@@ -1,4 +1,4 @@
 //! Evaluation integration contracts and explicit crate-owned support.
-mod evaluation;
+mod scalar;
 #[allow(dead_code)]
 mod support;

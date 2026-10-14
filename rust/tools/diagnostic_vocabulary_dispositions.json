@@ -106,7 +106,7 @@
       "phases": ["validation"],
       "reason": "REQ-0030 remains a conditional capability obligation, not retirement. There is no current literal emitter or alternate native text-contract selector. Fixed core text/scalar owners must preserve the contract; final installed Unicode/NUL and ordering qualification must prove supported capability, with no host-default fallback. This disposition does not invent an executable refusal path.",
       "owners": ["rules/values/text.md", "rust/crates/yamaa-core/src/value.rs", "rust/crates/yamaa-core/src/text_case.rs"],
-      "controls": ["rust/crates/yamaa-core/tests/evaluation/values.rs", "rust/crates/yamaa-core/tests/evaluation/text_case.rs", "rust/tests/installed_public_contract.py", "R/yamaa/tests/scalars.R"],
+      "controls": ["rust/crates/yamaa-core/tests/scalar/values.rs", "rust/crates/yamaa-core/tests/scalar/text_case.rs", "rust/tests/installed_public_contract.py", "R/yamaa/tests/scalars.R"],
       "producer": null,
       "history": "Current normative REQ-0030 and fixed-contract source/control ownership. The absence of an emitter is explicit; successful static disposition is not unavailable-capability replay or migration acceptance."
     },
@@ -115,7 +115,7 @@
       "phases": ["output"],
       "reason": "The retired build_artifact(TypedTable, ...) API accepted mutable Polars objects and rejected invalid dtype, subsecond/timezone datetime and calendar values here. Closed finite/temporal values and typed Arrow boundaries now refuse those representations before held output. REQ-0763 preserve-or-error and immutable Save semantics remain required, not retired.",
       "owners": ["rules/storage/publication.md", "rust/crates/yamaa-core/src/value.rs", "rust/crates/yamaa-core/src/temporal.rs", "rust/crates/yamaa-adapters/src/arrow_table.rs"],
-      "controls": ["rust/crates/yamaa-adapters/tests/table/arrow_table.rs", "rust/crates/yamaa-core/tests/evaluation/temporal.rs", "rust/tests/installed_public_contract.py"],
+      "controls": ["rust/crates/yamaa-adapters/tests/table/arrow_table.rs", "rust/crates/yamaa-core/tests/scalar/temporal.rs", "rust/tests/installed_public_contract.py"],
       "producer": null,
       "history": "Three invalid host-object artifact assertions at 845a91ff9ba4ab6599efbd79fafe1c4e1dd14255:python/tests/io/test_artifact.py remain mapped by 43bb4437d9c0890ec7877ec7575a517c771a8147; direct IO/typed-object extension API retirement under #1973."
     }

@@ -1,3 +1,5 @@
+// Preserve this original embedded assertion in each preparation context.
+#[allow(clippy::duplicate_mod)]
 #[path = "../support/schema_requirement_expectations.rs"]
 mod schema_requirement_expectations;
 

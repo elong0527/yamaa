@@ -38,7 +38,7 @@ mod preflight;
 mod producer;
 mod project_activation;
 mod project_codelist_binding;
-mod project_environment;
+use crate::support::project_environment;
 mod project_functions;
 mod project_lock;
 use crate::support::project_call_compiler as project_support;

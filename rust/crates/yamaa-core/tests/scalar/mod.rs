@@ -1,4 +1,4 @@
-//! Evaluation contracts in the yamaa-core integration suite.
+//! Scalar contracts in the yamaa-core integration suite.
 
 mod aggregate_reduction;
 mod arithmetic;

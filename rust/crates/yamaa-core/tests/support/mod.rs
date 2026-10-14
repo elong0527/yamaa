@@ -8,6 +8,7 @@ pub mod producer;
 pub mod producer_graph;
 pub mod project_call_compiler;
 pub mod project_codelist_compiler;
+pub mod project_environment;
 
 /// Construct an ordered schema independently of plan compilation.
 pub fn table_schema(columns: &[(&str, ColumnType)]) -> TableSchema {

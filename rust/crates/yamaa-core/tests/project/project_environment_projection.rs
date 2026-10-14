@@ -1,5 +1,4 @@
-#[path = "../diagnostics/diagnostic/project_environment.rs"]
-mod support;
+use crate::support::project_environment as support;
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     cell::Cell,

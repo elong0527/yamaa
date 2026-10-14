@@ -21,8 +21,8 @@ name = "numeric_tests"
 path = "tests/numeric_tests.rs"
 
 [[test]]
-name = "evaluation_tests"
-path = "tests/evaluation_tests.rs"
+name = "scalar_tests"
+path = "tests/scalar_tests.rs"
 
 [[test]]
 name = "relations_tests"
