@@ -690,7 +690,8 @@ jobs:
   audit:
     name: native-run-evidence-audit
     needs: [plan, rust, dist, qualify, r, math-portability, public-cohort]
-    if: ${{ always() && github.event_name == 'push' }}
+    # Retain failed-run evidence, but let superseded cancelled runs release refs.
+    if: ${{ !cancelled() && github.event_name == 'push' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     # Main retains its observational audit; qualification branches require it.
