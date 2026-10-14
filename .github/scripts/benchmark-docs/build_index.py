@@ -12,9 +12,12 @@ from public_conformance import plan
 
 
 def render_index(fixtures, current):
-    if len(re.findall(r"^## Benchmarks\n", current, re.MULTILINE)) != 1:
+    headings = list(
+        re.finditer(r"^[ \t]*##[ \t]+Benchmarks[^\n]*(?:\n|$)", current, re.MULTILINE)
+    )
+    if len(headings) != 1 or headings[0].group() != "## Benchmarks\n":
         raise ValueError("benchmark index requires exactly one '## Benchmarks' heading")
-    prefix = current.split("## Benchmarks\n", 1)[0]
+    prefix = current[: headings[0].start()]
     payload = plan(fixtures)
     active = sum(not row["excluded"] for row in payload["examples"])
     lines = [
