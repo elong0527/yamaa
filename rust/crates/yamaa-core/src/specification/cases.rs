@@ -552,55 +552,108 @@ pub(super) fn bind(
 pub(super) fn charge(
     d: &Document,
     value: usize,
+    path: &str,
     total: &mut usize,
     limit: usize,
     depth: usize,
 ) -> Result<(), PrepareError> {
     if depth > 64 {
-        return Err(PrepareError::limit("case_depth", 64, Some(depth), None));
+        return Err(PrepareError::limit(
+            "case_depth",
+            64,
+            Some(depth),
+            Some(path),
+        ));
     }
     if let Some(flag) = d.field(value, "flag") {
-        let condition = if matches!(d.nodes()[flag], N::Text(_)) {
+        let scalar = matches!(d.nodes()[flag], N::Text(_));
+        let condition = if scalar {
             flag
         } else {
             field(d, flag, "condition")?
+        };
+        let condition_path = if scalar {
+            format!("{path}.flag")
+        } else {
+            format!("{path}.flag.condition")
         };
         compiler_limits::charge(
             "numeric_bytes",
             total,
             text(d, condition)?.len(),
             limit,
-            None,
+            Some(&condition_path),
         )?;
     }
     if let Some(payload) = d.field(value, "str_concat") {
-        for &child in sequence(d, field(d, payload, "sources")?)? {
+        for (index, &child) in sequence(d, field(d, payload, "sources")?)?
+            .iter()
+            .enumerate()
+        {
+            let child_path = format!("{path}.str_concat.sources[{index}]");
             if let Some(expr) = d.field(child, "compute").and_then(|id| d.field(id, "expr")) {
-                compiler_limits::charge("numeric_bytes", total, text(d, expr)?.len(), limit, None)?;
+                compiler_limits::charge(
+                    "numeric_bytes",
+                    total,
+                    text(d, expr)?.len(),
+                    limit,
+                    Some(&format!("{child_path}.compute.expr")),
+                )?;
             }
-            charge(d, child, total, limit, depth + 1)?;
+            charge(d, child, &child_path, total, limit, depth + 1)?;
         }
     }
     let Some(case) = d.field(value, "case") else {
         return Ok(());
     };
-    for &branch in sequence(d, case)? {
+    for (index, &branch) in sequence(d, case)?.iter().enumerate() {
+        let prefix = format!("{path}.case[{index}]");
         let when = d.field(branch, "when");
         let child = d
             .field(branch, "then")
-            .or_else(|| d.field(branch, "otherwise"));
+            .map(|id| (id, "then"))
+            .or_else(|| d.field(branch, "otherwise").map(|id| (id, "otherwise")));
+        let child_path = child.map(|(_, name)| format!("{prefix}.{name}"));
         let compute = child
-            .and_then(|id| d.field(id, "compute"))
+            .and_then(|(id, _)| d.field(id, "compute"))
             .and_then(|id| d.field(id, "expr"));
         let filter = child
-            .and_then(|id| d.field(id, "source"))
+            .and_then(|(id, _)| d.field(id, "source"))
             .and_then(|id| d.field(id, "filter"))
             .filter(|&id| !matches!(d.nodes()[id], N::Null));
-        for id in when.into_iter().chain(compute).chain(filter) {
-            compiler_limits::charge("numeric_bytes", total, text(d, id)?.len(), limit, None)?;
+        for (id, expression_path) in when
+            .map(|id| (id, format!("{prefix}.when")))
+            .into_iter()
+            .chain(compute.map(|id| {
+                (
+                    id,
+                    format!("{}.compute.expr", child_path.as_deref().unwrap()),
+                )
+            }))
+            .chain(filter.map(|id| {
+                (
+                    id,
+                    format!("{}.source.filter", child_path.as_deref().unwrap()),
+                )
+            }))
+        {
+            compiler_limits::charge(
+                "numeric_bytes",
+                total,
+                text(d, id)?.len(),
+                limit,
+                Some(&expression_path),
+            )?;
         }
-        if let Some(child) = child {
-            charge(d, child, total, limit, depth + 1)?;
+        if let Some((child, _)) = child {
+            charge(
+                d,
+                child,
+                child_path.as_deref().unwrap(),
+                total,
+                limit,
+                depth + 1,
+            )?;
         }
     }
     Ok(())

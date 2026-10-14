@@ -865,6 +865,7 @@ impl PreparedSpecification {
             }
         }
         for &column in sequence(d, field(d, root, "columns")?)? {
+            let column_path = format!("columns.{}.derivation", text(d, field(d, column, "name")?)?);
             let expr = d
                 .field(column, "derivation")
                 .and_then(|id| d.field(id, "value"))
@@ -874,7 +875,14 @@ impl PreparedSpecification {
                 .field(column, "derivation")
                 .and_then(|id| d.field(id, "value"));
             if let Some(value) = value {
-                cases::charge(d, value, &mut numeric_bytes, limits.numeric_bytes, 0)?;
+                cases::charge(
+                    d,
+                    value,
+                    &column_path,
+                    &mut numeric_bytes,
+                    limits.numeric_bytes,
+                    0,
+                )?;
             }
             let operands = value
                 .and_then(|id| d.field(id, "first_available"))
@@ -887,7 +895,7 @@ impl PreparedSpecification {
                     "source_operands",
                     limits.source_operands,
                     Some(operands.len()),
-                    None,
+                    Some(&format!("{column_path}.first_available.sources")),
                 ));
             }
             let filter = d
@@ -896,17 +904,27 @@ impl PreparedSpecification {
                 .and_then(|id| d.field(id, "source"))
                 .and_then(|id| d.field(id, "filter"))
                 .filter(|&id| !matches!(d.nodes()[id], N::Null));
-            let selection_filters = operands
-                .iter()
-                .filter_map(|&id| d.field(id, "filter"))
-                .filter(|&id| !matches!(d.nodes()[id], N::Null));
-            for id in expr.into_iter().chain(filter).chain(selection_filters) {
+            let expression_paths = expr
+                .into_iter()
+                .map(|id| (id, format!("{column_path}.compute.expr")))
+                .chain(filter.map(|id| (id, format!("{column_path}.source.filter"))))
+                .chain(operands.iter().enumerate().filter_map(|(index, &id)| {
+                    d.field(id, "filter")
+                        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                        .map(|id| {
+                            (
+                                id,
+                                format!("{column_path}.first_available.sources[{index}].filter"),
+                            )
+                        })
+                }));
+            for (id, path) in expression_paths {
                 compiler_limits::charge(
                     "numeric_bytes",
                     &mut numeric_bytes,
                     text(d, id)?.len(),
                     limits.numeric_bytes,
-                    Some("columns"),
+                    Some(&path),
                 )?;
             }
         }
@@ -922,10 +940,11 @@ impl PreparedSpecification {
                     "row_templates",
                     16,
                     Some(rows.len()),
-                    None,
+                    Some("rows"),
                 ));
             }
-            for &row in rows {
+            for (row_index, &row) in rows.iter().enumerate() {
+                let row_path = format!("rows[{row_index}]");
                 if let Some(filter) = d
                     .field(row, "filter")
                     .filter(|&id| !matches!(d.nodes()[id], N::Null))
@@ -935,15 +954,21 @@ impl PreparedSpecification {
                         &mut numeric_bytes,
                         text(d, filter)?.len(),
                         limits.numeric_bytes,
-                        Some("columns"),
+                        Some(&format!("{row_path}.filter")),
                     )?;
                 }
                 if let Some(group) = d
                     .field(row, "group_by")
                     .filter(|&id| !matches!(d.nodes()[id], N::Null))
                 {
-                    if sequence(d, group)?.len() > limits.keys {
-                        return Err(PrepareError::limit("group_keys", limits.keys, None, None));
+                    let actual = sequence(d, group)?.len();
+                    if actual > limits.keys {
+                        return Err(PrepareError::limit(
+                            "group_keys",
+                            limits.keys,
+                            Some(actual),
+                            Some(&format!("{row_path}.group_by")),
+                        ));
                     }
                 }
                 let declarations = mapping(d, field(d, row, "derivations")?)?;
@@ -952,12 +977,20 @@ impl PreparedSpecification {
                         "row_columns",
                         limits.columns,
                         Some(declarations.len()),
-                        None,
+                        Some(&format!("{row_path}.derivations")),
                     ));
                 }
-                for &(_, declaration) in declarations {
+                for &(name, declaration) in declarations {
+                    let declaration_path = format!("{row_path}.derivations.{}", text(d, name)?);
                     let value = field(d, declaration, "value")?;
-                    cases::charge(d, value, &mut numeric_bytes, limits.numeric_bytes, 0)?;
+                    cases::charge(
+                        d,
+                        value,
+                        &declaration_path,
+                        &mut numeric_bytes,
+                        limits.numeric_bytes,
+                        0,
+                    )?;
                     for operation in ["compute", "aggregate"] {
                         if let Some(expr) =
                             d.field(value, operation).and_then(|id| d.field(id, "expr"))
@@ -967,7 +1000,7 @@ impl PreparedSpecification {
                                 &mut numeric_bytes,
                                 text(d, expr)?.len(),
                                 limits.numeric_bytes,
-                                Some("columns"),
+                                Some(&format!("{declaration_path}.{operation}.expr")),
                             )?;
                         }
                     }
@@ -978,7 +1011,7 @@ impl PreparedSpecification {
             .field(root, "verifications")
             .filter(|&id| !matches!(d.nodes()[id], N::Null))
         {
-            for &verification in sequence(d, verifications)? {
+            for (index, &verification) in sequence(d, verifications)?.iter().enumerate() {
                 if let Some(assertion) = d.field(verification, "assert") {
                     for name in ["when", "require"] {
                         if let Some(N::Text(expression)) =
@@ -989,7 +1022,7 @@ impl PreparedSpecification {
                                 &mut numeric_bytes,
                                 expression.len(),
                                 limits.numeric_bytes,
-                                Some("columns"),
+                                Some(&format!("verifications[{index}].assert.{name}")),
                             )?;
                         }
                     }

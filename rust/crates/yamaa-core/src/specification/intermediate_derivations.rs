@@ -316,7 +316,14 @@ pub(super) fn prepare(
                 })
             })
             .transpose()?;
-        cases::charge(d, value, &mut bytes, limits.numeric_bytes, 0)?;
+        cases::charge(
+            d,
+            value,
+            &expression_path,
+            &mut bytes,
+            limits.numeric_bytes,
+            0,
+        )?;
         let branch = derivations::prepare_value_with_driver(
             d,
             value,

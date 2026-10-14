@@ -938,21 +938,21 @@ fn row_filters_charge_the_whole_document_before_predicate_parsing() {
         None,
         Some(rows),
     );
-    assert!(matches!(
-        PreparedSpecification::prepare_with_limits(
+    for (limit, actual, path) in [(3, 4, "rows[0].filter"), (7, 8, "rows[1].filter")] {
+        let Err(PrepareError::Limit(refusal)) = PreparedSpecification::prepare_with_limits(
             &document,
             CompilationLimits {
-                numeric_bytes: 7,
+                numeric_bytes: limit,
                 ..Default::default()
-            }
-        ),
-        Err(PrepareError::Limit(
-            yamaa_core::specification::CompilerLimit {
-                resource: "numeric_bytes",
-                ..
-            }
-        ))
-    ));
+            },
+        ) else {
+            panic!("row filter must refuse before grammar parsing")
+        };
+        assert_eq!(refusal.resource, "numeric_bytes");
+        assert_eq!(refusal.limit, limit);
+        assert_eq!(refusal.actual, Some(actual));
+        assert_eq!(refusal.spec_paths, [path]);
+    }
     // Grammar findings remain retained for post-ingestion binding when aggregate text fits.
     assert!(PreparedSpecification::prepare_with_limits(
         &document,
