@@ -25,7 +25,10 @@ class RepositoryLinks(Treeprocessor):
             destination = element.get(attribute, "")
             url = urlsplit(destination)
             if url.path and not (url.scheme or url.netloc or url.path.startswith("/")):
-                element.set(attribute, urljoin(self.source_url, destination))
+                source_url = self.source_url
+                if element.tag == "img":
+                    source_url = source_url.replace("/blob/main/", "/raw/main/", 1)
+                element.set(attribute, urljoin(source_url, destination))
 
 
 class RepositoryLinksExtension(Extension):

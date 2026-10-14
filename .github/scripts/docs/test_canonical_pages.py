@@ -86,7 +86,7 @@ class CanonicalPages(unittest.TestCase):
             "rules/values/types.md?plain=1#requirements",
         ):
             self.assertIn(f'href="{repository}/blob/main/{path}"', home + rules)
-        self.assertIn(f'src="{repository}/blob/main/docs/diagrams/design.svg"', rules)
+        self.assertIn(f'src="{repository}/raw/main/docs/diagrams/design.svg"', rules)
         for url in (
             "#rules",
             "https://example.org/",
