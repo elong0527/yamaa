@@ -74,6 +74,7 @@ jobs:
     outputs:
       run-id: ${{ steps.admit.outputs.run-id }}
       run-attempt: ${{ steps.admit.outputs.run-attempt }}
+      artifact-ids: ${{ steps.admit.outputs.artifact-ids }}
       revision: ${{ steps.admit.outputs.revision }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -128,7 +129,8 @@ jobs:
         with:
           github-token: ${{ github.token }}
           run-id: ${{ needs.native.outputs.run-id }}
-          name: native-python-${{ matrix.os }}-3.14
+          artifact-ids: ${{ fromJSON(needs.native.outputs.artifact-ids)[format('native-python-{0}-3.14', matrix.os)] }}
+          merge-multiple: true
           path: ${{ runner.temp }}/candidate-distribution
       - name: Admit candidate source identity and prepare previous release source
         env:
@@ -268,7 +270,8 @@ jobs:
         with:
           github-token: ${{ github.token }}
           run-id: ${{ needs.native.outputs.run-id }}
-          name: native-r-${{ matrix.os }}
+          artifact-ids: ${{ fromJSON(needs.native.outputs.artifact-ids)[format('native-r-{0}', matrix.os)] }}
+          merge-multiple: true
           path: ${{ runner.temp }}/candidate-distribution
       - name: Admit source identity and build R and its admitted monotonic timer
         env:
