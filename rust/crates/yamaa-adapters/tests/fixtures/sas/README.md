@@ -3,7 +3,7 @@
 `build_xport.py` writes transport files directly from documented 80-byte
 records and 140-byte NAMESTR layouts, with rational IBM numbers. It imports no
 candidate parser and no ReadStat code. Literal rows are `ID` 2, 1, 3 in that
-order; text ` café`, blank, `.` in Windows-1252; `NUM` 1.5, `.Z`, -2; `DAY`
+order; text ` caf\xe9`, blank, `.` in Windows-1252; `NUM` 1.5, `.Z`, -2; `DAY`
 0, 3653, -1; `STAMP` 0, -1, 1. Version 8 uses `LONG_TEXT_NAME`. Each multi-member
 fixture contains the valid second member's descriptor and data records rather
 than a marker-only mutation. `precision.xpt` stores exact integer 2^53+1; ReadStat decodes it to binary64
