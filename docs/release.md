@@ -144,12 +144,31 @@ qualification pushes. Main's audit is nonblocking: inspect its verdict and repla
 the original inputs. Branch qualification stays `reviewed-branch`; only genuine
 postmerge evidence is `combined-main`.
 
+Benchmark directories and the public-conformance configuration determine the
+current authored inventory and explicit exclusions. The generated
+[benchmark index](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#benchmarks)
+accounts for all 318 authored cases, including 316 active cases shared by Python
+and R and the two reviewed path-history exclusions. Runnable host entries describe
+metadata. Each installed inventory must supply actual passing results for the
+same current active set; the earlier JSON observations keep their original
+source/run/attempt/artifact identities and do not qualify a later source.
+
+New native audit snapshots retain exact-source benchmark specification paths in
+`source.json` and the exclusion configuration in
+`source/rust/tools/public_conformance.py`. Offline replay of a pre-change retained
+snapshot uses its original `source/benchmarks/execution-manifest.yaml` and metadata.
+This retained-input reader does not restore a runtime API or infer qualification
+from current checkout labels. Original retained-snapshot replay and final
+installed Python/R results remain evidence gates under #2145.
+
 The live inventory is:
 
 | Record | Reader and purpose |
 | --- | --- |
+| [Current rules](articles/rules.md) and [schema-navigation.tsv](https://github.com/elong0527/yamaa/blob/main/.github/scripts/yaml-validation/fixtures/schema-navigation.tsv) | `check_rule_rewrite.py` derives current normative ownership; `test_rule_rewrite.py` checks 363 independent schema owners. `generate_rule_reference.py` derives navigation from current contracts and schemas. |
 | [release-api.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/release-api.json) | `check_release_api.py` and its tests compare declared exports/dispositions. `retain_candidate` labels remain inventory classifications, not final acceptance. |
-| [public-conformance.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/public-conformance.json) | Public conformance runner/comparator and native workflow enforce the required case ratchet. |
+| [benchmarks/](https://github.com/elong0527/yamaa/tree/main/benchmarks) and [public_conformance.py](https://github.com/elong0527/yamaa/blob/main/rust/tools/public_conformance.py) | Directories and explicit exclusions derive the current inventory, index/dashboard membership and the same mandatory active set for both installed hosts. |
+| [public-conformance.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/public-conformance.json) | Prior passing observations retain original evidence identities. The comparator gates the current directory-derived active set and compares new passes with these observations. |
 | [supplemental.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/supplemental.json) | Installed supplemental inventory and native audit enforce component/public obligations. |
 | [rollback-assets.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/rollback-assets.json) and [prior-python-rollback-run.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/prior-python-rollback-run.json) | Retention/rehearsal tools pin original packages, attempts, asset IDs and earlier receipts. |
 | [native-source-fixtures.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/native-source-fixtures.json) and [producer-cohort/](https://github.com/elong0527/yamaa/tree/main/rust/qualification/producer-cohort) | Staging and cohort comparison preserve independent fixture membership/truth. |
@@ -160,8 +179,11 @@ to `rust/qualification/release-api.json` in #2161. Historical
 and [validator assertion](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/validator-assertion-disposition.json)
 maps are retrievable at their original revision; #2147 must reconcile every
 unique replacement with final installed evidence. Git retrieval proves map
-availability, not replay of external artifacts. Current normative ownership is
-in [rules/README.md](articles/rules.md).
+availability, not replay of external artifacts. Current normative ownership and
+schema navigation use [the current rules](articles/rules.md), schema sources and
+the independent owner controls above. No active reader requires the retired
+[migration map](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rules/migration.yaml);
+its former aliases, retirement decisions and prose provenance remain in Git.
 [#2154](https://github.com/elong0527/yamaa/issues/2154) owns physical history removal
 and durable replay. Raw `rust/measurements/` remains pending verified retention
 of its original external inputs; a scratch path or expiring Actions URL is not a

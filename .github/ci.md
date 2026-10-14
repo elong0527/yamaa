@@ -5,50 +5,83 @@ Keep workflow definitions in `workflows/` and their supporting code in
 
 - `scripts/benchmark-docs/`: deterministic HTML dashboards generated from benchmark
   fixtures, their shared template, and checks for source fidelity and freshness.
-- `scripts/yaml-validation/`: Python repository and validation blocker checks,
-  their unit tests, and `requirements.txt`.
-- `scripts/ci/`: native matrix selection, cohort orchestration, and dashboard
-  change detection, with their unit tests.
+- `scripts/yaml-validation/`: Python repository and validation blocker checks
+  and their unit tests.
+- `scripts/ci/`: PR smoke selection, native matrix selection, cohort
+  orchestration, and dashboard change detection, with their unit tests.
+- `scripts/docs/`: canonical site page hooks and their tests.
+- `scripts/commands/`: owned repository, Rust, documentation and installed-host
+  commands shared by the root Makefile and full repository/native CI jobs.
 
-The repository-validation job runs Python formatting/linting, repository checks
-and deterministic dashboard previews when their sources change in a PR. The
-separate canonical-site-pages job tests the MkDocs hook that reads README and
-rules directly; no copied landing pages need synchronization. The R package
-workflow replays shared grammar vectors and runs the package suite; grammar
-changes trigger it as well.
+Run `make help` at the repository root for supported targets and prerequisites;
+the [development guide](../docs/development.md#local-checks) explains their
+contexts. `make check-fast` provides formatting/lint and selection controls;
+`make check-repository` runs repository/rule guards. Full repository and native
+CI call the shared command scripts directly instead of the root Makefile.
+Windows native R jobs require GNU make for their build and check environment.
+Automatic PR feedback uses the scoped smoke route below; these feedback checks
+do not establish installed qualification.
+
+## PR feedback
+
+`pr.yml` is the only automatic PR workflow. Three Linux jobs start in parallel:
+
+- `repository-validation (ubuntu-latest)` tests the canonical site page hook,
+  Python formatting and lint, CI selection tests, documentation,
+  rule metadata and generated references, and shared release versions. It
+  installs PyYAML, Ruff, MkDocs and Material. README and rule pages retain one
+  source; no copied landing pages are required.
+- `pr-rust-smoke` checks Rust formatting and dependency direction, shared library
+  unit tests, parser and numerical tests, feature-enabled project preparation,
+  and selected public execution boundaries. It uses the development profile.
+- `pr-python-smoke` installs one locked Python 3.12 development-profile wheel
+  and tests the retained public helpers, native metadata binding, package/build
+  backend, lightweight Harbor harness regressions, and benchmark style.
+
+Runtime jobs inspect the PR merge-base diff and skip build/test steps on
+prose-only changes. Renames retain both paths and deleted runtime files still
+select coverage. Rust, schema and benchmark data changes select both smoke jobs;
+Python, R facade, Harbor and validator changes select Python smoke. Rust test
+Markdown fixtures retain coverage. The jobs still report success when their
+runtime steps are intentionally skipped, so required checks always appear.
+
+The target is under five minutes for most PRs with warm caches, excluding runner
+queue time. The static job has a five-minute timeout. Runtime jobs allow ten
+minutes for cold toolchains or dependency changes; a timeout fails the check.
+Development builds omit debug information and release LTO. Main pushes run the
+same smoke jobs to refresh Rust caches for new PRs. New commits cancel stale PR
+runs. Actual Actions timings should be checked after rollout; local timings do
+not establish hosted-runner performance.
+
+Configure branch protection to require the three names above, replacing any old
+installed-matrix, R, numerical or Harbor PR requirements. The repository check
+keeps its previous name. Full qualification has separate check names and is
+available on main or by manual dispatch.
 
 ## Native coverage
 
-Native PR runs use Linux for distribution builds and R package checks.
-Installed Python qualification covers wheel and source installs on Python 3.12
-and 3.14. The workflow summary records this reduced matrix. macOS, Windows,
-Python 3.13, and complete public/producer cohort comparisons run on main pushes,
-explicit `qualification/issue-*` branch pushes, or manual full-matrix dispatches.
-Shared Rust checks, all nine math assessments and their exact comparison run on
-main and qualification branch pushes. Ordinary dispatch runs separate numeric
-component checks but omits that shared Rust/math qualification and the audit.
-
-Pushes to main retain the full three-OS, three-Python, two-package-form matrix,
-all three R hosts, the cross-platform math comparison, and the complete
-public/producer cohort gate. PR artifacts cover the reduced Linux matrix;
-they do not establish full platform qualification. Platform-specific regressions
-and Python 3.13 compatibility are checked in the full matrix.
-The R lanes install the package's declared suggested test dependencies before
-strict `R CMD check`; a successful installation alone does not establish
-**Status: OK** or complete installed-suite coverage.
+Pushes to main and explicit `qualification/issue-*` branches retain the full
+three-OS, three-Python, two-package-form matrix, all three R hosts, shared Rust
+checks, the cross-platform math comparison, and the complete public/producer
+cohort gate. Manual native dispatches retain the full installed matrix and
+numerical obligations. PR smoke checks do not establish release or platform
+qualification; source packaging, optimized behavior, the complete integration
+suite and installed R behavior remain covered by these full runs. R lanes install
+declared suggested test dependencies before strict `R CMD check`; installation
+alone does not establish **Status: OK**. Ordinary dispatch omits the shared
+Rust/math qualification and audit; retain a full push run for final acceptance.
 
 Benchmark Markdown changes trigger documentation checks without rebuilding
-the Python/native runtimes. Top-level Rust Markdown is also excluded by native
-path filters; nested Rust Markdown fixtures still select native coverage, as do
-specifications, input, expected outputs and SDK changes. Documentation and its
-site hook/workflow use relevant scoped checks. Native workflows, selectors and
-packaging require full native qualification. The audit stays nonblocking on main and must pass
-on qualification branches; inspect its own verdict even when a main workflow is
-green. Current migration decisions and final gate ownership live in the
-[release guide](../docs/release.md).
+the Python/native runtimes. Specification, input, expected-output, and SDK
+changes still trigger runtime coverage. The full native evidence audit stays
+observational on main and must pass on qualification branches. Complete repository
+semantic validation and deterministic dashboard generation run on main or a
+manual `yaml-validation.yml` dispatch, along with live validation blocker issue
+checks. R grammar/rollback and standalone numerical workflows remain available
+outside automatic PR feedback.
 
-Before merging changes to native code, R glue, package builds or native CI,
-dispatch the complete matrix on the current PR head:
+For release qualification, platform-specific changes, or changes needing complete
+installed evidence before merge, dispatch the native matrix on the branch head:
 
 ```sh
 gh workflow run native.yml --ref <branch>
@@ -60,17 +93,16 @@ The same dispatch is available in GitHub Actions under **Native installation
 prototype**, **Run workflow**, selecting the PR branch. Dispatch runs the same
 eighteen installed Python lanes, three R hosts, and public/producer cohort gate
 as a main push. Require every enabled lane, including Windows R, to pass on that
-exact head before merging. Dispatch's component checks do not supply shared Rust,
-nine-report math or audit evidence; retain a full push run for final acceptance.
-A reduced PR run does not replace the installed dispatch gate. When dispatch
-access is unavailable, push the reviewed head to an explicit
+exact head when using this qualification gate. Shared Rust checks and the math
+comparison run on main; retain that combined run for work-package acceptance.
+When dispatch access is unavailable, push the reviewed head to an explicit
 `qualification/issue-<number>` branch. Its complete installed, shared Rust,
 numerical and audit checks supply exact-head premerge evidence. Its audit records
 `qualification_scope: reviewed-branch`; renew combined-main evidence after merge.
 
-The shared-crates step also runs
-`cargo test --locked -p yamaa-engine --features test-support` on every selected
-Rust platform on main and qualification pushes. This enables the feature-gated
+The shared-crates step and `make test-rust` both call
+`scripts/commands/rust_tests.py` for locked debug, engine `test-support` and
+optimized `release-test` tests. The engine feature enables the feature-gated
 project-preparation and test-support coverage omitted by a default-feature test
 invocation, including the explicit `test_support` integration suite.
 
@@ -106,17 +138,25 @@ To audit a completed main run locally, authenticate `gh` for
 repository and Actions reads, then use a fresh output directory:
 
 ```sh
-python rust/tools/audit_native_run.py --run-id <run-id> \
-  --repository elong0527/yamaa --output /tmp/yamaa-native-audit --check
+make audit-native RUN_ID="$YAMAA_RUN_ID" REPOSITORY=elong0527/yamaa OUTPUT=/tmp/yamaa-native-audit
 ```
 
+Set `YAMAA_RUN_ID` to the completed run's ID first.
+`PYTHON` must select an interpreter with the locked independent reader
+dependencies from `python/uv.lock`; it need not contain the candidate engine.
 Manual dispatches retain installed package and cohort evidence. Auditing one
 with the same tool reports the missing shared Rust and math evidence; use the
 main run for the complete acceptance check.
 
-To replay downloaded evidence without network access, pass the retained `input`
-directory using `--input /tmp/yamaa-native-audit/input` and another fresh
-`--output`. This snapshot contains `run.json`, `source.json`, `jobs.json`,
+To replay downloaded evidence without network access, use the retained `input`
+directory and another fresh output directory:
+
+```sh
+make audit-replay AUDIT_INPUT=/tmp/yamaa-native-audit/input OUTPUT=/tmp/yamaa-native-replay
+```
+
+Both Make targets call `rust/tools/audit_native_run.py` with `--check`.
+This snapshot contains `run.json`, `source.json`, `jobs.json`,
 `artifacts.json`, canonical files under `source/`, and artifact directories under
 `artifacts/` using their Actions artifact names. An artifact-only directory also produces a
 record: missing metadata and exact source remain unavailable, and no tuple can
@@ -133,14 +173,9 @@ visible. CI-script discovery runs independent fixture tests for this protocol.
 
 ## Harbor Oracle coverage
 
-PRs select changed Harbor benchmarks from their data, prompts, and reference
-solutions using the PR merge-base diff. Renames include both benchmark names;
-deleted or non-Harbor benchmarks are excluded from the current selection.
-Every buildable selected case is verified by both oracle and nop, including all
-R/Python prompt tiers. PRs without affected cases skip the Docker steps and
-retain harness regression tests.
-
-Shared harness, image, workflow, selection-code, or dependency changes affect
-every benchmark and use full coverage. Scheduled and manual runs always retain
-all 134 confident opensas cases and the ten-task R/Python preflight.
-The workflow summary and `harbor-verification` artifact record the selection.
+PR Python smoke runs lightweight image, hardening and fairness regression tests
+without installing Harbor or building Docker images. Full R/Python reference
+grading runs on relevant main pushes or manual `harbor-evaluation.yml` dispatches.
+Oracle verification runs on relevant main pushes, the weekly schedule, or manual
+dispatch. It retains all 134 confident opensas cases and the ten-task R/Python
+preflight. The summary and `harbor-verification` artifact record the full selection.

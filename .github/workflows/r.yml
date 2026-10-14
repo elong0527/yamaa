@@ -9,13 +9,6 @@ on:
         default: false
   push:
     branches: [qualification/issue-1999]
-  pull_request:
-    paths:
-      - 'R/yamaa/**'
-      - 'rust/**'
-      - '!rust/**/*.md'
-      - 'yaml/grammar/**'
-      - '.github/workflows/r.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -26,7 +19,7 @@ permissions:
 
 jobs:
   installed-grammar:
-    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.rollback_r) }}
+    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.rollback_r }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     defaults:

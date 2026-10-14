@@ -32,11 +32,11 @@ requirement link for behavior. It is not an additional semantic contract.
 | `output_class.order_by` | `"list[order_by_term]"` | `false` | Absent | -- | [REQ-1047](../storage/publication.md#req-1047) |
 | `intermediate_class.id` | `"intermediate_id"` | `true` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.dataset` | `"identifier"` | `true` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
-| `intermediate_class.key` | `"match_key"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
-| `intermediate_class.between` | `"record_between_class"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
-| `intermediate_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
-| `intermediate_class.order_by` | `"list[order_by_term]"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
-| `intermediate_class.keep` | `"keep_policy"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
+| `intermediate_class.key` | `"match_key"` | `false` | Absent | -- | Schema constraint |
+| `intermediate_class.between` | `"record_between_class"` | `false` | Absent | -- | Schema constraint |
+| `intermediate_class.filter` | `"predicate"` | `false` | Absent | -- | Schema constraint |
+| `intermediate_class.order_by` | `"list[order_by_term]"` | `false` | Absent | -- | Schema constraint |
+| `intermediate_class.keep` | `"keep_policy"` | `false` | Absent | -- | Schema constraint |
 | `intermediate_class.columns` | `"list[identifier]"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.no_match` | `"literal_value"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.derivations` | `"dict[identifier, derivation]"` | `false` | Absent | -- | [REQ-1185](../operations/lookup.md#req-1185) |
@@ -229,11 +229,11 @@ requirement link for behavior. It is not an additional semantic contract.
 | `submission_section_class.dataset_json` | `"bool"` | `false` | `false` | -- | Schema constraint |
 | `submission_section_class.context` | `"str"` | `false` | `"Submission"` | `{"values": ["Submission", "Other"]}` | Schema constraint |
 | `submission_section_class.xml_lang` | `"language_tag"` | `false` | `"en"` | -- | Schema constraint |
-| `submission_section_class.file_oid` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1061](../submission/define-xml.md#req-1061) |
+| `submission_section_class.file_oid` | `"str"` | `false` | Absent | `{"min_length": 1}` | Schema constraint |
 | `submission_section_class.metadata_version` | `"metadata_version_class"` | `false` | Absent | -- | Schema constraint |
 | `submission_section_class.originator` | `"str"` | `false` | Absent | `{"min_length": 1}` | Schema constraint |
 | `submission_section_class.stylesheet` | `"relative_href"` | `false` | Absent | -- | Schema constraint |
-| `submission_section_class.source_system_version` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1080](../operations/functions.md#req-1080) |
+| `submission_section_class.source_system_version` | `"str"` | `false` | Absent | `{"min_length": 1}` | Schema constraint |
 | `implementation_guide_class.name` | `"standard_name"` | `true` | Absent | -- | Schema constraint |
 | `implementation_guide_class.version` | `"str"` | `true` | Absent | `{"min_length": 1}` | Schema constraint |
 | `implementation_guide_class.status` | `"str"` | `true` | Absent | `{"values": ["Draft", "Final"]}` | Schema constraint |
@@ -247,9 +247,9 @@ requirement link for behavior. It is not an additional semantic contract.
 | Field or value type | Type | Required | Default | Constraints | Contract |
 | --- | --- | --- | --- | --- | --- |
 | `expressions.aggregate` | `["aggregate_expression", "aggregate_class"]` | `false` | Absent | -- | Schema constraint |
-| `aggregate_class.key` | `"match_key"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
-| `aggregate_class.between` | `"record_between_class"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
-| `aggregate_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
+| `aggregate_class.key` | `"match_key"` | `false` | Absent | -- | Schema constraint |
+| `aggregate_class.between` | `"record_between_class"` | `false` | Absent | -- | Schema constraint |
+| `aggregate_class.filter` | `"predicate"` | `false` | Absent | -- | Schema constraint |
 | `aggregate_class.group_by` | `"list[variable]"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
 | `aggregate_class.derive` | `"list[derive_binding_class]"` | `false` | Absent | -- | [REQ-1189](../operations/aggregation.md#req-1189) |
 | `aggregate_class.expr` | `"aggregate_expression"` | `true` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
@@ -271,9 +271,9 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.case` | `"list[case_item_class]"` | `false` | Absent | -- | [REQ-1098](../operations/expressions.md#req-1098) |
 | `expressions.flag` | `["predicate", "flag_class"]` | `false` | Absent | -- | [REQ-1256](../operations/expressions.md#req-1256) |
 | `source_binding_class.variable` | `"variable"` | `true` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
-| `source_binding_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
-| `source_binding_class.order_by` | `"list[order_by_term]"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
-| `source_binding_class.keep` | `"keep_policy"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
+| `source_binding_class.filter` | `"predicate"` | `false` | Absent | -- | Schema constraint |
+| `source_binding_class.order_by` | `"list[order_by_term]"` | `false` | Absent | -- | Schema constraint |
+| `source_binding_class.keep` | `"keep_policy"` | `false` | Absent | -- | Schema constraint |
 | `source_binding_class.absent` | `"literal_value"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
 | `flag_class.condition` | `"predicate"` | `true` | Absent | -- | [REQ-1256](../operations/expressions.md#req-1256) |
 | `flag_class.true_value` | `"literal_value"` | `false` | `"Y"` | -- | [REQ-1256](../operations/expressions.md#req-1256) |

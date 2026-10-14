@@ -1,4 +1,4 @@
-//! Static admission of versionless project function definitions (#1757).
+//! Static admission of versionless project function definitions.
 //!
 //! This trusted typed service receives bounded, structurally admitted documents.
 //! It owns no source reader, lock verifier, import mechanism or callable port.

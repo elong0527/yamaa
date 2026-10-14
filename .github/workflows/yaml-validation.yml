@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -35,7 +35,7 @@ jobs:
         run: python .github/scripts/commands/docs.py test
 
   validate:
-    name: repository-validation (ubuntu-latest)
+    name: repository-validation-full (ubuntu-latest)
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -50,7 +50,7 @@ jobs:
         with:
           python-version: "3.14"
 
-      - name: Select dashboard preview checks
+      - name: Select full dashboard checks
         id: changes
         run: python .github/scripts/ci/dashboard_changes.py
 

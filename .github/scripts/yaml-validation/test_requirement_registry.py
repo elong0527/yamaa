@@ -2,9 +2,8 @@
 """Tests for check_requirement_registry.py.
 
 Every active requirement ID is defined exactly once as a bold dotted marker
-``**REQ-0001.**``. Retired IDs occur only in migration.yaml; other citations
-in rules/ must resolve to active definitions, and historical numbered IDs may
-occur only in explicit compatibility records and tests.
+``**REQ-0001.**``. Citations in rules/ must resolve to current definitions;
+historical numbered IDs are forbidden in active sources.
 """
 
 import tempfile
@@ -39,9 +38,6 @@ class RequirementRegistryTests(unittest.TestCase):
         self.write(
             "operations/compute.md",
             "# Compute\n\nSee REQ-0001 for the type.\n",
-        )
-        (self.rules / "migration.yaml").write_text(
-            "version: 2\nprose:\n  - R001-1: [REQ-0001]\n", encoding="ascii"
         )
         self.assertEqual(self.errors(), [])
 
@@ -88,32 +84,15 @@ class RequirementRegistryTests(unittest.TestCase):
             found,
         )
 
-    def test_unresolved_migration_citation_fails(self):
+    def test_undefined_id_in_generated_index_fails(self):
         self.write("values/a.md", "**REQ-0001.** First.\n")
-        (self.rules / "migration.yaml").write_text(
-            "version: 2\nprose:\n  - R001-1: [REQ-0099]\n", encoding="ascii"
-        )
-        found = self.errors()
+        (self.rules / "reference").mkdir()
+        self.write("reference/requirements.md", "| [REQ-0099](../values/a.md) |\n")
         self.assertTrue(
             any(
                 "unresolved requirement citation: REQ-0099" in error
-                and "migration.yaml" in error
-                for error in found
-            ),
-            found,
-        )
-
-    def test_retired_id_is_allowed_only_in_migration(self):
-        self.write("values/a.md", "**REQ-0001.** First.\n")
-        (self.rules / "migration.yaml").write_text(
-            "requirements:\n"
-            "  REQ-0099: {retired: true, replacement: [REQ-0001]}\n",
-            encoding="ascii",
-        )
-        self.assertEqual(self.errors(), [])
-        self.write("operations/b.md", "See REQ-0099.\n")
-        self.assertTrue(
-            any("unresolved requirement citation: REQ-0099" in error for error in self.errors())
+                for error in self.errors()
+            )
         )
 
     def test_definition_in_fenced_code_does_not_count(self):
@@ -144,7 +123,7 @@ class RequirementRegistryTests(unittest.TestCase):
         self.write("values/a.md", "**REQ-0001.** First.\n")
         source = self.root / "python/src/yamaa/module.py"
         source.parent.mkdir(parents=True)
-        source.write_text('\"\"\"Implements R001-1.\"\"\"\n', encoding="ascii")
+        source.write_text('"""Implements R001-1."""\n', encoding="ascii")
 
         self.assertIn(
             "historical requirement citation outside compatibility records: "
@@ -152,7 +131,7 @@ class RequirementRegistryTests(unittest.TestCase):
             self.errors(),
         )
 
-    def test_missing_migration_yaml_is_tolerated(self):
+    def test_no_history_inventory_is_required(self):
         self.write("values/a.md", "**REQ-0001.** First.\n")
         self.assertEqual(self.errors(), [])
 

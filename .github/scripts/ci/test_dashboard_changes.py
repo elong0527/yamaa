@@ -11,6 +11,16 @@ from dashboard_changes import affects_dashboard
 
 
 class DashboardChanges(unittest.TestCase):
+    def test_full_validation_always_checks_dashboards(self):
+        for event in ("push", "workflow_dispatch"):
+            with self.subTest(event=event), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory) / "output"
+                with patch.dict(
+                    os.environ, GITHUB_EVENT_NAME=event, GITHUB_OUTPUT=str(output)
+                ):
+                    dashboard_changes.main()
+                self.assertEqual(output.read_text(), "dashboards=true\n")
+
     def test_source_changes_and_deletions_need_preview(self):
         for path in (
             "benchmarks/schema-functions/input/data.csv",

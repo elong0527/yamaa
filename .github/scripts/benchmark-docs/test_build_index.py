@@ -12,7 +12,14 @@ spec.loader.exec_module(index)
 
 class BenchmarkIndex(unittest.TestCase):
     def test_malformed_heading_cannot_retain_old_rows_beside_generated_rows(self):
-        for heading in ("", "## Benchmarks \n", "## Benchmarks\n## Benchmarks\n"):
+        for heading in (
+            "",
+            "## Benchmarks \n",
+            "## Benchmarks\n## Benchmarks\n",
+            "## Benchmarks \n| old-case |\n## Benchmarks\n",
+            "## Benchmarks\n| old-case |\n## Benchmarks \n",
+            "##  Benchmarks\n| old-case |\n## Benchmarks\n",
+        ):
             with (
                 self.subTest(heading=heading),
                 self.assertRaisesRegex(ValueError, "exactly one"),

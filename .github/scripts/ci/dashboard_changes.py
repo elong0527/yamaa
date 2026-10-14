@@ -24,7 +24,7 @@ def affects_dashboard(path):
 
 
 def main():
-    changed = False
+    changed = True
     if os.environ["GITHUB_EVENT_NAME"] == "pull_request":
         event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
         base = subprocess.check_output(
