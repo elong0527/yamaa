@@ -31,7 +31,7 @@ pub(super) fn apply(
         if let N::Text(value) = node {
             budget
                 .text(value)
-                .map_err(|_| PrepareError::Limit("terminology_bindings"))?;
+                .map_err(|error| PrepareError::project_limit(error, limits, None))?;
         }
     }
     let mut declarations = Vec::new();
@@ -87,7 +87,7 @@ pub(super) fn apply(
                 for value in [text(d, field(d, row, "id")?)?, name, code] {
                     budget
                         .text(value)
-                        .map_err(|_| PrepareError::Limit("terminology_bindings"))?;
+                        .map_err(|error| PrepareError::project_limit(error, limits, None))?;
                 }
                 declarations.push(Declaration {
                     column,
@@ -129,7 +129,7 @@ pub(super) fn apply(
         })
         .collect::<Vec<_>>();
     let checks = ct::bind(catalogue, &bindings, limits).map_err(|error| match error {
-        ct::Error::Limit(_) => PrepareError::Limit("terminology_bindings"),
+        ct::Error::Limit(error) => PrepareError::project_limit(error, limits, None),
         ct::Error::Findings(findings) => PrepareError::Invalid(
             findings
                 .into_iter()

@@ -894,18 +894,26 @@ fn compiler_budgets_precede_owned_planning_and_preserve_policy_boundary() {
     ] {
         let error = PreparedSpecification::prepare_with_limits(doc.model(), limits).unwrap_err();
         assert!(
-            matches!(error, PrepareError::Limit(actual) if actual == resource),
+            matches!(&error, PrepareError::Limit(actual) if actual .resource == resource),
             "{error:?}"
         );
         let error = specification_run::Error::Prepare(error);
         assert!(specification_diagnostics::findings(&error, None).is_none());
-        assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&specification_diagnostics::failure(
-                &error, None
-            ))
-            .unwrap(),
-            serde_json::json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"prepare","code":"compiler_limit"}})
-        );
+        let envelope = serde_json::from_str::<serde_json::Value>(
+            &specification_diagnostics::failure(&error, None),
+        )
+        .unwrap();
+        let outcome = &envelope["outcome"];
+        assert_eq!(outcome["status"], "rejected");
+        assert_eq!(outcome["stage"], "prepare");
+        assert_eq!(outcome["code"], "compiler_limit");
+        assert_eq!(outcome["resource"], resource);
+        let specification_run::Error::Prepare(PrepareError::Limit(facts)) = &error else {
+            unreachable!()
+        };
+        assert_eq!(outcome["limit"], facts.limit);
+        assert_eq!(outcome["actual"].as_u64(), facts.actual.map(|v| v as u64));
+        assert_eq!(outcome["spec_paths"], serde_json::json!(facts.spec_paths));
     }
     PreparedSpecification::prepare_with_limits(
         doc.model(),
@@ -1316,7 +1324,12 @@ fn declared_field_and_total_row_expression_budgets_precede_compiler_ownership() 
                 ..Default::default()
             }
         ),
-        Err(PrepareError::Limit("source_fields"))
+        Err(PrepareError::Limit(
+            yamaa_core::specification::CompilerLimit {
+                resource: "source_fields",
+                ..
+            }
+        ))
     ));
     assert!(matches!(
         PreparedSpecification::prepare_with_limits(
@@ -1326,7 +1339,12 @@ fn declared_field_and_total_row_expression_budgets_precede_compiler_ownership() 
                 ..Default::default()
             }
         ),
-        Err(PrepareError::Limit("numeric_bytes"))
+        Err(PrepareError::Limit(
+            yamaa_core::specification::CompilerLimit {
+                resource: "numeric_bytes",
+                ..
+            }
+        ))
     ));
 }
 
@@ -4057,6 +4075,61 @@ fn original_mapping_cut_admission_has_complete_findings_before_study_ports() {
                 .clone(),
             "{}",
             fields[0]
+        );
+    }
+}
+
+#[test]
+fn numeric_policy_reply_preserves_the_applicable_parser_and_resolution_bounds() {
+    use yamaa_adapters::{specification_diagnostics, specification_run::Error};
+    use yamaa_core::{
+        numeric_compiler::CompileError,
+        numeric_parser::{ParseError, ParseResource, SourcePosition},
+        specification::PrepareError,
+    };
+    for (error, resource, bound, actual) in [
+        (
+            CompileError::ResolutionLimit {
+                limit: 7,
+                required: 8,
+            },
+            "resolutions",
+            7,
+            Some(8),
+        ),
+        (
+            CompileError::Parse(ParseError::Limit {
+                position: SourcePosition {
+                    byte: 1,
+                    character: 1,
+                },
+                resource: ParseResource::Nodes,
+                limit: 3,
+            }),
+            "nodes",
+            3,
+            None,
+        ),
+    ] {
+        let error = Error::Prepare(PrepareError::Numeric {
+            path: "columns.VALUE.derivation.compute.expr".into(),
+            error,
+        });
+        let value: serde_json::Value =
+            serde_json::from_str(&specification_diagnostics::failure(&error, None)).unwrap();
+        let outcome = &value["outcome"];
+        assert_eq!(outcome["code"], "numeric_policy");
+        assert_eq!(outcome["stage"], "prepare");
+        assert_eq!(outcome["resource"], resource);
+        assert_eq!(outcome["limit"], bound);
+        assert_eq!(outcome["actual"].as_u64(), actual);
+        assert_eq!(
+            outcome["spec_paths"],
+            serde_json::json!(["columns.VALUE.derivation.compute.expr"])
+        );
+        assert_eq!(
+            outcome.as_object().unwrap().contains_key("actual"),
+            actual.is_some()
         );
     }
 }

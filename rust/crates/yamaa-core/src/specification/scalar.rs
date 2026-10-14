@@ -29,7 +29,7 @@ pub(super) fn prepare(
     templates: &str_template::Prepared,
 ) -> Result<Declaration, PrepareError> {
     if depth > 64 {
-        return Err(PrepareError::Limit("scalar_depth"));
+        return Err(PrepareError::limit("scalar_depth", 64, Some(depth), None));
     }
     let sources = sequence(d, field(d, payload, "sources")?)?;
     if op == "str_concat" {
@@ -90,7 +90,7 @@ pub(super) fn declaration_findings(
         depth: usize,
     ) -> Result<(), PrepareError> {
         if depth > 64 {
-            return Err(PrepareError::Limit("scalar_depth"));
+            return Err(PrepareError::limit("scalar_depth", 64, None, None));
         }
         for op in ["greatest", "least"] {
             if let Some(payload) = d.field(id, op) {
@@ -530,7 +530,7 @@ pub(super) fn operand_references(
     depth: usize,
 ) -> Result<(), PrepareError> {
     if depth > 64 {
-        return Err(PrepareError::Limit("scalar_depth"));
+        return Err(PrepareError::limit("scalar_depth", 64, Some(depth), None));
     }
     if let Some(payload) = d.field(value, "source") {
         names.push(text(d, field(d, payload, "variable")?)?.into());

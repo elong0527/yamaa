@@ -13,8 +13,9 @@ event sequence, type and complete event date.
 
 - `ASEQ`, `ADECOD1` and `ASTDT` identify the source sequence, type and date.
 - `ICEPRIO` is 1 for ICE04 and ICE05, 2 for ICE01, 3 for ICE02 and 4 for
-  ICE03: death or kidney replacement, prohibited medication, missed visit,
-  and treatment discontinuation, respectively.
+  ICE03: death or kidney replacement, prohibited medication, start of
+  other protocol-prohibited therapy, and treatment discontinuation,
+  respectively.
 - `ICERANK` numbers each subject's events from 1 by increasing priority,
   then earliest date, then lowest source sequence.
 - `GOVFL` is Y on position 1 and empty elsewhere; `SUPERFL` is Y on every

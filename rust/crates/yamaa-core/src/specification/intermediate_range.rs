@@ -234,7 +234,12 @@ pub(super) fn prepare_columns(
         .map(|node| {
             let fields = sequence(d, node)?;
             if fields.len() > limits.source_fields {
-                return Err(PrepareError::Limit("intermediate_columns"));
+                return Err(PrepareError::limit(
+                    "intermediate_columns",
+                    limits.source_fields,
+                    Some(fields.len()),
+                    None,
+                ));
             }
             fields
                 .iter()

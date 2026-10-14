@@ -180,7 +180,7 @@ fn default_reads(
     let operation = text(d, operation)?;
     fn contains_window(d: &Document, value: usize, depth: usize) -> Result<bool, PrepareError> {
         if depth > 64 {
-            return Err(PrepareError::Limit("expression_depth"));
+            return Err(PrepareError::limit("expression_depth", 64, None, None));
         }
         if [
             "row_number",
@@ -305,7 +305,7 @@ fn default_reads(
                     }
                 }
                 Err(crate::predicate_parser::ParseError::Grammar { .. }) => (),
-                Err(_) => return Err(PrepareError::Limit("predicate_parser")),
+                Err(error) => return Err(PrepareError::predicate_parse(error, None)),
             }
         }
         "compute" => {
@@ -317,7 +317,7 @@ fn default_reads(
                     }
                 }
                 Err(crate::numeric_parser::ParseError::Grammar { .. }) => {}
-                Err(_) => return Err(PrepareError::Limit("numeric_parser")),
+                Err(error) => return Err(PrepareError::numeric_parse(error, None)),
             }
         }
         "aggregate" | "lookup" | "window" => {
@@ -371,14 +371,19 @@ fn select_defaults(
         .collect::<Result<Vec<_>, _>>()?;
     let edges = defaults.iter().try_fold(0usize, |n, (_, edges, _)| {
         n.checked_add(edges.len())
-            .ok_or(PrepareError::Limit("row_dependencies"))
+            .ok_or_else(|| PrepareError::limit("row_dependencies", 67_108_864, None, None))
     })?;
     if columns
         .len()
         .checked_mul(edges.max(1))
         .is_none_or(|work| work > 67_108_864)
     {
-        return Err(PrepareError::Limit("row_dependencies"));
+        return Err(PrepareError::limit(
+            "row_dependencies",
+            67_108_864,
+            None,
+            None,
+        ));
     }
     let mut local = defaults
         .iter()
@@ -469,14 +474,15 @@ fn select_defaults(
         let bytes = rows
             .iter()
             .try_fold(output.columns()[column].name.len(), |n, row| {
-                n.checked_add(row.len())
-                    .ok_or(PrepareError::Limit("row_default_context"))
+                n.checked_add(row.len()).ok_or_else(|| {
+                    PrepareError::limit("row_default_context", 16_777_216, None, None)
+                })
             })?;
         context_bytes = bytes
             .checked_mul(4)
             .and_then(|n| context_bytes.checked_add(n))
             .filter(|&n| n <= 16_777_216)
-            .ok_or(PrepareError::Limit("row_default_context"))?;
+            .ok_or_else(|| PrepareError::limit("row_default_context", 16_777_216, None, None))?;
     }
     let findings = overridden
         .into_iter()
@@ -545,22 +551,27 @@ fn validate_row_phases(
             .checked_add(site.identifier.len())
             .and_then(|n| n.checked_add(site.template.id.len()))
             .and_then(|n| n.checked_add(128))
-            .ok_or(PrepareError::Limit("function_findings"))?;
+            .ok_or_else(|| PrepareError::limit("function_findings", 16_777_216, None, None))?;
         if let Some((call, argument)) = site.function {
             cost = cost
                 .checked_add(call.call.name.len())
                 .and_then(|n| n.checked_add(argument.name.len().checked_mul(2)?))
-                .ok_or(PrepareError::Limit("function_findings"))?;
+                .ok_or_else(|| PrepareError::limit("function_findings", 16_777_216, None, None))?;
         }
         let cost = cost
             .checked_mul(4)
-            .ok_or(PrepareError::Limit("function_findings"))?;
+            .ok_or_else(|| PrepareError::limit("function_findings", 16_777_216, None, None))?;
         *bytes = bytes
             .checked_add(cost)
             .filter(|&n| n <= 16_777_216)
-            .ok_or(PrepareError::Limit("function_findings"))?;
+            .ok_or_else(|| PrepareError::limit("function_findings", 16_777_216, None, None))?;
         if sites.len() >= 65_536 {
-            return Err(PrepareError::Limit("function_findings"));
+            return Err(PrepareError::limit(
+                "function_findings",
+                65_536,
+                Some(sites.len() + 1),
+                None,
+            ));
         }
         sites.push(site);
         Ok(())
@@ -668,7 +679,12 @@ impl Rows {
         let root = d.root();
         let raw_rows = sequence(d, field(d, root, "rows")?)?;
         if raw_rows.is_empty() || raw_rows.len() > 16 {
-            return Err(PrepareError::Limit("row_templates"));
+            return Err(PrepareError::limit(
+                "row_templates",
+                16,
+                Some(raw_rows.len()),
+                Some("rows"),
+            ));
         }
         row_intermediates::admit(d, raw_rows.len())?;
         let columns = sequence(d, field(d, root, "columns")?)?;
@@ -694,7 +710,9 @@ impl Rows {
                             Err(predicate_compiler::Error::Internal) => {
                                 return Err(PrepareError::Internal)
                             }
-                            Err(_) => return Err(PrepareError::Limit("predicate_compilation")),
+                            Err(error) => {
+                                return Err(PrepareError::predicate(error.clone(), Some(&path)))
+                            }
                         }
                         Ok((String::from(expression), compiled))
                     })
@@ -854,7 +872,12 @@ impl Rows {
                 .map(|id| {
                     let values = sequence(d, id)?;
                     if values.len() > limits.keys {
-                        return Err(PrepareError::Limit("group_keys"));
+                        return Err(PrepareError::limit(
+                            "group_keys",
+                            limits.keys,
+                            Some(values.len()),
+                            Some(&format!("{path}.group_by")),
+                        ));
                     }
                     values
                         .iter()
@@ -864,7 +887,12 @@ impl Rows {
                 .transpose()?;
             let entries = mapping(d, field(d, row, "derivations")?)?;
             if entries.len() > limits.columns {
-                return Err(PrepareError::Limit("row_columns"));
+                return Err(PrepareError::limit(
+                    "row_columns",
+                    limits.columns,
+                    Some(entries.len()),
+                    Some(&format!("{path}.derivations")),
+                ));
             }
             for &(name, _) in entries {
                 if !output
@@ -1010,11 +1038,15 @@ impl Rows {
                         .len()
                         .checked_mul(arguments)
                         .and_then(|n| n.checked_mul(4))
-                        .ok_or(PrepareError::Limit("function_row_context"))?;
+                        .ok_or_else(|| {
+                            PrepareError::limit("function_row_context", 16_777_216, None, None)
+                        })?;
                     row_context = row_context
                         .checked_add(cost)
                         .filter(|&n| n <= 16_777_216)
-                        .ok_or(PrepareError::Limit("function_row_context"))?;
+                        .ok_or_else(|| {
+                            PrepareError::limit("function_row_context", 16_777_216, None, None)
+                        })?;
                 }
             }
         }
@@ -1028,7 +1060,7 @@ impl Rows {
                 let count = uses.get_mut(call).ok_or(PrepareError::Internal)?;
                 *count = count
                     .checked_add(1)
-                    .ok_or(PrepareError::Limit("function_calls"))?;
+                    .ok_or_else(|| PrepareError::limit("function_calls", 1024, None, None))?;
             }
         }
         Ok(uses)

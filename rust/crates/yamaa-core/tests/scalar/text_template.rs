@@ -124,10 +124,11 @@ fn unique_name_comparison_work_refuses_before_unbounded_dedup_and_resets_per_req
         .map(|index| format!("{{N{index}}}"))
         .collect::<String>();
     assert!(StringTemplate::declaration_bytes(&text, "path", 0).unwrap() < MAX_DECLARATION_BYTES);
-    assert_eq!(
+    assert!(matches!(
         StringTemplate::new(text, "path".into(), None),
-        Err(AdmissionError::Limit)
-    );
+        Err(AdmissionError::Work { limit: yamaa_core::text_template::MAX_COMPILE_WORK, actual: Some(actual) })
+            if actual > yamaa_core::text_template::MAX_COMPILE_WORK
+    ));
     for _ in 0..2 {
         assert!(
             StringTemplate::new("{A}-{A}-{B}".into(), "path".into(), None)

@@ -15,7 +15,7 @@ use yamaa_core::schema::{
 };
 
 use crate::yaml_source::{scan_strict, LocatedEvent, ScanFailure, SourceEvent, SourceText};
-pub use crate::yaml_source::{ScanLimits, SourcePosition};
+pub use crate::yaml_source::{ResourceLimit, ScanLimits, SourcePosition};
 
 /// Quotas cover source scanning, exact numeric parsing, owned document storage
 /// and cumulative diagnostic-path construction. Refusal is not a language error.
@@ -49,7 +49,7 @@ pub enum DecodeFailure {
         reason: String,
     },
     InvalidText(Vec<UnicodeIssue>),
-    Limit(&'static str),
+    Limit(ResourceLimit),
     Internal,
 }
 
@@ -96,10 +96,14 @@ fn charge(
     limit: usize,
     resource: &'static str,
 ) -> Result<(), DecodeFailure> {
-    *used = used
-        .checked_add(amount)
+    let actual = used.checked_add(amount);
+    *used = actual
         .filter(|total| *total <= limit)
-        .ok_or(DecodeFailure::Limit(resource))?;
+        .ok_or(DecodeFailure::Limit(ResourceLimit {
+            resource,
+            limit,
+            actual,
+        }))?;
     Ok(())
 }
 
@@ -127,7 +131,11 @@ fn build(
                 | SourceEvent::MappingStart(..)
         ) && stack.len() + 1 > limits.document.depth.min(64)
         {
-            return Err(DecodeFailure::Limit("depth"));
+            return Err(DecodeFailure::Limit(ResourceLimit {
+                resource: "depth",
+                limit: limits.document.depth.min(64),
+                actual: Some(stack.len() + 1),
+            }));
         }
         let (value, start, merge) = match event {
             SourceEvent::Scalar(text, style, 0, None) => {
@@ -187,10 +195,16 @@ fn build(
         };
         let text_bytes = match &value {
             Value::Scalar(DocumentNode::Text(text) | DocumentNode::Integer(text)) => text.len(),
-            Value::InvalidText(points) => points
-                .len()
-                .checked_mul(4)
-                .ok_or(DecodeFailure::Limit("text_bytes"))?,
+            Value::InvalidText(points) => {
+                points
+                    .len()
+                    .checked_mul(4)
+                    .ok_or(DecodeFailure::Limit(ResourceLimit {
+                        resource: "text_bytes",
+                        limit: limits.document.text_bytes,
+                        actual: None,
+                    }))?
+            }
             _ => 0,
         };
         charge(
@@ -200,7 +214,11 @@ fn build(
             "text_bytes",
         )?;
         if nodes.len() >= limits.document.nodes {
-            return Err(DecodeFailure::Limit("nodes"));
+            return Err(DecodeFailure::Limit(ResourceLimit {
+                resource: "nodes",
+                limit: limits.document.nodes,
+                actual: Some(nodes.len() + 1),
+            }));
         }
         let id = nodes.len();
         nodes.push(Node {
@@ -222,7 +240,11 @@ fn build(
         return Ok((nodes, root));
     }
     if limits.document.nodes == 0 {
-        return Err(DecodeFailure::Limit("nodes"));
+        return Err(DecodeFailure::Limit(ResourceLimit {
+            resource: "nodes",
+            limit: limits.document.nodes,
+            actual: Some(nodes.len() + 1),
+        }));
     }
     nodes.push(Node {
         value: Value::Scalar(DocumentNode::Null),
@@ -401,11 +423,15 @@ pub fn decode_yaml(source: &[u8], limits: DecodeLimits) -> Result<DecodedYaml, D
     }
     let document =
         Document::new(document_nodes, root, limits.document).map_err(|error| match error {
-            DocumentError::Limit { resource, .. } => DecodeFailure::Limit(match resource {
-                DocumentResource::Nodes => "nodes",
-                DocumentResource::TextBytes => "text_bytes",
-                DocumentResource::Edges => "edges",
-                DocumentResource::Depth => "depth",
+            DocumentError::Limit { resource, limit } => DecodeFailure::Limit(ResourceLimit {
+                resource: match resource {
+                    DocumentResource::Nodes => "nodes",
+                    DocumentResource::TextBytes => "text_bytes",
+                    DocumentResource::Edges => "edges",
+                    DocumentResource::Depth => "depth",
+                },
+                limit,
+                actual: None,
             }),
             _ => DecodeFailure::Internal,
         })?;
