@@ -946,9 +946,9 @@ fn actual_capture_observations_survive_errors_and_distinguish_cached_reads() {
             limit: usize,
         ) -> Result<Arc<[u8]>, Self::Error> {
             assert_eq!((&*source.name, &*source.path), ("LB", "input/lb.csv"));
-            // The cumulative source owner has 16 MiB; the CSV decoder keeps
-            // its independent 8 MiB per-file admission after capture.
-            assert_eq!(limit, 16_777_216);
+            // This attempt starts with the central cumulative source allowance;
+            // capture retains the same physical bytes for later owned decoding.
+            assert_eq!(limit, yamaa_engine::capacity::SOURCE_BYTES);
             self.requests += 1;
             if self.fail {
                 return Err("resource_path_missing");

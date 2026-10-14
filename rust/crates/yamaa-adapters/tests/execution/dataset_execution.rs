@@ -91,7 +91,7 @@ fn combined_quotas_are_configurable_and_reset_per_attempt() {
     let donor = integers(&[&[3]]);
     let secondary = vec![donor.as_slice(); 8];
     let plan = plan(schema(ColumnType::Int), 8, RowMode::Records);
-    let mut budget = ExecutionBudget::default();
+    let mut budget = ExecutionBudget::bounded();
     assert!(matches!(
         execute_dataset_with_budget(&plan, &input, &secondary, budget),
         Err(TableError::ShapeLimit)
@@ -390,9 +390,9 @@ fn ten_million_records_execute_with_chunked_ipc() {
             ])) as ArrayRef
         }),
     );
-    assert!(input.len() > yamaa_adapters::ipc_table::MAX_INPUT_BYTES);
+    assert!(input.len() > 64 * 1024 * 1024);
     assert!(matches!(
-        decode_snapshot(&input),
+        decode_snapshot_with_budget(&input, ExecutionBudget::bounded()),
         Err(TableError::InputLimit)
     ));
     let rows = snapshot_batches(&input, budget)
@@ -439,11 +439,11 @@ fn large_accepted_output_exceeds_legacy_row_and_byte_caps() {
     .unwrap();
     assert_eq!(execution.dataset.row_count(), count);
     assert!(matches!(
-        encode_dataset_with_budget(&execution.dataset, ExecutionBudget::default()),
+        encode_dataset_with_budget(&execution.dataset, ExecutionBudget::bounded()),
         Err(TableError::ShapeLimit)
     ));
     let bytes = encode_dataset_with_budget(&execution.dataset, budget).unwrap();
-    assert!(bytes.len() > ExecutionBudget::default().max_output_bytes);
+    assert!(bytes.len() > ExecutionBudget::bounded().max_output_bytes);
     let table = decode_snapshot_with_budget(&bytes, budget).unwrap();
     assert_eq!(table.row_count(), count);
     assert_eq!(
