@@ -8,7 +8,6 @@ use yamaa_core::schema::{
     ValidationError, WindowReference,
 };
 use yamaa_engine::schema_capture::{self as capture, RootSelection};
-#[path = "specification_inheritance.rs"]
 mod inheritance;
 pub use inheritance::{CapturedParent, InheritanceError, InheritancePort, SourceFailure};
 

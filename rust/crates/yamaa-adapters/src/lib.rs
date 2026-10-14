@@ -62,6 +62,10 @@ pub mod file_producer_build;
 pub mod file_project;
 #[cfg(unix)]
 pub mod file_publication;
+// Finite platform exception: both implementations retain the same public and
+// restricted file_publication namespace. Unix file descriptors and Windows
+// retained handles need separate cfg-selected files; a backend submodule would
+// change the implementation module paths of those existing types and helpers.
 #[cfg(windows)]
 #[path = "file_publication_windows.rs"]
 pub mod file_publication;
