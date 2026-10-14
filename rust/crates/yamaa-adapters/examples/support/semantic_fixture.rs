@@ -126,9 +126,8 @@ pub fn observe(input: Value) -> Value {
         Err(error) => panic!("semantic fixture compiler policy refused: {error:?}"),
     };
     let mut issues = prepared
-        .check_declaration_diagnostics()
-        .into_iter()
-        .map(row)
+        .check_declaration_findings()
+        .map(|finding| row(finding.diagnostic()))
         .collect::<Vec<_>>();
     if input["output"].as_bool() == Some(true) {
         issues.extend(
