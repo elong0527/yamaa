@@ -350,6 +350,13 @@ which states why a planned dataset holds no records.
 | `Role` | `submission.role`, when declared |
 | `MethodOID` | generated method identifier; omit without `submission.method` |
 
+`KeySequence` describes the non-missing row identity asserted by `keys`
+([REQ-0221](../storage/publication.md#req-0221)). It is not independently
+declarable. Sponsor variables used for `output.order_by` or a `unique`
+verification do not acquire `KeySequence`; the
+[output identity example](../storage/publication.md#req-0221) shows how to use
+those variables when some values may be missing.
+
 <a id="req-0991"></a>
 
 **REQ-0991.** `OrderNumber` is written for every `ItemRef` of a container or for

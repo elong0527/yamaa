@@ -1045,6 +1045,52 @@ class TestAggregateDeriveStep(unittest.TestCase):
         errors = self.validate(self.payload(), self.context())
         self.assertEqual(errors, [])
 
+    def test_rejects_windows_in_derive_bindings_at_the_window_path(self):
+        path = 'spec.columns.AVAL.derivation.aggregate.derive[0].derivation'
+        for operation in VALIDATOR._DERIVE_WINDOW_OPERATIONS:
+            for qualified in (True, False):
+                source = 'QS.QSORRES' if qualified else 'QSORRES'
+                fields = {'window': {'order_by': [source]}}
+                if operation in ('row_value', 'previous_non_missing', 'locf'):
+                    fields['source'] = source
+                if operation == 'row_value':
+                    fields['offset'] = -1
+                if operation == 'baseline_flag':
+                    fields.update(date=source, reference_date=source)
+                window = {operation: fields}
+                for derivation, suffix in (
+                    (window, f'.{operation}'),
+                    ({'case': [
+                        {'when': "QS.QSCAT = 'SCALE'", 'then': window},
+                        {'otherwise': {'literal': 0}},
+                    ]}, f'.case[0].then.{operation}'),
+                    ({'case': [
+                        {'when': "QS.QSCAT = 'SCALE'", 'then': {'literal': 0}},
+                        {'otherwise': window},
+                    ]}, f'.case[1].otherwise.{operation}'),
+                    ({'str_concat': {'sources': [window]}},
+                        f'.str_concat.sources[0].{operation}'),
+                    ({'value': window, 'unconvertible': None}, f'.{operation}'),
+                ):
+                    with self.subTest(operation=operation, qualified=qualified,
+                            suffix=suffix):
+                        errors = self.validate(self.payload(derive=[{
+                            'name': 'QSNUM', 'type': 'float',
+                            'derivation': derivation,
+                        }]), self.context())
+                        self.assertEqual(len(errors), 1)
+                        self.assertEqual(errors[0].condition, 'invalid_derive_step')
+                        self.assertEqual(errors[0].path, path + suffix)
+                        self.assertEqual(errors[0].context['reason'],
+                            'a derive binding cannot use a window operation')
+
+    def test_window_names_in_derive_literals_remain_literals(self):
+        derive = self.payload()['derive'] + [{
+            'name': 'TAG', 'type': 'str',
+            'derivation': {'literal': 'row_value'},
+        }]
+        self.assertEqual(self.validate(self.payload(derive=derive), self.context()), [])
+
     def test_rejects_unknown_derive_variable_in_expression(self):
         errors = self.validate(self.payload(expr='SUM(MISSING)'), self.context())
         self.assertEqual(len(errors), 1)
@@ -1824,9 +1870,6 @@ class TestStaticSemanticContracts(unittest.TestCase):
         )
 
     def test_dependency_cycle_reports_each_participating_derivation(self):
-        root = TOOL_PATH.parents[3]
-        env, env_errors = VALIDATOR.build_schema_env(root)
-        self.assertEqual(env_errors, [])
         spec = {
             'columns': [
                 {
@@ -1845,15 +1888,18 @@ class TestStaticSemanticContracts(unittest.TestCase):
             ]
         }
 
-        cycle = VALIDATOR.find_column_dependency_cycle(spec, env)
+        errors = self.dependency_errors(spec)
 
-        self.assertIsNotNone(cycle)
-        self.assertEqual(set(cycle[:-1]), {'A', 'B'})
+        self.assertEqual(self.dependency_facts(errors), [
+            ('validation', 'dependency_cycle', 'REQ-0072',
+             'example/spec.yaml.columns.A.derivation.first_available',
+             {'cycle': ['A', 'B', 'A']}),
+            ('validation', 'dependency_cycle', 'REQ-0072',
+             'example/spec.yaml.columns.B.derivation.row_value',
+             {'cycle': ['A', 'B', 'A']}),
+        ])
 
     def test_forward_reference_reports_the_later_column(self):
-        root = TOOL_PATH.parents[3]
-        env, env_errors = VALIDATOR.build_schema_env(root)
-        self.assertEqual(env_errors, [])
         spec = {
             'columns': [
                 {
@@ -1867,14 +1913,13 @@ class TestStaticSemanticContracts(unittest.TestCase):
             ]
         }
 
-        self.assertEqual(
-            VALIDATOR.find_forward_reference(spec, env), ('A', 'B')
-        )
+        self.assertEqual(self.dependency_facts(self.dependency_errors(spec)), [
+            ('validation', 'forward_reference', 'REQ-0071',
+             'example/spec.yaml.columns.A.derivation.first_available',
+             {'column': 'A', 'dependency': 'B'}),
+        ])
 
     def test_forward_reference_skips_edges_inside_a_cycle(self):
-        root = TOOL_PATH.parents[3]
-        env, env_errors = VALIDATOR.build_schema_env(root)
-        self.assertEqual(env_errors, [])
         spec = {
             'columns': [
                 {
@@ -1893,161 +1938,192 @@ class TestStaticSemanticContracts(unittest.TestCase):
             ]
         }
 
-        self.assertIsNone(VALIDATOR.find_forward_reference(spec, env))
+        errors = self.dependency_errors(spec)
+        self.assertEqual([error.condition for error in errors],
+                         ['dependency_cycle', 'dependency_cycle'])
 
-
-class TestExecutionManifestGate(unittest.TestCase):
-    def load_text(self, text):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / 'execution-manifest.yaml'
-            path.write_text(text, encoding='utf-8')
-            return EXECUTION_CHECK.load_manifest(path)
-
-    def blocked_entry(self):
-        return {'status': 'blocked', 'blocked_by': '#101'}
-
-    def test_duplicate_keys_are_rejected(self):
-        manifest, error = self.load_text(
-            'version: "1.0"\n'
-            'examples:\n'
-            '  duplicate:\n'
-            '    status: blocked\n'
-            '    blocked_by: "#101"\n'
-            '  duplicate:\n'
-            '    status: blocked\n'
-            '    blocked_by: "#101"\n'
-        )
-
-        self.assertIsNone(manifest)
-        self.assertIsNotNone(error)
-        self.assertTrue(error.startswith('execution-manifest.yaml: '))
-        self.assertIn("found duplicate key 'duplicate'", error)
-
-    def test_missing_mistyped_and_unsupported_versions_are_rejected(self):
-        documents = (
-            {'examples': {}},
-            {'versions': '1.0', 'examples': {}},
-            {'version': 1.0, 'examples': {}},
-            {'version': '2.0', 'examples': {}},
-        )
-
-        for document in documents:
-            with self.subTest(document=document):
-                errors = EXECUTION_CHECK.check_manifest(document)
-                self.assertIn(
-                    'execution-manifest.yaml: \'version\' must be "1.0"',
-                    errors,
-                )
-
-    def test_non_mapping_root_is_a_clean_error(self):
-        manifest, load_error = self.load_text('')
-
-        self.assertIsNone(load_error)
-        self.assertEqual(
-            EXECUTION_CHECK.check_manifest(manifest),
-            ['execution-manifest.yaml: root must be a mapping'],
-        )
-
-    def test_bad_blocked_by_shapes_are_rejected(self):
-        entries = (
-            {'status': 'blocked', 'blocked_by': 101},
-            {'status': 'blocked', 'blocked_by': 'issue-101'},
-            {'status': 'blocked'},
-        )
-
-        for entry in entries:
-            with self.subTest(entry=entry):
-                document = {'version': '1.0', 'examples': {'one': entry}}
-                errors = EXECUTION_CHECK.check_manifest(document)
-                self.assertEqual(len(errors), 1)
-                self.assertIn('blocked_by', errors[0])
-
-    def test_unknown_status_is_rejected(self):
-        document = {
-            'version': '1.0',
-            'examples': {'one': {'status': 'pending'}},
+    def dependency_errors(self, spec, *, source='ID,V\n1,1.5\n'):
+        """Admit complete authored files with the installed native transport."""
+        columns = [
+            {'name': 'ID', 'type': 'int', 'derivation': 'SRC.ID'},
+            *copy.deepcopy(spec['columns']),
+        ]
+        for column in columns:
+            column['label'] = column['name']
+        complete = {
+            'schema_version': '1.0', 'domain': 'TEST',
+            'input': {'SRC': {'path': 'source.csv',
+                              'types': {'ID': 'int', 'V': 'float'}}},
+            'keys': ['ID'],
+            'columns': columns,
+            'output': {'path': 'result.csv',
+                       'columns': [column['name'] for column in columns]},
         }
+        complete.update({key: value for key, value in spec.items()
+                         if key != 'columns'})
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = root / 'spec.yaml'
+            path.write_text(yaml.safe_dump(complete), encoding='ascii')
+            if source is not None:
+                (root / 'source.csv').write_text(source, encoding='ascii')
+            errors = VALIDATOR.validate_spec_document(
+                complete, 'example/spec.yaml', path,
+                {'root': str(TOOL_PATH.parents[3])},
+            )
+            self.assertFalse((root / 'result.csv').exists())
+            return errors
 
-        errors = EXECUTION_CHECK.check_manifest(document)
+    @staticmethod
+    def dependency_facts(errors):
+        return [(error.phase, error.condition, error.requirement,
+                 error.path, error.context) for error in errors]
 
-        self.assertEqual(errors, ["one: unknown status 'pending'"])
-
-    def test_executable_without_runtimes_is_rejected(self):
-        document = {
-            'version': '1.0',
-            'examples': {'one': {'status': 'executable'}},
-        }
-
-        errors = EXECUTION_CHECK.check_manifest(document)
-
-        self.assertEqual(
-            errors,
-            ['one: executable entries must declare runtimes'],
-        )
-
-    def test_missing_and_stale_entries_are_rejected(self):
-        document = {
-            'version': '1.0',
-            'examples': {
-                'present': self.blocked_entry(),
-                'stale': self.blocked_entry(),
-            },
-        }
-
-        errors = EXECUTION_CHECK.check_manifest(
-            document, ['present', 'missing']
-        )
-
-        self.assertEqual(
-            errors,
-            [
-                'missing entry: missing',
-                'stale entry (no such example): stale',
+    def test_key_dependency_preserves_complete_native_order_and_paths(self):
+        errors = self.dependency_errors({
+            'columns': [
+                {'name': 'VALUE', 'type': 'float',
+                 'derivation': {'literal': 1.5}},
             ],
-        )
+            'keys': ['VALUE'],
+        })
+        self.assertEqual(errors, [])
+        errors = self.dependency_errors({
+            'columns': [
+                {'name': 'KEY', 'type': 'float',
+                 'derivation': {'compute': {'expr': 'VALUE'}}},
+                {'name': 'VALUE', 'type': 'float',
+                 'derivation': {'literal': 1.5}},
+            ],
+            'keys': ['ID', 'KEY'],
+        })
+        self.assertEqual(self.dependency_facts(errors), [
+            ('validation', 'forward_reference', 'REQ-0071',
+             'example/spec.yaml.columns.KEY.derivation.compute',
+             {'column': 'KEY', 'dependency': 'VALUE'}),
+            ('validation', 'key_dependency', 'REQ-0074',
+             'example/spec.yaml.columns.KEY.derivation',
+             {'column': 'KEY', 'dependency': 'VALUE'}),
+        ])
 
-    def test_reference_retirement_requires_an_issue_and_executable_python_entry(self):
-        entries = (
-            {'status': 'executable', 'runtimes': ['python'], 'reference_retired_by': 1757},
-            {'status': 'executable', 'runtimes': ['python'], 'reference_retired_by': '1757'},
-            {'status': 'blocked', 'blocked_by': '#1', 'reference_retired_by': '#1757'},
-            {'status': 'executable', 'runtimes': ['r'], 'reference_retired_by': '#1757'},
-        )
-        for entry in entries:
-            with self.subTest(entry=entry):
-                errors = EXECUTION_CHECK.check_manifest(
-                    {'version': '1.0', 'examples': {'one': entry}}, ['one']
-                )
-                self.assertEqual(len(errors), 1)
-                self.assertIn('reference_retired_by', errors[0])
-        self.assertEqual(
-            EXECUTION_CHECK.check_manifest(
-                {'version': '1.0', 'examples': {'one': {
-                    'status': 'executable', 'runtimes': ['python'],
-                    'reference_retired_by': '#1757',
-                }}}, ['one']
-            ),
-            [],
-        )
+    def test_completed_dependencies_are_admitted_without_publication(self):
+        self.assertEqual(self.dependency_errors({'columns': [
+            {'name': 'B', 'type': 'float', 'derivation': {'literal': 1.5}},
+            {'name': 'A', 'type': 'float',
+             'derivation': {'first_available': {'sources': ['B']}}},
+        ]}), [])
 
-    def test_valid_minimal_manifest_passes(self):
-        document = {
-            'version': '1.0',
-            'examples': {
-                'blocked': self.blocked_entry(),
-                'executable': {
-                    'status': 'executable',
-                    'runtimes': ['python'],
-                },
-            },
+    def test_header_binding_failure_precedes_dependency_admission(self):
+        errors = self.dependency_errors({'columns': [
+            {'name': 'A', 'type': 'float',
+             'derivation': {'first_available': {'sources': ['B']}}},
+            {'name': 'B', 'type': 'float', 'derivation': {'literal': 1.5}},
+        ]}, source='WRONG,V\n1,1.5\n')
+        self.assertEqual(self.dependency_facts(errors), [
+            ('validation', 'unknown_field', 'REQ-0532',
+             'example/spec.yaml.input.SRC.types.ID',
+             {'dataset': 'SRC', 'field': 'ID'}),
+        ])
+
+    def test_resource_path_failure_precedes_dependency_admission(self):
+        errors = self.dependency_errors({'columns': [
+            {'name': 'A', 'type': 'float',
+             'derivation': {'first_available': {'sources': ['B']}}},
+            {'name': 'B', 'type': 'float', 'derivation': {'literal': 1.5}},
+        ]}, source=None)
+        self.assertEqual(self.dependency_facts(errors), [
+            ('validation', 'resource_path_missing', 'REQ-0785',
+             'example/spec.yaml.input.SRC.path',
+             {'dataset': 'SRC', 'path': 'source.csv'}),
+        ])
+
+    def test_dependency_transport_failure_is_explicit(self):
+        with (
+            patch.object(VALIDATOR._native_specification, 'validate',
+                         side_effect=RuntimeError('native transport unavailable')),
+            self.assertRaisesRegex(RuntimeError, 'native transport unavailable'),
+        ):
+            self.dependency_errors({'columns': [
+                {'name': 'A', 'type': 'float', 'derivation': {'literal': 1.5}},
+            ]})
+
+    def test_missing_native_installation_cannot_import_semantic_transport(self):
+        native_path = TOOL_PATH.with_name('_native_specification.py')
+        native_spec = importlib.util.spec_from_file_location(
+            '_native_specification_without_native', native_path
+        )
+        module = importlib.util.module_from_spec(native_spec)
+        with (
+            patch.dict(sys.modules, {'yamaa._native': None}),
+            self.assertRaisesRegex(ModuleNotFoundError, 'yamaa._native'),
+        ):
+            native_spec.loader.exec_module(module)
+
+
+class TestDerivedBenchmarkInventory(unittest.TestCase):
+    def payload(self):
+        names = ['active', *EXECUTION_CHECK.EXCLUDED]
+        return {
+            'protocol': EXECUTION_CHECK.PROTOCOL,
+            'examples': [
+                {'name': name, 'entries': {'python': [{}], 'r': [{}]},
+                 'excluded': EXECUTION_CHECK.EXCLUDED.get(name)}
+                for name in names
+            ],
+        }, names
+
+    def observations(self):
+        return {
+            'protocol': 'public-conformance-ratchet/1', 'benchmarks': 3,
+            'python': ['active'], 'r': ['active'],
+            'exclusions': [{'example': n, 'reason': r}
+                           for n, r in EXECUTION_CHECK.EXCLUDED.items()],
         }
 
-        self.assertEqual(
-            EXECUTION_CHECK.check_manifest(
-                document, ['blocked', 'executable']
-            ),
-            [],
-        )
+    def test_derived_cases_include_both_hosts_and_explicit_exclusions(self):
+        payload, names = self.payload()
+        self.assertEqual(EXECUTION_CHECK.check_inventory(payload, names, self.observations()), [])
+
+    def test_missing_duplicate_and_unexpected_cases_are_rejected(self):
+        payload, names = self.payload()
+        payload['examples'][0]['name'] = 'unexpected'
+        payload['examples'].append(payload['examples'][0])
+        errors = EXECUTION_CHECK.check_inventory(payload, names)
+        self.assertIn('missing case: active', errors)
+        self.assertIn('unexpected case: unexpected', errors)
+        self.assertIn('duplicate case: unexpected', errors)
+
+    def test_missing_host_and_changed_exclusion_are_rejected(self):
+        payload, names = self.payload()
+        del payload['examples'][0]['entries']['r']
+        payload['examples'][1]['excluded'] = 'unreviewed reason'
+        errors = EXECUTION_CHECK.check_inventory(payload, names)
+        self.assertIn('missing public host entry: active', errors)
+        self.assertIn('exclusion reason differs: ' + names[1], errors)
+
+    def test_runnable_labels_cannot_replace_observed_passing_cases(self):
+        payload, names = self.payload()
+        observed = self.observations()
+        observed['r'] = ['unexpected', 'unexpected']
+        errors = EXECUTION_CHECK.check_inventory(payload, names, observed)
+        self.assertIn('duplicate observed r case', errors)
+        self.assertIn('missing observed r case: active', errors)
+        self.assertIn('unexpected observed r case: unexpected', errors)
+
+    def test_stale_exclusions_and_observed_denominator_are_rejected(self):
+        payload, names = self.payload()
+        observed = self.observations()
+        observed['benchmarks'] = 2
+        observed['exclusions'] = []
+        errors = EXECUTION_CHECK.check_inventory(payload, names, observed)
+        self.assertIn('observed authored denominator differs', errors)
+        self.assertIn('observed exclusions differ', errors)
+        self.assertIn('exclusion has no authored case: ' + names[1],
+                      EXECUTION_CHECK.check_inventory(payload, names[:1]))
+
+    def test_unknown_protocol_is_rejected(self):
+        self.assertEqual(EXECUTION_CHECK.check_inventory({}, []),
+                         ['unknown benchmark inventory protocol'])
 
 
 class TestConditionRegistry(unittest.TestCase):
@@ -2214,7 +2290,7 @@ class TestValidationManifest(unittest.TestCase):
             [],
         )
 
-    def test_load_blockers_includes_execution_manifest(self):
+    def test_load_blockers_uses_only_current_validation_manifest(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             examples = root / 'benchmarks'
@@ -2225,22 +2301,12 @@ class TestValidationManifest(unittest.TestCase):
                 '    blocked_by: "#103"\n',
                 encoding='utf-8',
             )
-            (examples / 'execution-manifest.yaml').write_text(
-                'examples:\n'
-                '  execution-one:\n'
-                '    status: blocked\n'
-                '    blocked_by: "#101"\n'
-                '  executable:\n'
-                '    status: executable\n'
-                '    blocked_by: "#102"\n',
-                encoding='utf-8',
-            )
 
             blockers = BLOCKER_CHECK.load_blockers(root)
 
         self.assertEqual(
             blockers,
-            {101: ['execution-one'], 103: ['validation-one']},
+            {103: ['validation-one']},
         )
 
 
@@ -6253,6 +6319,24 @@ class TestValidatorCLI(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('wrong-target', result.stdout)
+
+    def test_example_index_extra_columns_keep_link_title_and_duplicate_guards(self):
+        examples = self.root_dir / 'benchmarks'
+        case = examples / 'good'
+        case.mkdir(parents=True)
+        (case / 'README.md').write_text('# Good: description\n')
+        index = examples / 'README.md'
+        row = '| [`good`](good/) | description | lifecycle | Python, R |\n'
+        index.write_text(row)
+        self.assertEqual(VALIDATOR.validate_examples_index(self.root_dir), [])
+        index.write_text(row + row)
+        self.assertIn('duplicate index entry for good',
+                      '\n'.join(VALIDATOR.validate_examples_index(self.root_dir)))
+        index.write_text(row.replace('(good/)', '(wrong-target/)'))
+        self.assertIn('wrong-target',
+                      '\n'.join(VALIDATOR.validate_examples_index(self.root_dir)))
+        index.write_text(row.replace('description', 'wrong description'))
+        self.assertTrue(VALIDATOR.validate_examples_index(self.root_dir))
 
     def test_example_index_missing(self):
         ex_dir = self.root_dir / 'benchmarks'

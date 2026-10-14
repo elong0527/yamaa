@@ -23,6 +23,13 @@ pub enum Error {
     Limit(&'static str),
     Boundary(&'static str),
 }
+fn resource_at(error: ResourceError, field: &str, written: &str) -> Error {
+    if error == ResourceError::Changed {
+        Error::Document(file_preparation::Error::resource_at(error, field, written))
+    } else {
+        Error::Resource(error)
+    }
+}
 /// Identifies the original declaration being captured when a native failure
 /// occurs. Graph diagnostics retain their own node and authored field paths.
 #[derive(Debug)]
@@ -512,7 +519,13 @@ fn collect_nodes(
                 .ok_or(Error::Boundary("input_origin"))?;
             let identity = resources
                 .resolve_from(schema_origin.declaring_source, schema_origin.written)
-                .map_err(Error::Resource)?;
+                .map_err(|error| {
+                    resource_at(
+                        error,
+                        &format!("input.{dataset}.schema"),
+                        schema_origin.written,
+                    )
+                })?;
             let producer = if let Some(&known) = identities.get(&identity) {
                 let prior = &documents[known];
                 resources
@@ -521,7 +534,13 @@ fn collect_nodes(
                         schema_origin.written,
                         prior.source().bytes.len(),
                     )
-                    .map_err(Error::Resource)?;
+                    .map_err(|error| {
+                        resource_at(
+                            error,
+                            &format!("input.{dataset}.schema"),
+                            schema_origin.written,
+                        )
+                    })?;
                 Arc::clone(prior)
             } else {
                 if documents.len() >= limits.graph.nodes {
@@ -533,9 +552,18 @@ fn collect_nodes(
                     schema_origin.written,
                     Some(Arc::clone(schema)),
                 )
-                .map_err(Error::Document)?;
+                .map_err(|error| {
+                    Error::Document(
+                        error
+                            .entry_field(&format!("input.{dataset}.schema"), schema_origin.written),
+                    )
+                })?;
                 if prepared.source().identity != identity {
-                    return Err(Error::Resource(ResourceError::Changed));
+                    return Err(Error::Document(file_preparation::Error::resource_at(
+                        ResourceError::Changed,
+                        &format!("input.{dataset}.schema"),
+                        schema_origin.written,
+                    )));
                 }
                 own_document(
                     prepared,

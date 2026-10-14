@@ -1,5 +1,14 @@
 # Conventions
 
+## Find the current commands and contracts
+
+Run `make help` at the repository root for supported checks and their prerequisites.
+`make check-fast` provides repository feedback; installed-host checks and complete
+native release qualification are separate routes. Local targets and CI share the
+owned scripts under `.github/scripts/commands/` and the canonical `rust/tools/`.
+Current architecture/development and release gates live in `docs/development.md`
+and `docs/release.md`; language contracts remain in `rules/` and `yaml/`.
+
 ## The project name is written `yamaa`, never `YAMAA`
 
 Lower case, always, including at the start of a sentence, in headings, in page
@@ -28,7 +37,7 @@ The repository does not hash content. A runtime artifact is pinned by
 `runtime.artifact.reference` alone, a contract fingerprint is its canonical
 RFC 8785 JSON rather than a hash of it, the activation cache key is the
 joined identities themselves, and a resource snapshot compares the bytes it
-already holds. `migration.yaml` records provenance without digests.
+already holds.
 
 Do not reintroduce SHA-256 (or any digest field) to give something an
 identity. Compare the canonical form directly, and keep the bytes when
@@ -58,11 +67,19 @@ canonical source file. Build and test commands live in
 
 ## Rust and host APIs
 
-`rust/README.md` describes the crate boundaries and local verification commands.
+`docs/development.md` describes the crate boundaries and local verification
+commands; `rust/README.md` is the Rust entry point. `docs/release.md` owns current
+API/math/platform/rollback decisions and pending migration gates.
 Language contracts live in `rules/`, and host usage lives in `python/README.md`
 and `R/yamaa/README.md`. The declared API inventory is
 `rust/qualification/release-api.json`; check it from the repository root with
 `uv run --project python --no-sync python rust/tools/check_release_api.py`.
+
+Current REQ owners and generated references derive from `rules/` and `yaml/`.
+The independent schema-owner fixture is
+`.github/scripts/yaml-validation/fixtures/schema-navigation.tsv`; preserve its
+363 expectations when changing checkers. Run the rule/reference commands in
+`docs/development.md` with the repository Python environment.
 
 Portable math golden values live in
 `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv` and are shared by the

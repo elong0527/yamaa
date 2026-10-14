@@ -1,0 +1,531 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "yamaa independent public performance input and item-10 budgets",
+  "description": "Auditor reads original public-performance/1 and public-performance-campaign/1 evidence only. Paths are relative to the manifest, including a self-contained source Git bundle for offline replay. Original absolute runner paths remain immutable identity strings. JSON and Markdown outputs distinguish harness correctness, all 567 tuple/case combinations, and numeric budget acceptance. --check requires all three gates. No release thresholds are provided by this schema.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/input"
+    },
+    {
+      "$ref": "#/$defs/budgets"
+    }
+  ],
+  "$defs": {
+    "tuple": {
+      "enum": [
+        {
+          "host": "python",
+          "os": "ubuntu-24.04",
+          "python": "3.12",
+          "form": "wheel"
+        },
+        {
+          "host": "python",
+          "os": "ubuntu-24.04",
+          "python": "3.12",
+          "form": "source"
+        },
+        {
+          "host": "python",
+          "os": "ubuntu-24.04",
+          "python": "3.13",
+          "form": "wheel"
+        },
+        {
+          "host": "python",
+          "os": "ubuntu-24.04",
+          "python": "3.13",
+          "form": "source"
+        },
+        {
+          "host": "python",
+          "os": "ubuntu-24.04",
+          "python": "3.14",
+          "form": "wheel"
+        },
+        {
+          "host": "python",
+          "os": "ubuntu-24.04",
+          "python": "3.14",
+          "form": "source"
+        },
+        {
+          "host": "python",
+          "os": "macos-15",
+          "python": "3.12",
+          "form": "wheel"
+        },
+        {
+          "host": "python",
+          "os": "macos-15",
+          "python": "3.12",
+          "form": "source"
+        },
+        {
+          "host": "python",
+          "os": "macos-15",
+          "python": "3.13",
+          "form": "wheel"
+        },
+        {
+          "host": "python",
+          "os": "macos-15",
+          "python": "3.13",
+          "form": "source"
+        },
+        {
+          "host": "python",
+          "os": "macos-15",
+          "python": "3.14",
+          "form": "wheel"
+        },
+        {
+          "host": "python",
+          "os": "macos-15",
+          "python": "3.14",
+          "form": "source"
+        },
+        {
+          "host": "python",
+          "os": "windows-latest",
+          "python": "3.12",
+          "form": "wheel"
+        },
+        {
+          "host": "python",
+          "os": "windows-latest",
+          "python": "3.12",
+          "form": "source"
+        },
+        {
+          "host": "python",
+          "os": "windows-latest",
+          "python": "3.13",
+          "form": "wheel"
+        },
+        {
+          "host": "python",
+          "os": "windows-latest",
+          "python": "3.13",
+          "form": "source"
+        },
+        {
+          "host": "python",
+          "os": "windows-latest",
+          "python": "3.14",
+          "form": "wheel"
+        },
+        {
+          "host": "python",
+          "os": "windows-latest",
+          "python": "3.14",
+          "form": "source"
+        },
+        {
+          "host": "r",
+          "os": "ubuntu-24.04",
+          "python": null,
+          "form": "source"
+        },
+        {
+          "host": "r",
+          "os": "macos-15",
+          "python": null,
+          "form": "source"
+        },
+        {
+          "host": "r",
+          "os": "windows-latest",
+          "python": null,
+          "form": "source"
+        }
+      ]
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Retained relative path; absolute paths, traversal and symlink escapes are refused by the auditor."
+    },
+    "collection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "enum": [
+            "candidate",
+            "baseline",
+            "producer-root-build-baseline"
+          ]
+        },
+        "path": {
+          "$ref": "#/$defs/path"
+        }
+      },
+      "required": [
+        "role",
+        "path"
+      ]
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tuple": {
+          "$ref": "#/$defs/tuple"
+        },
+        "artifact_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "description": "null retains a visible missing matrix tuple; it cannot pass."
+        },
+        "artifact_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "run_attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "campaign": {
+          "$ref": "#/$defs/path"
+        },
+        "collections": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/collection"
+          }
+        },
+        "archive": {
+          "$ref": "#/$defs/path"
+        }
+      },
+      "required": [
+        "tuple",
+        "artifact_id",
+        "artifact_name",
+        "run_attempt",
+        "campaign",
+        "collections"
+      ],
+      "description": "archive optionally names an original Actions ZIP. The auditor safely expands only this tuple and removes private copies before advancing. Without archive, original unpacked evidence is read in place."
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "protocol": {
+          "const": "public-performance-audit-input/1"
+        },
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "source_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "run": {
+          "$ref": "#/$defs/path"
+        },
+        "artifacts": {
+          "$ref": "#/$defs/path"
+        },
+        "jobs": {
+          "$ref": "#/$defs/path"
+        },
+        "source_bundle": {
+          "$ref": "#/$defs/path"
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/entry"
+          }
+        },
+        "native_run": {
+          "$ref": "#/$defs/path"
+        },
+        "native_jobs": {
+          "$ref": "#/$defs/path"
+        },
+        "native_artifacts": {
+          "$ref": "#/$defs/path"
+        }
+      },
+      "required": [
+        "protocol",
+        "repository",
+        "source_revision",
+        "run",
+        "artifacts",
+        "entries"
+      ],
+      "description": "run/artifacts/jobs contain original Actions API snapshots for the selected performance.yml run attempt, with digest fields omitted. Successful actual producing jobs and artifact/campaign timestamps bind the attempt. An in-progress workflow snapshot is admitted only when its named producers have succeeded. Missing jobs fail admission. source_bundle is a self-contained Git bundle containing candidate, baseline, harness and generator truth revisions; otherwise --repository supplies pinned source. Full Actions admission requires native_run/native_jobs/native_artifacts original API snapshots for the exact successful native attempt. The auditor reuses the full native admission protocol, verifies each tuple native-run.json and the existing github-actions:<run>/attempt-<attempt>/<artifact>/<filename> reference, and records original native artifact IDs. Absent native proof remains unavailable and cannot pass; local raw-collection sample replay makes no Actions qualification claim."
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tuple": {
+          "oneOf": [
+            {
+              "const": "*"
+            },
+            {
+              "$ref": "#/$defs/tuple"
+            }
+          ]
+        },
+        "case": {
+          "enum": [
+            "*",
+            "lookup-1000-1",
+            "lookup-1000-4",
+            "lookup-10000-1",
+            "lookup-10000-4",
+            "lookup-100000-1",
+            "lookup-100000-4",
+            "aggregate-1000-10",
+            "aggregate-1000-100",
+            "aggregate-10000-10",
+            "aggregate-10000-100",
+            "aggregate-100000-10",
+            "aggregate-100000-100",
+            "window-1000-10",
+            "window-1000-100",
+            "window-10000-10",
+            "window-10000-100",
+            "window-100000-10",
+            "window-100000-100",
+            "callback-1000-1",
+            "callback-10000-1",
+            "callback-100000-1",
+            "producer-1000-1",
+            "producer-1000-3",
+            "producer-10000-1",
+            "producer-10000-3",
+            "producer-100000-1",
+            "producer-100000-3"
+          ]
+        },
+        "metric": {
+          "enum": [
+            "cold.package_import.median_ns",
+            "cold.public_build.median_ns",
+            "cold.copied_output.median_ns",
+            "cold.copied_issues.median_ns",
+            "cold.copied_verification_log.median_ns",
+            "cold.copied_warning_log.median_ns",
+            "cold.metadata_after_build.median_ns",
+            "cold.held_save_1.median_ns",
+            "cold.held_save_2.median_ns",
+            "warm.public_build.median_ns",
+            "warm.copied_output.median_ns",
+            "warm.copied_issues.median_ns",
+            "warm.copied_verification_log.median_ns",
+            "warm.copied_warning_log.median_ns",
+            "warm.metadata_after_build.median_ns",
+            "warm.held_save_1.median_ns",
+            "warm.held_save_2.median_ns",
+            "cold.child_peak_rss.median_bytes",
+            "warm.child_peak_rss.median_bytes",
+            "cold.phase.preparation.median_ns",
+            "cold.phase.build_service.median_ns",
+            "cold.phase.activation.median_ns",
+            "cold.phase.input.median_ns",
+            "cold.phase.execution_admission.median_ns",
+            "cold.phase.execution_derivation.median_ns",
+            "cold.phase.output_keys.median_ns",
+            "cold.phase.verification.median_ns",
+            "cold.phase.output_preparation.median_ns",
+            "warm.phase.preparation.median_ns",
+            "warm.phase.build_service.median_ns",
+            "warm.phase.activation.median_ns",
+            "warm.phase.input.median_ns",
+            "warm.phase.execution_admission.median_ns",
+            "warm.phase.execution_derivation.median_ns",
+            "warm.phase.output_keys.median_ns",
+            "warm.phase.verification.median_ns",
+            "warm.phase.output_preparation.median_ns",
+            "cold.phase.held_save_1.median_ns",
+            "cold.phase.held_save_2.median_ns",
+            "warm.phase.held_save_1.median_ns",
+            "warm.phase.held_save_2.median_ns"
+          ]
+        },
+        "comparison": {
+          "enum": [
+            "absolute",
+            "baseline-ratio"
+          ]
+        },
+        "limit": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "tuple",
+        "case",
+        "metric",
+        "comparison",
+        "limit"
+      ],
+      "description": "Exactly one rule must cover every observed candidate median. Values use nanoseconds/bytes for absolute comparison or a dimensionless compatible Python candidate/baseline ratio. Producer root-Build and cross-host R/Python observations never establish full-lifecycle or RSS ratios. One warm RSS measurement describes the actual whole warm child, including warmups and transport. Phase values sum original entered/completed offsets for each phase across actual nodes; phases can contain other phases and are not additive wall-time partitions. phase.held_save_1/2 use actual owner-local held Save intervals, separately from host boundaries."
+    },
+    "disposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tuple": {
+          "oneOf": [
+            {
+              "const": "*"
+            },
+            {
+              "$ref": "#/$defs/tuple"
+            }
+          ]
+        },
+        "case": {
+          "enum": [
+            "*",
+            "lookup-1000-1",
+            "lookup-1000-4",
+            "lookup-10000-1",
+            "lookup-10000-4",
+            "lookup-100000-1",
+            "lookup-100000-4",
+            "aggregate-1000-10",
+            "aggregate-1000-100",
+            "aggregate-10000-10",
+            "aggregate-10000-100",
+            "aggregate-100000-10",
+            "aggregate-100000-100",
+            "window-1000-10",
+            "window-1000-100",
+            "window-10000-10",
+            "window-10000-100",
+            "window-100000-10",
+            "window-100000-100",
+            "callback-1000-1",
+            "callback-10000-1",
+            "callback-100000-1",
+            "producer-1000-1",
+            "producer-1000-3",
+            "producer-10000-1",
+            "producer-10000-3",
+            "producer-100000-1",
+            "producer-100000-3"
+          ]
+        },
+        "metric": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision": {
+          "enum": [
+            "unavailable",
+            "incomparable"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reference": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "tuple",
+        "case",
+        "metric",
+        "decision",
+        "reason",
+        "reference"
+      ],
+      "description": "Exactly one recorded item-10 disposition must cover every required unavailable/incomparable metric. metric may be a fnmatch pattern, e.g. baseline:*. Known noncomparative gaps include phase_durations, actual_callback_counts, isolated_process_startup, shipped_schema_initialization and os_filesystem_cache. Missing baseline medians use baseline:<metric>. Callback totals and phase function counts remain exact correctness observations."
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "protocol": {
+          "const": "public-performance-budgets/1"
+        },
+        "status": {
+          "enum": [
+            "approved",
+            "unapproved"
+          ]
+        },
+        "source_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "decision": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "issue": {
+              "const": 1973
+            },
+            "item": {
+              "const": 10
+            },
+            "reference": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "issue",
+            "item",
+            "reference"
+          ]
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rule"
+          }
+        },
+        "dispositions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/disposition"
+          }
+        }
+      },
+      "required": [
+        "protocol",
+        "status",
+        "source_revision",
+        "decision",
+        "rules",
+        "dispositions"
+      ],
+      "description": "Explicit source-specific decision input. Absent or unapproved budgets produce not_evaluated; malformed budgets fail their own gate without replacing harness/coverage verdicts. There are no accepted numeric thresholds implied by collector booleans or this schema."
+    }
+  },
+  "examples": [
+    {
+      "protocol": "public-performance-budgets/1",
+      "status": "unapproved",
+      "source_revision": "0000000000000000000000000000000000000000",
+      "decision": {
+        "issue": 1973,
+        "item": 10,
+        "reference": "Unapproved illustration only; replace with the measured reviewed decision."
+      },
+      "rules": [],
+      "dispositions": []
+    }
+  ]
+}

@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
   push:
     # Explicit issue qualification branches exercise the same full checks before
-    # review; ordinary PR feedback remains sampled.
+    # review; ordinary PR feedback uses pr.yml smoke checks.
     branches: [main, 'qualification/issue-*']
     paths:
       - 'rust/**'
@@ -17,24 +17,15 @@ on:
       - '!benchmarks/**/*.md'
       - 'yaml/**'
       - '.github/workflows/native.yml'
+      - '.github/workflows/performance.yml'
       - '.github/scripts/ci/native_matrix.py'
       - '.github/scripts/ci/test_native_matrix.py'
-  pull_request:
-    paths:
-      - 'rust/**'
-      - '!rust/*.md'
-      - 'R/yamaa/**'
-      - 'python/**'
-      - 'benchmarks/**'
-      - '!benchmarks/**/*.md'
-      - 'yaml/**'
-      - '.github/workflows/native.yml'
-      - '.github/scripts/ci/native_matrix.py'
-      - '.github/scripts/ci/test_native_matrix.py'
+      - '.github/scripts/commands/**'
+      - 'Makefile'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  # Cancel stale PR and issue qualification feedback; active main runs finish.
+  # Cancel stale branch qualification feedback; active main runs finish.
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
@@ -69,12 +60,12 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.14'
-      - name: Select Linux PR coverage or the full installed matrix
+      - name: Select the full installed matrix
         id: coverage
         run: python .github/scripts/ci/native_matrix.py plan
 
   # Main and explicitly selected qualification pushes run all shared checks.
-  # Ordinary PRs and dispatches qualify the installed R/Python packages.
+  # Dispatches qualify the installed R/Python packages.
   rust:
     needs: plan
     if: needs.plan.outputs.run-rust == 'true'
@@ -82,7 +73,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     # Cold optimized test builds on Windows can consume more than 20 minutes.
     # Leave time for the complete shared guard and assessment suites afterward.
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 60 || 30 }}
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 60 || matrix.os == 'macos-15' && 45 || 30 }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.build) }}
@@ -124,9 +115,7 @@ jobs:
             cargo fmt --all --check
             python tools/check_cargo_lock.py --output-dir "${RUNNER_TEMP}/rust-dependencies"
             cargo clippy --locked -p yamaa-core -p yamaa-engine -p yamaa-adapters -p yamaa-python --all-targets -- -D warnings
-            cargo test --locked
-            cargo test --locked -p yamaa-engine --features test-support
-            cargo test --locked -p yamaa-core -p yamaa-engine -p yamaa-adapters --profile release-test
+            python ../.github/scripts/commands/rust_tests.py
             python tools/generate_regex_identifiers.py
             python tools/generate_schema_printable.py
             python tools/generate_shipped_schema.py
@@ -171,7 +160,7 @@ jobs:
         working-directory: rust
         run: uv run --no-project --python 3.13 python tools/assess_math.py --output "${RUNNER_TEMP}/math-assessment-3.13/math-assessment.json"
       - name: Assess decimal rounding independently
-        if: always()
+        if: ${{ !cancelled() }}
         working-directory: rust
         run: uv run --project ../python --locked --no-editable python tools/assess_rounding.py --output "${RUNNER_TEMP}/rounding-assessment.json"
       - name: Preserve candidate math assessment (not parity qualification)
@@ -339,28 +328,8 @@ jobs:
       - name: Stage installed checks outside checkout
         working-directory: ${{ runner.temp }}
         run: |
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_file_resources.py" installed_file_resources.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_inheritance.py" installed_inheritance.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_original_specifications.py" installed_original_specifications.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_producer_builds.py" installed_producer_builds.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_producer_cohort.py" installed_producer_cohort.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_producer_logs.py" installed_producer_logs.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_project_functions.py" installed_project_functions.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_contract.py" installed_public_contract.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_define.py" installed_public_define.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_environment.py" installed_public_environment.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_grammar.py" installed_public_grammar.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_odm_helpers.py" installed_odm_helpers.py
-          cp "${GITHUB_WORKSPACE}/python/tests/odm/_odm_documents.py" odm_documents.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_producers.py" installed_public_producers.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/installed_verification_logs.py" installed_verification_logs.py
-          cp "${GITHUB_WORKSPACE}/rust/tools/private_schema_requirements.py" private_schema_requirements.py
-          python "${GITHUB_WORKSPACE}/rust/tools/stage_specification_inputs.py" specification-original
-          python "${GITHUB_WORKSPACE}/rust/tools/stage_project_inputs.py" project-original
-          python "${GITHUB_WORKSPACE}/rust/tools/stage_define_inputs.py" define-fixtures
-          python "${GITHUB_WORKSPACE}/rust/tools/stage_grammar_inputs.py" grammar-original
-          cp -R "${GITHUB_WORKSPACE}/yaml" specification-yaml
-          cp -R "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/environment-candidate" specification-environment-candidate
+          python "${GITHUB_WORKSPACE}/.github/scripts/commands/installed.py" stage \
+            --runtime python --staged-root "${RUNNER_TEMP}"
       - name: Install the wheel
         if: matrix.form == 'wheel'
         working-directory: ${{ runner.temp }}
@@ -400,8 +369,7 @@ jobs:
           ARCHIVE: ${{ matrix.form == 'wheel' && '*.whl' || '*.tar.gz' }}
         run: |
           archives=(native-dist/${ARCHIVE})
-          YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/${FORM}/public-reports" python -I "${GITHUB_WORKSPACE}/rust/tools/supplemental_inventory.py" \
-            --root "${GITHUB_WORKSPACE}" --catalog "${GITHUB_WORKSPACE}/rust/qualification/supplemental.json" \
+          YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/${FORM}/public-reports" python -I "${GITHUB_WORKSPACE}/.github/scripts/commands/installed.py" run \
             --output "qualification/${FORM}/supplemental" --runtime python --staged-root "${RUNNER_TEMP}" \
             --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form "${FORM}" \
             --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-python-${{ matrix.os }}-${{ env.NATIVE_BUILD_PYTHON }}/$(basename "${archives[0]}")" \
@@ -523,7 +491,7 @@ jobs:
           stopifnot(all(vapply(packages, requireNamespace, logical(1), quietly = TRUE)))
           RS
       - name: Report installed R public benchmark conformance
-        if: ${{ always() && steps.r_install.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.r_install.outcome == 'success' }}
         working-directory: ${{ runner.temp }}
         env:
           R_LIBS: ${{ runner.temp }}/native-r-library
@@ -549,30 +517,18 @@ jobs:
           path: ${{ runner.temp }}/public-conformance
           if-no-files-found: error
       - name: Run installed R supplemental suites outside checkout
-        if: ${{ always() && steps.r_install.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.r_install.outcome == 'success' }}
         working-directory: ${{ runner.temp }}
         run: |
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_builds.R" producer_builds.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_producers.R" public_producers.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_cohort.R" producer_cohort.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/scalars.R" scalars.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/original_specifications.R" original_specifications.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/verification_logs.R" verification_logs.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_logs.R" producer_logs.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_environment.R" public_environment.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_define.R" public_define.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_contract.R" public_contract.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_grammar.R" public_grammar.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_file_resources.R" public_file_resources.R
-          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/arrow_input.R" arrow_input.R
-          YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/r-source/public-reports" R_LIBS="${RUNNER_TEMP}/native-r-library" python -I "${GITHUB_WORKSPACE}/rust/tools/supplemental_inventory.py" \
-            --root "${GITHUB_WORKSPACE}" --catalog "${GITHUB_WORKSPACE}/rust/qualification/supplemental.json" \
+          python "${GITHUB_WORKSPACE}/.github/scripts/commands/installed.py" stage \
+            --runtime r --staged-root "${RUNNER_TEMP}"
+          YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/r-source/public-reports" R_LIBS="${RUNNER_TEMP}/native-r-library" python -I "${GITHUB_WORKSPACE}/.github/scripts/commands/installed.py" run \
             --output qualification/r-source --runtime r --staged-root "${RUNNER_TEMP}" \
             --source-revision "$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)" --package-form source \
             --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-${{ matrix.os }}/yamaa_0.4.0.tar.gz" \
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
       - name: Require repository validator real-R public Check transport
-        if: ${{ always() && steps.r_install.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.r_install.outcome == 'success' }}
         working-directory: ${{ runner.temp }}
         env:
           R_LIBS: ${{ runner.temp }}/native-r-library
@@ -604,11 +560,8 @@ jobs:
           _R_CHECK_CRAN_INCOMING_REMOTE_: 'false'
           R_LIBS: ${{ runner.temp }}/native-r-library
         run: |
-          mkdir native-r-check
-          cd native-r-check
-          git -C "${GITHUB_WORKSPACE}" rev-parse HEAD > source-revision.txt
-          R CMD check --no-manual ../yamaa_0.4.0.tar.gz
-          python -c 'from pathlib import Path; lines = Path("yamaa.Rcheck/00check.log").read_text().splitlines(); assert "Status: OK" in lines, "R package check has unresolved findings"'
+          python "${GITHUB_WORKSPACE}/.github/scripts/commands/check_r.py" \
+            --archive "${RUNNER_TEMP}/yamaa_0.4.0.tar.gz" --work-dir "${RUNNER_TEMP}/native-r-check"
       - name: Preserve R package check
         if: ${{ always() && (steps.r_package_check.outcome == 'success' || steps.r_package_check.outcome == 'failure') }}
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -729,6 +682,14 @@ jobs:
         run: |
           python rust/tools/audit_native_run.py --run-id "${GITHUB_RUN_ID}" \
             --repository "${GITHUB_REPOSITORY}" --output "${RUNNER_TEMP}/native-run-audit" --check
+      - name: Independently replay the original inputs without network access
+        if: ${{ !cancelled() }}
+        run: |
+          sudo unshare --net -- "$(command -v python)" rust/tools/audit_native_run.py \
+            --input "${RUNNER_TEMP}/native-run-audit/input" \
+            --output "${RUNNER_TEMP}/native-run-audit/replay" --check
+          cmp "${RUNNER_TEMP}/native-run-audit/qualification.json" \
+            "${RUNNER_TEMP}/native-run-audit/replay/qualification.json"
       - name: Show the evidence record
         if: always()
         run: |
@@ -750,6 +711,8 @@ jobs:
           path: |
             ${{ runner.temp }}/native-run-audit/qualification.json
             ${{ runner.temp }}/native-run-audit/qualification.md
+            ${{ runner.temp }}/native-run-audit/replay/qualification.json
+            ${{ runner.temp }}/native-run-audit/replay/qualification.md
             ${{ runner.temp }}/native-run-audit/input/run.json
             ${{ runner.temp }}/native-run-audit/input/source.json
             ${{ runner.temp }}/native-run-audit/input/jobs.json

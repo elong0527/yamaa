@@ -436,6 +436,18 @@ def iter_odm_records(
                         raise ODMError(
                             f"ItemData {item_oid!r} has multiple Value children"
                         )
+                    # A `Value` child holds text, not markup: an element
+                    # child is released at its own end event, which clears
+                    # its text and tail, so itertext below would silently
+                    # truncate the value at the element. Comment and
+                    # processing-instruction children carry a callable tag,
+                    # not a name, and are annotations, not elements.
+                    if value_children and any(
+                        isinstance(child.tag, str) for child in value_children[0]
+                    ):
+                        raise ODMError(
+                            f"ItemData {item_oid!r} Value contains child elements"
+                        )
                     if "Value" in element.attrib:
                         value = element.get("Value")
                         value_present = True

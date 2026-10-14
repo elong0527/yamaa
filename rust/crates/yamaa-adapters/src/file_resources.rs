@@ -30,6 +30,7 @@ pub enum Error {
     InvalidRoot,
     InvalidBase,
     InvalidPath,
+    WrittenForm(yamaa_core::resource::ResourceFailure),
     InvalidLock,
     OutsideRoots,
     Symlink,
@@ -46,6 +47,7 @@ impl Error {
             Self::InvalidBase => "invalid resource base directory",
             Self::InvalidLock => "invalid packaging lock syntax",
             Self::InvalidPath => "invalid resource path spelling",
+            Self::WrittenForm(_) => "invalid resource path spelling",
             Self::OutsideRoots => "resource path outside approved roots",
             Self::Symlink => "resource path contains a symbolic link",
             Self::Changed => "captured resource content changed",
@@ -432,6 +434,11 @@ impl Resources {
         Ok(path_text(&anchor.key))
     }
     fn declaration_anchor(&self, base: &[String], written: &str) -> Result<Anchor, Error> {
+        bounded(written)?;
+        self.charge_work(written.len())?;
+        if let Some(failure) = yamaa_core::resource::written_path_failure(written) {
+            return Err(Error::WrittenForm(failure));
+        }
         if matches!(
             written.rsplit(['/', '\\']).next(),
             None | Some("" | "." | "..")
@@ -660,20 +667,13 @@ impl Resources {
             .try_fold(written.len(), |n, part| n.checked_add(part.len()))
             .ok_or(Error::Limit)?;
         self.charge_work(size.checked_mul(self.roots.len() + 1).ok_or(Error::Limit)?)?;
-        if written.contains('\\') || written.contains('\0') {
+        if let Some(failure) = yamaa_core::resource::written_path_failure(written) {
+            return Err(Error::WrittenForm(failure));
+        }
+        if written.contains('\0') {
             return Err(Error::InvalidPath);
         }
         let rooted = rooted_segments(written);
-        if rooted.is_none()
-            && written.split_once(':').is_some_and(|(head, _)| {
-                head.as_bytes().first().is_some_and(u8::is_ascii_alphabetic)
-                    && head
-                        .bytes()
-                        .all(|byte| byte.is_ascii_alphanumeric() || b"+.-".contains(&byte))
-            })
-        {
-            return Err(Error::InvalidPath);
-        }
         if rooted.as_ref().map_or_else(
             || written.split('/').any(str::is_empty),
             |s| {
@@ -1060,6 +1060,8 @@ impl yamaa_engine::specification_run::SourcePort for Resources {
             Error::Missing => Some(ResourceFailure::Missing),
             Error::NotRegularFile => Some(ResourceFailure::NotRegularFile),
             Error::Symlink => Some(ResourceFailure::Symlink),
+            Error::WrittenForm(failure) => Some(*failure),
+            Error::Changed => Some(ResourceFailure::ContentChanged),
             _ => None,
         }
     }

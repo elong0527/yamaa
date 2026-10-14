@@ -17,6 +17,7 @@ on:
       - '.github/scripts/benchmark-docs/**'
       - '.github/scripts/docs/**'
       - '.github/scripts/ci/coverage_report.py'
+      - '.github/scripts/commands/docs.py'
       - '.github/workflows/deploy-docs.yml'
   workflow_run:
     workflows: [Unit tests]
@@ -59,14 +60,15 @@ jobs:
           LC_ALL: C.UTF-8
           PYTHONHASHSEED: '1'
           TZ: UTC
-        run: python .github/scripts/benchmark-docs/generate.py --all --quiet
+        run: python .github/scripts/commands/docs.py dashboards
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@8a96df13519ee81fd526f2dfca5962811136661b # v2
       - name: Render slide decks
         run: |
           quarto render docs/slides/yamaa-pilot7-2026-09-25/index.qmd
           quarto render docs/slides/yamaa-njsug-2026-10-09/index.qmd
-      - name: Build the MkDocs site
+      - name: Prepare coverage report
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           COVERAGE_RUN_ID: ${{ github.event.workflow_run.id }}
@@ -74,12 +76,13 @@ jobs:
           if [ -z "${COVERAGE_RUN_ID}" ]; then
             COVERAGE_RUN_ID=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/unit-tests.yml/runs?branch=main&event=push&status=success&per_page=1" --jq '.workflow_runs[0].id // empty')
           fi
-          if [ -n "${COVERAGE_RUN_ID}" ]; then
-            gh run download "${COVERAGE_RUN_ID}" --name unit-test-coverage --dir docs/coverage
-          else
+          if [ -z "${COVERAGE_RUN_ID}" ] || \
+             ! gh run download "${COVERAGE_RUN_ID}" --name unit-test-coverage --dir docs/coverage; then
+            rm -rf docs/coverage
             python .github/scripts/ci/coverage_report.py --unavailable --output docs/coverage
           fi
-          python -m mkdocs build --strict
+      - name: Build the MkDocs site
+        run: python .github/scripts/commands/docs.py build
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:

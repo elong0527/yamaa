@@ -92,6 +92,85 @@ const PRODUCER: &str = "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys: [I
 const CONSUMER: &str = "schema_version: '1.0'\ndomain: TEST\nbase: FIRST\nkeys: [ID]\ninput:\n  FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}\n  SECOND: {path: ../generated/producer.csv, schema: ../producer/./p.yaml}\nintermediates: [{id: SECOND_REFERENCE, dataset: SECOND, key: [ID], no_match: null}]\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}\n  - {name: FIRST_VALUE, type: float, label: First value, derivation: FIRST.VALUE}\n  - {name: SECOND_VALUE, type: float, label: Second value, derivation: SECOND_REFERENCE.VALUE}\n  - {name: VALUE, type: float, label: Reported value, derivation: {compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}}\noutput: {path: ../generated/root.csv, columns: [ID, VALUE], decimals: 2}\n";
 
 #[test]
+fn producer_link_reduces_daily_doses_then_counts_days_before_any_publication() {
+    use yamaa_adapters::producer_result::prepare_owned_classified;
+    for language in [Language::Python, Language::R] {
+        let study = Study::new();
+        study.write(
+            "raw/ex.csv",
+            "USUBJID,EXTRT,EXSTDTC,EXDOSE\nA,X,2030-01-01,100\nA,X,2030-01-01,100\nA,X,2030-01-02,200\nA,X,2030-01-03,200\nB,X,2030-01-01,100\nB,X,2030-01-02,100\nB,X,2030-01-02,100\n",
+        );
+        study.write(
+            "producer/daily.yaml",
+            r#"schema_version: '1.0'
+domain: ADEXDAY
+keys: [USUBJID, EXTRT, EXSTDTC]
+input:
+  EX: {path: ../raw/ex.csv, types: {EXDOSE: int}}
+output: {path: ../generated/daily.csv, columns: [USUBJID, EXTRT, EXSTDTC, ADOSE]}
+rows:
+  - id: day
+    dataset: EX
+    group_by: [EX.USUBJID, EX.EXTRT, EX.EXSTDTC]
+    derivations:
+      USUBJID: EX.USUBJID
+      EXTRT: EX.EXTRT
+      EXSTDTC: EX.EXSTDTC
+      ADOSE: {aggregate: "SUM(EX.EXDOSE)"}
+columns:
+  - {name: USUBJID, type: str, label: Subject}
+  - {name: EXTRT, type: str, label: Treatment}
+  - {name: EXSTDTC, type: str, label: Dosing date}
+  - {name: ADOSE, type: int, label: Daily total dose}
+"#,
+        );
+        study.write(
+            "consumer/root.yaml",
+            r#"schema_version: '1.0'
+domain: ADEXSUM
+keys: [USUBJID, EXTRT, ADOSE]
+input:
+  DAILY: {path: ../generated/daily.csv, schema: ../producer/daily.yaml}
+output: {path: ../generated/adexsum.csv, columns: [USUBJID, EXTRT, ADOSE, TRTDUR]}
+rows:
+  - id: summary
+    dataset: DAILY
+    group_by: [DAILY.USUBJID, DAILY.EXTRT, DAILY.ADOSE]
+    derivations:
+      USUBJID: DAILY.USUBJID
+      EXTRT: DAILY.EXTRT
+      ADOSE: DAILY.ADOSE
+      TRTDUR: {aggregate: "COUNT(DAILY.*)"}
+columns:
+  - {name: USUBJID, type: str}
+  - {name: EXTRT, type: str}
+  - {name: ADOSE, type: int}
+  - {name: TRTDUR, type: int}
+"#,
+        );
+        let mut build = study.build(language);
+        let mut activation = Activation::new(&study, Mode::Pass);
+        let owned = build.build_owned_reported(&mut activation, report_id(), Default::default());
+        let mut result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
+        assert!(result.issues().is_empty(), "{:?}", result.issues());
+        assert!(result.output().is_some());
+        assert!(!study.0.join("generated/daily.csv").exists());
+        assert!(!study.0.join("generated/adexsum.csv").exists());
+        fs::create_dir(study.0.join("generated")).unwrap();
+        assert!(result.save().unwrap());
+        // The two day-1 doses combine before the consumer counts daily records.
+        assert_eq!(
+            fs::read(study.0.join("generated/daily.csv")).unwrap(),
+            b"USUBJID,EXTRT,EXSTDTC,ADOSE\nA,X,2030-01-01,200\nA,X,2030-01-02,200\nA,X,2030-01-03,200\nB,X,2030-01-01,100\nB,X,2030-01-02,200\n"
+        );
+        assert_eq!(
+            fs::read(study.0.join("generated/adexsum.csv")).unwrap(),
+            b"USUBJID,EXTRT,ADOSE,TRTDUR\nA,X,200,3\nB,X,100,1\nB,X,200,1\n"
+        );
+    }
+}
+
+#[test]
 fn linked_producer_ordinal_is_local_to_consumers_and_keeps_the_stored_contract() {
     use yamaa_adapters::producer_result::prepare_owned_classified;
     let study = Study::new();

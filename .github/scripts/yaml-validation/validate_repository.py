@@ -6337,6 +6337,39 @@ def derive_binding_reference_names(derivation):
     return names
 
 
+def derive_binding_window_path(derivation, path):
+    """Find a window in expression positions, without inspecting literal values."""
+    if not isinstance(derivation, dict):
+        return None
+    if set(derivation) <= {'value', 'unconvertible'} and 'value' in derivation:
+        return derive_binding_window_path(derivation['value'], path)
+    if len(derivation) != 1:
+        return None
+    operation, payload = next(iter(derivation.items()))
+    operation_path = f'{path}.{operation}'
+    if operation in _DERIVE_WINDOW_OPERATIONS:
+        return operation_path
+    if operation == 'case' and isinstance(payload, list):
+        for index, branch in enumerate(payload):
+            if isinstance(branch, dict):
+                for name in ('then', 'otherwise'):
+                    nested = derive_binding_window_path(
+                        branch.get(name), f'{operation_path}[{index}].{name}'
+                    )
+                    if nested is not None:
+                        return nested
+    if operation == 'str_concat' and isinstance(payload, dict):
+        sources = payload.get('sources')
+        if isinstance(sources, list):
+            for index, source in enumerate(sources):
+                nested = derive_binding_window_path(
+                    source, f'{operation_path}.sources[{index}]'
+                )
+                if nested is not None:
+                    return nested
+    return None
+
+
 def validate_derive_step(derive, path, context, filter_text=None):
     '''Validate an aggregate derive step.
 
@@ -6380,6 +6413,12 @@ def validate_derive_step(derive, path, context, filter_text=None):
             continue
         declared = binding.get('type')
         bindings[name] = declared if isinstance(declared, str) else None
+        window_path = derive_binding_window_path(
+            binding.get('derivation'), f'{binding_path}.derivation'
+        )
+        if window_path is not None:
+            invalid('a derive binding cannot use a window operation', window_path)
+            return bindings, None, errors
         # REQ-1189: a binding derivation reads the relation's fields and
         # earlier bindings, per record.
         earlier = {
@@ -7469,332 +7508,6 @@ def default_driver_dataset(spec):
         if len(names) == 1:
             return names[0]
     return None
-
-
-def column_dependency_graph(spec, env):
-    columns = spec.get('columns')
-    if not isinstance(columns, list):
-        return [], {}
-    names = [
-        column.get('name')
-        for column in columns
-        if isinstance(column, dict) and isinstance(column.get('name'), str)
-    ]
-    rows = spec.get('rows') if isinstance(spec.get('rows'), list) else []
-    intermediate_entries = (
-        spec.get('intermediates')
-        if isinstance(spec.get('intermediates'), list)
-        else []
-    )
-    intermediates = {
-        intermediate.get('id'): intermediate
-        for intermediate in intermediate_entries
-        if isinstance(intermediate, dict) and isinstance(intermediate.get('id'), str)
-    }
-    by_name = {
-        column.get('name'): column
-        for column in columns
-        if isinstance(column, dict) and isinstance(column.get('name'), str)
-    }
-    dependencies = {
-        name: {
-            dependency
-            for dependency in column_dependency_names(
-                by_name[name], rows, intermediates, env
-            )
-            if dependency in by_name
-        }
-        for name in names
-    }
-    return names, dependencies
-
-
-def dependency_components(names, dependencies):
-    index_of = {}
-    lowlink = {}
-    stack = []
-    on_stack = set()
-    counter = [0]
-    component_of = {}
-
-    def connect(name):
-        index_of[name] = lowlink[name] = counter[0]
-        counter[0] += 1
-        stack.append(name)
-        on_stack.add(name)
-        for dependency in sorted(dependencies[name]):
-            if dependency not in index_of:
-                connect(dependency)
-                lowlink[name] = min(lowlink[name], lowlink[dependency])
-            elif dependency in on_stack:
-                lowlink[name] = min(lowlink[name], index_of[dependency])
-        if lowlink[name] == index_of[name]:
-            while True:
-                member = stack.pop()
-                on_stack.discard(member)
-                component_of[member] = name
-                if member == name:
-                    break
-
-    for name in names:
-        if name not in index_of:
-            connect(name)
-    return component_of
-
-
-def find_forward_reference(spec, env):
-    names, dependencies = column_dependency_graph(spec, env)
-    positions = {name: index for index, name in enumerate(names)}
-    component_of = dependency_components(names, dependencies)
-    for name in names:
-        for dependency in sorted(dependencies[name]):
-            if positions[dependency] > positions[name]:
-                if component_of.get(name) == component_of.get(dependency):
-                    continue
-                return name, dependency
-    return None
-
-
-def find_key_dependency(spec, env):
-    rows = spec.get('rows')
-    if isinstance(rows, list) and rows:
-        return None
-    keys = spec.get('keys')
-    if not isinstance(keys, list):
-        return None
-    key_names = {key for key in keys if isinstance(key, str)}
-    names, dependencies = column_dependency_graph(spec, env)
-    for name in names:
-        if name in key_names:
-            for dependency in sorted(dependencies[name]):
-                if dependency not in key_names:
-                    return name, dependency
-    return None
-
-
-def find_column_dependency_cycle(spec, env):
-    names, dependencies = column_dependency_graph(spec, env)
-    state = {}
-    stack = []
-
-    def visit(name):
-        state[name] = 'active'
-        stack.append(name)
-        for dependency in sorted(dependencies[name]):
-            if state.get(dependency) == 'active':
-                start = stack.index(dependency)
-                return stack[start:] + [dependency]
-            if state.get(dependency) is None:
-                cycle = visit(dependency)
-                if cycle is not None:
-                    return cycle
-        stack.pop()
-        state[name] = 'complete'
-        return None
-
-    for name in reversed(names):
-        if state.get(name) is None:
-            cycle = visit(name)
-            if cycle is not None:
-                return cycle
-    return None
-
-
-def derivation_primary_path(spec, spec_label, name):
-    columns = spec.get('columns')
-    if isinstance(columns, list):
-        for column in columns:
-            if not isinstance(column, dict) or column.get('name') != name:
-                continue
-            derivation = column.get('derivation')
-            path = f"{spec_label}.columns.{name}.derivation"
-            if isinstance(derivation, str):
-                # REQ-0319: a bare string desugars to {source: string} before
-                # any path is computed, so diagnostics name the source.
-                derivation = {'source': derivation}
-            if isinstance(derivation, dict) and 'value' in derivation:
-                derivation = derivation.get('value')
-                path += '.value'
-            if isinstance(derivation, dict) and len(derivation) == 1:
-                path += '.' + next(iter(derivation))
-            return path
-    rows = spec.get('rows')
-    if isinstance(rows, list):
-        for index, row in enumerate(rows):
-            derivations = row.get('derivations') if isinstance(row, dict) else None
-            if not isinstance(derivations, dict) or name not in derivations:
-                continue
-            derivation = derivations[name]
-            path = f"{spec_label}.rows[{index}].derivations.{name}"
-            if isinstance(derivation, str):
-                derivation = {'source': derivation}
-            if isinstance(derivation, dict) and len(derivation) == 1:
-                path += '.' + next(iter(derivation))
-            return path
-    return f"{spec_label}.columns.{name}.derivation"
-
-
-def validate_spec_static_semantics(spec, spec_label, spec_path, env, sources=None):
-    """Validate static operation, aggregate, template, and graph contracts."""
-    errors = []
-    datasets = dataset_type_catalog(spec, spec_path, env, sources)
-    output_types = specification_column_types(spec)
-    intermediate_entries = spec.get('intermediates')
-    intermediates = intermediate_type_catalog(spec, datasets, spec_label)
-
-    # REQ-1242: a derive binding may read a keep-declared named intermediate.
-    # The planned selection only honors `keep` with `order_by` (REQ-0119),
-    # so the static single-record-per-row promise mirrors it.
-    keep_intermediate_ids = frozenset(
-        intermediate.get('id')
-        for intermediate in intermediate_entries or ()
-        if isinstance(intermediate, dict)
-        and isinstance(intermediate.get('id'), str)
-        and intermediate.get('keep') is not None
-        and intermediate.get('order_by') is not None
-    )
-
-    keys = spec.get('keys') if isinstance(spec.get('keys'), list) else []
-    column_context = {
-        'resolver': predicate_resolver(
-            unqualified=output_types, qualified={**datasets, **intermediates}
-        ),
-        'input': datasets,
-        'env': env,
-        'aggregate': {
-            'kind': 'column',
-            'input': datasets,
-            'output_types': output_types,
-            'keys': keys,
-            'intermediate_ids': frozenset(intermediates),
-            'keep_intermediate_ids': keep_intermediate_ids,
-            'resolver': predicate_resolver(
-                unqualified=output_types, qualified={**datasets, **intermediates}
-            ),
-        },
-    }
-    columns = spec.get('columns')
-    if isinstance(columns, list):
-        for index, column in enumerate(columns):
-            if not isinstance(column, dict) or 'derivation' not in column:
-                continue
-            name = column.get('name', index)
-            errors.extend(
-                validate_derivation_static_semantics(
-                    column['derivation'],
-                    f"{spec_label}.columns.{name}.derivation",
-                    column_context,
-                )
-            )
-
-    rows = spec.get('rows')
-    if isinstance(rows, list):
-        for index, row in enumerate(rows):
-            if not isinstance(row, dict):
-                continue
-            driver = row.get('dataset', default_driver_dataset(spec))
-            derivations = row.get('derivations')
-            if not isinstance(derivations, dict):
-                continue
-            row_output = {
-                name: output_types[name]
-                for name in derivations
-                if name in output_types
-            }
-            driver_fields = datasets.get(driver, {})
-            grouped = isinstance(row.get('group_by'), list)
-            row_context = {
-                'resolver': predicate_resolver(
-                    unqualified=row_output,
-                    qualified={
-                        # REQ-0156/REQ-0157: a row derivation reads another
-                        # dataset through the row-phase join, so binding
-                        # accepts every input dataset here. Formula and
-                        # predicate scopes stay driver-only in their own
-                        # validators (REQ-0410, REQ-0058).
-                        **datasets,
-                        **intermediates,
-                        **(
-                            {driver: driver_fields}
-                            if isinstance(driver, str)
-                            else {}
-                        ),
-                    },
-                ),
-                'input': datasets,
-                'env': env,
-                'aggregate': {
-                    'kind': 'grouped_row' if grouped else 'ungrouped_row',
-                    'input': datasets,
-                    'output_types': row_output,
-                    'keys': keys,
-                    'driver': driver,
-                    'row_group_by': row.get('group_by'),
-                    'intermediate_ids': frozenset(intermediates),
-                    'keep_intermediate_ids': keep_intermediate_ids,
-                    'resolver': predicate_resolver(
-                        unqualified=row_output,
-                        qualified={
-                            **intermediates,
-                            **(
-                                {driver: driver_fields}
-                                if isinstance(driver, str)
-                                else {}
-                            ),
-                        },
-                    ),
-                },
-            }
-            for name, derivation in derivations.items():
-                errors.extend(
-                    validate_derivation_static_semantics(
-                        derivation,
-                        f"{spec_label}.rows[{index}].derivations.{name}",
-                        row_context,
-                    )
-                )
-
-    errors.extend(
-        validate_intermediate_static_semantics(
-            spec, spec_label, datasets, output_types
-        )
-    )
-    cycle = find_column_dependency_cycle(spec, env)
-    if cycle is not None:
-        for name in dict.fromkeys(cycle[:-1]):
-            errors.append(
-                validation_diagnostic(
-                    derivation_primary_path(spec, spec_label, name),
-                    'dependency_cycle',
-                    'column dependency cycle: ' + ' -> '.join(cycle),
-                    context={'cycle': cycle},
-                )
-            )
-    forward = find_forward_reference(spec, env)
-    if forward is not None:
-        name, dependency = forward
-        errors.append(
-            validation_diagnostic(
-                derivation_primary_path(spec, spec_label, name),
-                'forward_reference',
-                f'column {name!r} references later declared column '
-                f'{dependency!r}',
-                context={'column': name, 'dependency': dependency},
-            )
-        )
-    key_dependency = find_key_dependency(spec, env)
-    if key_dependency is not None:
-        name, dependency = key_dependency
-        errors.append(
-            validation_diagnostic(
-                derivation_primary_path(spec, spec_label, name),
-                'key_dependency',
-                f'key column {name!r} depends on non-key output column '
-                f'{dependency!r}',
-                context={'column': name, 'dependency': dependency},
-            )
-        )
-    return list(dict.fromkeys(errors))
 
 
 def prepare_spec_document(spec, spec_label, spec_path, env):

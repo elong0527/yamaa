@@ -497,15 +497,24 @@ def test_informed_consent_text_is_preserved(tmp_path, language, consent):
 def test_race_keeps_the_subject_key_in_dm_and_suppdm(tmp_path, language):
     name = "sdtm-dm-race-ethnicity"
     odm = _input(name, "odm.csv")
-    first = odm[0]["SubjectKey"]
+    # SUPPDM holds the additional races of multi-race subjects only, so
+    # rename the first subject with more than one collected race. Renaming
+    # a single-race subject (such as the first row's) would leave the
+    # suppdm assertion below with no row it could ever match.
+    races = {}
     for r in odm:
-        if r["SubjectKey"] == first:
+        if r["ItemOID"] == "IT.DM.RACE":
+            races[r["SubjectKey"]] = races.get(r["SubjectKey"], 0) + 1
+    subject = next(key for key, count in races.items() if count > 1)
+    for r in odm:
+        if r["SubjectKey"] == subject:
             r["SubjectKey"] = "COLLECTED-SUBJECT"
     output = _run(tmp_path, name, language, {"odm.csv": odm})
     assert any(r["USUBJID"] == "COLLECTED-SUBJECT" for r in output["dm.csv"])
-    for r in output["suppdm.csv"]:
-        if "COLLECTED-SUBJECT" in r["USUBJID"]:
-            assert r["USUBJID"] == r["IDVARVAL"] == "COLLECTED-SUBJECT"
+    suppdm = [r for r in output["suppdm.csv"] if r["USUBJID"] == "COLLECTED-SUBJECT"]
+    assert suppdm
+    for r in suppdm:
+        assert r["USUBJID"] == r["IDVARVAL"] == "COLLECTED-SUBJECT"
 
 
 @pytest.mark.parametrize("coded_term", ["", "OTHER"])

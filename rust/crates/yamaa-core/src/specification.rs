@@ -1,4 +1,4 @@
-//! Bounded original-specification compiler prototype: declared typed sources,
+//! Bounded original-specification compiler: declared typed sources,
 //! implicit key grain, source columns and checked numeric computations.
 //! Admission never reads study data; binding consumes only the captured source schema.
 use crate::{
@@ -1037,9 +1037,9 @@ impl PreparedSpecification {
         for &(name, id) in inputs {
             let prefix = format!("input.{}", text(d, name)?);
             let written = text(d, field(d, id, "path")?)?;
-            if crate::resource::has_uri_scheme(written) {
+            if let Some(failure) = crate::resource::written_path_failure(written) {
                 source_findings.push(PreflightFinding::Scalar(
-                    crate::resource::ResourceFailure::UriScheme.diagnostic(text(d, name)?, written),
+                    failure.diagnostic(text(d, name)?, written),
                 ));
                 continue;
             }

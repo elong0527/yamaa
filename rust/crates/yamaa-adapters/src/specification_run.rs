@@ -1,5 +1,5 @@
-//! Original YAML run prototype over captured schema and typed snapshots. This is
-//! not a filesystem runner, artifact publisher or qualified host frontend yet.
+//! Execute prepared YAML specifications over captured schema and typed snapshots.
+//! Source ports supply snapshots; publication belongs to the public Save service.
 use crate::{
     arrow_table::{ArrowTable, TableLimits},
     csv_source::{self, TextTableError},

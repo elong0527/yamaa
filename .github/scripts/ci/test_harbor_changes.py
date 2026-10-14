@@ -70,15 +70,15 @@ class HarborChanges(unittest.TestCase):
         )
         self.assertEqual(selection["benchmarks"], [])
 
-    def test_schedule_and_dispatch_keep_full_coverage(self):
-        for event in ("schedule", "workflow_dispatch"):
+    def test_main_schedule_and_dispatch_keep_full_coverage(self):
+        for event in ("push", "schedule", "workflow_dispatch"):
             selection = select_benchmarks(event, [], AVAILABLE)
             self.assertEqual(selection["benchmarks"], sorted(AVAILABLE))
             self.assertTrue(selection["full"])
 
     def test_unknown_event_cannot_silently_skip_coverage(self):
         with self.assertRaises(ValueError):
-            select_benchmarks("push", [], AVAILABLE)
+            select_benchmarks("release", [], AVAILABLE)
 
     def test_actions_outputs_and_saved_selection_match_the_coverage_scope(self):
         cases = (
@@ -91,6 +91,7 @@ class HarborChanges(unittest.TestCase):
             ("pull_request", ["evaluations/harbor/README.md"], [], False),
             ("pull_request", ["evaluations/harbor/grade.py"], sorted(AVAILABLE), True),
             ("schedule", [], sorted(AVAILABLE), True),
+            ("push", [], sorted(AVAILABLE), True),
         )
         for event_name, paths, names, full in cases:
             with (

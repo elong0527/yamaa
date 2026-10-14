@@ -467,9 +467,10 @@ fn execute_inner_with_observer_into<P: SourcePort, D: SourceDecoder>(
                 failure,
                 error,
             });
-            // Known validation causes collect in declaration order; opaque host
-            // errors and interruptions terminate before any later authority.
-            if failure.is_none() {
+            // Validation causes collect in declaration order. An observed
+            // content change is an ingest failure and retains fail-fast order,
+            // like opaque host errors and interruptions.
+            if failure.is_none() || failure == Some(ResourceFailure::ContentChanged) {
                 attempt.result = Err(PortError::Inspect(inspections));
                 return;
             }

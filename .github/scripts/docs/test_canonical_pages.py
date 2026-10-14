@@ -26,7 +26,7 @@ class CanonicalPages(unittest.TestCase):
         (self.root / "rules/README.md").write_text(
             "# Rules\n\n"
             "[Binding](specification/binding.md#requirements)\n\n"
-            "[Manifest](../benchmarks/execution-manifest.yaml)\n\n"
+            "[Inventory](../benchmarks/README.md)\n\n"
             "[Reference][owner]\n\n"
             "[owner]: values/types.md?plain=1#requirements\n\n"
             "![Diagram](../docs/diagrams/design.svg)\n\n"
@@ -82,7 +82,7 @@ class CanonicalPages(unittest.TestCase):
         for path in (
             "rules/README.md",
             "rules/specification/binding.md#requirements",
-            "benchmarks/execution-manifest.yaml",
+            "benchmarks/README.md",
             "rules/values/types.md?plain=1#requirements",
         ):
             self.assertIn(f'href="{repository}/blob/main/{path}"', home + rules)

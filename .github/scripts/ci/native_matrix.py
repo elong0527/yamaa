@@ -13,8 +13,6 @@ PYTHONS = ("3.12", "3.13", "3.14")
 FORMS = ("wheel", "source")
 R_PLATFORMS = PLATFORMS
 BUILD_PYTHON = "3.14"
-PR_PLATFORM = "ubuntu-24.04"
-PR_PYTHONS = ("3.12", "3.14")
 
 
 def plan(event, reference=None):
@@ -25,17 +23,11 @@ def plan(event, reference=None):
         and not reference.startswith("refs/heads/qualification/issue-")
     ):
         raise ValueError(f"unsupported native qualification push: {reference}")
-    if event == "pull_request":
-        # Keep PR feedback on Linux and exercise both supported Python endpoints.
-        platforms = [PR_PLATFORM]
-        pythons = PR_PYTHONS
-        r_platforms = [PR_PLATFORM]
-    elif event in {"push", "workflow_dispatch"}:
-        platforms = list(PLATFORMS)
-        pythons = PYTHONS
-        r_platforms = list(R_PLATFORMS)
-    else:
+    if event not in {"push", "workflow_dispatch"}:
         raise ValueError(f"unsupported native CI event: {event}")
+    platforms = list(PLATFORMS)
+    pythons = PYTHONS
+    r_platforms = list(R_PLATFORMS)
     combinations = [
         {"os": platform, "python": version, "form": form}
         for platform, version, form in itertools.product(platforms, pythons, FORMS)
@@ -50,7 +42,7 @@ def plan(event, reference=None):
         "r": {"os": r_platforms},
         "run-r": bool(r_platforms),
         "run-rust": event == "push",
-        "full": event in {"push", "workflow_dispatch"},
+        "full": True,
         "compare-os": platforms[0],
     }
 
@@ -132,18 +124,10 @@ def main():
             )
             output.write(f"{key}={encoded}\n")
     with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
-        if coverage["full"]:
-            summary.write(
-                "Full installed native coverage: all 18 Python combinations "
-                "and all three R hosts.\n"
-            )
-        else:
-            summary.write(
-                "PR native coverage: Linux, Python 3.12 and 3.14, "
-                "wheel and source installs.\n\n"
-                "Full installed platform coverage and complete cohort "
-                "comparisons run on main pushes or manual full-matrix dispatches.\n"
-            )
+        summary.write(
+            "Full installed native coverage: all 18 Python combinations "
+            "and all three R hosts. PR smoke checks run in pr.yml.\n"
+        )
         summary.write(
             "Shared Rust checks and cross-platform math run on main and explicit "
             "qualification/issue-* pushes. Branch evidence remains separate from "

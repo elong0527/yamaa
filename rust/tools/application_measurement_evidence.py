@@ -2,10 +2,19 @@
 from __future__ import annotations
 import gzip
 import json
-from pathlib import Path
+from pathlib import PureWindowsPath
 
 PREFIX = '{"protocol":"held-observations/1","report":'
 DELIMITER = ',"measurements":'
+
+
+def node_name(identity):
+    """Read generated node basenames from original Windows or POSIX spellings.
+
+    This lexical comparison never rewrites the full retained identity, which
+    must still stay exactly equal across the original Build and held Saves.
+    """
+    return PureWindowsPath(identity).name
 
 
 def retain_envelope(raw, report_path, measurements_path):
@@ -116,7 +125,7 @@ def validate_repetition(case, child, row, read_json):
         previous=immutable
         phases=durations
     if case["family"]=="producer":
-        actual=[Path(node["identity"]).name for node in value["nodes"]]
+        actual=[node_name(node["identity"]) for node in value["nodes"]]
         if actual!=case["expected_nodes"]:
             raise ValueError("actual phase nodes differ from independently declared graph")
     elif value["nodes"]:

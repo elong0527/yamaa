@@ -8,6 +8,7 @@ Package identity is its artifact reference, and equality compares actual bytes.
 from __future__ import annotations
 
 import argparse
+import ast
 import base64
 import io
 import itertools
@@ -35,7 +36,7 @@ SOURCE_FILES = (
     "rust/Cargo.toml",
     "rust/rust-toolchain.toml",
     "python/uv.lock",
-    "benchmarks/execution-manifest.yaml",
+    "rust/tools/public_conformance.py",
     "rust/qualification/supplemental.json",
 )
 COHORT = (
@@ -106,9 +107,22 @@ def snapshot(repository, run_id, destination):
     run["repository"] = repository
     write(destination / "run.json", run)
     source = gh_json(f"{prefix}/commits/{run['head_sha']}")
+    tree = gh_json(f"{prefix}/git/trees/{run['head_sha']}?recursive=1")
+    require(not tree.get("truncated"), "exact source tree is truncated")
+    spec_paths = sorted(
+        item["path"]
+        for item in tree["tree"]
+        if item["type"] == "blob"
+        and re.fullmatch(r"benchmarks/[^/]+/spec[^/]*\.yaml", item["path"])
+    )
+    require(bool(spec_paths), "exact source benchmark paths missing")
     write(
         destination / "source.json",
-        {"sha": source["sha"], "parents": [p["sha"] for p in source["parents"]]},
+        {
+            "sha": source["sha"],
+            "parents": [p["sha"] for p in source["parents"]],
+            "benchmark_spec_paths": spec_paths,
+        },
     )
     attempt = run["run_attempt"]
     pages = gh_json(
@@ -271,12 +285,74 @@ class Audit:
             len({a["name"] for a in self.artifacts}) == len(self.artifacts),
             "duplicate artifact names from different attempts",
         )
-        for name in SOURCE_FILES:
+        # A retained pre-change snapshot is judged from its original inventory,
+        # never from the auditor checkout's current corpus or exclusions.
+        required_sources = SOURCE_FILES
+        if "benchmark_spec_paths" not in self.source:
+            required_sources = tuple(
+                "benchmarks/execution-manifest.yaml"
+                if name == "rust/tools/public_conformance.py"
+                else name
+                for name in SOURCE_FILES
+            )
+        for name in required_sources:
             require(
                 (self.directory / "source" / name).is_file(),
                 f"exact source bytes missing: {name}",
             )
+        self.public_corpus()
         return {"revision": self.source["sha"], "parents": self.source["parents"]}
+
+    def public_corpus(self):
+        if "benchmark_spec_paths" not in self.source:
+            manifest = (
+                self.directory / "source/benchmarks/execution-manifest.yaml"
+            ).read_text()
+            names = re.findall(r"^  ([A-Za-z0-9_-]+):\s*$", manifest, re.MULTILINE)
+            require(len(names) == len(set(names)), "duplicate retained corpus entry")
+            require(bool(names), "retained corpus denominator missing")
+            return set(names), None
+        paths = self.source["benchmark_spec_paths"]
+        require(
+            isinstance(paths, list)
+            and paths
+            and all(
+                isinstance(p, str)
+                and re.fullmatch(r"benchmarks/[^/]+/spec[^/]*\.yaml", p)
+                for p in paths
+            )
+            and len(paths) == len(set(paths)),
+            "invalid exact source benchmark paths",
+        )
+        names = {path.split("/")[1] for path in paths}
+        source = (
+            self.directory / "source/rust/tools/public_conformance.py"
+        ).read_text()
+        try:
+            declarations = ast.parse(source).body
+        except SyntaxError as exc:
+            raise ValueError("invalid exact source conformance configuration") from exc
+        assignments = [
+            node.value
+            for node in declarations
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "EXCLUDED"
+                for target in node.targets
+            )
+        ]
+        require(len(assignments) == 1, "exact source exclusions missing or duplicate")
+        exclusions = ast.literal_eval(assignments[0])
+        require(
+            isinstance(exclusions, dict)
+            and set(exclusions) <= names
+            and all(
+                isinstance(k, str) and isinstance(v, str) and v
+                for k, v in exclusions.items()
+            ),
+            "exact source exclusions invalid",
+        )
+        return names, exclusions
 
     def check(self, checks, name, function):
         try:
@@ -952,11 +1028,7 @@ class Audit:
             or inventory["runtime_version"].startswith(version + "."),
             "public inventory Python version differs",
         )
-        # Extract only top-level manifest entries without depending on a host evaluator.
-        manifest = (
-            self.directory / "source/benchmarks/execution-manifest.yaml"
-        ).read_text()
-        expected = set(re.findall(r"^  ([A-Za-z0-9_-]+):\s*$", manifest, re.MULTILINE))
+        expected, exclusions = self.public_corpus()
         rows = inventory["benchmarks"]
         require(
             expected
@@ -964,6 +1036,17 @@ class Audit:
             and {r["example"] for r in rows} == expected,
             "public corpus denominator differs",
         )
+        if exclusions is not None:
+            require(
+                {r["example"] for r in rows if r["verdict"] == "excluded"}
+                == set(exclusions)
+                and all(
+                    r.get("reason") == exclusions[r["example"]]
+                    for r in rows
+                    if r["verdict"] == "excluded"
+                ),
+                "public corpus exclusions differ from exact source",
+            )
         counts = dict(Counter(r["verdict"] for r in rows))
         require(
             set(counts) <= {"pass", "mismatch", "unsupported", "error", "excluded"},

@@ -67,6 +67,14 @@ pub trait Ports {
         declaring: &str,
         written: &str,
     ) -> Result<Self::Specification, Self::Error>;
+    fn capture_specification_at(
+        &mut self,
+        _path: &str,
+        declaring: &str,
+        written: &str,
+    ) -> Result<Self::Specification, Self::Error> {
+        self.capture_specification(declaring, written)
+    }
     fn specification(document: &Self::Specification) -> SpecificationView<'_>;
     fn location(&self, path: &str, declaring: &str, written: &str) -> Result<String, Self::Error>;
     fn json_written(&self, written: &str) -> String;
@@ -234,7 +242,7 @@ impl<P: Ports> Application<P> {
         for (index, spec) in section.specs.value.iter().enumerate() {
             let path = format!("{standard}.specs[{index}]");
             let document = ports
-                .capture_specification(identity, &spec.value)
+                .capture_specification_at(&path, identity, &spec.value)
                 .map_err(Failure::Port)?;
             let view = P::specification(&document);
             let origin = view.output.ok_or_else(|| {
@@ -653,6 +661,7 @@ pub fn resource_diagnostic(
         R::Missing if path.ends_with(".artifact") => ConditionCode::ProducerContractMismatch,
         R::Missing => ConditionCode::ResourceMissing,
         R::NotRegularFile => ConditionCode::ResourceNotRegularFile,
+        R::Changed => ConditionCode::ResourceContentChanged,
         _ => ConditionCode::ApplicationRejected,
     };
     let mut context: yamaa_core::diagnostic::Context = [(
@@ -669,9 +678,10 @@ pub fn resource_diagnostic(
             R::InvalidLock => "invalid_packaging_lock",
             R::OutsideRoots => "resource_outside_roots",
             R::Symlink => "resource_link",
-            R::Changed => "resource_changed",
             R::Limit => "resource_limit",
-            R::Missing | R::NotRegularFile => unreachable!("normative resource cause selected"),
+            R::Missing | R::NotRegularFile | R::Changed => {
+                unreachable!("normative resource cause selected")
+            }
         };
         context.insert(
             "stage".into(),

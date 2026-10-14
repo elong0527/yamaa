@@ -228,7 +228,7 @@ def rule_identity_errors(meta: dict, stem: str, label: str) -> list[str]:
 
 
 def validate_rule_metadata(root: Path):
-    if (root / 'rules/migration.yaml').is_file():
+    if any((root / "rules").glob("*/*.md")):
         from check_rule_rewrite import check
         return check(root)[0]
     errors = []
@@ -392,9 +392,11 @@ def validate_examples_index(root: Path):
         return errors
 
     index_content = index_file.read_text(encoding="utf-8")
-    # Find all table rows matching: | [`dir`](dir/) | desc | (Lifecycle) |
+    # Find all table rows matching: | [`dir`](dir/) | desc | ... |
+    # Trailing columns (lifecycle, conformance, ...) are allowed and ignored.
+    # Column classes exclude newlines so a match can never span rows.
     pattern = re.compile(
-        r"^\|\s*\[`([^`]+)`\]\(([^)]+)\)\s*\|\s*([^|]+?)\s*(?:\|\s*([^|]*?)\s*)?\|$",
+        r"^\|\s*\[`([^`\n]+)`\]\(([^)\n]+)\)\s*\|\s*([^\n|]+?)\s*(?:\|[^\n|]*?)*\|$",
         re.MULTILINE,
     )
 

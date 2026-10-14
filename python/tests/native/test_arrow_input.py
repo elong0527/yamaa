@@ -7,6 +7,14 @@ import polars as pl
 import pyarrow as pa
 import pytest
 
+# The native extension is optional for the test suite (see
+# test_package.py), but every test in this module exercises the compiled
+# `_prepare_document` entry point, so there is no pure-Python fallback:
+# skip the whole module instead of erroring on import during collection.
+pytest.importorskip(
+    "yamaa._native", reason="the compiled native extension is not installed"
+)
+
 from yamaa._native import _prepare_document
 
 

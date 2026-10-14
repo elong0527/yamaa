@@ -18,7 +18,7 @@ SHARED_FILES = {
 def select_benchmarks(event, paths, available):
     """Map benchmark data, prompts, and references to their current Harbor cases."""
     available = set(available)
-    if event in {"schedule", "workflow_dispatch"}:
+    if event in {"push", "schedule", "workflow_dispatch"}:
         return {"benchmarks": sorted(available), "full": True, "shared": []}
     if event != "pull_request":
         raise ValueError(f"unsupported Harbor Oracle event: {event}")

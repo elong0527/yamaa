@@ -14,12 +14,17 @@ def affects_dashboard(path):
             "evaluations/harbor/solutions/",
             ".github/scripts/benchmark-docs/",
             ".github/scripts/ci/",
+            ".github/scripts/commands/",
         )
-    ) or path in ("docs/articles/benchmark.md", ".github/workflows/yaml-validation.yml")
+    ) or path in (
+        "Makefile",
+        "docs/articles/benchmark.md",
+        ".github/workflows/yaml-validation.yml",
+    )
 
 
 def main():
-    changed = False
+    changed = True
     if os.environ["GITHUB_EVENT_NAME"] == "pull_request":
         event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
         base = subprocess.check_output(

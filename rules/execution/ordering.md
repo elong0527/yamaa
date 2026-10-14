@@ -80,8 +80,10 @@ determined.
 
 <a id="req-0302"></a>
 
-**REQ-0302.** Non-missing values use the order their type owns: numeric order
-under [Numeric values](../values/numbers.md), text order under [Text values](../values/text.md), and chronological order for `date` and
+**REQ-0302.** Non-missing values use the order their type owns: exact numeric
+comparison under [REQ-0005](../values/types.md#req-0005), including a mixed
+`int`/`float` pair without rounding the integer to binary64; text order under
+[Text values](../values/text.md); and chronological order for `date` and
 `datetime` under [Temporal values](../values/temporal.md).
 
 ### Type behavior

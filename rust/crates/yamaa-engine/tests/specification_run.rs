@@ -915,6 +915,28 @@ mod source_collection {
         assert_eq!(port.capture.reads, 0);
     }
     #[test]
+    fn changed_content_inspection_keeps_original_payload_and_stops_later_authority() {
+        use yamaa_core::resource::ResourceFailure::{ContentChanged, Missing};
+        let prepared = prepared();
+        let (mut port, mut decoder) = inspection();
+        port.failures = vec![
+            ("SRC".into(), Some(ContentChanged)),
+            ("THIRD".into(), Some(Missing)),
+        ];
+        let mut attempt = CapturedAttempt::new(prepared.source());
+        run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+        let Err(PortError::Inspect(errors)) = &attempt.result else {
+            panic!("content change missing");
+        };
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].failure, Some(ContentChanged));
+        assert!(Rc::ptr_eq(&errors[0].error.payload, &port.capture.payload));
+        assert_eq!(port.inspected, ["SRC"]);
+        assert_eq!(*decoder.trace.borrow(), ["inspect"]);
+        assert!(attempt.sources.is_empty() && port.capture.requests.is_empty());
+        assert_eq!(port.capture.reads, 0);
+    }
+    #[test]
     fn opaque_inspection_failure_stops_later_authority_and_keeps_original_payload() {
         use yamaa_core::resource::ResourceFailure::Missing;
         let prepared = prepared();

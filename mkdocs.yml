@@ -93,5 +93,7 @@ nav:
       - Codelists and terminology: articles/terminology.md
   - Benchmark: benchmark/index.md
   - Engine:
+      - Development: development.md
+      - Release and migration: release.md
       - Python engine: https://github.com/elong0527/yamaa/tree/main/python
       - R engine: https://github.com/elong0527/yamaa/tree/main/R/yamaa

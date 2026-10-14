@@ -92,7 +92,11 @@ How to write a prompt is in
   subject identifier in the inputs is renamed and supported ages,
   measurements and complete dates are changed. The reference computes the
   answer from those inputs, and the script must write it. The grade records
-  the shared seed and changed columns. This checks supported counterfactuals;
+  the shared seed and changed columns. The shared day shift preserves chronology
+  among complete dates only. Partial dates, dates collected in separate
+  year/month/day items, and interval strings stay unchanged; their alignment
+  with complete dates and the resulting imputations can therefore change.
+  This checks supported counterfactuals;
   it does not prove generalization to every possible input. Column and row
   order are reported, not graded. Cells are read by column type: integers
   compare exactly (`1.0` equals `1`), other numbers within a relative 1e-9,

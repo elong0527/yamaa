@@ -86,7 +86,7 @@ def publish(output, data=None, *, commit=None, run_url=None):
     if data is None:
         page = """# Code coverage
 
-Coverage is pending the first successful run of all Rust, Python and R test suites.
+Coverage is pending an available report from a successful run of all Rust, Python and R test suites.
 
 [Unit test runs](https://github.com/elong0527/yamaa/actions/workflows/unit-tests.yml)
 """

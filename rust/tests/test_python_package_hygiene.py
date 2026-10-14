@@ -7,6 +7,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location(
     "python_package_hygiene",
@@ -20,7 +21,11 @@ def write_archive(path, names):
     if path.suffix == ".whl":
         with zipfile.ZipFile(path, "w") as archive:
             for name in names:
-                archive.writestr(name, b"raise RuntimeError('do not import')\n")
+                member = zipfile.ZipInfo(name)
+                # ZipInfo normalizes host separators; these controls need the
+                # authored bytes of hostile names in both ZIP headers.
+                member.filename = name
+                archive.writestr(member, b"raise RuntimeError('do not import')\n")
     else:
         with tarfile.open(path, "w:gz") as archive:
             for name in names:
@@ -36,9 +41,10 @@ class PythonPackageHygiene(unittest.TestCase):
             root = Path(directory)
             for filename, prefix in (
                 ("yamaa.whl", ""),
-                ("yamaa.tar.gz", "yamaa-0.2.0/python/src/"),
+                ("yamaa.tar.gz", "yamaa-0.4.0/src/"),
+                ("yamaa.tar.gz", "yamaa-0.4.0/python/src/"),
             ):
-                with self.subTest(filename=filename):
+                with self.subTest(filename=filename, prefix=prefix):
                     path = root / filename
                     write_archive(
                         path,
@@ -57,26 +63,41 @@ class PythonPackageHygiene(unittest.TestCase):
 
     def test_every_retired_import_family_is_rejected_in_both_distribution_forms(self):
         retired = (
-            "_reference_domain.py", "application.py", "regex.py",
-            "adapters/__init__.py", "expressions/scalar.py", "io/project.py",
-            "models/__init__.py", "odm/bindings.py", "planning/__init__.py",
-            "runtime/context.py", "schema/__init__.py", "specification/__init__.py",
-            "submission/schema.xsd", "verification/__init__.py",
+            "_reference_domain.py",
+            "application.py",
+            "regex.py",
+            "adapters/__init__.py",
+            "expressions/scalar.py",
+            "io/project.py",
+            "models/__init__.py",
+            "odm/bindings.py",
+            "planning/__init__.py",
+            "runtime/context.py",
+            "schema/__init__.py",
+            "specification/__init__.py",
+            "submission/schema.xsd",
+            "verification/__init__.py",
         )
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for filename, prefix in (
                 ("yamaa.whl", "yamaa/"),
+                ("yamaa.tar.gz", "yamaa-0.4.0/src/yamaa/"),
                 ("yamaa.tar.gz", "yamaa-0.4.0/python/src/yamaa/"),
             ):
                 for name in retired:
-                    with self.subTest(filename=filename, member=name):
+                    with self.subTest(filename=filename, prefix=prefix, member=name):
                         path = root / filename
                         write_archive(path, [prefix + name])
-                        with self.assertRaisesRegex(ValueError, "retired Python evaluator/API"):
+                        with self.assertRaisesRegex(
+                            ValueError, "retired Python evaluator/API"
+                        ) as finding:
                             module.check_archive(path)
+                        self.assertIn(prefix + name, str(finding.exception))
 
-    def test_wheel_install_schemes_and_windows_member_spellings_cannot_restore_reference(self):
+    def test_wheel_install_schemes_and_windows_member_spellings_cannot_restore_reference(
+        self,
+    ):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "yamaa.whl"
             for name in (
@@ -91,7 +112,37 @@ class PythonPackageHygiene(unittest.TestCase):
             ):
                 with self.subTest(member=name):
                     write_archive(path, [name])
-                    with self.assertRaisesRegex(ValueError, "retired Python evaluator/API") as finding:
+                    with self.assertRaisesRegex(
+                        ValueError, "retired Python evaluator/API"
+                    ) as finding:
+                        module.check_archive(path)
+                    self.assertIn(name, str(finding.exception))
+
+    def test_wheel_raw_names_survive_host_zipinfo_normalization(self):
+        name = "yamaa\\Runtime\\context.py"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "yamaa.whl"
+            with mock.patch.object(zipfile.os, "sep", "\\"):
+                write_archive(path, [name])
+                self.assertIn(name.encode(), path.read_bytes())
+                with zipfile.ZipFile(path) as archive:
+                    member = archive.infolist()[0]
+                    self.assertEqual(member.orig_filename, name)
+                    self.assertEqual(member.filename, name.replace("\\", "/"))
+                with self.assertRaisesRegex(
+                    ValueError, "retired Python evaluator/API"
+                ) as finding:
+                    module.check_archive(path)
+                self.assertIn(name, str(finding.exception))
+
+    def test_wheel_nul_truncation_keeps_retired_root_refusal_and_original_finding(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "yamaa.whl"
+            for name in ("yamaa/io\x00allowed.py", "yamaa/__pycache__\x00notes.py"):
+                with self.subTest(member=name):
+                    write_archive(path, [name])
+                    self.assertIn(name.encode(), path.read_bytes())
+                    with self.assertRaises(ValueError) as finding:
                         module.check_archive(path)
                     self.assertIn(name, str(finding.exception))
 
@@ -99,13 +150,18 @@ class PythonPackageHygiene(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "yamaa.tar.gz"
             for name in (
+                "yamaa-0.4.0/SRC/YAMAA/IO.py",
+                "yamaa-0.4.0/Src/Yamaa/Verification/__init__.py",
+                "yamaa-0.4.0\\SRC\\YAMAA\\REGEX.PY",
                 "yamaa-0.4.0/PYTHON/SRC/YAMAA/IO.py",
                 "yamaa-0.4.0/Python/Src/Yamaa/Verification/__init__.py",
                 "yamaa-0.4.0\\PYTHON\\SRC\\YAMAA\\REGEX.PY",
             ):
                 with self.subTest(member=name):
                     write_archive(path, [name])
-                    with self.assertRaisesRegex(ValueError, "retired Python evaluator/API") as finding:
+                    with self.assertRaisesRegex(
+                        ValueError, "retired Python evaluator/API"
+                    ) as finding:
                         module.check_archive(path)
                     self.assertIn(name, str(finding.exception))
 
@@ -114,20 +170,29 @@ class PythonPackageHygiene(unittest.TestCase):
             root = Path(directory)
             for filename, prefix in (
                 ("yamaa.whl", ""),
+                ("yamaa.tar.gz", "yamaa-0.4.0/src/"),
                 ("yamaa.tar.gz", "yamaa-0.4.0/python/src/"),
             ):
-                with self.subTest(filename=filename):
+                with self.subTest(filename=filename, prefix=prefix):
                     path = root / filename
-                    names = [prefix + name for name in (
-                        "yamaa/_odm/readers.py", "yamaa/_odm/parquet.py",
-                        "yamaa/style/__main__.py", "yamaa/style/_fields.json",
-                        "yamaa/_native.pyi", "yamaa/__init__.py",
-                    )]
-                    names.extend((
-                        "yamaa-0.4.0/rust/crates/yamaa-core/src/regex.rs",
-                        "yamaa-0.4.0/rust/crates/yamaa-adapters/tests/fixtures/expressions.tsv",
-                        "yamaa-0.4.0/rust/qualification/producer-cohort/shared-producer-parquet/reference.json",
-                    ))
+                    names = [
+                        prefix + name
+                        for name in (
+                            "yamaa/_odm/readers.py",
+                            "yamaa/_odm/parquet.py",
+                            "yamaa/style/__main__.py",
+                            "yamaa/style/_fields.json",
+                            "yamaa/_native.pyi",
+                            "yamaa/__init__.py",
+                        )
+                    ]
+                    names.extend(
+                        (
+                            "yamaa-0.4.0/rust/crates/yamaa-core/src/regex.rs",
+                            "yamaa-0.4.0/rust/crates/yamaa-adapters/tests/fixtures/expressions.tsv",
+                            "yamaa-0.4.0/rust/qualification/producer-cohort/shared-producer-parquet/reference.json",
+                        )
+                    )
                     write_archive(path, names)
                     self.assertEqual(module.check_archive(path), len(names))
 
@@ -136,7 +201,8 @@ class PythonPackageHygiene(unittest.TestCase):
             root = Path(directory)
             for filename, prefix in (
                 ("yamaa.whl", ""),
-                ("yamaa.tar.gz", "yamaa-0.2.0/python/src/"),
+                ("yamaa.tar.gz", "yamaa-0.4.0/src/"),
+                ("yamaa.tar.gz", "yamaa-0.4.0/python/src/"),
             ):
                 for name in (
                     "yamaa/__pycache__/__init__.cpython-314.pyc",
@@ -147,7 +213,7 @@ class PythonPackageHygiene(unittest.TestCase):
                     "yamaa/submission/module.pyo",
                     "yamaa\\submission\\__pycache__\\note.txt",
                 ):
-                    with self.subTest(filename=filename, member=name):
+                    with self.subTest(filename=filename, prefix=prefix, member=name):
                         path = root / filename
                         write_archive(path, [prefix + name])
                         with self.assertRaisesRegex(

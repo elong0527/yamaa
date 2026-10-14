@@ -20,6 +20,7 @@ use alloc::{
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SchemaContext {
     Text(String),
+    Boolean(bool),
     /// A decoded value rejected by a schema descriptor or value constraint.
     ValueKind(DocumentKind),
     /// A decoded collection or member rejected by inheritance layer admission.
@@ -45,6 +46,44 @@ impl SchemaDiagnostic {
     pub fn definition(&self) -> Definition {
         self.code.definition()
     }
+}
+
+// These are historical spellings, scoped to their former schema owner. They
+// remain invalid; the hints do not admit aliases or change finding order.
+const ENVIRONMENT_MIGRATION: &str = "replace the retired environment format with language, lock and functions definitions containing function, description, params, returns and tests (REQ-1080, REQ-1083); see benchmarks/adam-adsl-bmi";
+
+fn retired_field_hint(class: &str, field: &str) -> Option<&'static str> {
+    match (class, field) {
+        ("assert", "expr") => Some("replace expr with require (REQ-0384)"),
+        ("function", "contract_version") => {
+            Some("delete contract_version; a call takes name and args only (REQ-1085)")
+        }
+        ("environment_class", "version" | "runtime")
+        | ("function_definition_class", "contract" | "binding" | "conformance") => {
+            Some(ENVIRONMENT_MIGRATION)
+        }
+        _ => None,
+    }
+}
+
+fn retired_operation_hint(registry: &str, operation: &str) -> Option<&'static str> {
+    match (registry, operation) {
+        ("dataset_verifications", "implies") => {
+            Some("replace implies with assert using when and require (REQ-0383)")
+        }
+        _ => None,
+    }
+}
+
+fn migration_context(
+    mut context: Vec<(&'static str, SchemaContext)>,
+    suggestion: Option<&str>,
+) -> Vec<(&'static str, SchemaContext)> {
+    if let Some(suggestion) = suggestion {
+        context.push(("retired", SchemaContext::Boolean(true)));
+        context.push(("suggestion", SchemaContext::Text(suggestion.into())));
+    }
+    context
 }
 
 /// Each default is interpreted against its descriptor after all references resolve.
@@ -429,6 +468,19 @@ impl Run<'_, '_> {
         let N::Mapping(items) = &self.input.nodes()[site.value] else {
             return self.invalid(site, name);
         };
+        let missing_hint = match name {
+            "assert" if self.field(site.value, "expr")?.is_some() => {
+                retired_field_hint("assert", "expr")
+            }
+            "function_definition_class"
+                if self.field(site.value, "contract")?.is_some()
+                    || self.field(site.value, "binding")?.is_some()
+                    || self.field(site.value, "conformance")?.is_some() =>
+            {
+                Some(ENVIRONMENT_MIGRATION)
+            }
+            _ => None,
+        };
         let mut diagnostics = Vec::new();
         for field in fields {
             self.budget.work(1)?;
@@ -449,10 +501,13 @@ impl Run<'_, '_> {
                         } else {
                             ConditionCode::SchemaMissingRequiredField
                         },
-                        vec![
-                            ("field", Self::text(&field.name)),
-                            ("class", Self::text(name)),
-                        ],
+                        migration_context(
+                            vec![
+                                ("field", Self::text(&field.name)),
+                                ("class", Self::text(name)),
+                            ],
+                            missing_hint,
+                        ),
                     )?)
                 }
                 None => {}
@@ -472,7 +527,10 @@ impl Run<'_, '_> {
                 diagnostics.push(self.diagnostic(
                     site.child(site.value, &path),
                     ConditionCode::SchemaUnknownField,
-                    vec![("field", Self::text(key)), ("class", Self::text(name))],
+                    migration_context(
+                        vec![("field", Self::text(&key)), ("class", Self::text(name))],
+                        retired_field_hint(name, &key),
+                    ),
                 )?);
             }
         }
@@ -619,10 +677,13 @@ impl Run<'_, '_> {
                         return Ok(vec![self.diagnostic(
                             site.child(site.value, &path),
                             ConditionCode::SchemaUnknownOperation,
-                            vec![
-                                ("registry", Self::text(&registry.name)),
-                                ("operation", Self::text(operation)),
-                            ],
+                            migration_context(
+                                vec![
+                                    ("registry", Self::text(&registry.name)),
+                                    ("operation", Self::text(&operation)),
+                                ],
+                                retired_operation_hint(&registry.name, &operation),
+                            ),
                         )?]);
                     };
                     match &entry.shape {
@@ -666,7 +727,33 @@ impl Run<'_, '_> {
                         "time_rule" => ConstraintOwner::TimeRule,
                         _ => ConstraintOwner::Descriptor,
                     };
-                    self.constraints(descriptor, site, owner)
+                    let diagnostics = self.constraints(descriptor, site, owner)?;
+                    if !diagnostics.is_empty() {
+                        return Ok(diagnostics);
+                    }
+                    if name == "project_path" {
+                        if let N::Text(written) = &self.input.nodes()[site.value] {
+                            self.budget.work(written.len().saturating_mul(3))?;
+                            if let Some(failure) = crate::resource::written_path_failure(written) {
+                                let mut path = site.path.to_string();
+                                let mut context =
+                                    vec![("path", SchemaContext::InputValue(site.value))];
+                                if let Some(input) = site.path.strip_prefix("input.") {
+                                    let dataset = input.split('.').next().unwrap_or(input);
+                                    context.insert(0, ("dataset", Self::text(dataset)));
+                                    if !input.contains('.') {
+                                        path = self.joined(site.path, "path", false)?;
+                                    }
+                                }
+                                return Ok(vec![self.diagnostic(
+                                    site.child(site.value, &path),
+                                    failure.code(),
+                                    context,
+                                )?]);
+                            }
+                        }
+                    }
+                    Ok(diagnostics)
                 }
             }
         })();

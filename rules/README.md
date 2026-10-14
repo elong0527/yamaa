@@ -4,8 +4,8 @@ Every contract indexed below is normative. Files have one semantic owner;
 requirements use permanent global IDs independent of that owner's filename.
 The schema owns shape, defaults, and structural constraints. Contracts state
 shared and operation-local behavior and failure conditions. The
-[benchmark manifest](../benchmarks/execution-manifest.yaml) identifies
-executable examples.
+[generated benchmark index](../benchmarks/README.md#benchmarks) accounts for
+authored examples, public host entries, and explicit conformance exclusions.
 
 Read the relevant block, then follow its requirement links. The blocks are
 reading order, not execution phases; [execution/lifecycle](execution/lifecycle.md)
@@ -82,25 +82,20 @@ owns the sequence of a run.
 
 Requirements are defined once as `**REQ-0001.**`. IDs remain stable across
 file moves and section reordering. Allocate new IDs above the largest assigned
-number; never renumber or reuse a retired ID. Delete retired rule blocks and
-record their IDs in `migration.yaml`, with a replacement where one exists.
+number; never renumber or reuse a retired ID. Delete retired rule blocks;
+Git history preserves their former definitions and retirement decisions.
 Normative `must`, `must not`, `should`, and `may` have their usual requirement
 meanings.
 Every contract has Requirements; contracts with distinct failure rules also
 have Error conditions. Topic subsections group related rules.
 
-[migration.yaml](migration.yaml) tracks former `RNNN-n` citations, retired
-IDs and their replacements where one exists, and schema-prose provenance. It
-is not a second semantic contract.
-
 The generated [requirement index](reference/requirements.md) links each active ID
-and its historical aliases to the current owner.
+to the current owning contract, derived from its definition.
 
 The validation-condition registry (`yaml/conditions.yaml`) maps every condition an
 implementation may raise to the phases that may raise it. It no longer carries
-the old diagnostic family tags (`R001`, etc.); those remain compatibility names
-resolved through [migration.yaml](migration.yaml). New author-facing citations
-use REQ IDs.
+the old diagnostic family tags (`R001`, etc.). Author-facing citations use
+current REQ IDs; historical citations remain in Git history.
 
 [Schema fields](reference/schema-fields.md) is generated from the current
 schema: it lists shapes and defaults and links to semantic owners. Edit the
