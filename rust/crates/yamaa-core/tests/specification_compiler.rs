@@ -133,6 +133,150 @@ fn source() -> TableSchema {
     .unwrap()
 }
 
+#[test]
+fn aggregate_derive_windows_fail_preflight_at_the_nested_operation_path() {
+    use yamaa_core::{
+        diagnostic::{ConditionCode, ContextValue},
+        specification::PreflightFinding,
+    };
+    use Tree::*;
+    for operation in [
+        "row_number",
+        "rank",
+        "row_value",
+        "previous_non_missing",
+        "locf",
+        "baseline_flag",
+    ] {
+        for variable in ["SRC.ID", "ID"] {
+            let mut fields = vec![(
+                "window",
+                Map(vec![("order_by", List(vec![Text(variable)]))]),
+            )];
+            match operation {
+                "row_value" => {
+                    fields.push(("source", Text(variable)));
+                    fields.push(("offset", Scalar(N::Integer("-1".into()))));
+                }
+                "previous_non_missing" | "locf" => fields.push(("source", Text(variable))),
+                "baseline_flag" => {
+                    fields.push(("date", Text(variable)));
+                    fields.push(("reference_date", Text(variable)));
+                }
+                _ => {}
+            }
+            let window = Map(vec![(operation, Map(fields))]);
+            let literal = Map(vec![("literal", Scalar(N::Integer("0".into())))]);
+            for (derivation, suffix) in [
+                (window.clone(), format!(".{operation}")),
+                (
+                    Map(vec![(
+                        "case",
+                        List(vec![
+                            Map(vec![
+                                ("when", Text("SRC.ID >= 0")),
+                                ("then", window.clone()),
+                            ]),
+                            Map(vec![("otherwise", literal.clone())]),
+                        ]),
+                    )]),
+                    format!(".case[0].then.{operation}"),
+                ),
+                (
+                    Map(vec![(
+                        "case",
+                        List(vec![
+                            Map(vec![
+                                ("when", Text("SRC.ID >= 0")),
+                                ("then", literal.clone()),
+                            ]),
+                            Map(vec![("otherwise", window.clone())]),
+                        ]),
+                    )]),
+                    format!(".case[1].otherwise.{operation}"),
+                ),
+                (
+                    Map(vec![(
+                        "str_concat",
+                        Map(vec![("sources", List(vec![window.clone()]))]),
+                    )]),
+                    format!(".str_concat.sources[0].{operation}"),
+                ),
+            ] {
+                let document = operation_document(
+                    "aggregate",
+                    Map(vec![
+                        (
+                            "derive",
+                            List(vec![Map(vec![
+                                ("name", Text("V")),
+                                ("type", Text("int")),
+                                ("derivation", Map(vec![("value", derivation)])),
+                            ])]),
+                        ),
+                        ("expr", Text("SUM(V)")),
+                    ]),
+                    "input.csv",
+                );
+                let outcome = PreparedSpecification::prepare(&document);
+                let Err(PrepareError::Invalid(findings)) = outcome else {
+                    panic!("unexpected aggregate derive window outcome: {operation} {variable}: {outcome:?}");
+                };
+                let [PreflightFinding::Scalar(diagnostic)] = findings.as_slice() else {
+                    panic!("unexpected window findings: {findings:?}");
+                };
+                assert_eq!(diagnostic.code, ConditionCode::AggregateDeriveDeclaration);
+                assert_eq!(diagnostic.definition().phase, "validation");
+                assert_eq!(diagnostic.definition().condition, "invalid_derive_step");
+                assert_eq!(diagnostic.definition().requirement, Some("REQ-1189"));
+                assert_eq!(
+                    diagnostic.spec_paths,
+                    [format!(
+                        "columns.VALUE.derivation.aggregate.derive[0].derivation{suffix}"
+                    )]
+                );
+                assert_eq!(
+                    diagnostic.context["reason"],
+                    ContextValue::Scalar(Value::Str(
+                        "a derive binding cannot use a window operation".into()
+                    ))
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn aggregate_derive_window_names_in_literals_remain_literals() {
+    use Tree::*;
+    let binding = |name, kind, value| {
+        Map(vec![
+            ("name", Text(name)),
+            ("type", Text(kind)),
+            ("derivation", Map(vec![("value", value)])),
+        ])
+    };
+    let document = operation_document(
+        "aggregate",
+        Map(vec![
+            (
+                "derive",
+                List(vec![
+                    binding(
+                        "V",
+                        "int",
+                        Map(vec![("source", Map(vec![("variable", Text("SRC.ID"))]))]),
+                    ),
+                    binding("TAG", "str", Map(vec![("literal", Text("row_value"))])),
+                ]),
+            ),
+            ("expr", Text("SUM(V)")),
+        ]),
+        "input.csv",
+    );
+    PreparedSpecification::prepare(&document).unwrap();
+}
+
 fn case_document(when: &str, expression: &str) -> SpecificationDocument {
     use Tree::*;
     operation_document(

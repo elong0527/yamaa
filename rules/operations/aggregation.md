@@ -120,6 +120,24 @@ date becomes an integer only through an operation such as
 `to_epoch_day` in the binding's own derivation. The aggregate and numeric
 computation grammars never parse text or dates themselves.
 
+A binding cannot use a window operation (`row_number`, `rank`, `row_value`,
+`previous_non_missing`, `locf`, or `baseline_flag`), including inside `case`
+or `str_concat`. Validation reports `invalid_derive_step` at the window's
+path: the binding evaluates one record and has no window relation.
+
+For ordered pairwise reductions, first construct one row per sample and
+derive its neighbours with [Window functions](windows.md), then derive each
+segment as an ordinary column. A second specification reduces the stored
+segments at the subject grain. Its input may declare
+`SEGS: {path: segments.csv, schema: segments.yaml}` under
+[REQ-0520](../storage/ingestion.md#req-0520); the producing specification
+completes before the consumer reads its artifact under
+[REQ-0521](../storage/ingestion.md#req-0521). For the linear trapezoid, the
+producer's segment expression is `0.5 * (PREVC + AVAL) * (ARELTM - PREVT)`,
+and the consumer's reduction is `SUM(SEGS.SEG)`. A first sample's missing
+neighbour produces a missing segment, which `SUM` skips under
+[REQ-0480](#req-0480).
+
 <a id="req-1190"></a>
 
 **REQ-1190.** Each derive binding's evaluated value converts to its declared
