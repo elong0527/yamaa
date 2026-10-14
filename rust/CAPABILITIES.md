@@ -209,6 +209,12 @@ The snapshot port must provide correctly normalized cells of its declared types.
 Source/output row, output-cell and key-cell budgets are resource limits rather
 than language restrictions. These are not byte-level memory or allocator-failure
 guarantees: strings, tree nodes and verification observations allocate normally.
+`ExecutionBudget` now composes those evaluation limits with configurable source
+count, IPC byte, decoded-cell, column and batch quotas. The opt-in
+`ExecutionBudget::longitudinal()` profile supports 10,000,000 combined source
+records and 10,000,000 output rows, within independently adjustable work/text/byte
+quotas. Existing callers retain the bounded defaults; each execution starts fresh
+accounting. Budget-aware engine entrypoints admit combined shapes before cell reads.
 
 Absent/empty row templates can use native standalone key construction: every
 input key lifecycle completes before non-key derivation; converted combinations
@@ -346,6 +352,18 @@ unconstructed keys remain unavailable. The bridge reports raw typed observations
 not complete public verification logs, warning handling or publication. An optional [Python normalization frontend](../python/src/yamaa/adapters/NATIVE_DATASETS.md)
 now executes the ADLB specification through this bridge. The shared Rust compiler,
 remaining named prototypes and all full-workflow/default-cutover gates remain open.
+
+The Rust adapter exposes `execute_dataset_with_budget` for prebound plans and
+canonical IPC inputs. It preflights all source framing and combined shapes before
+decoding. `ipc_table::snapshot_batches` optionally decodes normalized input batches
+incrementally. After successful execution, `dataset_batches` and
+`write_dataset_with_budget` export sanitized `RecordBatch` chunks, preserving exact
+values, schema, nulls and row order under cumulative output byte/batch quotas.
+`encode_dataset_with_budget` retains the owned-byte convenience form. Chunked
+transport reduces temporary Arrow allocations; the dataset engine still retains
+complete snapshots and output for global operations. See the
+[resource policy](DATASET_TRANSPORT.md#resource-policy) for defaults, the 10M profile
+and streaming lifecycle constraints.
 
 The trusted Rust dataset API also composes prebound host-function calls with
 record/group assignments and completed key-grain outputs. The explicit Python/R

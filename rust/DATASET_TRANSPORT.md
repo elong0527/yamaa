@@ -19,10 +19,14 @@ separate entrypoint below; there are no retries, fallback or implicit external w
 For multiple inputs, both hosts expose `execute_dataset_sources(request, source,
 secondary)`. `secondary` is an ordered Python list of bytes or R list of raw
 vectors. The plan adds optional `secondary: [{name, schema}]`, with unique names
-and schemas in that same order. There are at most eight total sources. Aggregate
-IPC bytes are at most 8 MiB, total decoded cells at most 262,144, and combined
-source rows at most 65,536. Plan and buffer-count checks precede IPC decoding;
-all snapshots are copied before execution. A legacy single-source call rejects a
+and schemas in that same order. Resource quotas are caller-selected implementation
+policies, represented by `yamaa_engine::dataset::ExecutionBudget` and re-exported
+by `yamaa_adapters`. The bounded defaults retain eight sources and 8 MiB IPC input;
+current source capacity is 524,288 combined rows and 2,097,152 decoded cells.
+`ExecutionBudget::longitudinal()` admits up to **10,000,000 combined source records**
+and 10,000,000 output rows. Each quota can be adjusted independently.
+Plan, buffer-count, aggregate byte and all source framing/shape checks precede
+IPC decoding; complete snapshots are retained before engine execution. A legacy single-source call rejects a
 plan requiring secondary snapshots. Existing single-source requests and outcome
 bytes retain their previous shape.
 
@@ -375,25 +379,91 @@ full workflow cancellation and asynchronous execution remain qualification gates
 
 ## Resource policy
 
-| Resource | Fixed limit |
+`ExecutionBudget` composes transport quotas with the existing engine `Limits`.
+The budget is supplied by a trusted caller, separately from the dataset plan.
+`Default` uses `ExecutionBudget::bounded()`; existing entrypoints retain these
+defaults. Budget-aware Rust entrypoints have no additional fixed source, row,
+cell or IPC-byte ceiling. Zero quotas refuse that resource; `batch_rows` uses
+`Option<NonZeroUsize>` so an enabled chunk size cannot be zero.
+
+| Budget field / resource | Bounded default | Longitudinal profile |
+| --- | --- | --- |
+| `max_sources` | 8 | 64 |
+| `max_ipc_bytes`: aggregate encoded input and logical decoded string bytes | 8 MiB | 1 GiB |
+| `execution.source_rows`: combined input rows | 524,288 | 10,000,000 |
+| `max_decoded_cells`: combined input rows x each source's width | 2,097,152 | 640,000,000 |
+| `max_columns`: source/output width | 64 | 64 |
+| `max_batches`: combined input batches / exported batches | 256 | 65,536 |
+| `execution.output_rows` | 131,072 | 10,000,000 |
+| `execution.output_cells` | 1,048,576 | 640,000,000 |
+| `execution.key_cells`: cells per partition/key scan | 524,288 | 640,000,000 |
+| `execution.work_cells`: cumulative logical work | 134,217,728 | 2,000,000,000 |
+| `execution.scalar_text_bytes`: cumulative scalar input text | 16 MiB | 1 GiB |
+| `execution.output_text_bytes`: retained output text | 2 MiB | 512 MiB |
+| `execution.identity_cells` / `identity_text_bytes` | 65,536 / 1 MiB | 65,536 / 1 MiB |
+| `max_output_bytes`: complete exported IPC stream, including framing | 8 MiB | 1 GiB |
+| `batch_rows`: maximum rows per exported `RecordBatch` | `None` (one batch) | `Some(65,536)` |
+
+The longitudinal profile covers ten million records within its independent byte,
+width, work and text quotas. Wider records, large strings or expensive plans may
+require higher quotas. Raising only the row limit does not bypass any other limit.
+All additions and rows x columns calculations are checked for overflow. Source
+counts, aggregate rows/cells/batches and encoded bytes apply across primary and
+secondary inputs, including empty batches. Logical string accounting also applies
+across sources so buffer aliases cannot evade the byte quota.
+
+Rust callers use the same budget for admission, evaluation and export:
+
+```rust
+use yamaa_adapters::{execute_dataset_with_budget, ExecutionBudget};
+use yamaa_adapters::ipc_table::write_dataset_with_budget;
+
+let budget = ExecutionBudget::longitudinal();
+let attempt = execute_dataset_with_budget(&plan, &primary_ipc, &secondary_ipc, budget)?;
+// Handle a failed attempt and its observations before obtaining accepted output.
+let accepted = attempt.result.expect("successful dataset execution");
+write_dataset_with_budget(&accepted.dataset, &mut sink, budget)?;
+```
+
+`DatasetExecution::execute_with_budget` and `execute_functions_with_budget`
+admit trusted `TableAccess` inputs under the same shape/evaluation policy.
+`ipc_table::decode_snapshot_with_budget` retains a complete Arrow snapshot;
+`snapshot_batches` instead decodes and normalizes one input batch at a time after
+preflighting the entire stream. Exhaust that iterator to validate every value;
+a later batch can still fail UTF-8, temporal or cumulative logical-text checks.
+Previously yielded batches own their buffers independently of the borrowed IPC.
+
+For output, `dataset_batches` lazily constructs sanitized batches from an accepted
+dataset; `write_dataset_with_budget` writes them directly to an arbitrary `Write`
+sink without accumulating encoded bytes. `encode_dataset_with_budget` is the
+convenience form that returns an owned `Vec<u8>`. `batch_rows: None` retains one
+batch. Chunking preserves schema, nulls, exact values and row order; an empty output
+exports one empty batch with its declared schema. Batch and byte quotas cover the
+entire stream, including the final EOS frame. A failed sink or exhausted byte quota
+can leave a partial stream, so callers that publish artifacts must stage output
+until export succeeds. `OutputIo` distinguishes sink failure from `OutputLimit`.
+
+Chunking bounds temporary Arrow export allocations and allows standalone input
+consumers to release batches as they go. Dataset evaluation still retains complete
+source snapshots and accepted rows for grouping, joins, windows and verification.
+It is not constant-memory execution of arbitrary plans. Accepted output is exposed
+only after output identity and verification succeed. These logical quotas do not
+reserve memory or guarantee that every ten-million-row domain fits available RAM.
+
+Plan compilation and diagnostic response policies remain separately bounded:
+
+| Resource | Limit |
 | --- | --- |
 | Plan JSON | 1 MiB UTF-8 |
-| IPC input / accepted output | 8 MiB each |
 | Outcome JSON | 8 MiB |
-| Source/output columns | 64 each |
 | Templates / verification declarations | 16 each |
 | Assignments per template / column phase | 64 each |
 | Schema name / provenance text | 256 / 1,024 UTF-8 bytes |
-| Source/output rows | 65,536 each |
-| Output cells / cells per partition key scan | 262,144 each |
-| Cumulative logical work cells | 4,194,304 |
-| Cumulative scalar input text processed | 16 MiB |
 | Predicate nodes / bindings / IN items | 4,096 each |
 | Predicate expression text / depth | 65,536 UTF-8 bytes / 64 |
-| Cumulative predicate resolutions / LIKE work | 4,194,304 each |
-| Cumulative regex subject bytes / work / state cells | 16 MiB / 4,194,304 / 4,194,304 |
-| Retained output text | 1 MiB |
-| Retained identity cells / identity text | 65,536 / 1 MiB |
+
+Cumulative predicate resolutions, LIKE work and regex work/state cells use
+`execution.work_cells`; regex subject bytes use `execution.scalar_text_bytes`.
 
 Work cells charge assignments, direct/aggregate source reads, partition key scans,
 key checks, row-count checks and identity copies before the relevant operation.
@@ -428,6 +498,21 @@ text before copying the selected value. Partition comparisons and sorting groups
 by first source position remain subject to the documented non-deadline policy.
 
 ## Evidence and remaining gates
+
+The [budget-aware transport tests](crates/yamaa-adapters/tests/dataset_transport.rs)
+execute 10,000,000 encoded input records through grouped COUNT and export
+1,100,000 accepted record-level output rows beyond the bounded row/byte caps.
+They also cover aggregate admission, chunk order, empty schemas, late invalid
+values, byte-boundary exhaustion and sink failures. IPC adversarial tests retain
+logical-text accounting across aliased buffers, batches and sources. These are
+capacity/correctness checks, not a performance or memory-size guarantee.
+
+A separate [10M-row ODM timing](measurements/dataset-odm-10m.md) records three
+release-mode executions with all eleven ODM fields, 10,000 subjects and key-scope
+AGE/SEX derivations. The median was 9.352 seconds for IPC decode, checked dataset
+execution and IPC export to a byte-count sink. The record states the hardware,
+raw trials, memory observation and excluded workflow stages; this does not time
+XML/CSV ingestion or establish a runtime for other ODM scopes or specifications.
 
 Shared fixtures encode committed ADLB source/expected values independently of the
 Rust engine and include duplicate keys, failed row count, conversion timing,
