@@ -97,6 +97,7 @@ fn resolve<'a>(
     use SchemaDiagnosticValue as V;
     Ok(match value {
         C::Text(text) => V::Text(text),
+        C::Boolean(value) => V::Boolean(*value),
         C::ValueKind(_) | C::LayerKind(_) => {
             V::Text(schema_diagnostic_kind_label(value).ok_or(Invalid)?)
         }
