@@ -283,15 +283,11 @@ static readstat_error_t sas7bdat_parse_row_size_subheader(const char *subheader,
         ctx->rdc_compression = (memcmp(compression, SAS_COMPRESSION_SIGNATURE_RDC, 8) == 0);
     }
 
-    if (!row_length) return READSTAT_ERROR_ROW_WIDTH_MISMATCH;
+    if (!row_length || row_length > UINT32_MAX || page_row_count > UINT32_MAX)
+        return READSTAT_ERROR_ROW_WIDTH_MISMATCH;
     if (!yamaa_readstat_admit(total_row_count, ctx->column_count, row_length))
         return READSTAT_ERROR_MALLOC;
     ctx->row_length = row_length;
-    READSTAT_RESIZE_OR_RETURN(ctx->row, ctx->row_length);
-    if (ctx->row == NULL) {
-        retval = READSTAT_ERROR_MALLOC;
-        goto cleanup;
-    }
 
     ctx->page_row_count = page_row_count;
     uint64_t total_row_count_after_skipping = total_row_count;
@@ -528,7 +524,7 @@ cleanup:
 static readstat_error_t sas7bdat_parse_subheader_rdc(const char *subheader, size_t len, sas7bdat_ctx_t *ctx) {
     readstat_error_t retval = READSTAT_OK;
     const unsigned char *input = (const unsigned char *)subheader;
-    char *buffer = malloc(ctx->row_length);
+    char *buffer = readstat_malloc(ctx->row_length);
     if (!buffer) return READSTAT_ERROR_MALLOC;
     char *output = buffer;
     while (input + 2 <= (const unsigned char *)subheader + len) {
@@ -753,6 +749,20 @@ cleanup:
 
 static readstat_error_t sas7bdat_submit_columns(sas7bdat_ctx_t *ctx, int compressed) {
     readstat_error_t retval = READSTAT_OK;
+    /* Row-size metadata can precede physical column metadata. Check the full
+     * admitted shape and known SAS scalar widths/offsets before allocating a
+     * potentially large compressed observation buffer. Physical gaps remain
+     * source-authoritative; do not infer a packed row size from field widths. */
+    if (!yamaa_readstat_admit(ctx->row_limit, ctx->column_count, ctx->row_length))
+        return READSTAT_ERROR_MALLOC;
+    for (uint32_t i = 0; i < ctx->column_count; i++) {
+        col_info_t *column = &ctx->col_info[i];
+        if ((retval = sas7bdat_validate_column(column)) != READSTAT_OK)
+            return retval;
+        if (column->offset > ctx->row_length ||
+                column->width > ctx->row_length - column->offset)
+            return READSTAT_ERROR_PARSE;
+    }
     if (ctx->handle.metadata) {
         readstat_metadata_t metadata = {
             .row_count = ctx->row_limit,
@@ -807,6 +817,10 @@ static readstat_error_t sas7bdat_submit_columns(sas7bdat_ctx_t *ctx, int compres
         } else {
             index_after_skipping++;
         }
+    }
+    if (retval != READSTAT_OK) goto cleanup;
+    if (compressed) {
+        READSTAT_RESIZE_OR_CLEANUP(ctx->row, ctx->row_length);
     }
 cleanup:
     return retval;
@@ -1237,6 +1251,7 @@ readstat_error_t readstat_parse_sas7bdat(readstat_parser_t *parser, const char *
     }
 
     if (hinfo->header_size > ctx->file_size || !hinfo->page_size ||
+            hinfo->page_size > ctx->file_size ||
             hinfo->page_count > (ctx->file_size - hinfo->header_size) / hinfo->page_size ||
             hinfo->header_size + hinfo->page_count * hinfo->page_size != ctx->file_size) {
         retval = READSTAT_ERROR_READ; goto cleanup;

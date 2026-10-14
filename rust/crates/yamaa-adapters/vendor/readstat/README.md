@@ -34,6 +34,15 @@ charge to the receipt using the same maximum rule. These are the enforced
 logical quota charges, not measurements of allocator usage, RSS, or CPU time.
 The existing public parser keeps its separate snapshot IO policy.
 
+Native allocation admission uses the supplied work allowance, with checked
+arithmetic and source page/header extents validated first. Compressed SAS row
+buffers are allocated only after row/cell bounds and physical scalar widths
+and offsets pass. IO operation admission derives from the bounded snapshot
+read budget, row/cell allowance, column allowance, and fixed framing overhead;
+there is no lower fixed million-operation or 16 MiB allocation ceiling.
+The SAS header/page sizes are bounded by the captured snapshot framing, rather
+than a separate 16 MiB threshold. Their minimum framing sizes still apply.
+
 The independent adapter controls cover XPT v5/v8, long field names, multiple
 members, numeric missing tags, declared Unicode decoding, exact narrowing and
 1960 epochs, SAS uncompressed/RLE/RDC storage, malformed/truncated input,

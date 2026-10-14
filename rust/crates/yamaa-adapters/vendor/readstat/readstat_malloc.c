@@ -2,12 +2,9 @@
 #include <stdint.h>
 extern int yamaa_readstat_allocation(size_t, int);
 
-#define MAX_MALLOC_SIZE 0x1000000
-/* =16 MiB. Needs to be at least 0x3FF00, i.e. the default ~4MB block size used
- * in compressed SPSS (ZSAV) files. Some SAS installations use 16MiB page sizes
- * by default, see https://github.com/tidyverse/haven/issues/697.
- * The purpose here is to prevent massive allocations in the event of a
- * malformed file or a bug in the library. */
+/* The memory bridge admits every checked allocation against the caller's work
+ * allowance. Format readers validate source extents and physical dimensions
+ * first; a second fixed ceiling would reject valid wide observations. */
 
 void *readstat_malloc(size_t len) {
     if (!yamaa_readstat_allocation(len, 1) || len == 0) {

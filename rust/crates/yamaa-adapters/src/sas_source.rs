@@ -100,6 +100,7 @@ struct Context<'a> {
     source: &'a SourceDeclaration,
     table_limits: TableLimits,
     budget: usize,
+    work_limit: usize,
     budget_resource: &'static str,
     remaining: usize,
     columns: Vec<Column>,
@@ -245,10 +246,10 @@ unsafe extern "C" fn variable(
             .row_width
             .checked_add(width)
             .ok_or_else(|| context.overflow())?;
-        if context.row_width > context.budget {
+        if context.row_width > context.work_limit {
             return Err(Error::Limit {
                 resource: "work_bytes",
-                limit: context.budget,
+                limit: context.work_limit,
                 actual: Some(context.row_width),
             });
         }
@@ -544,6 +545,7 @@ fn parse_inner(
         source,
         table_limits,
         budget,
+        work_limit: limits.work_bytes,
         budget_resource: if limits.retained_bytes <= limits.work_bytes {
             "retained_bytes"
         } else {
@@ -676,6 +678,266 @@ mod tests {
         let mut bytes = include_bytes!("../tests/fixtures/sas/fractional.xpt").to_vec();
         bytes.extend_from_slice(&[b' '; 5120]);
         bytes
+    }
+
+    #[test]
+    fn native_xport_operations_admit_more_than_a_million_small_records() {
+        // Independently authored v5 layout: 880 header/descriptor bytes then
+        // repeated exact IBM cells for 1.5. Counting callbacks exercise the
+        // real memory transport without allocating a million Rust table rows.
+        const RECORDS: usize = 1_100_000;
+        let fixture = include_bytes!("../tests/fixtures/sas/fractional.xpt");
+        let mut bytes = fixture[..880].to_vec();
+        bytes.extend_from_slice(&fixture[880..888].repeat(RECORDS));
+        struct Seen {
+            rows: usize,
+            invalid: bool,
+        }
+        unsafe extern "C" fn meta(
+            _rows: i64,
+            columns: c_int,
+            version: c_int,
+            _encoding: *const c_char,
+            _opaque: *mut c_void,
+        ) -> c_int {
+            c_int::from(columns != 1 || version != 5)
+        }
+        unsafe extern "C" fn field(
+            column: c_int,
+            _name: *const c_char,
+            width: usize,
+            text: c_int,
+            _opaque: *mut c_void,
+        ) -> c_int {
+            c_int::from(column != 0 || width != 8 || text != 0)
+        }
+        unsafe extern "C" fn cell(
+            row: c_int,
+            column: c_int,
+            text: *const c_char,
+            number: f64,
+            missing: c_int,
+            exact: c_int,
+            opaque: *mut c_void,
+        ) -> c_int {
+            let seen = &mut *opaque.cast::<Seen>();
+            seen.invalid |= usize::try_from(row).ok() != Some(seen.rows)
+                || column != 0
+                || !text.is_null()
+                || number != 1.5
+                || missing != 0
+                || exact != 1;
+            seen.rows = seen.rows.saturating_add(1);
+            c_int::from(seen.invalid)
+        }
+        let mut seen = Seen {
+            rows: 0,
+            invalid: false,
+        };
+        let (mut resource, mut limit, mut actual, mut known, mut work_used) = (0, 0, 0, 0, 0);
+        let status = unsafe {
+            yamaa_readstat_parse(
+                bytes.as_ptr(),
+                bytes.len(),
+                1,
+                10_000_000,
+                1024,
+                640_000_000,
+                64 * 1024 * 1024,
+                1,
+                &mut work_used,
+                meta,
+                field,
+                cell,
+                (&mut seen as *mut Seen).cast(),
+                &mut resource,
+                &mut limit,
+                &mut actual,
+                &mut known,
+            )
+        };
+        assert_eq!(status, 0);
+        assert_eq!(seen.rows, RECORDS);
+        assert!(!seen.invalid);
+        assert_eq!(work_used, bytes.len() - 100);
+    }
+
+    #[test]
+    fn wide_xport_observation_uses_caller_work_cap_instead_of_fixed_allocator_cap() {
+        // The existing independent MEMBER-text fixture supplies v5 framing and
+        // one character NAMESTR. Author 513 unique width32767 fields directly:
+        // their one observation is 32767 bytes larger than 512 such fields and
+        // exceeds the former 16 MiB allocator ceiling while below source policy.
+        const COLUMNS: usize = 513;
+        const WIDTH: usize = 32767;
+        let fixture = include_bytes!("../tests/fixtures/sas/member-text.xpt");
+        let mut bytes = fixture[..640].to_vec();
+        bytes[613..618].copy_from_slice(b"00513");
+        for column in 0..COLUMNS {
+            let mut descriptor = fixture[640..780].to_vec();
+            descriptor[4..6].copy_from_slice(&(WIDTH as u16).to_be_bytes());
+            descriptor[6..8].copy_from_slice(&((column + 1) as u16).to_be_bytes());
+            descriptor[8..16].fill(b' ');
+            descriptor[8..13].copy_from_slice(format!("C{column:04}").as_bytes());
+            descriptor[84..88].copy_from_slice(&((column * WIDTH) as u32).to_be_bytes());
+            bytes.extend_from_slice(&descriptor);
+        }
+        bytes.resize(bytes.len().div_ceil(80) * 80, b' ');
+        bytes.extend_from_slice(&fixture[960..1040]);
+        let observation = bytes.len();
+        bytes.resize(observation + COLUMNS * WIDTH, b' ');
+        bytes[observation + (COLUMNS - 1) * WIDTH] = b'!';
+        bytes.resize(bytes.len().div_ceil(80) * 80, b' ');
+        let source = receipt_source();
+        let limits = Limits {
+            source_bytes: 64 * 1024 * 1024,
+            work_bytes: 64 * 1024 * 1024,
+            retained_bytes: 4 * 1024 * 1024,
+        };
+        let table_limits = TableLimits {
+            max_columns: 1024,
+            ..receipt_table_limits()
+        };
+        let mut usage = Usage::default();
+        let table = parse_with_usage(&bytes, &source, limits, table_limits, &mut usage).unwrap();
+        assert_eq!(table.row_count(), 1);
+        assert_eq!(table.schema().columns().len(), COLUMNS);
+        assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Missing);
+        assert_eq!(table.cell(0, COLUMNS - 1).unwrap(), ValueRef::Str("!"));
+        assert!(usage.complete);
+        assert!(usage.work_bytes > 16 * 1024 * 1024);
+        assert!(usage.storage_bytes < limits.retained_bytes);
+        let mut exact = Usage::default();
+        assert!(parse_with_usage(
+            &bytes,
+            &source,
+            Limits {
+                work_bytes: usage.work_bytes,
+                retained_bytes: usage.storage_bytes,
+                ..limits
+            },
+            table_limits,
+            &mut exact,
+        )
+        .is_ok());
+        assert_eq!(exact.storage_bytes, usage.storage_bytes);
+        assert_eq!(exact.work_bytes, usage.work_bytes);
+        assert!(exact.complete);
+        let small = Limits {
+            work_bytes: 16 * 1024 * 1024,
+            ..limits
+        };
+        assert!(matches!(
+            parse(&bytes, &source, small, table_limits),
+            Err(Error::Limit {
+                resource: "work_bytes",
+                limit: 16_777_216,
+                actual: Some(actual),
+            }) if actual > 16_777_216
+        ));
+    }
+
+    #[test]
+    fn malformed_sas_dimensions_precede_large_row_or_page_allocation() {
+        // This independent haven fixture is a 32-bit little-endian SAS file:
+        // header/page sizes at 196/200, row-size subheader at 4640, and column
+        // attributes at 4084. Its original first numeric width is 8 bytes.
+        let fixture = include_bytes!("../tests/fixtures/sas/datetime.sas7bdat");
+        assert_eq!(&fixture[196..204], &[0, 4, 0, 0, 0, 16, 0, 0]);
+        assert_eq!(&fixture[4660..4664], &40u32.to_le_bytes());
+        assert_eq!(&fixture[4100..4104], &8u32.to_le_bytes());
+        let mut source = receipt_source();
+        source.profile = SourceProfile::Sas7bdat;
+        source.path = "datetime.sas7bdat".into();
+        let limits = Limits {
+            work_bytes: 128 * 1024 * 1024,
+            retained_bytes: 0,
+            ..receipt_limits()
+        };
+        let mut bad_row = fixture.to_vec();
+        bad_row[4660..4664].copy_from_slice(&(64u32 * 1024 * 1024).to_le_bytes());
+        bad_row[4100..4104].copy_from_slice(&32768u32.to_le_bytes());
+        bad_row[4106] = 2; // Character storage exceeds the SAS signed 16-bit width.
+        let mut bad_page = fixture.to_vec();
+        bad_page[200..204].copy_from_slice(&(8u32 * 1024 * 1024).to_le_bytes());
+        for bytes in [bad_row, bad_page] {
+            assert!(matches!(
+                parse(&bytes, &source, limits, receipt_table_limits()),
+                Err(Error::Invalid("malformed"))
+            ));
+        }
+    }
+
+    #[test]
+    fn resized_independent_sas_page_above_sixteen_mib_keeps_exact_physical_truth() {
+        // Independent little-endian fixture framing: one MIX page, four
+        // observations of five 8-byte numeric fields at page offset 184. The
+        // stored row cells and every subheader pointer remain at their original
+        // offsets; only page size and unused zero padding change.
+        let fixture = include_bytes!("../tests/fixtures/sas/datetime.sas7bdat");
+        let page_size = 32usize * 1024 * 1024;
+        let mut bytes = fixture.to_vec();
+        bytes[200..204].copy_from_slice(&(page_size as u32).to_le_bytes());
+        bytes.resize(1024 + page_size, 0);
+        let mut source = receipt_source();
+        source.profile = SourceProfile::Sas7bdat;
+        source.path = "datetime.sas7bdat".into();
+        let mut usage = Usage::default();
+        let table = parse_with_usage(
+            &bytes,
+            &source,
+            Limits {
+                source_bytes: 64 * 1024 * 1024,
+                work_bytes: 128 * 1024 * 1024,
+                ..receipt_limits()
+            },
+            receipt_table_limits(),
+            &mut usage,
+        )
+        .unwrap();
+        // Literal physical binary64 truth, read independently from the fixture
+        // slots (not obtained from the candidate parser or its display formats).
+        let expected = [
+            [1_738_507_332.0, 20_121.0, 20_121.0, 20_121.0, 52_932.0],
+            [1_704_190_463.0, 19_724.0, 19_724.0, 19_724.0, 36_863.0],
+            [1_736_921_722.0, 20_254.0, 20_254.0, 20_254.0, 22_522.0],
+            [-356_840_880.0, -4_124.0, -4_124.0, -4_124.0, 77_520.0],
+        ];
+        assert_eq!(table.row_count(), expected.len());
+        assert_eq!(table.schema().columns().len(), 5);
+        for (row, values) in expected.into_iter().enumerate() {
+            for (column, value) in values.into_iter().enumerate() {
+                assert_eq!(
+                    table.cell(row, column).unwrap(),
+                    ValueRef::Float(yamaa_core::value::FiniteFloat::new(value).unwrap()),
+                );
+            }
+        }
+        assert!(usage.complete);
+        assert!(usage.work_bytes >= 2 * page_size);
+        assert!(usage.storage_bytes < page_size);
+        let mut small = Usage::default();
+        assert!(matches!(
+            parse_with_usage(
+                &bytes,
+                &source,
+                Limits {
+                    source_bytes: 64 * 1024 * 1024,
+                    work_bytes: 16 * 1024 * 1024,
+                    ..receipt_limits()
+                },
+                receipt_table_limits(),
+                &mut small,
+            ),
+            Err(Error::Limit {
+                resource: "work_bytes",
+                limit: 16_777_216,
+                actual: Some(33_554_432),
+            })
+        ));
+        assert!(small.complete);
+        assert_eq!(small.storage_bytes, 0);
+        assert!(small.work_bytes < 16_777_216);
     }
 
     #[test]
