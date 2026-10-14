@@ -16,8 +16,11 @@ use yamaa_engine::{
 };
 
 fn document(value: &Value) -> SpecificationDocument {
-    let decoded = decode_yaml(value.to_string().as_bytes(), Default::default())
-        .expect("authored normalized document");
+    let source = value
+        .as_str()
+        .expect("original ordered normalized document");
+    let decoded =
+        decode_yaml(source.as_bytes(), Default::default()).expect("authored normalized document");
     SpecificationDocument::admit(
         decoded.document,
         &mut ValidationBudget::new(Default::default()),
