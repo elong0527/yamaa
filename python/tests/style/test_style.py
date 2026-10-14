@@ -488,6 +488,20 @@ def test_directories_expand_to_specifications_only(tmp_path: Path) -> None:
     assert not is_specification(tmp_path / "define.yaml", root_fields)
 
 
+def test_a_complex_root_key_is_not_a_specification(tmp_path: Path) -> None:
+    # A stray YAML file with a sequence or mapping key at the root is not a
+    # specification; classifying it must not crash the directory scan.
+    _spec(tmp_path, "? [a, b]\n: 1\nschema_version: 1\n", "sequence-key.yaml")
+    _spec(tmp_path, "? {a: 1}\n: 2\n", "mapping-key.yaml")
+    _spec(tmp_path, CANONICAL, "adsl.yaml")
+    root_fields = ORDERS["root_class"]
+    assert not is_specification(tmp_path / "sequence-key.yaml", root_fields)
+    assert not is_specification(tmp_path / "mapping-key.yaml", root_fields)
+    assert [path.name for path in specification_files([tmp_path], root_fields)] == [
+        "adsl.yaml"
+    ]
+
+
 def test_command_line_exit_status(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
