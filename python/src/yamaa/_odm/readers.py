@@ -326,10 +326,14 @@ def iter_odm_records(
                     if name == "ODM":
                         raise ODMError("document contains a nested ODM element")
                     if clinical is None and name == "Study":
+                        if metadata_study is not None:
+                            raise ODMError("nested Study is not supported")
                         metadata_study = _required_attribute(element, "OID")
                     elif clinical is None and name == "MetaDataVersion":
                         if metadata_study is None:
                             raise ODMError("MetaDataVersion appears outside Study")
+                        if metadata_version is not None:
+                            raise ODMError("nested MetaDataVersion is not supported")
                         metadata_version = _required_attribute(element, "OID")
                     elif clinical is None and name in {
                         "StudyEventDef",
