@@ -392,9 +392,11 @@ def validate_examples_index(root: Path):
         return errors
 
     index_content = index_file.read_text(encoding="utf-8")
-    # Find all table rows matching: | [`dir`](dir/) | desc | (Lifecycle) |
+    # Find all table rows matching: | [`dir`](dir/) | desc | ... |
+    # Trailing columns (lifecycle, conformance, ...) are allowed and ignored.
+    # Column classes exclude newlines so a match can never span rows.
     pattern = re.compile(
-        r"^\|\s*\[`([^`]+)`\]\(([^)]+)\)\s*\|\s*([^|]+?)\s*(?:\|\s*([^|]*?)\s*)?\|$",
+        r"^\|\s*\[`([^`\n]+)`\]\(([^)\n]+)\)\s*\|\s*([^\n|]+?)\s*(?:\|[^\n|]*?)*\|$",
         re.MULTILINE,
     )
 
