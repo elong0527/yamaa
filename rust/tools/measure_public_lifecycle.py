@@ -208,10 +208,20 @@ def clock_evidence(record, repository, retained):
     if not installed.is_relative_to(Path(collectors["microbenchmark"]["origin"])):
         raise ValueError("clock library is outside the declared collector")
     outside_checkout(installed, repository)
-    if built.read_bytes() != installed.read_bytes():
+    built_bytes = built.read_bytes()
+    installed_bytes = installed.read_bytes()
+    if built_bytes != installed_bytes:
         raise ValueError("installed timer library differs from retained build")
     retained.mkdir()
-    shutil.copyfile(built, retained / built.name)
+    (retained / built.name).write_bytes(built_bytes)
+    (retained / "built-library.bin").write_bytes(built_bytes)
+    (retained / "installed-library.bin").write_bytes(installed_bytes)
+    write_json(retained / "library-byte-comparisons.json", {
+        "built_library": str(built), "installed_library": str(installed),
+        "retained_built": "built-library.bin",
+        "retained_installed": "installed-library.bin",
+        "bytes": len(built_bytes), "equal": True,
+    })
     system = record["system"]
     if system == "Windows":
         # 1.5.0's WIN32 branch precedes all config branches. The caller must
