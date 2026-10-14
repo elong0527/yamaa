@@ -26,6 +26,14 @@ does not override the explicit declaration. The bridge contains bounded memory
 IO callbacks and never initializes filesystem IO. Rust contains every callback
 panic before it reaches C. The parent parser lifetime contains all callbacks.
 
+The shared decoder receipt route also admits cumulative snapshot bytes read
+before copying and returns the actual admitted work charge. Independent C
+buffer/header stages reuse the allowance, so their successful highwater and the
+cumulative read charge combine by maximum. Rust adds its admitted retention
+charge to the receipt using the same maximum rule. These are the enforced
+logical quota charges, not measurements of allocator usage, RSS, or CPU time.
+The existing public parser keeps its separate snapshot IO policy.
+
 The independent adapter controls cover XPT v5/v8, long field names, multiple
 members, numeric missing tags, declared Unicode decoding, exact narrowing and
 1960 epochs, SAS uncompressed/RLE/RDC storage, malformed/truncated input,

@@ -11,6 +11,7 @@
 #define YAMAA_THREAD_LOCAL _Thread_local
 #endif
 static YAMAA_THREAD_LOCAL size_t work_limit, rows_limit, columns_limit, cells_limit;
+static YAMAA_THREAD_LOCAL size_t work_remaining;
 static YAMAA_THREAD_LOCAL int limit_hit, number_exact, refusal_resource, refusal_known;
 static YAMAA_THREAD_LOCAL size_t refusal_limit, refusal_actual;
 static int refuse(int resource, size_t limit, size_t actual, int known) {
@@ -20,6 +21,11 @@ static int refuse(int resource, size_t limit, size_t actual, int known) {
     }
     limit_hit = 1;
     return 0;
+}
+/* Independent stages reuse the work allowance. Record their largest admitted
+ * charge, rather than claiming an allocator total or a CPU measurement. */
+static void charge_work(size_t bytes) {
+    if (bytes > work_limit - work_remaining) work_remaining = work_limit - bytes;
 }
 void yamaa_readstat_number(const unsigned char *bytes) {
     uint64_t mantissa = 0;
@@ -35,6 +41,7 @@ int yamaa_readstat_admit(size_t rows, size_t columns, size_t bytes) {
     if (bytes > work_limit) return refuse(4, work_limit, bytes, 1);
     if (columns && rows > cells_limit / columns)
         return refuse(3, cells_limit, rows * columns, rows <= SIZE_MAX / columns);
+    charge_work(bytes);
     return 1;
 }
 int yamaa_readstat_allocation(size_t bytes, int known) {
@@ -56,7 +63,7 @@ typedef struct {
     yamaa_variable variable;
     yamaa_value value;
     void *user;
-    int xport;
+    int xport, measured;
 } yamaa_ctx;
 
 /* Parser construction must never even initialize a filesystem transport. */
@@ -89,6 +96,12 @@ static ssize_t memory_read(void *buffer, size_t count, void *opaque) {
     if (ctx->reads > ctx->length * 4 || count > ctx->length * 4 - ctx->reads) {
         refuse(6, ctx->length * 4, ctx->reads + count, 1); return -1;
     }
+    /* The measured graph route admits its cumulative actual snapshot reads
+     * before touching the buffer. Legacy public parsing keeps its IO policy. */
+    if (ctx->measured && count > work_limit - ctx->reads) {
+        refuse(4, work_limit, ctx->reads + count, count <= SIZE_MAX - ctx->reads); return -1;
+    }
+    if (ctx->measured) charge_work(ctx->reads + count);
     memcpy(buffer, ctx->bytes + ctx->position, count);
     ctx->position += count;
     ctx->reads += count;
@@ -122,14 +135,16 @@ static int value_handler(int row, readstat_variable_t *variable,
 }
 int yamaa_readstat_parse(const unsigned char *bytes, size_t length, int xport,
         size_t rows, size_t columns, size_t cells, size_t work,
+        int measured, size_t *work_used,
         yamaa_metadata metadata, yamaa_variable variable, yamaa_value value,
         void *user, int *resource, size_t *limit, size_t *actual, int *known) {
     yamaa_ctx ctx = { .bytes = bytes, .length = length, .metadata = metadata,
-        .variable = variable, .value = value, .user = user, .xport = xport };
+        .variable = variable, .value = value, .user = user, .xport = xport,
+        .measured = measured };
     rows_limit = rows; columns_limit = columns; cells_limit = cells;
-    work_limit = work; limit_hit = 0;
+    work_limit = work; work_remaining = work; limit_hit = 0;
     readstat_parser_t *parser = readstat_parser_init();
-    if (!parser) return -6;
+    if (!parser) { *work_used = work_limit - work_remaining; return -6; }
     readstat_set_io_ctx(parser, &ctx);
     readstat_set_open_handler(parser, memory_open);
     readstat_set_close_handler(parser, memory_close);
@@ -143,6 +158,7 @@ int yamaa_readstat_parse(const unsigned char *bytes, size_t length, int xport,
     int status = xport ? readstat_parse_xport(parser, "snapshot", &ctx) :
         readstat_parse_sas7bdat(parser, "snapshot", &ctx);
     readstat_parser_free(parser);
+    *work_used = work_limit - work_remaining;
     if (limit_hit) {
         *resource = refusal_resource; *limit = refusal_limit;
         *actual = refusal_actual; *known = refusal_known;

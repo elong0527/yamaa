@@ -55,6 +55,8 @@ unsafe extern "C" {
         columns: usize,
         cells: usize,
         work: usize,
+        measured: c_int,
+        work_used: *mut usize,
         metadata: unsafe extern "C" fn(i64, c_int, c_int, *const c_char, *mut c_void) -> c_int,
         variable: unsafe extern "C" fn(c_int, *const c_char, usize, c_int, *mut c_void) -> c_int,
         value: unsafe extern "C" fn(
@@ -477,6 +479,37 @@ pub fn parse(
     limits: Limits,
     table_limits: TableLimits,
 ) -> Result<ArrowTable, Error> {
+    parse_inner(bytes, source, limits, table_limits, None)
+}
+
+/// Record admitted logical quota charges for the shared native decoder route.
+/// C buffers/header work and cumulative snapshot reads reuse the work allowance;
+/// Rust retention reuses both allowances. Their receipt therefore takes maxima,
+/// rather than describing allocated memory or CPU usage.
+pub(crate) fn parse_with_usage(
+    bytes: &[u8],
+    source: &SourceDeclaration,
+    limits: Limits,
+    table_limits: TableLimits,
+    usage: &mut crate::source_decode_usage::Usage,
+) -> Result<ArrowTable, Error> {
+    usage.complete();
+    let result = parse_inner(bytes, source, limits, table_limits, Some(usage));
+    // An internal failure can include a caught panic or an Arrow allocation
+    // failure outside the modeled admissions. Preserve conservative reservation.
+    if matches!(result, Err(Error::Internal)) {
+        usage.complete = false;
+    }
+    result
+}
+
+fn parse_inner(
+    bytes: &[u8],
+    source: &SourceDeclaration,
+    limits: Limits,
+    table_limits: TableLimits,
+    mut usage: Option<&mut crate::source_decode_usage::Usage>,
+) -> Result<ArrowTable, Error> {
     if !matches!(
         source.encoding.as_deref(),
         Some("utf-8" | "windows-1252" | "iso-8859-1" | "ascii")
@@ -526,6 +559,7 @@ pub fn parse(
     };
     let (mut refusal_resource, mut refusal_limit, mut refusal_actual, mut refusal_known) =
         (0, 0, 0, 0);
+    let mut c_work_used = 0;
     let status = unsafe {
         yamaa_readstat_parse(
             bytes.as_ptr(),
@@ -535,6 +569,8 @@ pub fn parse(
             table_limits.max_columns,
             table_limits.max_cells,
             limits.work_bytes,
+            c_int::from(usage.is_some()),
+            &mut c_work_used,
             metadata,
             variable,
             value,
@@ -545,6 +581,11 @@ pub fn parse(
             &mut refusal_known,
         )
     };
+    if let Some(usage) = usage.as_mut() {
+        let retained = context.budget - context.remaining;
+        usage.storage(retained);
+        usage.work(retained.max(c_work_used));
+    }
     if let Some(error) = context.error {
         return Err(error);
     }
@@ -603,6 +644,203 @@ pub fn parse(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::source_decode_usage::Usage;
+
+    fn receipt_source() -> SourceDeclaration {
+        SourceDeclaration {
+            name: "SRC".into(),
+            path: "fractional.xpt".into(),
+            types: vec![],
+            profile: SourceProfile::Xport,
+            encoding: Some("windows-1252".into()),
+            empty_string_present: false,
+            ordinal: None,
+        }
+    }
+    fn receipt_limits() -> Limits {
+        Limits {
+            source_bytes: 1_048_576,
+            work_bytes: 4_194_304,
+            retained_bytes: 4_194_304,
+        }
+    }
+    fn receipt_table_limits() -> TableLimits {
+        TableLimits {
+            max_rows: 1000,
+            max_columns: 200,
+            max_batches: 1,
+            max_cells: 100_000,
+        }
+    }
+    fn padded_xport() -> Vec<u8> {
+        let mut bytes = include_bytes!("../tests/fixtures/sas/fractional.xpt").to_vec();
+        bytes.extend_from_slice(&[b' '; 5120]);
+        bytes
+    }
+
+    #[test]
+    fn measured_work_uses_actual_snapshot_reads_and_exact_small_quota() {
+        let bytes = padded_xport();
+        let source = receipt_source();
+        let mut usage = Usage::default();
+        let table = parse_with_usage(
+            &bytes,
+            &source,
+            receipt_limits(),
+            receipt_table_limits(),
+            &mut usage,
+        )
+        .unwrap();
+        assert_eq!(table.row_count(), 1);
+        assert_eq!(
+            table.cell(0, 0).unwrap(),
+            ValueRef::Float(yamaa_core::value::FiniteFloat::new(1.5).unwrap())
+        );
+        assert!(usage.complete);
+        // Independent v5 framing: the source's 80-byte library record and
+        // 20-byte NAMESTR padding are skipped, not read. All observation
+        // padding is read. This also exceeds the native buffer highwater.
+        assert_eq!(usage.work_bytes, bytes.len() - 100);
+        assert!(usage.storage_bytes > 0);
+        assert!(usage.storage_bytes < usage.work_bytes);
+
+        let mut limits = receipt_limits();
+        limits.work_bytes = usage.work_bytes;
+        limits.retained_bytes = usage.storage_bytes;
+        let mut exact = Usage::default();
+        assert!(
+            parse_with_usage(&bytes, &source, limits, receipt_table_limits(), &mut exact,).is_ok()
+        );
+        assert!(exact.complete);
+        assert_eq!(exact.storage_bytes, usage.storage_bytes);
+        assert_eq!(exact.work_bytes, usage.work_bytes);
+
+        limits.work_bytes -= 1;
+        // The public route preserves its historical per-buffer work policy.
+        assert!(parse(&bytes, &source, limits, receipt_table_limits()).is_ok());
+        let mut refused = Usage::default();
+        assert!(matches!(
+            parse_with_usage(&bytes, &source, limits, receipt_table_limits(), &mut refused),
+            Err(Error::Limit {
+                resource: "work_bytes",
+                limit,
+                actual: Some(actual),
+            }) if limit == usage.work_bytes - 1 && actual == usage.work_bytes
+        ));
+        assert!(refused.complete);
+        assert_eq!(refused.storage_bytes, usage.storage_bytes);
+        assert_eq!(refused.work_bytes, usage.work_bytes - 8);
+    }
+
+    #[test]
+    fn retention_and_semantic_refusals_report_only_the_admitted_prefix() {
+        let bytes = include_bytes!("../tests/fixtures/sas/fractional.xpt");
+        let mut source = receipt_source();
+        let mut success = Usage::default();
+        parse_with_usage(
+            bytes,
+            &source,
+            receipt_limits(),
+            receipt_table_limits(),
+            &mut success,
+        )
+        .unwrap();
+        let mut limits = receipt_limits();
+        limits.retained_bytes = success.storage_bytes - 1;
+        let mut refused = Usage::default();
+        assert!(matches!(
+            parse_with_usage(bytes, &source, limits, receipt_table_limits(), &mut refused),
+            Err(Error::Limit {
+                resource: "retained_bytes",
+                limit,
+                actual: Some(actual),
+            }) if limit == success.storage_bytes - 1 && actual == success.storage_bytes
+        ));
+        assert!(refused.complete);
+        assert!(refused.storage_bytes < limits.retained_bytes);
+        assert!(refused.work_bytes <= limits.work_bytes);
+
+        source.types = vec![("NUM".into(), ColumnType::Int)];
+        let mut semantic = Usage::default();
+        assert!(matches!(
+            parse_with_usage(
+                bytes,
+                &source,
+                receipt_limits(),
+                receipt_table_limits(),
+                &mut semantic
+            ),
+            Err(Error::Typing(
+                yamaa_core::typed_csv::Error::FieldParse { .. }
+            ))
+        ));
+        assert!(semantic.complete);
+        assert_eq!(semantic.storage_bytes, success.storage_bytes);
+        assert_eq!(semantic.work_bytes, success.work_bytes);
+
+        source.encoding = None;
+        let mut static_refusal = Usage::default();
+        assert!(matches!(
+            parse_with_usage(
+                bytes,
+                &source,
+                receipt_limits(),
+                receipt_table_limits(),
+                &mut static_refusal
+            ),
+            Err(Error::Invalid("encoding"))
+        ));
+        assert!(static_refusal.complete);
+        assert_eq!(static_refusal.storage_bytes, 0);
+        assert_eq!(static_refusal.work_bytes, 0);
+
+        source.encoding = Some("windows-1252".into());
+        source.profile = SourceProfile::Csv;
+        let mut internal = Usage::default();
+        assert!(matches!(
+            parse_with_usage(
+                bytes,
+                &source,
+                receipt_limits(),
+                receipt_table_limits(),
+                &mut internal,
+            ),
+            Err(Error::Internal)
+        ));
+        assert!(!internal.complete);
+    }
+
+    #[test]
+    fn sas_dataset_receipts_are_stable_with_exact_remaining_allowances() {
+        let bytes = include_bytes!("../tests/fixtures/sas/datetime.sas7bdat");
+        let mut source = receipt_source();
+        source.path = "datetime.sas7bdat".into();
+        source.profile = SourceProfile::Sas7bdat;
+        let mut usage = Usage::default();
+        let table = parse_with_usage(
+            bytes,
+            &source,
+            receipt_limits(),
+            receipt_table_limits(),
+            &mut usage,
+        )
+        .unwrap();
+        assert_eq!(table.schema().columns().len(), 5);
+        assert!(usage.complete);
+        assert!(usage.storage_bytes > 0);
+        assert!(usage.work_bytes > 0);
+        let mut limits = receipt_limits();
+        limits.retained_bytes = usage.storage_bytes;
+        limits.work_bytes = usage.work_bytes;
+        let mut exact = Usage::default();
+        let exact_table =
+            parse_with_usage(bytes, &source, limits, receipt_table_limits(), &mut exact).unwrap();
+        assert_eq!(exact_table.row_count(), table.row_count());
+        assert_eq!(exact.storage_bytes, usage.storage_bytes);
+        assert_eq!(exact.work_bytes, usage.work_bytes);
+        assert!(exact.complete);
+    }
+
     #[test]
     fn numeric_narrowing_has_exact_bounds_and_epoch() {
         assert_eq!(
