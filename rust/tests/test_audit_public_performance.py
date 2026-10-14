@@ -415,6 +415,15 @@ class Replay(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "repetition failed"):
             self.replay()
 
+    def test_malformed_complete_report_runtime_refuses(self):
+        original = auditor.read(self.cold / "response.json")
+        for runtime in (None, "", 123):
+            changed = copy.deepcopy(original)
+            changed["repetitions"][0]["metadata"]["report_runtime_version"] = runtime
+            write(self.cold / "response.json", changed)
+            with self.assertRaisesRegex(ValueError, "complete-report runtime identity"):
+                self.replay()
+
 
 class Budgets(unittest.TestCase):
     def setUp(self):
@@ -684,6 +693,72 @@ class ActionsAdmission(unittest.TestCase):
             self.assertEqual(result["harness_correctness"]["status"], "incomplete")
             self.assertEqual(result["budgets"]["status"], "fail")
             self.assertFalse(result["accepted"])
+
+    def test_malformed_campaign_still_writes_both_reports_and_all_matrix_gaps(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            name = self.entry["artifact_name"]
+            collection = root / name / "candidate-evidence"
+            collection.mkdir(parents=True)
+            write(
+                collection / "collection.json",
+                {
+                    "protocol": "public-performance/1",
+                    "purpose": "characterization",
+                    "host": "python",
+                    "sampling": auditor.SAMPLING,
+                    "phase_measurements_required": False,
+                    "evaluator": "public",
+                    "measurement_scope": "full-lifecycle",
+                    "source_revision": "a" * 40,
+                    "measurement_campaign": {},
+                },
+            )
+            entry = dict(
+                self.entry,
+                campaign=name + "/machine-campaign.json",
+                collections=[
+                    {"role": "candidate", "path": name + "/candidate-evidence"}
+                ],
+            )
+            payload = dict(
+                self.payload,
+                protocol=auditor.PROTOCOL,
+                run="run.json",
+                artifacts="artifacts.json",
+                jobs="jobs.json",
+                entries=[entry],
+            )
+            write(root / "input.json", payload)
+            write(root / "run.json", self.run)
+            write(root / "artifacts.json", [self.artifact])
+            write(root / "jobs.json", [dict(self.job, runner_name="fixture-runner")])
+            write(
+                root / name / "machine-campaign.json",
+                {
+                    "protocol": "public-performance-campaign/1",
+                    "campaign_id": 123,
+                    "created_at": "2026-10-14T01:05:00Z",
+                    "measurement_machine": {"runner_name": "fixture-runner"},
+                },
+            )
+            self.assertEqual(
+                auditor.main(
+                    [
+                        "--input",
+                        str(root / "input.json"),
+                        "--output",
+                        str(root / "report"),
+                        "--check",
+                    ]
+                ),
+                1,
+            )
+            report = auditor.read(root / "report/performance-audit.json")
+            self.assertEqual(report["harness_correctness"]["status"], "fail")
+            self.assertEqual(len(report["cells"]), 567)
+            self.assertEqual(report["coverage"]["missing"], 567)
+            self.assertTrue((root / "report/performance-audit.md").is_file())
 
 
 class Archives(unittest.TestCase):

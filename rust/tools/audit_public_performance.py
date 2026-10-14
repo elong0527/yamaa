@@ -42,6 +42,8 @@ ROLES = ("candidate", "baseline", "producer-root-build-baseline")
 EVIDENCE_ERRORS = (
     ValueError,
     KeyError,
+    AttributeError,
+    IndexError,
     OSError,
     TypeError,
     EOFError,
@@ -153,6 +155,7 @@ def offline_origins(observed, declared, repository):
         "actual core version differs",
     )
     runtime = observed["report_runtime_version"]
+    nonempty(runtime, "complete-report runtime identity")
     require(
         (runtime.split()[0] if declared["host"] == "python" else runtime)
         == declared["runtime_version"],
