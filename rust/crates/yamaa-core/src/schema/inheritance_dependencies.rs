@@ -499,6 +499,9 @@ impl<'a> Run<'a, '_> {
             }
             // Name the cycle itself, not only the residuals it blocks: the shared
             // analysis spells the first cycle the same way the flat compiler does.
+            // Charge its bounded scheduler state like the first scheduling pass.
+            self.budget
+                .reserve(0, dependency_analysis::stable_order_slots(&dependencies))?;
             let analysis = dependency_analysis::analyze_admitted(dependencies);
             let (cycle_indices, closed) = match analysis.cycle {
                 Some(cycle) => (cycle, true),
