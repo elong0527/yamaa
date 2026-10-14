@@ -55,8 +55,8 @@ uv run --project python --no-sync python .github/scripts/yaml-validation/validat
 From `rust/`:
 
 ```sh
-cargo fmt --check
-cargo clippy --all-targets --locked
+cargo fmt --all --check
+cargo clippy --locked -p yamaa-core -p yamaa-engine -p yamaa-adapters -p yamaa-python --all-targets -- -D warnings
 cargo test --locked
 cargo test --locked -p yamaa-engine --features test-support
 python tools/check_dependencies.py
