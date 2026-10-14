@@ -2,8 +2,10 @@ import csv
 from collections import defaultdict
 from datetime import date, timedelta
 
-subjects = list(csv.DictReader(open('/app/input/adsl.csv')))
-events = list(csv.DictReader(open('/app/input/adae.csv')))
+with open('/app/input/adsl.csv', newline='') as source:
+    subjects = list(csv.DictReader(source))
+with open('/app/input/adae.csv', newline='') as source:
+    events = list(csv.DictReader(source))
 terms = ['DIARRHOEA', 'HEADACHE']
 risk, totals = [], defaultdict(lambda: [0, 0])
 for subject in subjects:
