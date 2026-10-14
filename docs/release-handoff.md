@@ -1,6 +1,13 @@
 # Shared Rust release handoff
 
-Prepared on 2026-10-13 (America/New_York) for
+Current release acceptance is tracked in
+[#2288](https://github.com/elong0527/yamaa/issues/2288); repository cleanup is
+tracked in [#2289](https://github.com/elong0527/yamaa/issues/2289). Earlier roll-up
+issues are closed as superseded. Their closure does not establish qualification.
+The historical preparation and rollback receipts below retain their original
+source and artifact identities.
+
+Originally prepared on 2026-10-13 (America/New_York) for
 [#2147](https://github.com/elong0527/yamaa/issues/2147), using main
 `1b795ca4c1cbc742233ba459c1b987ee4b88fd73` and the original evidence identified below. The current
 [release guide](release.md) owns policy and the B01-B19 register. This handoff
@@ -11,8 +18,8 @@ Reconciled on 2026-10-14 (UTC) against main
 evidence below retain their original identities; this reconciliation is not a
 new qualification result.
 
-**Transition acceptance is pending.** No final qualified source, passing complete
-performance/budget audit or publishable 0.4.0 package selection is asserted here.
+**Transition acceptance is pending.** No final qualified source, completed
+current performance measurement or publishable 0.4.0 package selection is asserted here.
 Removal and coordinated 0.4.0 version changes already merged before final
 item-10/item-11 acceptance. The delegated decision authority in
 [#1973](https://github.com/elong0527/yamaa/issues/1973) permits evidence-backed
@@ -21,11 +28,11 @@ release tagging, package publication or asset replacement.
 
 ## Final acceptance reconciliation
 
-| #1969 gate / transition entry | Required final evidence | Current disposition |
+| #2288 gate / transition entry | Required final evidence | Current disposition |
 | --- | --- | --- |
-| Fixtures, language, workflow and APIs; B01-B12/B16 | All 316 active cases in every installed tuple, two declared historical exclusions, retained host APIs/helpers and error/value/ownership/Save contracts. Independently committed truth remains unchanged. Unique retired assertions require qualified public or typed-native replacements. | Implementation merged; exact final-source installed renewal and retirement reconciliation pending under #2145/#2147. |
-| Installed matrix, numerical behavior and reproducible packages; B12-B15 | 18 CPython 3.12/3.13/3.14 wheel/source tuples plus three R 4.6.1 source tuples, strict R `Status: OK`, three shared Rust checks with engine test-support, nine math assessments and their exact comparison. Six package builds must preserve canonical workspace/lock/toolchain bytes. | Final combined-main native audit and original-input independent replay pending under #2145. A successful workflow alone is insufficient. |
-| Performance and capacity; B17-B18 | Adopted installed Python/R bounds, original 27-case x 21-tuple campaign, independent distribution/coverage replay and versioned item-10 budget evaluation. Each counted tuple has ten cold samples, thirty warm samples and three retained warmups. | #2141/#2142 admission and bounds, #2143 auditor and #2144 final campaign/budgets remain pending. Local samples and earlier merged fixes do not qualify the campaign. |
+| Fixtures, language, workflow and APIs; B01-B12/B16 | All 316 active cases in every installed tuple, two declared historical exclusions, retained host APIs/helpers and error/value/ownership/Save contracts. Independently committed truth remains unchanged. Unique retired assertions require qualified public or typed-native replacements. | Exact final-source installed renewal and retirement reconciliation remain under #2288/#2289. |
+| Installed matrix, numerical behavior and reproducible packages; B12-B15 | 18 CPython 3.12/3.13/3.14 wheel/source tuples plus three R 4.6.1 source tuples, strict R `Status: OK`, three shared Rust checks with engine test-support, nine math assessments and their exact comparison. Six package builds must preserve canonical workspace/lock/toolchain bytes. | Final combined-main native audit and original-input independent replay remain under #2288. Inspect actual verdicts and exact source identities. |
+| Performance and capacity; B17-B18 | The maintainer selected 1,024 columns and longitudinal host defaults. Measure the 27 authored cases on Linux installed Python 3.12 wheel and R 4.6.1 source, with ten cold samples, thirty warm samples and three warmups. No pass/fail performance budgets apply to 0.4.0. | Implementation, installed boundaries, scoped coverage audit and latency/RSS records remain under #2288. Earlier broad campaigns retain their historical scope. |
 | Transition and rollback; B19 | Exact prior artifacts and complete fresh reinstall matrix; version checks before study effects; explicit item-11 decision linked to all passing entry gates. | Historical 18-tuple Python and three-host R raw receipt replay passed as described below. Final item-11 acceptance remains pending. |
 | Removal; B03/B05/B13 | Retained API, assertion replacements, package/archive membership and dependency/validator locks reconcile with final installed contracts. | Removal is implemented. Its chronology does not establish entry-gate approval; final reconciliation remains pending. |
 | Exact source/run/attempt/artifact handoff; B15/B19 | Final native source and parents, original Actions run/attempt/artifact identities, actual package names/bytes and independent replay; measured performance revision and policy bindings remain explicit. | Final source and selected release bytes are pending. Publication is separate. |
@@ -56,14 +63,15 @@ control retired with that input. Six derived benchmark-inventory controls and th
 validation-only blocker-loader control exercise its current successors; nine
 further controls cover native static admission, aggregate bindings and example
 index validation. These 16 additions do not establish equivalence for every
-retired assertion. Final #2145/#2147 admission still reconciles the required
-behavior and renewed native routing against installed evidence.
+retired assertion. Final admission still reconciles the required
+behavior and renewed native routing against installed evidence under #2288/#2289.
 
 ### Source differences and evidence renewal
 
 Record the campaign's measured source, collection run/attempt, original artifact
-IDs, collector/workload interfaces and effective capacity policy. Bind item-10
-budgets to that measured source. Later documentation or decision-record commits
+IDs, collector/workload interfaces and effective capacity policy. Record the
+observed latency/RSS values for that measured source without inventing budgets.
+Later documentation or decision-record commits
 must keep the measured revision; do not replace it with the later main SHA.
 
 For any source difference, inspect the complete Git diff and compare actual
@@ -81,7 +89,7 @@ Prior Python lookup/aggregate/window lifecycle baselines are comparable only on
 the same Python tuple and machine. The prior callback baseline is unavailable;
 its producer baseline measures root Build, so full graph Build/Save/RSS ratios
 are incomparable. Python comparator observations for R remain cross-host
-observations. These reasons remain visible in the campaign and budget decision;
+observations. These reasons remain visible when reporting comparative measurements;
 they cannot become passing regression ratios. The candidate still requires its
 complete correctness and measurement coverage.
 
@@ -178,18 +186,21 @@ the release guide's PortableLibmV1 compatibility note before opting in: EXP/LN/
 POWER bits and dependent predicates, conversions and saved bytes may differ from
 historical Python platform behavior. Restore an entire prior release for rollback.
 
-Remaining closure evidence belongs to #2141/#2143 for retained harness/auditor
-replay, #2142 for adopted capacity, #2144 for all 567 campaign combinations and
-accepted item-10 budgets, and #2145 for final combined-main native audit and
-independent original-input replay. #2147 then reconciles retired assertions and
-actual tested package selection before recording item-11 transition acceptance.
-Earlier branch passes, merged repairs and historical rollback re-admission do
-not supply those remaining results. #2154 separately retains all 17 raw
-measurement files until durable original-byte retrieval and replay pass.
+Remaining release evidence belongs to #2288: implemented and tested capacity,
+the current Linux measurement scope, a passing combined-main native audit and
+independent original-input replay, release notes and actual tested package
+selection. Cleanup acceptance remains #2289, including the original assertion
+mapping and staged qualification. Earlier branch passes and historical rollback
+receipts retain their original scopes.
 
-After every entry gate passes, update #1994/#1999/#1973 and completed child criteria
-with durable links, close #2147 after its implementing PR merges, and close #1969
-last. Record package/tag publication independently. If 0.4.0 has been published
+The maintainer explicitly retired the 17 historical measurement files on
+2026-10-14. Git history preserves their saved bytes; the pending acceptance tied
+to unavailable original capacity inputs is abandoned. No retrieval or replay of
+those missing inputs is claimed. Current collectors, audits, qualification and
+rollback records remain active.
+
+Close the current trackers only after their scoped implementing work and evidence
+land. Record package/tag publication independently. If 0.4.0 has been published
 before final selection, choose the next version deliberately and requalify the
 affected packages.
 
