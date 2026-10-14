@@ -47,7 +47,11 @@ class PerformanceSelection(unittest.TestCase):
             r_job,
         )
         python_job = re.search(r"(?ms)^  python:\n(.*?)(?=^  \S|\Z)", source).group(1)
-        self.assertNotIn("variant:", python_job)
+        self.assertIn("variant_cases(os.environ['PERFORMANCE_VARIANT'])", python_job)
+        self.assertEqual(python_job.count('--cases "${case_args[@]}"'), 3)
+        self.assertIn("${{ matrix.form }}-${{ matrix.variant }}", python_job)
+        self.assertIn("${{ matrix.form }}, ${{ matrix.variant }})", python_job)
+        self.assertIn("--r-variants --python-variants", source)
         self.assertIn("python: ['3.12', '3.13', '3.14']", python_job)
         self.assertIn("form: [wheel, source]", python_job)
 

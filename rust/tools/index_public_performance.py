@@ -21,7 +21,7 @@ ROLES = (
     ("baseline", "baseline-evidence"),
     ("producer-root-build-baseline", "producer-root-build-baseline"),
 )
-R_VARIANTS = (
+VARIANTS = (
     "lookup-1",
     "lookup-4",
     "aggregate-10",
@@ -32,18 +32,20 @@ R_VARIANTS = (
     "producer-1",
     "producer-3",
 )
+# Preserve the original adapter import for existing retained R-only campaigns.
+R_VARIANTS = VARIANTS
 
 
 def variant_cases(variant):
-    if variant not in R_VARIANTS:
-        raise ValueError("unexpected R performance variant")
+    if variant not in VARIANTS:
+        raise ValueError("unexpected performance variant")
     family, dimension = variant.split("-")
     return [f"{family}-{rows}-{dimension}" for rows in (1000, 10000, 100000)]
 
 
 def producer_job(item, variant=None):
     if item["host"] == "python":
-        return f"performance-python ({item['os']}, {item['python']}, {item['form']})"
+        return f"performance-python ({item['os']}, {item['python']}, {item['form']}{', ' + variant if variant else ''})"
     return f"performance-r ({item['os']}, source{', ' + variant if variant else ''})"
 
 
@@ -130,6 +132,7 @@ def manifest(
     *,
     jobs,
     r_variants=False,
+    python_variants=False,
 ):
     if (
         run["repository"]["full_name"] != repository
@@ -173,7 +176,7 @@ def manifest(
 
     entries = []
     for item, name in tuples():
-        if item["host"] == "r" and r_variants:
+        if (item["host"] == "r" and r_variants) or (item["host"] == "python" and python_variants):
             entries.append(
                 {
                     "tuple": item,
@@ -183,7 +186,7 @@ def manifest(
                             "cases": variant_cases(variant),
                             **original_entry(item, f"{name}-{variant}", variant),
                         }
-                        for variant in R_VARIANTS
+                        for variant in VARIANTS
                     ],
                 }
             )
@@ -289,6 +292,7 @@ def index(args):
         native,
         jobs=jobs,
         r_variants=getattr(args, "r_variants", False),
+        python_variants=getattr(args, "python_variants", False),
     )
     if (root / "source.bundle").exists() or (root / "manifest.json").exists():
         raise ValueError("cannot replace an original performance index")
@@ -327,4 +331,5 @@ if __name__ == "__main__":
     parser.add_argument("--native-run-id", default="")
     parser.add_argument("--native-attempt", default="")
     parser.add_argument("--r-variants", action="store_true")
+    parser.add_argument("--python-variants", action="store_true")
     index(parser.parse_args())

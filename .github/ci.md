@@ -166,10 +166,10 @@ available for an explicit native run and purpose. Reusable workflow calls are
 not a campaign entry point: their caller context does not identify this exact
 performance workflow run.
 
-The eighteen Python jobs each retain all 27 cases. R uses nine approved dimension
-variants per OS: each job retains its variant's 1k, 10k and 100k cases, complete
+Both hosts use nine approved dimension variants per logical tuple: 162 Python
+jobs and 27 R jobs. Each job retains its variant's 1k, 10k and 100k cases, complete
 sampling distributions, and applicable prior Python comparison on that same
-actual runner. The index still names three logical R tuples, each with nine
+actual runner. The index still names 18 Python and three R logical tuples, each with nine
 independently bound original artifact segments. No individual case distribution
 is split across runners. The auditor rejects unexpected, overlapping, duplicate
 or missing segments/cases; the required counts remain 567 candidate cells and
@@ -198,8 +198,9 @@ creates a Git tag, replaces an asset, or approves a budget.
 `performance-replay.yml` runs after the trusted characterization completes. It
 keeps the original in-progress `run.json` unchanged and adds a separately fetched
 `completion-run.json` and completed manifest. A metadata-only catalog derives
-complete reader units from the original manifest: currently 18 whole Python
-entries and 27 R segments, still 21 logical tuples. Each trusted reader job
+complete reader units from the original manifest: currently 189 independently
+bound segments, still 21 logical tuples. Legacy whole-tuple campaigns retain their
+original units and remain independently replayable. Each trusted reader job
 independently validates every original typed view/report/Save/source/clock/RSS
 record for all its cases and applicable roles. Its fragment remains
 `accepted:false` with budgets `not_evaluated`.

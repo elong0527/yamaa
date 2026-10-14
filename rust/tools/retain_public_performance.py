@@ -18,7 +18,7 @@ import urllib.request
 from pathlib import Path
 
 from index_public_performance import (
-    R_VARIANTS,
+    VARIANTS,
     api,
     producer_job,
     tuples,
@@ -91,10 +91,9 @@ def producer_name(name):
     for lane, artifact_name in tuples():
         if name == artifact_name:
             return producer_job(lane)
-        if lane["host"] == "r":
-            for variant in R_VARIANTS:
-                if name == f"{artifact_name}-{variant}":
-                    return producer_job(lane, variant)
+        for variant in VARIANTS:
+            if name == f"{artifact_name}-{variant}":
+                return producer_job(lane, variant)
     return {
         "performance-native-admission": "Admit exact-source full native qualification",
         "performance-index": "Retain exact original campaign index",

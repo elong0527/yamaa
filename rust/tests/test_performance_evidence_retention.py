@@ -30,6 +30,44 @@ def selected_run(revision="a" * 40):
 
 
 class RetainedIndex(unittest.TestCase):
+    def test_both_hosts_segment189_original_jobs_without_changing567_504_logical_cells(self):
+        artifacts, jobs = [], []
+        for lane, name in index.tuples():
+            for variant in index.VARIANTS:
+                artifacts.append({"id": len(artifacts) + 1, "name": f"{name}-{variant}",
+                                  "created_at": "2026-10-14T00:00:10Z"})
+                jobs.append({"name": index.producer_job(lane, variant), "run_attempt": 1,
+                             "status": "completed", "started_at": "2026-10-14T00:00:00Z",
+                             "completed_at": "2026-10-14T00:01:00Z"})
+                self.assertEqual(retention.producer_name(artifacts[-1]["name"]), jobs[-1]["name"])
+        result = index.manifest(selected_run(), artifacts, "elong0527/yamaa", "a" * 40,
+                                1, jobs=jobs, r_variants=True, python_variants=True)
+        self.assertEqual(len(result["entries"]), 21)
+        segments = [segment for entry in result["entries"] for segment in entry["segments"]]
+        self.assertEqual(len(segments), 189)
+        self.assertEqual(sum(entry["tuple"]["host"] == "python" for entry in result["entries"]), 18)
+        self.assertTrue(all(segment["artifact_id"] is not None for segment in segments))
+        self.assertEqual(sum(len(segment["cases"]) for segment in segments), 567)
+        self.assertEqual(sum(len(segment["cases"]) for segment in segments
+                             for role in segment["collections"] if role["role"] != "candidate"), 504)
+        self.assertTrue(all(len(entry["segments"]) == 9 for entry in result["entries"]))
+
+    def test_python_variant_cannot_use_another_variant_job_or_old_attempt(self):
+        lane = {"host": "python", "os": "ubuntu-24.04", "python": "3.12", "form": "wheel"}
+        name = "performance-python-ubuntu-24.04-3.12-wheel-window-10"
+        artifact = {"id": 42, "name": name, "created_at": "2026-10-14T00:00:10Z"}
+        for variant, attempt in (("window-100", 1), ("window-10", 2)):
+            jobs = [{"name": index.producer_job(lane, variant), "run_attempt": attempt,
+                     "status": "completed", "started_at": "2026-10-14T00:00:00Z",
+                     "completed_at": "2026-10-14T00:01:00Z"}]
+            with self.subTest(variant=variant, attempt=attempt):
+                result = index.manifest(selected_run(), [artifact], "elong0527/yamaa", "a" * 40,
+                                        1, jobs=jobs, r_variants=True, python_variants=True)
+                self.assertEqual(len(result["entries"]), 21)
+                entry = next(entry for entry in result["entries"] if entry["tuple"] == lane)
+                self.assertEqual(len(entry["segments"]), 9)
+                self.assertTrue(all(segment["artifact_id"] is None for segment in entry["segments"]))
+
     def test_r_variant_segments_keep_twenty_one_logical_tuples_and_all_approved_cases(
         self,
     ):
@@ -126,7 +164,7 @@ class RetainedIndex(unittest.TestCase):
         entry = next(e for e in result["entries"] if e["tuple"] == lane)
         self.assertEqual(len(entry["segments"]), 9)
         self.assertTrue(all(s["artifact_id"] is None for s in entry["segments"]))
-        with self.assertRaisesRegex(ValueError, "unexpected R performance variant"):
+        with self.assertRaisesRegex(ValueError, "unexpected performance variant"):
             index.variant_cases("window-999")
 
     def test_rerun_does_not_select_a_unique_artifact_from_an_earlier_attempt(self):

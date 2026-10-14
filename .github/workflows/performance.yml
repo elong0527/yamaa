@@ -106,10 +106,11 @@ jobs:
     env:
       NATIVE_RUN_ID: ${{ needs.native.outputs.run-id }}
       NATIVE_RUN_ATTEMPT: ${{ needs.native.outputs.run-attempt }}
-    name: performance-python (${{ matrix.os }}, ${{ matrix.python }}, ${{ matrix.form }})
+      PERFORMANCE_VARIANT: ${{ matrix.variant }}
+    name: performance-python (${{ matrix.os }}, ${{ matrix.python }}, ${{ matrix.form }}, ${{ matrix.variant }})
     runs-on: ${{ matrix.os }}
-    # Approved reference producer 100k Build alone takes about 30-42 seconds;
-    # both baseline scopes retain ten cold and 33 warm attempts for every case.
+    # Actual large-case diagnostics require bounded dimension groups. Each
+    # case keeps its complete original distribution and same-machine baseline.
     timeout-minutes: 240
     strategy:
       fail-fast: false
@@ -117,6 +118,7 @@ jobs:
         os: [ubuntu-24.04, macos-15, windows-latest]
         python: ['3.12', '3.13', '3.14']
         form: [wheel, source]
+        variant: [lookup-1, lookup-4, aggregate-10, aggregate-100, window-10, window-100, callback-1, producer-1, producer-3]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -188,6 +190,16 @@ jobs:
           python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "$(cat "${RUNNER_TEMP}/baseline-revision.txt")" --host python --executable "${BASELINE_PYTHON}" --artifact "${baseline_artifact}" --artifact-reference "source-built:${BASELINE_REF}/$(basename "${baseline_artifact}")" --form wheel --build-association "clean source-built previous release archive; baseline-build.log retained; not a downloaded previous-release binary" --output "${RUNNER_TEMP}/baseline-installation"
       - name: Create same-runner campaign before original measurements
         run: python rust/tools/performance_campaign.py create --campaign "${RUNNER_TEMP}/machine-campaign.json"
+      - name: Select the complete approved dimension variant without splitting samples
+        run: |
+          python - <<'PY'
+          import os, sys
+          sys.path.insert(0, 'rust/tools')
+          from index_public_performance import variant_cases
+          cases=variant_cases(os.environ['PERFORMANCE_VARIANT'])
+          with open(os.environ['GITHUB_ENV'],'a') as env:
+              env.write('PERFORMANCE_CASES='+' '.join(cases)+'\n')
+          PY
       - name: Collect candidate with independent truth before timing
         id: candidate
         continue-on-error: true
@@ -195,15 +207,22 @@ jobs:
           phase_args=()
           if [[ "${PHASE_MEASUREMENTS}" == "true" ]]; then phase_args+=(--phase-measurements); fi
           if [[ "${COLLECTION_PURPOSE}" == "capacity-frontier" ]]; then export YAMAA_REPORT_CAPACITY_TRACE=1; fi
-          python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${CANDIDATE_PYTHON}" --provenance "${RUNNER_TEMP}/candidate-installation/provenance.json" --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/candidate-evidence" "${phase_args[@]}"
+          read -r -a case_args <<< "${PERFORMANCE_CASES}"
+          python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${CANDIDATE_PYTHON}" --provenance "${RUNNER_TEMP}/candidate-installation/provenance.json" --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/candidate-evidence" --cases "${case_args[@]}" "${phase_args[@]}"
       - name: Collect compatible previous-release Python reference on the same runner
+        if: startsWith(matrix.variant, 'lookup-') || startsWith(matrix.variant, 'aggregate-') || startsWith(matrix.variant, 'window-')
         id: baseline
         continue-on-error: true
-        run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --families lookup aggregate window --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/baseline-evidence"
+        run: |
+          read -r -a case_args <<< "${PERFORMANCE_CASES}"
+          python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --families lookup aggregate window --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/baseline-evidence" --cases "${case_args[@]}"
       - name: Collect supported producer root-Build reference without graph Saves
+        if: startsWith(matrix.variant, 'producer-')
         id: producer_baseline
         continue-on-error: true
-        run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --scope producer-root-build --families producer --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/producer-root-build-baseline"
+        run: |
+          read -r -a case_args <<< "${PERFORMANCE_CASES}"
+          python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --scope producer-root-build --families producer --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/producer-root-build-baseline" --cases "${case_args[@]}"
       - name: Attach original campaign identity without changing sample admission
         if: always()
         run: |
@@ -221,7 +240,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
-          name: performance-python-${{ matrix.os }}-${{ matrix.python }}-${{ matrix.form }}
+          name: performance-python-${{ matrix.os }}-${{ matrix.python }}-${{ matrix.form }}-${{ matrix.variant }}
           retention-days: 90
           path: |
             ${{ runner.temp }}/native-run.json
@@ -239,7 +258,18 @@ jobs:
           if-no-files-found: error
       - name: Require complete evidence after preserving failures
         if: always()
-        run: test "${{ steps.candidate.outcome }}" = success && test "${{ steps.baseline.outcome }}" = success && test "${{ steps.producer_baseline.outcome }}" = success
+        env:
+          CANDIDATE_OUTCOME: ${{ steps.candidate.outcome }}
+          BASELINE_OUTCOME: ${{ steps.baseline.outcome }}
+          PRODUCER_BASELINE_OUTCOME: ${{ steps.producer_baseline.outcome }}
+        run: |
+          test "${CANDIDATE_OUTCOME}" = success
+          case "${PERFORMANCE_VARIANT}" in
+            lookup-*|aggregate-*|window-*) test "${BASELINE_OUTCOME}" = success ;;
+            producer-*) test "${PRODUCER_BASELINE_OUTCOME}" = success ;;
+            callback-1) true ;;
+            *) exit 1 ;;
+          esac
 
   r:
     needs: native
@@ -510,7 +540,7 @@ jobs:
             --revision "${GITHUB_SHA}" --run-id "${GITHUB_RUN_ID}" \
             --attempt "${GITHUB_RUN_ATTEMPT}" --baseline-ref "${BASELINE_REF}" \
             --native-run-id "${{ needs.native.outputs.run-id }}" \
-            --native-attempt "${{ needs.native.outputs.run-attempt }}" --r-variants
+            --native-attempt "${{ needs.native.outputs.run-attempt }}" --r-variants --python-variants
       - name: Preserve complete tuple selection and original source histories
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5

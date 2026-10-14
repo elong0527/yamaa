@@ -106,7 +106,9 @@ def prepare(args):
         catalog = json.loads((args.output / "catalog/performance-replay-catalog.json").read_text())
         with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
             output.write(f"mode={record['mode']}\n")
-            output.write(f"units={json.dumps(catalog['units'], separators=(',', ':'))}\n")
+            units = [{"key": item["key"], "selector": item["selector"]}
+                     for item in catalog["units"]]
+            output.write(f"units={json.dumps(units, separators=(',', ':'))}\n")
 
 
 def prepared(root):
