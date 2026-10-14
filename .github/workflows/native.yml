@@ -36,8 +36,8 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  # Cancel stale PR feedback while allowing active main qualification to finish.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Cancel stale PR and issue qualification feedback; active main runs finish.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read

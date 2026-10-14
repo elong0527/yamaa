@@ -113,6 +113,9 @@ class NativeCoverage(unittest.TestCase):
         self.assertIn(
             "continue-on-error: ${{ github.ref == 'refs/heads/main' }}", workflow
         )
+        self.assertIn(
+            "cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}", workflow
+        )
 
     def test_pr_checks_both_installation_forms_on_linux_and_python_endpoints(self):
         coverage = native_matrix.plan("pull_request")
