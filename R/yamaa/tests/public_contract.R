@@ -117,6 +117,23 @@ run_contract <- function() {
     identical(is.na(column), c(FALSE, FALSE, TRUE)),
     identical(unclass(column[c(1L, 3L)]), list(as.raw(c(97L, 0L, 98L)), NULL)),
     identical(text$output$EMPTY, rep("", 3L)), identical(text$save(), TRUE))
+  conversion <- tryCatch(as.character(column), error = identity)
+  stopifnot(inherits(conversion, "error"),
+    grepl("cannot preserve NUL", conditionMessage(conversion), fixed = TRUE),
+    identical(as.character(column[c(2L, 3L)]), c("\u00e9", NA_character_)),
+    identical(as.character(column[integer()]), character()),
+    identical(as.character(setNames(column[c(2L, 3L)], c("text", "missing"))),
+      c(text = "\u00e9", missing = NA_character_)),
+    identical(as.character(text$output$VALUE[c(2L, 3L)]), c("\u00e9", NA_character_)),
+    nrow(check_issues(text)) == 0L)
+  for (value in list(
+    structure(list(as.raw(255L)), class = "yamaa_utf8_vector"),
+    structure(list("repaired"), class = "yamaa_utf8_vector"),
+    structure(list(structure(raw(), names = character())), class = "yamaa_utf8_vector"),
+    structure(list(raw()), class = c("yamaa_utf8_vector", "other")),
+    structure(list(raw()), class = "yamaa_utf8_vector", dim = c(1L, 1L)))) {
+    stopifnot(inherits(tryCatch(as.character(value), error = identity), "error"))
+  }
   expected <- c(charToRaw('ID,VALUE,EMPTY\na,a'), as.raw(0L), charToRaw('b,""\nb,'),
     as.raw(c(0xc3, 0xa9)), charToRaw(',""\nc,,""\n'))
   stopifnot(identical(rawfile("output.csv"), expected))

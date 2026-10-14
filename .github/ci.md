@@ -21,9 +21,10 @@ trigger that workflow as well.
 Native PR runs use Linux for distribution builds and R package checks.
 Installed Python qualification covers wheel and source installs on Python 3.12
 and 3.14. The workflow summary records this reduced matrix. macOS, Windows,
-Python 3.13, and complete public/producer cohort comparisons run on main pushes
-or manual full-matrix dispatches. Shared Rust checks and cross-platform math
-run only on pushes to main.
+Python 3.13, and complete public/producer cohort comparisons run on main pushes,
+explicit `qualification/issue-*` branch pushes, or manual full-matrix dispatches.
+Shared Rust checks and cross-platform math run on main and qualification branch
+pushes. Ordinary PR sampling and manual dispatch coverage remain unchanged.
 
 Pushes to main retain the full three-OS, three-Python, two-package-form matrix,
 all three R hosts, the cross-platform math comparison, and the complete
@@ -35,9 +36,9 @@ Benchmark Markdown changes trigger documentation checks without rebuilding
 the Python/native runtimes. Specification, input, expected-output, and SDK
 changes still trigger runtime coverage. Native PR runs use seven jobs: the
 selection job, a Linux distribution build, four installed Python qualifications,
-and Linux R package checks. Full installed dispatches use 26 jobs. Main pushes
-add three shared Rust jobs, the cross-platform math comparison, and the
-nonblocking evidence audit for 31 jobs in total.
+and Linux R package checks. Main and qualification pushes add three shared Rust
+jobs, the cross-platform math comparison, and the evidence audit. The audit stays
+observational on main and must pass on qualification branches.
 
 Before merging changes to native code, R glue, package builds or native CI,
 dispatch the complete matrix on the current PR head:
@@ -54,7 +55,11 @@ eighteen installed Python lanes, three R hosts, and public/producer cohort gate
 as a main push. Require every enabled lane, including Windows R, to pass on that
 exact head before merging. Shared Rust checks and the math comparison are
 deferred to the main push; retain that combined run for work-package acceptance.
-A reduced PR run does not replace the installed dispatch gate.
+A reduced PR run does not replace the installed dispatch gate. When dispatch
+access is unavailable, push the reviewed head to an explicit
+`qualification/issue-<number>` branch. Its complete installed, shared Rust,
+numerical and audit checks supply exact-head premerge evidence. Its audit records
+`qualification_scope: reviewed-branch`; renew combined-main evidence after merge.
 
 The shared-crates step also runs
 `cargo test --locked -p yamaa-engine --features test-support` on every selected
@@ -76,12 +81,19 @@ commands.
 ### Independent native run audit
 
 Main pushes append a nonblocking `native-run-evidence-audit` job after all native
-lanes finish. Its `native-run-audit` artifact retains `qualification.json` and
+lanes finish. Qualification branch pushes run the same audit as a required job.
+Its `native-run-audit` artifact retains `qualification.json` and
 `qualification.md`, the exact source revision and parents, selected Actions
 attempt metadata, downloaded artifacts, and canonical source files. The audit
 job itself may still be running when the metadata snapshot is taken; acceptance
 uses the named dependency jobs and never treats the workflow's pending overall
-conclusion as a pass.
+conclusion as a pass. The small `native-run-audit-record` artifact separately
+retains the verdicts and source/run/job/artifact metadata for review; independent
+replay still requires the canonical files and original artifact bytes retained in
+the full audit. Both records distinguish combined-main from reviewed-branch scope.
+The audit installs independent report and artifact readers from `python/uv.lock`
+without installing the candidate engine. Missing readers stay explicit missing
+evidence and cannot produce a complete audit.
 
 To audit a completed main run locally, authenticate `gh` for
 repository and Actions reads, then use a fresh output directory:

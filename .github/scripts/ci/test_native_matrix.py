@@ -1,8 +1,11 @@
-"""Check installed matrices and the main-only shared Rust coverage policy."""
+"""Check sampled PR and complete main/issue qualification coverage."""
 
+import ast
+import fnmatch
 import itertools
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -22,6 +25,7 @@ class NativeCoverage(unittest.TestCase):
                 environment = dict(
                     os.environ,
                     GITHUB_EVENT_NAME=event,
+                    GITHUB_REF="refs/heads/main",
                     GITHUB_RUN_ID="38146574656",
                     GITHUB_OUTPUT=str(output),
                     GITHUB_STEP_SUMMARY=str(summary),
@@ -73,6 +77,88 @@ class NativeCoverage(unittest.TestCase):
             {key: value for key, value in main.items() if key != "run-rust"},
         )
         self.assertFalse(dispatch["run-rust"])
+
+    def test_explicit_qualification_push_keeps_every_main_check(self):
+        main = native_matrix.plan("push", "refs/heads/main")
+        branch = native_matrix.plan("push", "refs/heads/qualification/issue-1996")
+        self.assertEqual(branch, main)
+        self.assertTrue(branch["run-rust"])
+        for reference in (
+            "refs/heads/feature/example",
+            "refs/tags/qualification/issue-1996",
+        ):
+            with self.subTest(reference=reference), self.assertRaises(ValueError):
+                native_matrix.plan("push", reference)
+
+    def test_workflow_push_trigger_and_full_job_guards_agree_with_plan(self):
+        workflow = (Path(__file__).parents[2] / "workflows/native.yml").read_text()
+        # Match the workflow's explicitly selected push branch patterns:
+        # main and selected issue branches must qualify, ordinary branches do not.
+        branches = re.search(r"branches: \[(.*?)\]", workflow).group(1)
+        patterns = [value.strip().strip("'\"") for value in branches.split(",")]
+        for branch, selected in (
+            ("main", True),
+            ("qualification/issue-1996", True),
+            ("qualification/issue-2005-predicates", True),
+            ("feature/example", False),
+        ):
+            with self.subTest(branch=branch):
+                self.assertEqual(
+                    any(fnmatch.fnmatchcase(branch, p) for p in patterns), selected
+                )
+                if selected:
+                    self.assertTrue(
+                        native_matrix.plan("push", "refs/heads/" + branch)["run-rust"]
+                    )
+        self.assertNotIn("outputs.run-rust == 'true' && github.ref", workflow)
+        self.assertIn(
+            "continue-on-error: ${{ github.ref == 'refs/heads/main' }}", workflow
+        )
+        self.assertIn(
+            "cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}", workflow
+        )
+
+    def test_audit_retains_failed_runs_and_releases_superseded_cancelled_runs(self):
+        workflow = (Path(__file__).parents[2] / "workflows/native.yml").read_text()
+        condition = re.search(
+            r"  audit:\n.*?    if: \$\{\{ (.*?) \}\}", workflow, re.DOTALL
+        ).group(1)
+        expression = ast.parse(
+            condition.replace("!", "not ").replace("&&", "and"), mode="eval"
+        ).body
+
+        def evaluate(node, event, conclusion):
+            if isinstance(node, ast.Constant):
+                return node.value
+            if isinstance(node, ast.Attribute) and node.attr == "event_name":
+                self.assertIsInstance(node.value, ast.Name)
+                self.assertEqual(node.value.id, "github")
+                return event
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                self.assertEqual(node.args, [])
+                if node.func.id == "cancelled":
+                    return conclusion == "cancelled"
+                if node.func.id == "always":
+                    return True
+            if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+                return not evaluate(node.operand, event, conclusion)
+            if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.And):
+                return all(evaluate(value, event, conclusion) for value in node.values)
+            if isinstance(node, ast.Compare):
+                self.assertEqual(len(node.ops), 1)
+                self.assertIsInstance(node.ops[0], ast.Eq)
+                return evaluate(node.left, event, conclusion) == evaluate(
+                    node.comparators[0], event, conclusion
+                )
+            self.fail(f"unsupported audit condition: {ast.dump(node)}")
+
+        for event in ("push", "pull_request", "workflow_dispatch"):
+            for conclusion in ("success", "failure", "cancelled"):
+                with self.subTest(event=event, conclusion=conclusion):
+                    self.assertEqual(
+                        evaluate(expression, event, conclusion),
+                        event == "push" and conclusion != "cancelled",
+                    )
 
     def test_pr_checks_both_installation_forms_on_linux_and_python_endpoints(self):
         coverage = native_matrix.plan("pull_request")

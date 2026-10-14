@@ -9,8 +9,8 @@ same machine; missing baseline or phase/callback metrics remain unavailable.
 from __future__ import annotations
 
 import argparse
-import copy
 import csv
+import gzip
 import io
 import json
 import platform
@@ -21,6 +21,20 @@ from pathlib import Path
 import application_measurement_evidence as phases
 import measure_public_lifecycle as lifecycle
 import prepare_public_workloads as workloads
+
+
+def retained_equal(left, right):
+    """Compare original report bytes with bounded buffers, including gzip."""
+    def reader(path):
+        return gzip.open(path, "rb") if path.suffix == ".gz" else path.open("rb")
+
+    with reader(left) as lhs, reader(right) as rhs:
+        while True:
+            block = lhs.read(1_048_576)
+            if block != rhs.read(1_048_576):
+                return False
+            if not block:
+                return True
 
 
 def verify_workload(source, case_name, output):
@@ -98,13 +112,12 @@ def validate(case, authored, child, request, response, record, repository):
             raise ValueError("undeclared logs must remain null")
         if request.get("phase_measurements"):
             phases.validate_repetition(case, child, actual, lifecycle.read_json)
+        # The complete copied views have passed independent truth. Release their
+        # typed cell dictionaries before decoding the larger graph reports.
+        del views
         if actual["save_returns"] != [True, True]:
             raise ValueError("held Saves failed")
-        reports = {
-            stage: lifecycle.read_json(child / actual["reports"][stage])
-            for stage in ("build", "save_1", "save_2")
-        }
-        before = reports["build"]
+        before = lifecycle.read_json(child / actual["reports"]["build"])
         if (
             before.get("outcome") != "success"
             or before.get("diagnostics")
@@ -138,14 +151,18 @@ def validate(case, authored, child, request, response, record, repository):
             for read in reads
         ):
             raise ValueError("source ledger differs from independently declared reads")
-        if reports["save_1"] != reports["save_2"]:
+        if not retained_equal(child / actual["reports"]["save_1"],
+                              child / actual["reports"]["save_2"]):
             raise ValueError("repeated held Save changes complete observations")
+        saved = lifecycle.read_json(child / actual["reports"]["save_1"])
+        # Native held observations have one stable original encoding. The exact
+        # decompressed comparison above admits both reports, without decoding
+        # and deep-copying a third graph's millions of cell dictionaries.
         for stage in ("save_1", "save_2"):
-            saved = copy.deepcopy(reports[stage])
-            publication = saved.pop("publication", None)
+            publication = saved.get("publication")
             if publication is not None and publication.get("status") != "success":
                 raise ValueError("complete Save report has no successful publication")
-            artifacts = saved.pop("artifacts", None)
+            artifacts = saved.get("artifacts")
             if not artifacts:
                 raise ValueError("complete Save report omits published artifacts")
             expected_artifacts = {
@@ -171,10 +188,9 @@ def validate(case, authored, child, request, response, record, repository):
                     or artifact["profile"] != "csv"
                 ):
                     raise ValueError("reported artifact differs from independent bytes")
-            build = copy.deepcopy(before)
-            build.pop("publication", None)
-            build.pop("artifacts", None)
-            if saved != build:
+            excluded = {"publication", "artifacts"}
+            if (saved.keys() - excluded != before.keys() - excluded
+                    or any(saved[key] != before[key] for key in before.keys() - excluded)):
                 raise ValueError("held Save changes completed Build observations")
             for artifact in case["expected_artifacts"]:
                 name = actual["saved_artifacts"][stage][artifact["path"]]
@@ -190,9 +206,12 @@ def validate(case, authored, child, request, response, record, repository):
         # actual disk presence, not a report field, establishes zero publication.
         if (
             before.get("artifacts")
-            and before["artifacts"] != reports["save_1"]["artifacts"]
+            and before["artifacts"] != saved["artifacts"]
         ):
             raise ValueError("prospective Build artifacts differ from completed Save")
+        # Warm validation must not retain the previous repetition's graph when
+        # the next Build report is decoded.
+        del before, saved
 
 
 def collect(args):

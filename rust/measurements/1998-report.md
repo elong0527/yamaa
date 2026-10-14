@@ -1,153 +1,137 @@
 # Representative public performance evidence
 
-The committed [raw frontier record](1998-frontier-2026-10-13.json) retains actual
-clock boundaries, child peak RSS, refusals and origins for installed Linux
-x86_64 / CPython 3.12.14 wheels. It is functional evidence, not an approved
-10-cold/30-warm distribution or release qualification. Candidate source is
-`a1a9c2d216075f331ac108aa4d3638573f103cea`, from the successful
-[native run 38394553441](https://github.com/elong0527/yamaa/actions/runs/38394553441).
-The previous release is tag `yamaa-py-0.3.0`, source
-`845a91ff9ba4ab6599efbd79fafe1c4e1dd14255`.
+The [current-main raw frontier record](1998-current-main-frontier-2026-10-14.json)
+passes all 27 independently authored lookup, ordered aggregate, window, callback
+and producer variants at 1,000, 10,000 and 100,000 driving rows. It retains actual
+import/Build/view/Save clocks, original application phase ledgers, callback
+counts, report lengths and exact-child peak RSS for installed Linux x86_64 /
+CPython 3.12.14 / yamaa 0.4.0 wheels. Candidate source is
+`da02b59b386cfd22a20a7ae062e602c92f6f8983`.
 
-## Observations
+These are functional frontier observations. They contain one independent-truth
+child per case and one separate delegated callback observer per callback case.
+They contain no ten-cold/thirty-warm characterization distribution. Other session
+package builds were permitted, and no timing ratio or approved budget is derived
+from these clocks. The initial attempt without installed locked dependencies
+retains `ModuleNotFoundError: polars` separately; it admits no samples.
 
-The candidate completes exact independent output and both held Saves for the
-1,000-row aggregate workloads (group widths 10 and 100) and callback workload.
-All 10,000/100,000-row cases refuse. The corrected producer workload now has a
-key-correlated, ordered first-match intermediate, preserving independently
-computed outputs; its remaining refusals are engine findings, not invalid
-rename-only declarations. Refused Builds and false/throwing Saves are retained.
-Their durations never become successful samples.
+## Independent acceptance and actual phases
 
-| Actual accepted frontier | Child lifetime peak RSS |
-| --- | ---: |
-| Candidate aggregate, 1,000 rows / width 10 | 66,617,344 bytes |
-| Candidate aggregate, 1,000 rows / width 100 | 65,351,680 bytes |
-| Candidate callback, 1,000 rows | 78,036,992 bytes |
-| Previous Python reference lookup, 100,000 rows / multiplicity 4 | 528,199,680 bytes |
-| Previous Python reference aggregate, 100,000 rows / width 10 | 157,077,504 bytes |
-| Previous Python reference window, 100,000 rows / partition width 100 | 1,345,900,544 bytes |
+Every root output column, row count, typed cell and binary64 bit pattern matches
+standard-library truth authored before candidate execution. Every producer's
+original CSV bytes match independent truth after both held Saves. Build publishes
+no declared artifact. The graph node and original source-capture inventories,
+empty issues, absent logs and complete held observations all pass. Callback
+observers delegate once and match independent argument/result order, activation
+tests and missing-input short circuit. Their executions do not count as timing
+samples.
 
-The previous release passes all 18 lookup/aggregate/window variants at the three
-approved sizes against independent typed cells, float bits and both original CSV
-Saves. Its public reference API does not accept `environment`; nine callback and
-producer cases retain the resulting `TypeError`. The reference wheel needs its supported explicit
-`schema_root` argument; the collector retains the release's original YAML bytes
-outside the checkout rather than substituting candidate schema content.
+Original owner-local `std::time::Instant` offsets provide actual preparation,
+Build service, activation when entered, input, execution admission, derivation,
+output keys, verification, output preparation and both Saves. Nested intervals
+remain nested, including per-node producer intervals. They are not added into an
+exclusive partition. Reading observations after Save preserves the original
+Build events and function aggregates. The raw record retains original uint64
+values and every reached Save ledger rather than fabricating missing metrics.
 
-A separately labeled producer root-Build scope now passes all six variants
-through 100k using the previous release's actual `yamaa_domain` callable and
-`schema_root`, with no environment argument. Its installed callable source is
-compared directly with the pinned Git bytes; its exact signature is retained.
-The authored environment declares empty functions and only schema/language/lock
-metadata, with no codelist/study/submission fields. Every independently authored
-root cell, issue/log expectation and Build artifact absence passes. No Save is
-called or timed in this scope: the previous reference only publishes the root
-CSV and cannot provide a complete producer/branch Save comparator. The 100k
-depth-3 root-Build child peak is 518,799,360 bytes; it cannot be compared directly
-with a complete native graph lifecycle peak. Its raw clocks are diagnostic.
-Callback and complete graph Save budgets still need measured absolute proposals.
+| Accepted 100k frontier | Diagnostic Build seconds | Child lifetime peak RSS bytes |
+| --- | ---: | ---: |
+| Lookup, multiplicity 1 | 0.832 | 554,885,120 |
+| Lookup, multiplicity 4 | 1.160 | 593,072,128 |
+| Aggregate, width 10 | 0.185 | 141,783,040 |
+| Aggregate, width 100 | 0.152 | 111,394,816 |
+| Window, partition width 10 | 1.197 | 1,404,846,080 |
+| Window, partition width 100 | 0.763 | 1,414,307,840 |
+| Callback, one call per present row | 0.962 | 535,748,608 |
+| Producer, depth 1 | 3.881 | 771,813,376 |
+| Producer, depth 3 | 4.577 | 896,376,832 |
 
-The 1,000-row callback observer records 859 actual delegated invocations: the
-two present activation-test arguments and 857 present study arguments, in exact
-independent argument/result order. No missing argument reaches the callable.
-Ordinary and observed output, both Saves and complete reports agree after only
-fresh-directory identities are normalized. The wrapper has the installed
-callable's admitted signature and delegates once. Activation/derivation stage
-counts and lock/binding counts remain unavailable. Each successful repetition
-observes two output property accesses and one access to each issue/log property.
-These accessor counts do not estimate internal allocations or copies.
+The linked raw record is authoritative for exact durations and RSS. Peaks include
+worker transport and are cumulative over the child's lifetime, not phase deltas
+or allocation guarantees. Linux/macOS use the original child's `wait4` high-water
+result; Windows uses `GetProcessMemoryInfo` / `PeakWorkingSetSize`. A fresh small
+broker prevents the workload generator's memory from contaminating the child's
+kernel high-water observation. Validated allocation/isolation controls remain in
+the collector tests. Missing supported-platform metrics remain null and refuse
+characterization admission.
 
-Memory uses the candidate child's `wait4` high-water result on Linux/macOS and
-`GetProcessMemoryInfo` / `PeakWorkingSetSize` on Windows. A small, newly executed
-broker launches the measured process: a large workload controller's RSS would
-otherwise survive fork/exec in the child high-water observation. An actual
-192 MiB parent-allocation control verifies isolation, and an actual 64 MiB child
-allocation verifies measurement and nonzero exit preservation. Raw observations
-retain original units. Warm-child RSS is cumulative across repetitions and
-includes collector transport. Supported-platform provider failures stay null
-and reject admission. Isolated macOS R source collection now admits aggregate
-1k widths 10/100 and callback 1k with actual child peaks
-95,240,192 / 101,548,032 / 105,873,408 bytes. The complete raw ZIP is retained from
-run 38425076753, artifact 11829916909. Windows collection initially stopped at
-baseline archive extraction; portable filtered extraction is fixed for the next
-run. No cross-platform qualification is claimed from these partial frontiers.
+## Collector memory and exact-source qualification
 
-## Concrete resource-policy proposal for review
+The largest producer report is about 124 MiB. Decoding three complete reports and
+deep-copying their millions of cell dictionaries made the original controller
+consume about 5.9 GiB in an observed process snapshot. The validator now releases
+verified copied views, decodes only Build and the first Save, compares repeated
+Save original bytes with bounded buffers (including gzip), and compares unchanged
+Build fields without deep copies. Every graph table, artifact, node and source
+comparison remains required. A fresh-process validation of the original complete
+100k depth-3 evidence passes with a measured controller peak of 2,257,395,712 bytes
+(`os.wait4`, original 2,204,488 KiB). This is controller validation evidence,
+separate from candidate peak RSS and performance samples.
 
-Size approval does not approve quota increases. The following is a bounded
-proposal, not an implemented or approved policy:
+Pushing the explicit `qualification/issue-1998` branch starts the
+[performance workflow](../../.github/workflows/performance.yml). Its bounded
+admission job waits for completed successful native qualification on the identical
+source revision, same repository and expected branch. A sampled PR run, different
+source, failed audit, missing platform/form, expired artifact or timeout prevents
+collection. The admitted native jobs cover shared Rust, all 18 Python
+installations, all three R hosts, portable math, complete cohort comparison and
+the required evidence audit. Artifact source associations are checked before
+candidate installation. Superseded explicit qualification pushes cancel older
+collection attempts.
 
-| Resource | Approved workload requirement | Proposed ceiling |
-| --- | --- | --- |
-| Source rows | Lookup multiplicity 4 has 342,856 donor rows at 100k driving rows. | 524,288 per source |
-| Captured source cells | That donor has 1,028,568 cells, plus 100,000 base cells. | 2,097,152 per execution |
-| Output rows/cells | Windows have 100,000 rows and 700,000 output cells. | 131,072 rows / 1,048,576 cells |
-| Key/identity cells | 100k driving identities; donor key preparation exceeds 262,144. | 1,048,576 cells, with 8 MiB retained identity text |
-| Retained output text | Lookup ID/text and window partition identities exceed 1 MiB. | 8 MiB |
-| Execution work | Existing ordinary keyed selectors scan all donors for each current row. | Keep existing work refusal until indexed selection is qualified; then review a bounded 67,108,864-work-unit ceiling. |
-| Report projection | The 16 MiB conservative projection charge blocks complete public results before actual encoded report bytes reach 16 MiB. | Review actual retained/encoded allocation charges and aggregate graph accounting before selecting a ceiling. Do not mechanically raise it to GiB. |
+The workflow builds and installs every candidate/source form and the previous
+release before collecting. Each of the 18 Python tuples and three R source tuples
+requires independent truth before ten fresh cold children and thirty warm Builds
+after three retained warm-ups. Actual application phases are required for the
+explicit branch route. The same runner collects the supported previous-release
+reference. Every attempt, raw clock, warm-up, full report, saved byte, child RSS,
+refusal and unavailable metric is retained before the job rejects incomplete
+characterization. Lossless compression reduces raw retention without changing
+the original bytes used for comparisons.
 
-The current `dataset_intermediates.rs` ordinary selection loop performs about
-34.3 billion donor visits for the largest lookup and about 342.8 million at 10k.
-Raising the work allowance to accommodate this scan would permit quadratic
-execution. Index ordinary eligible keyed donors while preserving source filters,
-donor order, missingness, correlated checks and stable first/last selection;
-retain the existing path for scopes whose eligibility depends on the current
-row. Qualify that change before increasing admitted source/cell capacity.
+## Previous release and budget proposal
 
-The actual reference window peak of 1.346 GB demonstrates that the largest
-approved truth can run on this machine; it does not establish candidate memory
-at increased quotas. After reviewing the policy amendment, collect progressively
-larger candidate cases and retain refusal/peak evidence before a full
-characterization. A policy ceiling is an accounting bound, not an allocator or
-operating-system memory guarantee.
+The prior release is tag `yamaa-py-0.3.0`, source
+`845a91ff9ba4ab6599efbd79fafe1c4e1dd14255`. Its retained source archive and freshly
+built Linux wheel are installed outside the checkout before collection. The
+previous [raw frontier](1998-frontier-2026-10-13.json) retains independently correct
+full lookup/aggregate/window lifecycles through 100k. Its original reference
+schema bytes are used with the supported explicit `schema_root` parameter.
 
-## Proposed numerical budgets and remaining gates
+The legacy public callable does not accept `environment`. Callback and full
+producer graph Saves therefore lack a compatible previous-release comparator;
+original incompatibilities remain retained. The separately labeled
+[producer root-Build reference](1998-producer-root-build-reference-2026-10-13.json)
+uses the actual installed `yamaa_domain` signature and independently admitted
+empty function declarations. It verifies all root cells and no publication, calls
+no Save, and cannot stand in for complete graph Save or lifetime memory budgets.
 
-For item 10 review, retain the existing recommended numerical proposal:
+The existing numerical proposal for #1973 item 10 remains:
 
-- At cutover, each 10k/100k workload's median warm Build time is at most 1.00
-  times the comparable previous Python reference on the same runner; maximum
-  child-lifetime peak RSS is at most 1.00 times that reference under the same
-  collection protocol.
+- At cutover, each comparable 10k/100k workload's median warm Build time and
+  maximum child-lifetime peak RSS are at most 1.00 times the previous Python
+  release measured on the same runner with the same lifecycle scope.
 - After release, each workload's median warm Build time is at most 1.10 times
-  the previous release, using the approved 30 measured warm repetitions after
-  three retained warm-ups, plus ten fresh cold children.
+  the previous release, using thirty measured warm repetitions after three
+  retained warm-ups and ten fresh cold children.
 
-These numbers remain proposals. No ratio or budget is approved from a refused
-sample or a single frontier run. Producer root-Build has a separately labeled
-supported reference scope; its complete graph Saves and callback workloads need
-reviewed absolute budgets after successful candidate measurements. Preparation,
-activation, ingestion, derivation and verification stage attribution remains
-unavailable; copied views and held Saves are actual separate outer boundaries.
+These are review proposals, not approvals. Callback and complete producer graph
+Saves need measured absolute proposals after full candidate characterization.
+The source/output/work/report frontier policy already merged on main is still
+explicitly unapproved; this collection increases no quota. Functional success at
+all sizes does not approve capacity policy, numeric budgets or transition.
 
-The dispatched [collector workflow](../../.github/workflows/performance.yml)
-downloads a named successful native run's distributions, builds/installs source
-forms and a retained previous-release baseline before collection, and covers all
-18 Python tuples plus three R source tuples. Every case has a fresh independent
-truth child before timing. Characterization requires complete provenance and the
-approved counts. It retains every child, warm-up, raw report, saved bytes, RSS,
-failure and unlaunched slot, and preserves failures before rejecting the job.
-Characterization compresses retained views/reports/copied CSV bytes losslessly
-to keep the full raw scope within runner storage; comparisons use the original
-decompressed bytes. An actual installed compressed aggregate control passes.
-Callback observation runs separately and does not count toward timing samples.
-The workflow retains the 18 compatible full reference lifecycles separately from
-the six supported producer root Builds. Their scopes never become one Save or
-memory comparator. Cold package-import distributions are derived from actual
-child import anchors; a warm child's one import is not repeated as warm samples.
+The complete approved platform/form raw distributions and same-machine baseline
+comparisons remain pending. #1998 is not closure-ready until that retained record
+is committed. B17/B18 and transition acceptance are not asserted here. Actions
+artifacts have a 90-day collection window; preserve accepted raw evidence and
+baseline archives durably before expiry or reference retirement. A source tag
+alone does not establish a qualified package rollback or a pinning rehearsal.
 
-The 90-day Actions retention is a collection window. Preserve the accepted
-baseline/archive and raw evidence durably before that window expires and before
-retiring reference code. The previous GitHub release currently has no package
-assets, and the configured package registry cannot resolve `yamaa==0.3.0`.
-Rollback needs a qualified, retrievable package artifact and an actual pinning
-rehearsal. A source tag alone does not establish package rollback. No release
-asset, budget or transition was approved by this collection; #1998 and gates
-B17/B18 remain open.
-
-Raw evidence remains at `/workspace/scratch/performance-final-frontier`,
-`/workspace/scratch/performance-reference-schema-frontier` and
-`/workspace/scratch/performance-callback-observer-corrected`. The built baseline
-and original archive remain in `/workspace/scratch/performance-baseline`.
+Current raw evidence is at
+`/workspace/scratch/issue-1998/main-frontier-with-dependencies`, including all 27
+original reports and both Saved artifact inventories. Candidate/prior-release
+source build logs, wheels, archives and installation provenance are retained
+under `/workspace/scratch/issue-1998`. The independent largest-controller replay
+and exact-child memory observation are at
+`/workspace/scratch/issue-1998/controller-validation`.

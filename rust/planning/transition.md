@@ -92,6 +92,19 @@ introduced. Packaging-tool lock checksums retain the repository's narrow excepti
 
 ## Rollback before a new run
 
+The [exact prior-package pins](rollback-pins.md) distinguish the actual published
+Python 0.3.0 source from the qualified pre-cutover R 0.3.0 archive; no previous R
+release was published. Python's prior source and three platform wheels passed
+all eighteen interpreter/platform/form reinstall tuples in
+[run 38460509078](https://github.com/elong0527/yamaa/actions/runs/38460509078).
+The canonical R archive passed three-host replay in
+[run 38435902670](https://github.com/elong0527/yamaa/actions/runs/38435902670).
+The [retention receipt](../qualification/rollback-assets.json) records exact
+durable draft asset identities and downloaded-byte comparisons. Full study lock
+restoration and a complete prior producer-graph baseline remain separate from
+these representative domain/held-Save rehearsals. Neither retained assets nor
+their rehearsal approves a combined transition before its other gates pass.
+
 Stop the application and discard outstanding build/result handles. In a fresh
 environment, restore the reviewed prior-release lock: Python pins yamaa==0.3.0
 in project dependencies and restores/rebuilds uv.lock; R restores renv.lock and
