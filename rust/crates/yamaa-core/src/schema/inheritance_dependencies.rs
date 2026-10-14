@@ -273,6 +273,12 @@ impl<'a> Run<'a, '_> {
                 add(&mut self.live_columns, column.name, self.budget)?;
             }
         }
+        for i in 0..self.intermediates.len() {
+            let intermediate = self.intermediates[i];
+            if self.field(intermediate.node, "verifications")?.is_some() {
+                add(&mut self.live_intermediates, intermediate.name, self.budget)?;
+            }
+        }
         let base = self.field(root, "base")?;
         if let Some(name) = base.and_then(|id| self.text(id)) {
             add(&mut self.live_inputs, name, self.budget)?;
