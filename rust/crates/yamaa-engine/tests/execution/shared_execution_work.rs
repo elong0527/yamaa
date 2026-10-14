@@ -221,3 +221,118 @@ fn an_unwind_preserves_its_owner_and_prevents_a_second_grant_of_remaining_work()
     assert_eq!(work.used(), 10);
     assert_eq!(table.cells.get(), 1);
 }
+
+fn literal_rows(table: &Table, count: usize, kind: ColumnType, text: bool) -> DatasetPlan {
+    DatasetPlan::new(
+        table.schema.clone(),
+        schema(kind),
+        (0..count)
+            .map(|row| RowTemplate {
+                mode: RowMode::Records,
+                assignments: vec![Assignment {
+                    column: 0,
+                    path: "columns.ID".into(),
+                    expression: Expression::Literal(if text {
+                        Value::Str("abcdef".into())
+                    } else {
+                        Value::Int(row as i64 + 1)
+                    }),
+                }],
+                filter: None,
+            })
+            .collect(),
+        vec![],
+        vec![0],
+        vec![],
+    )
+    .unwrap()
+}
+#[test]
+fn pooled_output_geometry_spends_actual_counts_and_refuses_the_next_growth() {
+    let (table, _) = fixture(Expression::Literal(Value::Int(1)));
+    let limits = Limits {
+        work_cells: 1000,
+        ..limits()
+    };
+    let owner = WorkBudget::pooled(limits);
+    let seven = literal_rows(&table, 7, ColumnType::Int, false);
+    let one = literal_rows(&table, 1, ColumnType::Int, false);
+    assert_eq!(
+        seven
+            .execute_with_work_budget(&table, &[], &mut NoFunctions::new(), limits, &owner)
+            .result
+            .unwrap()
+            .dataset
+            .row_count(),
+        7
+    );
+    assert_eq!(
+        one.execute_with_work_budget(&table, &[], &mut NoFunctions::new(), limits, &owner)
+            .result
+            .unwrap()
+            .dataset
+            .row_count(),
+        1
+    );
+    let before = owner.usage().unwrap();
+    assert_eq!((before.output_rows, before.output_cells), (8, 8));
+    assert!(seven
+        .execute_with_work_budget(&table, &[], &mut NoFunctions::new(), limits, &owner)
+        .result
+        .is_err());
+    let after = owner.usage().unwrap();
+    assert_eq!((after.output_rows, after.output_cells), (8, 8));
+    assert!(after.runtime.work >= before.runtime.work);
+}
+#[test]
+fn pooled_text_failure_commits_the_known_prefix_and_unwind_reserves_unknown_usage() {
+    let (table, _) = fixture(Expression::Literal(Value::Int(1)));
+    let limits = Limits {
+        work_cells: 1000,
+        scalar_text_bytes: 100,
+        ..limits()
+    };
+    let owner = WorkBudget::pooled(limits);
+    let text = literal_rows(&table, 1, ColumnType::Str, true);
+    text.execute_with_work_budget(&table, &[], &mut NoFunctions::new(), limits, &owner)
+        .result
+        .unwrap();
+    let before = owner.usage().unwrap();
+    assert_eq!(before.output_text_bytes, 6);
+    assert!(matches!(
+        *text
+            .execute_with_work_budget(&table, &[], &mut NoFunctions::new(), limits, &owner)
+            .result
+            .unwrap_err(),
+        ExecutionError::Limit {
+            resource: Resource::OutputTextBytes,
+            limit: 10,
+            required: Some(12)
+        }
+    ));
+    let failed = owner.usage().unwrap();
+    assert_eq!(failed.output_text_bytes, 6);
+    assert_eq!(failed.output_rows, 1);
+    assert!(failed.runtime.work >= before.runtime.work);
+    let (mut failing, source) = fixture(Expression::Source(0));
+    let payload = Arc::new(());
+    failing.panic = Some(Arc::clone(&payload));
+    let held = catch_unwind(AssertUnwindSafe(|| {
+        source.execute_with_work_budget(&failing, &[], &mut NoFunctions::new(), limits, &owner)
+    }))
+    .unwrap_err();
+    assert!(Arc::ptr_eq(
+        held.downcast_ref::<Arc<()>>().unwrap(),
+        &payload
+    ));
+    assert_eq!(owner.usage(), None);
+    assert_eq!(owner.used(), owner.limit());
+    assert!(matches!(
+        *text
+            .execute_with_work_budget(&table, &[], &mut NoFunctions::new(), limits, &owner)
+            .result
+            .unwrap_err(),
+        ExecutionError::Capacity
+    ));
+    assert_eq!(owner.usage(), None);
+}

@@ -1414,6 +1414,13 @@ impl Executor<'_> {
         work: Option<&crate::execution_work::WorkBudget>,
         execution_budget: Option<ExecutionBudget>,
     ) -> ExecutionAttempt<T::Error> {
+        let limits = work
+            .and_then(crate::execution_work::WorkBudget::node_limits)
+            .map_or(limits, |pool| Limits {
+                output_rows: limits.output_rows.min(pool.output_rows),
+                output_cells: limits.output_cells.min(pool.output_cells),
+                ..limits
+            });
         let active = core::cell::Cell::new(ExecutionPhase::Admission);
         let mut observer = |event| {
             if let ExecutionEvent::Phase(phase) = event {
@@ -1517,6 +1524,9 @@ impl Executor<'_> {
         work: Option<&crate::execution_work::WorkBudget>,
         execution_budget: Option<ExecutionBudget>,
     ) -> Result<Execution, Box<ExecutionError<T::Error>>> {
+        if work.is_some_and(crate::execution_work::WorkBudget::unknown_prefix) {
+            return Err(Box::new(ExecutionError::Capacity));
+        }
         functions::admit_plan(self.plan, functions)?;
         if table.schema() != self.plan.source()
             || secondary.len() != self.plan.secondary().len()
@@ -1604,6 +1614,9 @@ impl Executor<'_> {
         });
         let reservation = work.map(crate::execution_work::WorkBudget::enter);
         let mut budget = match &reservation {
+            Some(reservation) if reservation.usage().is_some() => {
+                Budget::pooled(limits, reservation.usage().expect("pooled prefix"))
+            }
             Some(reservation) => {
                 Budget::with_work(limits, reservation.limit(), reservation.prior())
             }
@@ -1620,7 +1633,14 @@ impl Executor<'_> {
             &mut budget,
         );
         if let Some(reservation) = reservation {
-            reservation.complete(budget.used_work());
+            let shape = result.as_ref().ok().map(|execution| {
+                let rows = execution.dataset.row_count();
+                let cells = rows
+                    .checked_mul(execution.dataset.schema().columns().len())
+                    .expect("admitted output cells");
+                (rows, cells)
+            });
+            reservation.complete(budget.used_work(), budget.usage(), shape);
         }
         result
     }
