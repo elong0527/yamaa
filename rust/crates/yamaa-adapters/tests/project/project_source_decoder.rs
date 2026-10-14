@@ -21,6 +21,64 @@ use yamaa_engine::{
 struct Payload(Rc<()>);
 
 #[test]
+fn wide_producer_contract_decodes_1024_and_refuses_1025_actual_fields() {
+    use yamaa_engine::producer_build::{DecodeError, DecodeLimits, DecodePort};
+    let names = (0..1_024)
+        .map(|column| format!("F{column:04}"))
+        .collect::<Vec<_>>();
+    let columns = names
+        .iter()
+        .map(|name| {
+            format!("  - {{name: {name}, type: str, label: Field, derivation: {{literal: x}}}}\n")
+        })
+        .collect::<String>();
+    let document = yamaa_adapters::shipped_schema::capture().unwrap().prepare_standalone(
+        yamaa_adapters::specification_source::Source {
+            identity: "wide-producer.yaml".into(),
+            bytes: format!("schema_version: '1.0'\ndomain: TEST\nkeys: [F0000]\ninput: {{RAW: raw.csv}}\ncolumns:\n{columns}output: {{path: produced.csv, columns: [{}]}}\n", names.join(", ")).into_bytes(),
+        }
+    ).unwrap();
+    let contract =
+        yamaa_core::producer_contract::prepare(document.model(), Default::default()).unwrap();
+    let source = SourceDeclaration {
+        name: "P".into(),
+        path: "produced.csv".into(),
+        types: names
+            .iter()
+            .map(|name| (name.clone(), ColumnType::Str))
+            .collect(),
+        profile: SourceProfile::Csv,
+        empty_string_present: false,
+        ordinal: None,
+    };
+    let limits = DecodeLimits {
+        cells: 2_048,
+        storage_bytes: 1_000_000,
+        work_bytes: 1_000_000,
+    };
+    let bytes = format!("{}\n{}\n", names.join(","), vec!["x"; 1_024].join(","));
+    let mut decoder = Decoder::<Payload>::default();
+    let table = decoder
+        .decode_bounded(&source, bytes.as_bytes(), Some(&contract), limits)
+        .unwrap();
+    assert_eq!(table.schema().columns().len(), 1_024);
+    assert_eq!(table.cell(0, 1_023).unwrap(), ValueRef::Str("x"));
+    let excess = format!("{},EXCESS\n", names.join(","));
+    assert!(matches!(
+        decoder.decode_bounded(&source, excess.as_bytes(), Some(&contract), limits),
+        Err(DecodeError::Limit("producer_source_fields"))
+    ));
+    assert_eq!(
+        decoder
+            .decode_bounded(&source, bytes.as_bytes(), Some(&contract), limits)
+            .unwrap()
+            .cell(0, 0)
+            .unwrap(),
+        ValueRef::Str("x")
+    );
+}
+
+#[test]
 fn bounded_producer_csv_admits_original_header_before_typing_and_owns_portable_mismatch() {
     use yamaa_engine::producer_build::{DecodeError, DecodeLimits, DecodePort};
     let document = yamaa_adapters::shipped_schema::capture().unwrap().prepare_standalone(

@@ -39,6 +39,56 @@ fn import(batch: RecordBatch) -> Result<yamaa_adapters::arrow_table::ArrowTable,
 }
 
 #[test]
+fn column_width_admits_1024_and_refuses_1025_before_reading_batches() {
+    let names = (0..1_024)
+        .map(|column| format!("F{column:04}"))
+        .collect::<Vec<_>>();
+    let value = Arc::new(StringArray::from(vec!["x"])) as ArrayRef;
+    let table = import(batch(
+        names
+            .iter()
+            .map(|name| (name.as_str(), value.clone()))
+            .collect(),
+    ))
+    .unwrap();
+    assert_eq!(table.schema().columns().len(), 1_024);
+    assert_eq!(table.cell(0, 1_023).unwrap(), ValueRef::Str("x"));
+
+    struct NeverRead {
+        schema: SchemaRef,
+        reads: Arc<AtomicUsize>,
+    }
+    impl Iterator for NeverRead {
+        type Item = Result<RecordBatch, ArrowError>;
+        fn next(&mut self) -> Option<Self::Item> {
+            self.reads.fetch_add(1, Ordering::SeqCst);
+            None
+        }
+    }
+    impl RecordBatchReader for NeverRead {
+        fn schema(&self) -> SchemaRef {
+            self.schema.clone()
+        }
+    }
+    let reads = Arc::new(AtomicUsize::new(0));
+    let reader = NeverRead {
+        schema: Arc::new(Schema::new(
+            (0..1_025)
+                .map(|column| Field::new(format!("F{column:04}"), DataType::Utf8, true))
+                .collect::<Vec<_>>(),
+        )),
+        reads: reads.clone(),
+    };
+    let stream = FFI_ArrowArrayStream::new(Box::new(reader));
+    // SAFETY: arrow-rs owns the schema and exports valid C Stream callbacks.
+    assert!(matches!(
+        unsafe { ImportBudget::default().import(stream) },
+        Err(Error::Limit)
+    ));
+    assert_eq!(reads.load(Ordering::SeqCst), 0);
+}
+
+#[test]
 fn primitive_and_all_string_layouts_share_buffers_and_outlive_the_producer() {
     for strings in [
         Arc::new(StringArray::from(vec![

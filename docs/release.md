@@ -91,6 +91,21 @@ installation commands have one home in the
 [Python](https://github.com/elong0527/yamaa/blob/main/python/README.md) and
 [R](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md) guides.
 
+The width decision in [#2299](https://github.com/elong0527/yamaa/issues/2299),
+implemented in [#2327](https://github.com/elong0527/yamaa/pull/2327), admits
+1,024 declared columns, output columns, typed input fields, CSV/Parquet/Arrow
+source fields and producer contract fields; 1,025 is refused at its corresponding
+boundary. Producer declarations also allow 1,024, because each selected contract
+field requires one declaration. Keys remain limited to 64, input datasets to 16
+and source operands to 64. An `ordinal` field counts toward the source width.
+Validation and normalization allow 67,108,864 logical work units; the separate
+schema-bundle work ceiling remains 4,194,304. Layered equivalence and its work
+policy remain under [#2300](https://github.com/elong0527/yamaa/issues/2300).
+Source and output cell ceilings remain 2,097,152 and 1,048,576: at width 1,024,
+these permit at most 2,048 source rows and 1,024 output rows before other budgets
+apply. This width policy does not qualify the broader capacity or installed
+release gates under [#2288](https://github.com/elong0527/yamaa/issues/2288).
+
 ## Remaining gates and owners
 
 The historical B01-B19 identifiers remain useful for reconciliation. Closed
