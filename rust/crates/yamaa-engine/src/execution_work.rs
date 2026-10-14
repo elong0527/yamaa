@@ -73,6 +73,7 @@ impl WorkBudget {
         }
     }
     /// Pool the native graph's measured execution charges and retained geometry.
+    /// Local node policies may tighten these bounds without resetting usage.
     pub fn pooled(limits: Limits) -> Self {
         Self {
             limits: Some(limits),

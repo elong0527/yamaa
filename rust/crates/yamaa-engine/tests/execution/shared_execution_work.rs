@@ -490,3 +490,52 @@ fn pooled_predicate_resolutions_follow_actual_entered_rows() {
         assert_eq!(owner.usage().unwrap().runtime.resolutions, count);
     }
 }
+
+#[test]
+fn pooled_owner_bounds_survive_local_grant_changes_without_losing_known_usage() {
+    let (table, _) = fixture(Expression::Literal(Value::Int(1)));
+    let text = literal_rows(&table, 1, ColumnType::Str, true);
+    let pool = Limits {
+        work_cells: 1000,
+        output_text_bytes: 100,
+        ..limits()
+    };
+    let owner = WorkBudget::pooled(pool);
+    let large = Limits {
+        scalar_text_bytes: 100,
+        ..pool
+    };
+    text.execute_with_work_budget(&table, &[], &mut NoFunctions::new(), large, &owner)
+        .result
+        .unwrap();
+    let before = owner.usage().unwrap();
+    assert_eq!(before.runtime.text_bytes, 6);
+    let small = Limits {
+        scalar_text_bytes: 5,
+        ..pool
+    };
+    assert!(matches!(
+        *text
+            .execute_with_work_budget(&table, &[], &mut NoFunctions::new(), small, &owner)
+            .result
+            .unwrap_err(),
+        ExecutionError::Limit {
+            resource: Resource::ScalarTextBytes,
+            limit: 5,
+            required: Some(6)
+        }
+    ));
+    assert_eq!(owner.usage(), Some(before));
+    assert!(matches!(
+        *text
+            .execute_with_work_budget(&table, &[], &mut NoFunctions::new(), large, &owner)
+            .result
+            .unwrap_err(),
+        ExecutionError::Limit {
+            resource: Resource::ScalarTextBytes,
+            limit: 10,
+            required: Some(12)
+        }
+    ));
+    assert_eq!(owner.usage().unwrap().runtime.text_bytes, 6);
+}

@@ -54,6 +54,70 @@ impl Budget {
     pub(crate) fn used_work(&self) -> usize {
         self.runtime.used().work
     }
+    /// A caller may tighten a node policy after earlier graph effects. Refuse
+    /// against those already admitted counters before entering a new reservation.
+    pub(crate) fn admit_prefix<E>(
+        limits: Limits,
+        prior: crate::execution_work::Usage,
+    ) -> Result<(), Box<ExecutionError<E>>> {
+        for (resource, limit, required) in [
+            (Resource::WorkCells, limits.work_cells, prior.runtime.work),
+            (
+                Resource::PredicateResolutions,
+                limits.work_cells,
+                prior.runtime.resolutions,
+            ),
+            (
+                Resource::ScalarTextBytes,
+                limits.scalar_text_bytes,
+                prior.runtime.text_bytes,
+            ),
+            (
+                Resource::PredicateLikeWork,
+                limits.work_cells,
+                prior.runtime.like_work,
+            ),
+            (
+                Resource::PredicateRegexSubjectBytes,
+                limits.scalar_text_bytes,
+                prior.runtime.regex.subject_bytes,
+            ),
+            (
+                Resource::PredicateRegexWork,
+                limits.work_cells,
+                prior.runtime.regex.work,
+            ),
+            (
+                Resource::PredicateRegexStateCells,
+                limits.work_cells,
+                prior.runtime.regex.state_cells,
+            ),
+            (
+                Resource::OutputTextBytes,
+                limits.output_text_bytes,
+                prior.output_text_bytes,
+            ),
+            (
+                Resource::IdentityCells,
+                limits.identity_cells,
+                prior.identity_cells,
+            ),
+            (
+                Resource::IdentityTextBytes,
+                limits.identity_text_bytes,
+                prior.identity_text_bytes,
+            ),
+        ] {
+            if required > limit {
+                return Err(Box::new(ExecutionError::Limit {
+                    resource,
+                    limit,
+                    required: Some(required),
+                }));
+            }
+        }
+        Ok(())
+    }
     pub(crate) fn pooled(limits: Limits, prior: crate::execution_work::Usage) -> Self {
         let mut budget = Self::new(limits);
         let quotas = predicate::Usage {

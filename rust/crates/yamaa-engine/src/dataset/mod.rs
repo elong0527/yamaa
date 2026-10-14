@@ -1417,9 +1417,15 @@ impl Executor<'_> {
         let limits = work
             .and_then(crate::execution_work::WorkBudget::node_limits)
             .map_or(limits, |pool| Limits {
+                source_rows: limits.source_rows.min(pool.source_rows),
                 output_rows: limits.output_rows.min(pool.output_rows),
                 output_cells: limits.output_cells.min(pool.output_cells),
-                ..limits
+                key_cells: limits.key_cells.min(pool.key_cells),
+                work_cells: limits.work_cells.min(pool.work_cells),
+                scalar_text_bytes: limits.scalar_text_bytes.min(pool.scalar_text_bytes),
+                output_text_bytes: limits.output_text_bytes.min(pool.output_text_bytes),
+                identity_cells: limits.identity_cells.min(pool.identity_cells),
+                identity_text_bytes: limits.identity_text_bytes.min(pool.identity_text_bytes),
             });
         let active = core::cell::Cell::new(ExecutionPhase::Admission);
         let mut observer = |event| {
@@ -1607,6 +1613,9 @@ impl Executor<'_> {
                 limit: limits.source_rows,
                 required: rows,
             }));
+        }
+        if let Some(prior) = work.and_then(crate::execution_work::WorkBudget::usage) {
+            Budget::admit_prefix(limits, prior)?;
         }
         observer(ExecutionEvent::Exit {
             phase: ExecutionPhase::Admission,
