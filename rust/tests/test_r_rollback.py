@@ -6,8 +6,8 @@ import json
 import tarfile
 import tempfile
 import unittest
-from unittest import mock
 from pathlib import Path
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location(
     "prepare_r_rollback",
@@ -102,20 +102,41 @@ class RetainedSourceIdentity(unittest.TestCase):
 
     def test_durable_draft_asset_never_depends_on_expiring_actions_artifact(self):
         release = {
-            "id": module.RETAINED_RELEASE, "tag_name": module.RETAINED_TAG,
-            "target_commitish": module.PRIOR_SOURCE, "draft": True,
-            "assets": [{"id": module.RETAINED_ASSET, "name": "yamaa_0.3.0.tar.gz",
-                        "size": self.archive.stat().st_size, "state": "uploaded",
-                        "url": "https://api.github.com/repos/elong0527/yamaa/releases/assets/637944247"}],
+            "id": module.RETAINED_RELEASE,
+            "tag_name": module.RETAINED_TAG,
+            "target_commitish": module.PRIOR_SOURCE,
+            "draft": True,
+            "assets": [
+                {
+                    "id": module.RETAINED_ASSET,
+                    "name": "yamaa_0.3.0.tar.gz",
+                    "size": self.archive.stat().st_size,
+                    "state": "uploaded",
+                    "url": "https://api.github.com/repos/elong0527/yamaa/releases/assets/637944247",
+                }
+            ],
         }
-        destination, proof = self.directory / "durable-source", self.directory / "durable-proof"
-        with mock.patch.object(module, "RETAINED_BYTES", self.archive.stat().st_size), mock.patch.object(
-            module, "github", side_effect=[release, self.archive.read_bytes()]
-        ) as api:
+        destination, proof = (
+            self.directory / "durable-source",
+            self.directory / "durable-proof",
+        )
+        with (
+            mock.patch.object(module, "RETAINED_BYTES", self.archive.stat().st_size),
+            mock.patch.object(
+                module, "github", side_effect=[release, self.archive.read_bytes()]
+            ) as api,
+        ):
             module.retained(destination, proof)
-        self.assertEqual(api.call_args_list, [mock.call("releases/411979803"),
-                                              mock.call("releases/assets/637944247", binary=True)])
-        self.assertEqual((destination / "yamaa_0.3.0.tar.gz").read_bytes(), self.archive.read_bytes())
+        self.assertEqual(
+            api.call_args_list,
+            [
+                mock.call("releases/411979803"),
+                mock.call("releases/assets/637944247", binary=True),
+            ],
+        )
+        self.assertEqual(
+            (destination / "yamaa_0.3.0.tar.gz").read_bytes(), self.archive.read_bytes()
+        )
         receipt = json.loads((proof / "artifact-receipt.json").read_text())
         self.assertTrue(receipt["draft"])
         self.assertNotIn("artifact_expires_at", receipt)
@@ -123,19 +144,39 @@ class RetainedSourceIdentity(unittest.TestCase):
 
     def test_published_wrong_target_or_replaced_durable_asset_is_refused(self):
         release = {
-            "id": module.RETAINED_RELEASE, "tag_name": module.RETAINED_TAG,
-            "target_commitish": module.PRIOR_SOURCE, "draft": True,
-            "assets": [{"id": module.RETAINED_ASSET, "name": "yamaa_0.3.0.tar.gz",
-                        "size": module.RETAINED_BYTES, "state": "uploaded"}],
+            "id": module.RETAINED_RELEASE,
+            "tag_name": module.RETAINED_TAG,
+            "target_commitish": module.PRIOR_SOURCE,
+            "draft": True,
+            "assets": [
+                {
+                    "id": module.RETAINED_ASSET,
+                    "name": "yamaa_0.3.0.tar.gz",
+                    "size": module.RETAINED_BYTES,
+                    "state": "uploaded",
+                }
+            ],
         }
         for key, value in (("draft", False), ("target_commitish", "other-source")):
-            with self.subTest(key=key), mock.patch.object(module, "github", return_value={**release, key: value}):
-                with self.assertRaisesRegex(ValueError, "release/source identity"):
-                    module.retained(self.directory / "refused-source", self.directory / "refused-proof")
+            with (
+                self.subTest(key=key),
+                mock.patch.object(
+                    module, "github", return_value={**release, key: value}
+                ),
+                self.assertRaisesRegex(ValueError, "release/source identity"),
+            ):
+                module.retained(
+                    self.directory / "refused-source",
+                    self.directory / "refused-proof",
+                )
         release["assets"][0]["id"] += 1
-        with mock.patch.object(module, "github", return_value=release):
-            with self.assertRaisesRegex(ValueError, "asset identity"):
-                module.retained(self.directory / "refused-source", self.directory / "refused-proof")
+        with (
+            mock.patch.object(module, "github", return_value=release),
+            self.assertRaisesRegex(ValueError, "asset identity"),
+        ):
+            module.retained(
+                self.directory / "refused-source", self.directory / "refused-proof"
+            )
 
 
 if __name__ == "__main__":
