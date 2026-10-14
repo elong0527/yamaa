@@ -34,41 +34,61 @@ and pending acceptance.
 ## Local checks
 
 Read [AGENTS.md](https://github.com/elong0527/yamaa/blob/main/AGENTS.md) before
-editing. Use Rust 1.90.0 and the canonical `rust/Cargo.lock`. Install the locked
-Python development environment from the repository root:
+editing. [#2153](https://github.com/elong0527/yamaa/issues/2153) owns consolidation
+of the existing tool recipes into a root Makefile in
+[PR #2178](https://github.com/elong0527/yamaa/pull/2178), with `make help` as its
+target/prerequisite entry point. That interface is still under review. Until it
+lands, use the current recipes below and the package guides. Installed checks
+require a separate noneditable package outside the checkout.
+
+Use Rust 1.90.0 and the canonical `rust/Cargo.lock`. Python and R source archives
+stage the unchanged workspace and lock. From the repository root:
 
 ```sh
 uv sync --project python --extra test --locked
+uv run --project python --no-sync python rust/tools/check_release_api.py
+uv run --project python --no-sync python rust/tools/check_shared_release_versions.py
+uv run --project python --no-sync python .github/scripts/yaml-validation/test_validate_repository.py
+uv run --project python --no-sync python .github/scripts/yaml-validation/validate_repository.py
 ```
 
-Choose the checks for the affected area from the existing command homes:
+From `rust/`:
 
-- [Rust checks](https://github.com/elong0527/yamaa/blob/main/rust/README.md#development-checks),
-  including the separate engine `test-support` run.
-- [Repository checks](https://github.com/elong0527/yamaa/blob/main/.github/yaml-validation.md#local-commands)
-  and [installed checks](https://github.com/elong0527/yamaa/blob/main/rust/qualification/README.md),
-  which exercise the installed engine outside the checkout.
-- [Site checks](https://github.com/elong0527/yamaa/blob/main/.github/scripts/docs/README.md):
-  pinned documentation dependencies, canonical-page tests, dashboard generation
-  and a strict MkDocs build. Deployment additionally renders Quarto slides.
-- [CI coverage and audit commands](https://github.com/elong0527/yamaa/blob/main/.github/ci.md).
-  Local checks and sampled PR jobs do not establish the full installed matrix.
+```sh
+cargo fmt --check
+cargo clippy --all-targets --locked
+cargo test --locked
+cargo test --locked -p yamaa-engine --features test-support
+python tools/check_dependencies.py
+uv run --project ../python --no-sync python -m unittest discover -s tests -p 'test_*.py'
+```
 
-[#2153](https://github.com/elong0527/yamaa/issues/2153) owns consolidation of these
-recipes into a root Makefile. Keep the recipes in their owning tools while that
-change is reviewed; avoid copying CI shell blocks into another guide.
+The engine feature check includes the integration binaries omitted by a default
+test invocation. Portable math has shared authored golden values in
+`rust/crates/yamaa-core/tests/fixtures/portable_math.tsv`; run
+`cargo test --locked -p yamaa-core --test portable_math_golden` from `rust/`.
+Installed package suites run outside the checkout, against built wheel/source
+packages. Their commands and comparison rules are in
+[qualification](https://github.com/elong0527/yamaa/blob/main/rust/qualification/README.md).
+Expected benchmark files and Parquet fixtures are independent truth; do not
+regenerate them to accommodate implementation changes.
 
-## Documentation and evidence
+## Documentation and CI
 
-Edit `README.md` for the site home and `rules/README.md` for its rules index.
-The MkDocs hook reads them directly. Ordinary site pages live under `docs/`;
-benchmark dashboards are generated from their fixtures. Do not add home/rules
-copies or commit generated dashboards.
+Edit the root `README.md` for the site home and `rules/README.md` for its rules
+index. The MkDocs hook reads those canonical sources; no copied pages exist.
+Other site pages live in `docs/`. From the repository root:
 
-Record qualification in the implementing PR/issues and retained audit inputs,
-with the actual source, run, attempt and artifact identities. Preserve failures
-and partial attempts. Git history retains superseded plans; current gate owners
-and live machine-readable records are indexed in [release.md](release.md).
-Runtime artifact identity is its reference, contract equality uses canonical
-JSON, and resource equality compares retained bytes. Packaging-tool lockfile
-checksums remain the sole convention exception; add no repository content digest.
+```sh
+python -m pip install -r docs/requirements.txt -r .github/scripts/benchmark-docs/requirements.txt
+python -m unittest discover -s .github/scripts/docs -p 'test_*.py'
+python .github/scripts/benchmark-docs/generate.py --all --quiet
+python -m mkdocs build --strict
+```
+
+[CI guidance](https://github.com/elong0527/yamaa/blob/main/.github/ci.md)
+defines scoped checks and the required complete native matrix before merging
+native, R glue, packaging or native CI changes. [Release guidance](release.md)
+separates merged implementation, qualified revisions, pending decisions and
+publication. Keep current guidance here and there; retain historical plans in
+Git and put new evidence in the relevant PR/issue and qualification records.

@@ -10,19 +10,12 @@ Keep workflow definitions in `workflows/` and their supporting code in
 - `scripts/ci/`: native matrix selection, cohort orchestration, and dashboard
   change detection, with their unit tests.
 
-The separate canonical-site-pages job tests the real MkDocs hook against the
-root README and rules index. Those pages have no Markdown copies to synchronize.
-The repository-validation job runs formatting/linting and structural/native
-validation, and generates deterministic dashboard previews when their sources
-change in a PR. The R package workflow replays shared grammar vectors and runs
-the complete package suite; grammar changes trigger that workflow as well.
-
-Documentation-only changes use the relevant canonical-page, dashboard and strict
-site checks in [scripts/docs/README.md](scripts/docs/README.md). Native workflow
-path selection excludes benchmark Markdown and top-level Rust prose. Native
-code, R glue, packaging and native selectors require the complete installed
-qualification route below. Current gate ownership and publication state live in
-[docs/release.md](../docs/release.md).
+The repository-validation job runs Python formatting/linting, repository checks
+and deterministic dashboard previews when their sources change in a PR. The
+separate canonical-site-pages job tests the MkDocs hook that reads README and
+rules directly; no copied landing pages need synchronization. The R package
+workflow replays shared grammar vectors and runs the package suite; grammar
+changes trigger it as well.
 
 ## Native coverage
 
@@ -31,30 +24,28 @@ Installed Python qualification covers wheel and source installs on Python 3.12
 and 3.14. The workflow summary records this reduced matrix. macOS, Windows,
 Python 3.13, and complete public/producer cohort comparisons run on main pushes,
 explicit `qualification/issue-*` branch pushes, or manual full-matrix dispatches.
-Shared Rust checks and cross-platform math run on main and qualification branch
-pushes. Ordinary manual dispatch omits those shared checks, the nine math
-assessments/exact comparison and the run audit; its three-platform numeric-tool
-component checks do not substitute for them.
+Shared Rust checks, all nine math assessments and their exact comparison run on
+main and qualification branch pushes. Ordinary dispatch runs separate numeric
+component checks but omits that shared Rust/math qualification and the audit.
 
 Pushes to main retain the full three-OS, three-Python, two-package-form matrix,
 all three R hosts, the cross-platform math comparison, and the complete
 public/producer cohort gate. PR artifacts cover the reduced Linux matrix;
 they do not establish full platform qualification. Platform-specific regressions
 and Python 3.13 compatibility are checked in the full matrix.
-
-R qualification installs the package's declared `Suggests` into the isolated R
-library before running the complete suites and strict package check. Missing
-suggested test dependencies are failures, not a reason to disable
-`_R_CHECK_FORCE_SUGGESTS_` or accept a warning in place of `Status: OK`.
+The R lanes install the package's declared suggested test dependencies before
+strict `R CMD check`; a successful installation alone does not establish
+**Status: OK** or complete installed-suite coverage.
 
 Benchmark Markdown changes trigger documentation checks without rebuilding
-the Python/native runtimes. Specification, input, expected-output, and SDK
-changes still trigger runtime coverage. The PR matrix selects a Linux
-distribution build, four installed Python qualifications and Linux R package
-checks, plus the selected public/producer cohort comparison. Main and
-qualification pushes add three shared Rust jobs, the cross-platform math
-comparison and the evidence audit. The audit stays
-observational on main and must pass on qualification branches.
+the Python/native runtimes. Top-level Rust Markdown is also excluded by native
+path filters; nested Rust Markdown fixtures still select native coverage, as do
+specifications, input, expected outputs and SDK changes. Documentation and its
+site hook/workflow use relevant scoped checks. Native workflows, selectors and
+packaging require full native qualification. The audit stays nonblocking on main and must pass
+on qualification branches; inspect its own verdict even when a main workflow is
+green. Current migration decisions and final gate ownership live in the
+[release guide](../docs/release.md).
 
 Before merging changes to native code, R glue, package builds or native CI,
 dispatch the complete matrix on the current PR head:
@@ -69,8 +60,8 @@ The same dispatch is available in GitHub Actions under **Native installation
 prototype**, **Run workflow**, selecting the PR branch. Dispatch runs the same
 eighteen installed Python lanes, three R hosts, and public/producer cohort gate
 as a main push. Require every enabled lane, including Windows R, to pass on that
-exact head before merging. Shared Rust checks and the math comparison are
-deferred to the main push; retain that combined run for work-package acceptance.
+exact head before merging. Dispatch's component checks do not supply shared Rust,
+nine-report math or audit evidence; retain a full push run for final acceptance.
 A reduced PR run does not replace the installed dispatch gate. When dispatch
 access is unavailable, push the reviewed head to an explicit
 `qualification/issue-<number>` branch. Its complete installed, shared Rust,
