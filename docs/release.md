@@ -7,6 +7,11 @@ Reviewed 2026-10-13 (America/New_York) against main
 qualification records and the authenticated GitHub release listing. This is the
 current narrative; qualification observations keep their own tested revisions.
 
+The [final release handoff](release-handoff.md) reconciles every entry gate,
+independently re-admitted rollback receipts, measured-source renewal and exact
+package selection. Transition acceptance and the final package selection remain
+pending there until all evidence gates pass.
+
 ## State
 
 | State | Observed scope |
@@ -15,6 +20,14 @@ current narrative; qualification observations keep their own tested revisions.
 | Qualified at earlier revisions | Retained public-conformance ratchet: run 38416920074, attempt 1, source `2ba10418607933f92597f7c00ac363a3113a49db`; earlier rollback rehearsals below. Their results do not qualify current main or its 0.4.0 composition. |
 | Pending evidence/decisions | Final combined-main installed/numerical audit, adopted capacity bounds, complete performance campaign and item-10 budgets, item-11 transition acceptance and exact artifact handoff. |
 | Published | [Python source release 0.3.0](https://github.com/elong0527/yamaa/releases/tag/yamaa-py-0.3.0), source `845a91ff`, published 2026-10-11, with no package assets. No shared 0.4.0 release is listed. Prior source-built Python rollback packages and the pre-cutover R 0.3.0 candidate remain unpublished drafts. |
+
+PR [#2165](https://github.com/elong0527/yamaa/pull/2165) merged without a passing
+exact-head installed matrix. Its main run
+[38503400832](https://github.com/elong0527/yamaa/actions/runs/38503400832) began
+after merge, and qualification run
+[38503459253](https://github.com/elong0527/yamaa/actions/runs/38503459253) was
+canceled. Neither satisfies the required pre-merge gate; no approved exception
+superseded that requirement. Final combined-main acceptance remains pending.
 
 Removal and version changes landed **before** final evidence-based item-10/item-11
 acceptance. Planning removal in PR #2161 and math-record replacement in PR #2162
