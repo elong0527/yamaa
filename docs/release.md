@@ -18,8 +18,9 @@ pending there until all evidence gates pass.
 | State | Observed scope |
 | --- | --- |
 | Implemented and merged | Shared language execution; Python/R domain/check/define; runner conversion; legacy evaluator/API/probe and R/cdiscbuilder removal; coordinated Python/R/Cargo 0.4.0 source versions. The performance harness is merged through PR #2137; subsequent native dependency/guard, portable-math control and performance admission repairs are merged through PRs #2164-#2168. |
+| Implemented candidate | Longitudinal defaults and actual native usage pools in PRs [#2365](https://github.com/elong0527/yamaa/pull/2365) and [#2367](https://github.com/elong0527/yamaa/pull/2367). Paired capacity controls passed in local installed Python/R runs at `983e9c96`; the scope is recorded in the [handoff](release-handoff.md#local-candidate-implementation-and-installed-controls). |
 | Qualified at earlier revisions | Retained public-conformance ratchet: run 38416920074, attempt 1, source `2ba10418607933f92597f7c00ac363a3113a49db`; earlier rollback rehearsals below. Their results do not qualify current main or its 0.4.0 composition. |
-| Pending evidence | Final combined-main installed/numerical audit, implementation and installed proof of the approved longitudinal capacity, the Linux performance measurements below, remaining assertion migration under #2289, and exact artifact handoff. |
+| Pending evidence | Final combined-main installed/numerical qualification and independent audit/replay, renewed capacity controls at that source, the Linux performance measurements below, remaining assertion migration under #2289, and exact package/tag selection and artifact handoff. |
 | Published | [Python source release 0.3.0](https://github.com/elong0527/yamaa/releases/tag/yamaa-py-0.3.0), source `845a91ff`, published 2026-10-11, with no package assets. No shared 0.4.0 release is listed. Prior source-built Python rollback packages and the pre-cutover R 0.3.0 candidate remain unpublished drafts. |
 
 PR [#2165](https://github.com/elong0527/yamaa/pull/2165) merged without a passing
@@ -91,8 +92,15 @@ The current #2288 decision adopts the public hosts' longitudinal profile:
 10,000,000 source/output rows, 640,000,000 cells, 1 GiB scalar text,
 512 MiB output text and 1 GiB output. Lower decoder, CSV, IPC, report and
 publication ceilings must not refuse an otherwise admitted input below this
-profile. Implementation and the paired 100-column, 50,000-record Build/Save
-control remain release evidence obligations. Preparation work for inherited
+profile. The candidate implementation in
+[#2365](https://github.com/elong0527/yamaa/pull/2365) and
+[#2367](https://github.com/elong0527/yamaa/pull/2367) supplies this default and
+actual native usage pools. Paired 100-column, 50,000-record Build/Save controls
+passed in the local installed Python and Linux R 4.6.1 runs at source
+[`983e9c96`](https://github.com/elong0527/yamaa/commit/983e9c9687a1a49a7d283fe70e681196eef7bd8f),
+with the [installed evidence scope](release-handoff.md#local-candidate-implementation-and-installed-controls)
+recorded in the handoff.
+Final combined-main renewal remains required. Preparation work for inherited
 documents is tracked separately by #2300.
 
 These are target decisions, not qualification results. Host behavior and source
@@ -166,7 +174,7 @@ implementation owners are not reopened; the following owners renew final evidenc
 | B14 - content identity | Policy resolved by the lockfile exception above; build evidence belongs to B13. |
 | B15 - independent audit | Audit implemented; passing post-removal combined-main verdict and original-input offline replay: #2288. |
 | B16 - lifecycle/removal | Installed controls retained; final ownership/interruptions/reentrancy/repeated use/Save: #2288; removal reconciliation: #2289. |
-| B17 - performance/capacity | Harness complete; approved capacity implementation and scoped Linux measurements remain under #2288. |
+| B17 - performance/capacity | Harness complete; capacity implemented in PRs #2365/#2367 with scoped local installed controls at `983e9c96`. Final combined-main renewal and scoped Linux measurements remain under #2288. |
 | B18 - numeric budgets | The maintainer sets no performance pass/fail budgets for 0.4.0. Retain observed latency/RSS and check coverage with the independent auditor. |
 | B19 - transition/rollback | Rollback receipts already re-admitted; exact final tested package selection and artifact handoff: #2288. |
 
