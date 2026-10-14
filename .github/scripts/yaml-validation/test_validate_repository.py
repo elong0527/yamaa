@@ -21,6 +21,7 @@ SPEC = importlib.util.spec_from_file_location("validate_repository", TOOL_PATH)
 assert SPEC is not None and SPEC.loader is not None
 VALIDATOR = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(VALIDATOR)
+import regex_checks as REGEX_CHECKS  # noqa: E402 - owner path set by validator loader
 
 BLOCKER_PATH = Path(__file__).parent / 'check_validation_blockers.py'
 BLOCKER_SPEC = importlib.util.spec_from_file_location(
@@ -4990,83 +4991,83 @@ class TestRegularExpressionContract(unittest.TestCase):
     # -- the portable contract ---------------------------------------------
 
     def test_the_validator_names_the_contract_it_replays(self):
-        self.assertEqual(VALIDATOR.REGEX_CONTRACT, 'regex')
-        self.assertEqual(VALIDATOR.REGEX_CONTRACT_VERSION, '2.0.0')
+        self.assertEqual(REGEX_CHECKS.REGEX_CONTRACT, 'regex')
+        self.assertEqual(REGEX_CHECKS.REGEX_CONTRACT_VERSION, '2.0.0')
 
     def test_the_replay_reads_through_public_native_specifications(self):
-        VALIDATOR.require_regex_binding()
+        REGEX_CHECKS.require_regex_binding()
         import _native_regex as package_binding
 
         self.assertIs(
-            VALIDATOR._portable_compile, package_binding.compile_pattern
+            REGEX_CHECKS._portable_compile, package_binding.compile_pattern
         )
         self.assertIs(
-            VALIDATOR._portable_full_match, package_binding.full_match
+            REGEX_CHECKS._portable_full_match, package_binding.full_match
         )
         self.assertIs(package_binding.check, __import__('yamaa').check)
         self.assertIs(package_binding.domain, __import__('yamaa').domain)
 
     def test_missing_binding_fails_rather_than_falling_back(self):
-        saved = VALIDATOR._portable_binding
+        saved = REGEX_CHECKS._portable_binding
         try:
-            VALIDATOR._portable_binding = False
-            with self.assertRaises(VALIDATOR.RegexBindingUnavailable) as caught:
-                VALIDATOR.compile_regex('a')
+            REGEX_CHECKS._portable_binding = False
+            with self.assertRaises(REGEX_CHECKS.RegexBindingUnavailable) as caught:
+                REGEX_CHECKS.compile_regex('a')
         finally:
-            VALIDATOR._portable_binding = saved
+            REGEX_CHECKS._portable_binding = saved
         message = str(caught.exception)
         self.assertIn('unsupported_regex_engine', message)
-        self.assertIn(VALIDATOR.REGEX_CONTRACT_VERSION, message)
+        self.assertIn(REGEX_CHECKS.REGEX_CONTRACT_VERSION, message)
 
     # -- the contract is not the host default ------------------------------
 
     def test_accepts_contract_syntax_beyond_the_host_library(self):
         for pattern in ('(?<name>a)', r'\u{1D400}', '(?<=ab)x'):
             with self.subTest(pattern=pattern):
-                VALIDATOR.compile_regex(pattern)
+                REGEX_CHECKS.compile_regex(pattern)
 
     def test_rejects_syntax_outside_the_portable_contract(self):
         for pattern in (
             '(?P<name>a)', '(?i)a', r'\a', 'a{', '(?<=a+)b', r'\p{L}',
         ):
             with self.subTest(pattern=pattern):
-                with self.assertRaises(VALIDATOR.InvalidRegex):
-                    VALIDATOR.compile_regex(pattern)
+                with self.assertRaises(REGEX_CHECKS.InvalidRegex):
+                    REGEX_CHECKS.compile_regex(pattern)
 
     def test_character_classes_do_not_widen_to_unicode(self):
-        self.assertTrue(VALIDATOR.regex_full_match(r'\d', '5'))
-        self.assertFalse(VALIDATOR.regex_full_match(r'\d', chr(0x0665)))
-        self.assertFalse(VALIDATOR.regex_full_match(r'\w', chr(0x00E9)))
-        with self.assertRaises(VALIDATOR.InvalidRegex):
-            VALIDATOR.regex_full_match(r'\p{L}', chr(0x00E9))
+        self.assertTrue(REGEX_CHECKS.regex_full_match(r'\d', '5'))
+        self.assertFalse(REGEX_CHECKS.regex_full_match(r'\d', chr(0x0665)))
+        self.assertFalse(REGEX_CHECKS.regex_full_match(r'\w', chr(0x00E9)))
+        with self.assertRaises(REGEX_CHECKS.InvalidRegex):
+            REGEX_CHECKS.regex_full_match(r'\p{L}', chr(0x00E9))
 
     def test_dollar_does_not_match_before_a_trailing_line_feed(self):
-        self.assertTrue(VALIDATOR.regex_full_match('a', 'a'))
-        self.assertFalse(VALIDATOR.regex_full_match('a', 'a\n'))
-        self.assertFalse(VALIDATOR.regex_full_match('a$', 'a\n'))
+        self.assertTrue(REGEX_CHECKS.regex_full_match('a', 'a'))
+        self.assertFalse(REGEX_CHECKS.regex_full_match('a', 'a\n'))
+        self.assertFalse(REGEX_CHECKS.regex_full_match('a$', 'a\n'))
 
     def test_a_supplementary_scalar_is_one_character(self):
         scalar = chr(0x1D400)
-        self.assertTrue(VALIDATOR.regex_full_match('.', scalar))
-        self.assertFalse(VALIDATOR.regex_full_match('..', scalar))
-        self.assertTrue(VALIDATOR.regex_full_match(r'\u{1D400}', scalar))
+        self.assertTrue(REGEX_CHECKS.regex_full_match('.', scalar))
+        self.assertFalse(REGEX_CHECKS.regex_full_match('..', scalar))
+        self.assertTrue(REGEX_CHECKS.regex_full_match(r'\u{1D400}', scalar))
 
     def test_matching_applies_no_normalization(self):
         self.assertFalse(
-            VALIDATOR.regex_full_match(r'\u{00E9}', 'e' + chr(0x0301))
+            REGEX_CHECKS.regex_full_match(r'\u{00E9}', 'e' + chr(0x0301))
         )
 
     # -- full match versus search ------------------------------------------
 
     def test_the_pattern_keyword_is_a_full_match_and_matches_searches(self):
-        self.assertFalse(VALIDATOR.regex_full_match('[0-9]{3}', 'AE-007-X'))
-        self.assertIsNotNone(VALIDATOR.regex_search('[0-9]{3}', 'AE-007-X'))
+        self.assertFalse(REGEX_CHECKS.regex_full_match('[0-9]{3}', 'AE-007-X'))
+        self.assertIsNotNone(REGEX_CHECKS.regex_search('[0-9]{3}', 'AE-007-X'))
 
     def test_anchoring_adds_no_capture_group(self):
-        source = VALIDATOR.anchored_regex_source('(a)|(b)')
+        source = REGEX_CHECKS.anchored_regex_source('(a)|(b)')
         self.assertEqual(source, '^(?:(a)|(b))$')
-        self.assertEqual(VALIDATOR.regex_capture_group_count(source), 2)
-        self.assertTrue(VALIDATOR.regex_full_match('a|ab', 'ab'))
+        self.assertEqual(REGEX_CHECKS.regex_capture_group_count(source), 2)
+        self.assertTrue(REGEX_CHECKS.regex_full_match('a|ab', 'ab'))
 
     def test_every_fixture_pattern_survives_anchoring(self):
         document = yaml.safe_load(
@@ -5076,8 +5077,8 @@ class TestRegularExpressionContract(unittest.TestCase):
             if case.get('invalid'):
                 continue
             with self.subTest(case=case['id']):
-                VALIDATOR.compile_regex(
-                    VALIDATOR.anchored_regex_source(case['pattern'])
+                REGEX_CHECKS.compile_regex(
+                    REGEX_CHECKS.anchored_regex_source(case['pattern'])
                 )
 
     # -- capture groups -----------------------------------------------------
@@ -5098,31 +5099,31 @@ class TestRegularExpressionContract(unittest.TestCase):
         for pattern, expected in cases.items():
             with self.subTest(pattern=pattern):
                 self.assertEqual(
-                    VALIDATOR.regex_capture_group_count(pattern), expected
+                    REGEX_CHECKS.regex_capture_group_count(pattern), expected
                 )
 
     def test_extract_distinguishes_no_match_from_an_unentered_group(self):
         self.assertIs(
-            VALIDATOR.regex_extract('^a(b)?$', 'z', 0),
-            VALIDATOR.REGEX_NO_MATCH,
+            REGEX_CHECKS.regex_extract('^a(b)?$', 'z', 0),
+            REGEX_CHECKS.REGEX_NO_MATCH,
         )
-        self.assertIsNone(VALIDATOR.regex_extract('^a(b)?$', 'a', 1))
-        self.assertEqual(VALIDATOR.regex_extract('^a(b)?$', 'ab', 1), 'b')
+        self.assertIsNone(REGEX_CHECKS.regex_extract('^a(b)?$', 'a', 1))
+        self.assertEqual(REGEX_CHECKS.regex_extract('^a(b)?$', 'ab', 1), 'b')
 
     def test_extract_returns_the_empty_string_for_an_empty_match(self):
-        self.assertEqual(VALIDATOR.regex_extract('x*', 'y', 0), '')
+        self.assertEqual(REGEX_CHECKS.regex_extract('x*', 'y', 0), '')
 
     def test_extract_reads_a_group_by_scalar_not_by_byte(self):
         subject = 'x' + chr(0x1D400) + '-tail'
         self.assertEqual(
-            VALIDATOR.regex_extract(r'(\u{1D400})-(\w+)', subject, 2), 'tail'
+            REGEX_CHECKS.regex_extract(r'(\u{1D400})-(\w+)', subject, 2), 'tail'
         )
 
     def test_extract_rejects_a_group_the_pattern_does_not_declare(self):
         for group in (2, -1):
             with self.subTest(group=group):
-                with self.assertRaises(VALIDATOR.RegexGroupOutOfRange):
-                    VALIDATOR.regex_extract('^A-([0-9]+)$', 'A-1', group)
+                with self.assertRaises(REGEX_CHECKS.RegexGroupOutOfRange):
+                    REGEX_CHECKS.regex_extract('^A-([0-9]+)$', 'A-1', group)
 
     # -- the validation surface --------------------------------------------
 
@@ -5235,7 +5236,7 @@ class TestRegularExpressionContract(unittest.TestCase):
     # -- the shared fixtures ------------------------------------------------
 
     def test_shared_fixtures_replay_against_the_portable_binding(self):
-        self.assertEqual(VALIDATOR.validate_regex_conformance(self.root), [])
+        self.assertEqual(REGEX_CHECKS.validate_regex_conformance(self.root), [])
 
     def test_replay_reports_an_outcome_that_drifted_from_the_binding(self):
         source = self.root / 'yaml' / 'conformance' / 'regex.yaml'
@@ -5253,7 +5254,7 @@ class TestRegularExpressionContract(unittest.TestCase):
             target = root / 'yaml' / 'conformance'
             target.mkdir(parents=True)
             (target / 'regex.yaml').write_text(drifted)
-            errors = VALIDATOR.validate_regex_conformance(root)
+            errors = REGEX_CHECKS.validate_regex_conformance(root)
         self.assertEqual(len(errors), 1)
         self.assertIn('schema_pattern records False', errors[0])
 
@@ -5272,14 +5273,14 @@ class TestRegularExpressionContract(unittest.TestCase):
                 "    pattern: 'a'\n"
                 '    invalid: true\n'
             )
-            errors = VALIDATOR.validate_regex_conformance(root)
+            errors = REGEX_CHECKS.validate_regex_conformance(root)
         self.assertTrue(
             any('the portable binding accepts pattern' in e for e in errors),
             errors,
         )
 
     def test_replay_requires_a_case_for_every_named_category(self):
-        self.assertTrue(VALIDATOR.REGEX_FIXTURE_REQUIRED_COVERS)
+        self.assertTrue(REGEX_CHECKS.REGEX_FIXTURE_REQUIRED_COVERS)
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             target = root / 'yaml' / 'conformance'
@@ -5297,13 +5298,13 @@ class TestRegularExpressionContract(unittest.TestCase):
                 '    matches: true\n'
                 '    str_extract: {group: 0, value: "a"}\n'
             )
-            errors = VALIDATOR.validate_regex_conformance(root)
+            errors = REGEX_CHECKS.validate_regex_conformance(root)
         self.assertEqual(len(errors), 1)
         self.assertIn('no case covers', errors[0])
 
     def test_missing_fixture_file_fails_validation(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            errors = VALIDATOR.validate_regex_conformance(Path(temp_dir))
+            errors = REGEX_CHECKS.validate_regex_conformance(Path(temp_dir))
         self.assertEqual(len(errors), 1)
         self.assertIn('missing R022', errors[0])
 

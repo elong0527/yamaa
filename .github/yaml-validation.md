@@ -8,6 +8,13 @@ Native CSV/Parquet/ODM/regex and grammar fixtures replace the deleted
 in Python. See [development](../docs/development.md) for architecture and
 [release](../docs/release.md) for final installed migration acceptance.
 
+R022 native-binding and fixture checks live in `scripts/yaml-validation/regex_checks.py`.
+Their missing-binding cache and refusal belong to that owner; tests import it
+directly. Shared repository diagnostic records live in
+`scripts/yaml-validation/validation_diagnostics.py`. Other schema, inheritance
+and expression families remain in `validate_repository.py` pending separate
+preserved-assertion migrations under #2289.
+
 Automatic PR feedback uses the lightweight repository checks in
 [`pr.yml`](workflows/pr.yml), plus selected Rust/Python smoke tests. Complete
 semantic validation and deterministic dashboard generation run on main pushes
