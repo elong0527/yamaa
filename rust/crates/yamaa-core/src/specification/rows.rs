@@ -221,10 +221,9 @@ fn default_reads(
     let mut names = Vec::new();
     derivations::references(d, value, project, &mut names, 0)?;
     self_relations::template_references(d, value, string_templates, &mut names, 0)?;
+    let mut named_default = false;
     for name in names {
-        if self_relations::is_reference(d, &name)? {
-            return Ok((false, reads));
-        }
+        named_default |= self_relations::is_named_reference(d, &name)?;
     }
     let mut reference = |name: &str| {
         if !name.contains('.') {
@@ -320,9 +319,9 @@ fn default_reads(
             }
         }
         "aggregate" | "lookup" | "window" => return Ok((false, reads)),
-        _ => return Ok((true, reads)),
+        _ => return Ok((!named_default, reads)),
     }
-    Ok((!window_default, reads))
+    Ok((!window_default && !named_default, reads))
 }
 
 fn select_defaults(
@@ -1520,7 +1519,7 @@ impl Rows {
                     .transpose()
                     .map_err(BindError::InvalidPredicateBinding)?
             };
-            if let Some(filter) = filter.as_ref() {
+            if let Some(filter) = filter.as_ref().filter(|_| !grouped) {
                 let bound = intermediates
                     .iter()
                     .filter_map(Option::as_ref)
@@ -1529,39 +1528,57 @@ impl Rows {
                 let deferred =
                     crate::dataset::window_stages(&assignments, output.columns().len(), &bound);
                 for binding in filter.bindings() {
-                    if matches!(binding.read, Read::Column(column) if deferred.get(column).copied().unwrap_or(false))
+                    let lookup_match = match binding.read {
+                        Read::Intermediate { index, .. } => {
+                            row_intermediates::dependencies(index, &intermediates)?
+                                .into_iter()
+                                .find(|&column| deferred.get(column).copied().unwrap_or(false))
+                        }
+                        _ => None,
+                    };
+                    if lookup_match.is_some()
+                        || matches!(binding.read, Read::Column(column) if deferred.get(column).copied().unwrap_or(false))
                         || matches!(&binding.read, Read::Joined(read) if read.keys.iter().any(|key| deferred.get(key.output_column).copied().unwrap_or(true)))
                     {
+                        let mut context: crate::diagnostic::Context = [
+                            (
+                                "identifier".into(),
+                                crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(
+                                    binding.name.clone(),
+                                )),
+                            ),
+                            (
+                                "row".into(),
+                                crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(
+                                    template.id.clone(),
+                                )),
+                            ),
+                            (
+                                "available_phase".into(),
+                                crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(
+                                    "window_derivation".into(),
+                                )),
+                            ),
+                            (
+                                "required_phase".into(),
+                                crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(
+                                    "row_filter".into(),
+                                )),
+                            ),
+                        ]
+                        .into();
+                        if let Some(column) = lookup_match {
+                            context.insert(
+                                "lookup_match".into(),
+                                crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(
+                                    output.columns()[column].name.clone(),
+                                )),
+                            );
+                        }
                         findings.push(BindFinding::Scalar(crate::diagnostic::Diagnostic {
                             code: crate::diagnostic::ConditionCode::RowFilterPhaseBoundary,
                             spec_paths: vec![filter_path.clone()],
-                            context: [
-                                (
-                                    "identifier".into(),
-                                    crate::diagnostic::ContextValue::Scalar(
-                                        crate::value::Value::Str(binding.name.clone()),
-                                    ),
-                                ),
-                                (
-                                    "row".into(),
-                                    crate::diagnostic::ContextValue::Scalar(
-                                        crate::value::Value::Str(template.id.clone()),
-                                    ),
-                                ),
-                                (
-                                    "available_phase".into(),
-                                    crate::diagnostic::ContextValue::Scalar(
-                                        crate::value::Value::Str("window_derivation".into()),
-                                    ),
-                                ),
-                                (
-                                    "required_phase".into(),
-                                    crate::diagnostic::ContextValue::Scalar(
-                                        crate::value::Value::Str("row_filter".into()),
-                                    ),
-                                ),
-                            ]
-                            .into(),
+                            context,
                             source_span: None,
                             operand_route: None,
                         }));

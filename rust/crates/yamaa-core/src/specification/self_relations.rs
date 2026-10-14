@@ -345,8 +345,8 @@ pub(super) fn bind_operand(
     }
 }
 
-/// A default reading prior completed templates cannot run in the first template.
-pub(super) fn is_reference(d: &Document, name: &str) -> Result<bool, PrepareError> {
+/// A default reading a named relation retains its column-phase meaning.
+pub(super) fn is_named_reference(d: &Document, name: &str) -> Result<bool, PrepareError> {
     let Some((relation, _)) = name.split_once('.') else {
         return Ok(false);
     };
@@ -357,9 +357,7 @@ pub(super) fn is_reference(d: &Document, name: &str) -> Result<bool, PrepareErro
         return Ok(false);
     };
     for &item in sequence(d, items)? {
-        if text(d, field(d, item, "id")?)? == relation
-            && text(d, field(d, item, "dataset")?)? == "SELF"
-        {
+        if text(d, field(d, item, "id")?)? == relation {
             return Ok(true);
         }
     }

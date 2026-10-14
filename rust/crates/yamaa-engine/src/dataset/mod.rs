@@ -1605,6 +1605,12 @@ impl Executor<'_> {
                     self.plan.output().columns().len(),
                     self.plan.intermediates(),
                 );
+                // Grouped predicates may read the completed window pass. Predicates
+                // independent of windows keep their single prewindow eligibility pass.
+                let postwindow_filter = matches!(template.mode.local_mode(), RowMode::Groups(_))
+                    && template.filter.as_ref().is_some_and(|filter| filter.bindings().iter().any(|binding| {
+                        matches!(binding.read, yamaa_core::bound_expression::Read::Column(column) if deferred.get(column).copied().unwrap_or(false))
+                    }));
                 let groups = match template.mode.local_mode() {
                     RowMode::Driver { .. } | RowMode::IntermediateDriver { .. } => {
                         unreachable!("plan admission rejects nested drivers")
@@ -1685,7 +1691,7 @@ impl Executor<'_> {
                         )?;
                         candidate.completed[assignment.column] = true;
                     }
-                    if let Some(filter) = template.filter.as_ref() {
+                    if let Some(filter) = template.filter.as_ref().filter(|_| !postwindow_filter) {
                         let source_row = candidate.members[0];
                         let truth = if filter.bindings().iter().any(|binding| {
                             matches!(
@@ -1765,6 +1771,34 @@ impl Executor<'_> {
                         aggregate_row: None,
                     },
                 )?;
+                if postwindow_filter {
+                    let filter = template.filter.as_ref().expect("deferred filter exists");
+                    let mut retained = first;
+                    for row in first..candidates.len() {
+                        let candidate = &candidates[row];
+                        let source_row = candidate.members[0];
+                        let truth = crate::dataset_predicate::evaluate(
+                            filter,
+                            table,
+                            source_row,
+                            &candidate.values,
+                            budget.predicate(),
+                        )
+                        .map_err(|error| match error.kind {
+                            yamaa_core::predicate::ErrorKind::Limit(limit) => {
+                                Box::new(predicate_limit(limit))
+                            }
+                            _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                        })?;
+                        if truth == yamaa_core::predicate::Truth::True {
+                            candidates.swap(retained, row);
+                            retained += 1;
+                        } else {
+                            budget.discard_candidate(&candidate.values);
+                        }
+                    }
+                    candidates.truncate(retained);
+                }
                 intermediate_run.publish_self(self, budget)?;
                 intermediates::verify(
                     self,

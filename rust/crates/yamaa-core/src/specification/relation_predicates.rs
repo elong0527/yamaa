@@ -92,6 +92,34 @@ pub(super) fn bind(
             )));
         }
     }
+    findings.extend(
+        static_types::predicate_kinds(plan, |name| {
+            let binding = bindings.iter().find(|binding| binding.name == name)?;
+            let (schema, column) = match binding.read {
+                Read::Source(column) => (donor, column),
+                Read::Column(slot) => {
+                    let CurrentRead::Record { source, column } = current.get(slot)?.read else {
+                        return None;
+                    };
+                    let index = if source == 0 {
+                        driver
+                    } else if source <= driver {
+                        source - 1
+                    } else {
+                        source
+                    };
+                    (*schemas.get(index)?, column)
+                }
+                _ => return None,
+            };
+            schema
+                .columns()
+                .get(column)
+                .map(|column| column.kind.into())
+        })?
+        .into_iter()
+        .map(BindFinding::Predicate),
+    );
     if findings.len() != before {
         return Ok(None);
     }

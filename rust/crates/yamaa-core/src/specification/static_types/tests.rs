@@ -290,3 +290,346 @@ fn repeated_type_findings_refuse_whole_projection_before_output() {
         Err(BindError::PredicateDiagnosticLimit)
     ));
 }
+
+fn phase_document(
+    columns: Vec<Tree<'_>>,
+    intermediates: Vec<Tree<'_>>,
+    rows: Vec<Tree<'_>>,
+) -> SpecificationDocument {
+    use Tree::*;
+    let mut fields = vec![
+        ("schema_version", Text("1.0")),
+        ("domain", Text("TEST")),
+        (
+            "input",
+            Map(vec![("SRC", Map(vec![("path", Text("SRC.csv"))]))]),
+        ),
+        ("keys", List(vec![Text("ID")])),
+        ("columns", List(columns)),
+        (
+            "output",
+            Map(vec![
+                ("path", Text("result.csv")),
+                ("columns", List(vec![Text("ID")])),
+            ]),
+        ),
+    ];
+    if !intermediates.is_empty() {
+        fields.push(("intermediates", List(intermediates)));
+    }
+    if !rows.is_empty() {
+        fields.push(("rows", List(rows)));
+    }
+    let mut nodes = Vec::new();
+    let root = Map(fields).append(&mut nodes);
+    SpecificationDocument::admit(
+        Document::new(nodes, root, DocumentLimits::default()).unwrap(),
+        &mut ValidationBudget::new(Default::default()),
+    )
+    .unwrap()
+    .unwrap()
+}
+fn empty_column(name: &str) -> Tree<'_> {
+    Tree::Map(vec![
+        ("name", Tree::Text(name)),
+        ("type", Tree::Text("int")),
+    ])
+}
+fn source_value(name: &str) -> Tree<'_> {
+    operation("source", vec![("variable", Tree::Text(name))])
+}
+fn row_value(value: Tree<'_>) -> Tree<'_> {
+    Tree::Map(vec![("value", value)])
+}
+fn row_number() -> Tree<'static> {
+    use Tree::*;
+    operation(
+        "row_number",
+        vec![(
+            "window",
+            Map(vec![(
+                "order_by",
+                List(vec![Map(vec![("variable", Text("ID"))])]),
+            )]),
+        )],
+    )
+}
+fn phase_findings(
+    spec: &PreparedSpecification,
+    schema: &TableSchema,
+) -> Vec<crate::diagnostic::Diagnostic> {
+    let BindError::Invalid(findings) = spec.bind(schema).unwrap_err() else {
+        panic!("canonical binding diagnostics")
+    };
+    findings
+        .into_iter()
+        .flat_map(|finding| finding.diagnostics(spec.source()).unwrap())
+        .collect()
+}
+
+#[test]
+fn only_ungrouped_filters_refuse_direct_and_transitive_window_reads() {
+    use Tree::*;
+    for grouped in [false, true] {
+        let mut row = vec![
+            ("id", Text("candidate")),
+            ("filter", Text("ALIAS > 1")),
+            (
+                "derivations",
+                Map(vec![
+                    ("ID", row_value(source_value("SRC.ID"))),
+                    ("SEQ", row_value(row_number())),
+                    ("ALIAS", row_value(source_value("SEQ"))),
+                ]),
+            ),
+        ];
+        if grouped {
+            row.push(("group_by", List(vec![Text("SRC.ID")])));
+        }
+        let spec = PreparedSpecification::prepare(&phase_document(
+            vec![
+                empty_column("ID"),
+                empty_column("SEQ"),
+                empty_column("ALIAS"),
+            ],
+            vec![],
+            vec![Map(row)],
+        ))
+        .unwrap();
+        if grouped {
+            assert!(spec.bind(&source()).is_ok());
+        } else {
+            let findings = phase_findings(&spec, &source());
+            assert_eq!(findings.len(), 1);
+            assert_eq!(findings[0].code, C::RowFilterPhaseBoundary);
+            assert_eq!(
+                findings[0].context["identifier"],
+                crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str("ALIAS".into()))
+            );
+        }
+    }
+}
+
+#[test]
+fn a_deferred_lookup_match_has_its_authored_filter_phase_witness() {
+    use Tree::*;
+    let intermediate = Map(vec![
+        ("id", Text("COLLECTED")),
+        ("dataset", Text("SRC")),
+        ("key", List(vec![Text("ID"), Text("SEQ")])),
+        ("columns", List(vec![Text("VAL")])),
+    ]);
+    let row = Map(vec![
+        ("id", Text("candidate")),
+        ("filter", Text("COLLECTED.VAL IS NULL")),
+        (
+            "derivations",
+            Map(vec![
+                ("ID", row_value(source_value("SRC.ID"))),
+                ("SEQ", row_value(row_number())),
+                ("VAL", row_value(source_value("SRC.VAL"))),
+            ]),
+        ),
+    ]);
+    let schema = TableSchema::new(
+        ["ID", "SEQ", "VAL"]
+            .into_iter()
+            .map(|name| Column {
+                name: name.into(),
+                kind: ColumnType::Int,
+            })
+            .collect(),
+    )
+    .unwrap();
+    let spec = PreparedSpecification::prepare(&phase_document(
+        vec![empty_column("ID"), empty_column("SEQ"), empty_column("VAL")],
+        vec![intermediate],
+        vec![row],
+    ))
+    .unwrap();
+    let findings = phase_findings(&spec, &schema);
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].code, C::RowFilterPhaseBoundary);
+    for (key, expected) in [
+        ("identifier", "COLLECTED.VAL"),
+        ("lookup_match", "SEQ"),
+        ("row", "candidate"),
+        ("available_phase", "window_derivation"),
+        ("required_phase", "row_filter"),
+    ] {
+        assert_eq!(
+            findings[0].context[key],
+            crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(expected.into()))
+        );
+    }
+}
+
+#[test]
+fn named_defaults_and_their_transitive_readers_remain_outside_self_donors() {
+    use Tree::*;
+    for named in [false, true] {
+        let prior = Map(vec![
+            ("id", Text("PRIOR_SAE")),
+            ("dataset", Text("SELF")),
+            ("key", List(vec![Text("ID")])),
+            ("filter", Text("SELF.LATE > 0 AND SELF.ALIAS > 0")),
+            (
+                "order_by",
+                List(vec![Map(vec![("variable", Text("SELF.SEQ"))])]),
+            ),
+            ("keep", Text("first")),
+        ]);
+        let first = Map(vec![
+            ("id", Text("FIRST_AE")),
+            ("dataset", Text("SRC")),
+            ("key", List(vec![Text("ID")])),
+            (
+                "order_by",
+                List(vec![Map(vec![("variable", Text("SRC.SEQ"))])]),
+            ),
+            ("keep", Text("first")),
+        ]);
+        let row = |id, prior| {
+            Map(vec![
+                ("id", Text(id)),
+                (
+                    "derivations",
+                    Map(vec![
+                        ("ID", row_value(source_value("SRC.ID"))),
+                        ("SEQ", row_value(source_value("SRC.SEQ"))),
+                        ("PRIOR", row_value(prior)),
+                    ]),
+                ),
+            ])
+        };
+        let spec = PreparedSpecification::prepare(&phase_document(
+            vec![
+                empty_column("ID"),
+                empty_column("SEQ"),
+                empty_column("PRIOR"),
+                column(
+                    "LATE",
+                    "int",
+                    source_value(if named { "FIRST_AE.SEQ" } else { "SRC.SEQ" }),
+                ),
+                column("ALIAS", "int", source_value("LATE")),
+            ],
+            vec![prior, first],
+            vec![
+                row("first", literal(N::Null)),
+                row("second", source_value("PRIOR_SAE.SEQ")),
+            ],
+        ))
+        .unwrap();
+        let schema = TableSchema::new(
+            ["ID", "SEQ"]
+                .into_iter()
+                .map(|name| Column {
+                    name: name.into(),
+                    kind: ColumnType::Int,
+                })
+                .collect(),
+        )
+        .unwrap();
+        if !named {
+            assert!(spec.bind(&schema).is_ok());
+        } else {
+            let findings = phase_findings(&spec, &schema);
+            let excluded = findings
+                .iter()
+                .filter(|finding| finding.code == C::LookupSelectionReference)
+                .collect::<Vec<_>>();
+            assert_eq!(excluded.len(), 2);
+            for (finding, name) in excluded.into_iter().zip(["SELF.LATE", "SELF.ALIAS"]) {
+                assert_eq!(
+                    finding.context["identifier"],
+                    crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(name.into()))
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn donor_filter_observes_the_computed_intermediate_type() {
+    use Tree::*;
+    let intermediate = Map(vec![
+        ("id", Text("EOT")),
+        ("dataset", Text("SRC")),
+        ("filter", Text("SRC.EOT_FALLBACK = 'x'")),
+        (
+            "derivations",
+            Map(vec![(
+                "EOT_FALLBACK",
+                row_value(operation(
+                    "compute",
+                    vec![("expr", Text("SEQ + VAL / 1000"))],
+                )),
+            )]),
+        ),
+    ]);
+    let spec = PreparedSpecification::prepare(&phase_document(
+        vec![column("ID", "int", source_value("SRC.ID"))],
+        vec![intermediate],
+        vec![],
+    ))
+    .unwrap();
+    let schema = TableSchema::new(
+        ["ID", "SEQ", "VAL"]
+            .into_iter()
+            .map(|name| Column {
+                name: name.into(),
+                kind: ColumnType::Int,
+            })
+            .collect(),
+    )
+    .unwrap();
+    let findings = phase_findings(&spec, &schema);
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].code, C::PredicateIncompatiblePair);
+    assert_eq!(
+        findings[0].spec_paths,
+        [String::from("intermediates[0].filter")]
+    );
+}
+
+#[test]
+fn explicit_named_row_reads_still_promote_their_local_match_defaults() {
+    use Tree::*;
+    let first = Map(vec![
+        ("id", Text("FIRST_AE")),
+        ("dataset", Text("SRC")),
+        ("key", Map(vec![("SEQ", Text("CURRENT"))])),
+    ]);
+    let row = Map(vec![
+        ("id", Text("candidate")),
+        (
+            "derivations",
+            Map(vec![
+                ("ID", row_value(source_value("SRC.ID"))),
+                ("VAL", row_value(source_value("FIRST_AE.SEQ"))),
+            ]),
+        ),
+    ]);
+    let spec = PreparedSpecification::prepare(&phase_document(
+        vec![
+            empty_column("ID"),
+            column("CURRENT", "int", source_value("SRC.SEQ")),
+            empty_column("VAL"),
+        ],
+        vec![first],
+        vec![row],
+    ))
+    .unwrap();
+    let schema = TableSchema::new(
+        ["ID", "SEQ"]
+            .into_iter()
+            .map(|name| Column {
+                name: name.into(),
+                kind: ColumnType::Int,
+            })
+            .collect(),
+    )
+    .unwrap();
+    spec.bind(&schema).unwrap();
+}

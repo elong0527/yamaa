@@ -67,3 +67,6 @@ pub(super) fn complete<T: TableAccess + ?Sized>(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;
