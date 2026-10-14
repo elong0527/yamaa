@@ -1,0 +1,59 @@
+name: Retain reviewed prior Python rollback artifacts
+
+on:
+  push:
+    branches: [qualification/issue-1999]
+    paths:
+      - '.github/workflows/retain-rollback.yml'
+      - 'rust/tools/retain_python_rollback.py'
+      - 'rust/qualification/prior-python-rollback-run.json'
+
+permissions: {}
+
+concurrency:
+  group: retain-prior-python-rollback
+  cancel-in-progress: false
+
+jobs:
+  retain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      # Reading unpublished drafts requires push access. Uploads are additive,
+      # restricted to the existing reviewed draft; no publication or deletion.
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Fetch the immutable rehearsal verifier revision
+        run: git fetch origin 7acd9bce2fd7943083ad9afe748d31a97fe97aef
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 7acd9bce2fd7943083ad9afe748d31a97fe97aef
+          path: prior-proof
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install the historical raw-table reader
+        run: python -m pip install polars==1.44.2
+      - name: Re-admit all eighteen original tuples and retain unchanged draft assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python rust/tools/retain_python_rollback.py
+          --prior-tools prior-proof/.rollback-python
+          --work "${RUNNER_TEMP}/rollback-retention" --upload
+      - name: Preserve authenticated draft retention receipt
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: prior-python-draft-retention
+          path: |
+            ${{ runner.temp }}/rollback-retention/retention-receipt.json
+            ${{ runner.temp }}/rollback-retention/uploads/prior-python-rollback-38460509078.json
+          if-no-files-found: error
+          retention-days: 90

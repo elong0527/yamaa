@@ -7,6 +7,8 @@ on:
         description: Rehearse the retained qualified pre-cutover R source artifact
         type: boolean
         default: false
+  push:
+    branches: [qualification/issue-1999]
   pull_request:
     paths:
       - 'R/yamaa/**'
@@ -24,7 +26,7 @@ permissions:
 
 jobs:
   installed-grammar:
-    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.rollback_r }}
+    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.rollback_r) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     defaults:
@@ -84,13 +86,13 @@ jobs:
           if-no-files-found: warn
 
   rollback-source:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.rollback_r }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.rollback_r) || (github.event_name == 'push' && github.ref == 'refs/heads/qualification/issue-1999') }}
     name: R source rollback (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     permissions:
-      contents: read
-      actions: read
+      # Draft assets require repository push access; retrieval performs GET only.
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -118,23 +120,12 @@ jobs:
           if [ "${{ runner.os }}" = Windows ]; then
             rustup target add --toolchain 1.90.0 x86_64-pc-windows-gnu
           fi
-      - name: Fetch exact retained source artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          # One exact source tarball is the proposed durable rollback asset.
-          artifact-ids: 11811851297
-          path: ${{ runner.temp }}/prior-r-source
-          run-id: 38394553441
-          github-token: ${{ github.token }}
-      - name: Verify source, artifact and package identities before installation
+      - name: Fetch durable draft asset and verify exact source/release/package before installation
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p "${RUNNER_TEMP}/r-rollback-proof"
-          gh api repos/elong0527/yamaa/actions/runs/38394553441 --jq '{id,head_sha,run_attempt,conclusion,status,html_url}' > "${RUNNER_TEMP}/r-rollback-proof/prior-run.json"
-          gh api repos/elong0527/yamaa/actions/artifacts/11811851297 --jq '{id,name,expired,expires_at,workflow_run}' > "${RUNNER_TEMP}/r-rollback-proof/prior-artifact.json"
           python rust/tools/prepare_r_rollback.py "${RUNNER_TEMP}/prior-r-source" "${RUNNER_TEMP}/r-rollback-proof" \
-            --artifact-id 11811851297 --artifact-name native-r-ubuntu-24.04
+            --retained-release
       - name: Install exact old archive in an empty isolated library
         working-directory: ${{ runner.temp }}
         run: |
