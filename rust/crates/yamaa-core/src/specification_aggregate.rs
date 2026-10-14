@@ -65,6 +65,54 @@ fn diagnostic(
     }
     value.diagnostic()
 }
+/// Per-record aggregate bindings have no relation-wide window context.
+fn window_path(
+    d: &Document,
+    value: usize,
+    path: &str,
+    depth: usize,
+) -> Result<Option<String>, PrepareError> {
+    if depth > 64 || path.len() > 65_536 {
+        return Err(PrepareError::Limit("expression_depth"));
+    }
+    let &[(operation, payload)] = mapping(d, value)? else {
+        return Err(PrepareError::Internal);
+    };
+    let operation = text(d, operation)?;
+    let path = format!("{path}.{operation}");
+    match operation {
+        "row_number" | "rank" | "row_value" | "previous_non_missing" | "locf" | "baseline_flag" => {
+            return Ok(Some(path));
+        }
+        "case" => {
+            for (index, &branch) in sequence(d, payload)?.iter().enumerate() {
+                for name in ["then", "otherwise"] {
+                    if let Some(child) = d.field(branch, name) {
+                        if let Some(path) =
+                            window_path(d, child, &format!("{path}[{index}].{name}"), depth + 1)?
+                        {
+                            return Ok(Some(path));
+                        }
+                    }
+                }
+            }
+        }
+        "str_concat" => {
+            for (index, &child) in sequence(d, field(d, payload, "sources")?)?
+                .iter()
+                .enumerate()
+            {
+                if let Some(path) =
+                    window_path(d, child, &format!("{path}.sources[{index}]"), depth + 1)?
+                {
+                    return Ok(Some(path));
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(None)
+}
 #[allow(clippy::too_many_arguments)]
 pub(super) fn prepare(
     d: &Document,
@@ -145,6 +193,14 @@ pub(super) fn prepare(
                     };
                     let derivation = field(d, item, "derivation")?;
                     let value = field(d, derivation, "value")?;
+                    if let Some(window) =
+                        window_path(d, value, &format!("{binding_path}.derivation"), depth + 1)?
+                    {
+                        return Err(invalid(
+                            &window,
+                            "a derive binding cannot use a window operation",
+                        ));
+                    }
                     let mut references = Vec::new();
                     let mut intermediate_names = Vec::<String>::new();
                     derivations::current_references(d, value, project, &mut references, 0)?;

@@ -6337,6 +6337,39 @@ def derive_binding_reference_names(derivation):
     return names
 
 
+def derive_binding_window_path(derivation, path):
+    """Find a window in expression positions, without inspecting literal values."""
+    if not isinstance(derivation, dict):
+        return None
+    if set(derivation) <= {'value', 'unconvertible'} and 'value' in derivation:
+        return derive_binding_window_path(derivation['value'], path)
+    if len(derivation) != 1:
+        return None
+    operation, payload = next(iter(derivation.items()))
+    operation_path = f'{path}.{operation}'
+    if operation in _DERIVE_WINDOW_OPERATIONS:
+        return operation_path
+    if operation == 'case' and isinstance(payload, list):
+        for index, branch in enumerate(payload):
+            if isinstance(branch, dict):
+                for name in ('then', 'otherwise'):
+                    nested = derive_binding_window_path(
+                        branch.get(name), f'{operation_path}[{index}].{name}'
+                    )
+                    if nested is not None:
+                        return nested
+    if operation == 'str_concat' and isinstance(payload, dict):
+        sources = payload.get('sources')
+        if isinstance(sources, list):
+            for index, source in enumerate(sources):
+                nested = derive_binding_window_path(
+                    source, f'{operation_path}.sources[{index}]'
+                )
+                if nested is not None:
+                    return nested
+    return None
+
+
 def validate_derive_step(derive, path, context, filter_text=None):
     '''Validate an aggregate derive step.
 
@@ -6380,6 +6413,12 @@ def validate_derive_step(derive, path, context, filter_text=None):
             continue
         declared = binding.get('type')
         bindings[name] = declared if isinstance(declared, str) else None
+        window_path = derive_binding_window_path(
+            binding.get('derivation'), f'{binding_path}.derivation'
+        )
+        if window_path is not None:
+            invalid('a derive binding cannot use a window operation', window_path)
+            return bindings, None, errors
         # REQ-1189: a binding derivation reads the relation's fields and
         # earlier bindings, per record.
         earlier = {

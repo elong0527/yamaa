@@ -1045,6 +1045,52 @@ class TestAggregateDeriveStep(unittest.TestCase):
         errors = self.validate(self.payload(), self.context())
         self.assertEqual(errors, [])
 
+    def test_rejects_windows_in_derive_bindings_at_the_window_path(self):
+        path = 'spec.columns.AVAL.derivation.aggregate.derive[0].derivation'
+        for operation in VALIDATOR._DERIVE_WINDOW_OPERATIONS:
+            for qualified in (True, False):
+                source = 'QS.QSORRES' if qualified else 'QSORRES'
+                fields = {'window': {'order_by': [source]}}
+                if operation in ('row_value', 'previous_non_missing', 'locf'):
+                    fields['source'] = source
+                if operation == 'row_value':
+                    fields['offset'] = -1
+                if operation == 'baseline_flag':
+                    fields.update(date=source, reference_date=source)
+                window = {operation: fields}
+                for derivation, suffix in (
+                    (window, f'.{operation}'),
+                    ({'case': [
+                        {'when': "QS.QSCAT = 'SCALE'", 'then': window},
+                        {'otherwise': {'literal': 0}},
+                    ]}, f'.case[0].then.{operation}'),
+                    ({'case': [
+                        {'when': "QS.QSCAT = 'SCALE'", 'then': {'literal': 0}},
+                        {'otherwise': window},
+                    ]}, f'.case[1].otherwise.{operation}'),
+                    ({'str_concat': {'sources': [window]}},
+                        f'.str_concat.sources[0].{operation}'),
+                    ({'value': window, 'unconvertible': None}, f'.{operation}'),
+                ):
+                    with self.subTest(operation=operation, qualified=qualified,
+                            suffix=suffix):
+                        errors = self.validate(self.payload(derive=[{
+                            'name': 'QSNUM', 'type': 'float',
+                            'derivation': derivation,
+                        }]), self.context())
+                        self.assertEqual(len(errors), 1)
+                        self.assertEqual(errors[0].condition, 'invalid_derive_step')
+                        self.assertEqual(errors[0].path, path + suffix)
+                        self.assertEqual(errors[0].context['reason'],
+                            'a derive binding cannot use a window operation')
+
+    def test_window_names_in_derive_literals_remain_literals(self):
+        derive = self.payload()['derive'] + [{
+            'name': 'TAG', 'type': 'str',
+            'derivation': {'literal': 'row_value'},
+        }]
+        self.assertEqual(self.validate(self.payload(derive=derive), self.context()), [])
+
     def test_rejects_unknown_derive_variable_in_expression(self):
         errors = self.validate(self.payload(expr='SUM(MISSING)'), self.context())
         self.assertEqual(len(errors), 1)
