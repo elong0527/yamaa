@@ -165,7 +165,8 @@ pub(super) fn prepare_value_with_driver(
             }
             Operation::Imputation(operation)
         }
-        "date_diff" | "study_day" | "to_epoch_day" => {
+        "date_diff" | "study_day" | "to_epoch_day" | "date_shift" | "datetime_diff"
+        | "datetime_shift" | "duration_value" | "duration_text" => {
             let mut features = Vec::new();
             let operation = temporal::prepare(
                 d,
@@ -741,6 +742,19 @@ pub(super) fn declaration_findings(
     match operation {
         Operation::Flag(operation) => operation.findings(findings),
         Operation::StrPad(operation) => str_pad::declaration_findings(operation, findings),
+        Operation::Temporal(operation) => {
+            for index in 0..operation.sources().len() {
+                if matches!(
+                    operation.literal(index),
+                    Some(crate::value::Value::Float(_))
+                ) && operation.expected(index) == "int"
+                {
+                    findings.push(BindFinding::Temporal(
+                        operation.operand_diagnostic(index, "float"),
+                    ));
+                }
+            }
+        }
         Operation::InvalidNumeric { expression, error } => findings.push(BindFinding::Numeric {
             path: format!("{path}.expr"),
             expression: expression.clone(),

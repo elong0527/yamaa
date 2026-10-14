@@ -19,6 +19,7 @@ mod predicate_evaluation;
 mod mapping_cut;
 mod schema;
 mod submission;
+mod temporal_arithmetic;
 mod temporal_imputation;
 mod text_case;
 mod text_extract;
@@ -61,6 +62,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     let mut reached = BTreeSet::new();
     reached.extend(record_operations::reached());
     reached.extend(mapping_cut::reached());
+    reached.extend(temporal_arithmetic::reached());
     let publication = yamaa_core::application_issue::publication_failed("generated/producer.csv");
     assert_eq!(
         (

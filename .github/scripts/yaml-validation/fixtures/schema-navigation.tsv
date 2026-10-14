@@ -361,3 +361,16 @@ schema_shared.yaml:project_path.description	See REQ-1151.
 schema_shared.yaml:identifier.description	See REQ-1046.
 schema_verification.yaml:dataset_verifications.assert.when.description	See REQ-0383.
 schema_verification.yaml:dataset_verifications.row_count.when.description	See REQ-1154.
+schema_expression_date.yaml:expressions.date_shift.source.description	See REQ-1298.
+schema_expression_date.yaml:expressions.date_shift.days.description	See REQ-1298.
+schema_expression_date.yaml:expressions.datetime_diff.start.description	See REQ-1299.
+schema_expression_date.yaml:expressions.datetime_diff.end.description	See REQ-1299.
+schema_expression_date.yaml:expressions.datetime_diff.unit.description	See REQ-1299.
+schema_expression_date.yaml:expressions.datetime_shift.source.description	See REQ-1300.
+schema_expression_date.yaml:expressions.datetime_shift.amount.description	See REQ-1300.
+schema_expression_date.yaml:expressions.datetime_shift.unit.description	See REQ-1300.
+schema_expression_date.yaml:expressions.duration_value.source.description	See REQ-1301.
+schema_expression_date.yaml:expressions.duration_value.unit.description	See REQ-1301.
+schema_expression_date.yaml:expressions.duration_value.invalid.description	See REQ-1301.
+schema_expression_date.yaml:expressions.duration_text.source.description	See REQ-1302.
+schema_expression_date.yaml:expressions.duration_text.unit.description	See REQ-1302.

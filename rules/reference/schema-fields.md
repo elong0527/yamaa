@@ -328,6 +328,19 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.study_day.date` | `"variable"` | `true` | Absent | -- | [REQ-1108](../operations/temporal.md#req-1108) |
 | `expressions.study_day.reference` | `"variable"` | `true` | Absent | -- | [REQ-1108](../operations/temporal.md#req-1108) |
 | `expressions.to_epoch_day.source` | `"variable"` | `true` | Absent | -- | [REQ-1188](../operations/temporal.md#req-1188) |
+| `expressions.date_shift.source` | `"variable"` | `true` | Absent | -- | [REQ-1298](../operations/temporal.md#req-1298) |
+| `expressions.date_shift.days` | `["variable", "int"]` | `true` | Absent | -- | [REQ-1298](../operations/temporal.md#req-1298) |
+| `expressions.datetime_diff.start` | `"variable"` | `true` | Absent | -- | [REQ-1299](../operations/temporal.md#req-1299) |
+| `expressions.datetime_diff.end` | `"variable"` | `true` | Absent | -- | [REQ-1299](../operations/temporal.md#req-1299) |
+| `expressions.datetime_diff.unit` | `"str"` | `true` | Absent | `{"values": ["second", "minute", "hour", "day"]}` | [REQ-1299](../operations/temporal.md#req-1299) |
+| `expressions.datetime_shift.source` | `"variable"` | `true` | Absent | -- | [REQ-1300](../operations/temporal.md#req-1300) |
+| `expressions.datetime_shift.amount` | `["variable", "int", "float"]` | `true` | Absent | -- | [REQ-1300](../operations/temporal.md#req-1300) |
+| `expressions.datetime_shift.unit` | `"str"` | `true` | Absent | `{"values": ["second", "minute", "hour", "day"]}` | [REQ-1300](../operations/temporal.md#req-1300) |
+| `expressions.duration_value.source` | `"variable"` | `true` | Absent | -- | [REQ-1301](../operations/temporal.md#req-1301) |
+| `expressions.duration_value.unit` | `"str"` | `true` | Absent | `{"values": ["second", "minute", "hour", "day"]}` | [REQ-1301](../operations/temporal.md#req-1301) |
+| `expressions.duration_value.invalid` | `"literal_value"` | `false` | Absent | -- | [REQ-1301](../operations/temporal.md#req-1301) |
+| `expressions.duration_text.source` | `["variable", "int", "float"]` | `true` | Absent | -- | [REQ-1302](../operations/temporal.md#req-1302) |
+| `expressions.duration_text.unit` | `"str"` | `true` | Absent | `{"values": ["second", "minute", "hour", "day"]}` | [REQ-1302](../operations/temporal.md#req-1302) |
 | `day_rule` | `"str"` | `false` | Absent | `{"values": ["first", "last"]}` | [REQ-1109](../operations/temporal.md#req-1109) |
 | `time_rule` | `"str"` | `false` | Absent | `{"values": ["first", "last"]}` | [REQ-1184](../operations/temporal.md#req-1184) |
 

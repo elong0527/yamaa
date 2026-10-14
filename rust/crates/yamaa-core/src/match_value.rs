@@ -56,15 +56,17 @@ pub fn result_type(
                 });
             }
             match name {
-                "date_impute" | "to_date" => Some(Date.into()),
-                "datetime_impute" => Some(DateTime.into()),
+                "date_impute" | "to_date" | "date_shift" => Some(Date.into()),
+                "datetime_impute" | "datetime_shift" => Some(DateTime.into()),
                 "date_diff" | "rank" | "row_number" | "study_day" | "to_epoch_day" => {
                     Some(Int.into())
                 }
                 "compute" => Some(crate::numeric_compiler::NUMERIC_RESULT_TYPE.into()),
                 "round_half_away_from_zero" => Some(Float.into()),
                 "baseline_flag" | "cut" | "date_precision" | "datetime_precision" | "str_case"
-                | "str_concat" | "str_extract" | "str_pad" | "str_template" => Some(Str.into()),
+                | "str_concat" | "str_extract" | "str_pad" | "str_template" | "duration_text" => {
+                    Some(Str.into())
+                }
                 "str_contains" => Some(ComparableType::Boolean),
                 _ => None,
             }

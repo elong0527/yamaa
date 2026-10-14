@@ -1582,6 +1582,44 @@ class ParquetOriginalOutput(unittest.TestCase):
 
 
 class PublicDomains(unittest.TestCase):
+    def test_public_temporal_arithmetic_conformance(self):
+        import yamaa
+
+        def assert_issues(frame, expected):
+            if expected is None:
+                self.assertEqual(frame.height, 0)
+            else:
+                self.assertTrue(any(
+                    row["phase"] == expected["phase"]
+                    and row["condition"] == expected["condition"]
+                    and row["requirement"] == expected["requirement"]
+                    and row["spec_paths"] == [expected["spec_path"]]
+                    for row in frame.to_dicts()
+                ), frame)
+
+        for case in TRUTH["temporal_arithmetic"]:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                entry = root / "spec.yaml"
+                entry.write_text(case["spec"], encoding="utf-8")
+                assert_issues(yamaa.check(entry).issues, case["check_issue"])
+                for name, content in case["inputs"].items():
+                    (root / name).write_text(content, encoding="utf-8")
+                result = yamaa.domain(entry)
+                assert_issues(result.issues, case["run_issue"])
+                if case["csv"] is not None:
+                    self.assertTrue(result.save())
+                    self.assertEqual((root / "result.csv").read_bytes(), case["csv"].encode("utf-8"))
+                else:
+                    self.assertIsNone(result.output)
+                    with self.assertRaises(yamaa.DomainError):
+                        result.save()
+                    self.assertFalse((root / "result.csv").exists())
+                observations = result._native.observations()
+                if observations is not None:
+                    counts = json.loads(observations)["handler_counts"]
+                    self.assertEqual(sum(item["count"] for item in counts if item["handler"] == "invalid"), case["invalid_count"])
+
     def test_public_typed_intermediate_derivations(self):
         import yamaa
 
