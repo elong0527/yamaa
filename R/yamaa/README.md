@@ -28,7 +28,9 @@ and a null requirement, with `code: compiler_limit`, `stage: prepare`, the
 `resource`, integer `limit` and counted `actual` in context. `spec_paths`
 identifies the refused declaration; check and build return the same facts with
 or without an environment. Numeric policy refusals retain their applicable
-resource bound under `code: numeric_policy`. `yamaa_check` reads no study data or project code.
+resource bound under `code: numeric_policy`. Layered preparation and YAML
+resource refusals use `code: resource_limit` and retain the preparation or
+decoder `phase` alongside the resource bound in context. `yamaa_check` reads no study data or project code.
 Resource paths resolve from their original declaring YAML layer under the
 [local-path policy](../../rules/storage/resources.md).
 

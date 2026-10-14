@@ -284,10 +284,34 @@ fn capture_response(outcome: Value) -> String {
     crate::yaml_diagnostics::encode_outcome("specification/prototype", outcome, 16_777_216)
         .unwrap_or_else(|_| json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"capture","code":"diagnostic_context_limit"}}).to_string())
 }
+pub(super) fn decoder_limit(limit: &crate::yaml_decode::ResourceLimit, stage: &str) -> Value {
+    let mut outcome = json!({"status":"resource_limit","stage":stage,"phase":"yaml_decode",
+        "resource":limit.resource,"limit":limit.limit});
+    if let Some(actual) = limit.actual {
+        outcome["actual"] = json!(actual);
+    }
+    outcome
+}
 /// Preparation exposes semantic context, never an arbitrary dump of source bytes.
 /// Findings resolve against the retained schema/pass input or the shared YAML decoder.
 pub fn capture_failure(error: &crate::specification_source::Error) -> String {
     use crate::specification_source::Error;
+    if let Error::Decode {
+        error: crate::yaml_decode::DecodeFailure::Limit(limit),
+        ..
+    } = error
+    {
+        return capture_response(decoder_limit(limit, "capture"));
+    }
+    let resource = match error {
+        Error::Normalize(error) => crate::schema_outcomes::normalization(error.clone()).ok(),
+        Error::Validation(error) => crate::schema_outcomes::validation(error.clone()).ok(),
+        _ => None,
+    };
+    if let Some(mut outcome) = resource.filter(|outcome| outcome["status"] == "resource_limit") {
+        outcome["stage"] = json!("capture");
+        return capture_response(outcome);
+    }
     if let Error::Decode { identity, error } = error {
         if let Some(diagnostics) = crate::yaml_diagnostics::capture_diagnostics(error, identity) {
             return capture_response(json!({"status":"invalid","diagnostics":diagnostics}));
@@ -352,4 +376,48 @@ pub(crate) fn captured_findings(
         source_context,
         budget,
     )
+}
+
+#[cfg(test)]
+mod resource_refusal_tests {
+    use super::*;
+    #[test]
+    fn capture_preserves_nondefault_decoder_and_normalization_bounds() {
+        use crate::specification_source::Error;
+        use yamaa_core::schema::{NormalizationError, NormalizationResource};
+        for (error, phase, resource, bound) in [
+            (
+                Error::Decode {
+                    identity: "spec.yaml".into(),
+                    error: crate::yaml_decode::DecodeFailure::Limit(
+                        crate::yaml_decode::ResourceLimit {
+                            resource: "events",
+                            limit: 7,
+                            actual: Some(8),
+                        },
+                    ),
+                },
+                "yaml_decode",
+                "events",
+                7,
+            ),
+            (
+                Error::Normalize(NormalizationError::Limit {
+                    resource: NormalizationResource::Nodes,
+                    limit: 3,
+                }),
+                "normalization",
+                "nodes",
+                3,
+            ),
+        ] {
+            let value: Value = serde_json::from_str(&capture_failure(&error)).unwrap();
+            let outcome = &value["outcome"];
+            assert_eq!(outcome["status"], "resource_limit");
+            assert_eq!(outcome["stage"], "capture");
+            assert_eq!(outcome["phase"], phase);
+            assert_eq!(outcome["resource"], resource);
+            assert_eq!(outcome["limit"], bound);
+        }
+    }
 }
