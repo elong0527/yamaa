@@ -67,14 +67,18 @@ in each input's `types`. CSV, Parquet, SAS, Arrow imports and producer contracts
 the same width ceiling. An `ordinal` adds one field and counts toward this bound.
 Specifications still admit at most 64 keys and 16 inputs.
 
-Width does not override aggregate budgets: the default source allowance is
-2,097,152 cells and output allowance is 1,048,576 cells. At 1,024 fields these
-allow at most 2,048 source rows and 1,024 output rows, before other limits apply.
+The public hosts use the longitudinal profile: 10,000,000 source or output
+rows, 640,000,000 source or output cells, 1 GiB scalar text, 512 MiB output
+text and 1 GiB encoded input/output. CSV admission includes its header in the
+field and record quotas. Finite report and producer budgets account for the
+same profile. Execution permits 2,000,000,000 logical work units; producer nodes
+share cumulative allowances, and expensive plans can exhaust work before size.
+
 Validation and normalization share 67,108,864 logical work units; complex or
-inherited specifications can exhaust this budget below the width ceiling.
-These are implementation policies, not language constraints or process-memory
-guarantees. Broader capacity and inheritance work remains tracked in
-[#2185](https://github.com/elong0527/yamaa/issues/2185) and
+inherited specifications can exhaust this separate preparation budget below
+the width ceiling. These are implementation policies, not language constraints
+or process-memory guarantees. Layered work policy and release acceptance remain
+tracked in [#2300](https://github.com/elong0527/yamaa/issues/2300) and
 [#2288](https://github.com/elong0527/yamaa/issues/2288).
 
 ## Define documents

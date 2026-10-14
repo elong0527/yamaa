@@ -1,29 +1,38 @@
-//! Bounded application capacity proposal. These are implementation policies,
-//! not language limits or allocator/process-memory guarantees.
+//! Approved bounded application capacity for the public longitudinal profile.
+//! These are implementation policies, not language limits or process-memory guarantees.
 
-/// Unapproved capped source/output/work frontier policy. Graph row reservations
-/// keep their separate cumulative 1,048,576-row ceiling.
-pub const SOURCE_ROWS: usize = 524_288;
-pub const SOURCE_CELLS: usize = 2_097_152;
-pub const SOURCE_BYTES: usize = 16 * 1024 * 1024;
-pub const EXECUTION_WORK: usize = 128 * 1024 * 1024;
-pub const GRAPH_OUTPUT_CELLS: usize = 2_097_152;
-pub const OUTPUT_ROWS: usize = 131_072;
-pub const OUTPUT_CELLS: usize = 1_048_576;
-pub const KEY_CELLS: usize = 524_288;
-pub const IDENTITY_CELLS: usize = 65_536;
-pub const OUTPUT_TEXT_BYTES: usize = 2 * 1024 * 1024;
-pub const IDENTITY_TEXT_BYTES: usize = 1024 * 1024;
+pub const SOURCE_ROWS: usize = 10_000_000;
+pub const SOURCE_CELLS: usize = 640_000_000;
+pub const SOURCE_BYTES: usize = 1024 * 1024 * 1024;
+pub const EXECUTION_WORK: usize = 2_000_000_000;
+pub const GRAPH_OUTPUT_CELLS: usize = 640_000_000;
+pub const OUTPUT_ROWS: usize = 10_000_000;
+pub const OUTPUT_CELLS: usize = 640_000_000;
+pub const KEY_CELLS: usize = 640_000_000;
+pub const IDENTITY_CELLS: usize = 640_000_000;
+pub const OUTPUT_TEXT_BYTES: usize = 512 * 1024 * 1024;
+pub const IDENTITY_TEXT_BYTES: usize = 1024 * 1024 * 1024;
 
-/// Unapproved larger frontier candidates. Encoded complete prefixes and actual
-/// retained preallocation charges have separate enforced ceilings. Native graph
-/// reports pool actual encoded lengths and cumulative retained charges. The
-/// 100k authored producer row/CSV geometry bounds the initial encoded probe;
-/// measured complete prefixes and requested buffers determine final proposals.
-pub const REPORT_ENCODED_BYTES: usize = 160 * 1024 * 1024;
+/// Physical Parquet values and canonical conversion charge 32 bytes per cell.
+/// Payload and encoded/header storage each retain their own source allowance.
+pub const SOURCE_STORAGE_BYTES: usize = 32 * SOURCE_CELLS + 2 * SOURCE_BYTES + 64 * 1024 * 1024;
+/// Internal public Arrow/Option/IPC projections charge 64 bytes per typed cell.
+/// This is separate from the authored output artifact's 1 GiB byte policy.
+pub const OUTPUT_STORAGE_BYTES: usize = 64 * OUTPUT_CELLS + OUTPUT_TEXT_BYTES + 64 * 1024 * 1024;
+
+/// A report can visit source cells, derived cells, artifact cells, and three
+/// public typed projection passes. These passes share logical traversal quotas.
+pub const REPORT_CELLS: usize = SOURCE_CELLS + 3 * OUTPUT_CELLS;
+/// Complete report storage derives from its admitted geometry. The 256-byte
+/// cell reserve covers type/value maps, scalar spellings and artifact records;
+/// 12 bytes per text/artifact byte covers JSON escaping and duplicate records.
+/// Rows reserve delimiters/owners, and metadata keeps a separate 64 MiB slack.
+pub const REPORT_ENCODED_BYTES: usize = 256 * REPORT_CELLS
+    + 12 * (SOURCE_BYTES + OUTPUT_TEXT_BYTES + SOURCE_BYTES)
+    + 16 * (SOURCE_ROWS + OUTPUT_ROWS)
+    + 64 * 1024 * 1024;
 pub const REPORT_RETAINED_FACTOR: usize = 6;
-pub const REPORT_RETAINED_BYTES: usize = 768 * 1024 * 1024;
+pub const REPORT_RETAINED_BYTES: usize = REPORT_RETAINED_FACTOR * REPORT_ENCODED_BYTES;
 
-/// Independently bounded report traversal/row counts; never byte or CPU units.
-pub const REPORT_CELLS: usize = 4_194_304;
-pub const REPORT_WORK: usize = 512 * 1024 * 1024;
+/// Entry/cell visits and encoded-buffer writes are separate charged work units.
+pub const REPORT_WORK: usize = 8 * REPORT_ENCODED_BYTES + 16 * REPORT_CELLS;

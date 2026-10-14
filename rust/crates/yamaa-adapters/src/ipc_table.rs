@@ -18,7 +18,7 @@ use yamaa_core::{
 };
 use yamaa_engine::dataset::{Dataset, ExecutionBudget};
 
-pub const MAX_INPUT_BYTES: usize = ExecutionBudget::bounded().max_ipc_bytes;
+pub const MAX_INPUT_BYTES: usize = ExecutionBudget::longitudinal().max_ipc_bytes;
 pub const MAX_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
 // Keep per-message bytes and verifier traversal bounded while admitting the
 // schema and record-batch metadata for the wider default column policy.
@@ -268,7 +268,13 @@ fn encode_dataset_projection<T: TableAccess<Error = std::convert::Infallible>>(
     table: &T,
     projection: Option<&[usize]>,
 ) -> Result<Vec<u8>, Error> {
-    encode_table_projection(table, projection, ExecutionBudget::default())
+    // Accepted output is projected through IPC for the host. Its transport
+    // representation is independent from the authored CSV/Parquet byte limit.
+    let budget = ExecutionBudget {
+        max_output_bytes: yamaa_engine::capacity::OUTPUT_STORAGE_BYTES,
+        ..Default::default()
+    };
+    encode_table_projection(table, projection, budget)
 }
 
 /// Export accepted output without a fixed byte or single-batch restriction.

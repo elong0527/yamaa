@@ -155,6 +155,18 @@ impl Admission {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn longitudinal_source_geometry_and_payload_fit_before_the_exact_next_byte_refusal() {
+        let maximum = yamaa_engine::capacity::SOURCE_STORAGE_BYTES;
+        let mut used = 0;
+        // Physical/canonical slots and payload admission need no giant fixture.
+        charge(&mut used, 32 * 640_000_000, maximum).unwrap();
+        charge(&mut used, 1024 * 1024 * 1024, maximum).unwrap();
+        let remaining = maximum - used;
+        charge(&mut used, remaining, maximum).unwrap();
+        assert_eq!(charge(&mut used, 1, maximum), Err(Error::Limit));
+    }
+
     use parquet::{
         basic::Repetition,
         schema::types::{SchemaDescriptor, Type as SchemaType},

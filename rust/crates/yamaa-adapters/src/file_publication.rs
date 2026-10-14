@@ -9,7 +9,7 @@ use std::{
 };
 
 const MAX_PATH_BYTES: usize = 65_536;
-const MAX_OUTPUT_BYTES: usize = 67_108_864;
+const MAX_OUTPUT_BYTES: usize = yamaa_engine::capacity::SOURCE_BYTES;
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug)]

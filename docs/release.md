@@ -188,6 +188,48 @@ superseded by the approved longitudinal defaults above. This width policy does
 not qualify the broader capacity or installed
 release gates under [#2288](https://github.com/elong0527/yamaa/issues/2288).
 
+Public Python and R calls now use `ExecutionBudget::longitudinal()`: 10,000,000
+source/output rows, 640,000,000 cells, 1 GiB scalar text, 512 MiB output text,
+and 1 GiB encoded input/output. Dataset execution has an independent
+2,000,000,000 logical-work allowance. CSV defaults admit the same source profile,
+including up to 1,024 header fields and the header record. The producer frontier
+shares these allowances. Smaller caller-selected budgets and the original
+`ExecutionBudget::bounded()` profile remain enforced.
+
+Representation allowances derive from the admitted geometry. Let `C` be
+640,000,000 cells, `R` be 10,000,000 rows, `S` be 1 GiB source/scalar text,
+`T` be 512 MiB output text, and `H` be 64 MiB metadata slack:
+
+- Source storage/decode allowance: `32*C + 2*S + H`, covering physical/canonical
+  slots, text payload and encoded/header storage.
+- Internal public Arrow/Option/IPC transport: `64*C + T + H`. Authored artifacts
+  retain their separate 1 GiB encoded-output limit.
+- Descriptor capture/reread allowance: `4*S`; copied original-source evidence:
+  `S + H`. Each capture still enforces the caller's encoded-byte maximum.
+- Parquet source groups admit the longitudinal 65,536-batch allowance. Compact
+  metadata/header bytes, nodes and schema tables remain bounded by the encoded
+  source allowance; pages admit up to `C`. These allow the writer's 1,024-row
+  groups to round-trip without a lower group/footer ceiling.
+- Report traversal cells: `P = C + 3*C`, covering source/derived/artifact visits
+  and the three public typed-copy passes.
+- Complete report encoded bytes: `E = 256*P + 12*(S + T + S) + 16*(R + R) + H`.
+  Fixed cell slots cover typed maps/scalar spellings, and text factors cover
+  JSON escaping and retained artifact records.
+- Report retained charges: `6*E`; report work: `8*E + 16*P`. Entries, buffer
+  writes and logical cell visits keep their actual independent charges.
+
+These are finite logical admission policies; they do not reserve memory or
+guarantee that the host has enough process memory.
+
+Paired installed-host controls build and save a 100-column, 50,000-row CSV
+source and compare all saved bytes to independent direct-projection truth. Both
+hosts also build a consumer through a Parquet-producing dependency. Python
+checks a CSV larger than 64 MiB, independent Parquet input and Parquet
+publication's complete values. Explicitly selected `ExecutionBudget::bounded()`
+and caller-provided smaller quotas remain enforced. Complete installed
+release qualification remains under
+[#2288](https://github.com/elong0527/yamaa/issues/2288).
+
 ## Remaining gates and owners
 
 The historical B01-B19 identifiers remain useful for reconciliation. Closed

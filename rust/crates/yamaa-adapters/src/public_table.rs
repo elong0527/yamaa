@@ -35,7 +35,11 @@ impl PublicTable {
         self.rows
     }
     pub fn decode(input: &[u8]) -> Result<Self, Error> {
-        let table = ipc_table::decode_snapshot(input)?;
+        let budget = yamaa_engine::dataset::ExecutionBudget {
+            max_ipc_bytes: yamaa_engine::capacity::OUTPUT_STORAGE_BYTES,
+            ..Default::default()
+        };
+        let table = ipc_table::decode_snapshot_with_budget(input, budget)?;
         let mut columns = Vec::new();
         for (index, column) in table.schema().columns().iter().enumerate() {
             macro_rules! collect {
@@ -96,7 +100,9 @@ impl PublicTable {
         struct Bytes(Vec<u8>);
         impl Write for Bytes {
             fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-                if self.0.len().saturating_add(bytes.len()) > ipc_table::MAX_INPUT_BYTES {
+                if self.0.len().saturating_add(bytes.len())
+                    > yamaa_engine::capacity::OUTPUT_STORAGE_BYTES
+                {
                     return Err(io::Error::other("public table byte limit"));
                 }
                 self.0.extend_from_slice(bytes);

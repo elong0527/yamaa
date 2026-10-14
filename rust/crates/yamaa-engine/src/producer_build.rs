@@ -135,31 +135,23 @@ pub struct Limits {
 }
 impl Default for Limits {
     fn default() -> Self {
+        let budget = dataset::ExecutionBudget::longitudinal();
         Self {
             nodes: 64,
-            source_bytes: 16_777_216,
-            source_cells: crate::capacity::SOURCE_CELLS,
-            source_storage_bytes: 67_108_864,
-            decode_work_bytes: 268_435_456,
-            output_bytes: 16_777_216,
+            source_bytes: budget.max_ipc_bytes,
+            source_cells: budget.max_decoded_cells,
+            source_storage_bytes: crate::capacity::SOURCE_STORAGE_BYTES,
+            decode_work_bytes: crate::capacity::SOURCE_STORAGE_BYTES,
+            output_bytes: budget.max_output_bytes,
             report_bytes: crate::capacity::REPORT_ENCODED_BYTES,
-            routing_work: 67_108_864,
-            execution: dataset::Limits {
-                source_rows: 1_048_576,
-                output_rows: 1_048_576,
-                output_cells: crate::capacity::GRAPH_OUTPUT_CELLS,
-                key_cells: 1_048_576,
-                work_cells: crate::capacity::EXECUTION_WORK,
-                scalar_text_bytes: 16_777_216,
-                output_text_bytes: 16_777_216,
-                identity_cells: 1_048_576,
-                identity_text_bytes: 16_777_216,
-            },
+            routing_work: crate::capacity::EXECUTION_WORK,
+            execution: budget.execution,
             activation: Default::default(),
             publication: Default::default(),
         }
     }
 }
+
 #[derive(Debug)]
 pub enum CaptureError<E> {
     External(E),

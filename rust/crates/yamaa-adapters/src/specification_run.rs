@@ -466,8 +466,14 @@ fn decode_parquet(
             l.cells.min(yamaa_engine::capacity::SOURCE_CELLS)
         }),
     };
-    let work_bytes = bounded.map_or(64 * 1024 * 1024, |l| l.work_bytes.min(64 * 1024 * 1024));
-    let storage_bytes = bounded.map_or(64 * 1024 * 1024, |l| l.storage_bytes.min(64 * 1024 * 1024));
+    let work_bytes = bounded.map_or(yamaa_engine::capacity::SOURCE_STORAGE_BYTES, |l| {
+        l.work_bytes
+            .min(yamaa_engine::capacity::SOURCE_STORAGE_BYTES)
+    });
+    let storage_bytes = bounded.map_or(yamaa_engine::capacity::SOURCE_STORAGE_BYTES, |l| {
+        l.storage_bytes
+            .min(yamaa_engine::capacity::SOURCE_STORAGE_BYTES)
+    });
     let parse = if odm {
         parquet_source::parse_odm
     } else {
@@ -478,25 +484,27 @@ fn decode_parquet(
         parquet_source::Limits {
             framing: FramingLimits {
                 source_bytes: csv_source::Limits::default().bytes,
-                metadata_bytes: 2 * 1024 * 1024,
-                metadata_nodes: 65_536,
-                header_bytes: 65_536,
-                header_nodes: 65_536,
-                row_groups: 1024,
+                // Compact nodes need at least one encoded byte. Headers and
+                // footers remain inside the independently admitted source.
+                metadata_bytes: yamaa_engine::capacity::SOURCE_BYTES,
+                metadata_nodes: yamaa_engine::capacity::SOURCE_BYTES,
+                header_bytes: yamaa_engine::capacity::SOURCE_BYTES,
+                header_nodes: yamaa_engine::capacity::SOURCE_BYTES,
+                row_groups: yamaa_engine::dataset::ExecutionBudget::longitudinal().max_batches,
                 columns: 4096,
                 rows: table_limits.max_rows,
                 cells: table_limits.max_cells,
-                pages: 65_536,
-                page_bytes: 8 * 1024 * 1024,
+                pages: yamaa_engine::capacity::SOURCE_CELLS,
+                page_bytes: yamaa_engine::capacity::SOURCE_BYTES,
                 decoded_bytes: work_bytes,
             },
             compression: CompressionLimits {
-                page_bytes: 8 * 1024 * 1024,
+                page_bytes: yamaa_engine::capacity::SOURCE_BYTES,
                 window_log: 24,
             },
             metadata: MetadataLimits {
-                bytes: 2 * 1024 * 1024,
-                tables: 65_536,
+                bytes: yamaa_engine::capacity::SOURCE_BYTES,
+                tables: yamaa_engine::capacity::SOURCE_BYTES,
                 depth: 64,
             },
             expanded_bytes: work_bytes,
@@ -555,6 +563,40 @@ mod width_tests {
         table::{TableAccess, ValueRef},
         value::ColumnType,
     };
+
+    #[test]
+    fn parquet_decode_admits_small_groups_beyond_prior_group_and_metadata_frontiers() {
+        use arrow_array::{Int64Array, RecordBatch};
+        use arrow_schema::{DataType, Field, Schema};
+        use parquet::{arrow::ArrowWriter, file::properties::WriterProperties};
+        use std::sync::Arc;
+
+        let source = SourceDeclaration {
+            name: "SRC".into(),
+            path: "input.parquet".into(),
+            types: vec![],
+            profile: SourceProfile::Parquet,
+            empty_string_present: false,
+            ordinal: None,
+        };
+        let schema = Arc::new(Schema::new(vec![Field::new("ID", DataType::Int64, true)]));
+        let batch = RecordBatch::try_new(
+            schema.clone(),
+            vec![Arc::new(Int64Array::from_iter_values(0..5000))],
+        )
+        .unwrap();
+        let properties = WriterProperties::builder()
+            .set_max_row_group_row_count(Some(1))
+            .build();
+        let mut bytes = Vec::new();
+        let mut writer = ArrowWriter::try_new(&mut bytes, schema, Some(properties)).unwrap();
+        writer.write(&batch).unwrap();
+        writer.close().unwrap();
+        let table = decode_parquet(&source, &bytes, None, false).unwrap();
+        assert_eq!(table.row_count(), 5000);
+        assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Int(0));
+        assert_eq!(table.cell(4999, 0).unwrap(), ValueRef::Int(4999));
+    }
 
     #[test]
     fn parquet_decode_admits_1024_and_refuses_1025_source_fields() {
