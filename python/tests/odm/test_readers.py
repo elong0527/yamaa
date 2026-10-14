@@ -136,6 +136,32 @@ def test_element_child_inside_value_is_rejected_not_truncated(
         list(iter_odm_records(source))
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        '<x:Value xmlns:x="urn:example">PD-L1</x:Value>',
+        '<Value xmlns="">PD-L1</Value>',
+    ],
+)
+def test_value_child_in_foreign_namespace_is_rejected_not_dropped(
+    tmp_path: Path, value: str
+) -> None:
+    # A `Value` element outside the ODM namespace names the item's value;
+    # ignoring it as a foreign extension silently presented a supplied
+    # value as absent (value null, ValuePresent false).
+    source = tmp_path / "foreign-value.xml"
+    source.write_text(
+        ODM_20.replace(
+            '<ItemData ItemOID="I.TEST"><Value>PD-L1</Value></ItemData>',
+            f'<ItemData ItemOID="I.TEST">{value}</ItemData>',
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ODMError, match="Value child is in an unsupported namespace"):
+        list(iter_odm_records(source))
+
+
 @pytest.mark.parametrize("annotation", ["<!-- c -->", "<?pi data?>"])
 def test_comment_or_pi_inside_item_data_is_ignored(
     tmp_path: Path, annotation: str
