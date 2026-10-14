@@ -271,58 +271,86 @@ pub(crate) fn decode_interpreted(
     bounded: Option<yamaa_engine::producer_build::DecodeLimits>,
     interpretation: yamaa_core::specification::SourceInterpretation,
 ) -> Result<ArrowTable, Error> {
+    decode_interpreted_inner(source, bytes, bounded, interpretation, None)
+}
+
+pub(crate) fn decode_interpreted_with_usage(
+    source: &SourceDeclaration,
+    bytes: &[u8],
+    limits: yamaa_engine::producer_build::DecodeLimits,
+    interpretation: yamaa_core::specification::SourceInterpretation,
+    usage: &mut crate::source_decode_usage::Usage,
+) -> Result<ArrowTable, Error> {
+    usage.complete();
+    decode_interpreted_inner(source, bytes, Some(limits), interpretation, Some(usage))
+}
+
+fn decode_interpreted_inner(
+    source: &SourceDeclaration,
+    bytes: &[u8],
+    bounded: Option<yamaa_engine::producer_build::DecodeLimits>,
+    interpretation: yamaa_core::specification::SourceInterpretation,
+    mut usage: Option<&mut crate::source_decode_usage::Usage>,
+) -> Result<ArrowTable, Error> {
     let odm = interpretation == yamaa_core::specification::SourceInterpretation::Odm;
     let cells = bounded.map_or(yamaa_engine::capacity::SOURCE_CELLS, |l| {
         l.cells.min(yamaa_engine::capacity::SOURCE_CELLS)
     });
     let table_limits = TableLimits {
-        max_rows: yamaa_engine::capacity::SOURCE_ROWS,
+        max_rows: bounded.map_or(yamaa_engine::capacity::SOURCE_ROWS, |l| {
+            l.rows.min(yamaa_engine::capacity::SOURCE_ROWS)
+        }),
         max_columns: yamaa_core::specification::DEFAULT_MAX_COLUMNS,
         max_batches: 1,
         max_cells: cells,
     };
     let table = if source.profile == yamaa_core::specification::SourceProfile::Parquet {
-        decode_parquet(source, bytes, bounded, odm)?
+        if let Some(usage) = usage.as_deref_mut() {
+            decode_parquet_with_usage(source, bytes, bounded, odm, Some(usage))?
+        } else {
+            decode_parquet(source, bytes, bounded, odm)?
+        }
     } else if matches!(
         source.profile,
         yamaa_core::specification::SourceProfile::Xport
             | yamaa_core::specification::SourceProfile::Sas7bdat
     ) {
-        let table = crate::sas_source::parse(
-            bytes,
-            source,
-            crate::sas_source::Limits {
-                source_bytes: csv_source::Limits::default().bytes,
-                work_bytes: bounded.map_or(
-                    yamaa_engine::capacity::SOURCE_STORAGE_BYTES,
-                    |limits| {
-                        limits
-                            .work_bytes
-                            .min(yamaa_engine::capacity::SOURCE_STORAGE_BYTES)
-                    },
-                ),
-                retained_bytes: bounded.map_or(
-                    yamaa_engine::capacity::SOURCE_STORAGE_BYTES,
-                    |limits| {
-                        limits
-                            .storage_bytes
-                            .min(yamaa_engine::capacity::SOURCE_STORAGE_BYTES)
-                    },
-                ),
-            },
-            table_limits,
-        )
+        let sas_limits = crate::sas_source::Limits {
+            source_bytes: csv_source::Limits::default().bytes,
+            work_bytes: bounded.map_or(yamaa_engine::capacity::SOURCE_STORAGE_BYTES, |limits| {
+                limits
+                    .work_bytes
+                    .min(yamaa_engine::capacity::SOURCE_STORAGE_BYTES)
+            }),
+            retained_bytes: bounded.map_or(
+                yamaa_engine::capacity::SOURCE_STORAGE_BYTES,
+                |limits| {
+                    limits
+                        .storage_bytes
+                        .min(yamaa_engine::capacity::SOURCE_STORAGE_BYTES)
+                },
+            ),
+        };
+        let table = if let Some(usage) = usage.as_deref_mut() {
+            crate::sas_source::parse_with_usage(bytes, source, sas_limits, table_limits, usage)
+        } else {
+            crate::sas_source::parse(bytes, source, sas_limits, table_limits)
+        }
         .map_err(Error::SasSource)?;
         if odm {
-            project_odm(table, table_limits)?
+            project_odm(source, table, table_limits)?
         } else {
             table
         }
     } else {
         let csv_limits = bounded.map_or_else(csv_source::Limits::default, bounded_csv_limits);
         if odm {
-            let parsed = crate::csv_source::parse(bytes, csv_limits)
-                .map_err(|error| Error::Source(TextTableError::Csv(error)))?;
+            let parsed = if let (Some(limits), Some(usage)) = (bounded, usage.as_deref_mut()) {
+                crate::source_decode_usage::parse_csv(bytes, csv_limits, limits, usage)?
+            } else {
+                crate::csv_source::parse(bytes, csv_limits)
+                    .map_err(|error| Error::Source(TextTableError::Csv(error)))?
+            };
             let fields = parsed
                 .names
                 .iter()
@@ -346,6 +374,10 @@ pub(crate) fn decode_interpreted(
                     ))
                 })?
                 .map_err(Error::OdmFields)?;
+            if let (Some(limits), Some(usage)) = (bounded, usage.as_deref_mut()) {
+                crate::source_decode_usage::csv_conversion(&parsed, limits.storage_bytes, usage)
+                    .map_err(|error| Error::Source(TextTableError::Table(error)))?;
+            }
             let projected = crate::csv_source::CsvSource {
                 names: yamaa_core::odm_source::FIELDS
                     .iter()
@@ -373,6 +405,14 @@ pub(crate) fn decode_interpreted(
                 },
             )
             .map_err(typed_source_error)?
+        } else if let (Some(limits), Some(usage)) = (bounded, usage.as_deref_mut()) {
+            let types =
+                yamaa_core::typed_csv::PreparedTypes::new(&source.types, table_limits.max_columns)
+                    .map_err(|error| typed_source_error(crate::typed_csv::Error::Typing(error)))?;
+            let parsed = crate::source_decode_usage::parse_csv(bytes, csv_limits, limits, usage)?;
+            crate::source_decode_usage::csv_conversion(&parsed, limits.storage_bytes, usage)
+                .map_err(|error| Error::Source(TextTableError::Table(error)))?;
+            crate::typed_csv::convert(parsed, types, table_limits).map_err(typed_source_error)?
         } else {
             crate::typed_csv::parse(bytes, &source.types, csv_limits, table_limits)
                 .map_err(typed_source_error)?
@@ -380,7 +420,17 @@ pub(crate) fn decode_interpreted(
     };
     // ODM interpretation has already selected the fixed canonical fields.
     // Its ordinal declaration is rejected by core before decoding begins.
-    crate::source_ordinal::append(source, table, table_limits)
+    if let (Some(limits), Some(usage)) = (bounded, usage) {
+        crate::source_ordinal::append_with_usage(
+            source,
+            table,
+            table_limits,
+            limits.storage_bytes,
+            usage,
+        )
+    } else {
+        crate::source_ordinal::append(source, table, table_limits)
+    }
 }
 
 pub(crate) fn typed_source_error(error: crate::typed_csv::Error) -> Error {
@@ -391,7 +441,11 @@ pub(crate) fn typed_source_error(error: crate::typed_csv::Error) -> Error {
     }
 }
 
-fn project_odm(table: ArrowTable, table_limits: TableLimits) -> Result<ArrowTable, Error> {
+fn project_odm(
+    source: &SourceDeclaration,
+    table: ArrowTable,
+    table_limits: TableLimits,
+) -> Result<ArrowTable, Error> {
     use yamaa_core::table::{Column, TableAccess, TableSchema};
     let fields = table
         .schema()
@@ -403,12 +457,18 @@ fn project_odm(table: ArrowTable, table_limits: TableLimits) -> Result<ArrowTabl
         })
         .collect::<Vec<_>>();
     let binding = yamaa_core::odm_source::bind_fields(&fields)
-        .map_err(|_| {
-            Error::SasSource(crate::sas_source::Error::Limit {
-                resource: "odm_metadata",
-                limit: 1_048_576,
-                actual: None,
-            })
+        .map_err(|error| {
+            let yamaa_core::odm_source::AdmissionError::MetadataLimit {
+                resource,
+                limit,
+                actual,
+            } = error;
+            Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                resource,
+                limit,
+                actual,
+                vec![format!("input.{}", source.name)],
+            ))
         })?
         .map_err(Error::OdmFields)?;
     let schema = TableSchema::new(
@@ -438,7 +498,7 @@ fn project_odm(table: ArrowTable, table_limits: TableLimits) -> Result<ArrowTabl
             ..table_limits
         },
     )
-    .map_err(|_| Error::SasSource(crate::sas_source::Error::Internal))
+    .map_err(|error| Error::Source(TextTableError::Table(error)))
 }
 pub(crate) fn bounded_csv_limits(
     limits: yamaa_engine::producer_build::DecodeLimits,
@@ -454,7 +514,10 @@ pub(crate) fn bounded_csv_limits(
         fields: ordinary
             .fields
             .min(cells.saturating_add(yamaa_core::specification::DEFAULT_MAX_COLUMNS)),
-        records: ordinary.records.min(cells.saturating_add(1)),
+        records: ordinary
+            .records
+            .min(limits.rows.saturating_add(1))
+            .min(cells.saturating_add(1)),
     }
 }
 
@@ -464,12 +527,24 @@ fn decode_parquet(
     bounded: Option<yamaa_engine::producer_build::DecodeLimits>,
     odm: bool,
 ) -> Result<ArrowTable, Error> {
+    decode_parquet_with_usage(source, bytes, bounded, odm, None)
+}
+
+fn decode_parquet_with_usage(
+    source: &SourceDeclaration,
+    bytes: &[u8],
+    bounded: Option<yamaa_engine::producer_build::DecodeLimits>,
+    odm: bool,
+    usage: Option<&mut crate::source_decode_usage::Usage>,
+) -> Result<ArrowTable, Error> {
     use crate::parquet_source::{self, CompressionLimits, FramingLimits, MetadataLimits};
     use arrow_array::{Array, ArrayRef, RecordBatch, StringArray};
     use std::sync::Arc;
     use yamaa_core::table::TableAccess;
     let table_limits = TableLimits {
-        max_rows: yamaa_engine::capacity::SOURCE_ROWS,
+        max_rows: bounded.map_or(yamaa_engine::capacity::SOURCE_ROWS, |l| {
+            l.rows.min(yamaa_engine::capacity::SOURCE_ROWS)
+        }),
         max_columns: yamaa_core::specification::DEFAULT_MAX_COLUMNS,
         max_batches: 1,
         max_cells: bounded.map_or(yamaa_engine::capacity::SOURCE_CELLS, |l| {
@@ -484,46 +559,44 @@ fn decode_parquet(
         l.storage_bytes
             .min(yamaa_engine::capacity::SOURCE_STORAGE_BYTES)
     });
-    let parse = if odm {
-        parquet_source::parse_odm
-    } else {
-        parquet_source::parse
-    };
-    let table = parse(
-        bytes,
-        parquet_source::Limits {
-            framing: FramingLimits {
-                source_bytes: csv_source::Limits::default().bytes,
-                // Compact nodes need at least one encoded byte. Headers and
-                // footers remain inside the independently admitted source.
-                metadata_bytes: yamaa_engine::capacity::SOURCE_BYTES,
-                metadata_nodes: yamaa_engine::capacity::SOURCE_BYTES,
-                header_bytes: yamaa_engine::capacity::SOURCE_BYTES,
-                header_nodes: yamaa_engine::capacity::SOURCE_BYTES,
-                row_groups: yamaa_engine::dataset::ExecutionBudget::longitudinal().max_batches,
-                columns: 4096,
-                rows: table_limits.max_rows,
-                cells: table_limits.max_cells,
-                pages: yamaa_engine::capacity::SOURCE_CELLS,
-                page_bytes: yamaa_engine::capacity::SOURCE_BYTES,
-                decoded_bytes: work_bytes,
-            },
-            compression: CompressionLimits {
-                page_bytes: yamaa_engine::capacity::SOURCE_BYTES,
-                window_log: 24,
-            },
-            metadata: MetadataLimits {
-                bytes: yamaa_engine::capacity::SOURCE_BYTES,
-                tables: yamaa_engine::capacity::SOURCE_BYTES,
-                depth: 64,
-            },
-            expanded_bytes: work_bytes,
-            retained_bytes: storage_bytes,
-            array_elements: table_limits.max_cells,
-            batches: table_limits.max_batches,
+    let limits = parquet_source::Limits {
+        framing: FramingLimits {
+            source_bytes: csv_source::Limits::default().bytes,
+            // Compact nodes need at least one encoded byte. Headers and
+            // footers remain inside the independently admitted source.
+            metadata_bytes: yamaa_engine::capacity::SOURCE_BYTES,
+            metadata_nodes: yamaa_engine::capacity::SOURCE_BYTES,
+            header_bytes: yamaa_engine::capacity::SOURCE_BYTES,
+            header_nodes: yamaa_engine::capacity::SOURCE_BYTES,
+            row_groups: yamaa_engine::dataset::ExecutionBudget::longitudinal().max_batches,
+            columns: 4096,
+            rows: table_limits.max_rows,
+            cells: table_limits.max_cells,
+            pages: yamaa_engine::capacity::SOURCE_CELLS,
+            page_bytes: yamaa_engine::capacity::SOURCE_BYTES,
+            decoded_bytes: work_bytes,
         },
-        table_limits,
-    )
+        compression: CompressionLimits {
+            page_bytes: yamaa_engine::capacity::SOURCE_BYTES,
+            window_log: 24,
+        },
+        metadata: MetadataLimits {
+            bytes: yamaa_engine::capacity::SOURCE_BYTES,
+            tables: yamaa_engine::capacity::SOURCE_BYTES,
+            depth: 64,
+        },
+        expanded_bytes: work_bytes,
+        retained_bytes: storage_bytes,
+        array_elements: table_limits.max_cells,
+        batches: table_limits.max_batches,
+    };
+    let table = if let Some(usage) = usage {
+        parquet_source::parse_with_usage(bytes, limits, table_limits, odm, usage)
+    } else if odm {
+        parquet_source::parse_odm(bytes, limits, table_limits)
+    } else {
+        parquet_source::parse(bytes, limits, table_limits)
+    }
     .map_err(|error| match error {
         parquet_source::Error::OdmFields(fields) => Error::OdmFields(fields),
         error => Error::ParquetSource(error),
@@ -683,6 +756,7 @@ mod width_tests {
             // One complete header plus one row must fit: the old 64-header
             // allowance refused this in-range table before width admission.
             let limits = yamaa_engine::producer_build::DecodeLimits {
+                rows: yamaa_engine::capacity::SOURCE_ROWS,
                 cells: 1_024,
                 storage_bytes: 1_000_000,
                 work_bytes: 1_000_000,
