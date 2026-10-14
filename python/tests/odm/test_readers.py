@@ -129,6 +129,58 @@ def test_comment_or_pi_inside_item_data_is_ignored(
     assert [row.value for row in rows] == ["2026-01-02", "", None]
 
 
+@pytest.mark.parametrize(
+    ("document", "bad_version"),
+    [
+        (ODM_13, "1.3junk"),
+        (ODM_13, "1.31"),
+        (ODM_20, "2.0junk"),
+        (ODM_20, "2.01"),
+    ],
+)
+def test_odm_version_with_junk_suffix_is_rejected(
+    tmp_path: Path, document: str, bad_version: str
+) -> None:
+    # A bare startswith check accepts any string that merely begins with
+    # the expected version; the version must be exact or a dotted
+    # sub-version of it.
+    source = tmp_path / "bad-version.xml"
+    base_version = "1.3" if document is ODM_13 else "2.0"
+    source.write_text(
+        document.replace(f'ODMVersion="{base_version}"', f'ODMVersion="{bad_version}"'),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ODMError, match="conflicts with namespace"):
+        list(iter_odm_records(source))
+
+
+@pytest.mark.parametrize(
+    ("document", "good_version"),
+    [
+        (ODM_13, "1.3.1"),
+        (ODM_13, "1.3.2"),
+        (ODM_20, "2.0.1"),
+    ],
+)
+def test_odm_dotted_sub_version_is_accepted(
+    tmp_path: Path, document: str, good_version: str
+) -> None:
+    source = tmp_path / "sub-version.xml"
+    base_version = "1.3" if document is ODM_13 else "2.0"
+    source.write_text(
+        document.replace(
+            f'ODMVersion="{base_version}"', f'ODMVersion="{good_version}"'
+        ),
+        encoding="utf-8",
+    )
+
+    rows = list(iter_odm_records(source))
+
+    assert rows
+    assert {row.odm_version for row in rows} == {good_version}
+
+
 def test_unsupported_group_depth_is_rejected(tmp_path: Path) -> None:
     source = tmp_path / "three-groups.xml"
     source.write_text(
