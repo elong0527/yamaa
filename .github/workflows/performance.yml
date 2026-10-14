@@ -19,6 +19,7 @@ on:
       - '.github/workflows/native.yml'
       - '.github/scripts/ci/native_matrix.py'
       - '.github/scripts/commands/installed.py'
+      - '.github/scripts/yaml-validation/fixtures/**'
       - '.github/scripts/commands/rust_tests.py'
       - '.github/scripts/commands/check_r.py'
       - '.github/scripts/ci/test_performance_selection.py'
