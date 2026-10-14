@@ -3,7 +3,11 @@ use crate::{
     diagnostic::{ConditionCode, ContextValue, Diagnostic},
     value::Value,
 };
-use alloc::{string::String, vec, vec::Vec};
+use alloc::{
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 
 /// Format classified installed-package disagreement. Packaging tools supply the
 /// facts; this owns the stable normative issue identity without comparing versions.
@@ -52,6 +56,33 @@ pub fn rejected(stage: &str, code: &str) -> Diagnostic {
         source_span: None,
         operand_route: None,
     }
+}
+
+/// A policy refusal names its exhausted capacity without inventing a language
+/// requirement. The caller supplies only admitted, typed resource facts.
+pub fn resource_rejected(
+    stage: &str,
+    code: &str,
+    resource: &str,
+    limit: usize,
+    actual: Option<usize>,
+    spec_paths: Vec<String>,
+) -> Diagnostic {
+    let mut finding = rejected(stage, code);
+    finding.spec_paths = spec_paths;
+    finding.context.insert(
+        "resource".into(),
+        ContextValue::Scalar(Value::Str(resource.into())),
+    );
+    finding
+        .context
+        .insert("limit".into(), ContextValue::Integer(limit.to_string()));
+    if let Some(actual) = actual {
+        finding
+            .context
+            .insert("actual".into(), ContextValue::Integer(actual.to_string()));
+    }
+    finding
 }
 
 /// A classified failure during the actual atomic publication request. Target
