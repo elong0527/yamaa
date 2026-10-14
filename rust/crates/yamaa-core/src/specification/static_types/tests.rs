@@ -465,9 +465,10 @@ fn a_deferred_lookup_match_has_its_authored_filter_phase_witness() {
 }
 
 #[test]
-fn named_defaults_and_their_transitive_readers_remain_outside_self_donors() {
+fn input_backed_defaults_join_self_donors_while_self_backed_columns_stay_late() {
+    use crate::dataset::Expression;
     use Tree::*;
-    for named in [false, true] {
+    for (named, self_backed) in [(false, false), (true, false), (true, true)] {
         let prior = Map(vec![
             ("id", Text("PRIOR_SAE")),
             ("dataset", Text("SELF")),
@@ -481,11 +482,14 @@ fn named_defaults_and_their_transitive_readers_remain_outside_self_donors() {
         ]);
         let first = Map(vec![
             ("id", Text("FIRST_AE")),
-            ("dataset", Text("SRC")),
+            ("dataset", Text(if self_backed { "SELF" } else { "SRC" })),
             ("key", List(vec![Text("ID")])),
             (
                 "order_by",
-                List(vec![Map(vec![("variable", Text("SRC.SEQ"))])]),
+                List(vec![Map(vec![(
+                    "variable",
+                    Text(if self_backed { "SELF.SEQ" } else { "SRC.SEQ" }),
+                )])]),
             ),
             ("keep", Text("first")),
         ]);
@@ -531,9 +535,55 @@ fn named_defaults_and_their_transitive_readers_remain_outside_self_donors() {
                 .collect(),
         )
         .unwrap();
-        if !named {
-            assert!(spec.bind(&schema).is_ok());
+        if !self_backed {
+            // Both direct input reads and input-backed named selections are
+            // row defaults under REQ-1260. LATE and ALIAS are therefore derived
+            // in every template and available to its completed SELF donors.
+            let plan = spec.bind(&schema).unwrap();
+            assert!(plan.columns().is_empty());
+            assert_eq!(plan.templates().len(), 2);
+            assert_eq!(
+                plan.output()
+                    .columns()
+                    .iter()
+                    .map(|column| (column.name.as_str(), column.kind))
+                    .collect::<Vec<_>>(),
+                ["ID", "SEQ", "PRIOR", "LATE", "ALIAS"].map(|name| (name, ColumnType::Int))
+            );
+            let donor = &plan.intermediates()[0];
+            assert!(donor.source.is_self());
+            assert_eq!(
+                donor.source_schema(plan.secondary()).unwrap(),
+                plan.output()
+            );
+            assert_eq!(donor.source_column(plan.secondary(), "LATE"), Some(3));
+            assert_eq!(donor.source_column(plan.secondary(), "ALIAS"), Some(4));
+            for template in plan.templates() {
+                let assignment = |column| {
+                    template
+                        .assignments
+                        .iter()
+                        .find(|assignment| assignment.column == column)
+                        .unwrap()
+                };
+                assert_eq!(assignment(3).path, "columns.LATE.derivation.source");
+                assert_eq!(
+                    assignment(3).expression,
+                    if named {
+                        Expression::Intermediate {
+                            index: 1,
+                            column: 1,
+                        }
+                    } else {
+                        Expression::Source(1)
+                    }
+                );
+                assert_eq!(assignment(4).path, "columns.ALIAS.derivation.source");
+                assert_eq!(assignment(4).expression, Expression::Column(3));
+            }
         } else {
+            // SELF-backed LATE remains a column derivation over all completed
+            // templates (REQ-0120), so neither it nor ALIAS is a donor field.
             let findings = phase_findings(&spec, &schema);
             let excluded = findings
                 .iter()
@@ -541,6 +591,7 @@ fn named_defaults_and_their_transitive_readers_remain_outside_self_donors() {
                 .collect::<Vec<_>>();
             assert_eq!(excluded.len(), 2);
             for (finding, name) in excluded.into_iter().zip(["SELF.LATE", "SELF.ALIAS"]) {
+                assert_eq!(finding.spec_paths, ["intermediates[0].filter"]);
                 assert_eq!(
                     finding.context["identifier"],
                     crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(name.into()))

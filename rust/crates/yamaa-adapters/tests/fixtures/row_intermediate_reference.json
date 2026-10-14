@@ -1434,6 +1434,66 @@
           }
         }
       ]
+    },
+    "named-intermediate-column-default": {
+      "contract": "https://github.com/elong0527/yamaa/issues/2294#issuecomment-6168847169",
+      "specification": "schema_version: '1.0'\ndomain: ADEX\nkeys: [STUDYID, USUBJID, PARAMCD]\ninput: {DM: dm.csv, EX: ex.csv}\nbase: DM\noutput: {path: result.csv, columns: [STUDYID, USUBJID, PARAMCD, AVALC]}\nintermediates:\n  - {id: FIRST_DOSE, dataset: EX, key: [USUBJID], order_by: [EX.EXSTDTC], keep: first, no_match: null}\ncolumns:\n  - {name: STUDYID, type: str, derivation: DM.STUDYID}\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: PARAMCD, type: str}\n  - {name: AVALC, type: str, derivation: FIRST_DOSE.EXSTDTC}\nrows:\n  - {id: first, dataset: DM, derivations: {PARAMCD: {literal: FIRSTDT}}}\n  - {id: count, dataset: DM, derivations: {PARAMCD: {literal: NDOSE}, AVALC: {literal: '2'}}}\n",
+      "inputs": {
+        "dm.csv": "STUDYID,USUBJID\nST-01,S-001\nST-01,S-002\n",
+        "ex.csv": "STUDYID,USUBJID,EXSEQ,EXSTDTC\nST-01,S-001,1,2026-01-05\nST-01,S-001,2,2026-01-20\nST-01,S-002,1,2026-01-06\nST-01,S-002,2,2026-01-21\n"
+      },
+      "handler_counts": [
+        {
+          "spec_path": "columns.AVALC.derivation.source.multiple_matches",
+          "handler": "multiple_matches",
+          "count": 2
+        }
+      ],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,PARAMCD,AVALC\nST-01,S-001,FIRSTDT,2026-01-05\nST-01,S-002,FIRSTDT,2026-01-06\nST-01,S-001,NDOSE,2\nST-01,S-002,NDOSE,2\n"
+    },
+    "transitive-named-intermediate-column-default": {
+      "contract": "https://github.com/elong0527/yamaa/issues/2294#issuecomment-6168847169",
+      "specification": "schema_version: '1.0'\ndomain: ADEX\nkeys: [STUDYID, USUBJID, PARAMCD]\ninput: {DM: dm.csv, EX: ex.csv}\nbase: DM\noutput: {path: result.csv, columns: [STUDYID, USUBJID, PARAMCD, AVALC]}\nintermediates:\n  - {id: FIRST_DOSE, dataset: EX, key: [USUBJID], order_by: [EX.EXSTDTC], keep: first, no_match: null}\ncolumns:\n  - {name: STUDYID, type: str, derivation: DM.STUDYID}\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: PARAMCD, type: str}\n  - {name: FIRSTDT, type: str, derivation: FIRST_DOSE.EXSTDTC}\n  - {name: AVALC, type: str, derivation: FIRSTDT}\nrows:\n  - {id: first, dataset: DM, derivations: {PARAMCD: {literal: FIRSTDT}}}\n  - {id: count, dataset: DM, derivations: {PARAMCD: {literal: NDOSE}, AVALC: {literal: '2'}}}\n",
+      "inputs": {
+        "dm.csv": "STUDYID,USUBJID\nST-01,S-001\nST-01,S-002\n",
+        "ex.csv": "STUDYID,USUBJID,EXSEQ,EXSTDTC\nST-01,S-001,1,2026-01-05\nST-01,S-001,2,2026-01-20\nST-01,S-002,1,2026-01-06\nST-01,S-002,2,2026-01-21\n"
+      },
+      "handler_counts": [
+        {
+          "spec_path": "columns.FIRSTDT.derivation.source.multiple_matches",
+          "handler": "multiple_matches",
+          "count": 4
+        }
+      ],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,PARAMCD,AVALC\nST-01,S-001,FIRSTDT,2026-01-05\nST-01,S-002,FIRSTDT,2026-01-06\nST-01,S-001,NDOSE,2\nST-01,S-002,NDOSE,2\n"
+    },
+    "aggregate-column-default-refused": {
+      "contract": "https://github.com/elong0527/yamaa/issues/2294#issuecomment-6168847169",
+      "specification": "schema_version: '1.0'\ndomain: ADEX\nkeys: [STUDYID, USUBJID, PARAMCD]\ninput: {DM: dm.csv, EX: ex.csv}\nbase: DM\noutput: {path: result.csv, columns: [STUDYID, USUBJID, PARAMCD, AVAL]}\ncolumns:\n  - {name: STUDYID, type: str, derivation: DM.STUDYID}\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: PARAMCD, type: str}\n  - {name: AVAL, type: int, derivation: {aggregate: {expr: 'COUNT(EX.*)'}}}\nrows:\n  - {id: ndose, dataset: DM, derivations: {PARAMCD: {literal: NDOSE}}}\n  - {id: fixed, dataset: DM, derivations: {PARAMCD: {literal: FIXED}, AVAL: {literal: 7}}}\n",
+      "inputs": {
+        "dm.csv": "STUDYID,USUBJID\nST-01,S-001\nST-01,S-002\n",
+        "ex.csv": "STUDYID,USUBJID,EXSEQ,EXSTDTC\nST-01,S-001,1,2026-01-05\nST-01,S-001,2,2026-01-20\nST-01,S-002,1,2026-01-06\nST-01,S-002,2,2026-01-21\n"
+      },
+      "handler_counts": [],
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "duplicate_derivation",
+          "spec_paths": [
+            "columns.AVAL.derivation"
+          ],
+          "requirement": "REQ-1260",
+          "context": {
+            "column": "AVAL",
+            "rows": [
+              "fixed"
+            ],
+            "not_row_local": "aggregate"
+          }
+        }
+      ]
     }
   },
   "eot_native_gates": [
