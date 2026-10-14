@@ -282,7 +282,7 @@ class Audit:
         try:
             detail = function()
             checks.append({"name": name, "result": "pass", "detail": detail})
-        except FileNotFoundError as exc:
+        except (FileNotFoundError, ImportError) as exc:
             checks.append({"name": name, "result": "missing", "detail": str(exc)})
         except (
             ValueError,

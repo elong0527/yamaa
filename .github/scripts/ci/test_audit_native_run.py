@@ -183,6 +183,25 @@ class NativeAudit(unittest.TestCase):
         record = audit.Audit(self.directory).collect()
         self.assertEqual(record["qualification_scope"], "combined-main")
 
+    def test_missing_independent_reader_is_retained_as_missing_evidence(self):
+        with patch.object(
+            self.auditor,
+            "cohort",
+            side_effect=ModuleNotFoundError("missing independent report reader"),
+        ):
+            record = self.auditor.collect()
+        self.assertFalse(record["complete"])
+        rows = [
+            row
+            for row in record["lanes"]
+            if row["kind"] in {"public-cohort", "producer"}
+        ]
+        self.assertEqual(len(rows), 36)
+        for row in rows:
+            check = next(item for item in row["checks"] if item["name"] == "cohort")
+            self.assertEqual(check["result"], "missing")
+            self.assertIn("missing independent report reader", check["detail"])
+
     def test_same_package_bytes_pass_and_stale_cargo_bytes_fail(self):
         _, _, source = self.package()
         detail = self.auditor.package("macos-15", "python")
