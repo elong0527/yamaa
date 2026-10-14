@@ -13,6 +13,38 @@ import platform
 SCOPE = "whole-child-lifetime; cumulative across warm repetitions; includes collector transport"
 
 
+def launch(command, python_worker=False):
+    """Hold the actual interpreter handle rather than a Windows venv redirector."""
+    import json
+    import subprocess
+
+    if platform.system() == "Windows" and python_worker:
+        # CPython's Windows venv redirector launches the base interpreter with
+        # this environment marker and waits. Skip only that extra process,
+        # retaining the requested interpreter's exact venv/site configuration.
+        invoked, base = json.loads(
+            subprocess.check_output(
+                [
+                    command[0],
+                    "-I",
+                    "-c",
+                    "import json, sys; print(json.dumps([sys.executable, sys._base_executable]))",
+                ],
+                text=True,
+                encoding="utf-8",
+            )
+        )
+        if os.path.normcase(os.path.abspath(invoked)) != os.path.normcase(
+            os.path.abspath(base)
+        ):
+            return subprocess.Popen(
+                command,
+                executable=base,
+                env={**os.environ, "__PYVENV_LAUNCHER__": invoked},
+            )
+    return subprocess.Popen(command)
+
+
 def wait(process):
     system = platform.system()
     if system in {"Linux", "Darwin"} and hasattr(os, "wait4"):
@@ -46,11 +78,19 @@ def windows(process):
         _fields_ = [
             ("cb", wintypes.DWORD),
             ("PageFaultCount", wintypes.DWORD),
-            *[(name, ctypes.c_size_t) for name in (
-                "PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage",
-                "QuotaPagedPoolUsage", "QuotaPeakNonPagedPoolUsage",
-                "QuotaNonPagedPoolUsage", "PagefileUsage", "PeakPagefileUsage",
-            )],
+            *[
+                (name, ctypes.c_size_t)
+                for name in (
+                    "PeakWorkingSetSize",
+                    "WorkingSetSize",
+                    "QuotaPeakPagedPoolUsage",
+                    "QuotaPagedPoolUsage",
+                    "QuotaPeakNonPagedPoolUsage",
+                    "QuotaNonPagedPoolUsage",
+                    "PagefileUsage",
+                    "PeakPagefileUsage",
+                )
+            ],
         ]
 
     counters = Counters()
@@ -58,13 +98,18 @@ def windows(process):
     query = ctypes.WinDLL("psapi", use_last_error=True).GetProcessMemoryInfo
     query.argtypes = [wintypes.HANDLE, ctypes.POINTER(Counters), wintypes.DWORD]
     query.restype = wintypes.BOOL
-    if not query(wintypes.HANDLE(int(process._handle)), ctypes.byref(counters), counters.cb):
+    if not query(
+        wintypes.HANDLE(int(process._handle)), ctypes.byref(counters), counters.cb
+    ):
         raise ctypes.WinError(ctypes.get_last_error())
     raw = counters.PeakWorkingSetSize
     return {
         "provider": "GetProcessMemoryInfo(child_handle).PeakWorkingSetSize",
-        "raw": raw, "original_unit": "bytes", "bytes": raw,
-        "scope": SCOPE, "system": "Windows",
+        "raw": raw,
+        "original_unit": "bytes",
+        "bytes": raw,
+        "scope": SCOPE,
+        "system": "Windows",
     }
 
 
@@ -74,16 +119,23 @@ def validate(observation, system):
             raise ValueError("unexpected RSS for an unadmitted provider")
         return
     if not isinstance(observation, dict):
-        raise ValueError("child peak RSS provider unavailable")
-    provider = ("GetProcessMemoryInfo(child_handle).PeakWorkingSetSize" if system == "Windows"
-                else "os.wait4(child_pid).ru_maxrss")
+        raise ValueError("child peak RSS provider unavailable")  # noqa: TRY004 - admission error contract
+    provider = (
+        "GetProcessMemoryInfo(child_handle).PeakWorkingSetSize"
+        if system == "Windows"
+        else "os.wait4(child_pid).ru_maxrss"
+    )
     raw = observation.get("raw")
-    if (isinstance(raw, bool) or not isinstance(raw, (int, float)) or raw <= 0
-            or observation.get("provider") != provider
-            or observation.get("system") != system
-            or observation.get("original_unit") != ("KiB" if system == "Linux" else "bytes")
-            or observation.get("bytes") != raw * (1024 if system == "Linux" else 1)
-            or observation.get("scope") != SCOPE):
+    if (
+        isinstance(raw, bool)
+        or not isinstance(raw, (int, float))
+        or raw <= 0
+        or observation.get("provider") != provider
+        or observation.get("system") != system
+        or observation.get("original_unit") != ("KiB" if system == "Linux" else "bytes")
+        or observation.get("bytes") != raw * (1024 if system == "Linux" else 1)
+        or observation.get("scope") != SCOPE
+    ):
         raise ValueError("invalid child peak RSS observation")
 
 
@@ -93,25 +145,34 @@ def main():
     # worker's own getrusage observation with workload-generation memory.
     import argparse
     import json
-    import subprocess
     import signal
+    import subprocess
     from pathlib import Path
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--command", required=True)
     parser.add_argument("--record", type=Path, required=True)
+    parser.add_argument("--python-worker", action="store_true")
     args = parser.parse_args()
-    process = subprocess.Popen(json.loads(args.command))
-    args.record.write_text(json.dumps({"state": "running", "pid": process.pid,
-                                      "peak_rss": None}) + "\n", encoding="utf-8")
+    process = launch(json.loads(args.command), args.python_worker)
+    args.record.write_text(
+        json.dumps({"state": "running", "pid": process.pid, "peak_rss": None}) + "\n",
+        encoding="utf-8",
+    )
     if os.name != "nt":
+
         def interrupted(signum, frame):
             raise KeyboardInterrupt("RSS broker interrupted")
+
         signal.signal(signal.SIGTERM, interrupted)
     try:
         code, peak = wait(process)
-        record = {"exit_code": code, "pid": process.pid, "peak_rss": peak,
-                  "launcher": "fresh small broker; controller fork RSS excluded"}
+        record = {
+            "exit_code": code,
+            "pid": process.pid,
+            "peak_rss": peak,
+            "launcher": "fresh small broker; controller fork RSS excluded",
+        }
     except BaseException:
         process.terminate()
         try:
