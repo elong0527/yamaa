@@ -13,6 +13,87 @@ use yamaa_adapters::{
 };
 use yamaa_engine::{inheritance as graph, inheritance_preparation as lifecycle};
 const VALID:&str="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n";
+
+fn case_parent(width: usize) -> Vec<u8> {
+    use std::fmt::Write;
+    let mut document = String::from(
+        "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n",
+    );
+    for index in 1..width {
+        writeln!(document, "  - name: K{index:04}\n    type: str\n    derivation:\n      case:\n        - when: \"SRC.A = 'x' AND SRC.B = '{}'\"\n          then: {{literal: P}}\n        - when: \"SRC.A IS NULL\"\n          then: {{literal: Q}}\n        - otherwise: SRC.A", index % 3).unwrap();
+    }
+    document.push_str("output: {path: out.csv, columns: [ID");
+    for index in 1..width {
+        write!(document, ", K{index:04}").unwrap();
+    }
+    document.push_str("]}\n");
+    document.into_bytes()
+}
+
+#[test]
+fn wide_case_parent_empty_child_and_two_layer_chain_reach_model_admission() {
+    let schema = shipped_schema::capture().unwrap();
+    for width in [40, 64, 1024] {
+        let parent = case_parent(width);
+        let child = b"schema_version: '1.0'\nparents: [parent.yaml]\n";
+        let grandchild = b"schema_version: '1.0'\nparents: [child.yaml]\n";
+        for (name, bytes) in [
+            ("parent", parent.clone()),
+            ("explicit", [parent.as_slice(), b"parents: []\n"].concat()),
+            ("child", child.to_vec()),
+            ("grandchild", grandchild.to_vec()),
+        ] {
+            let mut host = new_host(&parent);
+            host.bytes.insert("child.yaml".into(), child.to_vec());
+            match schema.prepare_document(source(bytes), "entry.yaml".into(), &mut host) {
+                Ok(prepared) => {
+                    let document = prepared.model().document();
+                    let columns = document.field(document.root(), "columns").unwrap();
+                    let yamaa_core::schema::DocumentNode::Sequence(columns) =
+                        &document.nodes()[columns]
+                    else {
+                        panic!("normalized columns");
+                    };
+                    assert_eq!(columns.len(), width, "{width}/{name}");
+                }
+                Err(InheritanceError::Entry(error)) => panic!("{width}/{name}: {error:?}"),
+                Err(error) => panic!("{width}/{name}: {}", outcome(error)),
+            }
+        }
+    }
+}
+
+#[test]
+fn repeated_parent_occurrences_cannot_bypass_the_traversal_request_bound() {
+    let parents = vec!["parent.yaml"; 8193].join(", ");
+    let entry = format!("schema_version: '1.0'\nparents: [{parents}]\n").into_bytes();
+    let mut host = new_host(VALID.as_bytes());
+    let result = shipped_schema::prepare(source(entry), "entry.yaml".into(), &mut host);
+    let Err(InheritanceError::Preparation { error, .. }) = result else {
+        panic!("pathological parent occurrences must be refused");
+    };
+    assert!(matches!(
+        *error,
+        lifecycle::Error::Traversal(graph::Error::Resource(graph::Exhausted {
+            resource: graph::Resource::ParentVisits,
+            limit: 8192,
+        }))
+    ));
+    assert_eq!(
+        host.calls
+            .iter()
+            .filter(|call| call.starts_with("capture:"))
+            .count(),
+        1
+    );
+    assert_eq!(
+        host.calls
+            .iter()
+            .filter(|call| call.starts_with("resolve:"))
+            .count(),
+        8192
+    );
+}
 struct Payload {
     identity: Rc<()>,
     allocation: Box<u32>,
