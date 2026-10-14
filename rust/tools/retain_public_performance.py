@@ -89,6 +89,7 @@ def producer_name(name):
         "performance-native-admission": "Admit exact-source full native qualification",
         "performance-index": "Retain exact original campaign index",
         "performance-audit": "Independent retained campaign replay",
+        "performance-audit-record": "Independent retained campaign replay",
     }.get(name)
 
 
