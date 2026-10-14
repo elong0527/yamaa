@@ -766,14 +766,12 @@ def held_out_rerun(
     run: RunScript = run_script,
     timeout: float = RERUN_TIMEOUT_SEC,
 ) -> dict:
-    """Rerun the script on the inputs without every third subject and grade
-    it against the golden restricted to the subjects kept.
+    """Rerun without selected subjects, using the restricted golden when it
+    agrees with the reference, otherwise the validated reference's answer.
 
-    The check applies only when the task's reference solution, run the same
-    way, writes exactly that restricted golden. A successful reference whose
-    data differs skips the check; a reference crash is a harness error.
-    Destructive while it runs
-    (it swaps the input directory), but it restores `/app` afterwards.
+    Validate the reference against the original golden before trusting any
+    recomputed answer. Reference crashes and invalid outputs are harness errors.
+    Restore the original input and output directories after every exit.
     """
     result: dict = {"checked": False, "passed": True, "problems": [], "notes": []}
     name, language = contract.get("script"), contract.get("language")
@@ -788,8 +786,6 @@ def held_out_rerun(
         return skip("no script to rerun")
     if reference is None or not reference.is_file():
         return skip("no reference solution")
-    if not all(HOLDOUT_SUBJECT in o["columns"] for o in contract["outputs"]):
-        return skip(f"an output has no {HOLDOUT_SUBJECT}")
     try:
         column, subjects = _input_subjects(input_dir)
     except ImportError:
@@ -798,13 +794,15 @@ def held_out_rerun(
         return skip("the inputs carry no subject id")
     if len(subjects) < 2:
         return skip("fewer than two subjects")
-    drop, restricted = _drop_set(contract, expected_dir, subjects)
+    drop, restricted = None, {}
+    if all(HOLDOUT_SUBJECT in o["columns"] for o in contract["outputs"]):
+        drop, restricted = _drop_set(contract, expected_dir, subjects)
     if drop is None:
-        return skip("no subjects to drop change the output")
+        drop = set(subjects[HOLDOUT_EVERY - 1 :: HOLDOUT_EVERY] or subjects[-1:])
     result["subject_column"], result["dropped"] = column, sorted(drop)
     work = Path(tempfile.mkdtemp(prefix="yamaa-held-out-"))
     saved_input, saved_output = work / "input", work / "output"
-    shutil.move(str(input_dir), saved_input)
+    shutil.copytree(input_dir, saved_input)
     shutil.copytree(output_dir, saved_output)
 
     def run_and_grade(script: Path, expected: Path) -> tuple[list[str], list[dict]]:
@@ -819,24 +817,48 @@ def held_out_rerun(
             problems.extend(f"{graded['file']}: {p}" for p in graded["problems"])
         return problems, outputs
 
+    def validate_reference(script: Path, expected: Path) -> list[dict]:
+        problems, outputs = run_and_grade(script, expected)
+        if problems and problems[0].startswith(f"{name} failed:"):
+            raise RuntimeError(f"held-out reference failed: {problems[0]}")
+        return outputs
+
     try:
+        own_reference = work / "reference" / name
+        own_reference.parent.mkdir()
+        shutil.copyfile(reference, own_reference)
+        baseline = validate_reference(own_reference, expected_dir)
+        if not all(o["passed"] for o in baseline):
+            raise RuntimeError("held-out reference does not match the original golden")
+        shutil.rmtree(input_dir)
         _subset_inputs(saved_input, input_dir, drop)
         expected = work / "expected"
         expected.mkdir()
         for name_, rows in restricted.items():
             with (expected / name_).open("w", newline="", encoding="utf-8") as h:
                 csv.writer(h, lineterminator="\n").writerows(rows)
-        own_reference = work / "reference" / name
-        own_reference.parent.mkdir()
-        shutil.copyfile(reference, own_reference)
-        reference_problems, _ = run_and_grade(own_reference, expected)
-        if reference_problems and reference_problems[0].startswith(f"{name} failed:"):
-            raise RuntimeError(f"held-out reference failed: {reference_problems[0]}")
-        if reference_problems:
-            return skip(
-                "the reference solution does not write the restricted golden, "
-                "so the derivation is not per subject"
-            )
+        reduced = validate_reference(
+            own_reference, expected if restricted else expected_dir
+        )
+        for spec in contract["outputs"]:
+            checked = grade_output(spec, output_dir, output_dir)
+            if not checked["passed"]:
+                raise RuntimeError(f"invalid held-out reference output: {checked}")
+        if restricted and all(o["passed"] for o in reduced):
+            result["expected_source"] = "restricted_golden"
+        else:
+            result["expected_source"] = "reference"
+            if all(
+                grade_output(spec, expected_dir, output_dir)["passed"]
+                for spec in contract["outputs"]
+            ):
+                result["discriminates"] = False
+                return skip(
+                    "the reference answer does not discriminate after subject removal"
+                )
+            for spec in contract["outputs"]:
+                shutil.copyfile(output_dir / spec["file"], expected / spec["file"])
+        result["discriminates"] = True
         result["checked"] = True
         result["problems"], result["outputs"] = run_and_grade(
             output_dir / name, expected
@@ -848,7 +870,7 @@ def held_out_rerun(
         return result
     finally:
         shutil.rmtree(input_dir, ignore_errors=True)
-        shutil.move(str(saved_input), input_dir)
+        shutil.copytree(saved_input, input_dir)
         shutil.rmtree(output_dir, ignore_errors=True)
         shutil.copytree(saved_output, output_dir)
         shutil.rmtree(work, ignore_errors=True)
