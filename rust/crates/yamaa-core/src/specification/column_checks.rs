@@ -71,7 +71,7 @@ pub(super) fn prepare(
                     "verification_values",
                     64,
                     Some(entries.len()),
-                    None,
+                    Some(&format!("{path}.values")),
                 ));
             }
             if entries.is_empty() {

@@ -679,7 +679,12 @@ impl Rows {
         let root = d.root();
         let raw_rows = sequence(d, field(d, root, "rows")?)?;
         if raw_rows.is_empty() || raw_rows.len() > 16 {
-            return Err(PrepareError::limit("row_templates", 16, None, None));
+            return Err(PrepareError::limit(
+                "row_templates",
+                16,
+                Some(raw_rows.len()),
+                Some("rows"),
+            ));
         }
         row_intermediates::admit(d, raw_rows.len())?;
         let columns = sequence(d, field(d, root, "columns")?)?;
@@ -871,7 +876,7 @@ impl Rows {
                             "group_keys",
                             limits.keys,
                             Some(values.len()),
-                            None,
+                            Some(&format!("{path}.group_by")),
                         ));
                     }
                     values
@@ -886,7 +891,7 @@ impl Rows {
                     "row_columns",
                     limits.columns,
                     Some(entries.len()),
-                    None,
+                    Some(&format!("{path}.derivations")),
                 ));
             }
             for &(name, _) in entries {

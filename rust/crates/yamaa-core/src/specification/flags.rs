@@ -152,7 +152,7 @@ pub(super) fn declaration_admission(
                         "flag_metadata",
                         crate::dataset::MAX_FLAG_METADATA_BYTES,
                         None,
-                        None,
+                        Some(path),
                     )
                 })?;
             for name in ["true_value", "false_value", "missing"] {
@@ -167,7 +167,7 @@ pub(super) fn declaration_admission(
                                 "flag_metadata",
                                 crate::dataset::MAX_FLAG_METADATA_BYTES,
                                 None,
-                                None,
+                                Some(path),
                             )
                         })?;
                 }
@@ -181,7 +181,7 @@ pub(super) fn declaration_admission(
                                 "flag_metadata",
                                 crate::dataset::MAX_FLAG_METADATA_BYTES,
                                 None,
-                                None,
+                                Some(path),
                             )
                         })?,
                 )
@@ -191,7 +191,7 @@ pub(super) fn declaration_admission(
                         "flag_metadata",
                         crate::dataset::MAX_FLAG_METADATA_BYTES,
                         None,
-                        None,
+                        Some(path),
                     )
                 })?;
         }

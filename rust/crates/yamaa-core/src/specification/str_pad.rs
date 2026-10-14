@@ -58,7 +58,7 @@ pub(super) fn prepare(
             "str_pad_metadata",
             MAX_DECLARATION_BYTES,
             None,
-            None,
+            Some(path),
         )),
         Err(DeclarationError::Shape) => Err(PrepareError::Internal),
     }
@@ -101,7 +101,7 @@ pub(super) fn declaration_admission(
             };
             let operation_path_bytes =
                 path.len().checked_add(".str_pad".len()).ok_or_else(|| {
-                    PrepareError::limit("str_pad_metadata", MAX_DECLARATION_BYTES, None, None)
+                    PrepareError::limit("str_pad_metadata", MAX_DECLARATION_BYTES, None, Some(path))
                 })?;
             let required = source
                 .len()
@@ -110,13 +110,13 @@ pub(super) fn declaration_admission(
                 .and_then(|n| n.checked_mul(8))
                 .and_then(|n| n.checked_add(512))
                 .ok_or_else(|| {
-                    PrepareError::limit("str_pad_metadata", MAX_DECLARATION_BYTES, None, None)
+                    PrepareError::limit("str_pad_metadata", MAX_DECLARATION_BYTES, None, Some(path))
                 })?;
             *bytes = bytes
                 .checked_add(required)
                 .filter(|&n| n <= MAX_DECLARATION_BYTES)
                 .ok_or_else(|| {
-                    PrepareError::limit("str_pad_metadata", MAX_DECLARATION_BYTES, None, None)
+                    PrepareError::limit("str_pad_metadata", MAX_DECLARATION_BYTES, None, Some(path))
                 })?;
         }
         if let Some(case) = d.field(value, "case") {
