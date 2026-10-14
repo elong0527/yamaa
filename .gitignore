@@ -11,3 +11,6 @@ site/
 /study/
 docs/benchmark/*.html
 docs/benchmark/index.md
+docs/coverage/
+.coverage
+.coverage.*

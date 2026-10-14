@@ -58,6 +58,35 @@ installed-matrix, R, numerical or Harbor PR requirements. The repository check
 keeps its previous name. Full qualification has separate check names and is
 available on main or by manual dispatch.
 
+## README test and coverage badges
+
+On main pushes or manual dispatch, `unit-tests.yml` runs all shared Rust
+unit/integration tests (debug and release, including test-support and Arrow
+C Data), Python package tests, Rust tool tests,
+repository helper tests and installed R package tests on Ubuntu 24.04. The
+`All unit tests passed` gate fails if any language job fails, is canceled or is
+skipped. The README status badge is pinned to main push runs. Python coverage is
+measured on 3.14 and R on 4.6.1; installation compatibility across supported
+platforms and interpreters remains in the separate native installation workflow.
+
+The coverage badge combines executable-line counts from cargo-llvm-cov for the
+three shared Rust crates, coverage.py for the installed Python facade and covr for
+the staged R package. It requires all three reports and weights their percentages
+by reported lines. A successful main test run produces `unit-test-coverage` with
+the SVG, raw reports, source revision and coverage page. The docs workflow deploys
+that artifact to `/coverage/`. When no report is available, including after an
+artifact expires or its download fails, it shows `pending` and documentation
+deployment continues. Otherwise it reports the latest successful test run,
+linked from the page.
+No external coverage account or secret is needed. A failure to deploy the report
+does not change the independent unit-test result.
+
+For a local docs build before reports are available, create the pending page:
+
+```sh
+python .github/scripts/ci/coverage_report.py --unavailable --output docs/coverage
+```
+
 ## Native coverage
 
 Pushes to main and explicit `qualification/issue-*` branches retain the full

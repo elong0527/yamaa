@@ -1,0 +1,8 @@
+[run]
+source = yamaa
+relative_files = True
+
+[paths]
+yamaa =
+    python/src/yamaa
+    */site-packages/yamaa
