@@ -1,5 +1,6 @@
 """Performance evidence survives missing tuples without accepting or replacing it."""
 
+import json
 import os
 import subprocess
 import sys
@@ -26,6 +27,24 @@ def selected_run(revision="a" * 40):
 
 
 class RetainedIndex(unittest.TestCase):
+    def test_native_snapshot_reads_selected_attempt_and_preserves_original_artifact_ids(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            native_run = {"id": 11, "run_attempt": 2, "head_sha": "a" * 40}
+            native_jobs = [{"id": 12, "run_attempt": 2}]
+            native_artifacts = [{"id": 13, "name": "native-python-ubuntu-24.04-3.14",
+                                 "digest": "unneeded", "created_at": "2026-10-14T01:00:00Z"}]
+            with mock.patch.object(index, "api", side_effect=[native_run, [{"jobs": native_jobs}],
+                                                              [{"artifacts": native_artifacts}]]) as api:
+                index.native_snapshot(root, "elong0527/yamaa", "11", "2")
+            self.assertEqual(api.call_args_list[0].args,
+                             ("repos/elong0527/yamaa/actions/runs/11/attempts/2",))
+            self.assertIn("attempts/2/jobs", api.call_args_list[1].args[0])
+            retained = json.loads((root / "native-artifacts.json").read_text())
+            self.assertEqual(retained[0]["id"], 13)
+            self.assertNotIn("digest", retained[0])
+            self.assertEqual(json.loads((root / "native-run.json").read_text()), native_run)
+
     def test_missing_and_ambiguous_artifacts_keep_all_twenty_one_tuples_visible(self):
         lanes = list(index.tuples())
         artifacts = [{"id": number + 1, "name": name}
@@ -76,6 +95,7 @@ class RetainedIndex(unittest.TestCase):
             args = SimpleNamespace(
                 input=root / "input", checkout=checkout, repository="elong0527/yamaa",
                 revision=revision, run_id=123, attempt=1, baseline_ref="yamaa-py-0.3.0",
+                native_run_id="", native_attempt="",
             )
             with mock.patch.object(index, "api", side_effect=[selected_run(revision), [{"artifacts": []}], [{"jobs": []}]]):
                 index.index(args)

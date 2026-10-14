@@ -58,7 +58,7 @@ def tuples():
         }, f"performance-r-{host}-source"
 
 
-def manifest(run, artifacts, repository, revision, attempt):
+def manifest(run, artifacts, repository, revision, attempt, native=False):
     if (
         run["repository"]["full_name"] != repository
         or run["head_repository"]["full_name"] != repository
@@ -86,7 +86,7 @@ def manifest(run, artifacts, repository, revision, attempt):
                 for role, directory in ROLES
             ],
         })
-    return {
+    result = {
         "protocol": "public-performance-audit-input/1",
         "repository": repository,
         "source_revision": revision,
@@ -96,6 +96,32 @@ def manifest(run, artifacts, repository, revision, attempt):
         "source_bundle": "source.bundle",
         "entries": entries,
     }
+    if native:
+        result.update({
+            "native_run": "native-run.json",
+            "native_jobs": "native-jobs.json",
+            "native_artifacts": "native-artifacts.json",
+        })
+    return result
+
+
+def native_snapshot(root, repository, run_id, attempt):
+    prefix = f"repos/{repository}/actions/runs/{run_id}"
+    run = api(f"{prefix}/attempts/{attempt}")
+    jobs = [
+        item for page in api(
+            f"{prefix}/attempts/{attempt}/jobs?per_page=100", True
+        ) for item in page["jobs"]
+    ]
+    artifacts = without_digests([
+        item for page in api(f"{prefix}/artifacts?per_page=100", True)
+        for item in page["artifacts"]
+    ])
+    for name, value in (("native-run.json", run), ("native-jobs.json", jobs),
+                        ("native-artifacts.json", artifacts)):
+        if (root / name).exists():
+            raise ValueError("cannot replace original native admission metadata")
+        write(root / name, value)
 
 
 def index(args):
@@ -105,6 +131,12 @@ def index(args):
         raise ValueError("invalid exact source revision")
     if args.run_id <= 0 or args.attempt <= 0:
         raise ValueError("invalid performance run/attempt")
+    native = bool(args.native_run_id or args.native_attempt)
+    if native and not (
+        args.native_run_id.isdecimal() and int(args.native_run_id) > 0
+        and args.native_attempt.isdecimal() and int(args.native_attempt) > 0
+    ):
+        raise ValueError("invalid original native run/attempt")
     head = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=args.checkout, text=True
     ).strip()
@@ -128,7 +160,9 @@ def index(args):
         if (root / name).exists():
             raise ValueError("cannot replace an original metadata snapshot")
         write(root / name, value)
-    value = manifest(run, artifacts, args.repository, args.revision, args.attempt)
+    if native:
+        native_snapshot(root, args.repository, args.native_run_id, args.native_attempt)
+    value = manifest(run, artifacts, args.repository, args.revision, args.attempt, native)
     if (root / "source.bundle").exists() or (root / "manifest.json").exists():
         raise ValueError("cannot replace an original performance index")
     # Include complete candidate/baseline histories. Direct commit identities
@@ -153,4 +187,6 @@ if __name__ == "__main__":
     parser.add_argument("--run-id", type=int, required=True)
     parser.add_argument("--attempt", type=int, required=True)
     parser.add_argument("--baseline-ref", default="yamaa-py-0.3.0")
+    parser.add_argument("--native-run-id", default="")
+    parser.add_argument("--native-attempt", default="")
     index(parser.parse_args())

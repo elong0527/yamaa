@@ -444,7 +444,9 @@ jobs:
           python rust/tools/index_public_performance.py --input "${RUNNER_TEMP}/performance-input" \
             --checkout "${GITHUB_WORKSPACE}" --repository "${GITHUB_REPOSITORY}" \
             --revision "${GITHUB_SHA}" --run-id "${GITHUB_RUN_ID}" \
-            --attempt "${GITHUB_RUN_ATTEMPT}" --baseline-ref "${BASELINE_REF}"
+            --attempt "${GITHUB_RUN_ATTEMPT}" --baseline-ref "${BASELINE_REF}" \
+            --native-run-id "${{ needs.native.outputs.run-id }}" \
+            --native-attempt "${{ needs.native.outputs.run-attempt }}"
       - name: Preserve complete tuple selection and original source histories
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -507,6 +509,9 @@ jobs:
             ${{ runner.temp }}/performance-input/run.json
             ${{ runner.temp }}/performance-input/jobs.json
             ${{ runner.temp }}/performance-input/artifacts.json
+            ${{ runner.temp }}/performance-input/native-run.json
+            ${{ runner.temp }}/performance-input/native-jobs.json
+            ${{ runner.temp }}/performance-input/native-artifacts.json
             ${{ runner.temp }}/performance-input/source.bundle
             ${{ runner.temp }}/performance-audit/performance-audit.json
             ${{ runner.temp }}/performance-audit/performance-audit.md
@@ -523,6 +528,9 @@ jobs:
             ${{ runner.temp }}/performance-input/run.json
             ${{ runner.temp }}/performance-input/jobs.json
             ${{ runner.temp }}/performance-input/artifacts.json
+            ${{ runner.temp }}/performance-input/native-run.json
+            ${{ runner.temp }}/performance-input/native-jobs.json
+            ${{ runner.temp }}/performance-input/native-artifacts.json
             ${{ runner.temp }}/performance-audit/performance-audit.json
             ${{ runner.temp }}/performance-audit/performance-audit.md
           if-no-files-found: error
