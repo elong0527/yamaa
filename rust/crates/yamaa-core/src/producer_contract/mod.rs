@@ -17,7 +17,7 @@ impl Default for Limits {
     fn default() -> Self {
         Self {
             declarations: 64,
-            fields: 64,
+            fields: 1_024,
             text_bytes: 262_144,
         }
     }

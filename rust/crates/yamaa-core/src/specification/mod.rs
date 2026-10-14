@@ -94,11 +94,11 @@ pub struct CompilationLimits {
 impl Default for CompilationLimits {
     fn default() -> Self {
         Self {
-            columns: 64,
+            columns: 1_024,
             keys: 64,
             inputs: 16,
-            projected_columns: 64,
-            source_fields: 64,
+            projected_columns: 1_024,
+            source_fields: 1_024,
             model_text_bytes: 262_144,
             numeric_bytes: 65_536,
             source_operands: 64,

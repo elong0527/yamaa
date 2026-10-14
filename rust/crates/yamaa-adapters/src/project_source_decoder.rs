@@ -104,7 +104,7 @@ impl<E> yamaa_engine::producer_build::DecodePort for Decoder<E> {
             // Admit stored header order before declared typing can replace a
             // producer mismatch with an unrelated missing-field diagnostic.
             let types =
-                yamaa_core::typed_csv::PreparedTypes::new(&source.types, 64).map_err(|e| {
+                yamaa_core::typed_csv::PreparedTypes::new(&source.types, 1_024).map_err(|e| {
                     DecodeError::Codec(Error::TypedSource(crate::typed_csv::Error::Typing(e)))
                 })?;
             let parsed = crate::csv_source::parse(
@@ -134,7 +134,7 @@ impl<E> yamaa_engine::producer_build::DecodePort for Decoder<E> {
                 types,
                 crate::arrow_table::TableLimits {
                     max_rows: yamaa_engine::capacity::SOURCE_ROWS,
-                    max_columns: 64,
+                    max_columns: 1_024,
                     max_batches: 1,
                     max_cells: limits.cells.min(yamaa_engine::capacity::SOURCE_CELLS),
                 },
@@ -145,7 +145,7 @@ impl<E> yamaa_engine::producer_build::DecodePort for Decoder<E> {
                 table,
                 crate::arrow_table::TableLimits {
                     max_rows: yamaa_engine::capacity::SOURCE_ROWS,
-                    max_columns: 64,
+                    max_columns: 1_024,
                     max_batches: 1,
                     max_cells: limits.cells.min(yamaa_engine::capacity::SOURCE_CELLS),
                 },
