@@ -20,7 +20,6 @@ import statistics
 import subprocess
 import tarfile
 import tempfile
-import tomllib
 import uuid
 import zipfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -30,6 +29,7 @@ import child_peak_rss
 import collect_public_performance as collector
 import measure_public_lifecycle as lifecycle
 import prepare_public_workloads as workloads
+import tomllib
 
 PROTOCOL = "public-performance-audit-input/1"
 SAMPLING = {"cold": 10, "warm": 30, "warmups": 3}
