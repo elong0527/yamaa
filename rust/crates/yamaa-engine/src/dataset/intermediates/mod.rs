@@ -170,6 +170,20 @@ impl<E> TableAccess for Data<'_, E> {
     }
 }
 
+/// Match descendant handlers; this plan's typed fields use the caller's counter.
+fn has_nested_conversion_handler(plan: &DatasetPlan, spec_path: &str) -> bool {
+    plan.intermediates().iter().any(|item| {
+        item.derivations.as_ref().is_some_and(|derived| {
+            derived
+                .plan
+                .conversion_handlers()
+                .iter()
+                .any(|handler| handler.handler.spec_path == spec_path)
+                || has_nested_conversion_handler(&derived.plan, spec_path)
+        })
+    })
+}
+
 /// An immutable donor snapshot is shared only across contexts supplying the same current row.
 #[allow(clippy::too_many_arguments)]
 fn materialize<E>(
@@ -275,7 +289,7 @@ fn materialize<E>(
         })
         .collect::<Vec<_>>();
     let mut intermediate_run = Run::default();
-    // Raw donor fields have no output lifecycle conversion or handler ledger.
+    // Untyped donor expressions retain their existing raw-result lifecycle.
     let mut donor_handlers = HandlerCounter::default();
     for assignment in nested.columns() {
         let table = Data::<E>::new(&input);
@@ -291,8 +305,8 @@ fn materialize<E>(
         let mut nested_windows = windows::Cache::default();
         for row in 0..candidates.len() {
             let table = Data::<E>::new(&input);
-            let value = if let Some(run) = &mut numbers {
-                run.value(row, &candidates, &table, state.budget, assignment, nested)?
+            let evaluated = if let Some(run) = &mut numbers {
+                run.value(row, &candidates, &table, state.budget, assignment, nested)
             } else {
                 evaluate_raw_retained(
                     &table,
@@ -316,7 +330,27 @@ fn materialize<E>(
                     },
                     false,
                 )
+            };
+            donor_handlers
+                .transfer_selected(state.handlers, |entry| {
+                    entry.handler == HandlerKind::Unconvertible
+                        && has_nested_conversion_handler(nested, &entry.spec_path)
+                })
+                .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
+            let value = evaluated.map_err(|error| donor_failure(error, item, plan, nested))?;
+            let value = if derived.typed_columns.contains(&assignment.column) {
+                finish(
+                    value,
+                    assignment,
+                    &candidates[row],
+                    nested,
+                    row,
+                    state.budget,
+                    state.handlers,
+                )
                 .map_err(|error| donor_failure(error, item, plan, nested))?
+            } else {
+                value
             };
             state.budget.value(&value)?;
             state.budget.value(&value)?;
@@ -350,7 +384,8 @@ fn donor_failure<E>(
     nested: &DatasetPlan,
 ) -> Box<ExecutionError<E>> {
     match error.as_mut() {
-        ExecutionError::Numeric { identity, .. }
+        ExecutionError::Conversion { identity, .. }
+        | ExecutionError::Numeric { identity, .. }
         | ExecutionError::MultipleValues { identity, .. }
         | ExecutionError::MultipleMatches { identity, .. }
         | ExecutionError::UnmatchedKey { identity, .. }

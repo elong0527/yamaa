@@ -698,7 +698,7 @@ impl Run<'_, '_> {
                 SchemaAliasKind::Descriptor(descriptor) => {
                     let members = schema.descriptors()[descriptor].descriptor.members();
                     let diagnostics = self.union(members, site.deeper())?;
-                    if name == "derivation"
+                    if matches!(name, "derivation" | "untyped_intermediate_derivation")
                         && !diagnostics.is_empty()
                         && !matches!(self.input.nodes()[site.value], N::Text(_) | N::Mapping(_))
                     {

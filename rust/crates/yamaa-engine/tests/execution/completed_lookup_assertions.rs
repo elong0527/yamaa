@@ -424,6 +424,7 @@ fn derived_donor_callback_counts_follow_one_materialization_per_attempt() {
         current: vec![],
         stored_columns: 1,
         driver_kinds: vec![],
+        typed_columns: vec![],
     };
     let plan = build_plan(
         &src,

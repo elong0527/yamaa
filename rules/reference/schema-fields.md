@@ -39,7 +39,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `intermediate_class.keep` | `"keep_policy"` | `false` | Absent | -- | Schema constraint |
 | `intermediate_class.columns` | `"list[identifier]"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.no_match` | `"literal_value"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
-| `intermediate_class.derivations` | `"dict[identifier, derivation]"` | `false` | Absent | -- | [REQ-1185](../operations/lookup.md#req-1185) |
+| `intermediate_class.derivations` | `"dict[identifier, intermediate_derivation]"` | `false` | Absent | -- | [REQ-1185](../operations/lookup.md#req-1185) |
 | `intermediate_class.verifications` | `"list[intermediate_verification]"` | `false` | Absent | -- | [REQ-1245](../operations/lookup.md#req-1245) |
 | `record_between_class.value` | `"variable"` | `true` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
 | `record_between_class.lower` | `"identifier"` | `false` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
@@ -155,6 +155,12 @@ requirement link for behavior. It is not an additional semantic contract.
 | `derivation` | `["str", "expression", "handled_expression_class"]` | `false` | Absent | -- | Schema constraint |
 | `handled_expression_class.value` | `"expression"` | `true` | Absent | -- | Schema constraint |
 | `handled_expression_class.unconvertible` | `"literal_value"` | `false` | Absent | -- | Schema constraint |
+| `intermediate_derivation` | `["untyped_intermediate_derivation", "intermediate_binding_class"]` | `false` | Absent | -- | Schema constraint |
+| `untyped_intermediate_derivation` | `["str", "expression", "intermediate_expression_class"]` | `false` | Absent | -- | Schema constraint |
+| `intermediate_expression_class.value` | `"expression"` | `true` | Absent | -- | Schema constraint |
+| `intermediate_binding_class.type` | `"column_type"` | `true` | Absent | -- | Schema constraint |
+| `intermediate_binding_class.derivation` | `"untyped_intermediate_derivation"` | `true` | Absent | -- | Schema constraint |
+| `intermediate_binding_class.unconvertible` | `"literal_value"` | `false` | Absent | -- | Schema constraint |
 
 ## schema_environment.yaml
 

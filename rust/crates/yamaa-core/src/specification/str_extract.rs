@@ -210,14 +210,9 @@ fn walk(
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
             {
                 for &(name, handled) in mapping(d, items)? {
-                    expression(
-                        d,
-                        field(d, handled, "value")?,
-                        &format!("intermediates[{index}].derivations.{}", text(d, name)?),
-                        true,
-                        0,
-                        visit,
-                    )?;
+                    let path = format!("intermediates[{index}].derivations.{}", text(d, name)?);
+                    let (value, path) = intermediate_derivations::value(d, handled, &path)?;
+                    expression(d, value, &path, true, 0, visit)?;
                 }
             }
         }

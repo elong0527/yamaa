@@ -149,9 +149,29 @@ model!(
         optional!("order_by", ORDER_TERMS),
         optional!("keep", Enum(&["first", "last"])),
         optional!("columns", STRINGS),
-        optional!("derivations", HANDLED_MAP),
+        optional!(
+            "derivations",
+            Dictionary(&Union(&[
+                ("IntermediateExpression", Object(INTERMEDIATE_EXPRESSION)),
+                ("IntermediateBinding", Object(INTERMEDIATE_BINDING)),
+            ]))
+        ),
         optional!("verifications", List(&Object(INTERMEDIATE_CHECK))),
         field!("no_match", Json),
+    ]
+);
+model!(
+    INTERMEDIATE_EXPRESSION,
+    "IntermediateExpression",
+    [required!("value", Expression)]
+);
+model!(
+    INTERMEDIATE_BINDING,
+    "IntermediateBinding",
+    [
+        required!("type", COLUMN_TYPE),
+        required!("derivation", Object(INTERMEDIATE_EXPRESSION)),
+        field!("unconvertible", Json)
     ]
 );
 model!(

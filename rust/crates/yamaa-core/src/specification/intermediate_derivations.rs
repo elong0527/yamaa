@@ -1,4 +1,4 @@
-//! Donor derivations share the original scalar compiler and retain raw values.
+//! Donor derivations share the scalar compiler and explicitly declared conversion.
 use super::*;
 use crate::dataset::{
     CurrentField, CurrentRead, Intermediate, IntermediateDerivations, IntermediateSource,
@@ -10,9 +10,39 @@ use crate::value::Value;
 pub(super) struct Derivation {
     pub name: String,
     pub branch: cases::Branch,
+    path: String,
+    typed: Option<ColumnType>,
+    handler: Option<crate::conversion::LiteralHandler>,
     kind: Kind,
     driver_kind: Kind,
     pub(super) references: Vec<String>,
+}
+impl Derivation {
+    fn assignment_path(&self) -> &str {
+        if self.typed.is_some() {
+            &self.path
+        } else {
+            &self.branch.path
+        }
+    }
+    pub(super) fn result_kind(
+        &self,
+        lookup: &impl Fn(&str) -> Option<ColumnType>,
+    ) -> Option<ColumnType> {
+        self.typed.or_else(|| self.kind.infer(lookup))
+    }
+}
+/// Both admitted entry forms expose the same normalized expression boundary.
+pub(super) fn value(
+    d: &Document,
+    entry: usize,
+    path: &str,
+) -> Result<(usize, String), PrepareError> {
+    if let Some(derivation) = d.field(entry, "derivation") {
+        Ok((field(d, derivation, "value")?, format!("{path}.derivation")))
+    } else {
+        Ok((field(d, entry, "value")?, path.into()))
+    }
 }
 #[derive(Clone, Debug)]
 enum Kind {
@@ -243,13 +273,26 @@ pub(super) fn prepare(
     let mut bytes = 0;
     for &(name, handled) in items {
         let name = text(d, name)?;
-        let value = field(d, handled, "value")?;
         let path = format!("{path}.derivations.{name}");
+        let (value, expression_path) = value(d, handled, &path)?;
+        let typed = d
+            .field(handled, "type")
+            .map(|id| {
+                Ok(match text(d, id)? {
+                    "str" => ColumnType::Str,
+                    "int" => ColumnType::Int,
+                    "float" => ColumnType::Float,
+                    "date" => ColumnType::Date,
+                    "datetime" => ColumnType::DateTime,
+                    _ => return Err(PrepareError::Internal),
+                })
+            })
+            .transpose()?;
         cases::charge(d, value, &mut bytes, limits.numeric_bytes, 0)?;
         let branch = derivations::prepare_value_with_driver(
             d,
             value,
-            &path,
+            &expression_path,
             project,
             named,
             true,
@@ -264,9 +307,13 @@ pub(super) fn prepare(
         self_relations::template_references(d, value, templates, &mut references, 0)?;
         let kind = prepare_kind(d, value, 0, project)?;
         let driver_kind = prepare_driver_kind(d, value, 0, project)?;
+        let handler = literal_handler(d, handled, &path)?;
         result.push(Derivation {
             name: name.into(),
             branch,
+            path,
+            typed,
+            handler,
             kind,
             driver_kind,
             references,
@@ -347,47 +394,48 @@ pub(super) fn bind(
                     .map(|column| column.kind)
             }
         };
-        let kind = declaration.kind.infer(&lookup).unwrap_or(ColumnType::Str);
-        driver_kinds.push(declaration.driver_kind.infer(&|name| {
-            let (owner, field) = name.split_once('.').unwrap_or((dataset, name));
-            if owner == dataset {
-                let index = fields.iter().position(|column| column.name == field)?;
-                if index < stored.columns().len() {
-                    Some(fields[index].kind)
-                } else {
-                    driver_kinds
-                        .get(index - stored.columns().len())
-                        .copied()
-                        .flatten()
-                }
-            } else if let Some((index, field)) = named.reference(name) {
-                let item = previous.get(index).and_then(Option::as_ref)?;
-                let schema = item.source_schema(&original_secondary)?;
-                let column = schema
-                    .columns()
-                    .iter()
-                    .position(|column| column.name == field)?;
-                item.derivations
-                    .as_ref()
-                    .filter(|derived| column >= derived.stored_columns)
-                    .map_or(Some(schema.columns()[column].kind), |derived| {
-                        derived
-                            .driver_kinds
-                            .get(column - derived.stored_columns)
+        let kind = declaration
+            .typed
+            .or_else(|| declaration.kind.infer(&lookup))
+            .unwrap_or(ColumnType::Str);
+        driver_kinds.push(declaration.typed.or_else(|| {
+            declaration.driver_kind.infer(&|name| {
+                let (owner, field) = name.split_once('.').unwrap_or((dataset, name));
+                if owner == dataset {
+                    let index = fields.iter().position(|column| column.name == field)?;
+                    if index < stored.columns().len() {
+                        Some(fields[index].kind)
+                    } else {
+                        driver_kinds
+                            .get(index - stored.columns().len())
                             .copied()
                             .flatten()
-                    })
-            } else {
-                None
-            }
+                    }
+                } else if let Some((index, field)) = named.reference(name) {
+                    let item = previous.get(index).and_then(Option::as_ref)?;
+                    let schema = item.source_schema(&original_secondary)?;
+                    let column = schema
+                        .columns()
+                        .iter()
+                        .position(|column| column.name == field)?;
+                    item.derivations
+                        .as_ref()
+                        .filter(|derived| column >= derived.stored_columns)
+                        .map_or(Some(schema.columns()[column].kind), |derived| {
+                            derived
+                                .driver_kinds
+                                .get(column - derived.stored_columns)
+                                .copied()
+                                .flatten()
+                        })
+                } else {
+                    None
+                }
+            })
         }));
         if fields.iter().any(|field| field.name == declaration.name) {
             let mut finding = LookupFinding::new(
-                declaration
-                    .branch
-                    .path
-                    .rsplit_once('.')
-                    .map_or(declaration.branch.path.as_str(), |(path, _)| path),
+                &declaration.path,
                 crate::diagnostic::ConditionCode::IntermediateDerivationDuplicate,
             );
             finding.text("identifier", &format!("{dataset}.{}", declaration.name));
@@ -645,7 +693,7 @@ pub(super) fn bind(
         if let Some(expression) = expression {
             assignments.push(Assignment {
                 column,
-                path: declaration.branch.path.clone(),
+                path: declaration.assignment_path().into(),
                 expression,
             });
         }
@@ -669,6 +717,18 @@ pub(super) fn bind(
             })
             .collect(),
     }];
+    let handlers = declarations
+        .iter()
+        .filter_map(|declaration| {
+            declaration
+                .handler
+                .as_ref()
+                .map(|handler| crate::dataset::ConversionHandler {
+                    assignment_path: declaration.assignment_path().into(),
+                    handler: handler.clone(),
+                })
+        })
+        .collect();
     let plan = DatasetPlan::new_donor(
         SourceSchemas {
             primary: source,
@@ -682,6 +742,7 @@ pub(super) fn bind(
         rows,
         assignments,
     )
+    .and_then(|plan| plan.with_conversion_handlers(handlers))
     .map_err(BindError::InvalidPlan)?;
     *pending_schema = None;
     Ok(Some(IntermediateDerivations {
@@ -689,6 +750,13 @@ pub(super) fn bind(
         current,
         stored_columns: stored.columns().len(),
         driver_kinds,
+        typed_columns: declarations
+            .iter()
+            .enumerate()
+            .filter_map(|(index, declaration)| {
+                declaration.typed.map(|_| stored.columns().len() + index)
+            })
+            .collect(),
     }))
 }
 /// Shared scalar binders report at the authored operand path; donor ownership
