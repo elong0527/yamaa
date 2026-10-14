@@ -42,6 +42,23 @@ sidecar can still be publishable. An operational publication failure returns
 ordered producer/log/output set. Replacement is atomic for each file; completed
 writes remain if a later target fails. There is no whole-run file rollback.
 
+## Implementation limits
+
+The shared engine admits up to 1,024 declared columns, output columns and fields
+in each input's `types`. CSV, Parquet, Arrow imports and producer contracts use
+the same width ceiling. An `ordinal` adds one field and counts toward this bound.
+Specifications still admit at most 64 keys and 16 inputs.
+
+Width does not override aggregate budgets: the default source allowance is
+2,097,152 cells and output allowance is 1,048,576 cells. At 1,024 fields these
+allow at most 2,048 source rows and 1,024 output rows, before other limits apply.
+Validation and normalization share 67,108,864 logical work units; complex or
+inherited specifications can exhaust this budget below the width ceiling.
+These are implementation policies, not language constraints or process-memory
+guarantees. Broader capacity and inheritance work remains tracked in
+[#2185](https://github.com/elong0527/yamaa/issues/2185) and
+[#2288](https://github.com/elong0527/yamaa/issues/2288).
+
 ## Define documents
 
 ```python

@@ -1014,7 +1014,7 @@ mod tests {
         assert!(result.save().unwrap());
     }
     #[test]
-    fn actual_host_view_metadata_refusal_preserves_original_code_or_verification_owner() {
+    fn actual_host_view_admits_metadata_beyond_the_old_64k_limit_and_saves_held_bytes() {
         for verification in [false, true] {
             let root = std::env::temp_dir().join(format!(
                 "yamaa-host-view-refusal-{}-{}",
@@ -1024,10 +1024,10 @@ mod tests {
             fs::create_dir_all(&root).unwrap();
             let study = Study(fs::canonicalize(root).unwrap());
             fs::write(study.0.join("input.csv"), "ID\n1\n").unwrap();
-            // Build a real native output whose IPC schema exceeds the public
-            // decoder's 64 KiB metadata admission. The test uses the unchanged
-            // shipped schema with an explicit larger normalization budget;
-            // production admission limits and output bytes remain unchanged.
+            // This real native output exceeded the former 64 KiB IPC metadata
+            // allowance. The wider allowance admits it without losing public
+            // output or verification ownership. Long names need a fixture-only
+            // regex allowance; the production width and compiler policy apply.
             let names = (0..39)
                 .map(|index| format!("V{index}_{}", "a".repeat(2048)))
                 .collect::<Vec<_>>();
@@ -1078,7 +1078,10 @@ mod tests {
             )
             .unwrap();
             assert!(result.issues().is_empty());
-            assert!(crate::public_table::PublicTable::decode(result.output().unwrap()).is_err());
+            let public =
+                crate::public_table::PublicTable::decode(result.output().unwrap()).unwrap();
+            assert_eq!(public.columns().len(), 40);
+            assert_eq!(public.rows(), 1);
             let domain = Domain::from_build(result, |field| {
                 let origin = prepared
                     .document()
@@ -1086,41 +1089,20 @@ mod tests {
                     .ok_or(crate::file_resources::Error::InvalidPath)?;
                 resources.publication_target_from(origin.declaring_source, origin.written)
             });
-            if !verification {
-                let failures = match domain {
-                    Err(failures) => failures,
-                    Ok(_) => panic!("rejected public view acquired a Domain owner"),
-                };
-                assert_eq!(failures.len(), 1);
-                assert_eq!(
-                    failures[0].condition,
-                    crate::test_diagnostic_truth::text("implementation-rejection", "condition")
-                );
-                assert_eq!(
-                    serde_json::from_str::<Value>(&failures[0].context).unwrap(),
-                    serde_json::json!({"stage":"build","code":"output_projection"})
-                );
-            } else {
-                let mut domain = domain.unwrap();
-                assert!(domain.output().is_none());
-                assert!(domain.warning_log().is_none());
-                assert_eq!(domain.log_table(false).unwrap().rows(), 0);
-                assert_eq!(
-                    serde_json::from_str::<Value>(&domain.issues()[0].context).unwrap(),
-                    serde_json::json!({"stage":"output","code":"output_projection"})
-                );
-                fs::write(study.0.join("out.csv"), "primary sentinel").unwrap();
-                fs::remove_file(study.0.join("input.csv")).unwrap();
-                fs::remove_file(study.0.join("spec.yaml")).unwrap();
-                for _ in 0..2 {
-                    assert!(domain.save().is_err());
-                    assert_eq!(
-                        fs::read(study.0.join("out.csv")).unwrap(),
-                        b"primary sentinel"
-                    );
-                    assert_eq!(fs::read_to_string(study.0.join("checks.csv")).unwrap(),
+            let mut domain = domain.unwrap();
+            assert!(domain.output().is_some());
+            assert!(domain.issues().is_empty());
+            assert_eq!(domain.log_table(false).is_some(), verification);
+            fs::remove_file(study.0.join("input.csv")).unwrap();
+            fs::remove_file(study.0.join("spec.yaml")).unwrap();
+            assert!(domain.save().unwrap());
+            let held = fs::read(study.0.join("out.csv")).unwrap();
+            assert!(held.starts_with(b"ID,V0_"));
+            assert!(domain.save().unwrap());
+            assert_eq!(fs::read(study.0.join("out.csv")).unwrap(), held);
+            if verification {
+                assert_eq!(fs::read_to_string(study.0.join("checks.csv")).unwrap(),
                         "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n");
-                }
             }
         }
     }

@@ -1249,6 +1249,13 @@
       "level": "component"
     },
     {
+      "id": "r/column-ceilings",
+      "runtime": "r",
+      "path": "R/yamaa/tests/column_ceilings.R",
+      "staged_path": "column_ceilings.R",
+      "level": "shared_run"
+    },
+    {
       "id": "python/retained-odm-helpers",
       "runtime": "python",
       "path": "rust/tests/installed_odm_helpers.py",

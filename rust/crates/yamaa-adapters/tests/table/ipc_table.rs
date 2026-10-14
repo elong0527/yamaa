@@ -210,7 +210,53 @@ fn shape_and_schema_policy_are_enforced() {
         .map(|_| Arc::new(Int64Array::from(Vec::<i64>::new())) as arrow_array::ArrayRef)
         .collect();
     let batch = RecordBatch::try_new(Arc::new(Schema::new(fields)), arrays).unwrap();
-    assert_eq!(table_snapshot(&stream(&batch)), Err(E::ShapeLimit));
+    // 65 columns sit inside the default 1,024-column budget (#2185); the
+    // shape policy still refuses a schema wider than the selected budget.
+    assert!(table_snapshot(&stream(&batch)).is_ok());
+    let budget = yamaa_adapters::ExecutionBudget {
+        max_columns: 64,
+        ..Default::default()
+    };
+    assert_eq!(
+        yamaa_adapters::ipc_table::decode_snapshot_with_budget(&stream(&batch), budget).err(),
+        Some(E::ShapeLimit)
+    );
+}
+
+/// Canonical temporal fields exercise the largest supported scalar IPC schema.
+#[test]
+fn wide_temporal_ipc_admits_1024_and_refuses_1025_and_oversized_metadata() {
+    use yamaa_core::{
+        table::{Column, TableSchema},
+        value::ColumnType,
+    };
+    for width in [1_024, 1_025] {
+        let logical = TableSchema::new(
+            (0..width)
+                .map(|i| Column {
+                    name: format!("T{i:04}"),
+                    kind: ColumnType::DateTime,
+                })
+                .collect(),
+        )
+        .unwrap();
+        let physical = yamaa_adapters::arrow_table::physical_schema(&logical);
+        let arrays = physical
+            .fields()
+            .iter()
+            .map(|field| arrow_array::new_empty_array(field.data_type()))
+            .collect();
+        let batch = RecordBatch::try_new(physical, arrays).unwrap();
+        let result = table_round_trip(&stream(&batch));
+        if width == 1_024 {
+            assert_eq!(read(result.unwrap())[0].num_columns(), 1_024);
+        } else {
+            assert_eq!(result, Err(E::ShapeLimit));
+        }
+    }
+    // Framing refuses a declared metadata message over 1 MiB before reading it.
+    let oversized = (1_048_576_u32 + 8).to_le_bytes();
+    assert_eq!(table_round_trip(&oversized), Err(E::ShapeLimit));
 }
 
 /// Build adversarial metadata independently of Arrow's validating record writer.

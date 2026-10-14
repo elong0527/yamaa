@@ -20,7 +20,10 @@ use yamaa_engine::dataset::{Dataset, ExecutionBudget};
 
 pub const MAX_INPUT_BYTES: usize = ExecutionBudget::bounded().max_ipc_bytes;
 pub const MAX_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
-const MAX_METADATA: usize = 64 * 1024;
+// Keep per-message bytes and verifier traversal bounded while admitting the
+// schema and record-batch metadata for the wider default column policy.
+const MAX_METADATA: usize = yamaa_core::specification::DEFAULT_MAX_COLUMNS * 1024;
+const MAX_METADATA_TABLES: usize = yamaa_core::specification::DEFAULT_MAX_COLUMNS * 32;
 
 fn source_limits(budget: ExecutionBudget) -> TableLimits {
     TableLimits {
@@ -588,7 +591,7 @@ pub(crate) fn preflight(mut input: &[u8], budget: ExecutionBudget) -> Result<Sna
         let metadata = take(&mut input, length)?;
         let options = flatbuffers::VerifierOptions {
             max_depth: 16,
-            max_tables: 2048,
+            max_tables: MAX_METADATA_TABLES,
             max_apparent_size: MAX_METADATA * 4,
             ..Default::default()
         };
