@@ -148,32 +148,6 @@
         "rust/tests/installed_original_specifications.py"
       ],
       "disposition": "Keep the existing independent rational oracle and corpus; active assessment observes compiled policy outputs rather than the retiring private scalar helper."
-    },
-    {
-      "path": "rust/tools/assess_math_decision.py",
-      "old_frozen_boundaries": 58,
-      "old_frozen_integer_handler_controls": 2,
-      "old_historical_hosts": 9,
-      "old_observations_per_historical_report": 30033,
-      "obligations": [
-        "original integer promotion input and bits",
-        "complete language refusals",
-        "independent accuracy certificates and exclusions",
-        "exact historical bit differences",
-        "handler values/counts",
-        "downstream predicate/verification/rounding/CSV effects",
-        "five unchanged original fixtures",
-        "restore cwd before temporary-directory cleanup on success and original exceptions"
-      ],
-      "successors": [
-        "rust/qualification/math-decision-v1.json",
-        "rust/tools/math_decision_corpus.py",
-        "rust/tools/math_certificates.py",
-        "rust/tools/assess_math_decision.py public_numeric/downstream",
-        "rust/tests/test_math_decision.py",
-        "rust/tools/public_conformance.py"
-      ],
-      "disposition": "Read and validate frozen historical lifecycle observations instead of importing or monkeypatching the retired evaluator. Replay current fixtures through public domain and compare unchanged complete expected bytes/findings. Historical frontend blockers remain historical, not current qualifications."
     }
   ],
   "active_gate_limits": [

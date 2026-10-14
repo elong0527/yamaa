@@ -11,7 +11,6 @@ on:
       - 'rust/tools/check_regex.py'
       - 'rust/tools/assess_rounding.py'
       - 'rust/tools/check_rounding.py'
-      - 'rust/tools/assess_math_decision.py'
       - 'rust/tools/native-numeric-tool-assertions.json'
       - 'rust/crates/yamaa-core/**'
       - 'rust/crates/yamaa-adapters/examples/**'
@@ -19,7 +18,7 @@ on:
       - 'rust/qualification/**'
       - 'yaml/conformance/**'
       - 'rust/tests/test_native_numeric_tools.py'
-      - 'rust/tests/test_math_decision.py'
+      - 'rust/tests/test_portable_math.py'
       - 'rust/tests/test_predicate_syntax_encoding.py'
       - 'rust/tests/test_*rounding*.py'
       - '.github/workflows/native-numeric-tools.yml'
@@ -79,8 +78,8 @@ jobs:
           python -m pip install uv==0.11.6
       - name: Preserve original spans, parser precedence and numerical policy truth
         working-directory: rust
-        run: cargo test --locked -p yamaa-core --test numeric_parser --test aggregate_parser --test predicate_parser --test rounding --test regex
-      - name: Replay independent truth and retain historical coverage disposition
+        run: cargo test --locked -p yamaa-core --test numeric_parser --test aggregate_parser --test predicate_parser --test rounding --test regex --test math_policy --test portable_math_golden
+      - name: Replay independent syntax and numeric checks
         working-directory: rust
         run: |
           set -e
@@ -94,7 +93,7 @@ jobs:
           uv run --project ../python --locked --no-editable python tools/assess_rounding.py --output "${RUNNER_TEMP}/rounding-assessment.json"
           uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_native_numeric_tools.py -v
           uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_predicate_syntax_encoding.py -v
-          uv run --project ../python --locked --no-editable --group benchmark python -m unittest discover -s tests -p test_math_decision.py -v
+          uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_portable_math.py -v
           uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_rounding_assessment.py -v
           uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_rounding_check.py -v
       - name: Retain component evidence without claiming installed matrix qualification

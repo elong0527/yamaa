@@ -2,6 +2,15 @@
   "version": "1",
   "contracts": [
     {
+      "path": "rust/crates/yamaa-core/tests/fixtures/portable_math.tsv",
+      "family": "numeric",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-core/tests/portable_math_golden.rs",
+        "rust/tests/test_portable_math.py"
+      ]
+    },
+    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/diagnostic_literal_truth.json",
       "family": "diagnostics",
       "level": "component",
