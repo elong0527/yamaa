@@ -48,7 +48,9 @@ def check_archive(path: Path) -> int:
     wheel = path.suffix == ".whl"
     if wheel:
         with zipfile.ZipFile(path) as archive:
-            names = archive.namelist()
+            # Preserve the archive spelling in findings on Windows, where
+            # ZipInfo.filename normalizes authored backslashes to slashes.
+            names = [member.orig_filename for member in archive.infolist()]
     elif path.name.endswith(".tar.gz"):
         with tarfile.open(path, "r:gz") as archive:
             names = archive.getnames()
@@ -83,7 +85,9 @@ def check_distributions(directory: Path) -> None:
         raise ValueError("expected exactly one wheel and one source archive")
     for path in wheels + sources:
         count = check_archive(path)
-        print(f"{path.name}: {count} members, no generated caches or retired evaluator/API members")
+        print(
+            f"{path.name}: {count} members, no generated caches or retired evaluator/API members"
+        )
 
 
 if __name__ == "__main__":
