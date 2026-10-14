@@ -46,3 +46,12 @@ resource-snapshot digests.
 Use `opensas` in benchmark labels, prose, prompts, commands, dataset names,
 leaderboards, and solution comments. Keep the standard `.sas` source extension,
 upstream asset names, and required legal trademark attribution intact.
+
+## Site pages have one source
+
+Edit `README.md` for the site home page and `rules/README.md` for the rules
+index. MkDocs reads those files through `.github/scripts/docs/canonical_pages.py`;
+do not create `docs/index.md` or `docs/articles/rules.md`. Their site URLs and
+Edit buttons are set by the hook. Relative Markdown links resolve from the
+canonical source file. Build and test commands live in
+`.github/scripts/docs/README.md`.

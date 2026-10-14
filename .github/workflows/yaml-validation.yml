@@ -18,6 +18,22 @@ env:
   RUSTUP_TOOLCHAIN: 1.90.0
 
 jobs:
+  canonical-pages:
+    name: canonical-site-pages (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+      - name: Install pinned docs dependencies
+        run: python -m pip install -r docs/requirements.txt
+      - name: Test canonical site pages
+        run: python -m unittest discover -s .github/scripts/docs -p 'test_*.py'
+
   validate:
     name: repository-validation (ubuntu-latest)
     runs-on: ubuntu-latest
@@ -38,13 +54,6 @@ jobs:
         id: changes
         run: python .github/scripts/ci/dashboard_changes.py
 
-      - name: README.md and docs/index.md must match byte-for-byte
-        run: |
-          if ! cmp -s README.md docs/index.md; then
-            echo "::error::README.md and docs/index.md differ. README.md is canonical: copy it over docs/index.md (cp README.md docs/index.md)."
-            exit 1
-          fi
-
       - name: Install Rust for the bundled extension
         run: rustup toolchain install 1.90.0 --profile minimal
 
@@ -61,8 +70,8 @@ jobs:
 
       - name: Check formatting and lint once
         run: |
-          uv run --project python --no-sync ruff format --check python/src/yamaa python/tests .github/scripts/ci
-          uv run --project python --no-sync ruff check python/src/yamaa python/tests .github/scripts/ci
+          uv run --project python --no-sync ruff format --check python/src/yamaa python/tests .github/scripts/ci .github/scripts/docs
+          uv run --project python --no-sync ruff check python/src/yamaa python/tests .github/scripts/ci .github/scripts/docs
 
       - name: Check CI selection and dependencies
         run: python -m unittest discover -s .github/scripts/ci -p 'test_*.py'
