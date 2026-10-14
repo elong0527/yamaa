@@ -77,6 +77,54 @@ fn populate(f: &Fixture) {
     .unwrap();
     fs::write(f.0.join("donor.csv"), "ID,LOW,HIGH,ORD,ELIG,V,W\n1,1,3,2,Y,edge,\n1,3,5,1,Y,later,paired\n1,,10,3,Y,missing-bound,hidden\n1,1,10,0,N,filtered,hidden\n").unwrap();
 }
+
+#[test]
+fn derived_date_bound_keeps_the_last_record_on_the_current_date() {
+    let f = Fixture::new();
+    fs::write(
+        f.0.join("src.csv"),
+        "ID,TRTSDT\nS01,2030-01-10\nS02,2030-02-01\nS03,\n",
+    )
+    .unwrap();
+    fs::write(
+        f.0.join("donor.csv"),
+        "ID,VSDTC,WEIGHT\nS01,2030-01-05T08:00,70\nS01,2030-01-10T07:30,71\nS01,2030-01-15T09:00,72\nS02,2030-02-02T08:00,80\nS03,2030-01-03,60\n",
+    )
+    .unwrap();
+    let body = r#"schema_version: '1.0'
+domain: TEST
+base: SRC
+keys: [ID]
+input:
+  SRC: {path: src.csv, types: {TRTSDT: date}}
+  VS: {path: donor.csv, types: {WEIGHT: float}}
+output: {path: result.csv, columns: [ID, TRTSDT, WEIGHTBL]}
+intermediates:
+  - id: BL
+    dataset: VS
+    derivations:
+      ADT: {to_date: {source: VSDTC}}
+    between: {value: TRTSDT, lower: ADT}
+    order_by: [VS.ADT]
+    keep: last
+    no_match: null
+columns:
+  - {name: ID, type: str, derivation: SRC.ID}
+  - {name: TRTSDT, type: date, derivation: SRC.TRTSDT}
+  - {name: WEIGHTBL, type: float, derivation: BL.WEIGHT}
+"#;
+    let mut result = f.run(body);
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    assert!(!f.0.join("result.csv").exists());
+    assert!(result.save().unwrap());
+    // S01's same-day timestamp qualifies after the bound is derived as a date.
+    // S02 has only a later donor; S03's missing current value selects no donor.
+    assert_eq!(
+        fs::read(f.0.join("result.csv")).unwrap(),
+        b"ID,TRTSDT,WEIGHTBL\nS01,2030-01-10,71\nS02,2030-02-01,\nS03,,\n"
+    );
+}
+
 #[test]
 fn inclusive_ranges_keep_one_record_choice_and_project_only_named_reads() {
     let f = Fixture::new();
