@@ -31,7 +31,7 @@ release tagging, package publication or asset replacement.
 | --- | --- | --- |
 | Fixtures, language, workflow and APIs; B01-B12/B16 | All current directory-derived active cases in every installed tuple, two declared historical exclusions, retained host APIs/helpers and error/value/ownership/Save contracts. Independently committed truth remains unchanged. Unique retired assertions require qualified public or typed-native replacements. | Implementation merged; exact final-source installed renewal and retirement reconciliation pending under #2288/#2289. |
 | Installed matrix, numerical behavior and reproducible packages; B12-B15 | 18 CPython 3.12/3.13/3.14 wheel/source tuples plus three R 4.6.1 source tuples, strict R `Status: OK`, three shared Rust checks with engine test-support, nine math assessments and their exact comparison. Six package builds must preserve canonical workspace/lock/toolchain bytes. | Final combined-main native audit and original-input independent replay pending under #2288. A successful workflow alone is insufficient. |
-| Performance and capacity; B17-B18 | Approved longitudinal bounds and paired 100-column, 50,000-record Build/Save controls; 27 authored cases on Linux Python 3.12 wheel and R 4.6.1 source, independently audited for that scope. Each case has ten cold samples, three retained warmups and thirty warm samples. | Harness and auditor completed under #2141/#2143. Capacity implementation in PRs #2365/#2367 and paired local installed controls at `983e9c96` are recorded below. Final combined-main renewal and measured latency/RSS remain under #2288; no numeric budgets are set for 0.4.0. |
+| Performance and capacity; B17-B18 | Approved longitudinal bounds and paired 100-column, 50,000-record Build/Save controls; 27 authored cases on Linux Python 3.12 wheel and R 4.6.1 source, independently audited for that scope. Each case has ten cold samples, three retained warmups and thirty warm samples. | Harness and auditor completed under #2141/#2143. Capacity implementation in PRs #2365/#2367 and paired local Python and hosted Linux R installed controls at `983e9c96` are recorded below. Final combined-main renewal and measured latency/RSS remain under #2288; no numeric budgets are set for 0.4.0. |
 | Transition and rollback; B19 | Exact prior artifacts and complete fresh reinstall matrix; version checks before study effects; explicit item-11 decision linked to all passing entry gates. | Historical 18-tuple Python and three-host R raw receipt replay passed as described below. Final item-11 acceptance remains pending. |
 | Removal; B03/B05/B13 | Retained API, assertion replacements, package/archive membership and dependency/validator locks reconcile with final installed contracts. | Removal is implemented. Its chronology does not establish entry-gate approval; final reconciliation remains pending. |
 | Exact source/run/attempt/artifact handoff; B15/B19 | Final native source and parents, original Actions run/attempt/artifact identities, actual package names/bytes and independent replay; measured performance revision and policy bindings remain explicit. | Final source and selected release bytes are pending. Publication is separate. |
@@ -65,15 +65,16 @@ index validation. These 16 additions do not establish equivalence for every
 retired assertion. Final #2288/#2289 admission still reconciles the required
 behavior and renewed native routing against installed evidence.
 
-### Local candidate implementation and installed controls
+### Candidate implementation and scoped installed controls
 
 PRs [#2365](https://github.com/elong0527/yamaa/pull/2365) and
 [#2367](https://github.com/elong0527/yamaa/pull/2367) implement the longitudinal
-default and actual native usage pools. Local installed-host checks at source
+default and actual native usage pools. Scoped installed-host checks at source
 [`983e9c96`](https://github.com/elong0527/yamaa/commit/983e9c9687a1a49a7d283fe70e681196eef7bd8f)
-passed all 18 Python supplemental suites, all 17 Linux R 4.6.1 supplemental
-suites and 319 R conformance cases. Both hosts passed the paired 100-column,
-50,000-record Build/Save controls. These suite counts are local checks at that
+passed all 18 Python supplemental suites locally and all 17 R supplemental
+suites and 319 R conformance cases in the hosted Linux R 4.6.1 native job.
+Both hosts passed the paired 100-column, 50,000-record Build/Save controls.
+These suite counts are scoped checks at that
 source, not the required 18-tuple Python and three-tuple R release matrix.
 
 The strict R package check at that source still reports one NOTE. The packaging
@@ -82,7 +83,7 @@ repair at
 is queued for renewed checking; it does not change the source identity of the
 installed results above. Final postmerge main/native qualification, numerical
 assessments/comparison, independent audit/replay, Linux measurements and exact
-package/tag selection remain pending. This local evidence does not establish
+package/tag selection remain pending. This scoped installed evidence does not establish
 final release qualification or item-11 acceptance.
 
 ### Source differences and evidence renewal
