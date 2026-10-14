@@ -282,9 +282,27 @@ one source record and must reject duplicates.
 reduction, so `MAX(SUM(EX.EXDOSE))` is an error. Reducing at one key level and
 reducing that result at another uses two specifications. The first artifact
 names and validates the intermediate keys. The downstream specification
-declares that stored artifact as an ordinary source under [Name binding](../specification/binding.md). Pipeline
-orchestration supplies the execution and materialization boundary. The boundary
-is not inferred from a source path.
+declares that artifact as an ordinary source under [Name binding](../specification/binding.md)
+and can link its producing specification through `dataset_class.schema`
+([REQ-0520](../storage/ingestion.md#req-0520)). That link supplies the workflow
+boundary: the producer completes first under
+[REQ-0521](../storage/ingestion.md#req-0521), and the consumer reads its held
+serialized artifact under [REQ-1247](../storage/resources.md#req-1247).
+One domain build executes both levels; neither artifact must already exist,
+and only explicit Save publishes them. A source path alone does not establish
+this boundary. The producer's selected columns must declare their types and
+labels under [REQ-0522](../storage/ingestion.md#req-0522).
+
+For example, `daily.yaml` can group exposure records by subject, treatment,
+and day and derive `ADOSE: {aggregate: "SUM(EX.EXDOSE)"}`. A downstream
+specification declares
+`DAILY: {path: daily.csv, schema: daily.yaml}`, with the producer's
+`output.path` resolving to that same `daily.csv`. It groups `DAILY` by
+subject, treatment, and `DAILY.ADOSE` and derives
+`TRTDUR: {aggregate: "COUNT(DAILY.*)"}`. If a subject has two 100-unit records
+on day 1 and one 200-unit record on each of days 2 and 3, the first level
+produces three daily totals of 200 and the second produces one row with
+`ADOSE = 200` and `TRTDUR = 3`.
 
 <a id="req-0484"></a>
 
