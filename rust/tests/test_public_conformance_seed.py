@@ -130,6 +130,12 @@ class RatchetSeed(unittest.TestCase):
         self.assertEqual(len(value["inventories"]), 21)
         self.assertEqual(value["source_revision"], self.run["head_sha"])
 
+    def test_nightly_main_run_can_seed(self):
+        judge.write_json(
+            self.run_file, {**self.run, "event": "schedule", "head_branch": "main"}
+        )
+        self.assertEqual(self.seed()["source_revision"], self.run["head_sha"])
+
     def test_sampled_running_or_wrong_workflow_run_cannot_seed(self):
         for fields in (
             {"event": "pull_request"},
@@ -138,6 +144,7 @@ class RatchetSeed(unittest.TestCase):
             {"conclusion": "cancelled"},
             {"conclusion": None},
             {"event": "push", "head_branch": "other"},
+            {"event": "schedule", "head_branch": "other"},
             {"path": ".github/workflows/python.yml"},
         ):
             judge.write_json(self.run_file, {**self.run, **fields})

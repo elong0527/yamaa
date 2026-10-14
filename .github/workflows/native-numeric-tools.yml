@@ -1,16 +1,9 @@
 name: Native numerical and syntax obligations
 
 on:
+  # Focused manual gate. Main runs the same checks in native.yml's nightly
+  # native-rust jobs, so pushes no longer trigger a second copy.
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'rust/tools/**'
-      - 'rust/tests/test_*numeric*.py'
-      - 'rust/tests/test_*math*.py'
-      - 'rust/tests/test_*rounding*.py'
-      - 'rust/tests/test_predicate_syntax_encoding.py'
-      - '.github/workflows/native-numeric-tools.yml'
 
 permissions:
   contents: read

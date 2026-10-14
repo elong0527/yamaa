@@ -35,8 +35,8 @@ def seed(fixtures, artifacts, run_file, output, previous=None):
     require(
         run.get("status") == "completed"
         and run.get("conclusion") == "success"
-        and run.get("event") in {"push", "workflow_dispatch"}
-        and (run["event"] != "push" or run.get("head_branch") == "main")
+        and run.get("event") in {"push", "schedule", "workflow_dispatch"}
+        and (run["event"] == "workflow_dispatch" or run.get("head_branch") == "main")
         and run.get("path", "").split("@", 1)[0] == ".github/workflows/native.yml",
         "ratchet requires a successful completed full native main or dispatched run",
     )

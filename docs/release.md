@@ -138,11 +138,12 @@ thresholds merely to make results pass.
 
 Use [CI guidance](https://github.com/elong0527/yamaa/blob/main/.github/ci.md)
 for sampled PR coverage, the full native route and independent audit/replay.
-Ordinary dispatch supplies the installed matrix and component numeric checks;
-shared Rust, nine math assessments/comparison and audit require main or explicit
-qualification pushes. Main's audit is nonblocking: inspect its verdict and replay
-the original inputs. Branch qualification stays `reviewed-branch`; only genuine
-postmerge evidence is `combined-main`.
+A branch dispatch supplies the installed matrix and component numeric checks;
+shared Rust, nine math assessments/comparison and audit run on the nightly main
+run, a dispatch on main or an explicit qualification push. Main's audit is
+nonblocking: inspect its verdict and replay the original inputs. Branch
+qualification stays `reviewed-branch`; only genuine postmerge evidence is
+`combined-main`.
 
 Benchmark directories and the public-conformance configuration determine the
 current authored inventory and explicit exclusions. The generated

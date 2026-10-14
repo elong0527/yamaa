@@ -278,7 +278,7 @@ class Audit:
             self.run["path"] == ".github/workflows/native.yml", "run is not native.yml"
         )
         require(
-            self.run["event"] in ("push", "workflow_dispatch"),
+            self.run["event"] in ("push", "schedule", "workflow_dispatch"),
             "sampled PR cannot qualify full matrix",
         )
         require(
@@ -1216,7 +1216,8 @@ class Audit:
             "run": self.run,
             "source": self.source,
             "qualification_scope": "combined-main"
-            if self.run["event"] == "push" and self.run["head_branch"] == "main"
+            if self.run["event"] in ("push", "schedule", "workflow_dispatch")
+            and self.run["head_branch"] == "main"
             else "reviewed-branch",
             "scope": "evidence completeness; public report-only counts are not whole-corpus qualification",
             "checks": self.global_checks,

@@ -23,7 +23,9 @@ def plan(event, reference=None):
         and not reference.startswith("refs/heads/qualification/issue-")
     ):
         raise ValueError(f"unsupported native qualification push: {reference}")
-    if event not in {"push", "workflow_dispatch"}:
+    if event == "schedule" and reference not in (None, "refs/heads/main"):
+        raise ValueError(f"unsupported scheduled native run: {reference}")
+    if event not in {"push", "schedule", "workflow_dispatch"}:
         raise ValueError(f"unsupported native CI event: {event}")
     platforms = list(PLATFORMS)
     pythons = PYTHONS
@@ -41,7 +43,10 @@ def plan(event, reference=None):
         "qualify": {"include": combinations},
         "r": {"os": r_platforms},
         "run-r": bool(r_platforms),
-        "run-rust": event == "push",
+        # Main is qualified nightly or by dispatch; branch dispatches stay
+        # installed-only.
+        "run-rust": event in {"push", "schedule"}
+        or (event == "workflow_dispatch" and reference == "refs/heads/main"),
         "full": True,
         "compare-os": platforms[0],
     }
@@ -129,9 +134,9 @@ def main():
             "and all three R hosts. PR smoke checks run in pr.yml.\n"
         )
         summary.write(
-            "Shared Rust checks and cross-platform math run on main and explicit "
-            "qualification/issue-* pushes. Branch evidence remains separate from "
-            "combined-main acceptance.\n"
+            "Shared Rust checks and cross-platform math run nightly on main, on "
+            "dispatches on main and on explicit qualification/issue-* pushes. "
+            "Branch evidence remains separate from combined-main acceptance.\n"
         )
 
 
