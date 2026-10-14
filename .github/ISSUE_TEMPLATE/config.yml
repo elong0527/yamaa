@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: "Reviewer feedback workflow"
+    url: https://github.com/elong0527/yamaa/blob/main/docs/articles/reviewer-feedback.md
+    about: "Prepare a public report with synthetic examples, or use your organization's approved internal process for confidential evidence."
   - name: "Questions & discussion"
     url: https://github.com/elong0527/yamaa/discussions
     about: "General chat about yamaa. If you need a decision on the rules or docs, use the Question template instead."

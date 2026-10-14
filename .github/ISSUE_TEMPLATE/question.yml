@@ -5,6 +5,17 @@ body:
   - type: markdown
     attributes:
       value: |
+        This issue and its attachments will be public. Follow the
+        [reviewer feedback workflow](https://github.com/elong0527/yamaa/blob/main/docs/articles/reviewer-feedback.md):
+        use public references and synthetic examples. Review logs, screenshots,
+        filenames, paths, and links for participant data, confidential study
+        information, and credentials. If evidence must remain private, use your
+        organization's approved internal process; this repository has no
+        designated private intake channel for confidential clinical or study data.
+
+  - type: markdown
+    attributes:
+      value: |
         Use this when you need a maintainer decision about what the rules or
         docs mean - not for general chat (that lives in Discussions).
         Title it like "<area>: <the question>" - for example
@@ -49,3 +60,12 @@ body:
         - other
     validations:
       required: true
+
+  - type: checkboxes
+    id: confidentiality
+    attributes:
+      label: "Public disclosure check"
+      description: "This acknowledgment does not automatically inspect or sanitize the report."
+      options:
+        - label: "I reviewed the complete report and attachments, used public or synthetic information, and confirmed that the content is authorized for public disclosure and contains no confidential data or credentials."
+          required: true

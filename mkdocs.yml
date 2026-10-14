@@ -87,3 +87,5 @@ nav:
   - Engine:
       - Python engine: https://github.com/elong0527/yamaa/tree/main/python
       - R engine: https://github.com/elong0527/yamaa/tree/main/R/yamaa
+  - Contribute:
+      - Reviewer feedback: articles/reviewer-feedback.md

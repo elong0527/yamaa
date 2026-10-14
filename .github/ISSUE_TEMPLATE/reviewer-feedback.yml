@@ -1,0 +1,70 @@
+name: "Reviewer feedback"
+description: "Report a review finding using public references and synthetic examples."
+title: "[review] "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This report will be public. Read the
+        [reviewer feedback workflow](https://github.com/elong0527/yamaa/blob/main/docs/articles/reviewer-feedback.md)
+        before submitting. Use public references and invented examples, never
+        real participant data, confidential study documents, or credentials.
+        Review titles, logs, screenshots, attachments, paths, and links too.
+        If evidence must remain private, use your organization's approved
+        internal process; this repository has no designated private intake
+        channel for confidential clinical or study data.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: "Area reviewed"
+      options:
+        - rules
+        - benchmark
+        - docs
+        - Python engine
+        - R engine
+        - schema
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: finding
+    attributes:
+      label: "Review finding"
+      description: "Describe the problem using information authorized for public disclosure. Include a public rule, REQ ID, page, or benchmark reference when available."
+      placeholder: "The public rule and its worked example appear to disagree about how a missing value is handled."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-observed
+    attributes:
+      label: "Expected and observed behavior"
+      description: "Explain what should happen and what you observed. Use invented values if examples are needed."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: "Synthetic reproduction (if applicable)"
+      description: "Provide a minimal example built from scratch, commands, and a sanitized result. For document feedback, public links may be enough. Do not attach real study data or specifications."
+      placeholder: "Public benchmark path, or an invented input and minimal specification that reproduce the finding locally."
+
+  - type: input
+    id: environment
+    attributes:
+      label: "Version and environment (if applicable)"
+      description: "yamaa version or public commit, engine, and R/Python version. Omit internal hostnames and paths."
+
+  - type: checkboxes
+    id: confidentiality
+    attributes:
+      label: "Public disclosure check"
+      description: "This acknowledgment does not automatically inspect or sanitize the report."
+      options:
+        - label: "I reviewed the complete report and attachments, used public or synthetic information, and confirmed that the content is authorized for public disclosure and contains no confidential data or credentials."
+          required: true
