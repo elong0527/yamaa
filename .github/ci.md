@@ -170,7 +170,8 @@ Every attempt preserves its raw failures and partial collections. The independen
 replay job retains all 21 tuple slots, source and baseline histories in a Git
 bundle, original run/attempt/job/artifact identities, and a compact report. A
 first characterization uses `--check-collection`: harness correctness, all 567
-candidate cells and original full native source admission must pass. Numeric
+candidate cells, all 504 prior lifecycle/root-Build comparator cells and original
+full native source admission must pass. Numeric
 budgets remain `not_evaluated` and full acceptance stays false. This allows the
 original collection run to succeed before a reviewed budget decision exists;
 genuine failed collections still fail. Frontier preserves its index and

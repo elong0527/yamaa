@@ -285,6 +285,31 @@ class DurableOriginals(unittest.TestCase):
             )
             self.assertEqual(receipt, retained_parts()[1])
 
+    def test_auditor_content_refusal_does_not_accumulate_validated_original_zip_copies(
+        self,
+    ):
+        release, receipt = retained_parts()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest_root = root / "input"
+            manifest_root.mkdir()
+            entry = {
+                "artifact_id": 42,
+                "artifact_name": "tuple",
+                "archive": "tuple.zip",
+            }
+            provider = finalize.durable_provider(identity(), release, receipt)
+            with (
+                mock.patch.object(finalize, "download", side_effect=self.retrieve),
+                self.assertRaisesRegex(ValueError, "raw content refused"),
+                provider(entry, manifest_root) as downloaded,
+            ):
+                self.assertEqual((downloaded / "tuple.zip").read_bytes(), b"abcde")
+                raise ValueError("raw content refused by independent auditor")
+            self.assertFalse(downloaded.exists())
+            self.assertEqual(list(root.iterdir()), [manifest_root])
+            self.assertEqual(receipt, retained_parts()[1])
+
     def test_index_only_extracts_expected_original_data_and_refuses_archive_code_and_links(
         self,
     ):

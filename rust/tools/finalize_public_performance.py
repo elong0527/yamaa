@@ -263,15 +263,16 @@ def durable_provider(identity, release, receipt):
                     entry["artifact_name"],
                     root / entry["archive"],
                 )
-                yield root
             except Exception:
-                # Preserve refused retrieval bytes independently of the private
-                # extraction lifecycle. Never change the durable original assets.
+                # Preserve only refused retrieval/reassembly bytes. Content or
+                # extraction refusals after yield keep their original durable
+                # asset identities and report, without accumulating full ZIPs.
                 shutil.copytree(
                     root,
                     manifest_root.parent / f"refused-artifact-{entry['artifact_id']}",
                 )
                 raise
+            yield root
 
     return original_archive
 
