@@ -50,7 +50,10 @@ def _installed_providers(roots: Sequence[str]) -> Mapping[str, list[str]]:
     for index, distribution in enumerate(metadata.distributions()):
         if index >= _MAX_RECORDS:
             raise InvalidLock("installed distribution count limit")
-        raw = distribution.read_text("direct_url.json")
+        try:
+            raw = distribution.read_text("direct_url.json")
+        except UnicodeDecodeError as error:
+            raise InvalidLock("invalid editable metadata") from error
         if raw is None:
             continue
         if len(raw.encode("utf-8")) > 16_384:
