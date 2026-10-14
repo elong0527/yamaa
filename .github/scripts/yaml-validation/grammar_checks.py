@@ -1,10 +1,13 @@
 """Rust syntax observations and authored grammar vector/editorial checks."""
+
 import re
 from pathlib import Path, PurePosixPath
-import yaml
+
 import _typed_fixtures
 from _repository_yaml import UniqueKeyLoader
 from validation_diagnostics import validation_diagnostic
+
+import yaml
 
 
 class PredicateSemanticIssue(str):
@@ -19,10 +22,23 @@ class PredicateSemanticIssue(str):
 PREDICATE_COMPARISON_OPERATORS = ("=", "<>", "<", "<=", ">", ">=")
 
 
-PREDICATE_RESERVED_NAMES = frozenset({
-    "AND", "BETWEEN", "DATE", "DATETIME", "ESCAPE", "FALSE", "IN", "IS",
-    "LIKE", "NOT", "NULL", "OR", "TRUE",
-})
+PREDICATE_RESERVED_NAMES = frozenset(
+    {
+        "AND",
+        "BETWEEN",
+        "DATE",
+        "DATETIME",
+        "ESCAPE",
+        "FALSE",
+        "IN",
+        "IS",
+        "LIKE",
+        "NOT",
+        "NULL",
+        "OR",
+        "TRUE",
+    }
+)
 
 
 class PredicateError(ValueError):
@@ -42,7 +58,8 @@ def parse_predicate(text):
         return outcome["ast"]
     if outcome["status"] == "invalid":
         raise PredicateError(
-            outcome["message"], outcome["position"]["character"],
+            outcome["message"],
+            outcome["position"]["character"],
             outcome["requirement"],
         )
     raise RuntimeError(f"typed predicate fixture refused: {outcome!r}")
@@ -61,52 +78,50 @@ class NumericExpressionError(ValueError):
         start,
         end=None,
         *,
-        condition='invalid_numeric_expression',
+        condition="invalid_numeric_expression",
         context=None,
     ):
         self.message = message
         self.span = (start, start + 1 if end is None else end)
         self.condition = condition
         self.context = dict(context or {})
-        super().__init__(
-            f"{message} at characters [{self.span[0]}, {self.span[1]})"
-        )
+        super().__init__(f"{message} at characters [{self.span[0]}, {self.span[1]})")
 
 
 NUMERIC_FUNCTION_ARITIES = {
-    'ABS': (1, 1),
-    'CEIL': (1, 1),
-    'FLOOR': (1, 1),
-    'TRUNC': (1, 1),
-    'SQRT': (1, 1),
-    'POWER': (2, 2),
-    'EXP': (1, 1),
-    'LN': (1, 1),
-    'MOD': (2, 2),
-    'GREATEST': (2, None),
-    'LEAST': (2, None),
-    'NULLIF': (2, 2),
-    'COALESCE': (1, None),
-    'ROUND_HALF_AWAY_FROM_ZERO': (2, 2),
+    "ABS": (1, 1),
+    "CEIL": (1, 1),
+    "FLOOR": (1, 1),
+    "TRUNC": (1, 1),
+    "SQRT": (1, 1),
+    "POWER": (2, 2),
+    "EXP": (1, 1),
+    "LN": (1, 1),
+    "MOD": (2, 2),
+    "GREATEST": (2, None),
+    "LEAST": (2, None),
+    "NULLIF": (2, 2),
+    "COALESCE": (1, None),
+    "ROUND_HALF_AWAY_FROM_ZERO": (2, 2),
 }
 
 
 PROHIBITED_NUMERIC_KEYWORDS = {
-    'AND': 'boolean',
-    'BETWEEN': 'comparison',
-    'CASE': 'conditional',
-    'ELSE': 'conditional',
-    'END': 'conditional',
-    'FALSE': 'boolean',
-    'IN': 'comparison',
-    'IS': 'comparison',
-    'LIKE': 'comparison',
-    'NOT': 'boolean',
-    'OR': 'boolean',
-    'OVER': 'window',
-    'THEN': 'conditional',
-    'TRUE': 'boolean',
-    'WHEN': 'conditional',
+    "AND": "boolean",
+    "BETWEEN": "comparison",
+    "CASE": "conditional",
+    "ELSE": "conditional",
+    "END": "conditional",
+    "FALSE": "boolean",
+    "IN": "comparison",
+    "IS": "comparison",
+    "LIKE": "comparison",
+    "NOT": "boolean",
+    "OR": "boolean",
+    "OVER": "window",
+    "THEN": "conditional",
+    "TRUE": "boolean",
+    "WHEN": "conditional",
 }
 
 
@@ -120,11 +135,18 @@ def _expression_fixture(contract, text, error_type):
         raise RuntimeError(f"typed {contract} fixture refused: {outcome!r}")
     context = outcome["context"]
     start = outcome["position"]["character"]
-    end = start + len(context["function"]) if "function" in context else min(start + 1, len(text))
+    end = (
+        start + len(context["function"])
+        if "function" in context
+        else min(start + 1, len(text))
+    )
     start, end = outcome.get("span", [start, end])
     raise error_type(
-        outcome["condition"].replace("_", " "), start, end,
-        condition=outcome["condition"], context=context,
+        outcome["condition"].replace("_", " "),
+        start,
+        end,
+        condition=outcome["condition"],
+        context=context,
     )
 
 
@@ -141,7 +163,7 @@ class AggregateExpressionError(NumericExpressionError):
         start,
         end=None,
         *,
-        condition='invalid_aggregate_expression',
+        condition="invalid_aggregate_expression",
         context=None,
     ):
         super().__init__(
@@ -153,7 +175,7 @@ class AggregateExpressionError(NumericExpressionError):
         )
 
 
-AGGREGATE_REDUCERS = {'SUM', 'COUNT', 'MIN', 'MAX', 'MEAN', 'ONLY'}
+AGGREGATE_REDUCERS = {"SUM", "COUNT", "MIN", "MAX", "MEAN", "ONLY"}
 
 
 def parse_aggregate_expression(text):
@@ -161,26 +183,26 @@ def parse_aggregate_expression(text):
 
 
 def predicate_identifier_names(text):
-    return _native_identifiers('predicate', text)
+    return _native_identifiers("predicate", text)
 
 
 def _native_identifiers(contract, text):
     if not isinstance(text, str):
         return set()
     outcome = _typed_fixtures.observe(contract, text)
-    if outcome['status'] == 'parsed':
-        return set(outcome['identifiers'])
-    if outcome['status'] == 'invalid':
+    if outcome["status"] == "parsed":
+        return set(outcome["identifiers"])
+    if outcome["status"] == "invalid":
         return set()
-    raise RuntimeError(f'typed {contract} fixture refused: {outcome!r}')
+    raise RuntimeError(f"typed {contract} fixture refused: {outcome!r}")
 
 
 def numeric_expression_identifier_names(text):
-    return _native_identifiers('numeric', text)
+    return _native_identifiers("numeric", text)
 
 
 def aggregate_expression_identifier_names(text):
-    return _native_identifiers('aggregate', text)
+    return _native_identifiers("aggregate", text)
 
 
 class StringTemplateError(ValueError):
@@ -207,22 +229,25 @@ def parse_string_template(text):
     reason = facts["reason"]
     placeholder = facts.get("placeholder")
     raise StringTemplateError(
-        f"invalid placeholder {placeholder!r}" if placeholder is not None else "unmatched brace",
-        span["character_start"], span["character_end"], reason, placeholder,
+        f"invalid placeholder {placeholder!r}"
+        if placeholder is not None
+        else "unmatched brace",
+        span["character_start"],
+        span["character_end"],
+        reason,
+        placeholder,
     )
 
 
 def string_template_placeholders(text):
     """Return only the placeholder parts of a parsed template."""
     return [
-        part
-        for part in parse_string_template(text)
-        if part['kind'] == 'placeholder'
+        part for part in parse_string_template(text) if part["kind"] == "placeholder"
     ]
 
 
 def string_template_identifier_names(text):
-    return _native_identifiers('string-template', text)
+    return _native_identifiers("string-template", text)
 
 
 def expand_spec_windows(spec, env, strict=True, provenance=None, label=""):
@@ -237,84 +262,147 @@ def expand_spec_windows(spec, env, strict=True, provenance=None, label=""):
                 prefix = f"windows.{definition}"
                 for source_path, origin in list(updates.items()):
                     if source_path.startswith(prefix + "."):
-                        updates[logical + source_path[len(prefix):]] = origin
+                        updates[logical + source_path[len(prefix) :]] = origin
             provenance.update(updates)
         return outcome["document"], []
     if outcome["status"] == "invalid":
         return spec, [
             validation_diagnostic(
-                f"{label}.{item['path']}" if label else item['path'],
-                item['condition'], item['condition'], context=item['context'],
+                f"{label}.{item['path']}" if label else item["path"],
+                item["condition"],
+                item["condition"],
+                context=item["context"],
             )
             for item in outcome["diagnostics"]
         ]
     raise RuntimeError(f"typed window fixture refused: {outcome!r}")
 
 
-GRAMMAR_DIR = PurePosixPath('yaml/grammar')
+GRAMMAR_DIR = PurePosixPath("yaml/grammar")
 
 
 GRAMMAR_CONTRACTS = {
-    'predicate': 'operations/predicates',
-    'numeric': 'operations/computation',
-    'string-template': 'operations/text',
-    'aggregate': 'operations/aggregation',
+    "predicate": "operations/predicates",
+    "numeric": "operations/computation",
+    "string-template": "operations/text",
+    "aggregate": "operations/aggregation",
 }
 
 
 GRAMMAR_DOCUMENT_KEYS = {
-    'schema_version', 'contract', 'contract_version', 'rule', 'start',
-    'productions', 'imports', 'vocabulary', 'prohibited', 'reserved',
-    'cases',
+    "schema_version",
+    "contract",
+    "contract_version",
+    "rule",
+    "start",
+    "productions",
+    "imports",
+    "vocabulary",
+    "prohibited",
+    "reserved",
+    "cases",
 }
 
 
 GRAMMAR_REQUIRED_KEYS = (
-    'schema_version', 'contract', 'contract_version', 'rule', 'start',
-    'productions', 'imports', 'vocabulary', 'cases',
+    "schema_version",
+    "contract",
+    "contract_version",
+    "rule",
+    "start",
+    "productions",
+    "imports",
+    "vocabulary",
+    "cases",
 )
 
 
-GRAMMAR_PRODUCTION_KEYS = {'name', 'definition', 'prose'}
+GRAMMAR_PRODUCTION_KEYS = {"name", "definition", "prose"}
 
 
 GRAMMAR_CASE_KEYS = {
-    'id', 'covers', 'text', 'parse', 'condition', 'identifiers', 'shape',
+    "id",
+    "covers",
+    "text",
+    "parse",
+    "condition",
+    "identifiers",
+    "shape",
 }
 
 
 GRAMMAR_COVERS = {
-    'predicate': {
-        'between', 'call', 'comparison', 'escape', 'grouping', 'identifier',
-        'in', 'keyword-case', 'like', 'literal', 'logic', 'null-test',
-        'precedence', 'rejection', 'reserved', 'temporal',
+    "predicate": {
+        "between",
+        "call",
+        "comparison",
+        "escape",
+        "grouping",
+        "identifier",
+        "in",
+        "keyword-case",
+        "like",
+        "literal",
+        "logic",
+        "null-test",
+        "precedence",
+        "rejection",
+        "reserved",
+        "temporal",
     },
-    'numeric': {
-        'arithmetic', 'call', 'grouping', 'identifier', 'keyword-case',
-        'literal', 'null-literal', 'precedence', 'prohibited',
-        'rejection', 'unary', 'vocabulary',
+    "numeric": {
+        "arithmetic",
+        "call",
+        "grouping",
+        "identifier",
+        "keyword-case",
+        "literal",
+        "null-literal",
+        "precedence",
+        "prohibited",
+        "rejection",
+        "unary",
+        "vocabulary",
     },
-    'string-template': {
-        'escape', 'identifier', 'placeholder', 'rejection', 'text',
+    "string-template": {
+        "escape",
+        "identifier",
+        "placeholder",
+        "rejection",
+        "text",
     },
-    'aggregate': {
-        'arithmetic', 'call', 'grouping', 'identifier', 'keyword-case',
-        'literal', 'null-literal', 'precedence', 'prohibited',
-        'reduction', 'rejection', 'star', 'unary', 'vocabulary',
+    "aggregate": {
+        "arithmetic",
+        "call",
+        "grouping",
+        "identifier",
+        "keyword-case",
+        "literal",
+        "null-literal",
+        "precedence",
+        "prohibited",
+        "reduction",
+        "rejection",
+        "star",
+        "unary",
+        "vocabulary",
     },
 }
 
 
 GRAMMAR_CONDITIONS = {
-    'predicate': {'invalid_predicate'},
-    'numeric': {
-        'invalid_numeric_expression', 'prohibited_construct',
-        'prohibited_function',
+    "predicate": {"invalid_predicate"},
+    "numeric": {
+        "invalid_numeric_expression",
+        "prohibited_construct",
+        "prohibited_function",
     },
-    'string-template': {'invalid_string_template'},
-    'aggregate': {
-        'invalid_aggregate_expression', 'nested_reduction',
-        'prohibited_construct', 'prohibited_function',
+    "string-template": {"invalid_string_template"},
+    "aggregate": {
+        "invalid_aggregate_expression",
+        "nested_reduction",
+        "prohibited_construct",
+        "prohibited_function",
     },
 }
 
@@ -326,59 +414,58 @@ def quote_grammar_scalar(value):
 
 
 def predicate_operand_shape(node):
-    if node['kind'] == 'identifier':
+    if node["kind"] == "identifier":
         return f"(id {node['name']})"
-    value_type = node['type']
+    value_type = node["type"]
     if value_type is None:
-        return 'null'
-    if value_type in {'str', 'date', 'datetime'}:
+        return "null"
+    if value_type in {"str", "date", "datetime"}:
         return f"({value_type} {quote_grammar_scalar(node['value'])})"
     return f"({value_type} {node['value']})"
 
 
 def predicate_shape(node):
     """Render a parsed predicate as the prefix form a vector records."""
-    kind = node['kind']
-    if kind in {'and', 'or'}:
+    kind = node["kind"]
+    if kind in {"and", "or"}:
         return (
-            f"({kind} {predicate_shape(node['left'])} "
-            f"{predicate_shape(node['right'])})"
+            f"({kind} {predicate_shape(node['left'])} {predicate_shape(node['right'])})"
         )
-    if kind == 'not':
+    if kind == "not":
         return f"(not {predicate_shape(node['value'])})"
-    if kind == 'boolean':
-        return 'true' if node['value'] else 'false'
-    if kind == 'comparison':
+    if kind == "boolean":
+        return "true" if node["value"] else "false"
+    if kind == "comparison":
         return (
             f"({node['operator']} {predicate_operand_shape(node['left'])} "
             f"{predicate_operand_shape(node['right'])})"
         )
-    if kind == 'null_test':
-        name = 'is-not-null' if node['negated'] else 'is-null'
+    if kind == "null_test":
+        name = "is-not-null" if node["negated"] else "is-null"
         return f"({name} {predicate_operand_shape(node['value'])})"
-    if kind == 'in':
-        name = 'not-in' if node['negated'] else 'in'
-        operands = ' '.join(
-            predicate_operand_shape(operand) for operand in node['values']
+    if kind == "in":
+        name = "not-in" if node["negated"] else "in"
+        operands = " ".join(
+            predicate_operand_shape(operand) for operand in node["values"]
         )
         return f"({name} {predicate_operand_shape(node['value'])} {operands})"
-    if kind == 'between':
-        name = 'not-between' if node['negated'] else 'between'
+    if kind == "between":
+        name = "not-between" if node["negated"] else "between"
         return (
             f"({name} {predicate_operand_shape(node['value'])} "
             f"{predicate_operand_shape(node['lower'])} "
             f"{predicate_operand_shape(node['upper'])})"
         )
-    if kind == 'like':
-        name = 'not-like' if node['negated'] else 'like'
+    if kind == "like":
+        name = "not-like" if node["negated"] else "like"
         rendered = (
             f"({name} {predicate_operand_shape(node['value'])} "
             f"{predicate_operand_shape(node['pattern'])}"
         )
-        if node['escape'] is not None:
+        if node["escape"] is not None:
             rendered += f" (escape {quote_grammar_scalar(node['escape'])})"
-        return rendered + ')'
-    if kind == 'call':
+        return rendered + ")"
+    if kind == "call":
         return (
             f"(str-contains {predicate_operand_shape(node['source'])} "
             f"(str {quote_grammar_scalar(node['pattern'])})"
@@ -389,45 +476,42 @@ def predicate_shape(node):
 
 def expression_shape(node):
     """Render a parsed R010 or R013 expression as a vector's prefix form."""
-    kind = node['kind']
-    if kind == 'number':
+    kind = node["kind"]
+    if kind == "number":
         return f"({node['type']} {node['value']})"
-    if kind == 'null':
-        return 'null'
-    if kind == 'identifier':
+    if kind == "null":
+        return "null"
+    if kind == "identifier":
         return f"(id {node['name']})"
-    if kind == 'qualified_star':
+    if kind == "qualified_star":
         return f"(star {node['dataset']})"
-    if kind == 'unary':
-        name = 'neg' if node['operator'] == '-' else 'pos'
+    if kind == "unary":
+        name = "neg" if node["operator"] == "-" else "pos"
         return f"({name} {expression_shape(node['value'])})"
-    if kind == 'binary':
+    if kind == "binary":
         return (
             f"({node['operator']} {expression_shape(node['left'])} "
             f"{expression_shape(node['right'])})"
         )
-    if kind == 'reduction':
-        return (
-            f"(reduce {node['name'].upper()} "
-            f"{expression_shape(node['argument'])})"
-        )
-    if kind == 'call':
+    if kind == "reduction":
+        return f"(reduce {node['name'].upper()} {expression_shape(node['argument'])})"
+    if kind == "call":
         rendered = f"(call {node['name'].upper()}"
-        for argument in node['arguments']:
+        for argument in node["arguments"]:
             rendered += f" {expression_shape(argument)}"
-        return rendered + ')'
+        return rendered + ")"
     raise AssertionError(f"unknown expression AST node {kind!r}")
 
 
 def string_template_shape(parts):
     """Render parsed template parts as the prefix form a vector records."""
-    rendered = '(template'
+    rendered = "(template"
     for part in parts:
-        if part['kind'] == 'text':
+        if part["kind"] == "text":
             rendered += f" (text {quote_grammar_scalar(part['value'])})"
         else:
             rendered += f" (placeholder {part['name']})"
-    return rendered + ')'
+    return rendered + ")"
 
 
 def decide_predicate(text):
@@ -435,7 +519,7 @@ def decide_predicate(text):
     try:
         ast = parse_predicate(text)
     except PredicateError:
-        return 'invalid_predicate', None, set()
+        return "invalid_predicate", None, set()
     return None, predicate_shape(ast), predicate_identifier_names(text)
 
 
@@ -464,7 +548,7 @@ def decide_string_template(text):
     try:
         parts = parse_string_template(text)
     except StringTemplateError:
-        return 'invalid_string_template', None, set()
+        return "invalid_string_template", None, set()
     return (
         None,
         string_template_shape(parts),
@@ -473,10 +557,10 @@ def decide_string_template(text):
 
 
 GRAMMAR_DECISIONS = {
-    'predicate': decide_predicate,
-    'numeric': decide_numeric,
-    'string-template': decide_string_template,
-    'aggregate': decide_aggregate,
+    "predicate": decide_predicate,
+    "numeric": decide_numeric,
+    "string-template": decide_string_template,
+    "aggregate": decide_aggregate,
 }
 
 
@@ -488,48 +572,46 @@ def render_grammar_block(productions):
     definition operator; every other continuation aligns under the
     definition itself.
     """
-    width = max(len(production['name']) for production in productions)
+    width = max(len(production["name"]) for production in productions)
     lines = []
     for production in productions:
-        definition = production['definition'].split('\n')
+        definition = production["definition"].split("\n")
         lines.append(f"{production['name'].ljust(width)} := {definition[0]}")
         for continuation in definition[1:]:
-            indent = width + (2 if continuation.startswith('|') else 4)
-            lines.append(' ' * indent + continuation)
-    return '\n'.join(lines)
+            indent = width + (2 if continuation.startswith("|") else 4)
+            lines.append(" " * indent + continuation)
+    return "\n".join(lines)
 
 
 def rule_grammar_block(text):
     """Return the grammar block written in a rule's Grammar section."""
-    section = re.search(r'\n#{2,3} (?:Templates: )?Grammar\n(.*?)(?=\n#{2,3} |\Z)', text, re.DOTALL)
+    section = re.search(
+        r"\n#{2,3} (?:Templates: )?Grammar\n(.*?)(?=\n#{2,3} |\Z)", text, re.DOTALL
+    )
     if section is None:
         return None
-    block = re.search(r'```text\n(.*?)\n```', section.group(1), re.DOTALL)
+    block = re.search(r"```text\n(.*?)\n```", section.group(1), re.DOTALL)
     return None if block is None else block.group(1)
 
 
 def grammar_symbol_references(definition):
     """Return the non-terminals an EBNF definition refers to."""
-    without_terminals = re.sub(r'"[^"]*"', ' ', definition)
-    return set(re.findall(r'[A-Za-z_][A-Za-z0-9_]*', without_terminals))
+    without_terminals = re.sub(r'"[^"]*"', " ", definition)
+    return set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", without_terminals))
 
 
 def grammar_defined_symbols(document):
     """Return every symbol a grammar document defines or closes."""
     defined = set()
-    productions = document.get('productions')
+    productions = document.get("productions")
     if isinstance(productions, list):
         for production in productions:
-            if isinstance(production, dict) and isinstance(
-                production.get('name'), str
-            ):
-                defined.add(production['name'])
-    vocabulary = document.get('vocabulary')
+            if isinstance(production, dict) and isinstance(production.get("name"), str):
+                defined.add(production["name"])
+    vocabulary = document.get("vocabulary")
     if isinstance(vocabulary, dict):
-        defined.update(
-            name for name in vocabulary if isinstance(name, str)
-        )
-    for closed in ('prohibited', 'reserved'):
+        defined.update(name for name in vocabulary if isinstance(name, str))
+    for closed in ("prohibited", "reserved"):
         if closed in document:
             defined.add(closed)
     return defined
@@ -539,12 +621,12 @@ def grammar_vocabulary_errors(contract, document, label):
     """Compare a contract's closed vocabulary with this validator's."""
     _ensure_predicate_binding()
     errors = []
-    vocabulary = document.get('vocabulary')
+    vocabulary = document.get("vocabulary")
     if not isinstance(vocabulary, dict):
         return [f"ERROR: {label}: vocabulary must be a mapping"]
 
-    if contract == 'predicate':
-        reserved = document.get('reserved')
+    if contract == "predicate":
+        reserved = document.get("reserved")
         if not isinstance(reserved, list) or not all(
             isinstance(name, str) for name in reserved
         ):
@@ -558,14 +640,13 @@ def grammar_vocabulary_errors(contract, document, label):
         compare = next(
             (
                 production
-                for production in document['productions']
-                if isinstance(production, dict)
-                and production.get('name') == 'compare'
+                for production in document["productions"]
+                if isinstance(production, dict) and production.get("name") == "compare"
             ),
             None,
         )
         declared = (
-            re.findall(r'"([^"]*)"', compare.get('definition', ''))
+            re.findall(r'"([^"]*)"', compare.get("definition", ""))
             if isinstance(compare, dict)
             else []
         )
@@ -577,30 +658,29 @@ def grammar_vocabulary_errors(contract, document, label):
             )
         return errors
 
-    if contract == 'numeric':
-        functions = vocabulary.get('function')
+    if contract == "numeric":
+        functions = vocabulary.get("function")
         if not isinstance(functions, dict):
             errors.append(f"ERROR: {label}: vocabulary.function is missing")
         else:
             declared = {}
             for name, arity in sorted(functions.items()):
                 if not isinstance(arity, dict) or set(arity) != {
-                    'min_arguments', 'max_arguments'
+                    "min_arguments",
+                    "max_arguments",
                 }:
                     errors.append(
                         f"ERROR: {label}: function {name} must declare "
                         "min_arguments and max_arguments"
                     )
                     continue
-                declared[name] = (
-                    arity['min_arguments'], arity['max_arguments']
-                )
+                declared[name] = (arity["min_arguments"], arity["max_arguments"])
             if declared != NUMERIC_FUNCTION_ARITIES:
                 errors.append(
                     f"ERROR: {label}: vocabulary.function does not name the "
                     "functions and arities this validator permits"
                 )
-        prohibited = document.get('prohibited')
+        prohibited = document.get("prohibited")
         if prohibited != PROHIBITED_NUMERIC_KEYWORDS:
             errors.append(
                 f"ERROR: {label}: prohibited does not name the constructs "
@@ -608,8 +688,8 @@ def grammar_vocabulary_errors(contract, document, label):
             )
         return errors
 
-    if contract == 'aggregate':
-        reducers = vocabulary.get('reducer')
+    if contract == "aggregate":
+        reducers = vocabulary.get("reducer")
         if not isinstance(reducers, dict):
             errors.append(f"ERROR: {label}: vocabulary.reducer is missing")
         else:
@@ -620,20 +700,18 @@ def grammar_vocabulary_errors(contract, document, label):
                     f"{sorted(AGGREGATE_REDUCERS)}"
                 )
             for name, entry in sorted(reducers.items()):
-                arguments = (
-                    entry.get('argument') if isinstance(entry, dict) else None
-                )
-                expected = ['expr', 'star'] if name == 'COUNT' else ['expr']
+                arguments = entry.get("argument") if isinstance(entry, dict) else None
+                expected = ["expr", "star"] if name == "COUNT" else ["expr"]
                 if arguments != expected:
                     errors.append(
                         f"ERROR: {label}: reducer {name} must declare "
                         f"argument {expected}"
                     )
-        imports = document.get('imports')
+        imports = document.get("imports")
         if not isinstance(imports, dict):
             return errors
-        for symbol in ('function', 'prohibited'):
-            if imports.get(symbol) != 'numeric':
+        for symbol in ("function", "prohibited"):
+            if imports.get(symbol) != "numeric":
                 errors.append(
                     f"ERROR: {label}: {symbol} must be imported from the "
                     "numeric contract rather than restated"
@@ -652,7 +730,7 @@ def grammar_case_errors(contract, case, label):
     if unknown:
         errors.append(f"ERROR: {label}: unknown keys {unknown}")
 
-    covers = case.get('covers')
+    covers = case.get("covers")
     if not isinstance(covers, list) or not covers:
         errors.append(f"ERROR: {label}: covers must be a non-empty list")
     else:
@@ -660,25 +738,23 @@ def grammar_case_errors(contract, case, label):
         if outside:
             errors.append(f"ERROR: {label}: unknown covers {outside}")
 
-    text = case.get('text')
+    text = case.get("text")
     if not isinstance(text, str):
         errors.append(f"ERROR: {label}: text must be a string")
         return errors
 
-    outcome = case.get('parse')
-    if outcome not in {'accept', 'reject'}:
+    outcome = case.get("parse")
+    if outcome not in {"accept", "reject"}:
         errors.append(f"ERROR: {label}: parse must be 'accept' or 'reject'")
         return errors
 
     condition, shape, identifiers = GRAMMAR_DECISIONS[contract](text)
 
-    if outcome == 'reject':
-        for key in ('identifiers', 'shape'):
+    if outcome == "reject":
+        for key in ("identifiers", "shape"):
             if key in case:
-                errors.append(
-                    f"ERROR: {label}: a rejected text records no {key}"
-                )
-        declared = case.get('condition')
+                errors.append(f"ERROR: {label}: a rejected text records no {key}")
+        declared = case.get("condition")
         if declared not in GRAMMAR_CONDITIONS[contract]:
             errors.append(
                 f"ERROR: {label}: condition must be one of "
@@ -696,7 +772,7 @@ def grammar_case_errors(contract, case, label):
             )
         return errors
 
-    if 'condition' in case:
+    if "condition" in case:
         errors.append(f"ERROR: {label}: an accepted text records no condition")
     if condition is not None:
         errors.append(
@@ -705,7 +781,7 @@ def grammar_case_errors(contract, case, label):
         )
         return errors
 
-    declared_identifiers = case.get('identifiers')
+    declared_identifiers = case.get("identifiers")
     if not isinstance(declared_identifiers, list) or not all(
         isinstance(name, str) for name in declared_identifiers
     ):
@@ -719,7 +795,7 @@ def grammar_case_errors(contract, case, label):
             "vector records"
         )
 
-    declared_shape = case.get('shape')
+    declared_shape = case.get("shape")
     if not isinstance(declared_shape, str):
         errors.append(f"ERROR: {label}: shape must be a string")
     elif declared_shape != shape:
@@ -732,13 +808,13 @@ def grammar_case_errors(contract, case, label):
 
 def validate_grammar_contract(root: Path, contract: str):
     """Check one closed grammar against its rule and this validator."""
-    label = str(GRAMMAR_DIR / f'{contract}.yaml')
-    document_path = root / GRAMMAR_DIR / f'{contract}.yaml'
+    label = str(GRAMMAR_DIR / f"{contract}.yaml")
+    document_path = root / GRAMMAR_DIR / f"{contract}.yaml"
     if not document_path.exists():
         return [f"ERROR: {label}: missing machine-readable grammar"]
 
     try:
-        with open(document_path, 'r', encoding='utf-8') as handle:
+        with open(document_path, "r", encoding="utf-8") as handle:
             document = yaml.load(handle, Loader=UniqueKeyLoader)
     except Exception as exc:
         return [f"ERROR: {label}: {exc}"]
@@ -754,19 +830,18 @@ def validate_grammar_contract(root: Path, contract: str):
     if missing:
         errors.append(f"ERROR: {label}: missing keys {missing}")
         return errors
-    if document['contract'] != contract:
+    if document["contract"] != contract:
         errors.append(
             f"ERROR: {label}: contract must be {contract!r}, got "
             f"{document['contract']!r}"
         )
     rule_id = GRAMMAR_CONTRACTS[contract]
-    if document['rule'] != rule_id:
+    if document["rule"] != rule_id:
         errors.append(
-            f"ERROR: {label}: rule must be {rule_id!r}, got "
-            f"{document['rule']!r}"
+            f"ERROR: {label}: rule must be {rule_id!r}, got {document['rule']!r}"
         )
 
-    productions = document['productions']
+    productions = document["productions"]
     if not isinstance(productions, list) or not productions:
         errors.append(f"ERROR: {label}: productions must be a non-empty list")
         return errors
@@ -774,21 +849,17 @@ def validate_grammar_contract(root: Path, contract: str):
     names = []
     for index, production in enumerate(productions):
         if not isinstance(production, dict):
-            errors.append(
-                f"ERROR: {label}: productions[{index}] must be a mapping"
-            )
+            errors.append(f"ERROR: {label}: productions[{index}] must be a mapping")
             continue
         unknown = sorted(set(production) - GRAMMAR_PRODUCTION_KEYS)
         if unknown:
             errors.append(
                 f"ERROR: {label}: productions[{index}] unknown keys {unknown}"
             )
-        name = production.get('name')
-        definition = production.get('definition')
+        name = production.get("name")
+        definition = production.get("definition")
         if not isinstance(name, str) or not name:
-            errors.append(
-                f"ERROR: {label}: productions[{index}].name must be a name"
-            )
+            errors.append(f"ERROR: {label}: productions[{index}].name must be a name")
             continue
         if name in names:
             errors.append(f"ERROR: {label}: {name}: duplicate production")
@@ -796,50 +867,45 @@ def validate_grammar_contract(root: Path, contract: str):
         names.append(name)
         if not isinstance(definition, str) or not definition:
             errors.append(
-                f"ERROR: {label}: {name}: definition must be a non-empty "
-                "string"
+                f"ERROR: {label}: {name}: definition must be a non-empty string"
             )
-        if 'prose' in production and production['prose'] is not True:
-            errors.append(
-                f"ERROR: {label}: {name}: prose must be true or absent"
-            )
+        if "prose" in production and production["prose"] is not True:
+            errors.append(f"ERROR: {label}: {name}: prose must be true or absent")
     if errors:
         return errors
 
-    if document['start'] not in names:
+    if document["start"] not in names:
         errors.append(
             f"ERROR: {label}: start {document['start']!r} names no production"
         )
 
-    imports = document['imports']
+    imports = document["imports"]
     if not isinstance(imports, dict):
         errors.append(f"ERROR: {label}: imports must be a mapping")
         imports = {}
     defined = grammar_defined_symbols(document) | set(imports)
     for production in productions:
-        if production.get('prose') is True:
+        if production.get("prose") is True:
             continue
         undefined = sorted(
-            grammar_symbol_references(production['definition']) - defined
+            grammar_symbol_references(production["definition"]) - defined
         )
         if undefined:
             errors.append(
-                f"ERROR: {label}: {production['name']}: undefined symbols "
-                f"{undefined}"
+                f"ERROR: {label}: {production['name']}: undefined symbols {undefined}"
             )
 
     for symbol, source in sorted(imports.items()):
-        if source == 'schema':
+        if source == "schema":
             continue
         if source not in GRAMMAR_CONTRACTS:
             errors.append(
-                f"ERROR: {label}: {symbol} is imported from unknown contract "
-                f"{source!r}"
+                f"ERROR: {label}: {symbol} is imported from unknown contract {source!r}"
             )
             continue
-        source_path = root / GRAMMAR_DIR / f'{source}.yaml'
+        source_path = root / GRAMMAR_DIR / f"{source}.yaml"
         try:
-            with open(source_path, 'r', encoding='utf-8') as handle:
+            with open(source_path, "r", encoding="utf-8") as handle:
                 source_document = yaml.load(handle, Loader=UniqueKeyLoader)
         except Exception:
             errors.append(
@@ -855,11 +921,11 @@ def validate_grammar_contract(root: Path, contract: str):
 
     errors.extend(grammar_vocabulary_errors(contract, document, label))
 
-    rule_path = root / 'rules' / f'{rule_id}.md'
+    rule_path = root / "rules" / f"{rule_id}.md"
     if not rule_path.is_file():
         errors.append(f"ERROR: {label}: rule {rule_id} has no file")
     else:
-        block = rule_grammar_block(rule_path.read_text(encoding='utf-8'))
+        block = rule_grammar_block(rule_path.read_text(encoding="utf-8"))
         rendered = render_grammar_block(productions)
         if block is None:
             errors.append(
@@ -872,7 +938,7 @@ def validate_grammar_contract(root: Path, contract: str):
                 f"not the one {label} renders; replace it with:\n{rendered}"
             )
 
-    cases = document['cases']
+    cases = document["cases"]
     if not isinstance(cases, list) or not cases:
         errors.append(f"ERROR: {label}: cases must be a non-empty list")
         return errors
@@ -883,24 +949,19 @@ def validate_grammar_contract(root: Path, contract: str):
         if not isinstance(case, dict):
             errors.append(f"ERROR: {label}: cases[{index}] must be a mapping")
             continue
-        case_id = case.get('id')
+        case_id = case.get("id")
         if not isinstance(case_id, str) or not case_id:
             errors.append(
-                f"ERROR: {label}: cases[{index}].id must be a non-empty "
-                "string"
+                f"ERROR: {label}: cases[{index}].id must be a non-empty string"
             )
             continue
         if case_id in seen:
             errors.append(f"ERROR: {label}: {case_id}: duplicate case id")
             continue
         seen.add(case_id)
-        if isinstance(case.get('covers'), list):
-            covered.update(
-                name for name in case['covers'] if isinstance(name, str)
-            )
-        errors.extend(
-            grammar_case_errors(contract, case, f"{label}: {case_id}")
-        )
+        if isinstance(case.get("covers"), list):
+            covered.update(name for name in case["covers"] if isinstance(name, str))
+        errors.extend(grammar_case_errors(contract, case, f"{label}: {case_id}"))
 
     missing_covers = sorted(GRAMMAR_COVERS[contract] - covered)
     if missing_covers:

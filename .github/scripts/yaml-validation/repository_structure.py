@@ -1,16 +1,21 @@
 """Repository layout, authored document and editorial orchestration."""
+
 from pathlib import Path
-import yaml
-from editorial import example_spec_paths
+
 from _repository_yaml import UniqueKeyLoader
+from editorial import example_spec_paths
 from repository_artifacts import example_entry_specs, validate_expected_resolved_fixture
 from repository_manifests import validate_registered_fixture_diagnostics
 from repository_schema import build_schema_env, validate_spec_document, validate_type
 
+import yaml
 
-HISTORICAL_RESOURCE_FIXTURES = frozenset({
-    'negative-path-absolute', 'negative-path-parent-escape',
-})
+HISTORICAL_RESOURCE_FIXTURES = frozenset(
+    {
+        "negative-path-absolute",
+        "negative-path-parent-escape",
+    }
+)
 
 
 def validate_examples_structure(root: Path, env, warnings=None, manifest=None):
@@ -20,15 +25,15 @@ def validate_examples_structure(root: Path, env, warnings=None, manifest=None):
     if env is None:
         return errors
 
-    examples_dir = root / 'benchmarks'
+    examples_dir = root / "benchmarks"
     if not examples_dir.exists():
         return errors
 
     manifest_fixtures = (
-        manifest.get('fixtures', {}) if isinstance(manifest, dict) else {}
+        manifest.get("fixtures", {}) if isinstance(manifest, dict) else {}
     )
     for ex_dir in sorted(examples_dir.iterdir()):
-        if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
+        if not ex_dir.is_dir() or ex_dir.name.startswith("."):
             continue
 
         if ex_dir.name in HISTORICAL_RESOURCE_FIXTURES:
@@ -40,17 +45,15 @@ def validate_examples_structure(root: Path, env, warnings=None, manifest=None):
         spec_labels = []
         for spec_path in example_entry_specs(ex_dir):
             try:
-                with open(spec_path, 'r', encoding='utf-8') as f:
+                with open(spec_path, "r", encoding="utf-8") as f:
                     spec = yaml.load(f, Loader=UniqueKeyLoader)
             except Exception:
                 continue
 
             spec_label = f"{ex_dir.name}/{spec_path.name}"
             spec_labels.append(spec_label)
-            is_negative = ex_dir.name.startswith('negative-')
-            spec_errors = validate_spec_document(
-                spec, spec_label, spec_path, env
-            )
+            is_negative = ex_dir.name.startswith("negative-")
+            spec_errors = validate_spec_document(spec, spec_label, spec_path, env)
             if not is_negative:
                 errors.extend(spec_errors)
                 errors.extend(
@@ -62,24 +65,21 @@ def validate_examples_structure(root: Path, env, warnings=None, manifest=None):
 
             example_errors.extend(spec_errors)
 
-        if not ex_dir.name.startswith('negative-'):
+        if not ex_dir.name.startswith("negative-"):
             continue
 
-        error_yaml_path = ex_dir / 'expected' / 'error.yaml'
+        error_yaml_path = ex_dir / "expected" / "error.yaml"
         if not error_yaml_path.exists():
             errors.extend(example_errors)
             continue
 
         try:
-            with open(error_yaml_path, 'r', encoding='utf-8') as f:
+            with open(error_yaml_path, "r", encoding="utf-8") as f:
                 err_spec = yaml.load(f, Loader=UniqueKeyLoader)
         except Exception:
             errors.extend(example_errors)
             continue
-        if not (
-            isinstance(err_spec, dict)
-            and err_spec.get('phase') == 'validation'
-        ):
+        if not (isinstance(err_spec, dict) and err_spec.get("phase") == "validation"):
             errors.extend(example_errors)
             continue
 
@@ -94,11 +94,11 @@ def validate_examples_structure(root: Path, env, warnings=None, manifest=None):
 
         # Compatibility path for focused unit tests without a repository
         # validation manifest.
-        expected_paths = err_spec.get('spec_paths', [])
+        expected_paths = err_spec.get("spec_paths", [])
         if not isinstance(expected_paths, list):
             expected_paths = [expected_paths]
         for err in example_errors:
-            parts = err.split(': ', 2)
+            parts = err.split(": ", 2)
             if len(parts) < 2:
                 errors.append(err)
                 continue
@@ -107,7 +107,7 @@ def validate_examples_structure(root: Path, env, warnings=None, manifest=None):
             for spec_label in spec_labels:
                 prefix = f"{spec_label}."
                 if norm_path.startswith(prefix):
-                    norm_path = norm_path[len(prefix):]
+                    norm_path = norm_path[len(prefix) :]
                     break
             if not any(
                 norm_path == expected_path
@@ -128,25 +128,27 @@ def validate_examples_environment_documents(root: Path, env=None):
     this does not request Define rendering or a published dataset.
     """
     documents = sorted(
-        set((root / 'benchmarks').glob('*/environment.yaml'))
-        | set((root / 'benchmarks').glob('*/python/environment.yaml'))
-        | set((root / 'benchmarks').glob('*/r/environment.yaml'))
+        set((root / "benchmarks").glob("*/environment.yaml"))
+        | set((root / "benchmarks").glob("*/python/environment.yaml"))
+        | set((root / "benchmarks").glob("*/r/environment.yaml"))
     )
     if not documents:
         return []
     errors = []
     if env is None:
-        env, errors = build_schema_env(root, entrypoint='schema_environment.yaml')
+        env, errors = build_schema_env(root, entrypoint="schema_environment.yaml")
         if env is None or errors:
             return errors
     for path in documents:
         label = str(path.relative_to(root))
         try:
-            document = yaml.load(path.read_text(encoding='utf-8'), Loader=UniqueKeyLoader)
+            document = yaml.load(
+                path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader
+            )
         except (OSError, UnicodeError, yaml.YAMLError) as exc:
             errors.append(f"ERROR: {label}: {exc}")
             continue
-        errors.extend(validate_type(document, ['environment_class'], env, label))
+        errors.extend(validate_type(document, ["environment_class"], env, label))
     return errors
 
 
@@ -159,11 +161,11 @@ def validate_examples_define_documents(root: Path):
     unnoticed.
     """
     errors = []
-    documents = sorted((root / 'benchmarks').glob('*/define.yaml'))
+    documents = sorted((root / "benchmarks").glob("*/define.yaml"))
     if not documents:
         return errors
 
-    env, env_errors = build_schema_env(root, entrypoint='schema_define.yaml')
+    env, env_errors = build_schema_env(root, entrypoint="schema_define.yaml")
     if env is None:
         return env_errors
     errors.extend(env_errors)
@@ -171,7 +173,7 @@ def validate_examples_define_documents(root: Path):
     for path in documents:
         label = str(path.relative_to(root))
         try:
-            with open(path, 'r', encoding='utf-8') as handle:
+            with open(path, "r", encoding="utf-8") as handle:
                 document = yaml.load(handle, Loader=UniqueKeyLoader)
         except (OSError, UnicodeError, yaml.YAMLError) as exc:
             errors.append(f"ERROR: {label}: {exc}")
@@ -179,18 +181,18 @@ def validate_examples_define_documents(root: Path):
         if not isinstance(document, dict):
             errors.append(f"ERROR: {label}: document must be a mapping")
             continue
-        errors.extend(validate_type(document, ['define_class'], env, label))
+        errors.extend(validate_type(document, ["define_class"], env, label))
     return errors
 
 
 def validate_examples_layout(root: Path):
     errors = []
-    examples_dir = root / 'benchmarks'
+    examples_dir = root / "benchmarks"
     if not examples_dir.exists():
         return errors
 
     for ex_dir in sorted(examples_dir.iterdir()):
-        if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
+        if not ex_dir.is_dir() or ex_dir.name.startswith("."):
             continue
 
         rel = ex_dir.relative_to(root)
@@ -198,33 +200,33 @@ def validate_examples_layout(root: Path):
         # Specification files
         spec_paths = example_spec_paths(ex_dir)
         if not spec_paths:
-            errors.append(
-                f"ERROR: {rel} missing spec.yaml or spec_<variant>.yaml"
-            )
+            errors.append(f"ERROR: {rel} missing spec.yaml or spec_<variant>.yaml")
         elif len(spec_paths) > 1 and any(
-            path.name == 'spec.yaml' for path in spec_paths
+            path.name == "spec.yaml" for path in spec_paths
         ):
-            errors.append(
-                f"ERROR: {rel} cannot mix spec.yaml with variant specs"
-            )
+            errors.append(f"ERROR: {rel} cannot mix spec.yaml with variant specs")
 
         # input/
-        if not (ex_dir / 'input').is_dir():
+        if not (ex_dir / "input").is_dir():
             errors.append(f"ERROR: {rel} missing input/ directory")
 
         # expected/
-        expected_dir = ex_dir / 'expected'
+        expected_dir = ex_dir / "expected"
         if not expected_dir.is_dir():
             errors.append(f"ERROR: {rel} missing expected/ directory")
         else:
-            is_negative = ex_dir.name.startswith('negative-')
-            has_error_yaml = (expected_dir / 'error.yaml').exists()
+            is_negative = ex_dir.name.startswith("negative-")
+            has_error_yaml = (expected_dir / "error.yaml").exists()
             if is_negative and not has_error_yaml:
-                errors.append(f"ERROR: {rel} is negative but missing expected/error.yaml")
+                errors.append(
+                    f"ERROR: {rel} is negative but missing expected/error.yaml"
+                )
             elif not is_negative and has_error_yaml:
                 errors.append(f"ERROR: {rel} is positive but has expected/error.yaml")
 
-            has_artifacts = any(f.is_file() for f in expected_dir.iterdir() if f.name != 'error.yaml')
+            has_artifacts = any(
+                f.is_file() for f in expected_dir.iterdir() if f.name != "error.yaml"
+            )
             if not is_negative and not has_artifacts:
                 errors.append(f"ERROR: {rel}/expected has no artifacts")
 

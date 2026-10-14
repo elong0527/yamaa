@@ -90,8 +90,8 @@ def example_spec_paths(example_dir: Path):
 
 
 README_FORBIDDEN_PATTERN = re.compile(
-    r'\b(?:derivation|schema|handler|verification)s?\b'
-    r'|R0[0-9][0-9]|REQ-[0-9]+|output\.columns',
+    r"\b(?:derivation|schema|handler|verification)s?\b"
+    r"|R0[0-9][0-9]|REQ-[0-9]+|output\.columns",
     re.IGNORECASE,
 )
 README_KEY_COLUMNS = {
@@ -230,6 +230,7 @@ def rule_identity_errors(meta: dict, stem: str, label: str) -> list[str]:
 def validate_rule_metadata(root: Path):
     if any((root / "rules").glob("*/*.md")):
         from check_rule_rewrite import check
+
         return check(root)[0]
     errors = []
     rules_dir = root / "rules"
@@ -527,13 +528,13 @@ def validate_examples_readme_presence(root: Path):
 def validate_column_labels(spec, spec_label):
     """Require every surviving declared column to carry a usable label."""
     errors = []
-    columns = spec.get('columns')
+    columns = spec.get("columns")
     if not isinstance(columns, list):
         return errors
     for index, column in enumerate(columns):
         if not isinstance(column, dict):
             continue
-        label = column.get('label')
+        label = column.get("label")
         if isinstance(label, str) and label.strip():
             continue
         errors.append(
@@ -546,20 +547,20 @@ def validate_column_labels(spec, spec_label):
 def validate_producer_output_contract(producer, path):
     """Require each stored producer column to carry a usable label."""
     errors = []
-    output = producer.get('output')
-    output_columns = output.get('columns') if isinstance(output, dict) else None
+    output = producer.get("output")
+    output_columns = output.get("columns") if isinstance(output, dict) else None
     selected = (
         {name for name in output_columns if isinstance(name, str)}
         if isinstance(output_columns, list)
         else set()
     )
-    columns = producer.get('columns')
+    columns = producer.get("columns")
     if not isinstance(columns, list):
         return errors
     for index, column in enumerate(columns):
-        if not isinstance(column, dict) or column.get('name') not in selected:
+        if not isinstance(column, dict) or column.get("name") not in selected:
             continue
-        label = column.get('label')
+        label = column.get("label")
         if not isinstance(label, str) or not label.strip():
             errors.append(
                 f"ERROR: {path}.columns[{index}].label: stored producer "

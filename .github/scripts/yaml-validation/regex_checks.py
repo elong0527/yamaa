@@ -1,15 +1,17 @@
 """Installed native regex transport and independent conformance controls."""
+
 from pathlib import Path, PurePosixPath
-import yaml
+
 import _native_regex
 from _repository_yaml import UniqueKeyLoader
 from validation_diagnostics import validation_diagnostic
 
+import yaml
 
-REGEX_CONTRACT = 'regex'
+REGEX_CONTRACT = "regex"
 
 
-REGEX_CONTRACT_VERSION = '2.0.0'
+REGEX_CONTRACT_VERSION = "2.0.0"
 
 
 _portable_binding = None
@@ -58,11 +60,15 @@ def require_regex_binding():
     if _portable_binding is None:
         try:
             (
-                binding_error, binding_group_count,
-                binding_compile, binding_full_match,
+                binding_error,
+                binding_group_count,
+                binding_compile,
+                binding_full_match,
             ) = (
-                _native_regex.RegexError, _native_regex.capture_group_count,
-                _native_regex.compile_pattern, _native_regex.full_match,
+                _native_regex.RegexError,
+                _native_regex.capture_group_count,
+                _native_regex.compile_pattern,
+                _native_regex.full_match,
             )
         except ImportError:
             _portable_binding = False
@@ -84,9 +90,7 @@ def compile_regex(pattern):
     """Compile one R022 pattern source through the portable contract."""
     require_regex_binding()
     if not isinstance(pattern, str):
-        raise InvalidRegex(
-            f"pattern must be a string, got {type(pattern).__name__}"
-        )
+        raise InvalidRegex(f"pattern must be a string, got {type(pattern).__name__}")
     try:
         return _portable_compile(pattern)
     except _PortableRegexError as exc:
@@ -95,7 +99,7 @@ def compile_regex(pattern):
 
 def anchored_regex_source(pattern):
     """Return the full-match form R022 gives the `pattern` keyword."""
-    return '^(?:' + pattern + ')$'
+    return "^(?:" + pattern + ")$"
 
 
 def regex_search(pattern, subject):
@@ -159,21 +163,23 @@ def regex_pattern_errors(pattern, path, full_match=False):
         if full_match:
             compile_regex(anchored_regex_source(pattern))
     except InvalidRegex as exc:
-        return [validation_diagnostic(
-            path,
-            'invalid_regex',
-            f"the R022 contract rejects {pattern!r}: {exc.reason}",
-            context={'pattern': pattern, 'reason': exc.reason},
-        )]
+        return [
+            validation_diagnostic(
+                path,
+                "invalid_regex",
+                f"the R022 contract rejects {pattern!r}: {exc.reason}",
+                context={"pattern": pattern, "reason": exc.reason},
+            )
+        ]
     return []
 
 
 def regex_group_errors(keyword, payload, path):
     """Return the R022 regex_group_out_of_range error for a str_extract."""
-    if keyword != 'str_extract' or not isinstance(payload, dict):
+    if keyword != "str_extract" or not isinstance(payload, dict):
         return []
-    pattern = payload.get('pattern')
-    group = payload.get('group', 0)
+    pattern = payload.get("pattern")
+    group = payload.get("group", 0)
     if not isinstance(pattern, str) or type(group) is not int:
         return []
     try:
@@ -182,48 +188,56 @@ def regex_group_errors(keyword, payload, path):
         # The pattern's own rejection is reported where it is typed `regex`.
         return []
     if group < 0 or group > declared:
-        return [validation_diagnostic(
-            f"{path}.group",
-            'regex_group_out_of_range',
-            f"group {group} is outside the {declared} capturing "
-            f"{'group' if declared == 1 else 'groups'} {pattern!r} declares",
-            context={
-                'group': group,
-                'group_count': declared,
-                'pattern': pattern,
-            },
-        )]
+        return [
+            validation_diagnostic(
+                f"{path}.group",
+                "regex_group_out_of_range",
+                f"group {group} is outside the {declared} capturing "
+                f"{'group' if declared == 1 else 'groups'} {pattern!r} declares",
+                context={
+                    "group": group,
+                    "group_count": declared,
+                    "pattern": pattern,
+                },
+            )
+        ]
     return []
 
 
-REGEX_CONFORMANCE_PATH = PurePosixPath('yaml/conformance/regex.yaml')
+REGEX_CONFORMANCE_PATH = PurePosixPath("yaml/conformance/regex.yaml")
 
 
 REGEX_FIXTURE_COVERS = {
-    'anchors',
-    'capture-groups',
-    'dialect',
-    'empty-match',
-    'escaping',
-    'search',
-    'unicode',
-    'unsupported',
+    "anchors",
+    "capture-groups",
+    "dialect",
+    "empty-match",
+    "escaping",
+    "search",
+    "unicode",
+    "unsupported",
 }
 
 
 REGEX_FIXTURE_REQUIRED_COVERS = {
-    'anchors',
-    'capture-groups',
-    'empty-match',
-    'escaping',
-    'unicode',
-    'unsupported',
+    "anchors",
+    "capture-groups",
+    "empty-match",
+    "escaping",
+    "unicode",
+    "unsupported",
 }
 
 
 REGEX_FIXTURE_CASE_KEYS = {
-    'id', 'covers', 'pattern', 'subject', 'schema_pattern', 'matches',
-    'str_extract', 'invalid',
+    "id",
+    "covers",
+    "pattern",
+    "subject",
+    "schema_pattern",
+    "matches",
+    "str_extract",
+    "invalid",
 }
 
 
@@ -241,7 +255,7 @@ def validate_regex_conformance(root: Path):
         return [f"ERROR: {label}: missing R022 regular-expression fixtures"]
 
     try:
-        with open(document_path, 'r', encoding='utf-8') as handle:
+        with open(document_path, "r", encoding="utf-8") as handle:
             document = yaml.load(handle, Loader=UniqueKeyLoader)
     except Exception as exc:
         return [f"ERROR: {label}: {exc}"]
@@ -250,24 +264,22 @@ def validate_regex_conformance(root: Path):
         return [f"ERROR: {label}: expected a mapping"]
 
     errors = []
-    if document.get('contract') != REGEX_CONTRACT:
+    if document.get("contract") != REGEX_CONTRACT:
         errors.append(
             f"ERROR: {label}: contract {document.get('contract')!r} does not "
             f"name the portable contract this validator replays, "
             f"{REGEX_CONTRACT!r}"
         )
-    if document.get('contract_version') != REGEX_CONTRACT_VERSION:
+    if document.get("contract_version") != REGEX_CONTRACT_VERSION:
         errors.append(
             f"ERROR: {label}: contract_version "
             f"{document.get('contract_version')!r} is not the contract "
             f"version this validator replays, {REGEX_CONTRACT_VERSION!r}"
         )
-    if 'engine' in document:
-        errors.append(
-            f"ERROR: {label}: the portable contract pins no engine"
-        )
+    if "engine" in document:
+        errors.append(f"ERROR: {label}: the portable contract pins no engine")
 
-    cases = document.get('cases')
+    cases = document.get("cases")
     if not isinstance(cases, list) or not cases:
         errors.append(f"ERROR: {label}: cases must be a non-empty list")
         return errors
@@ -279,11 +291,9 @@ def validate_regex_conformance(root: Path):
         if not isinstance(case, dict):
             errors.append(f"ERROR: {case_label}: expected a mapping")
             continue
-        case_id = case.get('id')
+        case_id = case.get("id")
         if not isinstance(case_id, str) or not case_id:
-            errors.append(
-                f"ERROR: {case_label}: id must be a non-empty string"
-            )
+            errors.append(f"ERROR: {case_label}: id must be a non-empty string")
             continue
         case_label = f"{label}: {case_id}"
         if case_id in seen:
@@ -295,18 +305,16 @@ def validate_regex_conformance(root: Path):
         if unknown:
             errors.append(f"ERROR: {case_label}: unknown keys {unknown}")
 
-        covers = case.get('covers')
+        covers = case.get("covers")
         if not isinstance(covers, list) or not covers:
-            errors.append(
-                f"ERROR: {case_label}: covers must be a non-empty list"
-            )
+            errors.append(f"ERROR: {case_label}: covers must be a non-empty list")
         else:
             outside = sorted(set(covers) - REGEX_FIXTURE_COVERS)
             if outside:
                 errors.append(f"ERROR: {case_label}: unknown covers {outside}")
             covered.update(covers)
 
-        pattern = case.get('pattern')
+        pattern = case.get("pattern")
         if not isinstance(pattern, str):
             errors.append(f"ERROR: {case_label}: pattern must be a string")
             continue
@@ -315,17 +323,15 @@ def validate_regex_conformance(root: Path):
 
     missing = sorted(REGEX_FIXTURE_REQUIRED_COVERS - covered)
     if missing:
-        errors.append(
-            f"ERROR: {label}: no case covers {missing}"
-        )
+        errors.append(f"ERROR: {label}: no case covers {missing}")
     return errors
 
 
 def _regex_fixture_case_errors(case, case_label, pattern):
     """Compare one fixture case with what the portable binding produces."""
     errors = []
-    if case.get('invalid') is True:
-        for key in ('subject', 'schema_pattern', 'matches', 'str_extract'):
+    if case.get("invalid") is True:
+        for key in ("subject", "schema_pattern", "matches", "str_extract"):
             if key in case:
                 errors.append(
                     f"ERROR: {case_label}: a rejected pattern records no {key}"
@@ -340,11 +346,9 @@ def _regex_fixture_case_errors(case, case_label, pattern):
         )
         return errors
 
-    if 'invalid' in case:
-        errors.append(
-            f"ERROR: {case_label}: invalid must be true or absent"
-        )
-    subject = case.get('subject')
+    if "invalid" in case:
+        errors.append(f"ERROR: {case_label}: invalid must be true or absent")
+    subject = case.get("subject")
     if not isinstance(subject, str):
         errors.append(f"ERROR: {case_label}: subject must be a string")
         return errors
@@ -360,8 +364,8 @@ def _regex_fixture_case_errors(case, case_label, pattern):
         return errors
 
     for key, actual in (
-        ('schema_pattern', actual_full),
-        ('matches', actual_search),
+        ("schema_pattern", actual_full),
+        ("matches", actual_search),
     ):
         recorded = case.get(key)
         if type(recorded) is not bool:
@@ -372,29 +376,24 @@ def _regex_fixture_case_errors(case, case_label, pattern):
                 f"portable binding produces {actual}"
             )
 
-    errors.extend(
-        _regex_fixture_extract_errors(case, case_label, pattern, subject)
-    )
+    errors.extend(_regex_fixture_extract_errors(case, case_label, pattern, subject))
     return errors
 
 
 def _regex_fixture_extract_errors(case, case_label, pattern, subject):
     """Compare one fixture's recorded str_extract result with the engine."""
-    if 'str_extract' not in case:
+    if "str_extract" not in case:
         return [f"ERROR: {case_label}: str_extract is required"]
-    recorded = case['str_extract']
+    recorded = case["str_extract"]
     if recorded is None:
         group, expected = 0, REGEX_NO_MATCH
-    elif isinstance(recorded, dict) and set(recorded) == {'group', 'value'}:
-        group = recorded['group']
-        expected = recorded['value']
+    elif isinstance(recorded, dict) and set(recorded) == {"group", "value"}:
+        group = recorded["group"]
+        expected = recorded["value"]
         if type(group) is not int:
             return [f"ERROR: {case_label}: str_extract group must be an int"]
         if expected is not None and not isinstance(expected, str):
-            return [
-                f"ERROR: {case_label}: str_extract value must be a string "
-                f"or null"
-            ]
+            return [f"ERROR: {case_label}: str_extract value must be a string or null"]
     else:
         return [
             f"ERROR: {case_label}: str_extract must be null or a mapping of "
