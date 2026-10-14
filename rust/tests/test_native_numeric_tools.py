@@ -106,6 +106,7 @@ class NativeToolConsumers(unittest.TestCase):
             side_effect=lambda rows: [{"accepted": False} for _ in rows],
         ):
             poisoned = regex.assess()
+        self.assertEqual(len(poisoned["cases"]), 58)
         self.assertGreater(poisoned["mismatches"], 0)
         self.assertTrue(
             all(row["candidate"] == {"accepted": False} for row in poisoned["cases"])
