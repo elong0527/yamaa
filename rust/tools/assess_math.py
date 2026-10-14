@@ -1,7 +1,9 @@
 """Characterize candidate libm functions; a successful run never means parity.
 
 Exact mismatches are reported, not tolerated or promoted into expected fixtures.
-The default compiler keeps EXP/LN/POWER unsupported; opt-in uses PortableLibmV1.
+The public compiler uses the approved PortableLibmV1 policy. Its private
+ReferenceSubset policy keeps EXP/LN/POWER unsupported; a passing sample never
+enables those functions in that policy.
 Only finite EXP inputs, positive LN inputs and positive POWER bases are sampled;
 domain diagnostics, decimal rounding and completed-result formatting need separate
 qualification. Python math calls mirror the numeric reference's promoted inputs.

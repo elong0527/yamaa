@@ -22,6 +22,10 @@ assert SPEC is not None and SPEC.loader is not None
 VALIDATOR = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(VALIDATOR)
 
+import _semantic_controls as CONTROLS
+import _native_specification as OWNER_NATIVE_SPECIFICATION
+import repository_schema as OWNER_REPOSITORY_SCHEMA
+
 BLOCKER_PATH = Path(__file__).parent / 'check_validation_blockers.py'
 BLOCKER_SPEC = importlib.util.spec_from_file_location(
     'check_validation_blockers', BLOCKER_PATH
@@ -271,7 +275,7 @@ class TestTextSourceBoundary(unittest.TestCase):
 class TestPredicateLanguage(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        VALIDATOR._ensure_predicate_binding()
+        CONTROLS.syntax("predicate", "TRUE")
 
     def test_parses_precedence_compounds_and_all_literal_types(self):
         predicate = (
@@ -283,7 +287,7 @@ class TestPredicateLanguage(unittest.TestCase):
             "OPTION IN ('A', 'B', NULL)"
         )
 
-        ast = VALIDATOR.parse_predicate(predicate)
+        ast = CONTROLS.predicate_syntax(predicate)
         types = {
             'FLAG': 'str',
             'COUNT': 'int',
@@ -292,7 +296,7 @@ class TestPredicateLanguage(unittest.TestCase):
             'MOMENT': 'datetime',
             'OPTION': 'str',
         }
-        errors = VALIDATOR.validate_predicate_types(ast, types.get)
+        errors = CONTROLS.predicate_ast(ast, types.get)
 
         self.assertEqual(ast['kind'], 'or')
         self.assertEqual(errors, [])
@@ -310,29 +314,32 @@ class TestPredicateLanguage(unittest.TestCase):
 
         for predicate in invalid:
             with self.subTest(predicate=predicate):
-                with self.assertRaises(VALIDATOR.PredicateError):
-                    VALIDATOR.parse_predicate(predicate)
+                with self.assertRaises(CONTROLS.SyntaxError):
+                    CONTROLS.predicate_syntax(predicate)
 
     def test_allows_an_escaped_escape_at_the_end_of_like_pattern(self):
-        ast = VALIDATOR.parse_predicate("TERM LIKE 'abc!!' ESCAPE '!'")
-        errors = VALIDATOR.validate_predicate_types(
+        ast = CONTROLS.predicate_syntax("TERM LIKE 'abc!!' ESCAPE '!'")
+        errors = CONTROLS.predicate_ast(
             ast, {'TERM': 'str'}.get
         )
         self.assertEqual(errors, [])
 
     def test_rejects_unknown_and_incompatible_operands(self):
-        ast = VALIDATOR.parse_predicate(
+        ast = CONTROLS.predicate_syntax(
             "UNKNOWN = 1 OR DAY = '2025-01-01' OR COUNT LIKE '1%'"
         )
 
-        errors = VALIDATOR.validate_predicate_types(
+        errors = CONTROLS.predicate_ast(
             ast, {'DAY': 'date', 'COUNT': 'int'}.get
         )
-        message = '\n'.join(errors)
 
-        self.assertIn("unknown identifier 'UNKNOWN'", message)
-        self.assertIn("'date' and 'str'", message)
-        self.assertIn("LIKE requires str operands", message)
+        self.assertEqual([error.condition for error in errors],
+            ['unknown_field', 'incompatible_input_type', 'incompatible_input_type'])
+        self.assertEqual(errors[0].context['identifier'], 'UNKNOWN')
+        self.assertIn('date', errors[1].context.values())
+        self.assertIn('str', errors[1].context.values())
+        self.assertIn('int', errors[2].context.values())
+        self.assertIn('str', errors[2].context.values())
 
     def test_validates_predicate_sites_in_a_specification(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -381,17 +388,24 @@ class TestPredicateLanguage(unittest.TestCase):
                 ],
             }
 
-            errors = VALIDATOR.validate_spec_predicates(
-                spec, 'example/spec.yaml', spec_path
-            )
+            prefix = CONTROLS.document(spec, 'example/spec.yaml', spec_path)
+            self.assertEqual([(error.path, error.condition, error.context) for error in prefix], [
+                ('example/spec.yaml.verifications[0].assert.when', 'unknown_field',
+                    {'identifier': 'GUARD'})])
+            # The installed verifier keeps its first deferred failure. A second
+            # authored control makes the require clause independently reachable.
+            independent = copy.deepcopy(spec)
+            independent['verifications'][0]['assert']['when'] = 'TRUE'
+            errors = prefix + CONTROLS.document(
+                independent, 'example/spec.yaml', spec_path)
 
         # REQ-0383: an assert's `when` is a predicate site of its own, so
         # each field reports at its own path.
         self.assertEqual(len(errors), 2)
         self.assertIn('verifications[0].assert.when', errors[0])
-        self.assertIn("unknown identifier 'GUARD'", errors[0])
+        self.assertEqual(errors[0].context, {'identifier': 'GUARD'})
         self.assertIn('verifications[0].assert.require', errors[1])
-        self.assertIn("unknown identifier 'MISSING'", errors[1])
+        self.assertEqual(errors[1].context, {'identifier': 'MISSING'})
 
     def test_validates_the_predicate_a_source_filter_declares(self):
         # REQ-0132: the filter selects right-side records, so it resolves
@@ -442,7 +456,7 @@ class TestPredicateLanguage(unittest.TestCase):
                                     'filter': 'ODM.Missing IS NULL',
                                 }
                             ],
-                            'default': 'Unassigned',
+                            'missing': 'Unassigned',
                         }
                     },
                 },
@@ -455,7 +469,7 @@ class TestPredicateLanguage(unittest.TestCase):
                 'SubjectKey,ItemOID,Value\n01,IT.DM.SEX,Male\n'
             )
             spec_path = example_dir / 'spec.yaml'
-            errors = VALIDATOR.validate_spec_predicates(
+            errors = CONTROLS.document(
                 spec, 'example/spec.yaml', spec_path
             )
         message = '\n'.join(errors)
@@ -464,9 +478,9 @@ class TestPredicateLanguage(unittest.TestCase):
         self.assertIn('columns.SEX.derivation.mapping.source.filter', message)
         self.assertIn('columns.AGE.derivation.source.filter', message)
         self.assertIn('columns.ARM.derivation.first_available.sources[0].filter', message)
-        self.assertIn("unknown identifier 'ODM.Unknown'", message)
-        self.assertIn("unknown identifier 'USUBJID'", message)
-        self.assertIn("unknown identifier 'ODM.Missing'", message)
+        self.assertEqual([error.context['identifier'] for error in errors],
+            ['ODM.Unknown', 'USUBJID', 'ODM.Missing'])
+        self.assertEqual([error.condition for error in errors], ['unknown_field'] * 3)
 
     def test_an_ungrouped_row_filter_reads_derived_columns_and_lookups(self):
         # REQ-0068: the filter evaluates after the record's derivations, so
@@ -474,7 +488,8 @@ class TestPredicateLanguage(unittest.TestCase):
         # state, but not a column another template derives.
         spec = {
             'domain': 'ADQS',
-            'input': {'ADSL': 'adsl.csv', 'QS': 'qs.csv'},
+            'input': {'ADSL': 'adsl.csv', 'QS': {'path': 'qs.csv',
+                'types': {'AVISITN': 'int', 'AVAL': 'float'}}},
             'keys': ['USUBJID', 'AVISITN'],
             'intermediates': [
                 {'id': 'COLLECTED', 'dataset': 'QS', 'key': ['USUBJID', 'AVISITN']}
@@ -515,16 +530,22 @@ class TestPredicateLanguage(unittest.TestCase):
             example_dir = Path(temp_dir)
             (example_dir / 'adsl.csv').write_text('USUBJID,EFFFL\n01,Y\n')
             (example_dir / 'qs.csv').write_text('USUBJID,AVISITN,AVAL\n01,8,3\n')
-            errors = VALIDATOR.validate_spec_predicates(
+            incomplete = CONTROLS.document(
+                spec, 'example/spec.yaml', example_dir / 'spec.yaml'
+            )
+            self.assertEqual([(error.condition, error.context) for error in incomplete],
+                [('missing_derivation', {'column': 'OTHER', 'rows': ['unknown']})])
+            spec['columns'][2]['derivation'] = {'literal': None}
+            errors = CONTROLS.document(
                 spec, 'example/spec.yaml', example_dir / 'spec.yaml'
             )
         message = '\n'.join(errors)
 
-        self.assertEqual(len(errors), 2, message)
+        self.assertEqual(len(errors), 1, message)
         self.assertNotIn('rows[0].filter', message)
         self.assertIn('rows[1].filter', message)
-        self.assertIn("unknown identifier 'OTHER'", message)
-        self.assertIn("unknown identifier 'COLLECTED.NOSUCH'", message)
+        self.assertEqual(errors[0].context, {'identifier': 'COLLECTED.NOSUCH'})
+        self.assertEqual(errors[0].condition, 'unknown_field')
 
     def test_an_ungrouped_row_filter_rejects_a_window_derived_column(self):
         # REQ-0068: the filter evaluates before the window pass, so naming
@@ -533,17 +554,18 @@ class TestPredicateLanguage(unittest.TestCase):
         def window_derivation():
             return {
                 'locf': {
-                    'source': 'QS.AVAL',
+                    'source': 'RAW_AVAL',
                     'window': {
                         'group_by': ['USUBJID'],
-                        'order_by': ['AVISITN'],
+                        'order_by': ['USUBJID'],
                     },
                 }
             }
 
         spec = {
             'domain': 'ADQS',
-            'input': {'ADSL': 'adsl.csv', 'QS': 'qs.csv'},
+            'input': {'ADSL': 'adsl.csv', 'QS': {'path': 'qs.csv',
+                'types': {'AVISITN': 'int', 'AVAL': 'float'}}},
             'keys': ['USUBJID', 'AVISITN'],
             'output': {
                 'path': 'out.csv',
@@ -552,8 +574,9 @@ class TestPredicateLanguage(unittest.TestCase):
             'columns': [
                 {'name': 'USUBJID', 'type': 'str'},
                 {'name': 'AVISITN', 'type': 'int'},
+                {'name': 'RAW_AVAL', 'type': 'float', 'derivation': 'QS.AVAL'},
                 {'name': 'AVAL', 'type': 'float'},
-                {'name': 'DOUBLED', 'type': 'float'},
+                {'name': 'DOUBLED', 'type': 'float', 'derivation': {'literal': None}},
             ],
             'rows': [
                 {
@@ -580,7 +603,7 @@ class TestPredicateLanguage(unittest.TestCase):
                 {
                     'id': 'grouped',
                     'dataset': 'ADSL',
-                    'group_by': ['USUBJID'],
+                    'group_by': ['ADSL.USUBJID'],
                     'filter': 'AVAL > 20',
                     'derivations': {
                         'USUBJID': 'ADSL.USUBJID',
@@ -597,18 +620,16 @@ class TestPredicateLanguage(unittest.TestCase):
             (example_dir / 'qs.csv').write_text(
                 'USUBJID,AVISITN,AVAL\n01,8,25\n'
             )
-            errors = VALIDATOR.validate_spec_predicates(
+            errors = CONTROLS.document(
                 spec, 'example/spec.yaml', example_dir / 'spec.yaml'
             )
-        message = '\n'.join(errors)
-
-        self.assertEqual(len(errors), 2, message)
-        self.assertIn('rows[0].filter', message)
-        self.assertIn("row filter names 'AVAL'", message)
-        self.assertIn('rows[1].filter', message)
-        self.assertIn("row filter names 'DOUBLED'", message)
-        self.assertIn('[phase_boundary]', message)
-        self.assertNotIn('rows[2].filter', message)
+        self.assertEqual([(error.path, error.condition, error.context) for error in errors], [
+            ('example/spec.yaml.rows[0].filter', 'phase_boundary',
+                {'identifier': 'AVAL', 'row': 'direct',
+                    'available_phase': 'window_derivation', 'required_phase': 'row_filter'}),
+            ('example/spec.yaml.rows[1].filter', 'phase_boundary',
+                {'identifier': 'DOUBLED', 'row': 'transitive',
+                    'available_phase': 'window_derivation', 'required_phase': 'row_filter'})])
 
     def test_an_ungrouped_row_filter_rejects_a_window_derived_lookup_match(self):
         # REQ-0068: a qualified read through a lookup consumes its match
@@ -616,14 +637,17 @@ class TestPredicateLanguage(unittest.TestCase):
         # like a direct read.
         spec = {
             'domain': 'ADQS',
-            'input': {'ADSL': 'adsl.csv', 'QS': 'qs.csv'},
+            'input': {'ADSL': 'adsl.csv', 'QS': {'path': 'qs.csv',
+                'types': {'AVISITN': 'int', 'AVAL': 'float'}}},
             'keys': ['USUBJID', 'AVISITN'],
             'intermediates': [
                 {
                     'id': 'COLLECTED',
                     'dataset': 'QS',
                     'key': ['USUBJID', 'AVISITN'],
-                    'keep': ['AVAL'],
+                    'columns': ['AVAL'],
+                    'order_by': ['QS.AVAL'],
+                    'keep': 'first',
                 }
             ],
             'output': {
@@ -646,7 +670,7 @@ class TestPredicateLanguage(unittest.TestCase):
                             'row_number': {
                                 'window': {
                                     'group_by': ['USUBJID'],
-                                    'order_by': ['AVISITN'],
+                                    'order_by': ['USUBJID'],
                                 },
                             }
                         },
@@ -662,16 +686,15 @@ class TestPredicateLanguage(unittest.TestCase):
             (example_dir / 'qs.csv').write_text(
                 'USUBJID,AVISITN,AVAL\n01,8,25\n'
             )
-            errors = VALIDATOR.validate_spec_predicates(
+            errors = CONTROLS.document(
                 spec, 'example/spec.yaml', example_dir / 'spec.yaml'
             )
-        message = '\n'.join(errors)
-
-        self.assertEqual(len(errors), 1, message)
-        self.assertIn('rows[0].filter', message)
-        self.assertIn("row filter reads 'COLLECTED.AVAL'", message)
-        self.assertIn("lookup match 'AVISITN'", message)
-        self.assertIn('[phase_boundary]', message)
+        self.assertEqual([(error.path, error.condition, error.context) for error in errors], [
+            ('example/spec.yaml.rows[0].filter', 'phase_boundary', {
+                'identifier': 'COLLECTED.AVAL', 'row': 'week_8',
+                'available_phase': 'window_derivation',
+                'required_phase': 'row_filter', 'lookup_match': 'AVISITN',
+            })])
 
     def test_validates_a_grouped_row_count_filter(self):
         spec = {
@@ -720,46 +743,55 @@ class TestPredicateLanguage(unittest.TestCase):
             ],
         }
 
-        errors = VALIDATOR.validate_spec_predicates(spec, 'example/spec.yaml')
+        prefix = CONTROLS.document(spec, 'example/spec.yaml',
+            sources={'LB': {'USUBJID': 'str'}})
+        self.assertEqual([(error.path, error.condition, error.context) for error in prefix], [
+            ('example/spec.yaml.verifications[1].row_count.filter', 'unknown_field',
+                {'identifier': 'NOSUCHCOL'})])
+        # Reach the independently authored malformed clause without changing
+        # native verifier ordering or collecting past a deferred failure.
+        independent = copy.deepcopy(spec)
+        independent['verifications'][1]['row_count']['filter'] = 'TRUE'
+        errors = prefix + CONTROLS.document(independent, 'example/spec.yaml',
+            sources={'LB': {'USUBJID': 'str'}})
 
         self.assertEqual(len(errors), 2)
         self.assertIn('verifications[1].row_count.filter', errors[0])
-        self.assertIn("unknown identifier 'NOSUCHCOL'", errors[0])
+        self.assertEqual(errors[0].context, {'identifier': 'NOSUCHCOL'})
         self.assertIn('verifications[2].row_count.filter', errors[1])
-        self.assertIn('invalid predicate', errors[1])
+        self.assertEqual(errors[1].condition, 'invalid_predicate')
 
 
 class TestNumericExpressionLanguage(unittest.TestCase):
     def test_parses_precedence_and_infers_promoted_type(self):
         expression = 'A + POWER(B, 2) / -3'
-        ast = VALIDATOR.parse_numeric_expression(expression)
-        resolver = VALIDATOR.numeric_identifier_resolver(
+        ast = CONTROLS.numeric_syntax(expression)
+        resolver = CONTROLS.catalog(
             unqualified={'A': 'int', 'B': 'float'}
         )
 
-        result_type, errors = VALIDATOR.validate_numeric_expression_ast(
-            ast, 'spec.columns.RESULT.derivation.compute.expr',
-            expression, resolver
-        )
+        path = 'spec.columns.RESULT.derivation.compute.expr'
+        result_type = CONTROLS.result_type('numeric', expression, path)
+        errors = CONTROLS.numeric(expression, path, resolver)
 
         self.assertEqual(errors, [])
         self.assertEqual(result_type, 'float')
         self.assertEqual(ast['span'], (0, len(expression)))
 
     def test_reports_prohibited_construct_and_function_with_spans(self):
-        resolver = VALIDATOR.numeric_identifier_resolver(
+        resolver = CONTROLS.catalog(
             unqualified={'AVAL': 'float', 'ANRHI': 'float'}
         )
 
-        function_error = VALIDATOR.validate_numeric_expression_at(
+        function_error = CONTROLS.numeric(
             'SUM(AVAL)', 'spec.columns.TOTAL.derivation.compute.expr',
             resolver
         )[0]
-        comparison_error = VALIDATOR.validate_numeric_expression_at(
+        comparison_error = CONTROLS.numeric(
             'AVAL > ANRHI', 'spec.columns.FLAG.derivation.compute.expr',
             resolver
         )[0]
-        boolean_error = VALIDATOR.validate_numeric_expression_at(
+        boolean_error = CONTROLS.numeric(
             'AVAL AND ANRHI', 'spec.columns.FLAG.derivation.compute.expr',
             resolver
         )[0]
@@ -772,21 +804,21 @@ class TestNumericExpressionLanguage(unittest.TestCase):
         self.assertEqual(boolean_error.context['construct'], 'boolean')
 
     def test_rejects_unknown_qualified_and_non_numeric_identifiers(self):
-        resolver = VALIDATOR.numeric_identifier_resolver(
+        resolver = CONTROLS.catalog(
             unqualified={'TERM': 'str'},
             qualified={'PICK': {'VALUE': 'float'}},
         )
 
-        unknown = VALIDATOR.validate_numeric_expression_at(
+        unknown = CONTROLS.numeric(
             'MISSING + 1', 'spec.compute.expr', resolver
         )[0]
-        qualified = VALIDATOR.validate_numeric_expression_at(
+        qualified = CONTROLS.numeric(
             'DATA.VALUE + 1', 'spec.compute.expr', resolver
         )[0]
-        non_numeric = VALIDATOR.validate_numeric_expression_at(
+        non_numeric = CONTROLS.numeric(
             'TERM + 1', 'spec.compute.expr', resolver
         )[0]
-        lookup_errors = VALIDATOR.validate_numeric_expression_at(
+        lookup_errors = CONTROLS.numeric(
             'PICK.VALUE + 1', 'spec.compute.expr', resolver
         )
 
@@ -802,44 +834,44 @@ class TestNumericExpressionLanguage(unittest.TestCase):
             'GREATEST(A, B)', 'LEAST(A, B)', 'NULLIF(A, B)',
             'COALESCE(NULL, A, B)',
         ]
-        resolver = VALIDATOR.numeric_identifier_resolver(
+        resolver = CONTROLS.catalog(
             unqualified={'A': 'int', 'B': 'float'}
         )
 
         for expression in expressions:
             with self.subTest(expression=expression):
                 self.assertEqual(
-                    VALIDATOR.validate_numeric_expression_at(
+                    CONTROLS.numeric(
                         expression, 'spec.compute.expr', resolver
                     ),
                     [],
                 )
 
     def test_rejects_prohibited_function_argument_counts(self):
-        resolver = VALIDATOR.numeric_identifier_resolver(
+        resolver = CONTROLS.catalog(
             unqualified={'A': 'float'}
         )
         for expression in (
             'ABS()', 'POWER(A)', 'GREATEST(A)', 'COALESCE()'
         ):
             with self.subTest(expression=expression):
-                errors = VALIDATOR.validate_numeric_expression_at(
+                errors = CONTROLS.numeric(
                     expression, 'spec.compute.expr', resolver
                 )
                 self.assertEqual(len(errors), 1)
                 self.assertEqual(errors[0].condition, 'prohibited_function')
 
     def test_does_not_execute_runtime_failure_conditions(self):
-        resolver = VALIDATOR.numeric_identifier_resolver()
+        resolver = CONTROLS.catalog()
         for expression in ('1 / 0', 'SQRT(-1)', 'LN(0)'):
             with self.subTest(expression=expression):
-                errors = VALIDATOR.validate_numeric_expression_at(
+                errors = CONTROLS.numeric(
                     expression, 'spec.compute.expr', resolver
                 )
                 self.assertEqual(errors, [])
 
     def test_dependency_collection_uses_the_parsed_ast(self):
-        names = VALIDATOR.numeric_expression_identifier_names(
+        names = CONTROLS.numeric_names(
             'VALUE + POWER(BASE, 2) + PICK.DOSE'
         )
         self.assertEqual(names, {'VALUE', 'BASE', 'PICK.DOSE'})
@@ -864,42 +896,35 @@ class TestAggregateExpressionLanguage(unittest.TestCase):
 
     def test_parses_reducers_functions_and_count_star(self):
         expression = 'SUM(EX.DOSE) / NULLIF(EX.PLANDOSE, 0)'
-        ast = VALIDATOR.parse_aggregate_expression(expression)
-        resolver = VALIDATOR.numeric_identifier_resolver(
-            qualified=self.context()['input']
-        )
-
-        result_type, errors = VALIDATOR.validate_aggregate_expression_ast(
-            ast,
-            'spec.columns.RDI.derivation.aggregate.expr',
-            expression,
-            resolver,
-            {'EX.PLANDOSE'},
-            'EX',
-        )
-        count_errors = VALIDATOR.validate_aggregate_at(
+        ast = CONTROLS.aggregate_syntax(expression)
+        path = 'spec.columns.RDI.derivation.aggregate'
+        result_type = CONTROLS.result_type('aggregate', expression, path)
+        errors = CONTROLS.aggregate(
+            {'expr': expression, 'group_by': ['EX.PLANDOSE']}, path, self.context())
+        count_errors = CONTROLS.aggregate(
             'COUNT(EX.*)', 'spec.columns.N.derivation.aggregate',
             self.context()
         )
 
         self.assertEqual(errors, [])
         self.assertEqual(result_type, 'float')
+        self.assertEqual(ast['span'], (0, len(expression)))
         self.assertEqual(count_errors, [])
         self.assertEqual(
-            VALIDATOR.aggregate_expression_identifier_names(expression),
+            CONTROLS.aggregate_names(expression),
             {'EX.DOSE', 'EX.PLANDOSE'},
         )
 
     def test_rejects_invalid_grammar_constructs_and_functions(self):
         path = 'spec.columns.X.derivation.aggregate'
 
-        malformed = VALIDATOR.validate_aggregate_at(
+        malformed = CONTROLS.aggregate(
             'SUM(EX.DOSE', path, self.context()
         )[0]
-        comparison = VALIDATOR.validate_aggregate_at(
+        comparison = CONTROLS.aggregate(
             'SUM(EX.DOSE) > 0', path, self.context()
         )[0]
-        function = VALIDATOR.validate_aggregate_at(
+        function = CONTROLS.aggregate(
             'MEDIAN(EX.DOSE)', path, self.context()
         )
 
@@ -913,10 +938,10 @@ class TestAggregateExpressionLanguage(unittest.TestCase):
 
     def test_rejects_nested_reductions_and_mixed_relations(self):
         path = 'spec.columns.X.derivation.aggregate'
-        nested = VALIDATOR.validate_aggregate_at(
+        nested = CONTROLS.aggregate(
             'MAX(SUM(EX.DOSE))', path, self.context()
         )
-        mixed = VALIDATOR.validate_aggregate_at(
+        mixed = CONTROLS.aggregate(
             'SUM(EX.DOSE) + SUM(AE.DOSE)', path, self.context()
         )
 
@@ -925,10 +950,10 @@ class TestAggregateExpressionLanguage(unittest.TestCase):
 
     def test_enforces_grain_context_and_numeric_reducer_inputs(self):
         path = 'spec.columns.X.derivation.aggregate'
-        ungrouped = VALIDATOR.validate_aggregate_at(
+        ungrouped = CONTROLS.aggregate(
             'SUM(EX.DOSE) / EX.PLANDOSE', path, self.context()
         )
-        non_numeric = VALIDATOR.validate_aggregate_at(
+        non_numeric = CONTROLS.aggregate(
             {'expr': 'SUM(TERM)', 'group_by': ['VALUE']},
             path,
             self.context(),
@@ -936,7 +961,7 @@ class TestAggregateExpressionLanguage(unittest.TestCase):
         row_context = self.context(
             kind='ungrouped_row', driver='EX', row_group_by=None
         )
-        wrong_row_context = VALIDATOR.validate_aggregate_at(
+        wrong_row_context = CONTROLS.aggregate(
             'SUM(EX.DOSE)', path, row_context
         )
 
@@ -954,12 +979,12 @@ class TestAggregateExpressionLanguage(unittest.TestCase):
 
     def test_validates_row_relative_range_bounds_and_types(self):
         path = 'spec.columns.X.derivation.aggregate'
-        missing = VALIDATOR.validate_aggregate_at(
+        missing = CONTROLS.aggregate(
             {'expr': 'SUM(EX.DOSE)', 'between': {'value': 'VALUE'}},
             path,
             self.context(),
         )
-        qualified = VALIDATOR.validate_aggregate_at(
+        qualified = CONTROLS.aggregate(
             {
                 'expr': 'SUM(EX.DOSE)',
                 'between': {'value': 'VALUE', 'lower': 'EX.DOSE'},
@@ -967,7 +992,7 @@ class TestAggregateExpressionLanguage(unittest.TestCase):
             path,
             self.context(),
         )
-        incomparable = VALIDATOR.validate_aggregate_at(
+        incomparable = CONTROLS.aggregate(
             {
                 'expr': 'SUM(EX.DOSE)',
                 'between': {'value': 'TERM', 'lower': 'DOSE'},
@@ -976,21 +1001,15 @@ class TestAggregateExpressionLanguage(unittest.TestCase):
             self.context(),
         )
 
-        self.assertEqual(missing[0].context['reason'], 'missing_between_bound')
-        self.assertEqual(
-            qualified[0].context['reason'],
-            'qualified_between_bound',
-        )
-        self.assertEqual(incomparable[0].condition, 'incompatible_input_type')
+        self.assertEqual(missing[0].context['reason'], 'between declares at least one bound')
+        self.assertEqual(qualified[0].condition, 'pattern_mismatch')
+        self.assertEqual(qualified[0].context,
+            {'pattern': '^[A-Za-z_][A-Za-z0-9_]*$', 'value': 'EX.DOSE'})
+        self.assertEqual(incomparable[0].condition, 'incomparable_range_types')
+        self.assertEqual(incomparable[0].context, {'value_type': 'str', 'lower_type': 'float'})
 
 
 class TestAggregateDeriveStep(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        root = TOOL_PATH.parents[3]
-        cls.schema_env, env_errors = VALIDATOR.build_schema_env(root)
-        assert env_errors == [], env_errors
-
     def context(self, **changes):
         datasets = {
             'QS': {'QSORRES': 'str', 'QSCAT': 'str'},
@@ -1011,13 +1030,18 @@ class TestAggregateDeriveStep(unittest.TestCase):
             'input': datasets,
             'output_types': output_types,
             'keys': ['STUDYID', 'USUBJID'],
-            'env': self.schema_env,
             'aggregate': aggregate,
         }
         for key in ('intermediate_ids', 'keep_intermediate_ids'):
             if key in aggregate:
                 context[key] = aggregate[key]
         context.update(changes)
+        if 'CAP' in context.get('intermediate_ids', set()):
+            datasets['CAP_SOURCE'] = {'CAPDOSE': 'float'}
+            cap = {'id': 'CAP', 'dataset': 'CAP_SOURCE', 'key': ['STUDYID']}
+            if 'CAP' in context.get('keep_intermediate_ids', set()):
+                cap.update(order_by=['CAP_SOURCE.CAPDOSE'], keep='first')
+            context['intermediates'] = [cap]
         return context
 
     def payload(self, **changes):
@@ -1034,10 +1058,12 @@ class TestAggregateDeriveStep(unittest.TestCase):
             'expr': 'SUM(QSNUM)',
         }
         aggregate.update(changes)
+        if aggregate.get('filter') is None:
+            aggregate.pop('filter', None)
         return aggregate
 
     def validate(self, payload, context):
-        return VALIDATOR.validate_aggregate_at(
+        return CONTROLS.aggregate(
             payload, 'spec.columns.AVAL.derivation.aggregate', context
         )
 
@@ -1047,7 +1073,7 @@ class TestAggregateDeriveStep(unittest.TestCase):
 
     def test_rejects_windows_in_derive_bindings_at_the_window_path(self):
         path = 'spec.columns.AVAL.derivation.aggregate.derive[0].derivation'
-        for operation in VALIDATOR._DERIVE_WINDOW_OPERATIONS:
+        for operation in ('row_number', 'rank', 'row_value', 'previous_non_missing', 'locf', 'baseline_flag'):
             for qualified in (True, False):
                 source = 'QS.QSORRES' if qualified else 'QSORRES'
                 fields = {'window': {'order_by': [source]}}
@@ -1160,7 +1186,7 @@ class TestAggregateDeriveStep(unittest.TestCase):
             self.context(),
         )
         self.assertEqual(errors[0].condition, 'unknown_derive_variable')
-        self.assertEqual(errors[0].context['identifier'], 'MISSING')
+        self.assertEqual(errors[0].context['variable'], 'MISSING')
 
     def test_accepts_enum_strings_inside_binding_derivation(self):
         # #732: enum values in a binding derivation are not variable
@@ -1265,7 +1291,7 @@ class TestAggregateDeriveStep(unittest.TestCase):
             self.context(),
         )
         self.assertEqual(errors[0].condition, 'unknown_derive_variable')
-        self.assertEqual(errors[0].context['identifier'], 'QSNUM')
+        self.assertEqual(errors[0].context['variable'], 'QSNUM')
 
     def test_rejects_self_reference(self):
         errors = self.validate(
@@ -1282,7 +1308,7 @@ class TestAggregateDeriveStep(unittest.TestCase):
             self.context(),
         )
         self.assertEqual(errors[0].condition, 'unknown_derive_variable')
-        self.assertEqual(errors[0].context['identifier'], 'QSNUM')
+        self.assertEqual(errors[0].context['variable'], 'QSNUM')
 
     def test_rejects_missing_binding_name(self):
         errors = self.validate(
@@ -1296,11 +1322,8 @@ class TestAggregateDeriveStep(unittest.TestCase):
             ),
             self.context(),
         )
-        self.assertEqual(errors[0].condition, 'invalid_derive_step')
-        self.assertEqual(
-            errors[0].context['reason'],
-            'derive binding names are unique identifiers',
-        )
+        self.assertEqual(errors[0].condition, 'missing_required_field')
+        self.assertEqual(errors[0].context['field'], 'name')
 
     def test_rejects_filter_naming_other_relation(self):
         errors = self.validate(
@@ -1331,7 +1354,7 @@ class TestAggregateDeriveStep(unittest.TestCase):
                         'name': 'CUM',
                         'type': 'float',
                         'derivation': {
-                            'sum': ['EX.EXSEQ', 'CAP.CAPDOSE'],
+                            'compute': {'expr': 'EX.EXSEQ + CAP.CAPDOSE'},
                         },
                     },
                 ],
@@ -1353,7 +1376,7 @@ class TestAggregateDeriveStep(unittest.TestCase):
                         'name': 'CUM',
                         'type': 'float',
                         'derivation': {
-                            'sum': ['EX.EXSEQ', 'CAP.CAPDOSE'],
+                            'compute': {'expr': 'EX.EXSEQ + CAP.CAPDOSE'},
                         },
                     },
                 ],
@@ -1404,14 +1427,14 @@ class TestAggregateDeriveStep(unittest.TestCase):
 class TestStringTemplateLanguage(unittest.TestCase):
     def test_parses_placeholders_and_escaped_braces(self):
         template = '{{{SITEID}}}:{SUBJID}:{ODM.IT.DM.SEX}'
-        placeholders = VALIDATOR.string_template_placeholders(template)
+        placeholders = CONTROLS.template_placeholders(template)
 
         self.assertEqual(
             [placeholder['name'] for placeholder in placeholders],
             ['SITEID', 'SUBJID', 'ODM.IT.DM.SEX'],
         )
         self.assertEqual(
-            VALIDATOR.string_template_identifier_names(template),
+            CONTROLS.template_names(template),
             {'SITEID', 'SUBJID', 'ODM.IT.DM.SEX'},
         )
 
@@ -1419,19 +1442,19 @@ class TestStringTemplateLanguage(unittest.TestCase):
         # R012 makes the pairs take precedence while scanning, so a template
         # carries the literal text they produce as well as its placeholders.
         self.assertEqual(
-            VALIDATOR.parse_string_template('{{{SITEID}}}'),
+            CONTROLS.template_parts('{{{SITEID}}}'),
             [
                 {'kind': 'text', 'value': '{', 'span': (0, 2)},
                 {'kind': 'placeholder', 'name': 'SITEID', 'span': (3, 9)},
                 {'kind': 'text', 'value': '}', 'span': (10, 12)},
             ],
         )
-        self.assertEqual(VALIDATOR.parse_string_template(''), [])
+        self.assertEqual(CONTROLS.template_parts(''), [])
 
     def test_rejects_operators_empty_and_unmatched_braces(self):
         for template in ('{A + B}', '{}', '{A', 'A}'):
             with self.subTest(template=template):
-                errors = VALIDATOR.validate_string_template_at(
+                errors = CONTROLS.template(
                     template,
                     'spec.columns.X.derivation.str_template',
                     lambda _name: 'str',
@@ -1444,15 +1467,15 @@ class TestStringTemplateLanguage(unittest.TestCase):
 
     def test_resolves_placeholder_names_and_types(self):
         types = {'SITEID': 'str', 'AGE': 'int'}
-        resolver = types.get
+        resolver = CONTROLS.catalog(types)
 
-        valid = VALIDATOR.validate_string_template_at(
+        valid = CONTROLS.template(
             '{SITEID}', 'spec.template', resolver
         )
-        non_string = VALIDATOR.validate_string_template_at(
+        non_string = CONTROLS.template(
             '{AGE}', 'spec.template', resolver
         )
-        unknown = VALIDATOR.validate_string_template_at(
+        unknown = CONTROLS.template(
             '{MISSING}', 'spec.template', resolver
         )
 
@@ -1473,7 +1496,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
         }
         datasets = {'REF': {'K': 'str'}}
         return {
-            'resolver': VALIDATOR.predicate_resolver(
+            'resolver': CONTROLS.catalog(
                 unqualified=output_types
             ),
             'input': datasets,
@@ -1486,7 +1509,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
         }
 
     def validate(self, expression):
-        return VALIDATOR.validate_expression_static_semantics(
+        return CONTROLS.operation(
             expression, 'spec.columns.X.derivation', self.context()
         )
 
@@ -1500,6 +1523,15 @@ class TestStaticSemanticContracts(unittest.TestCase):
             error.path, 'spec.columns.X.derivation.flag.missing'
         )
         self.assertEqual(error.context, {'false_value': 'N'})
+        # Native issue transport must preserve exact scalar kinds and bytes.
+        for false_value in (-(2 ** 63), 2 ** 63 - 1, False, True, 'N\x00U'):
+            with self.subTest(false_value=false_value):
+                [exact] = self.validate({'flag': {
+                    **condition, 'false_value': false_value,
+                }})
+                self.assertEqual(exact.condition, 'missing_value_required')
+                self.assertEqual(exact.context, {'false_value': false_value})
+                self.assertIs(type(exact.context['false_value']), type(false_value))
         for missing in ('N', 'U', None):
             with self.subTest(missing=missing):
                 self.assertEqual(
@@ -1521,12 +1553,14 @@ class TestStaticSemanticContracts(unittest.TestCase):
             payload = (
                 {'source': 'B', 'offset': 1}
                 if operation == 'row_value'
+                else {'source': 'B'} if operation == 'previous_non_missing'
                 else {}
             )
             errors = self.validate({operation: payload})
             self.assertEqual(len(errors), 1)
             self.assertEqual(errors[0].condition, 'window_order_by_required')
-            self.assertIn('window.order_by', errors[0].message)
+            self.assertEqual(errors[0].context, {'operation': operation})
+            self.assertTrue(errors[0].path.endswith(f'.{operation}.window'))
 
             ordered = self.validate(
                 {operation: {**payload, 'window': {'order_by': ['B']}}}
@@ -1535,12 +1569,13 @@ class TestStaticSemanticContracts(unittest.TestCase):
 
     def test_window_order_by_forbidden_on_baseline_flag(self):
         errors = self.validate(
-            {'baseline_flag': {'window': {'order_by': ['B']}}}
+            {'baseline_flag': {'date': 'A', 'reference_date': 'A',
+                'window': {'order_by': ['B']}}}
         )
         self.assertEqual(len(errors), 1)
         self.assertEqual(errors[0].condition, 'window_order_by_forbidden')
 
-        unordered = self.validate({'baseline_flag': {}})
+        unordered = self.validate({'baseline_flag': {'date': 'A', 'reference_date': 'A'}})
         self.assertEqual(unordered, [])
 
     def test_mapping_extreme_window_and_cut_contracts(self):
@@ -1568,19 +1603,14 @@ class TestStaticSemanticContracts(unittest.TestCase):
         self.assertEqual(collision[0].condition, 'ambiguous_dictionary')
         self.assertEqual(extreme[0].condition, 'incomparable_sources')
         self.assertEqual(offset[0].condition, 'zero_offset')
-        self.assertEqual(
-            {error.context['reason'] for error in cut},
-            {'label_count', 'break_order'},
-        )
+        self.assertEqual([(error.condition, error.context) for error in cut], [
+            ('invalid_field_type', {'expected': 'one label more than breaks', 'operation': 'cut'}),
+            ('invalid_field_type', {'expected': 'ascending breaks', 'operation': 'cut'})])
 
     def test_rejects_unknown_direct_operation_inputs(self):
-        root = TOOL_PATH.parents[3]
-        env, env_errors = VALIDATOR.build_schema_env(root)
-        self.assertEqual(env_errors, [])
         context = self.context()
-        context['env'] = env
 
-        errors = VALIDATOR.validate_derivation_static_semantics(
+        errors = CONTROLS.operation(
             {'source': 'MISSING'},
             'spec.columns.X.derivation',
             context,
@@ -1606,10 +1636,9 @@ class TestStaticSemanticContracts(unittest.TestCase):
             'to_epoch_day': {'source': 'TEXT'}
         })
 
-        self.assertEqual(
-            {error.condition for error in impute},
-            {'month_out_of_range', 'day_out_of_range'},
-        )
+        self.assertEqual([(error.condition, error.context) for error in impute], [
+            ('month_out_of_range', {'month': 13}),
+            ('value_not_permitted', {'field': 'day', 'permitted': '1 to 31', 'value': 0})])
         self.assertEqual(valid_to_date, [])
         self.assertEqual(
             invalid_to_date[0].condition, 'incompatible_input_type'
@@ -1627,7 +1656,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
                 'between': {'value': 'A', 'lower': 'LO', 'upper': 'HI'},
             }]
         }
-        errors = VALIDATOR.validate_intermediate_static_semantics(
+        errors = CONTROLS.intermediate(
             spec,
             'spec.yaml',
             {'REF': {'LO': 'int', 'HI': 'float'}},
@@ -1641,7 +1670,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
         # REQ-1248: {id, dataset, no_match: null} reads what the implicit
         # join reads; without no_match the intermediate requires a match.
         def errors(intermediate):
-            return VALIDATOR.validate_intermediate_static_semantics(
+            return CONTROLS.intermediate(
                 {'intermediates': [intermediate]},
                 'spec.yaml',
                 {'REF': {'K': 'str'}},
@@ -1663,7 +1692,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
                 'key': {'K': 'A'},
             }]
         }
-        errors = VALIDATOR.validate_intermediate_static_semantics(
+        errors = CONTROLS.intermediate(
             spec,
             'spec.yaml',
             {'REF': {'K': 'str'}},
@@ -1702,7 +1731,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
             ],
             'rows': [
                 {
-                    'id': 'first',
+                    'id': 'first', 'dataset': 'AE',
                     'derivations': {
                         'USUBJID': 'AE.USUBJID',
                         'AESEQ': 'AE.AESEQ',
@@ -1711,7 +1740,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
                     },
                 },
                 {
-                    'id': 'second',
+                    'id': 'second', 'dataset': 'AE',
                     'derivations': {
                         'USUBJID': 'AE.USUBJID',
                         'AESEQ': 'AE.AESEQ',
@@ -1730,13 +1759,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
             (example_dir / 'ae.csv').write_text('USUBJID,AESEQ\n01,1\n')
             spec_path = example_dir / 'spec.yaml'
             label = 'example/spec.yaml'
-            return (
-                VALIDATOR.validate_spec_names(spec, label)
-                + VALIDATOR.validate_spec_predicates(spec, label, spec_path)
-                + VALIDATOR.validate_spec_numeric_expressions(
-                    spec, label, spec_path
-                )
-            )
+            return CONTROLS.document(spec, label, spec_path)
 
     def test_self_intermediate_resolves_output_columns(self):
         # REQ-0120: a SELF intermediate reads completed output rows, so its
@@ -1835,13 +1858,16 @@ class TestStaticSemanticContracts(unittest.TestCase):
                 errors = self.self_intermediate_errors(spec)
 
                 self.assertEqual(
-                    [(error.path, error.condition) for error in errors],
-                    [(
-                        'example/spec.yaml.intermediates[0].filter',
-                        'unknown_field',
-                    )],
+                    [(error.path, error.condition, error.context) for error in errors],
+                    [
+                        ('example/spec.yaml.intermediates[0].filter', 'unknown_field',
+                            {'identifier': 'SELF.LATE', 'intermediate': 'PRIOR_SAE'}),
+                        ('example/spec.yaml.rows[1].derivations.PRIOR.source', 'unknown_field',
+                            {'identifier': 'PRIOR_SAE.AESEQ'}),
+                        ('example/spec.yaml.rows[1].derivations.GAP.compute.expr', 'unknown_field',
+                            {'identifier': 'PRIOR_SAE.AESEQ'}),
+                    ],
                 )
-                self.assertEqual(errors[0].context, {'identifier': 'SELF.LATE'})
 
     def test_self_intermediate_requires_row_templates(self):
         # REQ-0120: SELF names completed rows only when the spec declares
@@ -1849,11 +1875,10 @@ class TestStaticSemanticContracts(unittest.TestCase):
         spec = self.self_intermediate_spec('SELF.AESEQ < AE.AESEQ')
         del spec['rows']
 
-        self.assertIn(
-            "ERROR: example/spec.yaml.intermediates[0].dataset: "
-            "undeclared dataset 'SELF'",
-            VALIDATOR.validate_spec_names(spec, 'example/spec.yaml'),
-        )
+        errors = self.self_intermediate_errors(spec)
+        self.assertEqual([(error.path, error.condition, error.context) for error in errors], [
+            ('example/spec.yaml.intermediates[0].dataset', 'unknown_field',
+                {'identifier': 'SELF', 'intermediate': 'PRIOR_SAE'})])
 
     def test_self_intermediate_rejects_declared_self_input(self):
         # REQ-0120: SELF is reserved for the completed rows, so it cannot
@@ -1863,11 +1888,12 @@ class TestStaticSemanticContracts(unittest.TestCase):
             'path': 'self.csv', 'types': {'AESEQ': 'int'},
         }
 
-        self.assertIn(
-            "ERROR: example/spec.yaml.intermediates[0].dataset: "
-            "'SELF' cannot also name an input",
-            VALIDATOR.validate_spec_names(spec, 'example/spec.yaml'),
-        )
+        errors = self.self_intermediate_errors(spec)
+        self.assertEqual([(error.path, error.condition, error.context) for error in errors], [
+            ('example/spec.yaml.intermediates[0].dataset', 'duplicate_identifier',
+                {'identifier': 'SELF'}),
+            ('example/spec.yaml.input.SELF', 'duplicate_identifier',
+                {'identifier': 'SELF'})])
 
     def test_dependency_cycle_reports_each_participating_derivation(self):
         spec = {
@@ -1967,7 +1993,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
             path.write_text(yaml.safe_dump(complete), encoding='ascii')
             if source is not None:
                 (root / 'source.csv').write_text(source, encoding='ascii')
-            errors = VALIDATOR.validate_spec_document(
+            errors = OWNER_REPOSITORY_SCHEMA.validate_spec_document(
                 complete, 'example/spec.yaml', path,
                 {'root': str(TOOL_PATH.parents[3])},
             )
@@ -2039,7 +2065,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
 
     def test_dependency_transport_failure_is_explicit(self):
         with (
-            patch.object(VALIDATOR._native_specification, 'validate',
+            patch.object(OWNER_NATIVE_SPECIFICATION, 'validate',
                          side_effect=RuntimeError('native transport unavailable')),
             self.assertRaisesRegex(RuntimeError, 'native transport unavailable'),
         ):
@@ -5640,6 +5666,10 @@ class TestIntermediateDerivedFilterValidation(unittest.TestCase):
                     },
                 },
                 'base': 'DM',
+                'columns': [
+                    {'name': 'STUDYID', 'type': 'str', 'derivation': 'DM.STUDYID'},
+                    {'name': 'USUBJID', 'type': 'str', 'derivation': 'DM.USUBJID'},
+                ],
                 'intermediates': [
                     {
                         'id': 'EOT',
@@ -5650,7 +5680,7 @@ class TestIntermediateDerivedFilterValidation(unittest.TestCase):
                 ],
             }
             if column_predicate is not None:
-                spec['columns'] = [
+                spec['columns'] += [
                     {
                         'name': 'FLAG',
                         'type': 'str',
@@ -5663,7 +5693,7 @@ class TestIntermediateDerivedFilterValidation(unittest.TestCase):
                     }
                 ]
             spec_path = root / 'spec.yaml'
-            return VALIDATOR.validate_spec_predicates(
+            return CONTROLS.document(
                 spec, 'spec.yaml', spec_path, None
             )
 
@@ -7733,12 +7763,13 @@ class TestCorrelatedLookupFilters(unittest.TestCase):
         }
         spec = {
             'input': {'PLAN': 'plan.csv', 'OBS': 'obs.csv', 'OTHER': 'other.csv'},
-            'base': 'PLAN',
-            'columns': [{'name': 'AVAL', 'type': 'float', 'derivation': 'PRIOR.AVAL'}],
+            'base': 'PLAN', 'keys': ['ID'],
+            'columns': [{'name': 'ID', 'type': 'str', 'derivation': {'literal': 'fixture'}},
+                {'name': 'AVAL', 'type': 'float', 'derivation': 'PRIOR.AVAL'}],
             'intermediates': [lookup],
         }
         if grouped:
-            spec['columns'][0].pop('derivation')
+            spec['columns'][1].pop('derivation')
             spec['rows'] = [{
                 'id': 'planned', 'dataset': 'PLAN',
                 'group_by': ['PLAN.ID'], 'derivations': {'AVAL': 'PRIOR.AVAL'},
@@ -7748,29 +7779,33 @@ class TestCorrelatedLookupFilters(unittest.TestCase):
     def test_only_current_driver_can_correlate(self):
         for qualifier, condition in [('PLAN', None), ('OTHER', 'unknown_field')]:
             with self.subTest(qualifier=qualifier):
-                errors = VALIDATOR.validate_lookup_filter_scopes(
+                errors = CONTROLS.document(
                     self.specification(f'OBS.VISIT < {qualifier}.VISIT'),
-                    'spec', None,
+                    'spec', None, sources={name: {'ID': 'str', 'VISIT': 'int', 'AVAL': 'float'}
+                        for name in ('PLAN', 'OBS', 'OTHER')},
                 )
                 self.assertEqual([e.condition for e in errors],
                                  [] if condition is None else [condition])
 
     def test_grouped_correlation_requires_a_group_key(self):
-        errors = VALIDATOR.validate_lookup_filter_scopes(
+        errors = CONTROLS.document(
             self.specification('OBS.VISIT < PLAN.VISIT', grouped=True),
-            'spec', None,
+            'spec', None, sources={name: {'ID': 'str', 'VISIT': 'int', 'AVAL': 'float'}
+                        for name in ('PLAN', 'OBS', 'OTHER')},
         )
-        self.assertEqual([e.condition for e in errors], ['ungrouped_driver_field'])
+        self.assertEqual([e.condition for e in errors], ['unknown_field'])
+        self.assertEqual(errors[0].context,
+            {'identifier': 'PLAN.VISIT', 'intermediate': 'PRIOR'})
 
 
 class TestFlagPredicates(unittest.TestCase):
     """Both flag spellings reach the predicate checks (REQ-1256)."""
 
     def errors(self, flag):
-        return VALIDATOR.validate_expression_predicates(
-            {'flag': flag}, 'spec.columns.ELDFL.derivation',
-            VALIDATOR.predicate_resolver({'AGE': 'int'}), {},
-        )
+        condition = flag if isinstance(flag, str) else flag['condition']
+        return CONTROLS.predicate(condition,
+            'spec.columns.ELDFL.derivation.flag.condition',
+            CONTROLS.catalog({'AGE': 'int'}))
 
     def test_both_spellings_check_the_condition_at_its_field(self):
         # R006 expands a bare string to the mapping form, so both report
@@ -7794,7 +7829,8 @@ class TestFlagPredicates(unittest.TestCase):
         for flag in ('AOCCSEQ = 1', {'condition': 'AOCCSEQ = 1'}):
             with self.subTest(flag=flag):
                 self.assertEqual(
-                    VALIDATOR.derive_binding_reference_names({'flag': flag}),
+                    sorted(CONTROLS.identifiers('predicate',
+                        flag if isinstance(flag, str) else flag['condition'])),
                     ['AOCCSEQ'],
                 )
 

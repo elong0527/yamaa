@@ -50,7 +50,10 @@ def _installed_providers(roots: Sequence[str]) -> Mapping[str, list[str]]:
     for index, distribution in enumerate(metadata.distributions()):
         if index >= _MAX_RECORDS:
             raise InvalidLock("installed distribution count limit")
-        raw = distribution.read_text("direct_url.json")
+        try:
+            raw = distribution.read_text("direct_url.json")
+        except UnicodeDecodeError as error:
+            raise InvalidLock("invalid editable metadata") from error
         if raw is None:
             continue
         if len(raw.encode("utf-8")) > 16_384:
@@ -145,7 +148,7 @@ def _read(raw: bytes) -> dict:
         raise InvalidLock("lock byte limit")
     try:
         document = tomllib.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError, RecursionError) as error:
         raise InvalidLock("invalid uv lock syntax") from error
     records = document.get("package")
     if type(document.get("version")) is not int or document["version"] != 1:

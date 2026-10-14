@@ -9,6 +9,6 @@ Description: Builds clinical data specifications, checks declarations, and
 License: MIT + file LICENSE
 Encoding: UTF-8
 Depends: R (>= 4.6.1)
-Suggests: nanoarrow, arrow
+Suggests: nanoarrow, arrow, jsonlite
 SystemRequirements: Cargo, rustc (>= 1.90.0), GNU make
 NeedsCompilation: yes

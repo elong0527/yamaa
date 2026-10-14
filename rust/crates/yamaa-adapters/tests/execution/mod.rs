@@ -1,0 +1,30 @@
+//! Execution contracts in the yamaa-adapters integration suite.
+
+mod aggregate_record_operations;
+mod compiled_model;
+mod completed_intermediate_scopes;
+mod completed_lookup_assertions;
+mod dataset_execution;
+mod declarative_case_intermediates;
+mod declarative_case_predicates;
+mod declarative_correlated_predicates;
+mod declarative_flags;
+mod declarative_intermediate_admission;
+mod declarative_intermediate_key_shorthand;
+mod declarative_intermediate_keys;
+mod declarative_intermediate_ranges;
+mod declarative_output_ordering;
+mod declarative_primary_intermediates;
+mod declarative_row_intermediates;
+mod declarative_self;
+mod declarative_source_selection;
+mod inherited_aggregate_bindings;
+mod inherited_identifier_collision;
+mod inherited_key_shorthand;
+mod nested_windows;
+mod probe_successors;
+mod row_derivations;
+mod row_filter_paths;
+mod row_intermediate_operands;
+mod scoped_windows_checks;
+mod specification_run;

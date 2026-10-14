@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gc
+import runpy
 import inspect
 import json
 import shutil
@@ -15,17 +16,13 @@ import polars as pl
 import yamaa
 from yamaa import _locked_functions as host
 
-SPEC = """schema_version: '1.0'
-domain: TEST
-keys: [ID]
-input: {SRC: input.csv}
-columns:
-  - {name: ID, type: str, derivation: SRC.ID}
-  - {name: VALUE, type: int, derivation: SRC.VALUE}
-output: {path: output.csv, columns: [ID, VALUE]}
-"""
-INPUT = b"ID,VALUE\na,-9223372036854775808\nb,9223372036854775807\nc,\n"
-VALUES = [-9223372036854775808, 9223372036854775807, None]
+TRUTH = runpy.run_path(str(Path(__file__).with_name("host-fixtures") / "reader.py"))["load"](
+    __file__, "public-contract"
+)
+
+SPEC = TRUTH["specification_yaml"]
+INPUT = TRUTH["python_input_csv"].encode("utf-8")
+VALUES = [None if value is None else int(value) for value in TRUTH["python_values_decimal"]]
 
 
 class PublicContract(unittest.TestCase):
@@ -41,7 +38,7 @@ class PublicContract(unittest.TestCase):
         frame = result.issues
         self.assertEqual(
             frame.columns,
-            ["phase", "condition", "requirement", "spec_paths", "context"],
+            TRUTH["issue_columns"],
         )
         self.assertEqual(
             frame.dtypes,
@@ -115,7 +112,7 @@ class PublicContract(unittest.TestCase):
             self.assertEqual(result.output["VALUE"].to_list(), VALUES)
             self.assertIsNone(result.verification_log)
             self.assertIsNone(result.warning_log)
-            for name in ("output", "issues", "verification_log", "warning_log"):
+            for name in tuple(TRUTH["owned_view_names"]):
                 with self.subTest(name=name), self.assertRaises(AttributeError):
                     setattr(result, name, None)
             with self.assertRaises(TypeError):
@@ -140,7 +137,7 @@ class PublicContract(unittest.TestCase):
             SPEC.replace("VALUE, type: int", "VALUE, type: str")
             .replace(
                 "output: {",
-                "  - {name: EMPTY, type: str, derivation: {literal: ''}}\noutput: {",
+                TRUTH["empty_text_column"],
             )
             .replace("columns: [ID, VALUE]", "columns: [ID, VALUE, EMPTY]"),
             encoding="utf-8",
@@ -159,7 +156,7 @@ class PublicContract(unittest.TestCase):
     def test_failed_verification_retains_owned_diagnostic_log(self):
         self.spec.write_text(
             SPEC.replace(
-                "  - {name: VALUE, type: int, derivation: SRC.VALUE}",
+                TRUTH["integer_column_yaml"],
                 "  - name: VALUE\n    type: int\n    derivation: SRC.VALUE\n"
                 "    verifications:\n"
                 "      - range: {max: 0, severity: warning, id: warn}\n"
@@ -167,11 +164,11 @@ class PublicContract(unittest.TestCase):
             )
             .replace(
                 "output: {",
-                "verifications:\n  - row_count: {min: 0, id: unreached}\noutput: {",
+                TRUTH["unreached_row_count_yaml"],
             )
             .replace(
                 "columns: [ID, VALUE]}",
-                "columns: [ID, VALUE], verification_log: checks.csv, warning_log: warnings.csv}",
+                TRUTH["log_output_yaml"],
             ),
             encoding="utf-8",
         )
@@ -228,7 +225,7 @@ class PublicContract(unittest.TestCase):
 
     def test_activation_interrupt_preserves_original_exception(self):
         source, environment = self.function_study()
-        original = KeyboardInterrupt("public contract activation interrupt")
+        original = KeyboardInterrupt(TRUTH["interrupt_message"])
         with (
             patch.object(host, "verify_versions", side_effect=original),
             self.assertRaises(KeyboardInterrupt) as seen,
@@ -267,7 +264,7 @@ class PublicContract(unittest.TestCase):
 
     def test_public_define_signature_and_missing_environment(self):
         parameters = inspect.signature(yamaa.define).parameters
-        self.assertEqual(list(parameters), ["environment", "standard", "created"])
+        self.assertEqual(list(parameters), TRUTH["define_argument_names"])
         self.assertEqual(parameters["created"].kind, inspect.Parameter.KEYWORD_ONLY)
         self.assertIsNone(parameters["created"].default)
         result = yamaa.define(

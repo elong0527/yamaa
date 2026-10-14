@@ -3,6 +3,7 @@
 Rust owns the Parquet profile, field/value admission and failure vocabulary.
 PyArrow reads physical codec metadata only after that admission succeeds.
 """
+import _native_json
 
 import io
 import json
@@ -31,7 +32,7 @@ def source_issue(content):
         (root / "source.parquet").write_bytes(content)
         specification = root / "spec.yaml"
         specification.write_text(
-            json.dumps(
+            _native_json.dumps(
                 {
                     "schema_version": "1.0",
                     "domain": "VALIDATOR",
@@ -71,7 +72,7 @@ def source_issue(content):
                 "source_field_type_unsupported",
                 "source_field_value_invalid",
             }:
-                return row["condition"], row["requirement"], json.loads(row["context"])
+                return row["condition"], row["requirement"], _native_json.loads(row["context"])
         raise RuntimeError(f"native Parquet fixture refused: {rows!r}")
 
 

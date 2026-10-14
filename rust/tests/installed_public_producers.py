@@ -1,5 +1,6 @@
 """Installed public producer builds against independently authored study truth."""
 import gc
+import runpy
 import json
 import os
 import shutil
@@ -14,44 +15,17 @@ from yamaa import DomainError, domain
 from yamaa import _locked_functions as host
 from yamaa import _native as native
 
+TRUTH = runpy.run_path(str(Path(__file__).with_name("host-fixtures") / "reader.py"))["load"](
+    __file__, "producer-graph"
+)
+
 ROOT = Path(__file__).parent / "project-original"
-RAW = b"ID,VALUE\n1,1.234\n2,2.345\n"
-PRODUCED = b"ID,VALUE\n1,1.23\n2,2.35\n"
-CONSUMED = b"ID,VALUE\n1,2.46\n2,4.70\n"
-PRODUCER = """schema_version: '1.0'
-domain: TEST
-base: RAW
-keys: [ID]
-input: {RAW: {path: ../../raw/raw.csv, types: {ID: int, VALUE: float}}}
-columns:
-  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}
-  - {name: VALUE, type: float, label: Value, derivation: {function: {name: id_float, args: {x: RAW.VALUE}}}}
-output: {path: ../../generated/producer.csv, columns: [ID, VALUE], decimals: 2}
-"""
-CONSUMER = """schema_version: '1.0'
-domain: TEST
-base: FIRST
-keys: [ID]
-input:
-  FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}
-  SECOND: {path: ../generated/producer.csv, schema: ../producer/./p.yaml}
-intermediates: [{id: SECOND_REFERENCE, dataset: SECOND, key: [ID], no_match: null}]
-columns:
-  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}
-  - {name: FIRST_VALUE, type: float, label: First value, derivation: FIRST.VALUE}
-  - {name: SECOND_VALUE, type: float, label: Second value, derivation: SECOND_REFERENCE.VALUE}
-  - {name: VALUE, type: float, label: Value, derivation: {compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}}
-output: {path: ../generated/root.csv, columns: [ID, VALUE], decimals: 2}
-"""
-FUNCTION = """function: yamaa_benchmarks.project_value
-description: Installed numeric identity.
-params: [{name: x, type: float}]
-returns: float
-tests:
-  - {id: normal, covers: [normal, numeric-comparison], args: {x: 7.25}, result: 7.25}
-  - {id: boundary, covers: [boundary], args: {x: 0.0}, result: 0.0}
-  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}
-"""
+RAW = TRUTH["raw_csv"].encode("utf-8")
+PRODUCED = TRUTH["produced_csv"].encode("utf-8")
+CONSUMED = TRUTH["consumed_csv"].encode("utf-8")
+PRODUCER = TRUTH["producer_yaml"]
+CONSUMER = TRUTH["consumer_yaml"]
+FUNCTION = TRUTH["function_yaml"].replace("HOST_CALLABLE", "yamaa_benchmarks.project_value")
 
 
 class PublicProducers(unittest.TestCase):
@@ -61,7 +35,7 @@ class PublicProducers(unittest.TestCase):
         self.root = Path(work.name).resolve()
         self.write("yamaa-project.yaml", "version: '1.0'\n")
         self.write("producer/layers/base.yaml", PRODUCER)
-        self.write("producer/p.yaml", "schema_version: '1.0'\nparents: [layers/base.yaml]\ndomain: PRODUCER\n")
+        self.write("producer/p.yaml", TRUTH["producer_parent_yaml"])
         self.write("consumer/root.yaml", CONSUMER)
         self.write("raw/raw.csv", RAW)
         self.write("env/environment.yaml", "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions: {id_float: float.yaml}\n")
@@ -114,7 +88,7 @@ class PublicProducers(unittest.TestCase):
         from yamaa import check
 
         self.write("producer/layers/base.yaml", PRODUCER.replace(
-            "{function: {name: id_float, args: {x: RAW.VALUE}}}", "RAW.VALUE"
+            TRUTH["identity_derivation"], "RAW.VALUE"
         ))
         self.write("env/environment.yaml", "[")
         (self.root / "generated").mkdir()
@@ -131,7 +105,7 @@ class PublicProducers(unittest.TestCase):
             self.assertFalse(any(name.endswith("environment.yaml") for name, _ in self.entered(result).retained_sources()))
             (self.root / "raw/raw.csv").unlink()
             self.assertTrue(check(self.root / "consumer/root.yaml").issues.is_empty())
-            for name in ("consumer/root.yaml", "producer/p.yaml", "producer/layers/base.yaml"):
+            for name in tuple(TRUTH["retained_specification_files"]):
                 (self.root / name).unlink()
             for _ in range(2):
                 self.assertTrue(result.save())
@@ -188,35 +162,26 @@ class PublicProducers(unittest.TestCase):
             self.assertEqual(result.output["VALUE"].to_list(), [2.46, 4.70])
 
     def test_root_output_keeps_unrounded_values_and_projection_order(self):
-        text = CONSUMER.replace("output: {path:", "  - {name: ROOT_UNROUNDED, type: float, label: Root precision, derivation: {compute: {expr: 'VALUE + 0.004'}}}\noutput: {path:")
-        text = text.replace("columns: [ID, VALUE], decimals: 2", "columns: [ROOT_UNROUNDED, ID, VALUE], decimals: 2")
+        text = CONSUMER.replace("output: {path:", TRUTH["root_unrounded_column"])
+        text = text.replace("columns: [ID, VALUE], decimals: 2", TRUTH["root_unrounded_projection"])
         self.write("consumer/root.yaml", text)
         result = self.build()
         self.assertTrue(result.issues.is_empty())
-        self.assertEqual(result.output.columns, ["ROOT_UNROUNDED", "ID", "VALUE"])
+        self.assertEqual(result.output.columns, TRUTH["root_unrounded_columns"])
         self.assertEqual(result.output["ROOT_UNROUNDED"].to_list(), [2.464, 4.704])
-        self.assertEqual(self.entered(result).artifact(0), b"ROOT_UNROUNDED,ID,VALUE\n2.46,1,2.46\n4.70,2,4.70\n")
+        self.assertEqual(self.entered(result).artifact(0), TRUTH["root_unrounded_csv"].encode("utf-8"))
         self.assertEqual(self.entered(result).artifact(1), PRODUCED)
         changed = result.output.with_columns(result.output["VALUE"] * 10)
         self.assertEqual(changed["VALUE"].to_list(), [24.6, 47.0])
         self.assertEqual(result.output["VALUE"].to_list(), [2.46, 4.70])
 
     def test_inherited_diamond_runs_shared_leaf_once_without_prospective_disk_inputs(self):
-        bridge = """schema_version: '1.0'
-domain: TEST
-base: FIRST
-keys: [ID]
-input: {FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}}
-columns:
-  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}
-  - {name: VALUE, type: float, label: Value, derivation: FIRST.VALUE}
-output: {path: ../generated/left.csv, columns: [ID, VALUE], decimals: 2}
-"""
+        bridge = TRUTH["retained_bridge_yaml"]
         self.write("bridge/left.yaml", bridge)
         self.write("bridge/right.yaml", bridge.replace("schema: ../producer/p.yaml", "schema: ../producer/./p.yaml").replace("generated/left.csv", "generated/right.csv"))
-        inherited = CONSUMER.replace(", no_match: null", "").replace("../generated/producer.csv, schema: ../producer/p.yaml", "../../generated/left.csv, schema: ../../bridge/left.yaml").replace("../generated/producer.csv, schema: ../producer/./p.yaml", "../../generated/right.csv, schema: ../../bridge/right.yaml").replace("path: ../generated/root.csv", "path: ../../generated/root.csv")
+        inherited = CONSUMER.replace(", no_match: null", "").replace("../generated/producer.csv, schema: ../producer/p.yaml", TRUTH["nested_left_reference"]).replace("../generated/producer.csv, schema: ../producer/./p.yaml", TRUTH["nested_right_reference"]).replace("path: ../generated/root.csv", "path: ../../generated/root.csv")
         self.write("consumer/layers/base.yaml", inherited)
-        self.write("consumer/root.yaml", "schema_version: '1.0'\nparents: [layers/base.yaml]\ndomain: ROOT\n")
+        self.write("consumer/root.yaml", TRUTH["root_parent_yaml"])
         calls = []
         original = program.project_value
         def value(x):
@@ -232,7 +197,7 @@ output: {path: ../generated/left.csv, columns: [ID, VALUE], decimals: 2}
         self.assertFalse((self.root / "generated").exists())
         (self.root / "generated").mkdir()
         before = self.observe(result)
-        for directory in ("producer", "consumer", "raw", "env", "bridge"):
+        for directory in tuple(TRUTH["owned_bridge_directories"]):
             shutil.rmtree(self.root / directory)
         gc.collect()
         for _ in range(2):
@@ -253,22 +218,22 @@ output: {path: ../generated/left.csv, columns: [ID, VALUE], decimals: 2}
         self.assertEqual(result.output["VALUE"].to_list(), [2.46, 4.70])
 
     def test_save_retains_rounded_alias_bytes_and_unrounded_root_after_originals_drop(self):
-        text = CONSUMER.replace("output: {path:", "  - {name: ROOT_UNROUNDED, type: float, label: Root precision, derivation: {compute: {expr: 'VALUE + 0.004'}}}\noutput: {path:")
-        text = text.replace("columns: [ID, VALUE], decimals: 2", "columns: [ROOT_UNROUNDED, ID, VALUE], decimals: 2")
+        text = CONSUMER.replace("output: {path:", TRUTH["root_unrounded_column"])
+        text = text.replace("columns: [ID, VALUE], decimals: 2", TRUTH["root_unrounded_projection"])
         self.write("consumer/root.yaml", text)
         (self.root / "generated").mkdir()
         result = self.build()
         before = self.observe(result)
         self.assertEqual(list((self.root / "generated").iterdir()), [])
         self.write("raw/raw.csv", b"ID,VALUE\n1,99.99\n")
-        for directory in ("producer", "consumer", "raw", "env"):
+        for directory in tuple(TRUTH["owned_directories"]):
             shutil.rmtree(self.root / directory)
         gc.collect()
         with patch.object(host, "verify_versions", side_effect=AssertionError("Save repeated activation")), patch.object(host, "resolve_callable", side_effect=AssertionError("Save rebound a callable")), patch.object(program, "project_value", side_effect=AssertionError("Save replayed a callback")):
             for _ in range(2):
                 self.assertTrue(result.save())
                 self.assertEqual((self.root / "generated/producer.csv").read_bytes(), PRODUCED)
-                self.assertEqual((self.root / "generated/root.csv").read_bytes(), b"ROOT_UNROUNDED,ID,VALUE\n2.46,1,2.46\n4.70,2,4.70\n")
+                self.assertEqual((self.root / "generated/root.csv").read_bytes(), TRUTH["root_unrounded_csv"].encode("utf-8"))
                 self.assertEqual(result.output["ROOT_UNROUNDED"].to_list(), [2.464, 4.704])
                 after = self.observe(result)
                 self.assertEqual(after.pop("publication")["entered"], [{"node": 1, "published": True}, {"node": 0, "published": True}])
@@ -361,7 +326,7 @@ output: {path: ../generated/left.csv, columns: [ID, VALUE], decimals: 2}
         bad = FUNCTION.replace("params: [{name: x", "params: [{name: z").replace("args: {x:", "args: {z:").replace("short-circuit-missing:x", "short-circuit-missing:z")
         self.write("env/bad.yaml", bad)
         self.write("env/environment.yaml", "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions: {id_float: float.yaml, bad: bad.yaml}\n")
-        self.write("consumer/root.yaml", CONSUMER.replace("{compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}", "{function: {name: bad, args: {z: FIRST_VALUE}}}"))
+        self.write("consumer/root.yaml", CONSUMER.replace(TRUTH["sum_derivation"], TRUTH["bad_derivation"]))
         shutil.rmtree(self.root / "raw")
         calls = []
         original = program.project_value
@@ -443,7 +408,7 @@ output: {path: ../generated/left.csv, columns: [ID, VALUE], decimals: 2}
         self.assertEqual(json.loads(result.issues["context"][0])["code"], "report_limit")
 
     def test_failed_consumer_verification_has_no_output_from_accepted_producer(self):
-        self.write("consumer/root.yaml", CONSUMER + "verifications:\n  - row_count: {min: 99}\n")
+        self.write("consumer/root.yaml", CONSUMER + TRUTH["fatal_row_count_yaml"])
         result = self.build()
         self.assertIsNone(result.output)
         held = self.entered(result)
@@ -472,7 +437,7 @@ output: {path: ../generated/left.csv, columns: [ID, VALUE], decimals: 2}
         # numeric columns take the public copy beyond its 8 MiB byte cap.
         payload = "x" * 2048
         extra = f'  - {{name: PAYLOAD, type: str, label: Payload, derivation: {{literal: "{payload}"}}}}\n'
-        self.write("consumer/root.yaml", CONSUMER.replace("output: {path:", extra + "output: {path:").replace("columns: [ID, VALUE], decimals: 2", "columns: [ID, VALUE, PAYLOAD], decimals: 2"))
+        self.write("consumer/root.yaml", CONSUMER.replace("output: {path:", extra + "output: {path:").replace("columns: [ID, VALUE], decimals: 2", TRUTH["payload_projection"]))
         self.write("raw/raw.csv", b"ID,VALUE\n" + "".join(f"{index},1.234\n" for index in range(1, 4096)).encode())
         result = self.build()
         self.assertTrue(self.entered(result).accepted())
@@ -513,7 +478,7 @@ output: {path: ../generated/left.csv, columns: [ID, VALUE], decimals: 2}
         self.assertTrue(self.entered(result).accepted())
 
     def test_invalid_original_producer_metadata_keeps_rejection_and_never_falls_back(self):
-        self.write("consumer/root.yaml", CONSUMER.replace("schema: ../producer/p.yaml", "schema: ../producer/p.yaml, types: {ID: str}"))
+        self.write("consumer/root.yaml", CONSUMER.replace("schema: ../producer/p.yaml", TRUTH["incompatible_reference"]))
         with patch.object(host, "verify_versions") as verify, patch.object(program, "project_value") as invoked:
             result = self.build()
         verify.assert_not_called()

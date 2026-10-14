@@ -1,0 +1,2263 @@
+use crate::support::producer_graph as support;
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+    sync::Arc,
+};
+use support::{candidate, document, environment, node};
+use yamaa_core::{
+    function_signature::{LogicalSignature, ProjectFunctionIdentity},
+    producer_graph::Node,
+    project_environment::LockReference,
+    project_function::Language,
+    specification::{PreparedSpecification, SourceDeclaration},
+    table::{CellError, Column, TableAccess, TableSchema, ValueRef},
+    value::{ColumnType, Value},
+};
+use yamaa_engine::{
+    dataset::{Dataset, Execution, ExecutionError},
+    function_invocation::{Argument, FailureKind, HostError},
+    producer_build::{self as build, CaptureError, CodecPort, Failure, ReportPort, StudyPort},
+    project_activation::{self, ActivationPort},
+    specification_output::{CompleteError, OutputReport},
+    specification_run::{PortError, SourceDecoder},
+};
+type Trace = Rc<RefCell<Vec<String>>>;
+#[derive(Debug)]
+struct Payload {
+    original: Rc<()>,
+    interrupt: bool,
+}
+#[derive(Clone, Copy)]
+enum Mode {
+    Pass,
+    Lock,
+    Binding,
+    CaseInterrupt,
+    Producer,
+    Consumer,
+    Unwind,
+}
+struct Activation {
+    trace: Trace,
+    original: Rc<()>,
+    unwind: Arc<()>,
+    mode: Mode,
+}
+impl Activation {
+    fn payload(&self, interrupt: bool) -> Payload {
+        Payload {
+            original: Rc::clone(&self.original),
+            interrupt,
+        }
+    }
+}
+impl ActivationPort for Activation {
+    type Error = Payload;
+    type Handle = String;
+    fn verify_lock(
+        &mut self,
+        _: Language,
+        lock: &LockReference,
+        calls: &[ProjectFunctionIdentity],
+    ) -> Result<(), Payload> {
+        assert_eq!(lock.written, "uv.lock");
+        assert_eq!(
+            calls.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(),
+            ["beta", "alpha"]
+        );
+        self.trace.borrow_mut().push("lock".into());
+        if matches!(self.mode, Mode::Lock) {
+            Err(self.payload(false))
+        } else {
+            Ok(())
+        }
+    }
+    fn bind(
+        &mut self,
+        call: &ProjectFunctionIdentity,
+        _: &LogicalSignature,
+    ) -> Result<String, Payload> {
+        self.trace.borrow_mut().push(format!("bind:{}", call.name));
+        if matches!(self.mode, Mode::Binding) {
+            Err(self.payload(false))
+        } else {
+            Ok(call.name.clone())
+        }
+    }
+    fn is_interrupt(&self, error: &Payload) -> bool {
+        error.interrupt
+    }
+    fn invoke(
+        &mut self,
+        name: &String,
+        args: &[Argument<'_>],
+    ) -> Result<Value, HostError<Payload>> {
+        let [Argument {
+            name: "x",
+            value: ValueRef::Int(value),
+        }] = args
+        else {
+            panic!("exact integer argument")
+        };
+        self.trace
+            .borrow_mut()
+            .push(format!("invoke:{name}:{value}"));
+        match (self.mode, name.as_str(), *value) {
+            (Mode::CaseInterrupt, "beta", i64::MIN) => Err(HostError::Raised(self.payload(true))),
+            (Mode::Producer, "beta", 1) | (Mode::Consumer, "alpha", 1) => {
+                Err(HostError::Raised(self.payload(false)))
+            }
+            (Mode::Unwind, "beta", 1) => std::panic::panic_any(Arc::clone(&self.unwind)),
+            _ => Ok(Value::Int(*value)),
+        }
+    }
+}
+struct Study {
+    trace: Trace,
+    reads: usize,
+    failure: bool,
+    unwind: Option<Arc<()>>,
+}
+impl StudyPort for Study {
+    type Error = &'static str;
+    fn inspect(&mut self, node: &Node, source: &SourceDeclaration) -> Result<(), Self::Error> {
+        assert_eq!((node.identity(), source.name.as_str()), ("/p", "RAW"));
+        self.trace.borrow_mut().push("inspect:/p:RAW".into());
+        Ok(())
+    }
+    fn capture_reads(&self) -> usize {
+        self.reads
+    }
+    fn capture(
+        &mut self,
+        node: &Node,
+        source: &SourceDeclaration,
+        maximum: usize,
+    ) -> Result<Arc<[u8]>, Self::Error> {
+        assert_eq!((node.identity(), source.name.as_str()), ("/p", "RAW"));
+        self.trace.borrow_mut().push("capture:/p:RAW".into());
+        if let Some(payload) = &self.unwind {
+            std::panic::panic_any(Arc::clone(payload));
+        }
+        if self.failure {
+            return Err("original source refusal");
+        }
+        let bytes = b"ID,VALUE\n1,1\n";
+        if bytes.len() > maximum {
+            return Err("source byte limit");
+        }
+        self.reads += 1;
+        Ok(Arc::from(bytes.as_slice()))
+    }
+}
+struct Table {
+    cells: Rc<Cell<usize>>,
+    cardinality: Rc<Cell<usize>>,
+    schema: TableSchema,
+    rows: Vec<Vec<Value>>,
+}
+impl TableAccess for Table {
+    type Error = Payload;
+    fn schema(&self) -> &TableSchema {
+        &self.schema
+    }
+    fn row_count(&self) -> usize {
+        self.cardinality.set(self.cardinality.get() + 1);
+        self.rows.len()
+    }
+    fn cell(&self, row: usize, col: usize) -> Result<ValueRef<'_>, CellError<Payload>> {
+        self.cells.set(self.cells.get() + 1);
+        Ok(ValueRef::from(&self.rows[row][col]))
+    }
+}
+struct Decoder {
+    schema_case: usize,
+    cells: Rc<Cell<usize>>,
+    cardinality: Rc<Cell<usize>>,
+    trace: Trace,
+    failure: bool,
+}
+impl SourceDecoder for Decoder {
+    type Error = &'static str;
+    type Table = Table;
+    fn decode(&mut self, source: &SourceDeclaration, bytes: &[u8]) -> Result<Table, Self::Error> {
+        self.trace
+            .borrow_mut()
+            .push(format!("decode:{}", source.name));
+        if self.failure {
+            return Err("original decode refusal");
+        }
+        assert_eq!(bytes, b"ID,VALUE\n1,1\n");
+        let mut columns = ["ID", "VALUE"]
+            .map(|name| Column {
+                name: name.into(),
+                kind: ColumnType::Int,
+            })
+            .to_vec();
+        let mut row = vec![Value::Int(1), Value::Int(1)];
+        if source.name != "RAW" {
+            self.cells.set(0);
+            self.cardinality.set(0);
+            match self.schema_case {
+                1 => columns.swap(0, 1),
+                2 => {
+                    columns.push(Column {
+                        name: "EXTRA".into(),
+                        kind: ColumnType::Int,
+                    });
+                    row.push(Value::Int(1));
+                }
+                3 => {
+                    columns.pop();
+                    row.pop();
+                }
+                4 => columns[1].kind = ColumnType::Str,
+                _ => {}
+            }
+        }
+        Ok(Table {
+            cells: Rc::clone(&self.cells),
+            cardinality: Rc::clone(&self.cardinality),
+            schema: TableSchema::new(columns).unwrap(),
+            rows: vec![row],
+        })
+    }
+}
+struct Report {
+    trace: Trace,
+    node: String,
+    maximum: usize,
+    failure: bool,
+    diagnostics: bool,
+    diagnostic_bytes: usize,
+    diagnostic_failure: bool,
+    diagnostic_unwind: Option<Arc<()>>,
+    diagnostic_capacities: Vec<(usize, usize)>,
+}
+impl ReportPort for Report {
+    fn prepare_diagnostics<C, D, T: TableAccess>(
+        &mut self,
+        node: &Node,
+        _attempt: &yamaa_engine::specification_run::CapturedAttempt<C, D, T>,
+        output_bytes: usize,
+        report_bytes: usize,
+    ) -> Result<usize, Self::Error> {
+        if !self.diagnostics {
+            return Ok(0);
+        }
+        self.trace
+            .borrow_mut()
+            .push(format!("diagnostics:{}", node.identity()));
+        self.diagnostic_capacities
+            .push((output_bytes, report_bytes));
+        if let Some(payload) = &self.diagnostic_unwind {
+            std::panic::panic_any(Arc::clone(payload));
+        }
+        if self.diagnostic_failure {
+            return Err("original diagnostic refusal");
+        }
+        Ok(self.diagnostic_bytes)
+    }
+    fn select<C, D, T: TableAccess>(
+        &mut self,
+        node: &Node,
+        _attempt: &yamaa_engine::specification_run::CapturedAttempt<C, D, T>,
+        maximum: usize,
+    ) -> Result<(), Self::Error> {
+        self.trace
+            .borrow_mut()
+            .push(format!("report:{}", node.identity()));
+        if self.failure {
+            return Err("original report refusal");
+        }
+        if node.identity().len() > maximum {
+            return Err("report byte limit");
+        }
+        self.node = node.identity().into();
+        self.maximum = maximum;
+        Ok(())
+    }
+}
+impl OutputReport for Report {
+    type Error = &'static str;
+    type Report = String;
+    fn failure(&mut self) -> Result<String, Self::Error> {
+        Ok(self.node.clone())
+    }
+    fn begin(&mut self, _: &Execution) -> Result<(), Self::Error> {
+        self.trace.borrow_mut().push("begin".into());
+        Ok(())
+    }
+    fn rejected(
+        &mut self,
+        _: &[yamaa_core::specification::OutputFinding],
+    ) -> Result<String, Self::Error> {
+        Ok(self.node.clone())
+    }
+    fn success(&mut self, _: &Execution, _: &[usize], _: &[u8]) -> Result<String, Self::Error> {
+        assert!(self.node.len() <= self.maximum);
+        self.trace.borrow_mut().push("success".into());
+        Ok(self.node.clone())
+    }
+}
+struct Codec {
+    trace: Trace,
+    failure: bool,
+}
+impl CodecPort for Codec {
+    type Error = &'static str;
+    fn encode(
+        &mut self,
+        plan: &PreparedSpecification,
+        dataset: &Dataset,
+        projection: &[usize],
+        maximum: usize,
+    ) -> Result<Vec<u8>, Self::Error> {
+        self.trace
+            .borrow_mut()
+            .push(format!("encode:{}", plan.source().name));
+        if self.failure {
+            return Err("original codec refusal");
+        }
+        assert_eq!(projection, [0, 1]);
+        assert_eq!(dataset.cell(0, 0).unwrap(), ValueRef::Int(1));
+        assert_eq!(dataset.cell(0, 1).unwrap(), ValueRef::Int(1));
+        let bytes = b"ID,VALUE\n1,1\n";
+        if bytes.len() > maximum {
+            return Err("output byte limit");
+        }
+        Ok(bytes.to_vec())
+    }
+}
+struct Ports {
+    activation: Activation,
+    study: Study,
+    decoder: Decoder,
+    report: Report,
+    codec: Codec,
+}
+impl Ports {
+    fn new() -> Self {
+        let trace = Rc::new(RefCell::new(vec![]));
+        Self {
+            activation: Activation {
+                trace: Rc::clone(&trace),
+                original: Rc::new(()),
+                unwind: Arc::new(()),
+                mode: Mode::Pass,
+            },
+            study: Study {
+                trace: Rc::clone(&trace),
+                reads: 0,
+                failure: false,
+                unwind: None,
+            },
+            decoder: Decoder {
+                schema_case: 0,
+                cells: Rc::new(Cell::new(0)),
+                cardinality: Rc::new(Cell::new(0)),
+                trace: Rc::clone(&trace),
+                failure: false,
+            },
+            report: Report {
+                trace: Rc::clone(&trace),
+                node: String::new(),
+                maximum: 0,
+                failure: false,
+                diagnostics: false,
+                diagnostic_bytes: 0,
+                diagnostic_failure: false,
+                diagnostic_unwind: None,
+                diagnostic_capacities: Vec::new(),
+            },
+            codec: Codec {
+                trace,
+                failure: false,
+            },
+        }
+    }
+    fn borrow(&mut self) -> build::Ports<'_, Activation, Study, Decoder, Report, Codec> {
+        build::Ports {
+            activation: &mut self.activation,
+            study: &mut self.study,
+            decoder: &mut self.decoder,
+            report: &mut self.report,
+            codec: &mut self.codec,
+        }
+    }
+}
+type Attempt = build::BuildAttempt<Activation, Study, Decoder, Report, Codec>;
+
+mod application_observations {
+    use super::*;
+    use yamaa_engine::{
+        application_observer::{CallStage, Event, Observer, Outcome, Phase, Scope},
+        dataset::ExecutionPhase,
+    };
+    type NodeCoordinate = Option<(usize, String)>;
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    enum Seen {
+        Phase(NodeCoordinate, Phase),
+        Call(NodeCoordinate, CallStage),
+        Exit(NodeCoordinate, Phase, Outcome),
+        Return(NodeCoordinate, CallStage, Outcome),
+        Refusal(
+            NodeCoordinate,
+            Phase,
+            yamaa_engine::application_observer::Refusal,
+        ),
+    }
+    struct Recorder {
+        trace: Trace,
+        events: RefCell<Vec<Seen>>,
+    }
+    impl Observer for Recorder {
+        fn observe(&self, event: Event<'_>) {
+            let (node, seen, marker) = match event {
+                Event::Phase { node, phase } => (node, Seen::Phase(None, phase), "observe:phase"),
+                Event::FunctionCall { node, stage } => {
+                    (node, Seen::Call(None, stage), "observe:call")
+                }
+                Event::Exit {
+                    node,
+                    phase,
+                    outcome,
+                } => (node, Seen::Exit(None, phase, outcome), "observe:exit"),
+                Event::FunctionReturn {
+                    node,
+                    stage,
+                    outcome,
+                } => (node, Seen::Return(None, stage, outcome), "observe:return"),
+                Event::Refusal {
+                    node,
+                    phase,
+                    refusal,
+                } => (node, Seen::Refusal(None, phase, refusal), "observe:refusal"),
+            };
+            let node = node.map(|node| (node.index, node.identity.to_owned()));
+            let seen = match seen {
+                Seen::Phase(_, phase) => Seen::Phase(node, phase),
+                Seen::Call(_, stage) => Seen::Call(node, stage),
+                Seen::Exit(_, phase, outcome) => Seen::Exit(node, phase, outcome),
+                Seen::Return(_, stage, outcome) => Seen::Return(node, stage, outcome),
+                Seen::Refusal(_, phase, refusal) => Seen::Refusal(node, phase, refusal),
+            };
+            self.events.borrow_mut().push(seen);
+            self.trace.borrow_mut().push(marker.into());
+        }
+    }
+    fn recorder(ports: &Ports) -> Recorder {
+        Recorder {
+            trace: Rc::clone(&ports.activation.trace),
+            events: RefCell::new(vec![]),
+        }
+    }
+    fn calls(events: &[Seen]) -> Vec<(NodeCoordinate, CallStage)> {
+        events
+            .iter()
+            .filter_map(|event| match event {
+                Seen::Call(node, stage) => Some((node.clone(), *stage)),
+                _ => None,
+            })
+            .collect()
+    }
+    fn assert_immediately_before_actual_calls(ports: &Ports) {
+        let trace = ports.activation.trace.borrow();
+        let invoked = trace
+            .iter()
+            .enumerate()
+            .filter(|(_, event)| event.starts_with("invoke:"));
+        for (index, _) in invoked {
+            assert_eq!(trace[index - 1], "observe:call");
+        }
+        assert_eq!(
+            trace
+                .iter()
+                .filter(|event| *event == "observe:call")
+                .count(),
+            trace
+                .iter()
+                .filter(|event| event.starts_with("invoke:"))
+                .count()
+        );
+    }
+    #[test]
+    fn cumulative_work_entry_retains_actual_node_exits_calls_and_global_refusal() {
+        for (ceiling, accepted) in [(22, true), (21, false)] {
+            let mut ports = Ports::new();
+            let observer = recorder(&ports);
+            let mut attempt = Attempt::default();
+            let mut limits = build::Limits::default();
+            limits.execution.work_cells = ceiling;
+            limits.execution.source_rows = 3;
+            let result = prepared().build_publication_with_observer_into(
+                ports.borrow(),
+                limits,
+                &mut attempt,
+                Scope::new(&observer),
+            );
+            assert_eq!(result.is_ok(), accepted);
+            assert_eq!(attempt.outcome.is_ok(), accepted);
+            assert_immediately_before_actual_calls(&ports);
+            let events = observer.events.borrow();
+            assert_eq!(
+                calls(&events),
+                [
+                    (None, CallStage::Activation),
+                    (None, CallStage::Activation),
+                    (None, CallStage::Activation),
+                    (None, CallStage::Activation),
+                    (
+                        Some((1, "/p".into())),
+                        CallStage::Dataset(ExecutionPhase::Derivation)
+                    ),
+                    (
+                        Some((0, "/root".into())),
+                        CallStage::Dataset(ExecutionPhase::Derivation)
+                    )
+                ]
+            );
+            for node in [(1, "/p"), (0, "/root")] {
+                let identity = Some((node.0, node.1.into()));
+                assert!(events.contains(&Seen::Exit(
+                    identity.clone(),
+                    Phase::Input,
+                    Outcome::Succeeded
+                )));
+                assert!(events.contains(&Seen::Exit(
+                    identity.clone(),
+                    Phase::Dataset(ExecutionPhase::Admission),
+                    Outcome::Succeeded
+                )));
+                assert!(events.contains(&Seen::Exit(
+                    identity,
+                    Phase::Dataset(ExecutionPhase::Derivation),
+                    Outcome::Succeeded
+                )));
+            }
+            let root = Some((0, "/root".into()));
+            if accepted {
+                assert!(!events.iter().any(|e| matches!(e, Seen::Refusal(..))));
+                assert!(events.contains(&Seen::Exit(
+                    root,
+                    Phase::Dataset(ExecutionPhase::Verification),
+                    Outcome::Succeeded
+                )));
+            } else {
+                let refusal = Seen::Refusal(
+                    root.clone(),
+                    Phase::Dataset(ExecutionPhase::OutputKeys),
+                    yamaa_engine::application_observer::Refusal {
+                        resource: yamaa_engine::dataset::Resource::WorkCells,
+                        limit: 21,
+                        required: Some(22),
+                    },
+                );
+                let index = events
+                    .iter()
+                    .position(|e| *e == refusal)
+                    .expect("classified global work refusal absent");
+                assert_eq!(
+                    events[index + 1],
+                    Seen::Exit(
+                        root.clone(),
+                        Phase::Dataset(ExecutionPhase::OutputKeys),
+                        Outcome::Failed
+                    )
+                );
+                assert_eq!(
+                    events[index + 2],
+                    Seen::Phase(root.clone(), Phase::Dataset(ExecutionPhase::Finished))
+                );
+                assert!(!events.iter().any(|e| matches!(
+                    e,
+                    Seen::Phase(Some((0, _)), Phase::Dataset(ExecutionPhase::Verification))
+                )));
+                assert_eq!(
+                    events.last(),
+                    Some(&Seen::Exit(root, Phase::Output, Outcome::Failed))
+                );
+                assert!(attempt.nodes[0]
+                    .dataset
+                    .result
+                    .as_ref()
+                    .unwrap()
+                    .result
+                    .is_ok());
+                assert!(matches!(
+                    attempt.nodes[1]
+                        .dataset
+                        .result
+                        .as_ref()
+                        .unwrap()
+                        .result
+                        .as_ref()
+                        .map_err(|e| &**e),
+                    Err(ExecutionError::Limit {
+                        resource: yamaa_engine::dataset::Resource::WorkCells,
+                        limit: 21,
+                        required: Some(22)
+                    })
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn observer_preserves_alias_graph_truth_and_counts_only_real_activation_and_node_calls() {
+        let build = prepared();
+        let mut ordinary = Ports::new();
+        let mut plain = Attempt::default();
+        let expected = build
+            .build_publication_into(ordinary.borrow(), Default::default(), &mut plain)
+            .unwrap();
+        let mut ports = Ports::new();
+        let observer = recorder(&ports);
+        let mut attempt = Attempt::default();
+        let held = build
+            .build_publication_with_observer_into(
+                ports.borrow(),
+                Default::default(),
+                &mut attempt,
+                Scope::new(&observer),
+            )
+            .unwrap();
+        let real_trace = ports
+            .activation
+            .trace
+            .borrow()
+            .iter()
+            .filter(|event| !event.starts_with("observe:"))
+            .cloned()
+            .collect::<Vec<_>>();
+        assert_eq!(real_trace, *ordinary.activation.trace.borrow());
+        assert_eq!(ports.study.reads, ordinary.study.reads);
+        assert_eq!(ports.decoder.cells.get(), ordinary.decoder.cells.get());
+        assert_eq!(attempt.activation, plain.activation);
+        assert_eq!(
+            held.artifacts()
+                .iter()
+                .map(|artifact| (artifact.node(), artifact.path(), artifact.bytes()))
+                .collect::<Vec<_>>(),
+            expected
+                .artifacts()
+                .iter()
+                .map(|artifact| (artifact.node(), artifact.path(), artifact.bytes()))
+                .collect::<Vec<_>>()
+        );
+        let events = observer.events.borrow();
+        assert_eq!(
+            calls(&events),
+            [
+                (None, CallStage::Activation),
+                (None, CallStage::Activation),
+                (None, CallStage::Activation),
+                (None, CallStage::Activation),
+                (
+                    Some((1, "/p".into())),
+                    CallStage::Dataset(ExecutionPhase::Derivation)
+                ),
+                (
+                    Some((0, "/root".into())),
+                    CallStage::Dataset(ExecutionPhase::Derivation)
+                ),
+            ]
+        );
+        // Each function's third authored case short-circuits missingness without
+        // crossing the port; aliases still execute their one producer once.
+        assert_eq!(attempt.activation.tests.len(), 6);
+        assert_eq!(
+            attempt
+                .activation
+                .tests
+                .iter()
+                .filter(|case| case.invoked)
+                .count(),
+            4
+        );
+        let phases = events
+            .iter()
+            .filter_map(|event| match event {
+                Seen::Phase(node, phase) => Some((node.clone(), *phase)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let mut expected_phases = vec![(None, Phase::Activation)];
+        for (index, identity) in [(1, "/p"), (0, "/root")] {
+            expected_phases.push((Some((index, identity.into())), Phase::Input));
+            for phase in [
+                ExecutionPhase::Admission,
+                ExecutionPhase::Derivation,
+                ExecutionPhase::OutputKeys,
+                ExecutionPhase::Verification,
+                ExecutionPhase::Finished,
+            ] {
+                expected_phases.push((Some((index, identity.into())), Phase::Dataset(phase)));
+            }
+            expected_phases.push((Some((index, identity.into())), Phase::Output));
+        }
+        assert_eq!(phases, expected_phases);
+        assert_eq!(
+            events
+                .iter()
+                .filter_map(|event| if let Seen::Return(node, stage, outcome) = event {
+                    Some((node.clone(), *stage, *outcome))
+                } else {
+                    None
+                })
+                .collect::<Vec<_>>(),
+            calls(&events)
+                .into_iter()
+                .map(|(node, stage)| (node, stage, Outcome::Succeeded))
+                .collect::<Vec<_>>()
+        );
+        assert!(events
+            .iter()
+            .filter_map(|event| if let Seen::Exit(_, _, outcome) = event {
+                Some(outcome)
+            } else {
+                None
+            })
+            .all(|outcome| *outcome == Outcome::Succeeded));
+        assert_immediately_before_actual_calls(&ports);
+    }
+    #[test]
+    fn observer_keeps_failed_activation_live_callback_and_unwind_prefixes() {
+        for mode in [
+            Mode::Lock,
+            Mode::CaseInterrupt,
+            Mode::Producer,
+            Mode::Unwind,
+        ] {
+            let mut ports = Ports::new();
+            ports.activation.mode = mode;
+            let observer = recorder(&ports);
+            let mut attempt = Attempt::default();
+            let build = prepared();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                build.build_publication_with_observer_into(
+                    ports.borrow(),
+                    Default::default(),
+                    &mut attempt,
+                    Scope::new(&observer),
+                )
+            }));
+            assert_immediately_before_actual_calls(&ports);
+            let events = observer.events.borrow();
+            let calls = calls(&events);
+            match mode {
+                Mode::Lock => {
+                    assert!(result.unwrap().is_err());
+                    assert!(calls.is_empty());
+                    assert_eq!(
+                        *events,
+                        [
+                            Seen::Phase(None, Phase::Activation),
+                            Seen::Exit(None, Phase::Activation, Outcome::Failed)
+                        ]
+                    );
+                    assert!(attempt.nodes.is_empty());
+                }
+                Mode::CaseInterrupt => {
+                    assert!(result.unwrap().is_err());
+                    assert_eq!(
+                        calls,
+                        [(None, CallStage::Activation), (None, CallStage::Activation)]
+                    );
+                    assert!(attempt.nodes.is_empty());
+                    assert_eq!(ports.study.reads, 0);
+                    assert_eq!(
+                        events.last(),
+                        Some(&Seen::Exit(None, Phase::Activation, Outcome::Failed))
+                    );
+                    assert!(events.contains(&Seen::Return(
+                        None,
+                        CallStage::Activation,
+                        Outcome::Failed
+                    )));
+                }
+                Mode::Producer => {
+                    assert!(result.unwrap().is_err());
+                    assert_eq!(calls.len(), 5);
+                    assert!(events.contains(&Seen::Return(
+                        Some((1, "/p".into())),
+                        CallStage::Dataset(ExecutionPhase::Derivation),
+                        Outcome::Failed
+                    )));
+                    assert!(events.contains(&Seen::Exit(
+                        Some((1, "/p".into())),
+                        Phase::Dataset(ExecutionPhase::Derivation),
+                        Outcome::Failed
+                    )));
+                    assert_eq!(
+                        calls.last(),
+                        Some(&(
+                            Some((1, "/p".into())),
+                            CallStage::Dataset(ExecutionPhase::Derivation)
+                        ))
+                    );
+                    let error = attempt.nodes[0]
+                        .dataset
+                        .result
+                        .as_ref()
+                        .unwrap()
+                        .result
+                        .as_ref()
+                        .unwrap_err();
+                    let ExecutionError::ProjectFunction { error, .. } = error.as_ref() else {
+                        panic!("original callback error")
+                    };
+                    let FailureKind::CallFailed(error) = &error.kind else {
+                        panic!("original payload")
+                    };
+                    assert!(Rc::ptr_eq(&error.original, &ports.activation.original));
+                    assert!(!events
+                        .iter()
+                        .any(|event| matches!(event, Seen::Phase(Some((0, _)), _))));
+                }
+                Mode::Unwind => {
+                    let Err(payload) = result else {
+                        panic!("original invocation unwind")
+                    };
+                    assert!(Arc::ptr_eq(
+                        payload.downcast_ref::<Arc<()>>().unwrap(),
+                        &ports.activation.unwind
+                    ));
+                    assert_eq!(calls.len(), 5);
+                    assert_eq!(
+                        events
+                            .iter()
+                            .filter(|event| matches!(event, Seen::Return(..)))
+                            .count(),
+                        4
+                    );
+                    assert_eq!(
+                        events.last(),
+                        Some(&Seen::Call(
+                            Some((1, "/p".into())),
+                            CallStage::Dataset(ExecutionPhase::Derivation)
+                        ))
+                    );
+                    assert!(matches!(
+                        attempt.nodes[0].dataset.result,
+                        Err(PortError::Incomplete)
+                    ));
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    #[test]
+    fn source_and_output_exits_use_actual_refusals_and_leave_unwound_output_unmatched() {
+        for failure in ["source", "report", "unwind"] {
+            let mut ports = Ports::new();
+            ports.report.diagnostics = true;
+            let original = Arc::new(());
+            match failure {
+                "source" => ports.study.failure = true,
+                "report" => ports.report.diagnostic_failure = true,
+                "unwind" => ports.report.diagnostic_unwind = Some(Arc::clone(&original)),
+                _ => unreachable!(),
+            }
+            let observer = recorder(&ports);
+            let mut attempt = Attempt::default();
+            let build = prepared();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                build.build_publication_with_observer_into(
+                    ports.borrow(),
+                    Default::default(),
+                    &mut attempt,
+                    Scope::new(&observer),
+                )
+            }));
+            let events = observer.events.borrow();
+            match failure {
+                "source" => {
+                    assert!(result.unwrap().is_err());
+                    assert!(events.contains(&Seen::Exit(
+                        Some((1, "/p".into())),
+                        Phase::Input,
+                        Outcome::Failed
+                    )));
+                    assert!(!events
+                        .iter()
+                        .any(|event| matches!(event, Seen::Phase(_, Phase::Dataset(_)))));
+                    assert!(matches!(
+                        attempt.nodes[0].dataset.result,
+                        Err(PortError::Capture(CaptureError::External(
+                            "original source refusal"
+                        )))
+                    ));
+                }
+                "report" => {
+                    assert!(result.unwrap().is_err());
+                    assert_eq!(
+                        events.last(),
+                        Some(&Seen::Exit(
+                            Some((1, "/p".into())),
+                            Phase::Output,
+                            Outcome::Failed
+                        ))
+                    );
+                    assert!(matches!(
+                        attempt.nodes[0].output,
+                        Err(CompleteError::Report("original diagnostic refusal"))
+                    ));
+                }
+                "unwind" => {
+                    let Err(payload) = result else {
+                        panic!("original report unwind")
+                    };
+                    assert!(Arc::ptr_eq(
+                        payload.downcast_ref::<Arc<()>>().unwrap(),
+                        &original
+                    ));
+                    assert_eq!(
+                        events.last(),
+                        Some(&Seen::Phase(Some((1, "/p".into())), Phase::Output))
+                    );
+                    assert!(!events
+                        .iter()
+                        .any(|event| matches!(event, Seen::Exit(_, Phase::Output, _))));
+                }
+                _ => unreachable!(),
+            }
+            assert_immediately_before_actual_calls(&ports);
+        }
+    }
+}
+fn prepared() -> build::PreparedBuild {
+    let root = document(
+        &[("FIRST", Some("/p")), ("SECOND", Some("/p"))],
+        Some("alpha"),
+    );
+    let producer = document(&[("RAW", None)], Some("beta"));
+    let links = [
+        candidate("/root", "FIRST", "/p", &producer),
+        candidate("/root", "SECOND", "/p", &producer),
+    ];
+    yamaa_engine::producer_graph::check(
+        "/root",
+        &[node("/root", &root, &links), node("/p", &producer, &[])],
+        environment(&["beta", "unused", "alpha"]),
+        Default::default(),
+    )
+    .unwrap()
+    .into_build()
+}
+
+fn publication_diamond() -> build::PreparedBuild {
+    let leaf = document(&[("RAW", None)], Some("beta"));
+    let left = document(&[("FIRST", Some("/p"))], None);
+    let right = document(&[("FIRST", Some("/p"))], None);
+    let root = document(
+        &[("FIRST", Some("/left")), ("SECOND", Some("/right"))],
+        Some("alpha"),
+    );
+    let roots = [
+        candidate("/root", "FIRST", "/left", &left),
+        candidate("/root", "SECOND", "/right", &right),
+    ];
+    let lefts = [candidate("/left", "FIRST", "/p", &leaf)];
+    let rights = [candidate("/right", "FIRST", "/p", &leaf)];
+    yamaa_engine::producer_graph::check(
+        "/root",
+        &[
+            node("/root", &root, &roots),
+            node("/left", &left, &lefts),
+            node("/right", &right, &rights),
+            node("/p", &leaf, &[]),
+        ],
+        environment(&["beta", "unused", "alpha"]),
+        Default::default(),
+    )
+    .unwrap()
+    .into_build()
+}
+
+#[test]
+fn diagnostic_preparation_precedes_primary_and_dependent_entry_with_one_shared_byte_budget() {
+    let mut ports = Ports::new();
+    ports.report.diagnostics = true;
+    ports.report.diagnostic_bytes = 4;
+    let primary = b"ID,VALUE\n1,1\n".len();
+    let limits = build::Limits {
+        output_bytes: primary * 2 + 8,
+        report_bytes: 100,
+        ..Default::default()
+    };
+    let mut attempt = Attempt::default();
+    assert!(prepared()
+        .build_publication_into(ports.borrow(), limits, &mut attempt)
+        .is_ok());
+    assert!(attempt.outcome.is_ok());
+    assert_eq!(ports.study.reads, 1);
+    assert_eq!(
+        ports.report.diagnostic_capacities,
+        [(primary * 2 + 8, 50), (primary + 4, 50)]
+    );
+    let events = ports.activation.trace.borrow();
+    let at = |event: &str| events.iter().position(|e| e == event).unwrap();
+    assert!(at("diagnostics:/p") < at("encode:RAW"));
+    assert!(at("encode:RAW") < at("decode:FIRST"));
+    assert!(at("decode:SECOND") < at("diagnostics:/root"));
+    assert!(at("diagnostics:/root") < at("encode:FIRST"));
+    assert_eq!(
+        events
+            .iter()
+            .filter(|e| e.starts_with("diagnostics:"))
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn diagnostic_refusal_stops_primary_encoding_and_every_dependent_source() {
+    let mut ports = Ports::new();
+    ports.report.diagnostics = true;
+    ports.report.diagnostic_failure = true;
+    let mut attempt = Attempt::default();
+    assert!(prepared()
+        .build_publication_into(ports.borrow(), Default::default(), &mut attempt)
+        .is_err());
+    assert_eq!(attempt.nodes.len(), 1);
+    assert_eq!(attempt.nodes[0].node, 1);
+    assert!(attempt.nodes[0]
+        .dataset
+        .result
+        .as_ref()
+        .unwrap()
+        .result
+        .is_ok());
+    assert!(matches!(
+        attempt.nodes[0].output,
+        Err(CompleteError::Report("original diagnostic refusal"))
+    ));
+    assert!(!ports
+        .activation
+        .trace
+        .borrow()
+        .iter()
+        .any(|e| e.starts_with("encode:") || e == "decode:FIRST" || e == "decode:SECOND"));
+}
+
+#[test]
+fn failed_execution_diagnostic_refusal_retains_the_original_live_payload() {
+    let mut ports = Ports::new();
+    ports.activation.mode = Mode::Producer;
+    ports.report.diagnostics = true;
+    ports.report.diagnostic_failure = true;
+    let mut attempt = Attempt::default();
+    prepared().build_into(ports.borrow(), Default::default(), &mut attempt);
+    assert_eq!(attempt.nodes.len(), 1);
+    let entered = &attempt.nodes[0];
+    let error = entered
+        .dataset
+        .result
+        .as_ref()
+        .unwrap()
+        .result
+        .as_ref()
+        .unwrap_err();
+    let ExecutionError::ProjectFunction { error, .. } = error.as_ref() else {
+        panic!("original execution error")
+    };
+    let FailureKind::CallFailed(error) = &error.kind else {
+        panic!("original live error")
+    };
+    assert!(Rc::ptr_eq(&error.original, &ports.activation.original));
+    assert!(matches!(
+        entered.output,
+        Err(CompleteError::Report("original diagnostic refusal"))
+    ));
+    let events = ports.activation.trace.borrow();
+    assert!(events.iter().any(|e| e == "diagnostics:/p"));
+    assert!(!events.iter().any(|e| e.starts_with("encode:")));
+    assert_eq!(events.iter().filter(|e| *e == "invoke:beta:1").count(), 1);
+}
+
+#[test]
+fn diagnostic_accounting_refusal_precedes_the_first_primary_encoder() {
+    let mut ports = Ports::new();
+    ports.report.diagnostics = true;
+    ports.report.diagnostic_bytes = 4;
+    let limits = build::Limits {
+        output_bytes: 3,
+        ..Default::default()
+    };
+    let mut attempt = Attempt::default();
+    prepared().build_into(ports.borrow(), limits, &mut attempt);
+    assert_eq!(attempt.nodes.len(), 1);
+    assert!(matches!(
+        attempt.nodes[0].output,
+        Err(CompleteError::OutputLimit)
+    ));
+    assert_eq!(ports.report.diagnostic_capacities[0].0, 3);
+    assert!(!ports
+        .activation
+        .trace
+        .borrow()
+        .iter()
+        .any(|e| e.starts_with("encode:")));
+}
+
+#[test]
+fn diagnostic_unwind_preserves_entered_execution_and_original_payload() {
+    let mut ports = Ports::new();
+    ports.report.diagnostics = true;
+    let original = Arc::new(());
+    ports.report.diagnostic_unwind = Some(Arc::clone(&original));
+    let mut attempt = Attempt::default();
+    let error = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        prepared().build_into(ports.borrow(), Default::default(), &mut attempt);
+    }))
+    .unwrap_err();
+    assert!(Arc::ptr_eq(
+        error.downcast_ref::<Arc<()>>().unwrap(),
+        &original
+    ));
+    assert_eq!(attempt.nodes.len(), 1);
+    assert!(attempt.nodes[0]
+        .dataset
+        .result
+        .as_ref()
+        .unwrap()
+        .result
+        .is_ok());
+    assert!(matches!(attempt.nodes[0].output, Ok(None)));
+    assert!(!ports
+        .activation
+        .trace
+        .borrow()
+        .iter()
+        .any(|e| e.starts_with("encode:")));
+}
+
+struct Publication {
+    calls: Vec<String>,
+    writes: Vec<usize>,
+    failure: Option<usize>,
+    interrupt: bool,
+    unwind: Option<usize>,
+    original: Rc<()>,
+    payload: Arc<()>,
+    preflight_failure: bool,
+}
+impl Publication {
+    fn new() -> Self {
+        Self {
+            calls: vec![],
+            writes: vec![],
+            failure: None,
+            interrupt: false,
+            unwind: None,
+            original: Rc::new(()),
+            payload: Arc::new(()),
+            preflight_failure: false,
+        }
+    }
+}
+impl yamaa_engine::producer_publication::PublicationPort for Publication {
+    type Error = Payload;
+    fn preflight(
+        &mut self,
+        artifacts: &[yamaa_engine::producer_publication::Artifact],
+    ) -> Result<(), Payload> {
+        self.calls.push("preflight".into());
+        assert!(artifacts.iter().all(|a| a.bytes() == b"ID,VALUE\n1,1\n"));
+        if self.preflight_failure {
+            Err(Payload {
+                original: Rc::clone(&self.original),
+                interrupt: self.interrupt,
+            })
+        } else {
+            Ok(())
+        }
+    }
+    fn publish(
+        &mut self,
+        artifact: &yamaa_engine::producer_publication::Artifact,
+    ) -> Result<(), Payload> {
+        let node = artifact.node();
+        self.calls.push(format!("publish:{node}"));
+        assert_eq!(artifact.path(), "produced.csv");
+        assert_eq!(artifact.bytes(), b"ID,VALUE\n1,1\n");
+        if self.unwind == Some(node) {
+            std::panic::panic_any(Arc::clone(&self.payload));
+        }
+        if self.failure == Some(node) {
+            return Err(Payload {
+                original: Rc::clone(&self.original),
+                interrupt: self.interrupt,
+            });
+        }
+        self.writes.push(node);
+        Ok(())
+    }
+}
+#[test]
+fn actual_build_seals_aliases_and_diamond_order_without_any_build_publication_or_save_replay() {
+    for (build, order) in [
+        (prepared(), vec![1, 0]),
+        (publication_diamond(), vec![3, 1, 2, 0]),
+    ] {
+        let mut ports = Ports::new();
+        let mut evidence = Attempt::default();
+        let held = build
+            .build_publication_into(ports.borrow(), Default::default(), &mut evidence)
+            .unwrap();
+        assert_eq!(ports.study.reads, 1);
+        let build_events = ports.activation.trace.borrow().clone();
+        assert!(!build_events.iter().any(|e| e.starts_with("publish")));
+        assert_eq!(
+            held.artifacts()
+                .iter()
+                .map(|a| a.node())
+                .collect::<Vec<_>>(),
+            order
+        );
+        // Mutable caller evidence is not publication authority and cannot change
+        // any privately held request, even after the prepared owner drops.
+        evidence.nodes.clear();
+        drop(build);
+        let mut publisher = Publication::new();
+        let mut saved = Default::default();
+        for _ in 0..2 {
+            held.save_into(&mut publisher, Default::default(), &mut saved);
+            assert!(saved.outcome.is_ok());
+            assert_eq!(
+                saved
+                    .entered
+                    .iter()
+                    .map(|n| (n.node, n.published))
+                    .collect::<Vec<_>>(),
+                order.iter().map(|&n| (n, true)).collect::<Vec<_>>()
+            );
+        }
+        assert_eq!(publisher.writes, order.repeat(2));
+        assert_eq!(*ports.activation.trace.borrow(), build_events);
+    }
+}
+#[test]
+fn every_save_failure_and_interrupt_keeps_original_and_actual_prefix_and_prior_writes() {
+    use yamaa_engine::producer_publication::Failure as SaveFailure;
+    for failed in [3, 1, 0] {
+        for interrupt in [false, true] {
+            let mut ports = Ports::new();
+            let mut evidence = Attempt::default();
+            let held = publication_diamond()
+                .build_publication_into(ports.borrow(), Default::default(), &mut evidence)
+                .unwrap();
+            let build_events = ports.activation.trace.borrow().clone();
+            let mut publisher = Publication::new();
+            publisher.failure = Some(failed);
+            publisher.interrupt = interrupt;
+            let mut saved = Default::default();
+            held.save_into(&mut publisher, Default::default(), &mut saved);
+            let order = [3, 1, 2, 0];
+            let position = order.iter().position(|&n| n == failed).unwrap();
+            assert_eq!(
+                saved
+                    .entered
+                    .iter()
+                    .map(|n| (n.node, n.published))
+                    .collect::<Vec<_>>(),
+                order[..=position]
+                    .iter()
+                    .map(|&n| (n, n != failed))
+                    .collect::<Vec<_>>()
+            );
+            assert_eq!(publisher.writes, order[..position]);
+            assert!(
+                matches!(&saved.outcome,Err(SaveFailure::Publish {node,error}) if *node==failed && Rc::ptr_eq(&error.original,&publisher.original) && error.interrupt==interrupt)
+            );
+            publisher.failure = None;
+            held.save_into(&mut publisher, Default::default(), &mut saved);
+            assert!(saved.outcome.is_ok());
+            assert_eq!(*ports.activation.trace.borrow(), build_events);
+            assert!(evidence.outcome.is_ok() && evidence.nodes.len() == 4);
+        }
+    }
+}
+#[test]
+fn save_unwind_and_whole_set_preflight_refusal_preserve_the_actual_evidence_without_replay() {
+    use yamaa_engine::producer_publication::Failure as SaveFailure;
+    let mut ports = Ports::new();
+    let mut evidence = Attempt::default();
+    let held = publication_diamond()
+        .build_publication_into(ports.borrow(), Default::default(), &mut evidence)
+        .unwrap();
+    let mut publisher = Publication::new();
+    publisher.unwind = Some(2);
+    let mut saved = Default::default();
+    let payload = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        held.save_into(&mut publisher, Default::default(), &mut saved)
+    }))
+    .unwrap_err();
+    assert!(Arc::ptr_eq(
+        payload.downcast_ref::<Arc<()>>().unwrap(),
+        &publisher.payload
+    ));
+    assert_eq!(
+        saved
+            .entered
+            .iter()
+            .map(|n| (n.node, n.published))
+            .collect::<Vec<_>>(),
+        [(3, true), (1, true), (2, false)]
+    );
+    assert!(matches!(saved.outcome, Err(SaveFailure::Incomplete)));
+    assert_eq!(publisher.writes, [3, 1]);
+    publisher.calls.clear();
+    publisher.preflight_failure = true;
+    held.save_into(&mut publisher, Default::default(), &mut saved);
+    assert!(saved.entered.is_empty());
+    assert_eq!(publisher.calls, ["preflight"]);
+    assert!(
+        matches!(&saved.outcome,Err(SaveFailure::Preflight(e)) if Rc::ptr_eq(&e.original,&publisher.original))
+    );
+}
+#[test]
+fn cumulative_save_quotas_and_failed_actual_build_never_cross_publication_ports() {
+    use yamaa_engine::producer_publication::{Failure as SaveFailure, Limits as SaveLimits};
+    let build = publication_diamond();
+    let mut ports = Ports::new();
+    let mut evidence = Attempt::default();
+    let held = build
+        .build_publication_into(ports.borrow(), Default::default(), &mut evidence)
+        .unwrap();
+    for limits in [
+        SaveLimits {
+            nodes: 3,
+            ..Default::default()
+        },
+        SaveLimits {
+            path_bytes: 47,
+            ..Default::default()
+        },
+        SaveLimits {
+            artifact_bytes: 51,
+            ..Default::default()
+        },
+        SaveLimits {
+            work: 3,
+            ..Default::default()
+        },
+    ] {
+        let mut publisher = Publication::new();
+        let mut saved = Default::default();
+        held.save_into(&mut publisher, limits, &mut saved);
+        assert!(publisher.calls.is_empty() && saved.entered.is_empty());
+        assert!(matches!(saved.outcome, Err(SaveFailure::Limit(_))));
+    }
+    // Forged caller success is discarded on actual failed activation.
+    ports.activation.mode = Mode::Lock;
+    evidence.outcome = Ok(());
+    assert!(build
+        .build_publication_into(ports.borrow(), Default::default(), &mut evidence)
+        .is_err());
+    assert!(evidence.nodes.is_empty());
+    assert!(matches!(evidence.outcome, Err(Failure::Activation(_))));
+    ports.activation.mode = Mode::Pass;
+    let mut limits = build::Limits::default();
+    limits.publication.artifact_bytes = 51;
+    assert!(matches!(
+        build.build_publication_into(ports.borrow(), limits, &mut evidence),
+        Err("producer_publication_bytes")
+    ));
+    assert!(evidence.outcome.is_ok() && evidence.nodes.len() == 4);
+}
+
+#[test]
+fn whole_union_activates_before_study_and_two_aliases_ingest_one_producer_artifact_arc() {
+    let build = prepared();
+    let mut ports = Ports::new();
+    let mut attempt = Attempt::default();
+    build.build_into(ports.borrow(), Default::default(), &mut attempt);
+    assert!(attempt.outcome.is_ok());
+    assert_eq!(ports.study.reads, 1);
+    assert_eq!(
+        attempt.nodes[0].dataset.sources[0].read.origin,
+        Some(yamaa_engine::specification_run::SourceOrigin::Resource)
+    );
+    assert_eq!(
+        attempt.nodes.iter().map(|n| n.node).collect::<Vec<_>>(),
+        [1, 0]
+    );
+    let artifact = attempt.nodes[0]
+        .output
+        .as_ref()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .artifact()
+        .unwrap();
+    for source in &attempt.nodes[1].dataset.sources {
+        let snapshot = source.snapshot.as_ref().unwrap();
+        assert_eq!(snapshot.as_ptr(), artifact.bytes().as_ptr());
+        assert_eq!(source.read.snapshots_created, Some(0));
+        assert_eq!(
+            source.read.origin,
+            Some(yamaa_engine::specification_run::SourceOrigin::Generated)
+        );
+    }
+    assert_eq!(
+        *ports.activation.trace.borrow(),
+        [
+            "lock",
+            "bind:beta",
+            "bind:alpha",
+            "invoke:beta:7",
+            "invoke:beta:-9223372036854775808",
+            "invoke:alpha:7",
+            "invoke:alpha:-9223372036854775808",
+            "inspect:/p:RAW",
+            "capture:/p:RAW",
+            "decode:RAW",
+            "invoke:beta:1",
+            "report:/p",
+            "begin",
+            "encode:RAW",
+            "success",
+            "decode:FIRST",
+            "decode:SECOND",
+            "invoke:alpha:1",
+            "report:/root",
+            "begin",
+            "encode:FIRST",
+            "success"
+        ]
+    );
+}
+
+#[test]
+fn each_build_repeats_every_gate_and_old_attempt_evidence_stays_independent() {
+    let build = prepared();
+    let mut ports = Ports::new();
+    let mut first = Attempt::default();
+    let mut second = Attempt::default();
+    build.build_into(ports.borrow(), Default::default(), &mut first);
+    build.build_into(ports.borrow(), Default::default(), &mut second);
+    assert!(first.outcome.is_ok() && second.outcome.is_ok());
+    assert_eq!(ports.study.reads, 2);
+    assert_eq!(
+        ports
+            .activation
+            .trace
+            .borrow()
+            .iter()
+            .filter(|s| *s == "lock")
+            .count(),
+        2
+    );
+    ports.activation.mode = Mode::Lock;
+    build.build_into(ports.borrow(), Default::default(), &mut second);
+    assert!(second.nodes.is_empty());
+    assert_eq!(first.nodes.len(), 2);
+    assert!(matches!(
+        second.outcome,
+        Err(Failure::Activation(project_activation::Failure::Lock(_)))
+    ));
+    assert_eq!(ports.study.reads, 2);
+}
+
+#[test]
+fn lock_binding_and_case_interrupts_keep_original_failure_and_zero_study_authority() {
+    let build = prepared();
+    for mode in [Mode::Lock, Mode::Binding, Mode::CaseInterrupt] {
+        let mut ports = Ports::new();
+        ports.activation.mode = mode;
+        let mut attempt = Attempt::default();
+        build.build_into(ports.borrow(), Default::default(), &mut attempt);
+        assert!(attempt.nodes.is_empty());
+        assert_eq!(ports.study.reads, 0);
+        assert!(!ports
+            .activation
+            .trace
+            .borrow()
+            .iter()
+            .any(|s| s.starts_with("inspect:")));
+        match attempt.outcome.unwrap_err() {
+            Failure::Activation(project_activation::Failure::Lock(error)) => {
+                assert!(Rc::ptr_eq(&error.original, &ports.activation.original))
+            }
+            Failure::Activation(project_activation::Failure::Bindings(errors)) => {
+                assert_eq!(errors.len(), 2);
+                assert!(errors
+                    .iter()
+                    .all(|e| Rc::ptr_eq(&e.error.original, &ports.activation.original)));
+                assert!(!ports
+                    .activation
+                    .trace
+                    .borrow()
+                    .iter()
+                    .any(|s| s.starts_with("invoke:")));
+            }
+            Failure::Activation(project_activation::Failure::InterruptedInvocation {
+                error,
+                ..
+            }) => {
+                let FailureKind::CallFailed(error) = error.kind else {
+                    panic!("original interruption")
+                };
+                assert!(error.interrupt && Rc::ptr_eq(&error.original, &ports.activation.original));
+                assert!(!ports
+                    .activation
+                    .trace
+                    .borrow()
+                    .iter()
+                    .any(|s| s.starts_with("invoke:alpha:")));
+            }
+            _ => panic!("original activation failure"),
+        }
+    }
+}
+
+#[test]
+fn producer_and_consumer_failures_keep_entered_prefix_and_original_payload_without_retry() {
+    let build = prepared();
+    for (mode, nodes, name) in [(Mode::Producer, 1, "beta"), (Mode::Consumer, 2, "alpha")] {
+        let mut ports = Ports::new();
+        ports.activation.mode = mode;
+        let mut attempt = Attempt::default();
+        build.build_into(ports.borrow(), Default::default(), &mut attempt);
+        assert!(matches!(attempt.outcome, Err(Failure::Node { .. })));
+        assert_eq!(attempt.nodes.len(), nodes);
+        let last = attempt.nodes.last().unwrap();
+        assert!(matches!(last.output, Ok(None)));
+        let error = last
+            .dataset
+            .result
+            .as_ref()
+            .unwrap()
+            .result
+            .as_ref()
+            .unwrap_err();
+        let ExecutionError::ProjectFunction { error, .. } = error.as_ref() else {
+            panic!("original live error")
+        };
+        let FailureKind::CallFailed(error) = &error.kind else {
+            panic!("opaque failure")
+        };
+        assert!(Rc::ptr_eq(&error.original, &ports.activation.original));
+        assert_eq!(
+            ports
+                .activation
+                .trace
+                .borrow()
+                .iter()
+                .filter(|s| *s == &format!("invoke:{name}:1"))
+                .count(),
+            1
+        );
+        assert_eq!(ports.study.reads, 1);
+        if nodes == 2 {
+            assert!(attempt.nodes[0]
+                .output
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .artifact()
+                .is_some());
+        }
+    }
+}
+
+#[test]
+fn source_decode_report_and_codec_failures_stop_dependents_and_retain_exact_stage_evidence() {
+    let build = prepared();
+    for stage in ["source", "decode", "report", "codec"] {
+        let mut ports = Ports::new();
+        match stage {
+            "source" => ports.study.failure = true,
+            "decode" => ports.decoder.failure = true,
+            "report" => ports.report.failure = true,
+            _ => ports.codec.failure = true,
+        }
+        let mut attempt = Attempt::default();
+        build.build_into(ports.borrow(), Default::default(), &mut attempt);
+        assert_eq!(attempt.nodes.len(), 1);
+        let node = &attempt.nodes[0];
+        assert!(matches!(attempt.outcome, Err(Failure::Node { node: 1 })));
+        match stage {
+            "source" => assert!(matches!(
+                node.dataset.result,
+                Err(PortError::Capture(CaptureError::External(
+                    "original source refusal"
+                )))
+            )),
+            "decode" => {
+                assert!(node.dataset.result.is_err());
+                assert_eq!(
+                    node.dataset.sources[0].snapshot.as_deref().unwrap(),
+                    b"ID,VALUE\n1,1\n"
+                );
+            }
+            "report" => assert!(matches!(
+                node.output,
+                Err(CompleteError::Report("original report refusal"))
+            )),
+            _ => assert!(matches!(
+                node.output,
+                Err(CompleteError::Encode("original codec refusal"))
+            )),
+        }
+        assert_eq!(
+            node.dataset.sources[0].read.origin,
+            Some(yamaa_engine::specification_run::SourceOrigin::Resource)
+        );
+        assert!(!ports
+            .activation
+            .trace
+            .borrow()
+            .iter()
+            .any(|s| s == "decode:FIRST"));
+    }
+}
+
+#[test]
+fn routing_admission_before_capture_leaves_both_acquisition_branches_unentered() {
+    let build = prepared();
+    let mut ports = Ports::new();
+    let mut attempt = Attempt::default();
+    let limits = build::Limits {
+        // Both generated-source inspections finish, then the first capture's
+        // routing lookup refuses before borrowing bytes or entering study.
+        routing_work: 5,
+        ..Default::default()
+    };
+    build.build_into(ports.borrow(), limits, &mut attempt);
+    assert!(matches!(attempt.outcome, Err(Failure::Node { node: 0 })));
+    assert_eq!(attempt.nodes.len(), 2);
+    let consumer = &attempt.nodes[1].dataset;
+    assert!(matches!(
+        consumer.result,
+        Err(PortError::Capture(CaptureError::Limit(
+            "producer_routing_work"
+        )))
+    ));
+    assert_eq!(consumer.sources.len(), 1);
+    let source = &consumer.sources[0];
+    assert_eq!(source.read.origin, None);
+    assert!(!source.read.captured && source.snapshot.is_none() && source.table.is_none());
+    assert_eq!(ports.study.reads, 1);
+    assert_eq!(
+        ports
+            .study
+            .trace
+            .borrow()
+            .iter()
+            .filter(|event| event.starts_with("capture:"))
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn study_capture_unwind_retains_resource_entry_without_inventing_a_completed_snapshot() {
+    let build = prepared();
+    let mut ports = Ports::new();
+    let payload = Arc::new(());
+    ports.study.unwind = Some(Arc::clone(&payload));
+    let mut attempt = Attempt::default();
+    let error = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        build.build_into(ports.borrow(), Default::default(), &mut attempt);
+    }))
+    .unwrap_err();
+    assert!(Arc::ptr_eq(
+        error.downcast_ref::<Arc<()>>().unwrap(),
+        &payload
+    ));
+    assert!(matches!(attempt.outcome, Err(Failure::Incomplete)));
+    assert_eq!(attempt.nodes.len(), 1);
+    let source = &attempt.nodes[0].dataset.sources[0];
+    assert_eq!(
+        source.read.origin,
+        Some(yamaa_engine::specification_run::SourceOrigin::Resource)
+    );
+    assert_eq!(source.read.snapshots_created, None);
+    assert!(!source.read.captured && source.snapshot.is_none() && source.table.is_none());
+    assert_eq!(ports.study.reads, 0);
+}
+
+#[test]
+fn graph_quotas_precede_ports_or_keep_the_honest_node_prefix_and_count_alias_reingestion() {
+    let build = prepared();
+    for resource in ["nodes", "functions", "source", "output", "routing", "cells"] {
+        let mut limits = build::Limits::default();
+        match resource {
+            "nodes" => limits.nodes = 1,
+            "functions" => limits.activation.functions = 1,
+            "source" => limits.source_bytes = b"ID,VALUE\n1,1\n".len() * 2,
+            "output" => limits.output_bytes = b"ID,VALUE\n1,1\n".len(),
+            "routing" => limits.routing_work = 0,
+            _ => limits.source_cells = 0,
+        }
+        let mut ports = Ports::new();
+        let mut attempt = Attempt::default();
+        build.build_into(ports.borrow(), limits, &mut attempt);
+        assert!(attempt.outcome.is_err());
+        if matches!(resource, "nodes" | "functions") {
+            assert!(ports.activation.trace.borrow().is_empty());
+            assert!(attempt.nodes.is_empty());
+        } else if resource == "cells" {
+            assert_eq!(attempt.nodes.len(), 1);
+            assert_eq!(ports.study.reads, 1);
+            assert!(!ports
+                .activation
+                .trace
+                .borrow()
+                .iter()
+                .any(|s| s == "invoke:beta:1"));
+        } else {
+            assert_eq!(attempt.nodes.len(), 2);
+            assert_eq!(ports.study.reads, 1);
+            assert!(attempt.nodes[0]
+                .output
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .artifact()
+                .is_some());
+            if resource == "source" {
+                assert_eq!(attempt.nodes[1].dataset.sources.len(), 2);
+                assert!(attempt.nodes[1].dataset.sources[0].snapshot.is_some());
+                assert!(attempt.nodes[1].dataset.sources[1].snapshot.is_none());
+            }
+        }
+    }
+}
+
+#[test]
+fn caller_owned_attempt_survives_original_host_unwind_with_incomplete_entered_node() {
+    let build = prepared();
+    let mut ports = Ports::new();
+    ports.activation.mode = Mode::Unwind;
+    let mut attempt = Attempt::default();
+    let error = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        build.build_into(ports.borrow(), Default::default(), &mut attempt)
+    }))
+    .unwrap_err();
+    assert!(Arc::ptr_eq(
+        error.downcast_ref::<Arc<()>>().unwrap(),
+        &ports.activation.unwind
+    ));
+    assert!(matches!(attempt.outcome, Err(Failure::Incomplete)));
+    assert_eq!(attempt.nodes.len(), 1);
+    assert_eq!(attempt.nodes[0].dataset.sources.len(), 1);
+    assert!(attempt.nodes[0].dataset.sources[0].snapshot.is_some());
+    assert_eq!(attempt.activation.bindings.len(), 2);
+}
+
+impl yamaa_engine::producer_build::DecodePort for Decoder {
+    fn decode_bounded(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        _contract: Option<&yamaa_core::producer_contract::Contract>,
+        limits: yamaa_engine::producer_build::DecodeLimits,
+    ) -> Result<Table, build::DecodeError<Self::Error>> {
+        if limits.cells < 2 || bytes.len() > limits.storage_bytes || bytes.len() > limits.work_bytes
+        {
+            return Err(build::DecodeError::Codec("original bounded codec refusal"));
+        }
+        self.decode(source, bytes)
+            .map_err(build::DecodeError::Codec)
+    }
+}
+
+#[test]
+fn producer_schema_mismatch_keeps_portable_diagnostics_before_consumer_cardinality_or_cell_observation(
+) {
+    let build = prepared();
+    for schema_case in 1..=4 {
+        let mut ports = Ports::new();
+        ports.decoder.schema_case = schema_case;
+        let mut attempt = Attempt::default();
+        build.build_into(ports.borrow(), Default::default(), &mut attempt);
+        assert!(matches!(attempt.outcome, Err(Failure::Node { node: 0 })));
+        assert_eq!(ports.decoder.cardinality.get(), 0);
+        assert_eq!(ports.decoder.cells.get(), 0);
+        let Err(PortError::Run(yamaa_engine::specification_run::RunError::Sources(errors))) =
+            &attempt.nodes[1].dataset.result
+        else {
+            panic!("retained producer metadata refusals")
+        };
+        assert_eq!(errors.len(), 2);
+        for (index, error) in errors {
+            let build::DecodeError::Metadata(diagnostic) = error else {
+                panic!("portable producer metadata mismatch")
+            };
+            assert_eq!(
+                diagnostic.code,
+                yamaa_core::diagnostic::ConditionCode::ProducerContractMismatch
+            );
+            let name = ["FIRST", "SECOND"][*index];
+            assert_eq!(
+                diagnostic.spec_paths,
+                [format!("input.{name}.schema"), format!("input.{name}.path")]
+            );
+        }
+        assert!(!ports
+            .activation
+            .trace
+            .borrow()
+            .iter()
+            .any(|s| s == "invoke:alpha:1"));
+        assert!(attempt.nodes[1]
+            .dataset
+            .sources
+            .iter()
+            .all(|s| s.table.is_none() && s.snapshot.is_some()));
+    }
+}
+#[test]
+fn alias_cells_and_codec_storage_and_work_are_reserved_before_decoded_table_ownership() {
+    let build = prepared();
+    for mode in 0..4 {
+        let mut ports = Ports::new();
+        let mut limits = build::Limits::default();
+        match mode {
+            0 => limits.source_cells = 5,
+            1 => limits.source_storage_bytes = 0,
+            2 => limits.decode_work_bytes = 0,
+            _ => limits.routing_work = 7,
+        }
+        let mut attempt = Attempt::default();
+        build.build_into(ports.borrow(), limits, &mut attempt);
+        assert!(attempt.outcome.is_err());
+        let entered = attempt.nodes.last().unwrap();
+        assert!(entered.dataset.sources.last().unwrap().table.is_none());
+        if mode == 0 {
+            assert_eq!(attempt.nodes.len(), 2);
+            assert!(entered.dataset.sources[0].table.is_some());
+            assert!(!ports
+                .activation
+                .trace
+                .borrow()
+                .iter()
+                .any(|s| s == "decode:SECOND"));
+        } else if mode == 3 {
+            assert_eq!(attempt.nodes.len(), 2);
+            assert!(entered.dataset.sources[0].snapshot.is_some());
+            assert_eq!(entered.dataset.sources.len(), 1);
+            assert!(entered.dataset.sources.iter().all(|s| s.table.is_none()));
+            assert!(!ports
+                .activation
+                .trace
+                .borrow()
+                .iter()
+                .any(|s| s == "decode:FIRST"));
+            let Err(PortError::Run(yamaa_engine::specification_run::RunError::Sources(errors))) =
+                &entered.dataset.result
+            else {
+                panic!("original bounded decoder refusal")
+            };
+            assert_eq!(errors.len(), 1);
+            assert!(matches!(
+                errors[0],
+                (0, build::DecodeError::Limit("producer_routing_work"))
+            ));
+        } else {
+            assert_eq!(attempt.nodes.len(), 1);
+        }
+    }
+}
+
+#[test]
+fn actual_graph_has_one_work_ceiling_and_input_slot_reservations_at_exact_boundaries() {
+    // Each admitted one-row node costs six key-construction units, three
+    // function/value units and two output-key scans: eleven per entered node.
+    let prepared = prepared();
+    for (work, rows, accepted) in [(22, 3, true), (21, 3, false), (22, 2, false)] {
+        let mut ports = Ports::new();
+        let mut attempt = Attempt::default();
+        let mut limits = build::Limits::default();
+        limits.execution.work_cells = work;
+        limits.execution.source_rows = rows;
+        prepared.build_into(ports.borrow(), limits, &mut attempt);
+        assert_eq!(attempt.outcome.is_ok(), accepted);
+        assert_eq!(ports.study.reads, 1);
+        let trace = ports.activation.trace.borrow();
+        assert_eq!(
+            &trace[..7],
+            [
+                "lock",
+                "bind:beta",
+                "bind:alpha",
+                "invoke:beta:7",
+                "invoke:beta:-9223372036854775808",
+                "invoke:alpha:7",
+                "invoke:alpha:-9223372036854775808"
+            ]
+        );
+        if rows == 2 {
+            assert_eq!(attempt.nodes.len(), 1);
+            assert_eq!(attempt.nodes[0].node, 1);
+            assert!(matches!(
+                attempt.nodes[0]
+                    .dataset
+                    .result
+                    .as_ref()
+                    .unwrap()
+                    .result
+                    .as_ref()
+                    .map_err(|e| &**e),
+                Err(ExecutionError::Capacity)
+            ));
+            assert_eq!(ports.decoder.cells.get(), 0);
+            assert!(!trace.iter().any(|e| e == "invoke:beta:1"
+                || e == "invoke:alpha:1"
+                || e.starts_with("encode:")));
+        } else {
+            assert_eq!(attempt.nodes.len(), 2);
+            assert!(attempt.nodes[0]
+                .dataset
+                .result
+                .as_ref()
+                .unwrap()
+                .result
+                .is_ok());
+            assert!(attempt.nodes[0]
+                .output
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .artifact()
+                .is_some());
+            for source in &attempt.nodes[1].dataset.sources {
+                assert_eq!(source.read.snapshots_created, Some(0));
+            }
+            assert!(trace.iter().any(|e| e == "invoke:beta:1"));
+            assert!(trace.iter().any(|e| e == "invoke:alpha:1"));
+            if work == 21 {
+                assert!(matches!(
+                    attempt.nodes[1]
+                        .dataset
+                        .result
+                        .as_ref()
+                        .unwrap()
+                        .result
+                        .as_ref()
+                        .map_err(|e| &**e),
+                    Err(ExecutionError::Limit {
+                        resource: yamaa_engine::dataset::Resource::WorkCells,
+                        limit: 21,
+                        required: Some(22)
+                    })
+                ));
+                assert!(!trace.iter().any(|e| e == "encode:FIRST"));
+            } else {
+                assert!(attempt.nodes[1]
+                    .dataset
+                    .result
+                    .as_ref()
+                    .unwrap()
+                    .result
+                    .is_ok());
+                assert!(trace.iter().any(|e| e == "encode:FIRST"));
+            }
+        }
+    }
+}
+
+#[test]
+fn owned_column_weighted_output_cells_keep_the_completed_producer_at_the_exact_boundary() {
+    use yamaa_core::schema::{
+        Document, DocumentNode as N, SpecificationDocument, ValidationBudget,
+    };
+    fn append(nodes: &mut Vec<N>, node: N) -> usize {
+        let index = nodes.len();
+        nodes.push(node);
+        index
+    }
+    fn text(nodes: &mut Vec<N>, value: &str) -> usize {
+        append(nodes, N::Text(value.into()))
+    }
+    fn mapping(nodes: &mut Vec<N>, fields: Vec<(&str, usize)>) -> usize {
+        let fields = fields
+            .into_iter()
+            .map(|(name, value)| (text(nodes, name), value))
+            .collect();
+        append(nodes, N::Mapping(fields))
+    }
+    fn literal(nodes: &mut Vec<N>, value: i64) -> usize {
+        let value = append(nodes, N::Integer(value.to_string()));
+        let expression = mapping(nodes, vec![("literal", value)]);
+        mapping(nodes, vec![("value", expression)])
+    }
+    fn ordered(nodes: &[N], index: usize, output: &mut Vec<N>) -> usize {
+        let node = match &nodes[index] {
+            N::Sequence(items) => N::Sequence(
+                items
+                    .iter()
+                    .map(|&item| ordered(nodes, item, output))
+                    .collect(),
+            ),
+            N::Mapping(fields) => N::Mapping(
+                fields
+                    .iter()
+                    .map(|&(name, value)| {
+                        (ordered(nodes, name, output), ordered(nodes, value, output))
+                    })
+                    .collect(),
+            ),
+            node => node.clone(),
+        };
+        append(output, node)
+    }
+    struct RootCodec(Codec);
+    impl CodecPort for RootCodec {
+        type Error = &'static str;
+        fn encode(
+            &mut self,
+            plan: &PreparedSpecification,
+            dataset: &Dataset,
+            projection: &[usize],
+            maximum: usize,
+        ) -> Result<Vec<u8>, Self::Error> {
+            if plan.source().name == "RAW" {
+                return self.0.encode(plan, dataset, projection, maximum);
+            }
+            assert_eq!(projection, [0, 1, 2]);
+            assert_eq!(dataset.row_count(), 2);
+            for row in 0..2 {
+                assert_eq!(dataset.cell(row, 0).unwrap(), ValueRef::Int(1));
+                assert_eq!(dataset.cell(row, 1).unwrap(), ValueRef::Int(1));
+                assert_eq!(dataset.cell(row, 2).unwrap(), ValueRef::Int(row as i64 + 1));
+            }
+            self.0.trace.borrow_mut().push("encode:FIRST".into());
+            let bytes = b"ID,VALUE,ROW\n1,1,1\n1,1,2\n";
+            assert!(bytes.len() <= maximum);
+            Ok(bytes.to_vec())
+        }
+    }
+    let original = document(
+        &[("FIRST", Some("/p")), ("SECOND", Some("/p"))],
+        Some("alpha"),
+    );
+    let document = original.document();
+    let mut nodes = document.nodes().to_vec();
+    let columns = document.field(document.root(), "columns").unwrap();
+    for name in ["ROW", "EXTRA"] {
+        let column_name = text(&mut nodes, name);
+        let kind = text(&mut nodes, "int");
+        let label = text(&mut nodes, name);
+        let derivation = literal(&mut nodes, 0);
+        let column = mapping(
+            &mut nodes,
+            vec![
+                ("name", column_name),
+                ("type", kind),
+                ("label", label),
+                ("derivation", derivation),
+            ],
+        );
+        let N::Sequence(columns) = &mut nodes[columns] else {
+            panic!("declared columns");
+        };
+        columns.push(column);
+    }
+    let row_key = text(&mut nodes, "ROW");
+    let keys = document.field(document.root(), "keys").unwrap();
+    let N::Sequence(keys) = &mut nodes[keys] else {
+        panic!("declared keys");
+    };
+    keys.push(row_key);
+    let output = document.field(document.root(), "output").unwrap();
+    let projection = document.field(output, "columns").unwrap();
+    let row_projection = text(&mut nodes, "ROW");
+    let N::Sequence(projection) = &mut nodes[projection] else {
+        panic!("declared output projection");
+    };
+    projection.push(row_projection);
+    let rows = (1..=2)
+        .map(|value| {
+            let id = text(&mut nodes, &format!("row-{value}"));
+            let dataset = text(&mut nodes, "FIRST");
+            let row = literal(&mut nodes, value);
+            let derivations = mapping(&mut nodes, vec![("ROW", row)]);
+            mapping(
+                &mut nodes,
+                vec![
+                    ("id", id),
+                    ("dataset", dataset),
+                    ("derivations", derivations),
+                ],
+            )
+        })
+        .collect();
+    let rows = append(&mut nodes, N::Sequence(rows));
+    let rows_name = text(&mut nodes, "rows");
+    let N::Mapping(root) = &mut nodes[document.root()] else {
+        panic!("specification mapping");
+    };
+    root.push((rows_name, rows));
+    let mut ordered_nodes = Vec::new();
+    let root = ordered(&nodes, document.root(), &mut ordered_nodes);
+    let root = SpecificationDocument::admit(
+        Document::new(ordered_nodes, root, Default::default()).unwrap(),
+        &mut ValidationBudget::new(Default::default()),
+    )
+    .unwrap()
+    .unwrap();
+    let producer = support::document(&[("RAW", None)], Some("beta"));
+    let links = [
+        candidate("/root", "FIRST", "/p", &producer),
+        candidate("/root", "SECOND", "/p", &producer),
+    ];
+    let prepared = yamaa_engine::producer_graph::check(
+        "/root",
+        &[node("/root", &root, &links), node("/p", &producer, &[])],
+        environment(&["beta", "unused", "alpha"]),
+        Default::default(),
+    )
+    .unwrap()
+    .into_build();
+    assert_eq!(
+        prepared
+            .report_contexts()
+            .map(|(node, plan)| (node.identity(), plan.output().columns().len()))
+            .collect::<Vec<_>>(),
+        [("/root", 4), ("/p", 2)]
+    );
+    // The root owns four columns, while its serialized projection keeps three.
+    // Total12 reserves8 root cells and4 producer cells; total11 reserves7/3.
+    // The producer needs only2, so both runs enter the same completed prefix.
+    for (cells, accepted, root_calls) in [(12, true, 2), (11, false, 0)] {
+        let mut ports = Ports::new();
+        let mut codec = RootCodec(Codec {
+            trace: Rc::clone(&ports.codec.trace),
+            failure: false,
+        });
+        let mut attempt =
+            build::BuildAttempt::<Activation, Study, Decoder, Report, RootCodec>::default();
+        let mut limits = build::Limits::default();
+        limits.execution.output_cells = cells;
+        prepared.build_into(
+            build::Ports {
+                activation: &mut ports.activation,
+                study: &mut ports.study,
+                decoder: &mut ports.decoder,
+                report: &mut ports.report,
+                codec: &mut codec,
+            },
+            limits,
+            &mut attempt,
+        );
+        assert_eq!(
+            attempt.outcome.is_ok(),
+            accepted,
+            "outcome={:?}, dataset={:?}",
+            attempt.outcome,
+            attempt
+                .nodes
+                .last()
+                .map(|node| node.dataset.result.as_ref().map(|run| &run.result))
+        );
+        assert_eq!(ports.study.reads, 1);
+        assert_eq!(attempt.nodes.len(), 2);
+        let producer = &attempt.nodes[0];
+        assert_eq!(producer.node, 1);
+        let execution = producer
+            .dataset
+            .result
+            .as_ref()
+            .unwrap()
+            .result
+            .as_ref()
+            .unwrap();
+        assert_eq!(execution.dataset.row_count(), 1);
+        assert_eq!(execution.dataset.schema().columns().len(), 2);
+        assert_eq!(execution.dataset.cell(0, 1).unwrap(), ValueRef::Int(1));
+        assert_eq!(
+            producer
+                .output
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .artifact()
+                .unwrap()
+                .bytes(),
+            b"ID,VALUE\n1,1\n"
+        );
+        let root = &attempt.nodes[1];
+        assert_eq!(root.node, 0);
+        assert!(root.dataset.sources.iter().all(|source| {
+            source.read.captured
+                && source.read.snapshots_created == Some(0)
+                && source.snapshot.is_some()
+                && source.table.is_some()
+        }));
+        let trace = ports.activation.trace.borrow();
+        assert_eq!(
+            trace
+                .iter()
+                .filter(|event| *event == "invoke:beta:1")
+                .count(),
+            1
+        );
+        assert_eq!(
+            trace
+                .iter()
+                .filter(|event| *event == "invoke:alpha:1")
+                .count(),
+            root_calls
+        );
+        assert_eq!(
+            trace.iter().filter(|event| *event == "encode:RAW").count(),
+            1
+        );
+        if accepted {
+            let execution = root
+                .dataset
+                .result
+                .as_ref()
+                .unwrap()
+                .result
+                .as_ref()
+                .unwrap();
+            assert_eq!(execution.dataset.row_count(), 2);
+            assert_eq!(execution.dataset.schema().columns().len(), 4);
+            assert_eq!(execution.dataset.cell(0, 2).unwrap(), ValueRef::Int(1));
+            assert_eq!(execution.dataset.cell(1, 2).unwrap(), ValueRef::Int(2));
+            assert!(root
+                .output
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .artifact()
+                .is_some());
+            assert_eq!(
+                trace
+                    .iter()
+                    .filter(|event| *event == "encode:FIRST")
+                    .count(),
+                1
+            );
+        } else {
+            assert!(matches!(attempt.outcome, Err(Failure::Node { node: 0 })));
+            assert!(matches!(
+                root.dataset
+                    .result
+                    .as_ref()
+                    .unwrap()
+                    .result
+                    .as_ref()
+                    .map_err(|error| &**error),
+                Err(ExecutionError::Capacity)
+            ));
+            assert!(root.output.as_ref().unwrap().is_none());
+            assert!(!trace
+                .iter()
+                .any(|event| event == "report:/root" || event == "encode:FIRST"));
+        }
+    }
+}

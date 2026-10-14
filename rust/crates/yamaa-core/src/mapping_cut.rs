@@ -235,21 +235,11 @@ impl Cut {
                 .chain(missing.iter().map(text_bytes))
                 .chain(core::iter::once(breaks.len().saturating_mul(8))),
         )?;
-        let expected = if labels.len() != breaks.len().saturating_add(1) {
-            Some("one label more than breaks")
-        } else if breaks.iter().any(|n| !n.is_finite()) {
-            Some("finite numeric breaks")
-        } else if breaks.windows(2).any(|pair| pair[1] <= pair[0]) {
-            Some("ascending breaks")
-        } else {
-            None
-        };
-        if let Some(expected) = expected {
-            return Err(AdmissionError::Diagnostic(diagnostic(
-                C::CutDeclaration,
-                &path,
-                [("operation", text("cut")), ("expected", text(expected))],
-            )));
+        if let Some(finding) = Self::declaration_findings(&source, &path, &breaks, &labels)?
+            .into_iter()
+            .next()
+        {
+            return Err(AdmissionError::Diagnostic(finding));
         }
         Ok(Self {
             source,
@@ -259,6 +249,47 @@ impl Cut {
             right,
             missing,
         })
+    }
+    /// Independent declaration defects share the same admitted context and order.
+    pub(crate) fn declaration_findings(
+        source: &str,
+        path: &str,
+        breaks: &[f64],
+        labels: &[String],
+    ) -> Result<Vec<Diagnostic>, AdmissionError> {
+        metadata(
+            source,
+            path,
+            labels
+                .iter()
+                .map(|label| label.len().saturating_add(32))
+                .chain(core::iter::once(breaks.len().saturating_mul(8))),
+        )?;
+        let expected = [
+            (
+                labels.len() != breaks.len().saturating_add(1),
+                "one label more than breaks",
+            ),
+            (
+                breaks.iter().any(|n| !n.is_finite()),
+                "finite numeric breaks",
+            ),
+            (
+                breaks.windows(2).any(|pair| pair[1] <= pair[0]),
+                "ascending breaks",
+            ),
+        ];
+        Ok(expected
+            .into_iter()
+            .filter(|(invalid, _)| *invalid)
+            .map(|(_, expected)| {
+                diagnostic(
+                    C::CutDeclaration,
+                    path,
+                    [("operation", text("cut")), ("expected", text(expected))],
+                )
+            })
+            .collect())
     }
     pub fn select(&self, value: ValueRef<'_>) -> Result<Selected<'_>, Diagnostic> {
         if matches!(value, ValueRef::Missing) {

@@ -36,8 +36,11 @@ SEED = Path("rust/tools/diagnostic_literal_seed.json")
 ALLOWLIST = Path("rust/tools/diagnostic_literal_allowlist.json")
 CORE_SEED = Path("rust/tools/core_diagnostic_literal_seed.json")
 CORE_ALLOWLIST = Path("rust/tools/core_diagnostic_literal_allowlist.json")
-REGISTRY = Path("rust/crates/yamaa-core/src/diagnostic.rs")
-SHIPPED_SCHEMA = Path("rust/crates/yamaa-adapters/src/shipped_schema_data.rs")
+REGISTRY = Path("rust/crates/yamaa-core/src/diagnostic/mod.rs")
+SHIPPED_SCHEMA = Path("rust/crates/yamaa-adapters/src/shipped_schema/data.rs")
+PRIVATE_TEST_MODULE = Path(
+    "rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs"
+)
 CHECKER = Path("rust/tools/check_diagnostics.py")
 NULL_POLICY = Path("rules/execution/lifecycle.md")
 NULL_START = "<!-- normative-null-conditions:start -->"
@@ -502,6 +505,31 @@ def diagnostic_literals(
     return found
 
 
+def private_unit_test_source(root: Path, relative: Path) -> bool:
+    """Keep relocated independent assertions outside the production literal ratchet."""
+    if relative != PRIVATE_TEST_MODULE:
+        return False
+    parent = root / relative.with_name("mod.rs")
+    if not parent.is_file():
+        return False
+    source = parent.read_text(encoding="utf-8")
+    declaration = "mod publication_failure_tests;"
+    if source.count(declaration) != 1 or not re.search(
+        r"(?m)^#\[cfg\(test\)\]\nmod publication_failure_tests;$", source
+    ):
+        return False
+    # An explicit path or textual include must not make this file available to
+    # production under another module name. Its only loader is the private cfg.
+    for path in (root / "rust/crates").glob("*/src/**/*.rs"):
+        if path != root / relative and re.search(
+            r'"[^"\n]*publication_failure_tests\.rs"',
+            path.read_text(encoding="utf-8"),
+            re.IGNORECASE,
+        ):
+            return False
+    return True
+
+
 def baseline_errors(
     root: Path, reference: str, seed_path: Path = SEED, allowlist_path: Path = ALLOWLIST
 ) -> list[str]:
@@ -713,7 +741,7 @@ def null_conditions(
 def registry_errors(
     root: Path, registered: dict[str, set[str]], nullable: set[tuple[str, str]]
 ) -> list[str]:
-    path = root / "rust/crates/yamaa-core/src/diagnostic.rs"
+    path = root / REGISTRY
     try:
         source = path.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as error:
@@ -803,6 +831,7 @@ def violations(root: Path, baseline_ref: str | None = None) -> list[str]:
         sites, active, used, _ = namespaces[namespace]
         source = path.read_text(encoding="utf-8")
         lines = source.splitlines()
+        test_only = private_unit_test_source(root, Path(relative))
         for number, literals in diagnostic_literals(source, registered).items():
             line = lines[number - 1]
             for identifier in literals:
@@ -811,7 +840,7 @@ def violations(root: Path, baseline_ref: str | None = None) -> list[str]:
                         f"{relative}:{number}: undefined requirement {identifier}"
                     )
             owned = literals
-            if Path(relative) in (REGISTRY, SHIPPED_SCHEMA) or not owned:
+            if Path(relative) in (REGISTRY, SHIPPED_SCHEMA) or test_only or not owned:
                 continue
             seed_identifier = sites.get((relative, line.strip()))
             used[seed_identifier] += 1

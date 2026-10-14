@@ -1,4 +1,8 @@
 library(yamaa)
+host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
+  system.file("host-fixtures",package="yamaa",mustWork=TRUE)
+source(file.path(host_fixture_root,"reader.R"),local=TRUE)
+host_truth <- read_host_fixture(host_fixture_root,"producer-graph")
 namespace <- asNamespace("yamaa")
 private <- function(name) get(name,namespace)
 prepare <- private(".prepare_producer_file")
@@ -10,29 +14,13 @@ retained <- private(".producer_retained")
 artifact <- private(".producer_artifact")
 reply <- private(".project_reply")
 root <- system.file("project-original",package="yamaa",mustWork=TRUE)
-raw <- charToRaw("ID,VALUE\n1,1.234\n2,2.345\n")
-produced <- charToRaw("ID,VALUE\n1,1.23\n2,2.35\n")
-consumed <- charToRaw("ID,VALUE\n1,2.46\n2,4.70\n")
-# R authors its environment and study independently of the Python witness.
-producer <- paste0("schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys: [ID]\n",
-  "input: {RAW: {path: ../../raw/raw.csv, types: {ID: int, VALUE: float}}}\n",
-  "columns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n",
-  "  - {name: VALUE, type: float, label: Value, derivation: {function: {name: id_float, args: {x: RAW.VALUE}}}}\n",
-  "output: {path: ../../generated/producer.csv, columns: [ID, VALUE], decimals: 2}\n")
-consumer <- paste0("schema_version: '1.0'\ndomain: TEST\nbase: FIRST\nkeys: [ID]\ninput:\n",
-  "  FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}\n",
-  "  SECOND: {path: ../generated/producer.csv, schema: ../producer/./p.yaml}\n",
-  "intermediates: [{id: SECOND_REFERENCE, dataset: SECOND, key: [ID], no_match: null}]\ncolumns:\n",
-  "  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}\n",
-  "  - {name: FIRST_VALUE, type: float, label: First value, derivation: FIRST.VALUE}\n",
-  "  - {name: SECOND_VALUE, type: float, label: Second value, derivation: SECOND_REFERENCE.VALUE}\n",
-  "  - {name: VALUE, type: float, label: Value, derivation: {compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}}\n",
-  "output: {path: ../generated/root.csv, columns: [ID, VALUE], decimals: 2}\n")
-definition <- paste0("function: yamaabenchmarks::project_value\ndescription: Installed numeric identity.\n",
-  "params: [{name: x, type: float}]\nreturns: float\ntests:\n",
-  "  - {id: normal, covers: [normal, numeric-comparison], args: {x: 7.25}, result: 7.25}\n",
-  "  - {id: boundary, covers: [boundary], args: {x: 0.0}, result: 0.0}\n",
-  "  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n")
+raw <- fixture_bytes(host_truth[["raw_csv"]])
+produced <- fixture_bytes(host_truth[["produced_csv"]])
+consumed <- fixture_bytes(host_truth[["consumed_csv"]])
+# Shared authored study truth; R owns its environment and capability assertions.
+producer <- host_truth[["producer_yaml"]]
+consumer <- host_truth[["consumer_yaml"]]
+definition <- sub("HOST_CALLABLE","yamaabenchmarks::project_value",host_truth[["function_yaml"]],fixed=TRUE)
 write <- function(work,name,value) {
   file <- file.path(work,name); dir.create(dirname(file),recursive=TRUE,showWarnings=FALSE)
   writeBin(if(is.raw(value)) value else charToRaw(value),file)
@@ -42,7 +30,7 @@ study <- function() {
   work <- normalizePath(work,winslash="/")
   write(work,"yamaa-project.yaml","version: '1.0'\n")
   write(work,"producer/layers/base.yaml",producer)
-  write(work,"producer/p.yaml","schema_version: '1.0'\nparents: [layers/base.yaml]\ndomain: PRODUCER\n")
+  write(work,"producer/p.yaml",host_truth[["producer_parent_yaml"]])
   write(work,"consumer/root.yaml",consumer)
   write(work,"raw/raw.csv",raw)
   write(work,"env/environment.yaml","schema_version: '1.0'\nlanguage: r\nlock: renv.lock\nfunctions: {id_float: float.yaml}\n")
@@ -89,12 +77,12 @@ for(attempt in attempts) {
   result <- report(attempt); before <- observe(result)
   stopifnot(identical(status(result),"complete"),identical(observe(report(attempt)),before),
     grepl('"outcome":"success"',before,fixed=TRUE),
-    grepl('"value":"3ff3be76c8b43958"',before,fixed=TRUE),
-    grepl('"value":"4002c28f5c28f5c3"',before,fixed=TRUE),
-    grepl('"value":"3ff3ae147ae147ae"',before,fixed=TRUE),
-    grepl('"value":"4002cccccccccccd"',before,fixed=TRUE),
-    grepl('"value":"4003ae147ae147ae"',before,fixed=TRUE),
-    grepl('"value":"4012cccccccccccd"',before,fixed=TRUE),
+    grepl(paste0('"value":"',host_truth[["raw_first_f64"]],'"'),before,fixed=TRUE),
+    grepl(paste0('"value":"',host_truth[["raw_second_f64"]],'"'),before,fixed=TRUE),
+    grepl(paste0('"value":"',host_truth[["produced_first_f64"]],'"'),before,fixed=TRUE),
+    grepl(paste0('"value":"',host_truth[["produced_second_f64"]],'"'),before,fixed=TRUE),
+    grepl(paste0('"value":"',host_truth[["consumed_first_f64"]],'"'),before,fixed=TRUE),
+    grepl(paste0('"value":"',host_truth[["consumed_second_f64"]],'"'),before,fixed=TRUE),
     grepl('"invoked":false',before,fixed=TRUE))
   bounded <- report(attempt,1L)
   stopifnot(identical(status(bounded),"report_limit"),isTRUE(retained(bounded)$accepted),identical(artifact(bounded,0L),consumed))
@@ -173,7 +161,7 @@ cat("R native report gate stops consumer authority before producer artifact cons
 work <- study()
 write(work,"env/environment.yaml","schema_version: '1.0'\nlanguage: r\nlock: renv.lock\nfunctions: {id_float: float.yaml, consumer_float: consumer.yaml}\n")
 write(work,"env/consumer.yaml",sub("yamaabenchmarks::project_value","yamaabenchmarks::absent_function",definition,fixed=TRUE))
-text <- sub("  - {name: VALUE,","  - {name: SUM_VALUE, type: float, label: Sum, derivation: {compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}}\n  - {name: VALUE,",consumer,fixed=TRUE)
+text <- sub("  - {name: VALUE,",host_truth[["summed_value_column"]],consumer,fixed=TRUE)
 # Replace the final VALUE derivation, keeping the independently specified sum.
 text <- sub("label: Value, derivation: {compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}",
   "label: Value, derivation: {function: {name: consumer_float, args: {x: SUM_VALUE}}}",text,fixed=TRUE)
@@ -192,9 +180,9 @@ for(branch in c("left","right")) write(work,paste0(branch,".yaml"),paste0(
   "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {LEAF: {path: generated/producer.csv, schema: producer/p.yaml}}\ncolumns:\n",
   "  - {name: ID, type: int, label: Identifier, derivation: LEAF.ID}\n",
   "  - {name: VALUE, type: float, label: Value, derivation: LEAF.VALUE}\n",
-  "output: {path: generated/",branch,".csv, columns: [ID, VALUE], decimals: 2}\n"))
-text <- sub("../generated/producer.csv, schema: ../producer/p.yaml","../generated/left.csv, schema: ../left.yaml",consumer,fixed=TRUE)
-write(work,"consumer/root.yaml",sub("../generated/producer.csv, schema: ../producer/./p.yaml","../generated/right.csv, schema: ../right.yaml",text,fixed=TRUE))
+  "output: {path: generated/",branch,host_truth[["rounded_output_suffix"]]))
+text <- sub(host_truth[["first_producer_reference"]],host_truth[["left_reference"]],consumer,fixed=TRUE)
+write(work,"consumer/root.yaml",sub(host_truth[["second_producer_reference"]],host_truth[["right_reference"]],text,fixed=TRUE))
 specification <- prepare_study(work); events <- character()
 attempt <- reply(.Call(private("wrap__producer_build"),specification,fields,verify,resolve,16777216L))
 stopifnot(identical(events,c("lock","bind","invoke:7.25","invoke:0","invoke:1.234","invoke:2.345")),
@@ -234,7 +222,7 @@ rm(conditionMessage.producer_reentrant,rendering_attempt,specification); unlink(
 stopifnot(identical(retained(refused)$failures[[1L]]$facts$condition,failure))
 cat("R reentrant renderer refuses promptly and retains the original condition\n")
 
-work <- study(); write(work,"consumer/root.yaml",paste0(consumer,"verifications: [{assert: {require: 'VALUE < 0'}}]\n"))
+work <- study(); write(work,"consumer/root.yaml",paste0(consumer,host_truth[["fatal_verification_yaml"]]))
 specification <- prepare_study(work); attempt <- build(specification,metadata); result <- report(attempt)
 facts <- retained(result)
 stopifnot(!facts$accepted,identical(unlist(facts$entered),c(1,0)),
@@ -256,8 +244,8 @@ unlink(work,recursive=TRUE)
 cat("R native ingestion refusal preserves the actual raw source and entered producer prefix\n")
 
 work <- study()
-write(work,"consumer/root.yaml",sub("../generated/producer.csv, schema: ../producer/p.yaml",
-  "../generated/wrong.csv, schema: ../producer/p.yaml",consumer,fixed=TRUE))
+write(work,"consumer/root.yaml",sub(host_truth[["first_producer_reference"]],
+  host_truth[["wrong_producer_reference"]],consumer,fixed=TRUE))
 rejected <- prepare(file.path(work,"consumer/root.yaml"),file.path(work,"env/environment.yaml"))
 stopifnot(identical(status(rejected),"graph_failure")); unlink(work,recursive=TRUE)
 issues <- private(".producer_rejection_issues")(rejected)

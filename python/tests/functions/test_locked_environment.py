@@ -166,6 +166,15 @@ def test_invalid_lock_syntax_and_shape_precede_metadata(raw):
     assert trace == []
 
 
+def test_deeply_nested_lock_syntax_is_an_invalid_lock():
+    depth = sys.getrecursionlimit() * 2
+    raw = f"version = 1\nx = {'[' * depth}{']' * depth}\npackage = []\n".encode()
+    trace = []
+    with pytest.raises(m.InvalidLock, match="invalid uv lock syntax"):
+        verify(raw, ["project.run"], {}, {}, trace)
+    assert trace == []
+
+
 def test_invalid_markers_and_missing_versions_do_not_become_installed_version_choices():
     for raw in [
         lock(("yamaa", "0.2.0", ["not a marker"])),
@@ -655,3 +664,19 @@ def test_editable_metadata_original_errors_and_interrupts_are_preserved(
     with pytest.raises(type(original)) as caught:
         m._installed_providers(("project_bmi",))
     assert caught.value is original
+
+
+def test_editable_metadata_invalid_utf8_is_an_invalid_lock(monkeypatch):
+    original = UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+
+    class UndecodableMetadata:
+        def read_text(self, name):
+            raise original
+
+    monkeypatch.setattr(m.metadata, "packages_distributions", dict)
+    monkeypatch.setattr(
+        m.metadata, "distributions", lambda: iter([UndecodableMetadata()])
+    )
+    with pytest.raises(m.InvalidLock, match="invalid editable metadata") as caught:
+        m._installed_providers(("project_bmi",))
+    assert caught.value.__cause__ is original

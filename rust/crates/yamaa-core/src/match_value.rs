@@ -61,7 +61,8 @@ pub fn result_type(
                 "date_diff" | "rank" | "row_number" | "study_day" | "to_epoch_day" => {
                     Some(Int.into())
                 }
-                "compute" | "round_half_away_from_zero" => Some(Float.into()),
+                "compute" => Some(crate::numeric_compiler::NUMERIC_RESULT_TYPE.into()),
+                "round_half_away_from_zero" => Some(Float.into()),
                 "baseline_flag" | "cut" | "date_precision" | "datetime_precision" | "str_case"
                 | "str_concat" | "str_extract" | "str_pad" | "str_template" => Some(Str.into()),
                 "str_contains" => Some(ComparableType::Boolean),

@@ -4,6 +4,59 @@ use crate::project_preparation::Source;
 use alloc::{string::String, vec::Vec};
 use yamaa_core::schema::{BundleError, BundleLimits, Document, SchemaModule, SchemaStructure};
 
+/// Discovery grants read authority only to names accepted by the existing core
+/// include grammar. Unsafe authored names remain for final bundle diagnostics.
+pub fn include_names(input: &Document) -> Vec<&str> {
+    use yamaa_core::schema::DocumentNode;
+    let Some(index) = input.field(input.root(), "includes") else {
+        return Vec::new();
+    };
+    let DocumentNode::Sequence(entries) = &input.nodes()[index] else {
+        return Vec::new();
+    };
+    entries
+        .iter()
+        .filter_map(|&entry| match &input.nodes()[entry] {
+            DocumentNode::Text(value) if yamaa_core::schema::schema_include_name(value) => {
+                Some(value.as_str())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// Read-only queries over an already admitted closure share core request budgets.
+/// Physical codecs, host query carriers and result serialization stay in adapters.
+pub fn validate_query(
+    schema: &SchemaStructure,
+    input: &Document,
+    types: &[String],
+    fragment: bool,
+) -> Result<Vec<yamaa_core::schema::SchemaDiagnostic>, yamaa_core::schema::ValidationError> {
+    let mut budget = yamaa_core::schema::ValidationBudget::new(Default::default());
+    let selected = schema.parse_query_types(types, &mut budget)?;
+    schema.validate_types(&selected, input, input.root(), "", fragment, &mut budget)
+}
+
+pub fn normalize_query(
+    schema: &SchemaStructure,
+    input: &Document,
+    types: &[String],
+    fragment: bool,
+) -> Result<yamaa_core::schema::NormalizedDocument, yamaa_core::schema::NormalizationError> {
+    let mut budget = yamaa_core::schema::NormalizationBudget::new(Default::default());
+    let selected = schema.parse_query_types(types, budget.validation_scope())?;
+    schema.normalize_types(&selected, input, input.root(), fragment, &mut budget)
+}
+
+pub fn default_findings(
+    schema: &SchemaStructure,
+) -> Result<Vec<yamaa_core::schema::DefaultDiagnostics>, yamaa_core::schema::ValidationError> {
+    schema.validate_defaults(&mut yamaa_core::schema::ValidationBudget::new(
+        Default::default(),
+    ))
+}
+
 /// A codec keeps its own physical parsing limits and occurrence locations.
 /// Locations must address this exact decoded document; the engine cannot infer
 /// their authority from equal text or independently reconstructed arenas.

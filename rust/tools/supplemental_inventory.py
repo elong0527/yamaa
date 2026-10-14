@@ -172,8 +172,12 @@ def load_catalog(root, catalog_path):
         supporting.add(name)
     discovered_fixtures = {
         p.relative_to(root).as_posix()
-        for p in (root / "rust/crates").glob("*/tests/fixtures/**/*")
-        if p.is_file()
+        for pattern in (
+            "rust/crates/*/tests/fixtures/**/*",
+            "rust/tests/host-fixtures/**/*",
+        )
+        for p in root.glob(pattern)
+        if p.is_file() and "__pycache__" not in p.parts
     }
     discovered_suites = {
         p.relative_to(root).as_posix()
@@ -189,6 +193,22 @@ def load_catalog(root, catalog_path):
                 f"{label} differ: uncataloged={sorted(actual - expected)}, stale={sorted(expected - actual)}"
             )
     return catalog
+
+
+def host_fixture_files(catalog):
+    """Return the shared installed-host inputs/codecs, excluding ownership docs."""
+    prefix = "rust/tests/host-fixtures/"
+    names = [contract["path"] for contract in catalog["contracts"]]
+    names += [
+        support["path"]
+        for support in catalog["support_files"]
+        if support["role"] == "input"
+    ]
+    return [
+        (name, "host-fixtures/" + name.removeprefix(prefix))
+        for name in names
+        if name.startswith(prefix)
+    ]
 
 
 def installed_metadata(runtime, staged_root):
@@ -266,6 +286,14 @@ def run_suites(root, catalog, *, runtime, staged_root, output, evidence):
         if original.read_bytes() != staged.read_bytes():
             raise ValueError(
                 f"staged suite differs from tested revision: {suite['id']}"
+            )
+    for name, staged_name in host_fixture_files(catalog):
+        if (
+            _path(root, name).read_bytes()
+            != _path(staged_root, staged_name).read_bytes()
+        ):
+            raise ValueError(
+                f"staged host fixture differs from tested revision: {name}"
             )
     output.mkdir(parents=True, exist_ok=True)
     environment = os.environ | {

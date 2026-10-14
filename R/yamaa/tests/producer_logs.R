@@ -6,6 +6,10 @@ if(nzchar(rm_path)) invisible(file.symlink(rm_path,file.path(runtime_path,"rm"))
 Sys.setenv(PATH=runtime_path)
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 library(yamaa)
+host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
+  system.file("host-fixtures",package="yamaa",mustWork=TRUE)
+source(file.path(host_fixture_root,"reader.R"),local=TRUE)
+host_truth <- read_host_fixture(host_fixture_root,"producer-logs")
 project <- system.file("project-original",package="yamaa",mustWork=TRUE)
 specification <- system.file("specification-original",package="yamaa",mustWork=TRUE)
 observe <- get(".domain_observations",envir=asNamespace("yamaa"))
@@ -14,18 +18,12 @@ write <- function(path,value) {
   dir.create(dirname(path),recursive=TRUE,showWarnings=FALSE)
   writeBin(if(is.raw(value))value else charToRaw(enc2utf8(value)),path)
 }
-ids <- c("1","2","3","4","5","6","7","9223372036854775807")
-primary <- charToRaw(paste0("ID\n",paste(ids,collapse="\n"),"\n"))
-keys <- paste0("[",paste0('{"ID":',ids,'}',collapse=","),"]")
-vheader <- "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n"
-wheader <- "LOG_VERSION,ARTIFACT,SEVERITY,CONDITION,REQUIREMENT,SPEC_PATH,VERIFICATION_ID,FAILURE_COUNT,OFFENDING_KEYS,DETAILS\n"
+ids <- fixture_strings(host_truth[["ids_decimal"]])
+primary <- fixture_bytes(host_truth[["input_csv"]])
+keys <- host_truth[["offending_keys_json"]]
 golden <- function(name,warning=FALSE,severity="warning") {
-  # These complete range records are authored from the normative log schema.
-  identifier <- if(name=="root")intToUtf8(c(233L,119070L)) else paste0(name,"-range")
-  details <- '"{""column"":""ID""}"'
-  row <- if(warning) paste0("1.0,generated/",name,".csv,warning,range_failed,REQ-0377,columns.ID.verifications[0].range,",identifier,',8,"',gsub('"','""',keys,fixed=TRUE),'",',details,"\n") else
-    paste0("1.0,generated/",name,".csv,columns.ID.verifications[0].range,",identifier,",range,ID,REQ-0377,",severity,",violated,range_failed,8,8,",details,"\n")
-  charToRaw(enc2utf8(paste0(if(warning)wheader else vheader,row)))
+  records <- host_truth[["golden_csv"]][[name]]
+  fixture_bytes(if(warning) records$warning else records$verification[[severity]])
 }
 base <- tempfile("public-producer-logs-");dir.create(base)
 base <- normalizePath(base,winslash="/",mustWork=TRUE)
@@ -35,13 +33,13 @@ make <- function(label,diamond=FALSE,fatal=NULL,blocked=FALSE) {
   write(file.path(work,"environment.yaml"),"schema_version: '1.0'\nlanguage: r\nlock: renv.lock\nfunctions: {}\n")
   stopifnot(file.copy(file.path(project,"schema-functions/r/renv.lock"),file.path(work,"renv.lock")))
   write(file.path(work,"input.csv"),primary)
-  names <- if(diamond)c("producer","left","right","root") else c("producer","root")
+  names <- if(diamond)fixture_strings(host_truth[["diamond_names"]]) else c("producer","root")
   for(name in names) {
-    if(name=="producer") { source <- "{SRC: {path: input.csv, types: {ID: int}}}";input <- "SRC" }
-    else if(name %in% c("left","right")) { source <- "{P: {path: generated/producer.csv, schema: producer.yaml}}";input <- "P" }
-    else if(diamond) { source <- "{A: {path: generated/left.csv, schema: left.yaml}, B: {path: generated/right.csv, schema: right.yaml}}";input <- "A" }
-    else { source <- "{A: {path: generated/producer.csv, schema: producer.yaml}, B: {path: generated/producer.csv, schema: ./producer.yaml}}";input <- "A" }
-    intermediate <- if(name=="root")"intermediates: [{id: SHARED, dataset: B, key: [ID], no_match: null}]\n" else ""
+    if(name=="producer") { source <- host_truth[["raw_source_reference"]];input <- "SRC" }
+    else if(name %in% c("left","right")) { source <- host_truth[["producer_reference"]];input <- "P" }
+    else if(diamond) { source <- host_truth[["diamond_reference"]];input <- "A" }
+    else { source <- host_truth[["aliased_producer_reference"]];input <- "A" }
+    intermediate <- if(name=="root")host_truth[["root_intermediate_yaml"]] else ""
     severity <- if(identical(name,fatal))"error" else "warning"
     warning <- if(blocked && name=="root")"blocked/root-warnings.csv" else paste0("generated/",name,"-warnings.csv")
     identifier <- if(name=="root")'"\\u00e9\\U0001d11e"' else paste0(name,"-range")
@@ -186,10 +184,10 @@ write(file.path(case$work,"producer.yaml"),original)
 stopifnot(file.copy(file.path(source,"input"),case$work,recursive=TRUE))
 consumer <- sub("domain: ADSL","domain: ADSL\nbase: A",original,fixed=TRUE)
 consumer <- gsub("adsl","root",consumer,fixed=TRUE)
-consumer <- sub("  DM: input/dm.csv","  A: {path: adsl.csv, schema: producer.yaml}\n  B: {path: adsl.csv, schema: ./producer.yaml}",consumer,fixed=TRUE)
+consumer <- sub("  DM: input/dm.csv",host_truth[["verification_producer_aliases"]],consumer,fixed=TRUE)
 consumer <- gsub("DM.","A.",consumer,fixed=TRUE)
 write(file.path(case$work,"root.yaml"),consumer)
-case$paths <- c("adsl-checks.csv","adsl-warnings.csv","adsl.csv","root-checks.csv","root-warnings.csv","root.csv")
+case$paths <- fixture_strings(host_truth[["verification_producer_artifacts"]])
 result <- build(case)
 stopifnot(nrow(result$issues)==0L,nrow(result$verification_log)==4L,nrow(result$warning_log)==1L)
 before <- retain(case,result,"build")

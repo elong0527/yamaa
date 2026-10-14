@@ -2,6 +2,7 @@
 
 import argparse
 import importlib.util
+import runpy
 import shutil
 from pathlib import Path
 
@@ -65,6 +66,14 @@ def stage(destination: Path):
     define_helper = importlib.util.module_from_spec(define_spec)
     define_spec.loader.exec_module(define_helper)
     define_helper.stage(resources / "define-fixtures")
+    inventory = runpy.run_path(str(WORKSPACE / "tools/supplemental_inventory.py"))
+    catalog = inventory["load_catalog"](
+        REPOSITORY, WORKSPACE / "qualification/supplemental.json"
+    )
+    for name, relative in inventory["host_fixture_files"](catalog):
+        target = resources / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(REPOSITORY / name, target)
     print(destination)
 
 

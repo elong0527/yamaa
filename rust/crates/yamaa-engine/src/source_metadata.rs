@@ -150,11 +150,30 @@ pub enum Error {
 
 /// Only the held compiled owner and complete metadata are accepted. A successful
 /// result proves names/types in this scope, never source values or execution.
+pub type NormalizedSchemas = Result<Vec<TableSchema>, Vec<Diagnostic>>;
+
 pub fn check(
     prepared: &PreparedSpecification,
     sources: &[SourceSchema],
     limits: Limits,
 ) -> Result<Vec<Diagnostic>, Error> {
+    let logical = match normalized_schemas(prepared, sources, limits)? {
+        Ok(schemas) => schemas,
+        Err(diagnostics) => return Ok(diagnostics),
+    };
+    let schemas = logical.iter().collect::<Vec<_>>();
+    prepared
+        .metadata_source_findings(&schemas, limits.findings)
+        .map_err(Error::Binding)
+}
+
+/// Read-only logical schemas retain the same complete carrier admission,
+/// normalization order and classified refusals as the metadata binding gate.
+pub fn normalized_schemas(
+    prepared: &PreparedSpecification,
+    sources: &[SourceSchema],
+    limits: Limits,
+) -> Result<NormalizedSchemas, Error> {
     let mut budget = Budget::new(sources.len(), limits)?;
     if prepared.sources().len() != sources.len() {
         return Err(Error::SourceIdentity);
@@ -170,19 +189,12 @@ pub fn check(
             budget.text(column.name.len())?;
         }
     }
-    let logical = match normalize(
+    normalize(
         prepared.sources(),
         |index| prepared.source_interpretation(index),
         sources,
         limits,
-    )? {
-        Ok(schemas) => schemas,
-        Err(diagnostics) => return Ok(diagnostics),
-    };
-    let schemas = logical.iter().collect::<Vec<_>>();
-    prepared
-        .metadata_source_findings(&schemas, limits.findings)
-        .map_err(Error::Binding)
+    )
 }
 
 fn normalize(
@@ -306,11 +318,29 @@ pub struct GraphSourceSchema {
     pub source: SourceSchema,
 }
 
+pub type GraphNormalizedSchemas = Result<Vec<Vec<TableSchema>>, Vec<(usize, Diagnostic)>>;
+
 pub fn graph_check(
     graph: &yamaa_core::producer_graph::PreparedGraph,
     external: &[GraphSourceSchema],
     limits: Limits,
 ) -> Result<Vec<(usize, Diagnostic)>, Error> {
+    let schemas = match graph_normalized_schemas(graph, external, limits)? {
+        Ok(schemas) => schemas,
+        Err(diagnostics) => return Ok(diagnostics),
+    };
+    graph
+        .check_source_schemas(&schemas, limits.findings)
+        .map_err(Error::Graph)
+}
+
+/// Producer published fields and external metadata share the original complete
+/// budget/admission pass before any native logical schema copies are made.
+pub fn graph_normalized_schemas(
+    graph: &yamaa_core::producer_graph::PreparedGraph,
+    external: &[GraphSourceSchema],
+    limits: Limits,
+) -> Result<GraphNormalizedSchemas, Error> {
     let mut budget = Budget::new(external.len(), limits)?;
     let expected = graph
         .nodes()
@@ -424,11 +454,9 @@ pub fn graph_check(
         return Err(Error::Limit);
     }
     if !diagnostics.is_empty() {
-        return Ok(diagnostics);
+        return Ok(Err(diagnostics));
     }
-    graph
-        .check_source_schemas(&schemas, limits.findings)
-        .map_err(Error::Graph)
+    Ok(Ok(schemas))
 }
 
 pub const MAX_CAPTURE_BYTES: usize = 8_388_608;

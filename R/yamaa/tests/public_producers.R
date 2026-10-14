@@ -1,4 +1,8 @@
 library(yamaa)
+host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
+  system.file("host-fixtures",package="yamaa",mustWork=TRUE)
+source(file.path(host_fixture_root,"reader.R"),local=TRUE)
+host_truth <- read_host_fixture(host_fixture_root,"producer-graph")
 namespace <- asNamespace("yamaa")
 private <- function(name) get(name, namespace)
 root <- system.file("project-original", package="yamaa", mustWork=TRUE)
@@ -43,27 +47,11 @@ observe <- function(result) {
 }
 evidence <- function(result) reply(.Call(private("wrap__domain_producer_evidence"), handle(result)))
 preparation <- function(result) reply(.Call(private("wrap__domain_preparation_sources"), handle(result)))
-raw <- charToRaw("ID,VALUE\n1,1.234\n2,2.345\n")
-# R authors its own environment, conformance vectors and expected public values.
-producer <- paste0("schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys: [ID]\n",
-  "input: {RAW: {path: ../../raw/raw.csv, types: {ID: int, VALUE: float}}}\n",
-  "columns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n",
-  "  - {name: VALUE, type: float, label: Value, derivation: {function: {name: id_float, args: {x: RAW.VALUE}}}}\n",
-  "output: {path: ../../generated/producer.csv, columns: [ID, VALUE], decimals: 2}\n")
-consumer <- paste0("schema_version: '1.0'\ndomain: TEST\nbase: FIRST\nkeys: [ID]\ninput:\n",
-  "  FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}\n",
-  "  SECOND: {path: ../generated/producer.csv, schema: ../producer/./p.yaml}\n",
-  "intermediates: [{id: SECOND_REFERENCE, dataset: SECOND, key: [ID], no_match: null}]\ncolumns:\n",
-  "  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}\n",
-  "  - {name: FIRST_VALUE, type: float, label: First value, derivation: FIRST.VALUE}\n",
-  "  - {name: SECOND_VALUE, type: float, label: Second value, derivation: SECOND_REFERENCE.VALUE}\n",
-  "  - {name: VALUE, type: float, label: Value, derivation: {compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}}\n",
-  "output: {path: ../generated/root.csv, columns: [ID, VALUE], decimals: 2}\n")
-definition <- paste0("function: yamaabenchmarks::project_value\ndescription: Installed numeric identity.\n",
-  "params: [{name: x, type: float}]\nreturns: float\ntests:\n",
-  "  - {id: normal, covers: [normal, numeric-comparison], args: {x: 7.25}, result: 7.25}\n",
-  "  - {id: boundary, covers: [boundary], args: {x: 0.0}, result: 0.0}\n",
-  "  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n")
+raw <- fixture_bytes(host_truth[["raw_csv"]])
+# Shared authored study truth; R owns its environment and capability assertions.
+producer <- host_truth[["producer_yaml"]]
+consumer <- host_truth[["consumer_yaml"]]
+definition <- sub("HOST_CALLABLE","yamaabenchmarks::project_value",host_truth[["function_yaml"]],fixed=TRUE)
 write <- function(work, name, value) {
   path <- file.path(work, name); dir.create(dirname(path), recursive=TRUE, showWarnings=FALSE)
   writeBin(if(is.raw(value)) value else charToRaw(value), path)
@@ -73,7 +61,7 @@ study <- function() {
   work <- normalizePath(work, winslash="/")
   write(work,"yamaa-project.yaml","version: '1.0'\n")
   write(work,"producer/layers/base.yaml",producer)
-  write(work,"producer/p.yaml","schema_version: '1.0'\nparents: [layers/base.yaml]\ndomain: PRODUCER\n")
+  write(work,"producer/p.yaml",host_truth[["producer_parent_yaml"]])
   write(work,"consumer/root.yaml",consumer)
   write(work,"raw/raw.csv",raw)
   write(work,"env/environment.yaml","schema_version: '1.0'\nlanguage: r\nlock: renv.lock\nfunctions: {id_float: float.yaml}\n")
@@ -125,10 +113,10 @@ for(result in results) {
   stopifnot(length(source)==1L,identical(source[[1L]]$bytes,raw))
   before <- observe(result)
   stopifnot(grepl('"outcome":"success"',before,fixed=TRUE),
-    grepl('"value":"3ff3be76c8b43958"',before,fixed=TRUE),
-    grepl('"value":"4002c28f5c28f5c3"',before,fixed=TRUE),
-    grepl('"value":"3ff3ae147ae147ae"',before,fixed=TRUE),
-    grepl('"value":"4002cccccccccccd"',before,fixed=TRUE),
+    grepl(paste0('"value":"',host_truth[["raw_first_f64"]],'"'),before,fixed=TRUE),
+    grepl(paste0('"value":"',host_truth[["raw_second_f64"]],'"'),before,fixed=TRUE),
+    grepl(paste0('"value":"',host_truth[["produced_first_f64"]],'"'),before,fixed=TRUE),
+    grepl(paste0('"value":"',host_truth[["produced_second_f64"]],'"'),before,fixed=TRUE),
     grepl('"content":"ID,VALUE\\n1,1.23\\n2,2.35\\n"',before,fixed=TRUE),
     grepl('"content":"ID,VALUE\\n1,2.46\\n2,4.70\\n"',before,fixed=TRUE),
     grepl('"invoked":false',before,fixed=TRUE))
@@ -139,23 +127,23 @@ for(result in results) {
 cat("R public aliases, fresh activation, held rounded ingestion and deleted target refusal passed\n")
 
 work <- study()
-text <- sub("output: {path:","  - {name: ROOT_UNROUNDED, type: float, label: Root precision, derivation: {compute: {expr: 'VALUE + 0.004'}}}\noutput: {path:",consumer,fixed=TRUE)
-text <- sub("columns: [ID, VALUE], decimals: 2","columns: [ROOT_UNROUNDED, ID, VALUE], decimals: 2",text,fixed=TRUE)
+text <- sub("output: {path:",host_truth[["root_unrounded_column"]],consumer,fixed=TRUE)
+text <- sub("columns: [ID, VALUE], decimals: 2",host_truth[["root_unrounded_projection"]],text,fixed=TRUE)
 write(work,"consumer/root.yaml",text)
 result <- build(work)
-stopifnot(nrow(result$issues)==0L,identical(names(result$output),c("ROOT_UNROUNDED","ID","VALUE")),
+stopifnot(nrow(result$issues)==0L,identical(names(result$output),fixture_strings(host_truth[["root_unrounded_columns"]])),
   identical(result$output$ROOT_UNROUNDED,c(2.464,4.704)),
   grepl('"content":"ROOT_UNROUNDED,ID,VALUE\\n2.46,1,2.46\\n4.70,2,4.70\\n"',observe(result),fixed=TRUE))
 copy <- result$output; copy$VALUE <- copy$VALUE*10
 stopifnot(identical(result$output$VALUE,c(2.46,4.70)))
 dir.create(file.path(work,"generated"))
 before <- observe(result)
-unlink(file.path(work,c("producer","consumer","raw","env")),recursive=TRUE)
+unlink(file.path(work,fixture_strings(host_truth[["owned_directories"]])),recursive=TRUE)
 invisible(gc())
 for(index in 1:2) {
   stopifnot(isTRUE(result$save()),nrow(result$issues)==0L,
-    identical(readBin(file.path(work,"generated/producer.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,1.23\n2,2.35\n")),
-    identical(readBin(file.path(work,"generated/root.csv"),"raw",n=100),charToRaw("ROOT_UNROUNDED,ID,VALUE\n2.46,1,2.46\n4.70,2,4.70\n")),
+    identical(readBin(file.path(work,"generated/producer.csv"),"raw",n=100),fixture_bytes(host_truth[["produced_csv"]])),
+    identical(readBin(file.path(work,"generated/root.csv"),"raw",n=100),fixture_bytes(host_truth[["root_unrounded_csv"]])),
     grepl('"entered":[{"node":1,"published":true},{"node":0,"published":true}]',observe(result),fixed=TRUE),
     identical(result$output$ROOT_UNROUNDED,c(2.464,4.704)),
     identical(sub('"publication":.+?,"report_version":','"report_version":',observe(result),perl=TRUE),before))
@@ -165,18 +153,14 @@ stopifnot(identical(result$output$ROOT_UNROUNDED,c(2.464,4.704)))
 cat("R public unrounded root precision, projection order and copied views passed\n")
 
 work <- study()
-bridge <- paste0("schema_version: '1.0'\ndomain: TEST\nbase: FIRST\nkeys: [ID]\n",
-  "input: {FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}}\ncolumns:\n",
-  "  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}\n",
-  "  - {name: VALUE, type: float, label: Value, derivation: FIRST.VALUE}\n",
-  "output: {path: ../generated/left.csv, columns: [ID, VALUE], decimals: 2}\n")
+bridge <- host_truth[["retained_bridge_yaml"]]
 write(work,"bridge/left.yaml",bridge)
 write(work,"bridge/right.yaml",sub("generated/left.csv","generated/right.csv",sub("schema: ../producer/p.yaml","schema: ../producer/./p.yaml",bridge,fixed=TRUE),fixed=TRUE))
-text <- sub("../generated/producer.csv, schema: ../producer/p.yaml","../../generated/left.csv, schema: ../../bridge/left.yaml",sub(", no_match: null","",consumer,fixed=TRUE),fixed=TRUE)
-text <- sub("../generated/producer.csv, schema: ../producer/./p.yaml","../../generated/right.csv, schema: ../../bridge/right.yaml",text,fixed=TRUE)
+text <- sub("../generated/producer.csv, schema: ../producer/p.yaml",host_truth[["nested_left_reference"]],sub(", no_match: null","",consumer,fixed=TRUE),fixed=TRUE)
+text <- sub("../generated/producer.csv, schema: ../producer/./p.yaml",host_truth[["nested_right_reference"]],text,fixed=TRUE)
 text <- sub("path: ../generated/root.csv","path: ../../generated/root.csv",text,fixed=TRUE)
 write(work,"consumer/layers/base.yaml",text)
-write(work,"consumer/root.yaml","schema_version: '1.0'\nparents: [layers/base.yaml]\ndomain: ROOT\n")
+write(work,"consumer/root.yaml",host_truth[["root_parent_yaml"]])
 events <- character()
 result <- with_caps(verify,resolve,build(work))
 stopifnot(nrow(result$issues)==0L,identical(result$output$VALUE,c(2.46,4.70)),
@@ -184,14 +168,14 @@ stopifnot(nrow(result$issues)==0L,identical(result$output$VALUE,c(2.46,4.70)),
   identical(unlist(evidence(result)$entered),c(3,1,2,0)),!dir.exists(file.path(work,"generated")))
 dir.create(file.path(work,"generated"))
 before <- observe(result)
-unlink(file.path(work,c("producer","consumer","raw","env","bridge")),recursive=TRUE)
+unlink(file.path(work,fixture_strings(host_truth[["owned_bridge_directories"]])),recursive=TRUE)
 invisible(gc())
 for(index in 1:2) {
   stopifnot(isTRUE(result$save()),nrow(result$issues)==0L,
-    identical(readBin(file.path(work,"generated/producer.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,1.23\n2,2.35\n")),
-    identical(readBin(file.path(work,"generated/left.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,1.23\n2,2.35\n")),
-    identical(readBin(file.path(work,"generated/right.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,1.23\n2,2.35\n")),
-    identical(readBin(file.path(work,"generated/root.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,2.46\n2,4.70\n")),
+    identical(readBin(file.path(work,"generated/producer.csv"),"raw",n=100),fixture_bytes(host_truth[["produced_csv"]])),
+    identical(readBin(file.path(work,"generated/left.csv"),"raw",n=100),fixture_bytes(host_truth[["produced_csv"]])),
+    identical(readBin(file.path(work,"generated/right.csv"),"raw",n=100),fixture_bytes(host_truth[["produced_csv"]])),
+    identical(readBin(file.path(work,"generated/root.csv"),"raw",n=100),fixture_bytes(host_truth[["consumed_csv"]])),
     grepl('"entered":[{"node":3,"published":true},{"node":1,"published":true},{"node":2,"published":true},{"node":0,"published":true}]',observe(result),fixed=TRUE),
     identical(events,c("lock","bind","invoke:7.25","invoke:0","invoke:1.234","invoke:2.345")),
     identical(sub('"publication":.+?,"report_version":','"report_version":',observe(result),perl=TRUE),before))
@@ -206,7 +190,7 @@ bad <- gsub("args: {x:","args: {z:",bad,fixed=TRUE)
 bad <- sub("short-circuit-missing:x","short-circuit-missing:z",bad,fixed=TRUE)
 write(work,"env/bad.yaml",bad)
 write(work,"env/environment.yaml","schema_version: '1.0'\nlanguage: r\nlock: renv.lock\nfunctions: {id_float: float.yaml, bad: bad.yaml}\n")
-write(work,"consumer/root.yaml",sub("{compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}","{function: {name: bad, args: {z: FIRST_VALUE}}}",consumer,fixed=TRUE))
+write(work,"consumer/root.yaml",sub(host_truth[["sum_derivation"]],host_truth[["bad_derivation"]],consumer,fixed=TRUE))
 unlink(file.path(work,"raw"),recursive=TRUE)
 events <- character()
 failed <- with_caps(verify,resolve,build(work))
@@ -267,7 +251,7 @@ stopifnot(is.null(failed$output),identical(unlist(evidence(failed)$entered),1),
 cat("R public oversized host projection refuses beside the original rooted condition\n")
 
 work <- study()
-write(work,"consumer/root.yaml",paste0(consumer,"verifications:\n  - row_count: {min: 99}\n"))
+write(work,"consumer/root.yaml",paste0(consumer,host_truth[["fatal_row_count_yaml"]]))
 failed <- build(work)
 stopifnot(is.null(failed$output),identical(failed$issues$condition,"row_count_failed"),
   identical(unlist(evidence(failed)$entered),c(1,0)),
@@ -283,7 +267,7 @@ unlink(work,recursive=TRUE)
 cat("R public ingestion and late verification failures retain evidence without accepted root output\n")
 
 work <- study()
-write(work,"consumer/root.yaml",sub("schema: ../producer/p.yaml","schema: ../producer/p.yaml, types: {ID: str}",consumer,fixed=TRUE))
+write(work,"consumer/root.yaml",sub("schema: ../producer/p.yaml",host_truth[["incompatible_reference"]],consumer,fixed=TRUE))
 failed <- build(work)
 stopifnot(is.null(evidence(failed)),is.null(failed$output),"REQ-0523" %in% failed$issues$requirement)
 before <- preparation(failed)
@@ -305,7 +289,7 @@ work <- study()
 write(work,"producer/layers/base.yaml",sub("name: ID, type: int","name: ID, type: str",
   sub("ID: int","ID: str",producer,fixed=TRUE),fixed=TRUE))
 extra <- paste0(vapply(0:58,function(index) paste0("  - {name: EXTRA",index,
-  ", type: str, label: Extra value, derivation: {literal: null}}\n"),character(1)),collapse="")
+  host_truth[["extra_null_column_suffix"]]),character(1)),collapse="")
 names <- paste(c("ID","VALUE",paste0("EXTRA",0:58)),collapse=", ")
 text <- sub("output: {path:",paste0(extra,"output: {path:"),consumer,fixed=TRUE)
 text <- sub("name: ID, type: int","name: ID, type: str",text,fixed=TRUE)
@@ -330,10 +314,10 @@ cat("R public copy quota preserves accepted whole attempt and typed original ref
 # Text stays below the execution allowance, while IPC offsets and numeric
 # columns take the public copy beyond its 8 MiB byte cap.
 work <- study()
-extra <- paste0('  - {name: PAYLOAD, type: str, label: Payload, derivation: {literal: "',
+extra <- paste0(host_truth[["large_payload_column"]],
   strrep("x",2048),'"}}\n')
 text <- sub("output: {path:",paste0(extra,"output: {path:"),consumer,fixed=TRUE)
-text <- sub("columns: [ID, VALUE], decimals: 2","columns: [ID, VALUE, PAYLOAD], decimals: 2",text,fixed=TRUE)
+text <- sub("columns: [ID, VALUE], decimals: 2",host_truth[["payload_projection"]],text,fixed=TRUE)
 write(work,"consumer/root.yaml",text)
 write(work,"raw/raw.csv",paste0("ID,VALUE\n",paste0(1:4095,",1.234\n",collapse="")))
 result <- build(work)
@@ -390,7 +374,7 @@ save_failure <- function(failed) {
   stopifnot(identical(result$save(),FALSE),identical(evidence(result),built),identical(events,calls),
     identical(result$output$VALUE,c(2.46,4.70)),"REQ-0764" %in% result$issues$requirement,
     identical(readBin(target,"raw",n=100),charToRaw(if(failed=="producer") "previous producer bytes" else "previous consumer bytes")),
-    identical(readBin(file.path(work,"generated/producer.csv"),"raw",n=100),charToRaw(if(failed=="producer") "previous producer bytes" else "ID,VALUE\n1,1.23\n2,2.35\n")),
+    identical(readBin(file.path(work,"generated/producer.csv"),"raw",n=100),charToRaw(if(failed=="producer") "previous producer bytes" else host_truth[["produced_csv"]])),
     grepl(if(failed=="producer") '"entered":[{"node":1,"published":false}]' else '"entered":[{"node":1,"published":true},{"node":0,"published":false}]',observe(result),fixed=TRUE),
     length(list.files(dirname(target),pattern="[.]stage$",all.files=TRUE))==0L)
   Sys.chmod(readonly,if(.Platform$OS.type=="windows") "0666" else "0700")
@@ -425,8 +409,8 @@ if(Sys.info()[["sysname"]]=="Darwin") {
     stopifnot(!is.null(result$output),isTRUE(evidence(result)$accepted))
     if(name=="PRODUCER.csv" && sensitive) {
       stopifnot(isTRUE(result$save()),
-        identical(readBin(file.path(work,"generated/producer.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,1.23\n2,2.35\n")),
-        identical(readBin(file.path(work,"generated/PRODUCER.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,2.46\n2,4.70\n")))
+        identical(readBin(file.path(work,"generated/producer.csv"),"raw",n=100),fixture_bytes(host_truth[["produced_csv"]])),
+        identical(readBin(file.path(work,"generated/PRODUCER.csv"),"raw",n=100),fixture_bytes(host_truth[["consumed_csv"]])))
       unlink(list.files(file.path(work,"generated"),full.names=TRUE))
     } else stopifnot(identical(result$save(),FALSE),
       grepl('"entered":[]',observe(result),fixed=TRUE),
@@ -439,7 +423,7 @@ if(Sys.info()[["sysname"]]=="Darwin") {
 # Environment absence is a request fact, even beside malformed environment YAML.
 # Both Check and Build use the producer closure without activation authority.
 work <- study()
-write(work,"producer/layers/base.yaml",sub("{function: {name: id_float, args: {x: RAW.VALUE}}}","RAW.VALUE",producer,fixed=TRUE))
+write(work,"producer/layers/base.yaml",sub(host_truth[["identity_derivation"]],"RAW.VALUE",producer,fixed=TRUE))
 write(work,"env/environment.yaml","[")
 dir.create(file.path(work,"generated"))
 poison <- function(...) stop("absent environment entered host activation")
@@ -451,10 +435,10 @@ result <- with_caps(poison,poison,{
     !any(vapply(evidence(built)$sources,function(item) endsWith(rawToChar(item$name),"environment.yaml"),logical(1))))
   unlink(file.path(work,"raw/raw.csv"))
   stopifnot(nrow(yamaa_check(file.path(work,"consumer/root.yaml"))$issues)==0L)
-  unlink(file.path(work,c("consumer/root.yaml","producer/p.yaml","producer/layers/base.yaml")))
+  unlink(file.path(work,fixture_strings(host_truth[["retained_specification_files"]])))
   for(index in 1:2) stopifnot(isTRUE(built$save()),
-    identical(readBin(file.path(work,"generated/producer.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,1.23\n2,2.35\n")),
-    identical(readBin(file.path(work,"generated/root.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,2.46\n2,4.70\n")))
+    identical(readBin(file.path(work,"generated/producer.csv"),"raw",n=100),fixture_bytes(host_truth[["produced_csv"]])),
+    identical(readBin(file.path(work,"generated/root.csv"),"raw",n=100),fixture_bytes(host_truth[["consumed_csv"]])))
   built
 })
 unlink(work,recursive=TRUE)

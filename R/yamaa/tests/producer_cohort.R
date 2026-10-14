@@ -6,14 +6,18 @@ if(nzchar(rm_path)) invisible(file.symlink(rm_path,file.path(runtime_path,"rm"))
 Sys.setenv(PATH=runtime_path)
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 library(yamaa)
+host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
+  system.file("host-fixtures",package="yamaa",mustWork=TRUE)
+source(file.path(host_fixture_root,"reader.R"),local=TRUE)
+host_truth <- read_host_fixture(host_fixture_root,"producer-cohort")
 root <- system.file("project-original",package="yamaa",mustWork=TRUE)
-name <- "shared-producer-parquet"
+name <- host_truth[["case_name"]]
 work <- tempfile("producer-cohort-");dir.create(work)
 work <- normalizePath(work,winslash="/",mustWork=TRUE)
 case <- file.path(work,name);dir.create(case)
-for(input in c("seed.csv","producer.yaml","spec.yaml"))
+for(input in fixture_strings(host_truth[["source_files"]]))
   stopifnot(file.copy(file.path(root,name,input),file.path(case,input)))
-writeBin(charToRaw("version: '1.0'\n"),file.path(work,"yamaa-project.yaml"))
+writeBin(fixture_bytes(host_truth[["project_yaml"]]),file.path(work,"yamaa-project.yaml"))
 writeBin(charToRaw("schema_version: '1.0'\nlanguage: r\nlock: renv.lock\nfunctions: {}\n"),file.path(work,"environment.yaml"))
 stopifnot(file.copy(file.path(root,"schema-functions/r/renv.lock"),file.path(work,"renv.lock")))
 output <- Sys.getenv("YAMAA_PUBLIC_REPORT_DIR")
@@ -29,7 +33,7 @@ stopifnot(nrow(result$issues)==0L,identical(result$output$ID,"01"))
 before <- observe(result)
 writeBin(before,file.path(evidence,"before.json"))
 stopifnot(!file.exists(file.path(case,"produced.parquet")),!file.exists(file.path(case,"out.csv")))
-inputs <- file.path(case,c("seed.csv","producer.yaml","spec.yaml"))
+inputs <- file.path(case,fixture_strings(host_truth[["source_files"]]))
 stopifnot(unlink(inputs)==0L,!any(file.exists(inputs)))
 saved <- NULL
 for(attempt in 1:2) {
@@ -41,7 +45,7 @@ for(attempt in 1:2) {
     writeBin(bytes,file.path(directory,target))
     bytes
   })
-  stopifnot(identical(actual[[2L]],charToRaw("ID\n01\n")),
+  stopifnot(identical(actual[[2L]],fixture_bytes(host_truth[["output_csv"]])),
     identical(actual[[1L]][1:4],charToRaw("PAR1")),
     identical(tail(actual[[1L]],4L),charToRaw("PAR1")))
   if(!is.null(saved)) stopifnot(identical(actual,saved))
