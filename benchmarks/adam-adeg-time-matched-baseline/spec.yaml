@@ -1,0 +1,137 @@
+schema_version: "1.0"
+domain: ADEG
+keys: [STUDYID, USUBJID, PARAMCD, APERIOD, APERDAY, ATPTN]
+input:
+  ADEG_RAW:
+    path: input/adeg_raw.csv
+    types: {APERIOD: int, APERDAY: int, ATPTN: float, AVAL: float}
+
+output:
+  path: adeg.csv
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, APERIOD, APERDAY, ATPT, ATPTN,
+            AVAL, AVALU, ABLFL, BASE, CHG, BASETYPE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ADEG_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ADEG_RAW.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: ADEG_RAW.PARAMCD
+
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation: ADEG_RAW.PARAM
+
+  - name: APERIOD
+    type: int
+    label: Period
+    derivation: ADEG_RAW.APERIOD
+
+  - name: APERDAY
+    type: int
+    label: Analysis Nominal Period Day
+    derivation: ADEG_RAW.APERDAY
+
+  - name: ATPT
+    type: str
+    label: Analysis Time Point
+    derivation: ADEG_RAW.ATPT
+
+  - name: ATPTN
+    type: float
+    label: Analysis Time Point (N)
+    derivation: ADEG_RAW.ATPTN
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: ADEG_RAW.AVAL
+
+  - name: AVALU
+    type: str
+    label: Analysis Value Unit
+    derivation: ADEG_RAW.AVALU
+
+  # The period as text, for the baseline type below; not in the output.
+  - name: APERIODC
+    type: str
+    label: Period (C)
+    derivation: ADEG_RAW.APERIOD
+
+  # Day -1 of each period is that period's baseline day: every record on it
+  # is a baseline record, one per nominal time point.
+  - name: ABLFL
+    type: str
+    label: Baseline Record Flag
+    derivation:
+      case:
+        - when: "APERDAY = -1"
+          then: {literal: "Y"}
+    verifications:
+      allowed_values:
+        values: [Y]
+
+  # Time-matched: the baseline record of the same subject, parameter, period
+  # and nominal time. A time point the baseline day did not record has none,
+  # and nothing stands in for it.
+  - name: BASE
+    type: float
+    label: Baseline Value
+    derivation:
+      aggregate:
+        filter: "ABLFL = 'Y'"
+        group_by: [STUDYID, USUBJID, PARAMCD, APERIOD, ATPTN]
+        expr: "ONLY(AVAL)"
+
+  # No change on the baseline day itself.
+  - name: CHG
+    type: float
+    label: Change from Baseline
+    derivation:
+      case:
+        - when: "ABLFL IS NULL"
+          then:
+            compute:
+              expr: "AVAL - BASE"
+
+  # The key that pairs a time point with its baseline names the period too,
+  # so each baseline record has a baseline type of its own.
+  - name: BASETYPE
+    type: str
+    label: Baseline Type
+    derivation:
+      str_template: "Period {APERIODC} Baseline Day {ATPT}"
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD, APERIOD, APERDAY, ATPTN]
+  - row_count:
+      min: 17
+      max: 17
+  - row_count:
+      id: at-most-one-baseline-record-per-baseline-type
+      group_by: [STUDYID, USUBJID, PARAMCD, BASETYPE]
+      filter: "ABLFL = 'Y'"
+      max: 1
+  - assert:
+      id: baseline-record-is-its-own-baseline
+      when: "ABLFL = 'Y' AND AVAL IS NOT NULL"
+      require: "BASE = AVAL"
+  - assert:
+      id: no-change-on-the-baseline-day
+      when: "ABLFL = 'Y'"
+      require: "CHG IS NULL"
+  - assert:
+      id: no-change-without-a-baseline
+      when: "BASE IS NULL"
+      require: "CHG IS NULL"
