@@ -47,7 +47,7 @@ class TestNativeSchemaFacts(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             (directory / 'schema.yaml').write_text(
-                'version: 1.0\nroot_class: [{FLAG: {type: on}}]\n'
+                'version: "1.0"\nroot_class: [{FLAG: {type: on}}]\n'
                 'on: {type: str}\nyes: {type: str}\n')
             schema = SCHEMA.capture(directory)
             self.assertEqual(schema.validate(b'FLAG: hello\n', ['root_class'], False), [])
@@ -58,19 +58,19 @@ class TestNativeSchemaFacts(unittest.TestCase):
             directory.mkdir()
             outside = Path(temporary) / 'outside.yaml'
             outside.write_text('root_class: []\n')
-            (directory / 'schema.yaml').write_text('version: 1.0\nincludes: [child.yaml]\n')
-            (directory / 'child.yaml').symlink_to(outside)
+            (directory / 'schema.yaml').write_text('version: "1.0"\nincludes: [schema_child.yaml]\n')
+            (directory / 'schema_child.yaml').symlink_to(outside)
             with self.assertRaisesRegex(OSError, 'symbolic link'):
                 SCHEMA.capture(directory)
 
     def test_permission_failure_keeps_original_cause(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
-            (directory / 'schema.yaml').write_text('version: 1.0\nincludes: [child.yaml]\n')
-            (directory / 'child.yaml').write_text('root_class: []\n')
+            (directory / 'schema.yaml').write_text('version: "1.0"\nincludes: [schema_child.yaml]\n')
+            (directory / 'schema_child.yaml').write_text('root_class: []\n')
             original = Path.open
             def opened(path, *args, **kwargs):
-                if path.name == 'child.yaml':
+                if path.name == 'schema_child.yaml':
                     raise PermissionError('authored physical refusal')
                 return original(path, *args, **kwargs)
             with patch.object(Path, 'open', opened), self.assertRaisesRegex(
@@ -80,7 +80,7 @@ class TestNativeSchemaFacts(unittest.TestCase):
     def test_missing_include_is_native_admission_failure(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
-            (directory / 'schema.yaml').write_text('version: 1.0\nincludes: [child.yaml]\nroot_class: []\n')
+            (directory / 'schema.yaml').write_text('version: "1.0"\nincludes: [schema_child.yaml]\nroot_class: []\n')
             with self.assertRaisesRegex(ValueError, 'MissingInclude'):
                 SCHEMA.capture(directory)
 
