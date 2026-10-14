@@ -1,3 +1,8 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "en-US"
+
+tone_instructions: "Direct and specific. Solo maintainer: flag real bugs and contract breaks, skip style nits."
+
 reviews:
   profile: "chill"               # balanced; "assertive" reads as nitpicky
   request_changes_workflow: false # advisory for now; flip to true once its signal is trusted
@@ -5,31 +10,76 @@ reviews:
   poem: false
   review_status: true
   collapse_walkthrough: true
+  sequence_diagrams: false       # diagram noise on a data/engine repo; walkthrough text is the signal
   auto_review:
     enabled: true
-    drafts: true                 # review draft PRs too, for early feedback while a PR is still in draft
+    auto_incremental_review: true
+    drafts: true                 # review draft PRs too, for early feedback while a PR is still in draft (#2329)
     base_branches:
       - "main"
   path_filters:
     - "!**/uv.lock"              # generated lock diffs are noise
+    - "!**/Cargo.lock"           # same: canonical lockfile, packaging-tool checksums only
+    - "!benchmarks/**/input/**/*.parquet"
+    - "!benchmarks/**/expected/**/*.parquet" # binary fixtures; golden rules live in the path instructions
+  tools:
+    ruff:
+      enabled: true
+    shellcheck:
+      enabled: true
+    yamllint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    actionlint:
+      enabled: true
+    languagetool:
+      enabled: false              # grammar nits in comments/docs are noise for this repo
+    pylint:
+      enabled: false              # duplicates ruff, which CI already gates on
+    flake8:
+      enabled: false              # duplicates ruff, which CI already gates on
+  finishing_touches:
+    autofix:
+      enabled: true               # "@coderabbitai autofix" / Fix comments checkbox: fix unresolved findings on the branch or in a stacked PR
+    fix_ci:
+      enabled: true               # "@coderabbitai fix-ci": propose fixes for branch CI failures
+    unit_tests:
+      enabled: true
+    resolve_merge_conflict:
+      enabled: true
+    docstrings:
+      enabled: false              # docstrings where they help, not generated wholesale
+    simplify:
+      enabled: false
   pre_merge_checks:
     docstrings:
       mode: "off"                # docstrings where they help, not to a coverage figure; quoted, as bare off is a YAML boolean
+    title:
+      mode: "warning"
+    description:
+      mode: "warning"
   path_instructions:
+    - path: "rust/**"
+      instructions: "Core engine (crates: core, engine, adapters, python, r). Flag unsafe or unwrap/expect on untrusted data, silent error swallowing, and any reintroduction of content hashing (digest/SHA-256 as identity) — repo rule: identity is the canonical RFC 8785 JSON / artifact reference, never a hash; Cargo.lock and uv.lock checksums are packaging-tool exceptions. Tests must accompany behavior changes."
     - path: "python/**"
-      instructions: "Verify the change matches the PR description, tests are added for behavior changes, and no public API signatures break without intent."
+      instructions: "Verify the change matches the PR description, tests are added for behavior changes, and no public API signatures break without intent. Python bindings sit over the Rust core; flag semantics that diverge from the Rust implementation."
     - path: "R/**"
-      instructions: "Check R idioms and package conventions; verify roxygen docs and tests accompany behavior changes."
+      instructions: "Check R idioms and package conventions; verify roxygen docs and tests accompany behavior changes. R is being retired: do not propose new R features."
     - path: "automation/benchmark_factory/**"
       instructions: "Judge work against the factory docs: task-spec rules, proposer/judge protocols. Flag any change that would break Harbor checks (e.g. conventions.md prompt-tier line limits)."
     - path: "benchmarks/**"
-      instructions: "Pre-existing golden values must remain byte-identical unless the work item explicitly changes them; flag silent regressions."
+      instructions: "Pre-existing golden values must remain byte-identical unless the work item explicitly changes them; flag silent regressions. YAMAA-01 in input/ and expected/ is a CDISC STUDYID data value, not the project name — do not flag its capitalization. Label the benchmark runtime opensas."
     - path: "yaml/**"
       instructions: "Benchmark YAMLs must follow conventions.md (prompt-tier limits, criterion pair structure). Flag malformed or over-limit criteria."
     - path: "rules/**"
       instructions: "Rules files must stay consistent with the benchmarks they govern."
-
-tone_instructions: "Direct and specific. Solo maintainer: flag real bugs and contract breaks, skip style nits."
+    - path: ".github/workflows/**"
+      instructions: "Flag unpinned action versions, secrets in logs, and jobs without timeouts. Note: bot tokens cannot push workflow-file changes, so findings here are for the maintainer."
+    - path: "docs/**"
+      instructions: "The project name is written yamaa, never YAMAA, including in headings. docs/stylesheets/extra.css and .github/scripts/benchmark-docs/dashboard.css share one palette — flag a color or bar-treatment change in one without the other."
+    - path: "**"
+      instructions: "The project name is yamaa (lowercase, even at the start of a sentence). Do not flag YAMAA-01 STUDYID data values in benchmark fixtures."
 
 chat:
   auto_reply: false
@@ -37,4 +87,12 @@ chat:
 knowledge_base:
   opt_out: false
   learnings:
-    enabled: true                # adapts from maintainer feedback on its comments
+    scope: "local"               # repo-local learnings (the v2 schema has no learnings.enabled; scope is the control)
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "AGENTS.md"              # the repo conventions file, fed into reviews explicitly
+  issues:
+    scope: "local"
+  pull_requests:
+    scope: "local"
