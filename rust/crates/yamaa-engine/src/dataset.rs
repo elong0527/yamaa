@@ -133,6 +133,76 @@ pub struct Limits {
     pub identity_text_bytes: usize,
 }
 
+/// Caller-selected transport and evaluation policy for one dataset attempt.
+/// Adapters enforce byte/batch limits. The engine admits combined source shapes
+/// before cell reads. These are logical quotas, not process-memory guarantees.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ExecutionBudget {
+    pub max_sources: usize,
+    /// Aggregate encoded input bytes and aggregate decoded logical string bytes.
+    pub max_ipc_bytes: usize,
+    pub max_decoded_cells: usize,
+    pub max_columns: usize,
+    /// Aggregate input batches; also bounds the number of exported batches.
+    pub max_batches: usize,
+    pub max_output_bytes: usize,
+    /// None exports one batch; Some exports at most this many rows per batch.
+    pub batch_rows: Option<core::num::NonZeroUsize>,
+    pub execution: Limits,
+}
+
+impl ExecutionBudget {
+    /// Existing capacity policy for callers that do not select a larger budget.
+    pub const fn bounded() -> Self {
+        Self {
+            max_sources: 8,
+            max_ipc_bytes: 8 * 1024 * 1024,
+            max_decoded_cells: crate::capacity::SOURCE_CELLS,
+            max_columns: 64,
+            max_batches: 256,
+            max_output_bytes: 8 * 1024 * 1024,
+            batch_rows: None,
+            execution: Limits {
+                source_rows: crate::capacity::SOURCE_ROWS,
+                output_rows: crate::capacity::OUTPUT_ROWS,
+                output_cells: crate::capacity::OUTPUT_CELLS,
+                key_cells: crate::capacity::KEY_CELLS,
+                work_cells: crate::capacity::EXECUTION_WORK,
+                scalar_text_bytes: 16 * 1024 * 1024,
+                output_text_bytes: crate::capacity::OUTPUT_TEXT_BYTES,
+                identity_cells: crate::capacity::IDENTITY_CELLS,
+                identity_text_bytes: crate::capacity::IDENTITY_TEXT_BYTES,
+            },
+        }
+    }
+
+    /// Opt-in profile for ten million combined source and output records.
+    /// Wider/text-heavy domains or more expensive plans can adjust each field.
+    pub const fn longitudinal() -> Self {
+        let mut budget = Self::bounded();
+        budget.max_sources = 64;
+        budget.max_ipc_bytes = 1024 * 1024 * 1024;
+        budget.max_decoded_cells = 640_000_000;
+        budget.max_batches = 65_536;
+        budget.max_output_bytes = 1024 * 1024 * 1024;
+        budget.batch_rows = core::num::NonZeroUsize::new(65_536);
+        budget.execution.source_rows = 10_000_000;
+        budget.execution.output_rows = 10_000_000;
+        budget.execution.output_cells = 640_000_000;
+        budget.execution.key_cells = 640_000_000;
+        budget.execution.work_cells = 2_000_000_000;
+        budget.execution.scalar_text_bytes = 1024 * 1024 * 1024;
+        budget.execution.output_text_bytes = 512 * 1024 * 1024;
+        budget
+    }
+}
+
+impl Default for ExecutionBudget {
+    fn default() -> Self {
+        Self::bounded()
+    }
+}
+
 /// Cumulative resource failures are distinct from normative language conditions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Resource {
@@ -1007,6 +1077,21 @@ fn finish<E>(
 /// Application execution for an immutable core plan. Each call owns fresh run state.
 /// The core model itself contains no ports, callbacks, counters or execution methods.
 pub trait DatasetExecution {
+    /// Admit combined source shapes against the selected execution budget.
+    fn execute_with_budget<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        budget: ExecutionBudget,
+    ) -> ExecutionAttempt<T::Error>;
+    /// Budget-aware execution with explicitly activated callbacks.
+    fn execute_functions_with_budget<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        budget: ExecutionBudget,
+    ) -> ExecutionAttempt<T::Error>;
     /// Execute only the admitted scope, returning no accepted table on any failure.
     /// Source access errors remain errors. No undeclared handlers, callbacks, joins,
     /// file publication or fallback are implicit.
@@ -1080,6 +1165,31 @@ pub trait DatasetExecution {
     ) -> ExecutionAttempt<T::Error>;
 }
 impl DatasetExecution for DatasetPlan {
+    fn execute_with_budget<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        budget: ExecutionBudget,
+    ) -> ExecutionAttempt<T::Error> {
+        self.execute_functions_with_budget(table, secondary, &mut unavailable_functions(), budget)
+    }
+    fn execute_functions_with_budget<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        budget: ExecutionBudget,
+    ) -> ExecutionAttempt<T::Error> {
+        Executor { plan: self }.execute_scoped(
+            table,
+            secondary,
+            functions,
+            budget.execution,
+            &mut |_| {},
+            None,
+            Some(budget),
+        )
+    }
     fn execute<T: TableAccess + ?Sized>(
         &self,
         table: &T,
@@ -1126,6 +1236,7 @@ impl DatasetExecution for DatasetPlan {
             limits,
             &mut |_| {},
             Some(work),
+            None,
         )
     }
     fn execute_with_phase_observer<T: TableAccess + ?Sized>(
@@ -1155,6 +1266,7 @@ impl DatasetExecution for DatasetPlan {
             limits,
             observer,
             Some(work),
+            None,
         )
     }
     fn execute_with_execution_observer<T: TableAccess + ?Sized>(
@@ -1254,7 +1366,7 @@ impl Executor<'_> {
         limits: Limits,
         observer: &mut dyn FnMut(ExecutionEvent),
     ) -> ExecutionAttempt<T::Error> {
-        self.execute_scoped(table, secondary, functions, limits, observer, None)
+        self.execute_scoped(table, secondary, functions, limits, observer, None, None)
     }
     #[allow(clippy::too_many_arguments)]
     fn execute_scoped<T: TableAccess + ?Sized>(
@@ -1265,6 +1377,7 @@ impl Executor<'_> {
         limits: Limits,
         observer: &mut dyn FnMut(ExecutionEvent),
         work: Option<&crate::execution_work::WorkBudget>,
+        execution_budget: Option<ExecutionBudget>,
     ) -> ExecutionAttempt<T::Error> {
         let active = core::cell::Cell::new(ExecutionPhase::Admission);
         let mut observer = |event| {
@@ -1303,6 +1416,7 @@ impl Executor<'_> {
             &mut observations,
             &mut observer,
             work,
+            execution_budget,
         );
         if let Err(error) = &result {
             if let ExecutionError::Limit {
@@ -1345,6 +1459,7 @@ impl Executor<'_> {
         observations: &mut AttemptObservations,
         observer: &mut dyn FnMut(ExecutionEvent),
         work: Option<&crate::execution_work::WorkBudget>,
+        execution_budget: Option<ExecutionBudget>,
     ) -> Result<Execution, Box<ExecutionError<T::Error>>> {
         functions::admit_plan(self.plan, functions)?;
         if table.schema() != self.plan.source()
@@ -1355,6 +1470,33 @@ impl Executor<'_> {
                 .any(|(table, expected)| table.schema() != &expected.schema)
         {
             return Err(Box::new(ExecutionError::SchemaMismatch));
+        }
+        if let Some(budget) = execution_budget {
+            let cells = table
+                .row_count()
+                .checked_mul(table.schema().columns().len())
+                .and_then(|initial| {
+                    secondary.iter().try_fold(initial, |total, source| {
+                        total.checked_add(
+                            source
+                                .row_count()
+                                .checked_mul(source.schema().columns().len())?,
+                        )
+                    })
+                });
+            if secondary
+                .len()
+                .checked_add(1)
+                .is_none_or(|count| count > budget.max_sources)
+                || table.schema().columns().len() > budget.max_columns
+                || self.plan.output().columns().len() > budget.max_columns
+                || secondary
+                    .iter()
+                    .any(|source| source.schema().columns().len() > budget.max_columns)
+                || cells.is_none_or(|cells| cells > budget.max_decoded_cells)
+            {
+                return Err(Box::new(ExecutionError::Capacity));
+            }
         }
         let rows = secondary
             .iter()

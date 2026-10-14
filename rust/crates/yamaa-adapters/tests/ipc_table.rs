@@ -391,6 +391,92 @@ fn aliased_text_and_json_expansion_are_bounded() {
     assert!(table_round_trip(&input).is_ok());
 }
 
+/// Logical text must share one quota across chunks and across distinct sources,
+/// even when multiple field buffers alias the same small encoded body.
+#[test]
+fn configurable_text_quota_accumulates_across_batches_and_sources() {
+    use arrow_ipc::{Buffer as B, FieldNode as N};
+    use yamaa_adapters::ipc_table::{decode_snapshot_with_budget, snapshot_batches};
+    use yamaa_adapters::{execute_dataset_with_budget, ExecutionBudget};
+    use yamaa_core::{
+        table::{Column, TableSchema},
+        value::ColumnType,
+    };
+    use yamaa_engine::dataset::{
+        Assignment, DatasetPlan, Expression, RowMode, RowTemplate, SecondarySource,
+    };
+
+    let schema = Schema::new(vec![
+        Field::new("A", DataType::Utf8, true),
+        Field::new("B", DataType::Utf8, true),
+    ]);
+    let length = 4096_i32;
+    let mut body = vec![];
+    body.extend_from_slice(&0_i32.to_le_bytes());
+    body.extend_from_slice(&length.to_le_bytes());
+    body.resize(8 + length as usize, b'x');
+    let input = declared_stream(
+        &schema,
+        1,
+        &[N::new(1, 0); 2],
+        &[
+            B::new(0, 0),
+            B::new(0, 8),
+            B::new(8, i64::from(length)),
+            B::new(0, 0),
+            B::new(0, 8),
+            B::new(8, i64::from(length)),
+        ],
+        &body,
+        body.len() as i64,
+        false,
+    );
+    let budget = ExecutionBudget {
+        max_ipc_bytes: input.len() * 2,
+        ..ExecutionBudget::default()
+    };
+    assert!(budget.max_ipc_bytes < 4 * length as usize);
+    let source = decode_snapshot_with_budget(&input, budget).unwrap();
+    let logical = yamaa_core::table::TableAccess::schema(&source).clone();
+    let plan = DatasetPlan::new_with_sources(
+        logical.clone(),
+        vec![SecondarySource {
+            name: "DONOR".into(),
+            schema: logical,
+        }],
+        TableSchema::new(vec![Column {
+            name: "A".into(),
+            kind: ColumnType::Str,
+        }])
+        .unwrap(),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![Assignment {
+                column: 0,
+                expression: Expression::Source(0),
+                path: "columns.A".into(),
+            }],
+            filter: None,
+        }],
+        vec![],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    assert!(matches!(
+        execute_dataset_with_budget(&plan, &input, &[&input], budget),
+        Err(E::ShapeLimit)
+    ));
+
+    let record_start = 8 + u32::from_le_bytes(input[4..8].try_into().unwrap()) as usize;
+    let mut two_batches = input[..input.len() - 8].to_vec();
+    two_batches.extend_from_slice(&input[record_start..]);
+    let mut batches = snapshot_batches(&two_batches, budget).unwrap();
+    assert!(batches.next().unwrap().is_ok());
+    assert!(matches!(batches.next(), Some(Err(E::ShapeLimit))));
+    assert!(batches.next().is_none());
+}
+
 /// Validate UTF-8 and reject unsupported dictionaries, nesting and IPC versions.
 #[test]
 fn closed_stream_forms_and_utf8_are_enforced() {
