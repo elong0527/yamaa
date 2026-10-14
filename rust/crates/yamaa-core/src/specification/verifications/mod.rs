@@ -2,7 +2,6 @@
 //! executes only after derivation and output keys; unsupported vocabulary is
 //! scanned across every declaration before any source request.
 use super::*;
-#[path = "specification_verification_lookup.rs"]
 mod lookups;
 use crate::dataset::{Check, CountBoundError, RowCount, RowCountBound, Verification};
 use crate::{

@@ -2,7 +2,6 @@
 use alloc::{collections::BTreeMap, string::String, vec};
 
 use crate::value::ColumnType;
-#[path = "reference_joined_binding.rs"]
 mod joined_binding;
 pub use joined_binding::JoinedFinding;
 

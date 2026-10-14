@@ -15,7 +15,7 @@
       "kind": "reference_invariant",
       "phases": ["derivation"],
       "reason": "The reference executor checked mutable candidate dictionaries and completed-column sets. Those Python objects and extension hooks are retired. Complete typed output schema, dependency admission and original output truth remain required; this is not permission to produce incomplete rows.",
-      "owners": ["rust/crates/yamaa-core/src/dataset.rs", "rust/crates/yamaa-core/src/table.rs"],
+      "owners": ["rust/crates/yamaa-core/src/dataset/mod.rs", "rust/crates/yamaa-core/src/table.rs"],
       "controls": ["rust/crates/yamaa-core/tests/dataset_model.rs", "rust/crates/yamaa-engine/tests/dataset.rs", "rust/tests/installed_original_specifications.py"],
       "producer": null,
       "history": "845a91ff9ba4ab6599efbd79fafe1c4e1dd14255:python/src/yamaa/runtime/executor.py; retirement map and scope authority retained at 43bb4437d9c0890ec7877ec7575a517c771a8147."
@@ -60,7 +60,7 @@
       "kind": "reference_invariant",
       "phases": ["derivation"],
       "reason": "This reference-executor guard protected mutable candidate/column-enrichment lengths. Those Python planner/model objects retire; typed row construction, completed dependencies, cardinality and independent output ordering/count assertions remain required.",
-      "owners": ["rust/crates/yamaa-core/src/dataset.rs", "rust/crates/yamaa-core/src/dataset_row_stages.rs"],
+      "owners": ["rust/crates/yamaa-core/src/dataset/mod.rs", "rust/crates/yamaa-core/src/dataset/row_stages.rs"],
       "controls": ["rust/crates/yamaa-core/tests/dataset_model.rs", "rust/crates/yamaa-engine/tests/row_derivations.rs", "rust/tests/installed_original_specifications.py"],
       "producer": null,
       "history": "845a91ff9ba4ab6599efbd79fafe1c4e1dd14255:python/tests/runtime/test_executor.py:test_column_enrichment_keeps_the_constructed_row_count; assertion replacement map at 43bb4437d9c0890ec7877ec7575a517c771a8147."

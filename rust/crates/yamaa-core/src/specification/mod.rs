@@ -16,91 +16,51 @@ use crate::{
 };
 use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
 
-#[path = "specification_binding_diagnostics.rs"]
 mod binding_diagnostics;
-#[path = "specification_intermediate_admission.rs"]
 mod intermediate_admission;
-#[path = "specification_intermediate_derivations.rs"]
 mod intermediate_derivations;
-#[path = "specification_intermediate_range.rs"]
 mod intermediate_range;
-#[path = "specification_intermediate_sources.rs"]
 mod intermediate_sources;
-#[path = "specification_intermediates.rs"]
 mod intermediates;
-#[path = "specification_lookup_diagnostics.rs"]
 mod lookup_diagnostics;
-#[path = "specification_match_values.rs"]
 mod match_values;
-#[path = "specification_relation_predicate.rs"]
 mod relation_predicates;
-#[path = "specification_static_checks.rs"]
 mod static_checks;
 pub use lookup_diagnostics::LookupFinding;
 use lookup_diagnostics::ReferenceCause;
-#[path = "specification_output_diagnostics.rs"]
 mod output_diagnostics;
-#[path = "specification_preflight_diagnostics.rs"]
 mod preflight_diagnostics;
-#[path = "specification_root_filter.rs"]
 mod root_filter;
-#[path = "specification_sources.rs"]
 mod source_expressions;
 pub use source_expressions::SourceFinding;
-#[path = "specification_column_checks.rs"]
 mod column_checks;
-#[path = "specification_logs.rs"]
 mod logs;
-#[path = "specification_row_drivers.rs"]
 mod row_drivers;
-#[path = "specification_row_intermediates.rs"]
 mod row_intermediates;
-#[path = "specification_rows.rs"]
 mod rows;
-#[path = "specification_self.rs"]
 mod self_relations;
-#[path = "specification_verifications.rs"]
 mod verifications;
 pub use logs::{LogFinding, OutputLogs};
-#[path = "specification_windows.rs"]
 mod windows;
 pub use windows::WindowFinding;
-#[path = "specification_functions.rs"]
 mod functions;
 pub use functions::{Cause as FunctionCause, FunctionFinding};
-#[path = "specification_aggregate.rs"]
 mod aggregates;
-#[path = "specification_case_predicates.rs"]
 mod case_predicates;
-#[path = "specification_cases.rs"]
 mod cases;
-#[path = "specification_derivations.rs"]
 mod derivations;
-#[path = "specification_flag.rs"]
 mod flags;
-#[path = "specification_temporal_imputation.rs"]
 mod imputation;
-#[path = "specification_mapping.rs"]
 mod mapping_cut;
-#[path = "specification_odm.rs"]
 mod odm;
-#[path = "specification_rounding.rs"]
 mod rounding;
-#[path = "specification_scalar.rs"]
 mod scalar;
-#[path = "specification_str_case.rs"]
 mod str_case;
-#[path = "specification_str_extract.rs"]
 mod str_extract;
-#[path = "specification_str_pad.rs"]
 mod str_pad;
-#[path = "specification_str_template.rs"]
 mod str_template;
-#[path = "specification_submission.rs"]
 mod submission;
-#[path = "specification_temporal.rs"]
 mod temporal;
-#[path = "specification_terminology.rs"]
 mod terminology;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -2242,5 +2202,4 @@ fn output_profile(path: &str) -> Option<&'static str> {
     }
 }
 
-#[path = "specification_metadata.rs"]
 mod metadata;
