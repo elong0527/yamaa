@@ -108,6 +108,34 @@ def test_comment_or_pi_inside_value_does_not_truncate_it(
     assert [row.value for row in rows] == ["PD-L1", ""]
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        "<Value>PD<Sub>L1</Sub></Value>",
+        '<Value>PD<x:B xmlns:x="urn:example">-MID-</x:B>L1</Value>',
+        "<Value>PD<Value>inner</Value>-L1</Value>",
+    ],
+)
+def test_element_child_inside_value_is_rejected_not_truncated(
+    tmp_path: Path, value: str
+) -> None:
+    # `Value` holds text, not markup. An element child is released at its
+    # own end event before the value is read, so without an explicit check
+    # the reader silently kept only the text before the element ('PD')
+    # instead of failing on the unsupported layout.
+    source = tmp_path / "element-value.xml"
+    source.write_text(
+        ODM_20.replace(
+            '<ItemData ItemOID="I.TEST"><Value>PD-L1</Value></ItemData>',
+            f'<ItemData ItemOID="I.TEST">{value}</ItemData>',
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ODMError, match="Value contains child elements"):
+        list(iter_odm_records(source))
+
+
 @pytest.mark.parametrize("annotation", ["<!-- c -->", "<?pi data?>"])
 def test_comment_or_pi_inside_item_data_is_ignored(
     tmp_path: Path, annotation: str
