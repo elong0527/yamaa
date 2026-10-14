@@ -112,7 +112,10 @@ def adapter_source_violations(source, identity):
         errors.append(f"{identity}: imported core semantic calls must delegate to the engine")
     if re.search(r"\.\s*(?:validate_header|validate_output|validate_document|validate_descriptor|validate_types|parse_query_types|compile_bundle)\s*\(", source):
         errors.append(f"{identity}: adapter semantic methods must delegate to the engine")
-    if re.search(r'\b(?:pub\s+)?mod\s+[A-Za-z_]+_transport\s*;',source):
+    # The current dataset bridge takes an engine-owned typed plan and IPC bytes;
+    # it does not restore the retired dataset/1 JSON request protocol.
+    transports = re.findall(r"\b(?:pub\s+)?mod\s+([A-Za-z_]+_transport)\s*;", source)
+    if any(name != "dataset_transport" for name in transports) or '"dataset/1"' in source:
         errors.append(f"{identity}: retired component request protocols must not return")
     return errors
 

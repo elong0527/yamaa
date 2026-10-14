@@ -160,10 +160,34 @@ class AdapterSourceBoundaries(unittest.TestCase):
             "use yamaa_core::{numeric_parser::{parse_numeric as parse}}; parse(input, limits);",
             "use yamaa_core::regex::Pattern as Regex; Regex::compile(input, limits);",
             "use yamaa_core::schema::SchemaStructure; schema.validate_document(input, limits);",
-            "pub mod dataset_transport;",
         ):
             with self.subTest(source=source):
                 self.assertTrue(guard.adapter_source_violations(source, "fixture.rs"))
+
+    def test_typed_dataset_ipc_bridge_is_permitted(self):
+        source = """
+pub mod dataset_transport;
+pub use dataset_transport::execute_dataset_with_budget;
+pub use yamaa_engine::dataset::ExecutionBudget;
+"""
+        self.assertEqual(guard.adapter_source_violations(source, "fixture.rs"), [])
+
+    def test_retired_request_transports_are_rejected(self):
+        for source in (
+            "pub mod numeric_transport;",
+            "mod schema_transport;",
+            "pub mod function_transport;",
+            "pub mod dataset_transport; mod predicate_transport;",
+            'const PROTOCOL: &str = "dataset/1";',
+        ):
+            with self.subTest(source=source):
+                self.assertIn(
+                    "fixture.rs: retired component request protocols must not return",
+                    guard.adapter_source_violations(source, "fixture.rs"),
+                )
+
+    def test_current_workspace_sources_respect_architecture_boundaries(self):
+        self.assertEqual(guard.source_violations(guard.WORKSPACE), [])
 
     def test_engine_use_cases_codec_parsing_values_and_diagnostics_are_permitted(self):
         source = """
