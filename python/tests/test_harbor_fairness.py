@@ -363,7 +363,7 @@ def test_declared_measurement_columns_scale_only_for_their_benchmark(tmp_path):
     assert changes == [{"file": "advs.csv", "columns": {"AVAL": 8}}]
     _, rows = grade.read_rows(staged / "advs.csv")
     _, originals = grade.read_rows(source / "advs.csv")
-    for before, after in zip(originals, rows):
+    for before, after in zip(originals, rows, strict=True):
         assert after["USUBJID"] == before["USUBJID"]
         if before["AVAL"] == "":
             assert after["AVAL"] == ""
