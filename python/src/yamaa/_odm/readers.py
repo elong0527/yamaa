@@ -81,7 +81,7 @@ def _safe_member_name(name: str) -> bool:
 
 def _is_os_metadata(name: str) -> bool:
     path = PurePosixPath(name)
-    return path.name.startswith("._") or "__MACOSX__" in path.parts
+    return path.name.startswith("._") or "__MACOSX" in path.parts
 
 
 def _bounded_archive_members(

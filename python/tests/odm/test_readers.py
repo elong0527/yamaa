@@ -294,6 +294,26 @@ def test_archive_with_one_xml_member_is_selected_automatically(
     assert [row.item_oid for row in rows] == ["I.TEST", "I.RESULT"]
 
 
+def test_archive_ignores_macosx_metadata_member(tmp_path: Path) -> None:
+    # macOS archive tools stash resource-fork metadata under a top-level
+    # __MACOSX directory; an XML member there is OS metadata, not a second
+    # study document, so it must not count against the one-XML rule. The
+    # folder name is __MACOSX (no trailing underscores).
+    archive_path = tmp_path / "odm-macosx.tar.gz"
+    payload = ODM_20.encode()
+    with tarfile.open(archive_path, "w:gz") as archive:
+        info = tarfile.TarInfo("study/odm.xml")
+        info.size = len(payload)
+        archive.addfile(info, io.BytesIO(payload))
+        metadata = b"not xml"
+        metadata_info = tarfile.TarInfo("__MACOSX/study/odm.xml")
+        metadata_info.size = len(metadata)
+        archive.addfile(metadata_info, io.BytesIO(metadata))
+
+    rows = list(iter_odm_records(archive_path))
+    assert [row.item_oid for row in rows] == ["I.TEST", "I.RESULT"]
+
+
 def test_archive_member_selects_one_of_multiple_xml_files(tmp_path: Path) -> None:
     archive_path = tmp_path / "multiple.tar.gz"
     payload = ODM_20.encode()
