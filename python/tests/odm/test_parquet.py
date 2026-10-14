@@ -34,6 +34,22 @@ def test_writer_publishes_one_parquet_file(odm13_path: Path, tmp_path: Path) -> 
     assert metadata["yamaa.row_count"] == "3"
 
 
+@pytest.mark.parametrize("batch_size", [1.5, 2.0, "10", None, True])
+def test_writer_rejects_non_integer_batch_size(
+    odm13_path: Path, tmp_path: Path, batch_size: object
+) -> None:
+    # A float batch_size never equals len(batch), so every row accumulated
+    # into one unbounded in-memory batch; strings and None leaked a raw
+    # TypeError from the `< 1` comparison instead of an ODMError, and True
+    # was silently accepted as 1.
+    output = tmp_path / "out.parquet"
+
+    with pytest.raises(ODMError, match="batch_size must be a positive integer"):
+        write_odm_parquet(odm13_path, output, batch_size=batch_size)  # type: ignore[arg-type]
+
+    assert not output.exists()
+
+
 def test_writer_projects_two_groups_into_same_schema(
     odm20_path: Path, tmp_path: Path
 ) -> None:

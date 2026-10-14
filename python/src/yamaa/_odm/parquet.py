@@ -50,6 +50,8 @@ def write_odm_parquet(
         raise ODMError("source and output paths must be different")
     if output_path.exists() and not overwrite:
         raise FileExistsError(output_path)
+    if isinstance(batch_size, bool) or not isinstance(batch_size, int):
+        raise ODMError("batch_size must be a positive integer")
     if batch_size < 1:
         raise ODMError("batch_size must be at least 1")
     if compression not in _PARQUET_COMPRESSIONS:
