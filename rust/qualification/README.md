@@ -37,9 +37,11 @@ python -I rust/tests/public_conformance.py --plan /tmp/public-plan --fixtures be
   --python-lock python/uv.lock --output /tmp/public-python --source-revision REVISION
 Rscript --vanilla rust/tests/public_conformance.R /tmp/public-plan benchmarks /tmp/public-r REVISION
 python -I rust/tools/public_conformance.py compare --fixtures benchmarks \
-  --observed /tmp/public-python --output /tmp/public-python/inventory.json
+  --observed /tmp/public-python --output /tmp/public-python/inventory.json \
+  --ratchet rust/qualification/public-conformance.json
 python -I rust/tools/public_conformance.py compare --fixtures benchmarks \
-  --observed /tmp/public-r --output /tmp/public-r/inventory.json
+  --observed /tmp/public-r --output /tmp/public-r/inventory.json \
+  --ratchet rust/qualification/public-conformance.json
 ```
 
 Use absolute script, fixture and lock paths when running outside the checkout.
@@ -49,8 +51,8 @@ the R runner needs base R and the installed package.
 `tools/seed_public_conformance.py` derives passing observations from successful full
 matrix runs. It replays saved observations against expected files, requires
 every platform/interpreter/package tuple from the same revision and refuses
-reductions when given `--previous`. Add
-`--ratchet rust/qualification/public-conformance.json` to each comparison to require
+reductions when given `--previous`. The comparison commands above use
+`--ratchet rust/qualification/public-conformance.json` to require
 every current active case to pass on that host, including a newly added directory
 absent from earlier observations. The prior observations identify new passes;
 they do not act as an executable/runtime registry. Expected data remains unchanged.
