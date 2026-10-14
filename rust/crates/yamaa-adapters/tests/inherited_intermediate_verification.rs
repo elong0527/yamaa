@@ -84,3 +84,34 @@ fn assertion_only_intermediate_keeps_its_filtered_records_and_blocks_failed_publ
         }
     }
 }
+
+#[test]
+fn empty_intermediate_verifications_do_not_keep_an_unread_lookup_or_input_live() {
+    for verifications in ["", "    verifications: []\n"] {
+        let fixture = Fixture::new();
+        fs::write(fixture.0.join("obs.csv"), "ID\n1\n2\n").unwrap();
+        fs::write(
+            fixture.0.join("parent.yaml"),
+            format!(
+                "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\nbase: OBS\ninput: {{OBS: obs.csv, UNUSED: absent.csv}}\noutput: {{path: result.csv, columns: [ID]}}\nintermediates:\n  - id: UNREAD\n    dataset: UNUSED\n{verifications}columns:\n  - {{name: ID, type: str, derivation: OBS.ID}}\n"
+            ),
+        ).unwrap();
+        fs::write(
+            fixture.0.join("child.yaml"),
+            "schema_version: '1.0'\nparents: parent.yaml\n",
+        )
+        .unwrap();
+        let mut result = fixture.build("child.yaml");
+        assert!(
+            result.issues().is_empty(),
+            "{verifications:?}: {:?}",
+            result.issues()
+        );
+        assert!(result.save().unwrap());
+        assert_eq!(
+            fs::read_to_string(fixture.0.join("result.csv")).unwrap(),
+            "ID\n1\n2\n"
+        );
+        assert!(!fixture.0.join("absent.csv").exists());
+    }
+}

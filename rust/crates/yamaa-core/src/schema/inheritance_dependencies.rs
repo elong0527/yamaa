@@ -275,7 +275,10 @@ impl<'a> Run<'a, '_> {
         }
         for i in 0..self.intermediates.len() {
             let intermediate = self.intermediates[i];
-            if self.field(intermediate.node, "verifications")?.is_some() {
+            let has_assertion = self.field(intermediate.node, "verifications")?.is_some_and(
+                |node| matches!(&self.input.nodes()[node], N::Sequence(items) if !items.is_empty()),
+            );
+            if has_assertion {
                 add(&mut self.live_intermediates, intermediate.name, self.budget)?;
             }
         }
