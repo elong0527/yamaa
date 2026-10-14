@@ -227,7 +227,15 @@ fn bounded_column_width_admits_1024_and_refuses_1025_before_cell_reads() {
             );
             assert_eq!(source.reads.get(), 1_024);
         } else {
-            assert!(matches!(*result.unwrap_err(), ExecutionError::Limit { .. }));
+            assert_eq!(
+                *result.unwrap_err(),
+                ExecutionError::SourceLimit {
+                    resource: Resource::SourceColumns,
+                    limit: 1_024,
+                    required: Some(1_025),
+                    source_index: 0,
+                }
+            );
             assert_eq!(source.reads.get(), 0);
         }
     }
@@ -260,7 +268,14 @@ fn explicitly_selected_bounded_profile_still_refuses_its_original_cell_frontier(
     let result = plan(&source, 0)
         .execute_with_budget(&source, &[], ExecutionBudget::bounded())
         .result;
-    assert!(matches!(*result.unwrap_err(), ExecutionError::Capacity));
+    assert_eq!(
+        *result.unwrap_err(),
+        ExecutionError::Limit {
+            resource: Resource::SourceCells,
+            limit: 2_097_152,
+            required: Some(2_098_176),
+        }
+    );
     assert_eq!(source.reads.get(), 0);
 }
 
