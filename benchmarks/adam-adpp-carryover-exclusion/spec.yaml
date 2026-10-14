@@ -1,0 +1,114 @@
+schema_version: "1.0"
+domain: ADPP
+keys: [STUDYID, USUBJID, VISITNUM, PARAMCD]
+input:
+  PP: {path: input/pp.csv, types: {PPSTRESN: float, VISITNUM: int}}
+  PC: {path: input/pc.csv, types: {PCSTRESN: float}}
+base: PP
+
+output:
+  path: adpp.csv
+  columns: [STUDYID, USUBJID, VISITNUM, VISIT, PARAMCD, PARAM, AVAL, PRECONC,
+            PREPCMAX, ANL01FL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: PP.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: PP.USUBJID
+
+  - name: VISITNUM
+    type: int
+    label: Visit Number
+    derivation: PP.VISITNUM
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+    derivation: PP.VISIT
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: PP.PPTESTCD
+
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation: PP.PPTEST
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: PP.PPSTRESN
+
+  # The period's pre-dose sample is the PC record planned at PREDOSE that
+  # shares the parameter's reference dose time (the SDTMIG PP-to-PC link). A
+  # below-limit result counts as 0; a sample not done, or a period without a
+  # pre-dose sample, gives no value. ONLY() stops the run on a second
+  # pre-dose sample in one period.
+
+  - name: PRECONC
+    type: float
+    label: Pre-Dose Concentration of the Period
+    derivation:
+      aggregate:
+        key: {STUDYID: PP.STUDYID, USUBJID: PP.USUBJID, PCRFTDTC: PP.PPRFTDTC}
+        filter: "PC.PCTPT = 'PREDOSE'"
+        derive:
+          - name: PREVAL
+            type: float
+            derivation:
+              case:
+                - when: "PC.PCSTRESC LIKE '<%'"
+                  then: {literal: 0}
+                - otherwise: PC.PCSTRESN
+        expr: "ONLY(PREVAL)"
+
+  # The same subject's Cmax in the same period; not an output column.
+  - name: CMAXPER
+    type: float
+    label: Maximum Concentration of the Period
+    derivation:
+      aggregate:
+        key: {STUDYID: PP.STUDYID, USUBJID: PP.USUBJID, PPRFTDTC: PP.PPRFTDTC}
+        filter: "PP.PPTESTCD = 'CMAX'"
+        expr: "ONLY(PP.PPSTRESN)"
+
+  - name: PREPCMAX
+    type: float
+    label: Pre-Dose Concentration as Percent of Cmax
+    derivation:
+      compute:
+        expr: "100 * PRECONC / NULLIF(CMAXPER, 0)"
+
+  # A period is left out only when its percentage is known and above 5:
+  # exactly 5 stays in, and a period without a percentage keeps Y.
+  - name: ANL01FL
+    type: str
+    label: Analysis Flag 01
+    derivation:
+      flag: "PREPCMAX IS NULL OR PREPCMAX <= 5"
+    verifications:
+      allowed_values:
+        values: [Y]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, VISITNUM, PARAMCD]
+  - row_count:
+      min: 20
+      max: 20
+  - assert:
+      id: percentage-needs-a-pre-dose-result
+      when: "PRECONC IS NULL"
+      require: "PREPCMAX IS NULL"
+  - assert:
+      id: excluded-period-is-above-five-percent
+      when: "ANL01FL IS NULL"
+      require: "PREPCMAX > 5"
