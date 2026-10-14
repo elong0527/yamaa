@@ -174,7 +174,10 @@ independently bound original artifact segments. No individual case distribution
 is split across runners. The auditor rejects unexpected, overlapping, duplicate
 or missing segments/cases; the required counts remain 567 candidate cells and
 504 prior lifecycle/root-Build comparator cells.
-Before collection, every R job uses pinned jsonlite 2.0.0 in its actual private
+Before any long producer starts, three OS-specific engine-free R preflights must
+pass their original checkpoint/PID controls. A platform refusal blocks collection
+and retains its original controls and partial bootstrap bytes. Every actual R
+producer also runs its own preflight, using pinned jsonlite 2.0.0 in its actual private
 library to require the focused checkpoint byte/failure controls with zero skips.
 It also proves that the plain R4.6.1 worker PID equals the RSS broker child,
 touches 64MiB of pages, preserves its authored nonzero exit and observes at least
@@ -194,6 +197,9 @@ Trusted qualification pushes retain unchanged original Actions ZIP bytes in a
 new unpublished run/attempt evidence draft and verify authenticated retrieval.
 This storage extends beyond 90-day Actions expiry. It never publishes a release,
 creates a Git tag, replaces an asset, or approves a budget.
+The serial original-storage job allows the hosted maximum 360 minutes for
+download, upload and independent byte retrieval of every ZIP; this is transfer
+headroom rather than a proven wall bound or numeric performance threshold.
 
 `performance-replay.yml` runs after the trusted characterization completes. It
 keeps the original in-progress `run.json` unchanged and adds a separately fetched

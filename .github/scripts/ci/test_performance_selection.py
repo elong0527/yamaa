@@ -7,6 +7,24 @@ from pathlib import Path
 
 
 class PerformanceSelection(unittest.TestCase):
+    def test_all_long_producers_wait_for_original_three_platform_r_preflight(self):
+        root = Path(__file__).resolve().parents[3]
+        source = (root / ".github/workflows/performance.yml").read_text()
+        preflight = re.search(r"(?ms)^  r_preflight:\n(.*?)(?=^  \S|\Z)", source).group(1)
+        self.assertIn("os: [ubuntu-24.04, macos-15, windows-latest]", preflight)
+        self.assertIn("r-version: '4.6.1'", preflight)
+        self.assertIn("R_LIBS: ${{ runner.temp }}/performance-r-preflight-library", preflight)
+        self.assertIn("--no-emit-project", preflight)
+        self.assertIn("jsonlite/tar.gz/refs/tags/2.0.0", preflight)
+        self.assertIn("not result.skipped", preflight)
+        self.assertIn("rust/tools/check_r_child_peak_rss.py", preflight)
+        self.assertNotIn("cargo ", preflight)
+        self.assertNotIn("candidate-distribution", preflight)
+        for host in ("python", "r"):
+            job = re.search(rf"(?ms)^  {host}:\n(.*?)(?=^  \S|\Z)", source).group(1)
+            self.assertIn("needs: [native, r_preflight]", job)
+        retain = re.search(r"(?ms)^  retain:\n(.*?)(?=^  \S|\Z)", source).group(1)
+        self.assertIn("timeout-minutes: 360", retain)
     def test_r_dimension_jobs_keep_all_sizes_and_complete_case_distributions(self):
         root = Path(__file__).resolve().parents[3]
         source = (root / ".github/workflows/performance.yml").read_text()
@@ -59,7 +77,7 @@ class PerformanceSelection(unittest.TestCase):
         root = Path(__file__).resolve().parents[3]
         campaign = (root / ".github/workflows/performance.yml").read_text()
         self.assertNotRegex(campaign, r"(?m)^  audit:")
-        self.assertIn("needs: [native, python, r, index]", campaign)
+        self.assertIn("needs: [native, r_preflight, python, r, index]", campaign)
         replay = (root / ".github/workflows/performance-replay.yml").read_text()
         push = re.search(r"(?ms)^  push:\n(.*?)(?=^  \S|\Z)", replay).group(1)
         self.assertIn("branches: [evidence/issue-1998-replay]", push)

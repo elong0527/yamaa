@@ -101,8 +101,111 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
-  python:
+  r_preflight:
     needs: native
+    name: performance-r-preflight (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: '4.6.1'
+          rtools-version: ${{ runner.os == 'Windows' && '45' || '' }}
+          use-public-rspm: true
+      - name: Install locked engine-free readers and the exact private JSON codec
+        env:
+          R_LIBS: ${{ runner.temp }}/performance-r-preflight-library
+        run: |
+          python -m pip install uv==0.11.6
+          uv export --project python --locked --extra test --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/requirements.txt"
+          python -m pip install --no-deps -r "${RUNNER_TEMP}/requirements.txt"
+          python - <<'PY'
+          import json, os, tarfile, urllib.request
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          library=root/'performance-r-preflight-library'
+          library.mkdir()
+          codec=root/'jsonlite_2.0.0.tar.gz'
+          with urllib.request.urlopen('https://codeload.github.com/cran/jsonlite/tar.gz/refs/tags/2.0.0') as original:
+              codec.write_bytes(original.read())
+          with tarfile.open(codec) as original:
+              original.extractall(root/'codec-source', filter='data')
+          with open(os.environ['GITHUB_ENV'],'a') as env:
+              env.write('R_LIBS='+str(library)+'\n')
+          record={'scope':'authored platform R checkpoint/PID controls before long collection; no SDK or timing samples',
+                  'repository':os.environ['GITHUB_REPOSITORY'],'source_revision':os.environ['GITHUB_SHA'],
+                  'run_id':int(os.environ['GITHUB_RUN_ID']),'run_attempt':int(os.environ['GITHUB_RUN_ATTEMPT']),
+                  'os':os.environ['RUNNER_OS'],'jsonlite_version':'2.0.0','runtime_version':'4.6.1',
+                  'private_library':str(library),'accepted':False}
+          (root/'r-platform-preflight.json').write_text(json.dumps(record,indent=2)+'\n')
+          PY
+          R CMD INSTALL --library="${R_LIBS}" "${RUNNER_TEMP}/codec-source/jsonlite-2.0.0" 2>&1 | tee "${RUNNER_TEMP}/jsonlite-install.log"
+      - name: Require actual R checkpoint bytes and original failure ordering without skips
+        id: views
+        run: |
+          python - <<'PY' 2>&1 | tee "${RUNNER_TEMP}/r-retention-controls.log"
+          import json, os, shutil, subprocess, sys, unittest
+          from pathlib import Path
+          executable=shutil.which('Rscript')
+          record={'scope':'authored actual-R checkpoint controls; no timing samples',
+                  'rscript':executable,'private_library':os.environ['R_LIBS'],
+                  'tests_run':0,'skipped':[],'success':False}
+          destination=Path(os.environ['RUNNER_TEMP'])/'r-retention-controls.json'
+          preflight=subprocess.run([executable,'--vanilla','-e',
+              'root <- normalizePath(Sys.getenv("R_LIBS"), winslash="/", mustWork=TRUE); '
+              'library(jsonlite, lib.loc=root); '
+              'stopifnot(as.character(packageVersion("jsonlite")) == "2.0.0"); '
+              'stopifnot(dirname(normalizePath(find.package("jsonlite"), winslash="/")) == root)'],
+              capture_output=True,text=True) if executable else None
+          record['private_namespace_preflight']=preflight.returncode if preflight else None
+          if preflight is None or preflight.returncode:
+              destination.write_text(json.dumps(record,indent=2)+'\n')
+              if preflight: print(preflight.stderr)
+              raise SystemExit(1)
+          suite=unittest.defaultTestLoader.discover('rust/tests',pattern='test_public_lifecycle_view_retention.py')
+          expected=suite.countTestCases()
+          result=unittest.TextTestRunner(verbosity=2).run(suite)
+          record.update(tests_expected=expected,tests_run=result.testsRun,
+              skipped=[{'test':str(test),'reason':reason} for test,reason in result.skipped],
+              failures=[str(test) for test,_ in result.failures],errors=[str(test) for test,_ in result.errors])
+          record['success']=expected>=3 and result.testsRun==expected and result.wasSuccessful() and not result.skipped
+          destination.write_text(json.dumps(record,indent=2)+'\n')
+          raise SystemExit(0 if record['success'] else 1)
+          PY
+      - name: Prove plain R worker PID, touched child RSS and original nonzero exit
+        id: rss
+        run: python rust/tools/check_r_child_peak_rss.py --rscript "$(command -v Rscript)" --output "${RUNNER_TEMP}/r-child-rss-controls"
+      - name: Preserve original platform controls and any refusal
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: performance-r-preflight-${{ matrix.os }}
+          retention-days: 90
+          path: |
+            ${{ runner.temp }}/r-platform-preflight.json
+            ${{ runner.temp }}/jsonlite_2.0.0.tar.gz
+            ${{ runner.temp }}/jsonlite-install.log
+            ${{ runner.temp }}/codec-source
+            ${{ runner.temp }}/r-retention-controls.json
+            ${{ runner.temp }}/r-retention-controls.log
+            ${{ runner.temp }}/r-child-rss-controls
+          if-no-files-found: error
+      - name: Block long collection on any platform control refusal
+        if: always()
+        run: test "${{ steps.views.outcome }}" = success && test "${{ steps.rss.outcome }}" = success
+
+  python:
+    needs: [native, r_preflight]
     env:
       NATIVE_RUN_ID: ${{ needs.native.outputs.run-id }}
       NATIVE_RUN_ATTEMPT: ${{ needs.native.outputs.run-attempt }}
@@ -272,7 +375,7 @@ jobs:
           esac
 
   r:
-    needs: native
+    needs: [native, r_preflight]
     env:
       NATIVE_RUN_ID: ${{ needs.native.outputs.run-id }}
       NATIVE_RUN_ATTEMPT: ${{ needs.native.outputs.run-attempt }}
@@ -551,11 +654,12 @@ jobs:
           if-no-files-found: error
 
   retain:
-    needs: [native, python, r, index]
+    needs: [native, r_preflight, python, r, index]
     if: always() && github.event_name == 'push' && (github.ref == 'refs/heads/qualification/issue-1998' || github.ref == 'refs/heads/qualification/issue-2142-frontier')
     name: Preserve original campaign bytes in an unpublished draft
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    # Transfer headroom for every immutable original ZIP; this is not a budget.
+    timeout-minutes: 360
     permissions:
       contents: write
       actions: read

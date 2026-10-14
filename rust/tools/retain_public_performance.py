@@ -88,6 +88,9 @@ def verify_original_download(path, artifact):
 
 
 def producer_name(name):
+    for platform in ("ubuntu-24.04", "macos-15", "windows-latest"):
+        if name == f"performance-r-preflight-{platform}":
+            return f"performance-r-preflight ({platform})"
     for lane, artifact_name in tuples():
         if name == artifact_name:
             return producer_job(lane)

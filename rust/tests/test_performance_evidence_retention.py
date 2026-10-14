@@ -30,6 +30,17 @@ def selected_run(revision="a" * 40):
 
 
 class RetainedIndex(unittest.TestCase):
+    def test_original_platform_preflight_artifacts_are_durable_with_actual_producing_attempt(self):
+        for platform in index.PLATFORMS:
+            artifact = {"name": f"performance-r-preflight-{platform}",
+                        "created_at": "2026-10-14T00:00:10Z"}
+            jobs = [{"name": f"performance-r-preflight ({platform})", "run_attempt": 2,
+                     "started_at": "2026-10-14T00:00:00Z", "completed_at": "2026-10-14T00:01:00Z"}]
+            with self.subTest(platform=platform):
+                self.assertEqual(retention.original_attempt(artifact, jobs), 2)
+                self.assertIsNone(retention.original_attempt(artifact, [{**jobs[0], "name": "other platform"}]))
+        self.assertIsNone(retention.producer_name("performance-r-preflight-unreviewed-os"))
+
     def test_both_hosts_segment189_original_jobs_without_changing567_504_logical_cells(self):
         artifacts, jobs = [], []
         for lane, name in index.tuples():
