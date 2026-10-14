@@ -154,7 +154,7 @@ pub(super) fn admit(d: &Document, templates: usize) -> Result<(), PrepareError> 
 }
 
 /// Borrow references from admitted key occurrences, without lowering them again.
-/// Only direct named source reads can promote matching output defaults.
+/// Named reads in every expression promote their matching output defaults.
 pub(super) fn default_dependencies(
     d: &Document,
     reference: &str,

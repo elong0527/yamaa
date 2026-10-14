@@ -228,6 +228,7 @@ fn default_reads(
     let mut self_default = false;
     for name in names {
         self_default |= self_relations::is_self_reference(d, &name)?;
+        reads.extend(row_intermediates::default_dependencies(d, &name, output)?);
     }
     let mut reference = |name: &str| {
         if !name.contains('.') {
@@ -261,7 +262,6 @@ fn default_reads(
         "source" => {
             let name = text(d, field(d, payload, "variable")?)?;
             reference(name);
-            reads.extend(row_intermediates::default_dependencies(d, name, output)?);
         }
         "str_template" => {
             for name in string_templates.get(payload)?.identifiers() {
