@@ -132,6 +132,17 @@ class PythonPackageHygiene(unittest.TestCase):
                     module.check_archive(path)
                 self.assertIn(name, str(finding.exception))
 
+    def test_wheel_nul_truncation_keeps_retired_root_refusal_and_original_finding(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "yamaa.whl"
+            for name in ("yamaa/io\x00allowed.py", "yamaa/__pycache__\x00notes.py"):
+                with self.subTest(member=name):
+                    write_archive(path, [name])
+                    self.assertIn(name.encode(), path.read_bytes())
+                    with self.assertRaises(ValueError) as finding:
+                        module.check_archive(path)
+                    self.assertIn(name, str(finding.exception))
+
     def test_source_archive_windows_prefix_aliases_preserve_the_original_finding(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "yamaa.tar.gz"

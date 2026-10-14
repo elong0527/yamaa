@@ -60,7 +60,10 @@ def check_archive(path: Path) -> int:
     generated = []
     retired = []
     for name in names:
-        member = PurePosixPath(name.replace("\\", "/"))
+        # ZIP readers terminate names at NUL; analyze that installed spelling
+        # while retaining the full original archive name in the finding.
+        installed = name.split("\x00", 1)[0] if wheel else name
+        member = PurePosixPath(installed.replace("\\", "/"))
         if "__pycache__" in member.parts or member.suffix.lower() in {".pyc", ".pyo"}:
             generated.append(name)
         package = package_members(member, wheel)
