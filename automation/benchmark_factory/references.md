@@ -260,6 +260,17 @@ task specs).
 
 ## FDA and PHUSE
 
+- **End-to-End Workflow for CDISC Estimand Framework in Clinical Trials:
+  Translating Complex Intercurrent Event Definitions into Submission-Ready
+  ADaMs & TLGs** (Raval, Luo, Starkell, PHUSE Connect US 2026, PP20) -
+  https://phuse.s3.eu-central-1.amazonaws.com/Archive/2026/Connect/US/Austin/PAP_PP20.pdf -
+  ADICE occurrence records preserve event type, date and source sequence;
+  section 4 gives priority ICE04/ICE05 over ICE01 over ICE02 over ICE03,
+  with the earlier composite event selected. TA: cross-TA (estimands).
+  Grounding: `adam-adice-governing-event` isolates the completed-history
+  priority summary; assessment-specific strategies and imputation remain
+  outside that benchmark.
+
 - **FDA Study Data Technical Conformance Guide** -
   https://Www.fda.gov/media/88173/download -
   Cross-cutting SDTM/SEND/ADaM expectations and traceability requirements.
