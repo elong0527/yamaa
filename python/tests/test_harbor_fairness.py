@@ -383,3 +383,108 @@ def test_date_challenges_preserve_authored_precision_and_timezone(
         assert path.read_bytes() == before
     else:
         assert changes == [{"file": "vs.csv", "columns": {"VSDTC": 1}}]
+
+
+@pytest.mark.parametrize("line_ending", ["\n", "\r\n"])
+def test_subject_rewrites_preserve_padded_shape_and_line_endings(tmp_path, line_ending):
+    import random
+
+    source = tmp_path / "source"
+    source.mkdir()
+    rows = [
+        "USUBJID,SUBJID,RFSTDTC",
+        "STUDY-SITE-0001,0001,2024-12-27T08:30",
+        "STUDY-SITE-0002,0002,2024-12-28T09:15",
+        "STUDY-SITE-003,003,2024-12-29T10:00",
+        "STUDY-SITE-00004,00004,2024-12-30T10:00",
+        "STUDY-SITE-²,²,2024-12-30T10:00",
+    ]
+    (source / "dm.csv").write_bytes((line_ending.join(rows) + line_ending).encode())
+    renamed = tmp_path / "renamed"
+    assert grade._rename_subjects(source, renamed, 4123456, "-evaluation")
+    _, changed = grade.read_rows(renamed / "dm.csv")
+    for before, after in zip(rows[1:4], changed[:3]):
+        original = before.split(",")[1]
+        assert len(after["SUBJID"]) == len(original)
+        assert after["SUBJID"].startswith("0")
+        assert after["USUBJID"] == "STUDY-SITE-" + after["SUBJID"]
+    assert int(changed[1]["SUBJID"]) - int(changed[0]["SUBJID"]) == 1
+    assert changed[-1]["SUBJID"] == "²-evaluation"
+    grade._perturb_values(renamed, random.Random(1))
+    assert (
+        (renamed / "dm.csv")
+        .read_bytes()
+        .splitlines(keepends=True)[0]
+        .endswith(line_ending.encode())
+    )
+    held = tmp_path / "held"
+    grade._subset_inputs(source, held, {"STUDY-SITE-0001"})
+    assert (
+        (held / "dm.csv")
+        .read_bytes()
+        .splitlines(keepends=True)[0]
+        .endswith(line_ending.encode())
+    )
+
+
+def test_padded_offsets_are_shared_across_tables_and_parquet(tmp_path):
+    import pyarrow as arrow
+    from pyarrow import parquet
+
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "dm.csv").write_text("USUBJID,SUBJID\nS-0001,0001\n")
+    parquet.write_table(
+        arrow.table({"SubjectKey": ["S-0001", "S-0998"], "PATNUM": [1, 998]}),
+        source / "subjects.parquet",
+    )
+    target = tmp_path / "target"
+    grade._rename_subjects(source, target, 4123456, "-evaluation")
+    _, rows = grade.read_rows(target / "dm.csv")
+    assert rows[0]["USUBJID"] == "S-0002"
+    assert rows[0]["SUBJID"] == "0002"
+    table = parquet.read_table(target / "subjects.parquet")
+    assert table["SubjectKey"].to_pylist() == ["S-0002", "S-0999"]
+    assert table["PATNUM"].to_pylist() == [4123457, 4124454]
+
+
+def test_full_padded_domain_rotates_without_losing_shape_or_joins(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "dm.csv").write_text(
+        "USUBJID,SUBJID\nS-000,000\nS-001,001\nS-099,099\nZERO-0,0\n"
+    )
+    (source / "vs.csv").write_text("USUBJID,VSORRES\nS-099,70\nS-000,80\n")
+    target = tmp_path / "target"
+    grade._rename_subjects(source, target, 4123456, "-evaluation")
+    _, rows = grade.read_rows(target / "dm.csv")
+    identifiers = [r["SUBJID"] for r in rows[:3]]
+    assert len(set(identifiers)) == 3
+    assert all(len(value) == 3 and value.startswith("0") for value in identifiers)
+    assert identifiers[2] < identifiers[0]  # The full domain wraps at its limit.
+    assert rows[-1]["SUBJID"] == "0" and rows[-1]["USUBJID"] == "ZERO-0"
+    _, vs = grade.read_rows(target / "vs.csv")
+    assert vs[0]["USUBJID"] == rows[2]["USUBJID"]
+    assert vs[1]["USUBJID"] == rows[0]["USUBJID"]
+
+
+def test_site_parse_reference_still_exercises_four_digit_subjects(tmp_path):
+    benchmark = build.BENCHMARKS / "adam-adsl-site-parse"
+    app = tmp_path / "app"
+    grade._rename_subjects(benchmark / "input", app / "input", 6473686, "-evaluation")
+    (app / "output").mkdir()
+    reference = tmp_path / "reference.py"
+    reference.write_text(
+        (build.SOLUTIONS / benchmark.name / "result.py")
+        .read_text()
+        .replace("/app/", f"{app.as_posix()}/")
+    )
+    assert _run("python")([sys.executable, str(reference)], app, 60)[0] == 0
+    _, original = grade.read_rows(benchmark / "expected/adsl.csv")
+    _, changed = grade.read_rows(app / "output/adsl.csv")
+    assert (
+        sum(bool(row["SITEIDP"]) for row in changed)
+        == sum(bool(row["SITEIDP"]) for row in original)
+        == 4
+    )
+    assert any(row["SITEID"] == "UCLA" for row in changed)

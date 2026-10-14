@@ -686,6 +686,12 @@ def _same_subject(value: str, drop: set[str]) -> bool:
     )
 
 
+def _csv_line_ending(path: Path) -> str:
+    """Keep the authored line ending when rewriting a CSV input."""
+    with path.open("rb") as handle:
+        return "\r\n" if handle.readline().endswith(b"\r\n") else "\n"
+
+
 def _subset_inputs(source: Path, target: Path, drop: set[str]) -> None:
     """Copy the input directory without the rows of the dropped subjects, in
     every table and under whichever subject column it carries."""
@@ -706,7 +712,9 @@ def _subset_inputs(source: Path, target: Path, drop: set[str]) -> None:
                 if not any(i < len(r) and _same_subject(r[i], drop) for i in at)
             ]
             with dest.open("w", newline="", encoding="utf-8") as handle:
-                csv.writer(handle, lineterminator="\n").writerows(rows)
+                csv.writer(handle, lineterminator=_csv_line_ending(path)).writerows(
+                    rows
+                )
         elif columns and path.suffix == ".parquet":
             _, parquet, _ = _parquet()
             table = parquet.read_table(path)
@@ -854,38 +862,91 @@ def held_out_rerun(
         shutil.rmtree(work, ignore_errors=True)
 
 
-def _renamed_subject(value: object, offset: int, suffix: str) -> object:
+def _subject_number(value: object) -> str | None:
+    text = str(value)
+    tail = text.rpartition("-")[2]
+    return tail if re.fullmatch(r"[0-9]+", tail) else None
+
+
+def _renamed_subject(
+    value: object,
+    offset: int,
+    suffix: str,
+    padded_offsets: dict[int, tuple[int, int]] | None = None,
+) -> object:
     if value in (None, ""):
         return value
     if isinstance(value, int):
         return value + offset
     text = str(value)
-    prefix, separator, tail = text.rpartition("-")
-    if (tail if separator else text).isdigit():
-        number = str(int(tail if separator else text) + offset)
-        return prefix + separator + number if separator else number
+    number = _subject_number(value)
+    if number is not None:
+        width = len(number)
+        if number.startswith("0") and padded_offsets and width in padded_offsets:
+            step, domain = padded_offsets[width]
+            renamed = str((int(number) + step) % domain).zfill(width)
+        else:
+            renamed = str(int(number) + offset)
+        return text[:-width] + renamed
     return text + suffix
 
 
 def _rename_subjects(source: Path, target: Path, offset: int, suffix: str) -> bool:
-    """Change subject identifiers while preserving numeric parquet types."""
+    """Change subject ids, keeping zero-padded widths and numeric parquet types."""
     shutil.copytree(source, target)
-    changed = False
-    for path in sorted(target.rglob("*")):
-        if not path.is_file():
+    tables = {
+        path: [c for c in HOLDOUT_INPUT_SUBJECTS if c in _columns(path)]
+        for path in sorted(target.rglob("*"))
+        if path.is_file()
+    }
+    maxima: dict[int, int] = {}
+    for path, columns in tables.items():
+        if not columns:
             continue
-        columns = [c for c in HOLDOUT_INPUT_SUBJECTS if c in _columns(path)]
+        if path.suffix == ".csv":
+            _, rows = read_rows(path)
+            values = (row[c] for row in rows for c in columns)
+        else:
+            _, parquet, _ = _parquet()
+            table = parquet.read_table(path, columns=columns)
+            values = (v for c in columns for v in table[c].to_pylist())
+        for value in values:
+            number = _subject_number(value)
+            if isinstance(value, str) and number and number.startswith("0"):
+                width = len(number)
+                maxima[width] = max(maxima.get(width, 0), int(number))
+    padded_offsets = {}
+    for width, maximum in maxima.items():
+        domain = 10 ** (width - 1)
+        room = domain - 1 - maximum
+        if room > 0:
+            # Prefer an order-preserving shift within the padded domain.
+            padded_offsets[width] = (1 + offset % room, domain)
+        elif domain > 1:
+            # When the largest padded value leaves no room, rotate the domain
+            # to preserve width, leading zeros, distinctness and joins.
+            padded_offsets[width] = (1 + offset % (domain - 1), domain)
+        else:
+            # The one-character padded domain contains only "0".
+            padded_offsets[width] = (0, domain)
+    changed = False
+    for path, columns in tables.items():
         if not columns:
             continue
         changed = True
         if path.suffix == ".csv":
             header, rows = read_rows(path)
+            line_ending = _csv_line_ending(path)
             with path.open("w", newline="", encoding="utf-8") as handle:
-                writer = csv.DictWriter(handle, fieldnames=header)
+                writer = csv.DictWriter(
+                    handle, fieldnames=header, lineterminator=line_ending
+                )
                 writer.writeheader()
                 writer.writerows(
                     {
-                        k: _renamed_subject(v, offset, suffix) if k in columns else v
+                        k: _renamed_subject(v, offset, suffix, padded_offsets)
+                        if k in columns
+                        else v
                         for k, v in row.items()
                     }
                     for row in rows
@@ -896,7 +957,7 @@ def _rename_subjects(source: Path, target: Path, offset: int, suffix: str) -> bo
             for column in columns:
                 field = table.schema.field(column)
                 values = [
-                    _renamed_subject(v, offset, suffix)
+                    _renamed_subject(v, offset, suffix, padded_offsets)
                     for v in table[column].to_pylist()
                 ]
                 table = table.set_column(
@@ -992,8 +1053,11 @@ def _perturb_values(input_dir: Path, randomizer: random.Random) -> list[dict]:
             continue
         changes.append({"file": str(path.relative_to(input_dir)), "columns": counts})
         if path.suffix == ".csv":
+            line_ending = _csv_line_ending(path)
             with path.open("w", newline="", encoding="utf-8") as handle:
-                writer = csv.DictWriter(handle, fieldnames=columns)
+                writer = csv.DictWriter(
+                    handle, fieldnames=columns, lineterminator=line_ending
+                )
                 writer.writeheader()
                 writer.writerows(rows)
         else:
