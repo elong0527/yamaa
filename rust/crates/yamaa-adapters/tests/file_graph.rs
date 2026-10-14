@@ -496,12 +496,27 @@ fn already_captured_changed_metadata_keeps_original_snapshot_and_native_failure(
         shipped_schema::capture().unwrap(),
         Limits::default(),
     ));
-    assert!(matches!(
-        failure.error(),
-        Error::Document(yamaa_adapters::file_preparation::Error::Resource(
-            ResourceError::Changed
+    let Error::Document(yamaa_adapters::file_preparation::Error::ResourceFinding {
+        error,
+        diagnostic,
+    }) = failure.error()
+    else {
+        panic!("changed metadata retains its original native cause and authored diagnostic");
+    };
+    assert_eq!(*error, ResourceError::Changed);
+    assert_eq!(diagnostic.definition().phase, "ingest");
+    assert_eq!(
+        diagnostic.definition().condition,
+        "resource_path_content_changed"
+    );
+    assert_eq!(diagnostic.definition().requirement, Some("REQ-0788"));
+    assert_eq!(diagnostic.spec_paths, ["specification"]);
+    assert_eq!(
+        diagnostic.context["path"],
+        yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+            "root.yaml".into()
         ))
-    ));
+    );
     assert_eq!(failure.capture_reads(), 1);
     assert_eq!(
         failure.captured_sources().next().unwrap().1,

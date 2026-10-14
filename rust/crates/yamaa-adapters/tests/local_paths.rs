@@ -45,6 +45,63 @@ impl Drop for Study {
 }
 
 #[test]
+fn public_check_and_build_validate_written_paths_before_source_profiles() {
+    use yamaa_adapters::{file_application, specification_report::Identity};
+    use yamaa_engine::domain_entry::Request;
+    let study = Study::new();
+    for (written, requirement) in [
+        ("input\\x.csv", "REQ-0776"),
+        ("C:\\input.csv", "REQ-0776"),
+        ("input//x.csv", "REQ-0777"),
+        ("input/x.csv/", "REQ-0777"),
+    ] {
+        for expanded in [false, true] {
+            let source = if expanded {
+                format!("{{path: '{written}'}}")
+            } else {
+                format!("'{written}'")
+            };
+            let spec = format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {source}}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: output.csv, columns: [ID]}}\n");
+            fs::write(study.0.join("entry/spec.yaml"), spec).unwrap();
+            let path = study.text("entry/spec.yaml");
+            let request = || Request {
+                specification: &path,
+                environment: None,
+            };
+            let identity = || Identity {
+                runtime: "test",
+                runtime_version: "test",
+                engine_version: "test",
+                example: "test",
+                specification: &path,
+                base_directory: ".",
+            };
+            let checked = file_application::check(request(), identity());
+            let built = file_application::domain(request(), identity()).map_or_else(
+                |issues| issues,
+                |result| {
+                    assert!(result.output().is_none());
+                    result.issues()
+                },
+            );
+            for issues in [checked, built] {
+                assert_eq!(issues.len(), 1, "{written:?}, expanded={expanded}");
+                let issue = &issues[0];
+                assert_eq!(issue.phase, "validation");
+                assert_eq!(issue.condition, "resource_path_not_normalized");
+                assert_eq!(issue.requirement.as_deref(), Some(requirement));
+                assert_eq!(issue.spec_paths, ["input.SRC.path"]);
+                assert_eq!(
+                    serde_json::from_str::<serde_json::Value>(&issue.context).unwrap(),
+                    serde_json::json!({"dataset":"SRC","path":written})
+                );
+            }
+            assert!(!study.0.join("entry/output.csv").exists());
+        }
+    }
+}
+
+#[test]
 fn public_uri_and_symlink_sources_keep_their_normative_cause_and_authored_path() {
     use yamaa_adapters::{file_application, specification_report::Identity};
     use yamaa_engine::domain_entry::Request;
@@ -215,21 +272,22 @@ fn outside_parent_and_file_links_remain_terminal() {
 
 #[test]
 fn local_path_admission_still_rejects_uri_backslash_and_empty_segments() {
+    use yamaa_core::resource::ResourceFailure;
     let study = Study::new();
     fs::write(study.0.join("entry/root.yaml"), b"declaring file").unwrap();
     let resources = study.resources();
     let declaring = resources.resolve("root.yaml").unwrap();
-    for written in [
-        "",
-        "file:/data.csv",
-        "https://example.org/data.csv",
-        "../shared\\data.csv",
-        "../shared//data.csv",
-        "../shared/data.csv/",
+    for (written, failure) in [
+        ("", ResourceFailure::EmptySegment),
+        ("file:/data.csv", ResourceFailure::UriScheme),
+        ("https://example.org/data.csv", ResourceFailure::UriScheme),
+        ("../shared\\data.csv", ResourceFailure::Backslash),
+        ("../shared//data.csv", ResourceFailure::EmptySegment),
+        ("../shared/data.csv/", ResourceFailure::EmptySegment),
     ] {
         assert_eq!(
             resources.inspect_from(&declaring, written),
-            Err(Error::InvalidPath),
+            Err(Error::WrittenForm(failure)),
             "{written}"
         );
     }

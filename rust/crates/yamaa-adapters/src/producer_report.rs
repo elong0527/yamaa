@@ -605,6 +605,9 @@ fn native_resource_failure(
         yamaa_engine::producer_build::CaptureError::External(Native::NotRegularFile) => {
             Some(ResourceFailure::NotRegularFile)
         }
+        yamaa_engine::producer_build::CaptureError::External(Native::Changed) => {
+            Some(ResourceFailure::ContentChanged)
+        }
         _ => None,
     }
 }

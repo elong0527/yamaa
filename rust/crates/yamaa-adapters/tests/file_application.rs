@@ -61,6 +61,64 @@ fn identity(specification: &str) -> Identity<'_> {
     }
 }
 #[test]
+fn changed_source_retains_original_snapshot_and_ingest_issue_and_refuses_both_saves() {
+    use yamaa_adapters::{file_preparation, specification_report, specification_run::PortError};
+    struct NoPublication;
+    impl specification_report::ArtifactPort for NoPublication {
+        type Error = ();
+        fn publish(&mut self, _: &str, _: &[u8]) -> Result<(), ()> {
+            panic!("changed source published");
+        }
+    }
+    let study = Study::new();
+    fs::write(study.0.join("spec.yaml"), VALID).unwrap();
+    fs::write(study.0.join("input.csv"), b"ID\n1\n").unwrap();
+    fs::write(study.0.join("output.csv"), b"prior saved output").unwrap();
+    let path = study.text("spec.yaml");
+    let (mut resources, entry) = file_configuration::resources(&path).unwrap();
+    let original = resources.capture("input.csv", 16).unwrap().0;
+    let mut prepared = FileSpecification::prepare(resources, &entry).unwrap();
+    let reads = prepared.capture_reads();
+    fs::write(study.0.join("input.csv"), b"ID\n2\n").unwrap();
+    let attempt = prepared.build();
+    assert!(matches!(
+        &attempt.result,
+        Err(PortError::Capture(
+            yamaa_adapters::file_resources::Error::Changed
+        ))
+    ));
+    assert_eq!(
+        file_preparation::opaque_resource_failure(&attempt),
+        Some(&yamaa_adapters::file_resources::Error::Changed)
+    );
+    assert!(file_preparation::public_opaque_resource_failure(&attempt).is_none());
+    assert_eq!(prepared.capture_reads(), reads);
+    assert_eq!(original.as_ref(), b"ID\n1\n");
+    let result =
+        specification_report::build_result(prepared.run(), &attempt, identity(&path)).unwrap();
+    assert!(result.output().is_none());
+    assert_eq!(result.issues().len(), 1);
+    let finding = &result.issues()[0];
+    assert_eq!(finding.phase, "ingest");
+    assert_eq!(finding.condition, "resource_path_content_changed");
+    assert_eq!(finding.requirement.as_deref(), Some("REQ-0788"));
+    assert_eq!(finding.spec_paths, ["input.SRC.path"]);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&finding.context).unwrap(),
+        serde_json::json!({"dataset":"SRC","path":"input.csv"})
+    );
+    for _ in 0..2 {
+        assert!(matches!(
+            result.save(&mut NoPublication),
+            Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+        ));
+    }
+    assert_eq!(
+        fs::read(study.0.join("output.csv")).unwrap(),
+        b"prior saved output"
+    );
+}
+#[test]
 fn environment_and_invalid_source_profile_precede_entry_and_study_reads() {
     let study = Study::new();
     let path = study.text("absent.yaml");

@@ -98,6 +98,8 @@ impl yamaa_engine::file_preparation::NativePort for Reader<'_> {
         match error {
             ResourceError::Missing => Some(ResourceFailure::Missing),
             ResourceError::NotRegularFile => Some(ResourceFailure::NotRegularFile),
+            ResourceError::WrittenForm(failure) => Some(*failure),
+            ResourceError::Changed => Some(ResourceFailure::ContentChanged),
             _ => None,
         }
     }

@@ -89,6 +89,7 @@ impl CapturedSchema {
                 content: PreparedContent::Inherited(Box::new(prepared.inheritance)),
                 parents: prepared.parents,
                 dictionaries: None,
+                resource_aliases: Default::default(),
             }
             .prepare_dictionaries(port)?),
             Err(application::Error::Entry(error)) => Err(InheritanceError::Entry(error)),

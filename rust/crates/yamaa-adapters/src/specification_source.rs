@@ -357,6 +357,7 @@ impl CapturedSchema {
             },
             parents: Vec::new(),
             dictionaries: None,
+            resource_aliases: Default::default(),
         })
     }
 
@@ -433,6 +434,7 @@ impl CapturedSchema {
             content,
             parents,
             dictionaries: None,
+            resource_aliases: Default::default(),
         };
         document.prepare_dictionaries(port)
     }
@@ -491,6 +493,7 @@ pub struct PreparedDocument {
     content: PreparedContent,
     parents: Vec<CapturedParent>,
     dictionaries: Option<yamaa_engine::dictionary_preparation::Prepared<DecodedYaml>>,
+    resource_aliases: std::collections::BTreeMap<String, Vec<(String, String)>>,
 }
 #[derive(Debug)]
 enum PreparedContent {
@@ -514,8 +517,71 @@ impl yamaa_engine::file_preparation::PreparedView for PreparedDocument {
             .iter()
             .flat_map(|prepared| prepared.captures.iter().map(|capture| capture.source()))
     }
+    fn resource_diagnostic(
+        &self,
+        declaring: &str,
+        written: &str,
+        failure: yamaa_core::resource::ResourceFailure,
+    ) -> Option<yamaa_core::diagnostic::Diagnostic> {
+        use yamaa_core::schema::DocumentNode as N;
+        let documents = core::iter::once((&self.source, &self.raw.document)).chain(
+            self.parents
+                .iter()
+                .map(|parent| (parent.source(), &parent.raw().document)),
+        );
+        for (source, raw) in documents {
+            if source.identity != declaring {
+                continue;
+            }
+            if let Some(parents) = raw.field(raw.root(), "parents") {
+                match &raw.nodes()[parents] {
+                    N::Text(path) if path == written => {
+                        return Some(failure.field_diagnostic("parents", written));
+                    }
+                    N::Sequence(paths) => {
+                        for (index, &path) in paths.iter().enumerate() {
+                            if matches!(&raw.nodes()[path], N::Text(path) if path == written) {
+                                return Some(
+                                    failure.field_diagnostic(&format!("parents[{index}]"), written),
+                                );
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let mut budget = NormalizationBudget::new(self.schema.limits.normalization);
+        let references = self
+            .schema
+            .structure
+            .mapping_dictionary_references(self.model().document(), &mut budget)
+            .ok()?;
+        references.into_iter().find_map(|reference| {
+            (reference.written() == written
+                && self.declaring_source(reference.path()) == Some(declaring))
+            .then(|| failure.field_diagnostic(reference.path(), written))
+        })
+    }
+    fn retain_resource_aliases(
+        &mut self,
+        aliases: std::collections::BTreeMap<String, Vec<(String, String)>>,
+    ) {
+        self.resource_aliases = aliases;
+    }
 }
 impl PreparedDocument {
+    pub(crate) fn resource_diagnostic_for_identity(
+        &self,
+        identity: &str,
+        failure: yamaa_core::resource::ResourceFailure,
+    ) -> Option<yamaa_core::diagnostic::Diagnostic> {
+        use yamaa_engine::file_preparation::PreparedView;
+        self.resource_aliases
+            .get(identity)?
+            .iter()
+            .find_map(|(declaring, written)| self.resource_diagnostic(declaring, written, failure))
+    }
     pub fn schema(&self) -> &CapturedSchema {
         &self.schema
     }

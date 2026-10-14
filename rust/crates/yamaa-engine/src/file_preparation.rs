@@ -5,7 +5,8 @@ use crate::{
     inheritance_capture::CapturePort,
     project_preparation::Source,
 };
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
+use yamaa_core::{diagnostic::Diagnostic, resource::ResourceFailure};
 
 pub trait NativePort {
     type Error;
@@ -79,6 +80,18 @@ pub trait PreparedView {
     fn resources(&self) -> impl Iterator<Item = &Source> {
         core::iter::empty()
     }
+    /// Project only an original declaring occurrence retained by this document.
+    /// Resolved identities are never substituted for its authored field or path.
+    fn resource_diagnostic(
+        &self,
+        _declaring: &str,
+        _written: &str,
+        _failure: ResourceFailure,
+    ) -> Option<Diagnostic> {
+        None
+    }
+    /// Move the already admitted alias ledger to its prepared document owner.
+    fn retain_resource_aliases(&mut self, _aliases: BTreeMap<String, Vec<(String, String)>>) {}
 }
 /// A schema authority connector delegates to the document application. It must
 /// not decode, traverse, normalize or retry a semantic failure in this method.
@@ -96,12 +109,29 @@ pub trait DocumentPort<E> {
 pub enum Error<E, X> {
     Resource(E),
     Preparation(X),
+    ResourceFinding {
+        error: E,
+        diagnostic: Box<Diagnostic>,
+    },
+    PreparationFinding {
+        error: X,
+        diagnostic: Box<Diagnostic>,
+    },
 }
 struct AliasCache<'a, P> {
     port: &'a mut P,
     paths: BTreeMap<String, Vec<(String, String)>>,
+    parent_failure: Option<Diagnostic>,
 }
 impl<P: NativePort> AliasCache<'_, P> {
+    fn parent_error(port: &P, written: &str, error: &SourceError<P::Error>) -> Option<Diagnostic> {
+        if let SourceError::Raised(error) = error {
+            if port.resource_failure(error) == Some(ResourceFailure::ContentChanged) {
+                return Some(ResourceFailure::ContentChanged.field_diagnostic("parents", written));
+            }
+        }
+        None
+    }
     fn remember(
         &mut self,
         source: &Identity,
@@ -141,7 +171,12 @@ impl<P: NativePort> CapturePort for AliasCache<'_, P> {
         declaring: &str,
         written: &str,
     ) -> Result<Identity, SourceError<Self::Error>> {
-        let source = self.port.canonicalize(declaring, written)?;
+        let source = self
+            .port
+            .canonicalize(declaring, written)
+            .inspect_err(|error| {
+                self.parent_failure = Self::parent_error(self.port, written, error);
+            })?;
         self.remember(&source, declaring, written)?;
         Ok(source)
     }
@@ -155,7 +190,11 @@ impl<P: NativePort> CapturePort for AliasCache<'_, P> {
             .get(&source.identity)
             .and_then(|paths| paths.first())
             .ok_or_else(|| SourceError::Raised(P::missing_alias()))?;
-        self.port.capture_parent(declaring, written, maximum)
+        let result = self.port.capture_parent(declaring, written, maximum);
+        if let Err(error) = &result {
+            self.parent_failure = Self::parent_error(self.port, written, error);
+        }
+        result
     }
     fn canonicalize_resource(
         &mut self,
@@ -206,12 +245,24 @@ pub fn prepare<P: NativePort, D: DocumentPort<P::Error>>(
     written: &str,
     maximum: usize,
 ) -> PreparationResult<P, D> {
+    let entry_error = |port: &P, error| {
+        if port.resource_failure(&error) == Some(ResourceFailure::ContentChanged) {
+            Error::ResourceFinding {
+                error,
+                diagnostic: Box::new(
+                    ResourceFailure::ContentChanged.field_diagnostic("specification", written),
+                ),
+            }
+        } else {
+            Error::Resource(error)
+        }
+    };
     let identity = port
         .resolve_entry(declaring, written)
-        .map_err(Error::Resource)?;
+        .map_err(|error| entry_error(port, error))?;
     let bytes = port
         .capture_entry(declaring, written, maximum)
-        .map_err(Error::Resource)?;
+        .map_err(|error| entry_error(port, error))?;
     let source = Source {
         identity: identity.clone(),
         bytes,
@@ -219,10 +270,20 @@ pub fn prepare<P: NativePort, D: DocumentPort<P::Error>>(
     let mut aliases = AliasCache {
         port,
         paths: BTreeMap::new(),
+        parent_failure: None,
     };
-    let document = documents
-        .prepare(source, identity.clone(), &mut aliases)
-        .map_err(Error::Preparation)?;
+    let mut document = match documents.prepare(source, identity.clone(), &mut aliases) {
+        Ok(document) => document,
+        Err(error) => {
+            return Err(match aliases.parent_failure {
+                Some(diagnostic) => Error::PreparationFinding {
+                    error,
+                    diagnostic: Box::new(diagnostic),
+                },
+                None => Error::Preparation(error),
+            })
+        }
+    };
     for source in document
         .parents()
         .iter()
@@ -234,15 +295,29 @@ pub fn prepare<P: NativePort, D: DocumentPort<P::Error>>(
             .get(&source.identity)
             .ok_or_else(|| Error::Resource(P::missing_alias()))?;
         for (declaring, written) in paths {
-            aliases
+            let result = aliases
                 .port
-                .accept_alias(declaring, written, source.bytes.len())
-                .map_err(Error::Resource)?;
+                .accept_alias(declaring, written, source.bytes.len());
+            if let Err(error) = result {
+                if let Some(diagnostic) = aliases
+                    .port
+                    .resource_failure(&error)
+                    .filter(|failure| *failure == ResourceFailure::ContentChanged)
+                    .and_then(|failure| document.resource_diagnostic(declaring, written, failure))
+                {
+                    return Err(Error::ResourceFinding {
+                        error,
+                        diagnostic: Box::new(diagnostic),
+                    });
+                }
+                return Err(Error::Resource(error));
+            }
         }
     }
     aliases
         .port
         .select_entry_base(&identity)
         .map_err(Error::Resource)?;
+    document.retain_resource_aliases(aliases.paths);
     Ok(document)
 }

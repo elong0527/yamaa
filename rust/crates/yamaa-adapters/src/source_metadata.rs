@@ -311,22 +311,27 @@ pub fn rejected_origins(
     let preparation = match error {
         file_workflow::SelectionError::Preparation(file_workflow::Error::Admission(error)) => {
             match error.error() {
-                file_graph::Error::Document(file_preparation::Error::Preparation(error)) => {
-                    Some(error)
-                }
+                file_graph::Error::Document(file_preparation::Error::Preparation(error))
+                | file_graph::Error::Document(file_preparation::Error::PreparationFinding {
+                    error,
+                    ..
+                }) => Some(error),
                 _ => None,
             }
         }
         file_workflow::SelectionError::Preparation(file_workflow::Error::Graph(error)) => {
             match error.error() {
-                file_graph::Error::Document(file_preparation::Error::Preparation(error)) => {
-                    Some(error)
-                }
+                file_graph::Error::Document(file_preparation::Error::Preparation(error))
+                | file_graph::Error::Document(file_preparation::Error::PreparationFinding {
+                    error,
+                    ..
+                }) => Some(error),
                 _ => None,
             }
         }
         file_workflow::SelectionError::Plain(error) => match error.error() {
-            file_preparation::Error::Preparation(error) => Some(error),
+            file_preparation::Error::Preparation(error)
+            | file_preparation::Error::PreparationFinding { error, .. } => Some(error),
             _ => None,
         },
         _ => None,
