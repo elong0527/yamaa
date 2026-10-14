@@ -783,6 +783,8 @@ def launch(command, child):
     ):
         broker = [sys.executable, "-I", str(HERE / "child_peak_rss.py"),
                   "--command", json.dumps(command), "--record", str(child / "process.json")]
+        if request["host"] == "python":
+            broker.append("--python-worker")
         process = subprocess.Popen(
             broker, cwd=child, env=environment, stdout=out, stderr=err
         )
