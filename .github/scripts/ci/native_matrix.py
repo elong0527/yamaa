@@ -18,11 +18,13 @@ PR_PYTHONS = ("3.12", "3.14")
 
 
 def plan(event, reference=None):
-    if event == "push" and reference is not None:
-        if reference != "refs/heads/main" and not reference.startswith(
-            "refs/heads/qualification/issue-"
-        ):
-            raise ValueError(f"unsupported native qualification push: {reference}")
+    if (
+        event == "push"
+        and reference is not None
+        and reference != "refs/heads/main"
+        and not reference.startswith("refs/heads/qualification/issue-")
+    ):
+        raise ValueError(f"unsupported native qualification push: {reference}")
     if event == "pull_request":
         # Keep PR feedback on Linux and exercise both supported Python endpoints.
         platforms = [PR_PLATFORM]

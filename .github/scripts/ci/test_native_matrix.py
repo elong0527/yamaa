@@ -1,8 +1,10 @@
-"""Check installed matrices and the main-only shared Rust coverage policy."""
+"""Check sampled PR and complete main/issue qualification coverage."""
 
+import fnmatch
 import itertools
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -89,11 +91,8 @@ class NativeCoverage(unittest.TestCase):
 
     def test_workflow_push_trigger_and_full_job_guards_agree_with_plan(self):
         workflow = (Path(__file__).parents[2] / "workflows/native.yml").read_text()
-        # Feed the declared push branches to Git's own ref matching vocabulary:
+        # Match the workflow's explicitly selected push branch patterns:
         # main and selected issue branches must qualify, ordinary branches do not.
-        import fnmatch
-        import re
-
         branches = re.search(r"branches: \[(.*?)\]", workflow).group(1)
         patterns = [value.strip().strip("'\"") for value in branches.split(",")]
         for branch, selected in (
