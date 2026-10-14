@@ -1831,7 +1831,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
     def test_self_intermediate_excludes_column_phase_columns(self):
         # REQ-0120/REQ-1260: a column-level derivation that is not row-local
         # keeps its column phase, so it is not on the completed rows a SELF
-        # intermediate reads, whether it uses a window, reads a named
+        # intermediate reads, whether it uses a window, reads a SELF-backed
         # intermediate, or reads a column that is not row-local.
         window = {
             'row_number': {
@@ -1842,7 +1842,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
             'window': [
                 {'name': 'LATE', 'type': 'int', 'derivation': window},
             ],
-            'intermediate': [
+            'self_intermediate': [
                 {'name': 'LATE', 'type': 'int', 'derivation': 'FIRST_AE.AESEQ'},
             ],
             'transitive': [
@@ -1859,11 +1859,12 @@ class TestStaticSemanticContracts(unittest.TestCase):
                 spec = self.self_intermediate_spec(
                     'SELF.AESEQ < AE.AESEQ AND SELF.LATE > 0'
                 )
+                dataset = 'SELF' if label == 'self_intermediate' else 'AE'
                 spec['intermediates'].append({
                     'id': 'FIRST_AE',
-                    'dataset': 'AE',
+                    'dataset': dataset,
                     'key': ['USUBJID'],
-                    'order_by': ['AE.AESEQ'],
+                    'order_by': [f'{dataset}.AESEQ'],
                     'keep': 'first',
                 })
                 spec['columns'].extend(columns)
@@ -1881,6 +1882,34 @@ class TestStaticSemanticContracts(unittest.TestCase):
                             {'identifier': 'PRIOR_SAE.AESEQ'}),
                     ],
                 )
+
+    def test_self_intermediate_reads_input_backed_named_column_defaults(self):
+        # REQ-1260 admits input-backed named reads as row defaults. Their
+        # transitive readers are available in completed SELF donors too.
+        for transitive in (False, True):
+            with self.subTest(transitive=transitive):
+                spec = self.self_intermediate_spec(
+                    'SELF.AESEQ < AE.AESEQ AND SELF.LATE > 0'
+                )
+                spec['intermediates'].append({
+                    'id': 'FIRST_AE',
+                    'dataset': 'AE',
+                    'key': ['USUBJID'],
+                    'order_by': ['AE.AESEQ'],
+                    'keep': 'first',
+                })
+                spec['columns'].append({
+                    'name': 'BASE' if transitive else 'LATE',
+                    'type': 'int',
+                    'derivation': 'FIRST_AE.AESEQ',
+                })
+                if transitive:
+                    spec['columns'].append({
+                        'name': 'LATE',
+                        'type': 'int',
+                        'derivation': {'compute': {'expr': 'BASE + 1'}},
+                    })
+                self.assertEqual(self.self_intermediate_errors(spec), [])
 
     def test_self_intermediate_requires_row_templates(self):
         # REQ-0120: SELF names completed rows only when the spec declares
@@ -6972,12 +7001,21 @@ class TestCsvProfile(unittest.TestCase):
         self.assertIsNone(OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('0.0000001'))
 
     def test_extreme_precision_and_magnitude_do_not_raise(self):
-        # The default decimal context is too small for either, and an
+        # REQ-0744 admits at most 18 fractional digits. The exact stored
+        # binary64 0.1 rounds to this independently authored fixed text.
+        self.assertIsNone(
+            OWNER_REPOSITORY_ARTIFACTS.canonical_float_text(
+                '0.100000000000000006', 18
+            )
+        )
+        self.assertIsNotNone(
+            OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('0.10000000000000000', 18)
+        )
+        # The magnitude still exceeds the default decimal context. An
         # uncaught InvalidOperation would abort the whole run.
         self.assertIsNotNone(
-            OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('0.1' + '0' * 27, 29)
+            OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('1e300', 18)
         )
-        self.assertIsNotNone(OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('1e300', 4))
         self.assertIsNone(OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('0.0313', 4))
 
     def test_temporal_text_follows_the_r016_grammar(self):
@@ -7105,7 +7143,7 @@ class TestCsvProfile(unittest.TestCase):
                    'columns': ['USUBJID']}),
         )
         self.assertIn(
-            'non-negative integer',
+            'an integer from 0 through 18',
             check({'path': 'adsl.csv', 'decimals': -1,
                    'columns': ['USUBJID']}),
         )
