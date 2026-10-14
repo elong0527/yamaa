@@ -1,7 +1,9 @@
 # Installed package checks
 
 The Python and R suites exercise installed `domain`, `check` and `define` APIs.
-`public-conformance.json` declares the required benchmark set for each host.
+Benchmark directories and `tools/public_conformance.py` define the current active
+set and explicit exclusions for both hosts. `public-conformance.json` retains
+prior passing observations and their original source/run/attempt/artifact identities.
 `supplemental.json` declares component contracts and installed probe suites.
 `audit_native_run.py` checks package identity, toolchain observations, complete
 reports, saved artifacts and R package checks for every selected platform.
@@ -18,7 +20,10 @@ compares logical fields, types, nulls, rows and values.
 ## Benchmark conformance
 
 `tools/public_conformance.py` discovers benchmark specifications and explicit
-runner arguments. The installed Python and R runners stage execution inputs
+runner arguments. Its shared plan accounts for 318 authored cases, 316 active
+cases and two reviewed exclusions. Runnable entries describe host metadata;
+qualification requires each installed host's actual passing inventory.
+The installed Python and R runners stage execution inputs
 without `expected/`, build domains and save outputs. The comparator reads
 independent expected files and rejects changed values, types, order, diagnostics
 or saved bytes. Per-case exclusions and artifact comparison scope appear in
@@ -41,8 +46,11 @@ Use absolute script, fixture and lock paths when running outside the checkout.
 The comparator needs the pinned YAML and Arrow dependencies in `python/uv.lock`;
 the R runner needs base R and the installed package.
 
-`tools/seed_public_conformance.py` derives required sets from successful full
+`tools/seed_public_conformance.py` derives passing observations from successful full
 matrix runs. It replays saved observations against expected files, requires
 every platform/interpreter/package tuple from the same revision and refuses
-reductions when given `--previous`. The comparator's `--ratchet` option enforces
-the declared required set. Expected data remains unchanged.
+reductions when given `--previous`. Add
+`--ratchet rust/qualification/public-conformance.json` to each comparison to require
+every current active case to pass on that host, including a newly added directory
+absent from earlier observations. The prior observations identify new passes;
+they do not act as an executable/runtime registry. Expected data remains unchanged.

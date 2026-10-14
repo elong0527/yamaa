@@ -6274,6 +6274,24 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('wrong-target', result.stdout)
 
+    def test_example_index_extra_columns_keep_link_title_and_duplicate_guards(self):
+        examples = self.root_dir / 'benchmarks'
+        case = examples / 'good'
+        case.mkdir(parents=True)
+        (case / 'README.md').write_text('# Good: description\n')
+        index = examples / 'README.md'
+        row = '| [`good`](good/) | description | lifecycle | Python, R |\n'
+        index.write_text(row)
+        self.assertEqual(VALIDATOR.validate_examples_index(self.root_dir), [])
+        index.write_text(row + row)
+        self.assertIn('duplicate index entry for good',
+                      '\n'.join(VALIDATOR.validate_examples_index(self.root_dir)))
+        index.write_text(row.replace('(good/)', '(wrong-target/)'))
+        self.assertIn('wrong-target',
+                      '\n'.join(VALIDATOR.validate_examples_index(self.root_dir)))
+        index.write_text(row.replace('description', 'wrong description'))
+        self.assertTrue(VALIDATOR.validate_examples_index(self.root_dir))
+
     def test_example_index_missing(self):
         ex_dir = self.root_dir / 'benchmarks'
         ex_dir.mkdir(parents=True, exist_ok=True)
