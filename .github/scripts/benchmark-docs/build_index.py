@@ -12,6 +12,8 @@ from public_conformance import plan
 
 
 def render_index(fixtures, current):
+    if len(re.findall(r"^## Benchmarks\n", current, re.MULTILINE)) != 1:
+        raise ValueError("benchmark index requires exactly one '## Benchmarks' heading")
     prefix = current.split("## Benchmarks\n", 1)[0]
     payload = plan(fixtures)
     active = sum(not row["excluded"] for row in payload["examples"])
@@ -50,8 +52,12 @@ def main():
     parser.add_argument("--root", type=Path, default=ROOT)
     args = parser.parse_args()
     path = args.root / "benchmarks/README.md"
-    current = path.read_text(encoding="utf-8")
-    result = render_index(path.parent, current)
+    try:
+        current = path.read_text(encoding="utf-8")
+        result = render_index(path.parent, current)
+    except (OSError, ValueError) as error:
+        print(f"Cannot generate benchmark index: {error}", file=sys.stderr)
+        return 1
     if args.check:
         if result != current:
             print(f"Stale benchmark index: {path}", file=sys.stderr)
