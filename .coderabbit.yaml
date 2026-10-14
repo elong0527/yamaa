@@ -7,7 +7,7 @@ reviews:
   collapse_walkthrough: true
   auto_review:
     enabled: true
-    drafts: false                # don't review draft PRs
+    drafts: true                 # review draft PRs too, for early feedback while a PR is still in draft
     base_branches:
       - "main"
   path_filters:
