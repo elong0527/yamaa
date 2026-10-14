@@ -23,7 +23,12 @@ packageVersion("yamaa")
 `yamaa_domain` computes without publishing files. Explicit Save publishes retained
 producer bytes before consumers and reuses those bytes on repeated calls. A failed
 build raises `yamaa_domain_error` on Save. Owned result attributes are read only;
-issue context is JSON text. `yamaa_check` reads no study data or project code.
+issue context is JSON text. Compiler capacity refusals retain `engine_rejected`
+and a null requirement, with `code: compiler_limit`, `stage: prepare`, the
+`resource`, integer `limit` and counted `actual` in context. `spec_paths`
+identifies the refused declaration; check and build return the same facts with
+or without an environment. Numeric policy refusals retain their applicable
+resource bound under `code: numeric_policy`. `yamaa_check` reads no study data or project code.
 Resource paths resolve from their original declaring YAML layer under the
 [local-path policy](../../rules/storage/resources.md).
 

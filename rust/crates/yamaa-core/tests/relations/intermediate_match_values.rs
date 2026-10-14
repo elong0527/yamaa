@@ -252,7 +252,12 @@ fn aggregate_key_count_refuses_before_deferred_width_ownership_or_findings() {
     };
     assert!(matches!(
         PreparedSpecification::prepare_with_limits(&document, limits),
-        Err(PrepareError::Limit("intermediate_keys"))
+        Err(PrepareError::Limit(
+            yamaa_core::specification::CompilerLimit {
+                resource: "intermediate_keys",
+                ..
+            }
+        ))
     ));
 }
 #[test]

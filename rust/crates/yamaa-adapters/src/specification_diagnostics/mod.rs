@@ -187,12 +187,11 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
         json!({"status":"invalid","diagnostics":diagnostics})
     } else if let Error::Prepare(PrepareError::Unsupported(features)) = error {
         json!({"status":"unsupported","features":features.iter().map(|f| json!({"operation":f.operation,"spec_path":f.path})).collect::<Vec<_>>()})
+    } else if let Error::Prepare(error) = error {
+        preparation_outcome(error)
     } else {
         let (stage, code) = match error {
-            Error::Prepare(PrepareError::Limit(_)) => ("prepare", "compiler_limit"),
-            Error::Prepare(PrepareError::Numeric { .. }) => ("prepare", "numeric_policy"),
-            Error::Prepare(PrepareError::OutputSchema(_)) => ("prepare", "output_schema"),
-            Error::Prepare(_) => ("prepare", "internal"),
+            Error::Prepare(_) => unreachable!("preparation errors handled above"),
             Error::Source(TextTableError::Csv(csv_source::Error::Limit { .. })) => {
                 ("ingest", "csv_limit")
             }
@@ -224,6 +223,61 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
         json!({"status":"rejected","stage":stage,"code":code})
     };
     json!({"protocol":"specification/prototype","outcome":outcome}).to_string()
+}
+
+/// The same compiler failure facts are used by plain and environment routes.
+pub(crate) fn preparation_outcome(error: &PrepareError) -> Value {
+    if let PrepareError::Limit(limit) = error {
+        let mut outcome = json!({"status":"rejected","stage":"prepare","code":"compiler_limit",
+            "resource":limit.resource,"limit":limit.limit,"spec_paths":limit.spec_paths});
+        if let Some(actual) = limit.actual {
+            outcome["actual"] = json!(actual);
+        }
+        return outcome;
+    }
+    if let PrepareError::Numeric { path, error } = error {
+        use yamaa_core::{
+            numeric_compiler::CompileError,
+            numeric_parser::{ParseError, ParseResource},
+        };
+        let bound = match error {
+            CompileError::ResolutionLimit { limit, required } => {
+                Some(("resolutions", *limit, Some(*required)))
+            }
+            CompileError::Parse(ParseError::Limit {
+                resource, limit, ..
+            }) => {
+                let resource = match resource {
+                    ParseResource::Bytes => "bytes",
+                    ParseResource::Tokens => "tokens",
+                    ParseResource::Nodes => "nodes",
+                    ParseResource::Depth => "depth",
+                };
+                Some((resource, *limit, None))
+            }
+            _ => None,
+        };
+        if let Some((resource, limit, actual)) = bound {
+            let mut outcome = json!({"status":"rejected","stage":"prepare","code":"numeric_policy",
+                "resource":resource,"limit":limit,"spec_paths":[path]});
+            if let Some(actual) = actual {
+                outcome["actual"] = json!(actual);
+            }
+            return outcome;
+        }
+    }
+    let code = match error {
+        PrepareError::Numeric { .. } => "numeric_policy",
+        PrepareError::OutputSchema(_) => "output_schema",
+        _ => "internal",
+    };
+    json!({"status":"rejected","stage":"prepare","code":code})
+}
+pub(crate) fn compiler_failure(error: &PrepareError) -> crate::file_application::Failure {
+    crate::file_application::preparation_failure(
+        json!({"protocol":"specification/prototype","outcome":preparation_outcome(error)})
+            .to_string(),
+    )
 }
 
 fn capture_response(outcome: Value) -> String {

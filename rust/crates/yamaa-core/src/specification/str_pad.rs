@@ -54,7 +54,12 @@ pub(super) fn prepare(
             source: source.into(),
             path: path.into(),
         }),
-        Err(DeclarationError::MetadataLimit) => Err(PrepareError::Limit("str_pad_metadata")),
+        Err(DeclarationError::MetadataLimit) => Err(PrepareError::limit(
+            "str_pad_metadata",
+            MAX_DECLARATION_BYTES,
+            None,
+            Some(path),
+        )),
         Err(DeclarationError::Shape) => Err(PrepareError::Internal),
     }
 }
@@ -73,29 +78,46 @@ pub(super) fn declaration_admission(
         depth: usize,
         bytes: &mut usize,
     ) -> Result<(), PrepareError> {
-        if depth > 64 || path.len() > 65_536 {
-            return Err(PrepareError::Limit("case_depth"));
+        if depth > 64 {
+            return Err(PrepareError::limit(
+                "case_depth",
+                64,
+                Some(depth),
+                Some(path),
+            ));
+        }
+        if path.len() > 65_536 {
+            return Err(PrepareError::limit(
+                "path_bytes",
+                65_536,
+                Some(path.len()),
+                Some(path),
+            ));
         }
         if let Some(payload) = d.field(value, "str_pad") {
             let source = text(d, field(d, payload, "source")?)?;
             let N::Integer(width) = &d.nodes()[field(d, payload, "width")?] else {
                 return Err(PrepareError::Internal);
             };
-            let operation_path_bytes = path
-                .len()
-                .checked_add(".str_pad".len())
-                .ok_or(PrepareError::Limit("str_pad_metadata"))?;
+            let operation_path_bytes =
+                path.len().checked_add(".str_pad".len()).ok_or_else(|| {
+                    PrepareError::limit("str_pad_metadata", MAX_DECLARATION_BYTES, None, Some(path))
+                })?;
             let required = source
                 .len()
                 .checked_add(operation_path_bytes)
                 .and_then(|n| n.checked_add(width.len()))
                 .and_then(|n| n.checked_mul(8))
                 .and_then(|n| n.checked_add(512))
-                .ok_or(PrepareError::Limit("str_pad_metadata"))?;
+                .ok_or_else(|| {
+                    PrepareError::limit("str_pad_metadata", MAX_DECLARATION_BYTES, None, Some(path))
+                })?;
             *bytes = bytes
                 .checked_add(required)
                 .filter(|&n| n <= MAX_DECLARATION_BYTES)
-                .ok_or(PrepareError::Limit("str_pad_metadata"))?;
+                .ok_or_else(|| {
+                    PrepareError::limit("str_pad_metadata", MAX_DECLARATION_BYTES, None, Some(path))
+                })?;
         }
         if let Some(case) = d.field(value, "case") {
             for (index, &branch) in sequence(d, case)?.iter().enumerate() {

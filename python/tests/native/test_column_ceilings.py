@@ -5,6 +5,8 @@ typed source fields, and refuses 1,025. These controls exercise the
 installed public host API, so they need the compiled native extension.
 """
 
+import json
+
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
@@ -124,3 +126,49 @@ def test_wide_producer_contract_and_decoder_build(tmp_path):
     built = yamaa.domain(spec)
     assert built.issues.height == 0
     assert built.output.to_dict(as_series=False) == {"ID": ["S-001"]}
+
+
+@pytest.mark.parametrize("environment", [False, True])
+@pytest.mark.parametrize(
+    ("resource", "limit", "actual", "path"),
+    [
+        ("columns", 1024, 1025, "columns"),
+        ("inputs", 16, 17, "input"),
+        ("source_fields", 1024, 1025, "input.SRC.types"),
+        ("projected_columns", 1024, 1025, "output.columns"),
+    ],
+)
+def test_compiler_refusal_details_on_check_and_domain(
+    tmp_path, environment, resource, limit, actual, path
+):
+    spec = write_case(
+        tmp_path,
+        columns=actual if resource == "columns" else 1,
+        typed_fields=actual if resource == "source_fields" else 0,
+    )
+    document = yaml.safe_load(spec.read_text())
+    if resource == "inputs":
+        document["input"] = {f"S{index}": "input.csv" for index in range(actual)}
+    if resource == "projected_columns":
+        document["output"]["columns"] = ["ID"] * actual
+    spec.write_text(yaml.safe_dump(document))
+    kwargs = {}
+    if environment:
+        env = tmp_path / "environment.yaml"
+        env.write_text("schema_version: '1.0'\nlanguage: python\n")
+        kwargs["environment"] = env
+    for operation in (yamaa.check, yamaa.domain):
+        result = operation(spec, **kwargs)
+        assert result.issues.height == 1
+        issue = result.issues.row(0, named=True)
+        assert issue["phase"] == "engine"
+        assert issue["condition"] == "engine_rejected"
+        assert issue["requirement"] is None
+        assert issue["spec_paths"] == [path]
+        assert json.loads(issue["context"]) == {
+            "code": "compiler_limit",
+            "stage": "prepare",
+            "resource": resource,
+            "limit": limit,
+            "actual": actual,
+        }
