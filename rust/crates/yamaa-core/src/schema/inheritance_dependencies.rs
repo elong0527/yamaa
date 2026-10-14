@@ -276,6 +276,18 @@ impl<'a> Run<'a, '_> {
                 add(&mut self.live_columns, column.name, self.budget)?;
             }
         }
+        // REQ-0638: an intermediate carrying its own verification is a
+        // declared assertion, so it is a reachability root even when no
+        // column reads it; an absent or empty list keeps ordinary pruning.
+        for i in 0..self.intermediates.len() {
+            let intermediate = self.intermediates[i];
+            let has_assertion = self.field(intermediate.node, "verifications")?.is_some_and(
+                |node| matches!(&self.input.nodes()[node], N::Sequence(items) if !items.is_empty()),
+            );
+            if has_assertion {
+                add(&mut self.live_intermediates, intermediate.name, self.budget)?;
+            }
+        }
         let base = self.field(root, "base")?;
         if let Some(name) = base.and_then(|id| self.text(id)) {
             add(&mut self.live_inputs, name, self.budget)?;

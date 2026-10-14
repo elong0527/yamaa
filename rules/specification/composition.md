@@ -283,6 +283,7 @@ live. Reachability begins with:
 - columns named by `output.columns`, `keys`, or `output.order_by`;
 - columns read by dataset verifications;
 - a column carrying its own column verification;
+- an intermediate carrying its own intermediate verification;
 - every surviving row template (declaring a row changes the artifact's
   rows); and
 - a dataset named by `base`, including when a surviving row falls back to it.
