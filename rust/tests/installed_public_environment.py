@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import runpy
 import os
 import shutil
 import tempfile
@@ -16,13 +17,12 @@ from yamaa import _locked_functions as host
 
 import yaml
 
-ROOT = Path(__file__).parent / "project-original"
-CASES = (
-    "schema-functions",
-    "schema-non-finite",
-    "adam-adsl-bmi",
-    "adam-advs-percentiles",
+TRUTH = runpy.run_path(str(Path(__file__).with_name("host-fixtures") / "reader.py"))["load"](
+    __file__, "public-environment"
 )
+
+ROOT = Path(__file__).parent / "project-original"
+CASES = tuple(TRUTH["original_case_names"])
 
 
 class PublicEnvironment(unittest.TestCase):
@@ -85,7 +85,7 @@ class PublicEnvironment(unittest.TestCase):
                     Path("environment.yaml").write_text(prefix + field)
                     checked = yamaa.check("spec.yaml", environment="environment.yaml")
                     self.assertTrue(checked.issues.is_empty(), checked.issues)
-                for declared in ("null", "true", "1", "1.5", "''"):
+                for declared in tuple(TRUTH["invalid_source_system_versions"]):
                     Path("environment.yaml").write_text(prefix + f"  source_system_version: {declared}\n")
                     checked = yamaa.check("spec.yaml", environment="environment.yaml")
                     self.assertEqual(checked.issues.height, 1, checked.issues)
@@ -138,9 +138,9 @@ class PublicEnvironment(unittest.TestCase):
         Path("parents").mkdir()
         Path("parents/base.yaml").write_text(document("{RAW: ../never-read.csv}", "RAW", "../leaf.csv", True))
         Path("leaf.yaml").write_text("schema_version: '1.0'\nparents: [parents/base.yaml]\ndomain: LEAF\n")
-        Path("left.yaml").write_text(document("{P: {path: leaf.csv, schema: './leaf.yaml'}}", "P", "left.csv"))
-        Path("right.yaml").write_text(document("{P: {path: leaf.csv, schema: leaf.yaml}}", "P", "right.csv"))
-        Path("spec.yaml").write_text(document("{L: {path: left.csv, schema: left.yaml}, R: {path: right.csv, schema: right.yaml}, Q: {path: right.csv, schema: './right.yaml'}}", "L", "consumer.csv", True))
+        Path("left.yaml").write_text(document(TRUTH["aliased_leaf_reference"], "P", "left.csv"))
+        Path("right.yaml").write_text(document(TRUTH["leaf_reference"], "P", "right.csv"))
+        Path("spec.yaml").write_text(document(TRUTH["diamond_reference"], "L", "consumer.csv", True))
         with (
             patch.object(host, "verify_versions", side_effect=AssertionError("unexpected activation")),
             patch.object(host, "resolve_callable", side_effect=AssertionError("unexpected binding")),
@@ -154,25 +154,25 @@ class PublicEnvironment(unittest.TestCase):
                         context["declaring_sources"] = [Path("parents/base.yaml").resolve().as_posix()]
                     self.assertEqual(row, {
                         "phase": "validation", "condition": "invalid_regex", "requirement": "REQ-0827",
-                        "spec_paths": ["columns.VALUE.verifications[0].matches.pattern"],
+                        "spec_paths": [TRUTH["verification_pattern_path"]],
                         "context": json.dumps(context, sort_keys=True, ensure_ascii=False, separators=(",", ":")),
                     })
             # The original authored mismatch is admitted independently of any
             # absent serialized artifact. Checking never opens the CSV paths.
-            Path("spec.yaml").write_text(document("{P: {path: wrong.csv, schema: leaf.yaml}}", "P", "consumer.csv"))
+            Path("spec.yaml").write_text(document(TRUTH["wrong_leaf_reference"], "P", "consumer.csv"))
             rows = yamaa.check("spec.yaml", environment="environment.yaml").issues.to_dicts()
             self.assertEqual([(r["condition"], r["requirement"], r["spec_paths"]) for r in rows],
                 [("producer_output_path_mismatch", "REQ-0534", ["input.P.path", "input.P.schema"])])
-            Path("spec.yaml").write_text(document("{P: {path: leaf.csv, schema: leaf.yaml, types: {ID: int}}}", "P", "consumer.csv"))
+            Path("spec.yaml").write_text(document(TRUTH["incompatible_leaf_reference"], "P", "consumer.csv"))
             rows = yamaa.check("spec.yaml", environment="environment.yaml").issues.to_dicts()
             self.assertEqual([(r["condition"], r["requirement"], r["spec_paths"]) for r in rows],
                 [("redundant_field_type", "REQ-0523", ["input.P.types.ID"])])
-        for name in ("never-read.csv", "leaf.csv", "left.csv", "right.csv", "consumer.csv", "wrong.csv"):
+        for name in tuple(TRUTH["unread_graph_files"]):
             self.assertFalse(Path(name).exists())
 
     def test_declaring_file_paths_ignore_configuration_and_save_held_bytes(self):
         os.chdir(self.directory)
-        for name in ("entry", "shared", "outputs"):
+        for name in tuple(TRUTH["inherited_directories"]):
             Path(name).mkdir()
         Path("yamaa-project.yaml").write_text("[invalid configuration")
         Path("shared/environment.yaml").write_text(
@@ -210,7 +210,7 @@ class PublicEnvironment(unittest.TestCase):
         self.assertNotIn("yamaa-project.yaml", json.dumps(before))
         # Save uses the already serialized bytes and retained output location.
         # No specification, environment or input reread can supply this truth.
-        for name in ("entry/spec.yaml", "shared/base.yaml", "shared/environment.yaml"):
+        for name in tuple(TRUTH["inherited_source_files"]):
             Path(name).unlink()
         Path("shared/data.csv").write_text("ID\n8\n")
         self.assertTrue(result.save())
@@ -221,7 +221,7 @@ class PublicEnvironment(unittest.TestCase):
         self,
     ):
         os.chdir(self.directory)
-        for name in ("entry", "shared", "outputs"):
+        for name in tuple(TRUTH["inherited_directories"]):
             Path(name).mkdir()
         Path("environment.yaml").write_text("schema_version: '1.0'\nlanguage: python\n")
         Path("shared/data.csv").write_text("ID\n7\n")
@@ -266,7 +266,7 @@ class PublicEnvironment(unittest.TestCase):
 
     def test_external_codelists_keep_environment_locations_and_missing_files_fail_there(self):
         os.chdir(self.directory)
-        for name in ("entry", "environment", "terminology", "outputs"):
+        for name in tuple(TRUTH["terminology_directories"]):
             Path(name).mkdir()
         Path("yamaa-project.yaml").write_text("[ignored configuration")
         Path("entry/spec.yaml").write_text(
@@ -424,7 +424,7 @@ class PublicEnvironment(unittest.TestCase):
             with self.assertRaises(yamaa.DomainError):
                 result.save()
             self.assertFalse((self.directory / output).exists())
-        for invalid in ("true", "2.0", "'2'"):
+        for invalid in tuple(TRUTH["invalid_significant_digits"]):
             self.precision_study(invalid)
             result = yamaa.check("spec.yaml", environment="environment.yaml")
             self.assertEqual(result.issues["spec_paths"].to_list(), [["output.decimals"]])
@@ -607,7 +607,7 @@ class PublicEnvironment(unittest.TestCase):
 
     def test_approved_math_is_identical_in_root_row_and_nested_case_compute(self):
         expression = {"compute": {"expr": "EXP(0) + LN(1) + POWER(2, 3)"}}
-        for context in ("column", "row", "case"):
+        for context in tuple(TRUTH["quota_modes"]):
             with self.subTest(context=context):
                 case = (
                     self.value_study()

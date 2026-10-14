@@ -1,4 +1,8 @@
 library(yamaa)
+host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
+  system.file("host-fixtures",package="yamaa",mustWork=TRUE)
+source(file.path(host_fixture_root,"reader.R"),local=TRUE)
+host_truth <- read_host_fixture(host_fixture_root,"public-environment")
 domain_file_native <- get("wrap__domain_file", asNamespace("yamaa"))
 for (capabilities in list(list(), list(NULL, function(...) NULL, function(...) NULL))) {
   reply <- .Call(domain_file_native, charToRaw("absent-spec.yaml"),
@@ -51,7 +55,7 @@ qualify_unavailable_environment_root()
 
 previous <- getwd()
 work <- tempfile("public-environment-"); dir.create(work)
-for (name in c("schema-functions", "schema-non-finite", "adam-adsl-bmi", "adam-advs-percentiles")) {
+for (name in fixture_strings(host_truth[["original_case_names"]])) {
   stopifnot(file.copy(file.path(root, name), work, recursive = TRUE))
   case <- file.path(work, name); setwd(case)
   expected <- list.files("expected", pattern = "[.]csv$", full.names = TRUE)
@@ -125,7 +129,7 @@ checked <- yamaa_check("spec.yaml", environment = env)
 stopifnot(setequal(checked$issues$requirement, c("REQ-0700", "REQ-0953")))
 # Independently specified math truth is identical in column, row and nested case
 # contexts. These declarations call no project function.
-for (context in c("column", "row", "case")) {
+for (context in fixture_strings(host_truth[["quota_modes"]])) {
   target <- file.path(work, paste0("math-", context)); dir.create(target)
   stopifnot(file.copy(file.path(root, name), target, recursive = TRUE))
   setwd(file.path(target, name))
@@ -157,7 +161,7 @@ precision_study <- function(decimals = "2", path = "rounded.csv") {
   precision <- if (is.null(decimals)) "" else paste0(", decimals: ", decimals)
   writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
     "input: {SRC: {path: input.csv, types: {ID: int, VALUE: float, INT: int}}}",
-    paste0("output: {path: ", path, ", columns: [ID, VALUE, DOUBLE, EMPTY, INT]", precision, "}"),
+    paste0("output: {path: ", path, host_truth[["callback_projection"]], precision, "}"),
     "columns:", "  - {name: ID, type: int, derivation: SRC.ID}",
     "  - {name: VALUE, type: float, derivation: SRC.VALUE}",
     "  - {name: DOUBLE, type: float, derivation: {compute: {expr: 'VALUE + VALUE'}}}",
@@ -166,9 +170,7 @@ precision_study <- function(decimals = "2", path = "rounded.csv") {
     "verifications: [{assert: {when: 'ID = 5', require: 'DOUBLE = 2.468'}}]"), "spec.yaml")
 }
 precision_study()
-expected <- charToRaw(paste0('ID,VALUE,DOUBLE,EMPTY,INT\n1,0.13,0.25,"",7\n2,-0.13,-0.25,"",-7\n',
-  '3,2.67,5.35,"",0\n4,0.00,-0.01,"",9\n5,1.23,2.47,"",1\n',
-  '6,2.35,4.69,"",2\n7,,,"",3\n8,25.00,50.00,"",4\n'))
+expected <- fixture_bytes(host_truth[["rounded_callback_csv"]])
 stopifnot(nrow(yamaa_check("spec.yaml", environment = "environment.yaml")$issues) == 0L)
 rounded <- yamaa_domain("spec.yaml", environment = "environment.yaml")
 stopifnot(nrow(rounded$issues) == 0L,
@@ -202,7 +204,7 @@ for (case in list(c("-9223372036854775809", "rounded.csv", "invalid_field_type",
   if (case[[1L]] == "-9223372036854775809") stopifnot(grepl(
     '"actual":-9223372036854775809', observations(failed), fixed = TRUE))
 }
-for (invalid in c("true", "2.0", "'2'")) {
+for (invalid in fixture_strings(host_truth[["invalid_significant_digits"]])) {
   precision_study(invalid)
   checked <- yamaa_check("spec.yaml", environment = "environment.yaml")
   stopifnot(nrow(checked$issues) == 1L, identical(checked$issues$spec_paths, list("output.decimals")))
@@ -244,9 +246,9 @@ graph_document <- function(input, base, output, invalid = FALSE) c(
 dir.create("parents")
 writeLines(graph_document("{RAW: ../never-read.csv}", "RAW", "../leaf.csv", TRUE), "parents/base.yaml")
 writeLines(c("schema_version: '1.0'", "parents: [parents/base.yaml]", "domain: LEAF"), "leaf.yaml")
-writeLines(graph_document("{P: {path: leaf.csv, schema: './leaf.yaml'}}", "P", "left.csv"), "left.yaml")
-writeLines(graph_document("{P: {path: leaf.csv, schema: leaf.yaml}}", "P", "right.csv"), "right.yaml")
-writeLines(graph_document("{L: {path: left.csv, schema: left.yaml}, R: {path: right.csv, schema: right.yaml}, Q: {path: right.csv, schema: './right.yaml'}}", "L", "consumer.csv", TRUE), "spec.yaml")
+writeLines(graph_document(host_truth[["aliased_leaf_reference"]], "P", "left.csv"), "left.yaml")
+writeLines(graph_document(host_truth[["leaf_reference"]], "P", "right.csv"), "right.yaml")
+writeLines(graph_document(host_truth[["diamond_reference"]], "L", "consumer.csv", TRUE), "spec.yaml")
 for (attempt in 1:2) {
   checked <- yamaa_check("spec.yaml", environment = "environment.yaml")
   expected_context <- vapply(c("spec.yaml", "leaf.yaml"), function(source) paste0(
@@ -256,25 +258,25 @@ for (attempt in 1:2) {
   stopifnot(identical(checked$issues$phase, rep("validation", 2L)),
     identical(checked$issues$condition, rep("invalid_regex", 2L)),
     identical(checked$issues$requirement, rep("REQ-0827", 2L)),
-    identical(checked$issues$spec_paths, rep(list("columns.VALUE.verifications[0].matches.pattern"), 2L)),
+    identical(checked$issues$spec_paths, rep(list(host_truth[["verification_pattern_path"]]), 2L)),
     identical(checked$issues$context, expected_context))
 }
-writeLines(graph_document("{P: {path: wrong.csv, schema: leaf.yaml}}", "P", "consumer.csv"), "spec.yaml")
+writeLines(graph_document(host_truth[["wrong_leaf_reference"]], "P", "consumer.csv"), "spec.yaml")
 checked <- yamaa_check("spec.yaml", environment = "environment.yaml")
 stopifnot(identical(checked$issues$condition, "producer_output_path_mismatch"),
   identical(checked$issues$requirement, "REQ-0534"),
   identical(checked$issues$spec_paths, list(c("input.P.path", "input.P.schema"))))
-writeLines(graph_document("{P: {path: leaf.csv, schema: leaf.yaml, types: {ID: int}}}", "P", "consumer.csv"), "spec.yaml")
+writeLines(graph_document(host_truth[["incompatible_leaf_reference"]], "P", "consumer.csv"), "spec.yaml")
 checked <- yamaa_check("spec.yaml", environment = "environment.yaml")
 stopifnot(identical(checked$issues$condition, "redundant_field_type"),
   identical(checked$issues$requirement, "REQ-0523"),
   identical(checked$issues$spec_paths, list("input.P.types.ID")),
-  !any(file.exists(c("never-read.csv", "leaf.csv", "left.csv", "right.csv", "consumer.csv", "wrong.csv"))))
+  !any(file.exists(fixture_strings(host_truth[["unread_graph_files"]]))))
 cat("public R original inherited diamond checks are complete with no study/publication effects\n")
 # Declaring-file input/output provenance survives inheritance and publication.
 local_paths <- file.path(work, "declaring-file-paths"); dir.create(local_paths)
 setwd(local_paths)
-for (name in c("entry", "shared", "outputs")) dir.create(name)
+for (name in fixture_strings(host_truth[["inherited_directories"]])) dir.create(name)
 writeLines("[invalid configuration", "yamaa-project.yaml")
 writeLines(c("schema_version: '1.0'", "language: r"), "shared/environment.yaml")
 writeLines(c("schema_version: '1.0'", "parents: ../shared/base.yaml", "domain: CHILD"), "entry/spec.yaml")
@@ -287,7 +289,7 @@ held <- yamaa_domain("entry/spec.yaml", environment = "shared/environment.yaml")
 stopifnot(nrow(checked$issues) == 0L, nrow(held$issues) == 0L,
   identical(as.character(held$output$ID), "7"), !file.exists("outputs/held.csv"),
   !grepl("yamaa-project.yaml", observations(held), fixed = TRUE))
-unlink(c("entry/spec.yaml", "shared/base.yaml", "shared/environment.yaml"))
+unlink(fixture_strings(host_truth[["inherited_source_files"]]))
 writeLines(c("ID", "8"), "shared/data.csv")
 stopifnot(isTRUE(held$save()), identical(rawfile("outputs/held.csv"), charToRaw("ID\n7\n")))
 writeLines(c("schema_version: '1.0'", "language: r"), "environment.yaml")
@@ -317,7 +319,7 @@ for (input in c("data.csv", "../shared/directory.csv")) {
 cat("public R declaring-file inheritance, absolute paths, held bytes and no configuration fallback passed\n")
 # External codelists obey the environment's own declaring-file path.
 ct_paths <- file.path(work, "codelist-paths"); dir.create(ct_paths); setwd(ct_paths)
-for (name in c("entry", "environment", "terminology", "outputs")) dir.create(name)
+for (name in fixture_strings(host_truth[["terminology_directories"]])) dir.create(name)
 writeLines("[ignored configuration", "yamaa-project.yaml")
 writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
   "input: {SRC: {path: data.csv, types: {ID: str}}}",
@@ -366,7 +368,7 @@ qualify_submission_versions <- function() {
       writeLines(c(prefix, field), "environment.yaml")
       stopifnot(nrow(yamaa_check("spec.yaml", environment = "environment.yaml")$issues) == 0L)
     }
-    for (declared in c("null", "true", "1", "1.5", "''")) {
+    for (declared in fixture_strings(host_truth[["invalid_source_system_versions"]])) {
       writeLines(c(prefix, paste0("  source_system_version: ", declared)), "environment.yaml")
       issues <- yamaa_check("spec.yaml", environment = "environment.yaml")$issues
       stopifnot(nrow(issues) == 1L,

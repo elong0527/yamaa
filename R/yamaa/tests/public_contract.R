@@ -1,12 +1,16 @@
 # Installed public API contracts; inputs and exact truth are independently authored.
 library(yamaa)
+host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
+  system.file("host-fixtures",package="yamaa",mustWork=TRUE)
+source(file.path(host_fixture_root,"reader.R"),local=TRUE)
+host_truth <- read_host_fixture(host_fixture_root,"public-contract")
 stopifnot(identical(as.character(packageVersion("yamaa")), "0.4.0"),
   identical(yamaa:::.core_version(), as.character(packageVersion("yamaa"))))
 stopifnot(identical(sort(getNamespaceExports("yamaa")), c("yamaa_check", "yamaa_define", "yamaa_domain")))
 check_issues <- function(result) {
   value <- result$issues
   stopifnot(is.data.frame(value),
-    identical(names(value), c("phase", "condition", "requirement", "spec_paths", "context")),
+    identical(names(value), fixture_strings(host_truth[["issue_columns"]])),
     all(vapply(value[c("phase", "condition", "requirement", "context")], is.character, logical(1))),
     is.list(value$spec_paths), all(startsWith(value$context, "{")))
   value
@@ -19,7 +23,7 @@ stopifnot(identical(names(formals(yamaa_domain)), c("specification", "environmen
   identical(names(formals(yamaa_check)), c("specification", "environment")),
   identical(formals(yamaa_domain)$environment, NULL),
   identical(formals(yamaa_check)$environment, NULL),
-  identical(names(formals(yamaa_define)), c("environment", "standard", "created")))
+  identical(names(formals(yamaa_define)), fixture_strings(host_truth[["define_argument_names"]])))
 for (value in list(NULL, 7L, TRUE, NA_character_, character(), c("a", "b"),
   structure("a", class = "path"), structure("a", names = "path"))) {
   argument_failure(yamaa_domain(value))
@@ -58,13 +62,9 @@ run_contract <- function() {
   path <- function(name) file.path(root, name)
   write <- function(name, value) writeBin(if (is.raw(value)) value else charToRaw(value), path(name))
   rawfile <- function(name) readBin(path(name), "raw", n = file.info(path(name))$size)
-  spec <- paste0("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\n",
-    "columns:\n  - {name: ID, type: str, derivation: SRC.ID}\n",
-    "  - {name: VALUE, type: int, derivation: SRC.VALUE}\n",
-    "output: {path: output.csv, columns: [ID, VALUE]}\n")
-  input <- paste0("ID,VALUE\na,-9223372036854775808\nb,9223372036854775807\n",
-    "c,9007199254740993\nd,7\ne,\n")
-  truth <- c("-9223372036854775808", "9223372036854775807", "9007199254740993", "7", NA_character_)
+  spec <- host_truth[["specification_yaml"]]
+  input <- host_truth[["r_input_csv"]]
+  truth <- vapply(host_truth[["r_values_decimal"]],function(value) if(is.null(value)) NA_character_ else value,character(1L),USE.NAMES=FALSE)
   write("spec.yaml", spec); write("input.csv", input)
   first <- yamaa_domain(path("spec.yaml")); second <- yamaa_domain(path("spec.yaml"))
   for (result in list(first, second)) {
@@ -73,7 +73,7 @@ run_contract <- function() {
       identical(as.character(result$output$VALUE), truth),
       identical(is.na(result$output$VALUE), c(FALSE, FALSE, FALSE, FALSE, TRUE)),
       is.null(result$verification_log), is.null(result$warning_log))
-    for (field in c("output", "issues", "verification_log", "warning_log")) {
+    for (field in fixture_strings(host_truth[["owned_view_names"]])) {
       stopifnot(inherits(tryCatch({ result[[field]] <- NULL }, error = identity), "error"))
     }
     stopifnot(inherits(tryCatch(result$save(path("other.csv")), error = identity), "error"))
@@ -105,7 +105,7 @@ run_contract <- function() {
   }
 
   text_spec <- sub("VALUE, type: int", "VALUE, type: str", spec, fixed = TRUE)
-  text_spec <- sub("output: {", "  - {name: EMPTY, type: str, derivation: {literal: ''}}\noutput: {", text_spec, fixed = TRUE)
+  text_spec <- sub("output: {", host_truth[["empty_text_column"]], text_spec, fixed = TRUE)
   text_spec <- sub("columns: [ID, VALUE]", "columns: [ID, VALUE, EMPTY]", text_spec, fixed = TRUE)
   write("spec.yaml", text_spec)
   write("input.csv", c(charToRaw("ID,VALUE\na,a"), as.raw(0L), charToRaw("b\nb,"),
@@ -138,14 +138,12 @@ run_contract <- function() {
     as.raw(c(0xc3, 0xa9)), charToRaw(',""\nc,,""\n'))
   stopifnot(identical(rawfile("output.csv"), expected))
 
-  failed_spec <- sub("  - {name: VALUE, type: int, derivation: SRC.VALUE}",
-    paste0("  - name: VALUE\n    type: int\n    derivation: SRC.VALUE\n    verifications:\n",
-      "      - range: {max: 0, severity: warning, id: warn}\n",
-      "      - range: {max: 0, severity: error, id: fatal}"), spec, fixed = TRUE)
-  failed_spec <- sub("output: {", "verifications:\n  - row_count: {min: 0, id: unreached}\noutput: {",
+  failed_spec <- sub(host_truth[["integer_column_yaml"]],
+    host_truth[["fatal_integer_column_yaml"]], spec, fixed = TRUE)
+  failed_spec <- sub("output: {", host_truth[["unreached_row_count_yaml"]],
     failed_spec, fixed = TRUE)
   failed_spec <- sub("columns: [ID, VALUE]}",
-    "columns: [ID, VALUE], verification_log: checks.csv, warning_log: warnings.csv}",
+    host_truth[["log_output_yaml"]],
     failed_spec, fixed = TRUE)
   write("spec.yaml", failed_spec); write("input.csv", "ID,VALUE\na,-3\nb,7\nc,\n")
   for (name in c("output.csv", "warnings.csv")) write(name, "sentinel")
@@ -179,7 +177,7 @@ run_contract <- function() {
   source <- readBin(entry, "raw", n = file.info(entry)$size)
   writeBin(charToRaw(sub("args: {}", "args: {x: SOURCE.VALUE}", rawToChar(source), fixed = TRUE)), entry)
   environment <- file.path(project, "r", "environment.yaml")
-  interrupted <- structure(list(message = "public contract activation interrupt", call = NULL),
+  interrupted <- structure(list(message = host_truth[["interrupt_message"]], call = NULL),
     class = c("public_contract_interrupt", "interrupt", "condition"))
   seen <- with_binding(".yamaa_verify_locked_versions", function(...) stop(interrupted),
     tryCatch(yamaa_domain(entry, environment), interrupt = identity))

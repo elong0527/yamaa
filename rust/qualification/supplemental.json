@@ -1033,6 +1033,35 @@
         "rust/tests/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications.R"
       ]
+    },
+    {
+      "path": "rust/tests/host-fixtures/cases.json",
+      "family": "installed-host-semantics",
+      "level": "component",
+      "consumers": [
+        "rust/tests/installed_producer_builds.py",
+        "rust/tests/installed_public_producers.py",
+        "rust/tests/installed_producer_cohort.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R",
+        "rust/tests/installed_file_resources.py",
+        "rust/tests/installed_public_environment.py",
+        "R/yamaa/tests/producer_builds.R",
+        "R/yamaa/tests/public_producers.R",
+        "R/yamaa/tests/producer_cohort.R",
+        "R/yamaa/tests/public_environment.R",
+        "rust/tests/installed_verification_logs.py",
+        "R/yamaa/tests/verification_logs.R",
+        "rust/tests/installed_producer_logs.py",
+        "R/yamaa/tests/producer_logs.R",
+        "rust/tests/installed_public_define.py",
+        "R/yamaa/tests/public_define.R",
+        "rust/tests/installed_public_contract.py",
+        "R/yamaa/tests/public_contract.R",
+        "rust/tests/installed_public_grammar.py",
+        "R/yamaa/tests/public_grammar.R",
+        "R/yamaa/tests/public_file_resources.R"
+      ]
     }
   ],
   "suites": [
@@ -1606,6 +1635,22 @@
     {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/tables/expected.tsv",
       "role": "input"
+    },
+    {
+      "path": "rust/tests/host-fixtures/reader.py",
+      "role": "input"
+    },
+    {
+      "path": "rust/tests/host-fixtures/reader.R",
+      "role": "input"
+    },
+    {
+      "path": "rust/tests/host-fixtures/assertions.json",
+      "role": "documentation"
+    },
+    {
+      "path": "rust/tests/host-fixtures/README.md",
+      "role": "documentation"
     }
   ]
 }

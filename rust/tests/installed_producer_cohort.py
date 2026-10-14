@@ -2,6 +2,7 @@
 
 import builtins
 import json
+import runpy
 import os
 import shutil
 import tempfile
@@ -11,8 +12,12 @@ from unittest.mock import patch
 
 from yamaa import domain
 
+TRUTH = runpy.run_path(str(Path(__file__).with_name("host-fixtures") / "reader.py"))["load"](
+    __file__, "producer-cohort"
+)
+
 ROOT = Path(__file__).with_name("project-original")
-NAME = "shared-producer-parquet"
+NAME = TRUTH["case_name"]
 
 
 class ProducerCohort(unittest.TestCase):
@@ -21,9 +26,9 @@ class ProducerCohort(unittest.TestCase):
             work = Path(temporary).resolve()
             case = work / NAME
             case.mkdir()
-            for name in ("seed.csv", "producer.yaml", "spec.yaml"):
+            for name in tuple(TRUTH["source_files"]):
                 shutil.copyfile(ROOT / NAME / name, case / name)
-            (work / "yamaa-project.yaml").write_text("version: '1.0'\n", encoding="ascii")
+            (work / "yamaa-project.yaml").write_text(TRUTH["project_yaml"], encoding="ascii")
             (work / "environment.yaml").write_text(
                 "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions: {}\n",
                 encoding="ascii",
@@ -54,7 +59,7 @@ class ProducerCohort(unittest.TestCase):
                 (evidence / "before.json").write_text(before, encoding="utf-8")
                 self.assertFalse((case / "produced.parquet").exists())
                 self.assertFalse((case / "out.csv").exists())
-                for name in ("seed.csv", "producer.yaml", "spec.yaml"):
+                for name in tuple(TRUTH["source_files"]):
                     (case / name).unlink()
                 saved = None
                 for attempt in (1, 2):
@@ -67,7 +72,7 @@ class ProducerCohort(unittest.TestCase):
                     for name in ("produced.parquet", "out.csv"):
                         actual[name] = (case / name).read_bytes()
                         (directory / name).write_bytes(actual[name])
-                    self.assertEqual(actual["out.csv"], b"ID\n01\n")
+                    self.assertEqual(actual["out.csv"], TRUTH["output_csv"].encode("utf-8"))
                     self.assertEqual(actual["produced.parquet"][:4], b"PAR1")
                     self.assertEqual(actual["produced.parquet"][-4:], b"PAR1")
                     if saved is not None:
