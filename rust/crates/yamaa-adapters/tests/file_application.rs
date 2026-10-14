@@ -62,8 +62,7 @@ fn identity(specification: &str) -> Identity<'_> {
 }
 #[test]
 fn changed_source_retains_original_snapshot_and_ingest_issue_and_refuses_both_saves() {
-    use yamaa_adapters::{file_preparation, specification_report};
-    use yamaa_engine::specification_run::PortError;
+    use yamaa_adapters::{file_preparation, specification_report, specification_run::PortError};
     struct NoPublication;
     impl specification_report::ArtifactPort for NoPublication {
         type Error = ();
@@ -88,10 +87,14 @@ fn changed_source_retains_original_snapshot_and_ingest_issue_and_refuses_both_sa
             yamaa_adapters::file_resources::Error::Changed
         ))
     ));
-    assert!(file_preparation::opaque_resource_failure(&attempt).is_none());
+    assert_eq!(
+        file_preparation::opaque_resource_failure(&attempt),
+        Some(&yamaa_adapters::file_resources::Error::Changed)
+    );
+    assert!(file_preparation::public_opaque_resource_failure(&attempt).is_none());
     assert_eq!(prepared.capture_reads(), reads);
     assert_eq!(original.as_ref(), b"ID\n1\n");
-    let mut result =
+    let result =
         specification_report::build_result(prepared.run(), &attempt, identity(&path)).unwrap();
     assert!(result.output().is_none());
     assert_eq!(result.issues().len(), 1);

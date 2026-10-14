@@ -546,7 +546,7 @@ impl RuntimePort for Native<'_> {
         scope: yamaa_engine::application_observer::Scope<'_>,
     ) -> Result<Domain, Failure> {
         let attempt = prepared.build_with_observer(scope);
-        if let Some(error) = file_preparation::opaque_resource_failure(&attempt) {
+        if let Some(error) = file_preparation::public_opaque_resource_failure(&attempt) {
             return Err(resource_failure("capture", error));
         }
         scope.phase(yamaa_engine::application_observer::Phase::Output);
