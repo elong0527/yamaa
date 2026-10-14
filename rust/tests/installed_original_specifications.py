@@ -3,6 +3,7 @@
 import builtins
 import csv
 import gc
+import runpy
 import importlib
 import json
 import os
@@ -18,8 +19,12 @@ from yamaa import _native as yamaa_native
 import pyarrow as pa
 import struct
 
+TRUTH = runpy.run_path(str(Path(__file__).with_name("host-fixtures") / "reader.py"))["load"](
+    __file__, "original-specifications"
+)
+
 ROOT = Path(__file__).with_name("specification-original")
-CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum", "schema-window-functions", "schema-inheritance", "schema-lookup", "negative-formula-flag", "negative-row-aggregate", "negative-row-no-prior", "negative-source-missing-field", "negative-source-trivial-filter", "negative-paired-dates", "negative-not-missing-age", "negative-implausible-age", "negative-invalid-sex", "negative-sex-code", "negative-matches-bad-pattern")
+CASES = tuple(TRUTH["original_case_names"])
 
 
 def table_snapshot(content):
@@ -86,7 +91,7 @@ def prepare(name):
     )
     if name == "schema-inheritance":
         assert state["reads"] == ["spec_organization.yaml", "spec_compound.yaml"]
-        assert state["resolutions"] == ["spec_organization.yaml", "spec_compound.yaml", "spec_organization.yaml"]
+        assert state["resolutions"] == TRUTH["parent_resolution_order"]
     else:
         assert state["reads"] == state["resolutions"] == []
     return prepared
@@ -157,7 +162,7 @@ class OriginalSpecifications(unittest.TestCase):
                     self.assertEqual(list(Path(directory).glob(".yamaa-output-*")), [])
 
     def test_native_file_preparation_retains_complete_early_findings_and_path_authority(self):
-        valid = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n"
+        valid = TRUTH["preflight_valid_yaml"]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             entry = root / "spec.yaml"
@@ -179,12 +184,12 @@ class OriginalSpecifications(unittest.TestCase):
                 yamaa_native._prepare_file_specification(str(root), str(root), "spec.yaml", [object()])
 
     def test_native_file_preparation_cross_directory_parent_rebases_and_holds_model(self):
-        valid = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n"
+        valid = TRUTH["preflight_valid_yaml"]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             (root / "entry").mkdir(); (root / "parent").mkdir()
             (root / "parent/base.yaml").write_text(valid)
-            (root / "entry/spec.yaml").write_text("schema_version: '1.0'\nparents: [../parent/base.yaml, ../parent/./base.yaml]\n")
+            (root / "entry/spec.yaml").write_text(TRUTH["aliased_parents_yaml"])
             specification = yamaa_native._prepare_file_specification(str(root), str(root / "entry"), "spec.yaml", [])
             self.assertEqual(specification.source(), ("SRC", "../parent/input.csv"))
             self.assertEqual(specification.capture_reads(), 2)
@@ -510,7 +515,7 @@ class OriginalSpecifications(unittest.TestCase):
         for created in (1, 0):
             events.clear()
             result = spec.build(capture, metadata, inspect=inspect)
-            self.assertEqual(events, [(kind, name) for kind in ("inspect", "capture") for name in ("DM", "AE", "MEDDRA")])
+            self.assertEqual(events, [(kind, name) for kind in ("inspect", "capture") for name in tuple(TRUTH["lookup_source_order"])])
             for read in expected["source_reads"]:
                 read["snapshots_created"] = created
             self.assertEqual(json.loads(result.observations()), expected)
@@ -734,7 +739,7 @@ class OriginalSpecifications(unittest.TestCase):
                     frame = result_view.issues_frame(result.issues())
                     self.assertEqual(frame.schema, result_view.ISSUE_SCHEMA)
                     self.assertEqual(frame.rows(), expected)
-                    self.assertEqual(frame.columns, ["phase","condition","requirement","spec_paths","context"])
+                    self.assertEqual(frame.columns, TRUTH["issue_columns"])
                 copy = result.issues()
                 if copy:
                     copy[0][3].append("caller mutation")
@@ -764,10 +769,7 @@ class OriginalSpecifications(unittest.TestCase):
                 content = bytes.fromhex(record["input_hex"])
                 expected = json.loads(record["expected"])
                 # Require captured citations without changing any finding.
-                if prefix == "row-filter" and record["case"] in (
-                    "grouped_source_phase", "grouped_unknown_phase",
-                    "record_unknown_phase", "group_and_filter_order",
-                ):
+                if prefix == "row-filter" and record["case"] in tuple(TRUTH["phase_replay_cases"]):
                     for diagnostics in (expected["diagnostics"], expected["nodes"][0]["diagnostics"]):
                         findings = [d for d in diagnostics if d["condition"] == "phase_boundary"]
                         self.assertEqual(len(findings), 1)
@@ -1011,7 +1013,7 @@ class OriginalSpecifications(unittest.TestCase):
         for name in CASES:
             with self.subTest(name=name):
                 specification = prepare(name)
-                sources = {"DM":"input/dm.csv", "AE":"input/ae.csv", "MEDDRA":"input/meddict.csv"} if name == "schema-lookup" else ({"VS":"input/vs.csv"} if name in ("schema-window-functions", "negative-row-no-prior") else ({"ODM":"input/odm.csv"} if name in ("negative-source-missing-field", "negative-source-trivial-filter") else ({"DM":"input/dm.csv"} if name in ("negative-paired-dates", "negative-not-missing-age", "negative-implausible-age", "negative-invalid-sex", "negative-sex-code", "negative-matches-bad-pattern") else {"LB":"input/lb.csv"})))
+                sources = {"DM":"input/dm.csv", "AE":"input/ae.csv", "MEDDRA":"input/meddict.csv"} if name == "schema-lookup" else ({"VS":"input/vs.csv"} if name in ("schema-window-functions", "negative-row-no-prior") else ({"ODM":"input/odm.csv"} if name in ("negative-source-missing-field", "negative-source-trivial-filter") else ({"DM":"input/dm.csv"} if name in tuple(TRUTH["demographic_case_names"]) else {"LB":"input/lb.csv"})))
                 self.assertEqual(specification.source(), next(iter(sources.items())))
                 state = {"requests": [], "reads": 0, "bytes": {}}
 
@@ -1045,7 +1047,7 @@ class OriginalSpecifications(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as directory:
 
                     def publish(path, content, *, name=name, published=published):
-                        self.assertIn(name, ("adam-adlb-ordered-sum", "schema-window-functions", "schema-inheritance", "schema-lookup"))
+                        self.assertIn(name, tuple(TRUTH["successful_case_names"]))
                         self.assertEqual(path, {"schema-lookup":"adsl.csv", "schema-window-functions":"advs.csv", "adam-adlb-ordered-sum":"adlb.csv", "schema-inheritance":"adlb.csv"}[name])
                         self.assertEqual(
                             content,
@@ -1064,7 +1066,7 @@ class OriginalSpecifications(unittest.TestCase):
                         )
                         self.assertEqual(actual, expected)
                 self.assertEqual(
-                    len(published), 2 if name in ("adam-adlb-ordered-sum", "schema-window-functions", "schema-inheritance", "schema-lookup") else 0
+                    len(published), 2 if name in tuple(TRUTH["successful_case_names"]) else 0
                 )
                 self.assertEqual(state["requests"], list(sources.items()) * 2)
                 self.assertEqual(state["reads"], len(sources))
@@ -1092,7 +1094,7 @@ class OriginalSpecifications(unittest.TestCase):
                 expected["artifacts"] = expected["verifications"] = []
                 expected["tables"] = [table for table in expected["tables"] if table["stage"] == "source"]
                 self.assertEqual(actual, expected)
-                self.assertEqual(requests, ["DM", "AE", "MEDDRA"])
+                self.assertEqual(requests, TRUTH["lookup_source_order"])
 
     def test_window_failures_retain_complete_reference_observations(self):
         name = "schema-window-functions"
@@ -1210,7 +1212,7 @@ class OriginalSpecifications(unittest.TestCase):
             expected[field] = []
         expected["nodes"][0]["handler_counts"] = []
         self.assertEqual(actual, expected)
-        self.assertEqual(requests, ["DM", "AE", "MEDDRA"])
+        self.assertEqual(requests, TRUTH["lookup_source_order"])
 
     def test_lookup_retains_later_source_exception_identity(self):
         name = "schema-lookup"
@@ -1300,7 +1302,7 @@ class ParquetOriginalOutput(unittest.TestCase):
 
     def test_parquet_semantic_failures_collect_in_source_order(self):
         source = json.dumps({"schema_version": "1.0", "domain": "TEST", "base": "FIRST",
-            "input": {name: {"path": name + ".parquet"} for name in ("FIRST", "SECOND", "THIRD")},
+            "input": {name: {"path": name + ".parquet"} for name in tuple(TRUTH["input_aliases"])},
             "keys": ["ID"], "columns": [{"name": "ID", "type": "int", "derivation": {"compute": {"expr": "1"}}}],
             "output": {"path": "output.csv", "columns": ["ID"]}}).encode()
         def no_port(*_):
@@ -1320,18 +1322,18 @@ class ParquetOriginalOutput(unittest.TestCase):
             {"phase": "ingest", "condition": "source_field_name_duplicate", "requirement": "REQ-1039",
              "spec_paths": ["input.SECOND.path"], "context": {"dataset": "SECOND", "path": "SECOND.parquet", "field": "I"}},
         ]
-        paths = [name + ".parquet" for name in ("FIRST", "SECOND", "THIRD")]
+        paths = [name + ".parquet" for name in tuple(TRUTH["input_aliases"])]
         self.assertEqual(json.loads(result.observations()), self.failed_report("collection", diagnostics, paths))
         self.assertIsNone(result.output())
         with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
             result.save(no_port)
-        self.assertEqual(requests, list(zip(("FIRST", "SECOND", "THIRD"), paths)))
+        self.assertEqual(requests, list(zip(tuple(TRUTH["input_aliases"]), paths)))
 
     def test_original_ordered_sum_reads_parquet_and_preserves_complete_truth(self):
         name = "adam-adlb-ordered-sum"
         case = ROOT / "cases" / name
         source = (case / "spec.yaml").read_bytes().replace(
-            b"path: input/lb.csv, types: {LBSTRESN: float}", b"path: input/lb.parquet"
+            TRUTH["floating_input_override"].encode("utf-8"), b"path: input/lb.parquet"
         )
         expected = json.loads((ROOT / "expected" / (name + ".json")).read_text())
         for read in expected["source_reads"]:
@@ -1756,7 +1758,7 @@ class PublicDomains(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             for name, output, dates, integers, datetimes in [
-                ("schema-birth-date", "adsl.csv", ["REFDT", "DOB_FIRST", "DOB_LAST", "DTMDT"], ["DOBDY"], ["DTM"]),
+                ("schema-birth-date", "adsl.csv", TRUTH["partial_date_columns"], ["DOBDY"], ["DTM"]),
                 ("sdtm-dm-age", "dm.csv", ["RFICDTC"], ["AGE"], []),
             ]:
                 case = Path(directory) / name
@@ -1817,18 +1819,7 @@ class PublicDomains(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            source = """schema_version: '1.0'
-domain: TEST
-keys: [ID]
-input: {SRC: input.csv}
-output: {path: output.csv, columns: [ID, UP, LOW, SENT, TITLE]}
-columns:
-  - {name: ID, type: str, derivation: SRC.ID}
-  - {name: UP, type: str, derivation: {str_case: {source: SRC.TEXT, to: upper, missing: MiXeD}}}
-  - {name: LOW, type: str, derivation: {str_case: {source: SRC.TEXT, to: lower, missing: null}}}
-  - {name: SENT, type: str, derivation: {str_case: {source: SRC.TEXT, to: sentence, missing: null}}}
-  - {name: TITLE, type: str, derivation: {str_case: {source: SRC.TEXT, to: title, missing: null}}}
-"""
+            source = TRUTH["unicode_case_yaml"]
             entry = root / "spec.yaml"
             entry.write_text(source)
             self.assertEqual(issues(yamaa.check(entry)), [])
@@ -1839,7 +1830,7 @@ columns:
                 ("2", "\u00df\u0130\u00e9\U0001f642ABC", "\u00df\u0130\u00e9\U0001f642abc", "\u00df\u0130\u00e9\U0001f642abc", "\u00df\u0130\u00e9\U0001f642Abc"), ("3", "MiXeD", None, None, None)])
             self.assertFalse((root / "output.csv").exists())
             self.assertTrue(result.save())
-            self.assertEqual((root / "output.csv").read_bytes(), "ID,UP,LOW,SENT,TITLE\n1,FOLLOW-UP,follow-up,Follow-up,Follow-Up\n2,\u00df\u0130\u00e9\U0001f642ABC,\u00df\u0130\u00e9\U0001f642abc,\u00df\u0130\u00e9\U0001f642abc,\u00df\u0130\u00e9\U0001f642Abc\n3,MiXeD,,,\n".encode())
+            self.assertEqual((root / "output.csv").read_bytes(), TRUTH["unicode_case_csv"].encode())
             source = source.replace("to: upper, missing: MiXeD", "to: upper")
             entry.write_text(source)
             (root / "input.csv").write_bytes(b"ID,TEXT\nrow1,\n")
@@ -1903,7 +1894,7 @@ columns:
             entry, data, output = root / "spec.yaml", root / "input.csv", root / "output.csv"
             entry.write_text(source, encoding="ascii")
             for content, rows, expected in [
-                (b'ID,SORT,KEEP,NOTE\na,5,N,first\nb,2,Y,"two\nlines"\nc,1,Y,last\n', [("c", 3), ("b", 2)], b"ID,POSITION\nc,3\nb,2\n"),
+                (TRUTH["filtered_multiline_csv"].encode("utf-8"), [("c", 3), ("b", 2)], b"ID,POSITION\nc,3\nb,2\n"),
                 (b"ID,SORT,KEEP,NOTE\n", [], b"ID,POSITION\n"),
             ]:
                 data.write_bytes(content)
@@ -2136,7 +2127,7 @@ columns:
                         with self.assertRaises(yamaa.DomainError):
                             result.save()
                         self.assertFalse(output.exists())
-                    if name in ("unknown-row-driver", "omitted-row-driver", "different-row-drivers", "adam-adlb-end-of-treatment"):
+                    if name in tuple(TRUTH["row_driver_cases"]):
                         self.assertEqual(issues(yamaa.check(entry)), expected)
             # Public Check admits metadata without inspecting missing study files.
             original = root / "adam-adlb-supplb-padded-key"
@@ -2354,7 +2345,7 @@ columns:
             self.assertIsNone(failed.output)
             self.assertEqual(failed.issues["condition"].to_list(),["resource_path_missing"])
             with self.assertRaises(yamaa.DomainError): failed.save()
-            (root / "input.csv").write_bytes(b"ID\n-9223372036854775808\n9223372036854775807\n")
+            (root / "input.csv").write_bytes(TRUTH["integer_boundary_csv"].encode("utf-8"))
             built=yamaa.domain(entry)
             self.assertEqual(built.output["ID"].to_list(),[-(2**63),2**63-1])
             (root / "input.csv").write_bytes(b"changed")
@@ -2364,7 +2355,7 @@ columns:
             (root / "absent").mkdir()
             self.assertTrue(built.save())
             self.assertTrue(built.issues.is_empty())
-            self.assertEqual((root / "absent/output.csv").read_bytes(),b"ID\n-9223372036854775808\n9223372036854775807\n")
+            self.assertEqual((root / "absent/output.csv").read_bytes(),TRUTH["integer_boundary_csv"].encode("utf-8"))
         for late in (False, True):
             for existing in (False, True):
                 with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as external:
@@ -2419,7 +2410,7 @@ columns:
 
     def test_public_self_donors_use_only_completed_templates_and_preserve_full_phase_refusal(self):
         import yamaa
-        body = 'schema_version: "1.0"\ndomain: TEST\ninput:\n  SRC: {path: src.csv}\n  OTHER: {path: other.csv}\nkeys: [ID, SECTION]\noutput: {path: result.csv, columns: [ID, SECTION, K, SEQ, V, FINAL, FIRST]}\nintermediates:\n  - id: P\n    dataset: SELF\n    key: {K: K}\n    order_by: [SELF.SEQ]\n    keep: last\n    no_match: 0\n  - id: F\n    dataset: SELF\n    key: [K]\n    filter: "SECTION = \'first\'"\n    order_by: [SEQ]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: K, type: str, derivation: SRC.K}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: V, type: int, derivation: SRC.V}\n  - {name: FINAL, type: int, derivation: P.V}\n  - {name: FIRST, type: int, derivation: F.V}\nrows:\n  - id: collected\n    dataset: SRC\n    derivations:\n      SECTION: {literal: first}\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.K]\n    derivations:\n      ID: {literal: g}\n      SECTION: {literal: second}\n      SEQ: {literal: 4}\n      V: {compute: {expr: "P.V + 10"}}\n  - id: added\n    dataset: OTHER\n    derivations:\n      ID: OTHER.ID\n      SECTION: {literal: third}\n      K: OTHER.K\n      SEQ: {literal: 9}\n      V: {compute: {expr: "P.V + 100"}}\n'
+        body = TRUTH["section_order_yaml"]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             entry = root / "spec.yaml"
@@ -2430,8 +2421,8 @@ columns:
             self.assertEqual(result.issues.rows(), [])
             self.assertEqual(json.loads(result._native.observations())["handler_counts"], [{'spec_path': 'rows[1].derivations.V.compute.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'rows[2].derivations.V.compute.multiple_matches', 'handler': 'multiple_matches', 'count': 2}, {'spec_path': 'columns.FINAL.derivation.source.multiple_matches', 'handler': 'multiple_matches', 'count': 5}, {'spec_path': 'columns.FIRST.derivation.source.multiple_matches', 'handler': 'multiple_matches', 'count': 5}])
             self.assertTrue(result.save())
-            self.assertEqual((root / "result.csv").read_bytes(), b'ID,SECTION,K,SEQ,V,FINAL,FIRST\na,first,x,2,5,115,5\nb,first,x,1,9,115,5\ng,second,x,4,15,115,5\nc,third,x,9,115,115,5\nd,third,x,9,115,115,5\n')
-            for name in ("src.csv", "other.csv", "result.csv"):
+            self.assertEqual((root / "result.csv").read_bytes(), TRUTH["section_order_csv"].encode("utf-8"))
+            for name in tuple(TRUTH["section_case_files"]):
                 (root / name).unlink()
             entry.write_text(body.replace("SECTION: {literal: first}", "SECTION: {source: {variable: P.K}}"))
             for checked in (yamaa.check(entry), yamaa.domain(entry)):
@@ -2449,7 +2440,7 @@ columns:
 
     def test_public_intermediate_applicable_keys_and_complete_declaration_findings(self):
         import yamaa
-        body = "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, PARAM]\ninput:\n  SRC: {path: src.csv, types: {ID: int}}\n  DONOR: {path: donor.csv, types: {ID: float, SEQ: int}}\noutput: {path: result.csv, columns: [ID, PARAM, A, B]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: PARAM, type: str, derivation: {literal: only}}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}\n"
+        body = TRUTH["duplicate_lookup_yaml"]
         def findings(result):
             return [dict(phase=phase, condition=condition, requirement=requirement,
                          spec_paths=paths, context=json.loads(context))
@@ -2459,14 +2450,14 @@ columns:
             entry = root / "spec.yaml"
             entry.write_text(body)
             (root / "src.csv").write_text("ID\n2\n1\n3\n")
-            (root / "donor.csv").write_text("SEQ,ID,A,B\n1,1,first,\n1,1,tied,second\n0,2,two,both\n")
+            (root / "donor.csv").write_text(TRUTH["duplicate_donor_csv"])
             result = yamaa.domain(entry)
             self.assertEqual(findings(result), [])
             self.assertEqual(json.loads(result._native.observations())["handler_counts"], [{'spec_path': 'columns.A.derivation.source.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'columns.A.derivation.source.no_match', 'handler': 'no_match', 'count': 1}, {'spec_path': 'columns.B.derivation.source.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'columns.B.derivation.source.no_match', 'handler': 'no_match', 'count': 1}])
             self.assertTrue(result.save())
-            self.assertEqual((root / "result.csv").read_bytes(), b'ID,PARAM,A,B\n2,only,two,both\n1,only,first,\n3,only,,\n')
+            self.assertEqual((root / "result.csv").read_bytes(), TRUTH["duplicate_lookup_csv"].encode("utf-8"))
         for remove, condition, context in [
-            ("    order_by: [DONOR.SEQ]\n    keep: first\n", "rename_only_intermediate", {"intermediate":"P", "dataset":"DONOR"}),
+            (TRUTH["lookup_first_clause"], "rename_only_intermediate", {"intermediate":"P", "dataset":"DONOR"}),
             ("    keep: first\n", "unpaired_fields", {"intermediate":"P", "declared":["order_by"], "missing":["keep"]}),
             ("    order_by: [DONOR.SEQ]\n", "unpaired_fields", {"intermediate":"P", "declared":["keep"], "missing":["order_by"]}),
         ]:
@@ -2486,23 +2477,23 @@ columns:
 
     def test_public_primary_donor_selection_retains_one_record_and_complete_handlers(self):
         import yamaa
-        body = 'schema_version: \'1.0\'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: SRC\n    key: [ID]\n    filter: "SRC.ELIG = \'Y\'"\n    order_by: [SRC.SEQ]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}\n'
+        body = TRUTH["lookup_filter_yaml"]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             entry = root / "spec.yaml"
             entry.write_text(body)
-            (root / "src.csv").write_text("ID,SEQ,ELIG,A,B\n1,1,Y,early,x\n1,2,Y,last,\n2,1,N,hidden,hidden\n")
+            (root / "src.csv").write_text(TRUTH["filtered_donor_csv"])
             self.assertTrue(yamaa.check(entry).issues.is_empty())
             result = yamaa.domain(entry)
             self.assertEqual(result.issues.rows(), [])
             self.assertEqual(json.loads(result._native.observations())["handler_counts"], [{'spec_path': 'columns.A.derivation.source.multiple_matches', 'handler': 'multiple_matches', 'count': 2}, {'spec_path': 'columns.A.derivation.source.no_match', 'handler': 'no_match', 'count': 1}, {'spec_path': 'columns.B.derivation.source.multiple_matches', 'handler': 'multiple_matches', 'count': 2}, {'spec_path': 'columns.B.derivation.source.no_match', 'handler': 'no_match', 'count': 1}])
             self.assertTrue(result.save())
-            self.assertEqual((root / "result.csv").read_bytes(), b"ID,SEQ,A,B\n1,1,last,\n1,2,last,\n2,1,,\n")
+            self.assertEqual((root / "result.csv").read_bytes(), TRUTH["filtered_lookup_csv"].encode("utf-8"))
 
     def test_public_correlated_intermediate_filters_preserve_current_driver_and_complete_handlers(self):
         import yamaa
-        inputs = {'src.csv': 'ID,SEQ,CUT\n1,1,2\n1,2,4\n3,1,2\n1,3,\n', 'donor.csv': 'ID,TIME,A,B\n1,1,one,x\n1,3,three,\n2,9,hidden,hidden\n', 'alt.csv': 'ID,SEQ,CUT\n1,1,4\n3,1,2\n'}
-        probes = [('schema_version: \'1.0\'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: "D.TIME < SRC.CUT"\n    order_by: [D.TIME]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}\n', b'ID,SEQ,A,B\n1,1,one,x\n1,2,three,\n3,1,,\n1,3,,\n', [{'spec_path': 'columns.A.derivation.source.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'columns.A.derivation.source.no_match', 'handler': 'no_match', 'count': 2}, {'spec_path': 'columns.B.derivation.source.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'columns.B.derivation.source.no_match', 'handler': 'no_match', 'count': 2}]), ('schema_version: \'1.0\'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int, CUT: int}}\n  ALT: {path: alt.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: "D.TIME < ALT.CUT"\n    order_by: [D.TIME]\n    keep: last\n    no_match: null\nrows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, SEQ: ALT.SEQ, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}\n', b'ID,SEQ,A,B\n1,1,three,\n3,1,,\n', [{'spec_path': 'rows[0].derivations.A.source.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'rows[0].derivations.B.source.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'rows[0].derivations.A.source.no_match', 'handler': 'no_match', 'count': 1}, {'spec_path': 'rows[0].derivations.B.source.no_match', 'handler': 'no_match', 'count': 1}])]
+        inputs = {'src.csv': 'ID,SEQ,CUT\n1,1,2\n1,2,4\n3,1,2\n1,3,\n', 'donor.csv': TRUTH["ordered_donor_csv"], 'alt.csv': 'ID,SEQ,CUT\n1,1,4\n3,1,2\n'}
+        probes = [(TRUTH["lookup_cutoff_yaml"], TRUTH["lookup_cutoff_csv"].encode("utf-8"), [{'spec_path': 'columns.A.derivation.source.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'columns.A.derivation.source.no_match', 'handler': 'no_match', 'count': 2}, {'spec_path': 'columns.B.derivation.source.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'columns.B.derivation.source.no_match', 'handler': 'no_match', 'count': 2}]), (TRUTH["lookup_alternative_yaml"], b'ID,SEQ,A,B\n1,1,three,\n3,1,,\n', [{'spec_path': 'rows[0].derivations.A.source.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'rows[0].derivations.B.source.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'rows[0].derivations.A.source.no_match', 'handler': 'no_match', 'count': 1}, {'spec_path': 'rows[0].derivations.B.source.no_match', 'handler': 'no_match', 'count': 1}])]
         for body, expected, ledger in probes:
             with self.subTest(body=body), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
@@ -2530,13 +2521,13 @@ columns:
 
     def test_public_case_intermediate_source_preserves_lazy_shared_selection_and_complete_ledger(self):
         import yamaa
-        body = 'schema_version: \'1.0\'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {ID: int}}\n  DONOR: {path: donor.csv, types: {ID: int, SEQ: int}}\noutput: {path: result.csv, columns: [ID, A, B]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SELECT, type: str, derivation: SRC.SELECT}\n  - name: A\n    type: str\n    derivation:\n      case:\n        - when: "SELECT = \'Y\'"\n          then: P.A\n        - otherwise: {literal: skip}\n  - name: B\n    type: str\n    derivation:\n      case:\n        - when: "SELECT = \'Y\'"\n          then: P.B\n        - otherwise: {literal: skip}\n'
+        body = TRUTH["lookup_fallback_yaml"]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             entry = root / "spec.yaml"
             entry.write_text(body)
             (root / "src.csv").write_text("ID,SELECT\n1,Y\n2,N\n3,Y\n")
-            (root / "donor.csv").write_text("ID,SEQ,A,B\n1,1,first,\n1,2,second,present\n2,1,hidden,hidden\n")
+            (root / "donor.csv").write_text(TRUTH["fallback_donor_csv"])
             result = yamaa.domain(entry)
             self.assertEqual(result.issues.rows(), [])
             self.assertEqual(json.loads(result._native.observations())["handler_counts"], [{'spec_path': 'columns.A.derivation.case[0].then.source.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'columns.A.derivation.case[0].then.source.no_match', 'handler': 'no_match', 'count': 1}, {'spec_path': 'columns.B.derivation.case[0].then.source.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'columns.B.derivation.case[0].then.source.no_match', 'handler': 'no_match', 'count': 1}])
@@ -2544,7 +2535,7 @@ columns:
             self.assertEqual((root / "result.csv").read_bytes(), b"ID,A,B\n1,first,\n2,skip,skip\n3,,\n")
             for variable, expected, count in (
                 ("P.A", b"ID,A,B\n1,first,\n2,skip,skip\n3,,\n", 0),
-                ("P.ABSENT", b"ID,A,B\n1,fallback,\n2,skip,skip\n3,fallback,\n", 2),
+                ("P.ABSENT", TRUTH["fallback_lookup_csv"].encode("utf-8"), 2),
             ):
                 entry.write_text(body.replace("then: P.A", f"then: {{source: {{variable: {variable}, absent: fallback}}}}"))
                 admitted = yamaa.domain(entry)
@@ -2586,7 +2577,7 @@ columns:
 
     def test_public_original_case_predicate_and_branch_filter_csv_truth_is_unchanged(self):
         import yamaa
-        names = ("adam-adae-protocol-review", "schema-expressions", "schema-predicates", "sdtm-ae-seriousness", "sdtm-mh-ongoing-conditions", "sdtm-tr-tumor-measurements", "sdtm-tu-tumor-identification", "sdtm-ds-reasons")
+        names = tuple(TRUTH["source_selection_case_names"])
         for name in names:
             with self.subTest(example=name), tempfile.TemporaryDirectory() as directory:
                 destination = Path(directory) / name
@@ -2602,7 +2593,7 @@ columns:
         import yamaa
         cases = [(name, case, ROOT / (label + "-cases") /
                   json.loads((ROOT / (label + "-case-paths.json")).read_text())[name])
-                 for label in ("source-selection", "source-filter-scope", "source-filter-mixed")
+                 for label in tuple(TRUTH["source_selection_modes"])
                  for name, case in json.loads((ROOT / (label + "-truth.json")).read_text())["cases"].items()]
 
         def issues(frame):

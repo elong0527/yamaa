@@ -3,6 +3,7 @@
 import builtins
 import csv
 import gc
+import runpy
 import json
 import os
 import shutil
@@ -16,9 +17,13 @@ import polars as pl
 import yamaa
 from yamaa import _native
 
+TRUTH = runpy.run_path(str(Path(__file__).with_name("host-fixtures") / "reader.py"))["load"](
+    __file__, "verification-logs"
+)
+
 ROOT = Path(__file__).with_name("specification-original")
-CASE = "schema-verification-log"
-NAMES = ("adsl-checks.csv", "adsl-warnings.csv", "adsl.csv")
+CASE = TRUTH["case_name"]
+NAMES = tuple(TRUTH["artifact_names"])
 
 
 class VerificationLogs(unittest.TestCase):
@@ -125,7 +130,7 @@ class VerificationLogs(unittest.TestCase):
             del result
             gc.collect()
             self.assertEqual(held.height, 4)
-            self.assertEqual(held["EVALUATED_COUNT"].to_list(), [3, 3, 3, 1])
+            self.assertEqual(held["EVALUATED_COUNT"].to_list(), [int(value) for value in TRUTH["evaluated_counts"]])
 
     def test_fatal_checks_publish_only_verification_and_keep_original_issues(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -139,7 +144,7 @@ class VerificationLogs(unittest.TestCase):
             self.assertIsNone(result.output)
             self.assertIsNone(result.warning_log)
             self.assertEqual(
-                result.verification_log["OUTCOME"].to_list(), ["held", "violated"]
+                result.verification_log["OUTCOME"].to_list(), TRUTH["fatal_outcomes"]
             )
             issues = result.issues.clone()
             self.assertEqual(issues["condition"].to_list(), ["range_failed"])

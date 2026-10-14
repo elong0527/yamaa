@@ -9,6 +9,7 @@ unchanged inspection truth and retain zero study reads.
 import builtins
 import csv
 import gc
+import runpy
 import json
 import shutil
 import sys
@@ -20,8 +21,12 @@ from unittest.mock import patch
 import yamaa
 from yamaa import _native
 
+TRUTH = runpy.run_path(str(Path(__file__).with_name("host-fixtures") / "reader.py"))["load"](
+    __file__, "file-resources"
+)
+
 ROOT = Path(__file__).with_name("specification-original")
-PATHS = {"DM": "input/dm.csv", "AE": "input/ae.csv", "MEDDRA": "input/meddict.csv"}
+PATHS = TRUTH["lookup_paths"]
 
 
 class FileResources(unittest.TestCase):
@@ -100,7 +105,7 @@ class FileResources(unittest.TestCase):
         self.assertIsNone(result.output)
         self.assertEqual(
             result.issues.columns,
-            ["phase", "condition", "requirement", "spec_paths", "context"],
+            TRUTH["issue_columns"],
         )
         self.assertEqual(
             result.issues.to_dicts(),
@@ -285,7 +290,7 @@ class FileResources(unittest.TestCase):
                         "condition": "resource_path_symlink",
                         "requirement": "REQ-0783",
                         "spec_paths": ["input.SRC.path"],
-                        "context": '{"dataset":"SRC","path":"alias.csv"}',
+                        "context": TRUTH["alias_context_json"],
                     }
                 ],
             )

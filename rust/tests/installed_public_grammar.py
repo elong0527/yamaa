@@ -1,25 +1,16 @@
 """Authored shared grammar decisions through the installed Python domain facade."""
 
 import csv
+import runpy
 from pathlib import Path
 
 import yamaa
 
-GRAMMAR = {
-    "numeric": {
-        "invalid_numeric_expression",
-        "prohibited_function",
-        "prohibited_construct",
-    },
-    "aggregate": {
-        "invalid_aggregate_expression",
-        "nested_reduction",
-        "prohibited_function",
-        "prohibited_construct",
-    },
-    "predicate": {"invalid_predicate", "integer_overflow"},
-    "string-template": {"invalid_string_template"},
-}
+TRUTH = runpy.run_path(str(Path(__file__).with_name("host-fixtures") / "reader.py"))["load"](
+    __file__, "public-grammar"
+)
+
+GRAMMAR = {name: set(values) for name, values in TRUTH["grammar_conditions"].items()}
 
 
 def main():

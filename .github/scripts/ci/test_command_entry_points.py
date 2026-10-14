@@ -67,7 +67,7 @@ class CommandEntryPoints(unittest.TestCase):
             suites = [suite for suite in catalog["suites"] if suite["runtime"] == "r"]
             self.assertEqual(
                 {p.name for p in destination.iterdir()},
-                {s["staged_path"] for s in suites},
+                {s["staged_path"] for s in suites} | {"host-fixtures"},
             )
             for suite in suites:
                 self.assertEqual(
@@ -81,6 +81,51 @@ class CommandEntryPoints(unittest.TestCase):
             )
             self.assertNotEqual(repeated.returncode, 0)
             self.assertEqual(first.read_text(), "retained earlier bytes\n")
+
+    def test_altered_shared_truth_refuses_before_any_installed_suite_runs(self):
+        spec = importlib.util.spec_from_file_location(
+            "supplemental_inventory", ROOT / "rust/tools/supplemental_inventory.py"
+        )
+        inventory = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(inventory)
+        catalog = inventory.load_catalog(
+            ROOT, ROOT / "rust/qualification/supplemental.json"
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "staged-r"
+            staged = self.command(
+                "installed.py", "stage", "--runtime", "r", "--staged-root", destination
+            )
+            self.assertEqual(staged.returncode, 0, staged.stderr)
+            for original, relative in inventory.host_fixture_files(catalog):
+                self.assertEqual(
+                    (ROOT / original).read_bytes(),
+                    (destination / relative).read_bytes(),
+                )
+            truth = destination / "host-fixtures/cases.json"
+            # A valid JSON document with identical semantic values still has
+            # different retained bytes and must fail before any child runs.
+            truth.write_bytes(truth.read_bytes() + b" ")
+            with (
+                patch.object(
+                    inventory,
+                    "installed_metadata",
+                    return_value={
+                        "package_location": str(Path(temporary) / "installed")
+                    },
+                ),
+                patch.object(inventory.subprocess, "run") as run,
+                self.assertRaisesRegex(ValueError, "staged host fixture differs"),
+            ):
+                inventory.run_suites(
+                    ROOT,
+                    catalog,
+                    runtime="r",
+                    staged_root=destination,
+                    output=Path(temporary) / "evidence",
+                    evidence="owned-command-control",
+                )
+            run.assert_not_called()
 
     def test_installed_checks_refuse_checkout_and_missing_artifact_identity(self):
         checkout = self.command(

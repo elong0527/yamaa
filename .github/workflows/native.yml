@@ -516,18 +516,7 @@ jobs:
           name: public-conformance-r-${{ matrix.os }}
           path: ${{ runner.temp }}/public-conformance
           if-no-files-found: error
-      - name: Run installed R supplemental suites outside checkout
-        if: ${{ !cancelled() && steps.r_install.outcome == 'success' }}
-        working-directory: ${{ runner.temp }}
-        run: |
-          python "${GITHUB_WORKSPACE}/.github/scripts/commands/installed.py" stage \
-            --runtime r --staged-root "${RUNNER_TEMP}"
-          YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/r-source/public-reports" R_LIBS="${RUNNER_TEMP}/native-r-library" python -I "${GITHUB_WORKSPACE}/.github/scripts/commands/installed.py" run \
-            --output qualification/r-source --runtime r --staged-root "${RUNNER_TEMP}" \
-            --source-revision "$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)" --package-form source \
-            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-${{ matrix.os }}/yamaa_0.4.0.tar.gz" \
-            --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-      - name: Require repository validator real-R public Check transport
+      - name: Install pinned R fixture JSON codec
         if: ${{ !cancelled() && steps.r_install.outcome == 'success' }}
         working-directory: ${{ runner.temp }}
         env:
@@ -550,6 +539,23 @@ jobs:
           install.packages(target, repos = NULL, type = "source", lib = Sys.getenv("R_LIBS"))
           stopifnot(as.character(utils::packageVersion("jsonlite")) == version)
           RS
+      - name: Run installed R supplemental suites outside checkout
+        if: ${{ !cancelled() && steps.r_install.outcome == 'success' }}
+        working-directory: ${{ runner.temp }}
+        run: |
+          python "${GITHUB_WORKSPACE}/.github/scripts/commands/installed.py" stage \
+            --runtime r --staged-root "${RUNNER_TEMP}"
+          YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/r-source/public-reports" R_LIBS="${RUNNER_TEMP}/native-r-library" python -I "${GITHUB_WORKSPACE}/.github/scripts/commands/installed.py" run \
+            --output qualification/r-source --runtime r --staged-root "${RUNNER_TEMP}" \
+            --source-revision "$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)" --package-form source \
+            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-${{ matrix.os }}/yamaa_0.4.0.tar.gz" \
+            --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+      - name: Require repository validator real-R public Check transport
+        if: ${{ !cancelled() && steps.r_install.outcome == 'success' }}
+        working-directory: ${{ runner.temp }}
+        env:
+          R_LIBS: ${{ runner.temp }}/native-r-library
+        run: |
           cp "${GITHUB_WORKSPACE}/.github/scripts/yaml-validation/_r_check_transport.py" _r_check_transport.py
           cp "${GITHUB_WORKSPACE}/rust/tests/check_repository_r_transport.py" check_repository_r_transport.py
           python -I check_repository_r_transport.py
