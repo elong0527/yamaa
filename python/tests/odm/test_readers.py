@@ -181,6 +181,51 @@ def test_odm_dotted_sub_version_is_accepted(
     assert {row.odm_version for row in rows} == {good_version}
 
 
+def test_nested_clinical_data_is_rejected(tmp_path: Path) -> None:
+    # SubjectData/StudyEventData/FormData all reject nesting; ClinicalData
+    # must too; without a guard the inner StudyOID silently re-attributes
+    # every row that follows and strips their metadata names.
+    source = tmp_path / "nested-clinical.xml"
+    source.write_text(
+        ODM_13.replace(
+            '<ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13">',
+            '<ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13">'
+            '<ClinicalData StudyOID="EVIL" MetaDataVersionOID="EVIL.M">',
+        ).replace(
+            "</ClinicalData>\n</ODM>",
+            "</ClinicalData></ClinicalData>\n</ODM>",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ODMError, match="nested ClinicalData is not supported"):
+        list(iter_odm_records(source))
+
+
+def test_sequential_clinical_data_blocks_are_read(tmp_path: Path) -> None:
+    source = tmp_path / "sequential-clinical.xml"
+    source.write_text(
+        ODM_13.replace(
+            "</ClinicalData>\n</ODM>",
+            "</ClinicalData>"
+            '<ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13">'
+            '<SubjectData SubjectKey="SUBJECT-2">'
+            '<StudyEventData StudyEventOID="E.13">'
+            '<FormData FormOID="F.13">'
+            '<ItemGroupData ItemGroupOID="G.13">'
+            '<ItemData ItemOID="I.DATE" Value="2026-02-02"/>'
+            "</ItemGroupData></FormData></StudyEventData></SubjectData>"
+            "</ClinicalData>\n</ODM>",
+        ),
+        encoding="utf-8",
+    )
+
+    rows = list(iter_odm_records(source))
+
+    assert [row.value for row in rows] == ["2026-01-02", "", None, "2026-02-02"]
+    assert rows[-1].subject_key == "SUBJECT-2"
+
+
 def test_unsupported_group_depth_is_rejected(tmp_path: Path) -> None:
     source = tmp_path / "three-groups.xml"
     source.write_text(

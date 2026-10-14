@@ -332,6 +332,8 @@ def iter_odm_records(
                             element.get("Name"),
                         )
                     elif name == "ClinicalData":
+                        if clinical is not None:
+                            raise ODMError("nested ClinicalData is not supported")
                         clinical = {
                             "StudyOID": _required_attribute(element, "StudyOID"),
                             "MetaDataVersionOID": _required_attribute(
