@@ -5,7 +5,7 @@ use crate::{
     inheritance_capture::CapturePort,
     project_preparation::Source,
 };
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
 use yamaa_core::{diagnostic::Diagnostic, resource::ResourceFailure};
 
 pub trait NativePort {
@@ -109,8 +109,14 @@ pub trait DocumentPort<E> {
 pub enum Error<E, X> {
     Resource(E),
     Preparation(X),
-    ResourceFinding { error: E, diagnostic: Diagnostic },
-    PreparationFinding { error: X, diagnostic: Diagnostic },
+    ResourceFinding {
+        error: E,
+        diagnostic: Box<Diagnostic>,
+    },
+    PreparationFinding {
+        error: X,
+        diagnostic: Box<Diagnostic>,
+    },
 }
 struct AliasCache<'a, P> {
     port: &'a mut P,
@@ -243,8 +249,9 @@ pub fn prepare<P: NativePort, D: DocumentPort<P::Error>>(
         if port.resource_failure(&error) == Some(ResourceFailure::ContentChanged) {
             Error::ResourceFinding {
                 error,
-                diagnostic: ResourceFailure::ContentChanged
-                    .field_diagnostic("specification", written),
+                diagnostic: Box::new(
+                    ResourceFailure::ContentChanged.field_diagnostic("specification", written),
+                ),
             }
         } else {
             Error::Resource(error)
@@ -269,7 +276,10 @@ pub fn prepare<P: NativePort, D: DocumentPort<P::Error>>(
         Ok(document) => document,
         Err(error) => {
             return Err(match aliases.parent_failure {
-                Some(diagnostic) => Error::PreparationFinding { error, diagnostic },
+                Some(diagnostic) => Error::PreparationFinding {
+                    error,
+                    diagnostic: Box::new(diagnostic),
+                },
                 None => Error::Preparation(error),
             })
         }
@@ -294,7 +304,10 @@ pub fn prepare<P: NativePort, D: DocumentPort<P::Error>>(
                     .resource_failure(&error)
                     .and_then(|failure| document.resource_diagnostic(declaring, written, failure))
                 {
-                    return Err(Error::ResourceFinding { error, diagnostic });
+                    return Err(Error::ResourceFinding {
+                        error,
+                        diagnostic: Box::new(diagnostic),
+                    });
                 }
                 return Err(Error::Resource(error));
             }

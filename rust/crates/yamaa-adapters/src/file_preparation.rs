@@ -13,11 +13,11 @@ pub enum Error {
     Preparation(InheritanceError<ResourceError>),
     ResourceFinding {
         error: ResourceError,
-        diagnostic: yamaa_core::diagnostic::Diagnostic,
+        diagnostic: Box<yamaa_core::diagnostic::Diagnostic>,
     },
     PreparationFinding {
         error: InheritanceError<ResourceError>,
-        diagnostic: yamaa_core::diagnostic::Diagnostic,
+        diagnostic: Box<yamaa_core::diagnostic::Diagnostic>,
     },
     Compile(crate::specification_run::Error),
 }
@@ -26,8 +26,10 @@ impl Error {
         if error == ResourceError::Changed {
             Self::ResourceFinding {
                 error,
-                diagnostic: yamaa_core::resource::ResourceFailure::ContentChanged
-                    .field_diagnostic(field, written),
+                diagnostic: Box::new(
+                    yamaa_core::resource::ResourceFailure::ContentChanged
+                        .field_diagnostic(field, written),
+                ),
             }
         } else {
             Self::Resource(error)
@@ -35,14 +37,13 @@ impl Error {
     }
     pub(crate) fn entry_field(self, field: &str, written: &str) -> Self {
         match self {
-            Self::ResourceFinding { error, diagnostic }
-                if diagnostic.spec_paths == ["specification"] =>
-            {
-                Self::ResourceFinding {
-                    error,
-                    diagnostic: yamaa_core::resource::ResourceFailure::ContentChanged
-                        .field_diagnostic(field, written),
-                }
+            Self::ResourceFinding {
+                error,
+                mut diagnostic,
+            } if diagnostic.spec_paths == ["specification"] => {
+                *diagnostic = yamaa_core::resource::ResourceFailure::ContentChanged
+                    .field_diagnostic(field, written);
+                Self::ResourceFinding { error, diagnostic }
             }
             error => error,
         }
@@ -60,7 +61,7 @@ impl Error {
                     "protocol": "specification/prototype",
                     "outcome": {
                         "status": "invalid",
-                        "diagnostics": [crate::specification_diagnostics::portable_diagnostic(diagnostic)
+                        "diagnostics": [crate::specification_diagnostics::portable_diagnostic(*diagnostic)
                             .expect("classified resource facts")],
                     },
                 }).to_string()
