@@ -150,7 +150,7 @@ class CommandEntryPoints(unittest.TestCase):
 
     def test_command_changes_select_native_and_docs_workflows(self):
         native = (ROOT / ".github/workflows/native.yml").read_text()
-        for event in ("push", "pull_request"):
+        for event in ("push",):
             section = re.search(rf"(?ms)^  {event}:\n(.*?)(?=^  \S|\Z)", native).group(
                 1
             )
@@ -160,6 +160,9 @@ class CommandEntryPoints(unittest.TestCase):
             ]
             self.assertIn(".github/scripts/commands/**", patterns)
             self.assertIn("Makefile", patterns)
+        self.assertNotRegex(native, r"(?m)^  pull_request:")
+        smoke = (ROOT / ".github/workflows/pr.yml").read_text()
+        self.assertRegex(smoke, r"(?m)^  pull_request:")
         deploy = (ROOT / ".github/workflows/deploy-docs.yml").read_text()
         self.assertIn("- '.github/scripts/commands/docs.py'", deploy)
 
