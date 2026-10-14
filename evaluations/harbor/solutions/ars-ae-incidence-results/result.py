@@ -1,8 +1,10 @@
 import csv
 from collections import defaultdict
 
-subjects = list(csv.DictReader(open('/app/input/adsl.csv')))
-events = list(csv.DictReader(open('/app/input/adae.csv')))
+with open('/app/input/adsl.csv', newline='') as source:
+    subjects = list(csv.DictReader(source))
+with open('/app/input/adae.csv', newline='') as source:
+    events = list(csv.DictReader(source))
 qualifying = {(e['STUDYID'], e['USUBJID']) for e in events
               if e['TRTEMFL'] == 'Y'}
 groups = defaultdict(list)
