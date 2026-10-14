@@ -1,11 +1,8 @@
 //! Lazy source eligibility and named record selection within one dataset attempt.
 use super::*;
 #[cfg(test)]
-#[path = "dataset_choice_cache_tests.rs"]
 mod cache_tests;
-#[path = "dataset_key_index.rs"]
 mod key_index;
-#[path = "dataset_match_values.rs"]
 pub(super) mod match_values;
 use alloc::{collections::BTreeMap, rc::Rc};
 
