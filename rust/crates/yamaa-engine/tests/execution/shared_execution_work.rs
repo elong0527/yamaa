@@ -336,3 +336,157 @@ fn pooled_text_failure_commits_the_known_prefix_and_unwind_reserves_unknown_usag
     ));
     assert_eq!(owner.usage(), None);
 }
+
+#[test]
+fn pooled_identity_failures_keep_actual_cell_and_text_prefixes_across_nodes() {
+    let (table, _) = fixture(Expression::Literal(Value::Int(1)));
+    let duplicate = literal_rows(&table, 2, ColumnType::Str, true);
+    for (cells, text, resource, required) in [
+        (1, 100, Resource::IdentityCells, 2),
+        (100, 6, Resource::IdentityTextBytes, 12),
+    ] {
+        let limits = Limits {
+            work_cells: 1000,
+            scalar_text_bytes: 100,
+            output_text_bytes: 100,
+            identity_cells: cells,
+            identity_text_bytes: text,
+            ..limits()
+        };
+        let owner = WorkBudget::pooled(limits);
+        assert!(matches!(
+            *duplicate
+                .execute_with_work_budget(&table, &[], &mut NoFunctions::new(), limits, &owner)
+                .result
+                .unwrap_err(),
+            ExecutionError::KeyFailures(_)
+        ));
+        let before = owner.usage().unwrap();
+        assert_eq!((before.identity_cells, before.identity_text_bytes), (1, 6));
+        assert!(
+            matches!(*duplicate.execute_with_work_budget(&table, &[], &mut NoFunctions::new(), limits, &owner).result.unwrap_err(), ExecutionError::Limit { resource: actual, limit, required: Some(count) } if actual == resource && count == required && limit == if cells == 1 { cells } else { text })
+        );
+        let after = owner.usage().unwrap();
+        if cells == 1 {
+            assert_eq!((after.identity_cells, after.identity_text_bytes), (1, 6));
+        } else {
+            assert_eq!((after.identity_cells, after.identity_text_bytes), (2, 6));
+        }
+        assert_eq!(after.output_rows, 0);
+    }
+}
+#[test]
+fn pooled_scalar_and_matching_counters_do_not_restart_at_a_node_boundary() {
+    use yamaa_engine::dataset::{Check, ColumnVerifications, Verification};
+    let (table, _) = fixture(Expression::Literal(Value::Int(1)));
+    let text = literal_rows(&table, 1, ColumnType::Str, true);
+    let scalar_limits = Limits {
+        work_cells: 1000,
+        output_text_bytes: 100,
+        ..limits()
+    };
+    let scalar = WorkBudget::pooled(scalar_limits);
+    text.execute_with_work_budget(&table, &[], &mut NoFunctions::new(), scalar_limits, &scalar)
+        .result
+        .unwrap();
+    assert_eq!(scalar.usage().unwrap().runtime.text_bytes, 6);
+    assert!(matches!(
+        *text
+            .execute_with_work_budget(&table, &[], &mut NoFunctions::new(), scalar_limits, &scalar)
+            .result
+            .unwrap_err(),
+        ExecutionError::Limit {
+            resource: Resource::ScalarTextBytes,
+            limit: 10,
+            required: Some(12)
+        }
+    ));
+    assert_eq!(scalar.usage().unwrap().runtime.text_bytes, 6);
+    let pattern = yamaa_core::regex::Pattern::compile("abcdef", Default::default()).unwrap();
+    let checked = text
+        .with_column_verifications(vec![ColumnVerifications {
+            column: 0,
+            checks: (0..12)
+                .map(|index| Verification {
+                    path: format!("columns.ID.verifications[{index}].matches"),
+                    check: Check::Matches(pattern.clone()),
+                })
+                .collect(),
+        }])
+        .unwrap();
+    let limits = Limits {
+        work_cells: 100_000,
+        scalar_text_bytes: 100,
+        output_text_bytes: 100,
+        ..limits()
+    };
+    let owner = WorkBudget::pooled(limits);
+    checked
+        .execute_with_work_budget(&table, &[], &mut NoFunctions::new(), limits, &owner)
+        .result
+        .unwrap();
+    let before = owner.usage().unwrap();
+    assert_eq!(before.runtime.regex.subject_bytes, 72);
+    assert!(checked
+        .execute_with_work_budget(&table, &[], &mut NoFunctions::new(), limits, &owner)
+        .result
+        .is_err());
+    let after = owner.usage().unwrap();
+    assert_eq!(after.runtime.regex.subject_bytes, 96);
+    assert_eq!(after.runtime.text_bytes, 12);
+    assert!(after.runtime.regex.work > before.runtime.regex.work);
+    assert!(after.runtime.regex.state_cells > before.runtime.regex.state_cells);
+}
+#[test]
+fn pooled_predicate_resolutions_follow_actual_entered_rows() {
+    use yamaa_core::predicate::{self, Comparison, Node, Scalar};
+    use yamaa_engine::dataset_predicate::{Binding, BoundPredicate, Read};
+    let (table, _) = fixture(Expression::Literal(Value::Int(1)));
+    let filter = BoundPredicate::new(
+        predicate::Plan::new(
+            vec![Node::Compare {
+                operator: Comparison::Greater,
+                left: Scalar::Identifier("x".into()),
+                right: Scalar::Literal(Value::Int(0)),
+            }],
+            0,
+            "rows[0].filter".into(),
+            "x > 0".into(),
+            Default::default(),
+        )
+        .unwrap(),
+        vec![Binding {
+            name: "x".into(),
+            read: Read::Source(0),
+        }],
+    )
+    .unwrap();
+    let plan = DatasetPlan::new(
+        table.schema.clone(),
+        table.schema.clone(),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![Assignment {
+                column: 0,
+                path: "columns.ID".into(),
+                expression: Expression::Source(0),
+            }],
+            filter: Some(filter),
+        }],
+        vec![],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    let limits = Limits {
+        work_cells: 1000,
+        ..limits()
+    };
+    let owner = WorkBudget::pooled(limits);
+    for count in 1..=2 {
+        plan.execute_with_work_budget(&table, &[], &mut NoFunctions::new(), limits, &owner)
+            .result
+            .unwrap();
+        assert_eq!(owner.usage().unwrap().runtime.resolutions, count);
+    }
+}
