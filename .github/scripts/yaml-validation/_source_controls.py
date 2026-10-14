@@ -79,6 +79,7 @@ def held(specification, path, *, scaffold=True):
 def source_fields(owner, snapshots=None):
     sources = []
     errors = []
+    before_capture_reads = owner.capture_reads() if snapshots is not None else 0
     for index, (identity, dataset, _declaring, _written, profile) in enumerate(
         owner.input_metadata()
     ):
@@ -86,7 +87,7 @@ def source_fields(owner, snapshots=None):
             index, _native_specification.MAX_CAPTURE
         )
         if snapshots is not None:
-            snapshots.reads = owner.capture_reads()
+            snapshots.reads = owner.capture_reads() - before_capture_reads
         if issues:
             errors.extend(issues)
             continue
