@@ -402,6 +402,33 @@ pub(crate) fn encoded_within_limit(
 mod typed_copy_tests {
     use super::*;
     #[test]
+    fn longitudinal_reports_admit_source_artifact_derived_and_three_typed_passes() {
+        use yamaa_engine::capacity;
+        // Charge full logical geometry without allocating or reading its cells.
+        let mut report = Budget::new(capacity::REPORT_ENCODED_BYTES);
+        report.row_shape(10_000_000, 64).unwrap();
+        report.shape(10_000_000, 64).unwrap();
+        report.row_shape(10_000_000, 64).unwrap();
+
+        let mut typed = Budget::new(capacity::REPORT_ENCODED_BYTES);
+        for _ in 0..3 {
+            typed.typed_shape(10_000_000, 64).unwrap();
+        }
+        let mut exact = Budget::new(capacity::REPORT_ENCODED_BYTES);
+        exact.row_shape(capacity::REPORT_CELLS, 1).unwrap();
+        assert!(matches!(exact.row_shape(1, 1), Err(Error::OutputLimit)));
+        assert!(matches!(
+            Budget::new(1).typed_shape(1, 1),
+            Err(Error::OutputLimit)
+        ));
+        let mut broad = Budget::new(usize::MAX);
+        broad
+            .retained_bytes(capacity::REPORT_RETAINED_BYTES)
+            .unwrap();
+        assert!(matches!(broad.retained_bytes(1), Err(Error::OutputLimit)));
+    }
+
+    #[test]
     fn typed_copy_admission_counts_actual_slots_utf8_and_exact_byte_boundaries() {
         assert!(std::mem::size_of::<Option<String>>() <= 24);
         assert!(std::mem::size_of::<Option<i64>>() <= 16);

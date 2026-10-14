@@ -12,9 +12,10 @@ pub struct Limits {
 impl Default for Limits {
     fn default() -> Self {
         Self {
-            bytes: 8_388_608,
-            fields: 1_048_576,
-            records: 1_048_576,
+            bytes: 1024 * 1024 * 1024,
+            // The profile counts the header as fields and one record.
+            fields: 640_000_000 + crate::specification::DEFAULT_MAX_COLUMNS,
+            records: 10_000_000 + 1,
         }
     }
 }

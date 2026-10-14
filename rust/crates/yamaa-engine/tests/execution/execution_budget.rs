@@ -255,6 +255,16 @@ fn checked_multiplication_and_combined_addition_refuse_overflow_before_reads() {
 }
 
 #[test]
+fn explicitly_selected_bounded_profile_still_refuses_its_original_cell_frontier() {
+    let source = Source::new(2_049, 1_024);
+    let result = plan(&source, 0)
+        .execute_with_budget(&source, &[], ExecutionBudget::bounded())
+        .result;
+    assert!(matches!(*result.unwrap_err(), ExecutionError::Capacity));
+    assert_eq!(source.reads.get(), 0);
+}
+
+#[test]
 fn longitudinal_row_quota_still_refuses_the_next_record() {
     let source = Source::new(10_000_001, 1);
     let result = plan(&source, 0)

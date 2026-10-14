@@ -1555,8 +1555,8 @@ fn public_root_result_refuses_limited_or_contradictory_whole_attempts_before_out
 }
 
 #[test]
-fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_refusal() {
-    use yamaa_adapters::{ipc_table::TableError, producer_result};
+fn public_root_copy_admits_the_prior_frontier_and_keeps_retained_truth_after_resources_drop() {
+    use yamaa_adapters::producer_result;
     let study = Study::new();
     study.rounded();
     study.write(
@@ -1595,51 +1595,36 @@ fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_r
     let attempt = build.build_reported(&mut host, report_id(), Limits::default());
     assert!(attempt.accepted());
     let before = host.trace.clone();
-    // Three actual typed-copy passes visit 4,347,000 cells, exceeding the
-    // cumulative 4,194,304-cell copying allowance.
-    // The complete indexed graph and encoded report remain accepted first.
-    match producer_result::prepare_classified(
+    // Three actual typed-copy passes visit 4,209,000 cells. The former
+    // 4,194,304-cell copying policy refused this already accepted graph.
+    let result = producer_result::prepare_classified(
         &attempt,
         report_id(),
         yamaa_engine::capacity::REPORT_ENCODED_BYTES,
         &[],
-    ) {
-        Err(producer_result::Error::Output {
-            attempt: held,
-            observations,
-            error: TableError::OutputLimit,
-        }) => {
-            assert!(std::ptr::eq(&attempt, held));
-            assert_eq!(observations["outcome"], "success");
-            assert_eq!(observations["nodes"].as_array().unwrap().len(), 2);
-            assert_eq!(observations["artifacts"].as_array().unwrap().len(), 2);
-        }
-        other => panic!(
-            "original output quota owner expected: {}",
-            match other {
-                Ok(_) => "unexpected success",
-                Err(_) => "wrong refusal",
-            }
-        ),
-    }
+    )
+    .unwrap_or_else(|_| panic!("accepted graph remains within the longitudinal copying policy"));
+    assert!(result.issues().is_empty());
+    let output = result.output_table().unwrap();
+    assert_eq!((output.rows(), output.columns().len()), (23_000, 61));
+    let observations = result.observations();
+    assert_eq!(observations["outcome"], "success");
+    assert_eq!(observations["nodes"].as_array().unwrap().len(), 2);
+    assert_eq!(observations["artifacts"].as_array().unwrap().len(), 2);
     assert_eq!(host.trace, before);
     assert!(!study.0.join("generated").exists());
     drop(build);
     drop(host);
     fs::remove_dir_all(&study.0).unwrap();
     assert!(attempt.accepted());
-    assert!(matches!(
-        producer_result::prepare_classified(
-            &attempt,
-            report_id(),
-            yamaa_engine::capacity::REPORT_ENCODED_BYTES,
-            &[]
-        ),
-        Err(producer_result::Error::Output {
-            error: TableError::OutputLimit,
-            ..
-        })
-    ));
+    let repeated = producer_result::prepare_classified(
+        &attempt,
+        report_id(),
+        yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+        &[],
+    )
+    .unwrap_or_else(|_| panic!("public projection owns its accepted truth"));
+    assert_eq!(repeated.output(), result.output());
 }
 
 #[test]
@@ -2263,7 +2248,7 @@ fn whole_report_rejects_contradictory_actual_activation_and_node_order_without_r
 }
 
 #[test]
-fn a_larger_caller_budget_cannot_bypass_retained_formatter_admission_before_identity_copy() {
+fn caller_report_quota_refuses_borrowed_identity_before_formatter_copy() {
     let study = Study::new();
     study.write(
         "producer/p.yaml",
@@ -2285,9 +2270,11 @@ fn a_larger_caller_budget_cannot_bypass_retained_formatter_admission_before_iden
     );
     let text = "small";
     study.write("raw/raw.csv", format!("ID,VALUE\n1,{text}\n"));
-    // Borrowed caller metadata exceeds the fixed retained admission by itself.
-    // It must be rejected before report JSON copies it, even with usize::MAX.
-    let oversized_runtime = "x".repeat(yamaa_engine::capacity::REPORT_RETAINED_BYTES / 12 + 1);
+    // Borrowed caller metadata exceeds this explicit retained admission by
+    // itself. No full-profile allocation is needed to exercise the refusal.
+    let report_bytes = 8192;
+    let oversized_runtime =
+        "x".repeat(report_bytes * yamaa_engine::capacity::REPORT_RETAINED_FACTOR / 12 + 1);
     let identity = yamaa_adapters::specification_report::Identity {
         runtime_version: &oversized_runtime,
         ..report_id()
@@ -2295,7 +2282,7 @@ fn a_larger_caller_budget_cannot_bypass_retained_formatter_admission_before_iden
     let mut build = study.build(Language::Python);
     let mut host = Activation::new(&study, Mode::Lock);
     let mut limits = Limits::default();
-    limits.engine.report_bytes = usize::MAX;
+    limits.engine.report_bytes = report_bytes;
     let attempt = build.build_reported(&mut host, identity, limits);
     assert!(!attempt.accepted());
     assert!(host.trace.is_empty());

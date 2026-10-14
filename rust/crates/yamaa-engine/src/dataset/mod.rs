@@ -127,54 +127,56 @@ pub struct ExecutionBudget {
 }
 
 impl ExecutionBudget {
-    /// Existing capacity policy for callers that do not select a larger budget.
+    /// Original smaller profile for callers that explicitly select this policy.
     pub const fn bounded() -> Self {
         Self {
             max_sources: 8,
             max_ipc_bytes: 8 * 1024 * 1024,
-            max_decoded_cells: crate::capacity::SOURCE_CELLS,
+            max_decoded_cells: 2_097_152,
             max_columns: yamaa_core::specification::DEFAULT_MAX_COLUMNS,
             max_batches: 256,
             max_output_bytes: 8 * 1024 * 1024,
             batch_rows: None,
             execution: Limits {
-                source_rows: crate::capacity::SOURCE_ROWS,
-                output_rows: crate::capacity::OUTPUT_ROWS,
-                output_cells: crate::capacity::OUTPUT_CELLS,
-                key_cells: crate::capacity::KEY_CELLS,
-                work_cells: crate::capacity::EXECUTION_WORK,
+                source_rows: 524_288,
+                output_rows: 131_072,
+                output_cells: 1_048_576,
+                key_cells: 524_288,
+                work_cells: 128 * 1024 * 1024,
                 scalar_text_bytes: 16 * 1024 * 1024,
-                output_text_bytes: crate::capacity::OUTPUT_TEXT_BYTES,
-                identity_cells: crate::capacity::IDENTITY_CELLS,
-                identity_text_bytes: crate::capacity::IDENTITY_TEXT_BYTES,
+                output_text_bytes: 2 * 1024 * 1024,
+                identity_cells: 65_536,
+                identity_text_bytes: 1024 * 1024,
             },
         }
     }
 
-    /// Opt-in profile for ten million combined source and output records.
+    /// Public default profile for ten million combined source and output records.
     /// Wider/text-heavy domains or more expensive plans can adjust each field.
     pub const fn longitudinal() -> Self {
         let mut budget = Self::bounded();
         budget.max_sources = 64;
-        budget.max_ipc_bytes = 1024 * 1024 * 1024;
-        budget.max_decoded_cells = 640_000_000;
+        budget.max_ipc_bytes = crate::capacity::SOURCE_BYTES;
+        budget.max_decoded_cells = crate::capacity::SOURCE_CELLS;
         budget.max_batches = 65_536;
-        budget.max_output_bytes = 1024 * 1024 * 1024;
+        budget.max_output_bytes = crate::capacity::SOURCE_BYTES;
         budget.batch_rows = core::num::NonZeroUsize::new(65_536);
-        budget.execution.source_rows = 10_000_000;
-        budget.execution.output_rows = 10_000_000;
-        budget.execution.output_cells = 640_000_000;
-        budget.execution.key_cells = 640_000_000;
-        budget.execution.work_cells = 2_000_000_000;
-        budget.execution.scalar_text_bytes = 1024 * 1024 * 1024;
-        budget.execution.output_text_bytes = 512 * 1024 * 1024;
+        budget.execution.source_rows = crate::capacity::SOURCE_ROWS;
+        budget.execution.output_rows = crate::capacity::OUTPUT_ROWS;
+        budget.execution.output_cells = crate::capacity::OUTPUT_CELLS;
+        budget.execution.key_cells = crate::capacity::KEY_CELLS;
+        budget.execution.work_cells = crate::capacity::EXECUTION_WORK;
+        budget.execution.scalar_text_bytes = crate::capacity::SOURCE_BYTES;
+        budget.execution.output_text_bytes = crate::capacity::OUTPUT_TEXT_BYTES;
+        budget.execution.identity_cells = crate::capacity::IDENTITY_CELLS;
+        budget.execution.identity_text_bytes = crate::capacity::IDENTITY_TEXT_BYTES;
         budget
     }
 }
 
 impl Default for ExecutionBudget {
     fn default() -> Self {
-        Self::bounded()
+        Self::longitudinal()
     }
 }
 
