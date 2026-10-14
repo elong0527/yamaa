@@ -39,6 +39,10 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/qualification/issue-1998' }}
+
 permissions:
   contents: read
   actions: read
