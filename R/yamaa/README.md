@@ -63,7 +63,11 @@ when they are absent from its cache.
 For a development build, stage this repository
 template before `R CMD build`.
 Direct `devtools::install_github(..., subdir = "R/yamaa")` installation omits the
-shared Rust sources and is unsupported. From the repository root:
+shared Rust sources and is unsupported.
+
+For the check and grammar commands below, install the declared test dependencies,
+including jsonlite 2.0.0, in the R library selected for these tests. Run the commands
+from the repository root:
 
 ```sh
 python -m pip install py-yaml12==0.2.0

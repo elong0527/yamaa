@@ -14,11 +14,39 @@ from unittest.mock import patch
 
 import pr_changes
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[3]
 COMMANDS = ROOT / ".github/scripts/commands"
 
 
 class CommandEntryPoints(unittest.TestCase):
+    def test_r_grammar_replay_installs_codec_in_its_selected_library_first(self):
+        grammar = yaml.safe_load((ROOT / ".github/workflows/r.yml").read_text())
+        native = yaml.safe_load((ROOT / ".github/workflows/native.yml").read_text())
+        steps = grammar["jobs"]["installed-grammar"]["steps"]
+        names = [step.get("name") for step in steps]
+        codec_index = names.index("Install pinned R fixture JSON codec")
+        replay_index = names.index(
+            "Replay shared decisions through the installed public R facade"
+        )
+        self.assertLess(codec_index, replay_index)
+        codec, replay = steps[codec_index], steps[replay_index]
+        self.assertEqual(codec["env"]["R_LIBS"], replay["env"]["R_LIBS"])
+        self.assertEqual(codec["env"]["R_LIBS"], "${{ runner.temp }}/grammar-r-library")
+        native_codec = next(
+            step
+            for step in native["jobs"]["r"]["steps"]
+            if step.get("name") == "Install pinned R fixture JSON codec"
+        )
+        self.assertEqual(codec["run"], native_codec["run"])
+        self.assertIn('version <- "2.0.0"', codec["run"])
+        self.assertIn('lib = Sys.getenv("R_LIBS")', codec["run"])
+        self.assertIn(
+            'stopifnot(as.character(utils::packageVersion("jsonlite")) == version)',
+            codec["run"],
+        )
+
     def test_shared_rust_command_discovers_both_feature_gated_suites(self):
         spec = importlib.util.spec_from_file_location(
             "rust_test_commands", COMMANDS / "rust_tests.py"
