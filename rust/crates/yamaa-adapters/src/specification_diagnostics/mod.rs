@@ -203,6 +203,7 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
             Error::Source(TextTableError::Csv(_)) => "csv_limit",
             Error::Source(TextTableError::Table(_)) => "table_limit",
             Error::ParquetSource(_) => "parquet_limit",
+            Error::SasSource(_) => "sas_limit",
             _ => "source_limit",
         };
         let mut outcome = json!({"status":"rejected","stage":"ingest","code":code,"resource":refusal.resource,"limit":refusal.limit,"spec_paths":refusal.spec_paths});
