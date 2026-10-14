@@ -113,14 +113,11 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
         variant_case <- case
         if (nrow(variant_rows)) {
           # Variants declare the same output paths as their entry, so build
-          # them in a copy of the staged case: a variant's save() must not
+          # them in a separate staged case: a variant's save() must not
           # overwrite the entry's saved files, whose bytes the comparator
           # checks against independent truth.
           variant_case <- file.path(output, "work", paste0(name, "__variants"))
-          dir.create(variant_case, recursive=TRUE, showWarnings=FALSE)
-          copied <- file.copy(list.files(case, full.names=TRUE, all.files=TRUE, no..=TRUE),
-            variant_case, recursive=TRUE)
-          if (!all(copied)) stop("could not copy staged case for variant builds: ", name)
+          move_inputs(file.path(args[[1L]], "r-variant-inputs", name), variant_case)
         }
         for (index in seq_len(nrow(variant_rows))) {
           vrow <- variant_rows[index, , drop=FALSE]

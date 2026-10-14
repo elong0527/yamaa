@@ -263,6 +263,9 @@ def emit_plan(fixtures, output):
     # Python's symlink-aware copy, then let R rename each case without copying
     # through its target. Independent expected truth never enters this tree.
     stage_r_inputs(fixtures, output / "r-inputs", payload)
+    # Variant saves must be isolated from base artifacts. Both execution trees
+    # retain links; base R's recursive file.copy follows their targets.
+    stage_r_inputs(fixtures, output / "r-variant-inputs", payload)
     # Metamorphic variant specifications are generated, never authored: the
     # Python runner copies them from the plan tree, the R runner receives them
     # inside its staged inputs.
@@ -271,7 +274,9 @@ def emit_plan(fixtures, output):
             continue
         _, contents = example_variants(fixtures, example)
         for relative, text in contents.items():
-            for base in (output / "variants", output / "r-inputs"):
+            for base in (
+                output / "variants", output / "r-inputs", output / "r-variant-inputs"
+            ):
                 target = base / example["name"] / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(text, encoding="utf-8")

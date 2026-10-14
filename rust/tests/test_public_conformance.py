@@ -98,17 +98,28 @@ class PublicConformance(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             judge.emit_plan(self.fixtures, output)
         staged = output / "r-inputs/simple"
-        for name, target in (
-            ("linked.csv", "target.csv"),
-            ("broken.csv", "absent.csv"),
-            ("linked-directory", "directory"),
-        ):
-            self.assertTrue((staged / "input" / name).is_symlink())
-            self.assertEqual(os.readlink(staged / "input" / name), target)
+        variants = output / "r-variant-inputs/simple"
+        for tree in (staged, variants):
+            for name, target in (
+                ("linked.csv", "target.csv"),
+                ("broken.csv", "absent.csv"),
+                ("linked-directory", "directory"),
+            ):
+                self.assertTrue((tree / "input" / name).is_symlink())
+                self.assertEqual(os.readlink(tree / "input" / name), target)
+            self.assertEqual((tree / "input/target.csv").read_bytes(), b"ID\n1\n")
+            self.assertFalse((tree / "expected").exists())
+            self.assertFalse((tree / "run.py").exists())
+            self.assertFalse((tree / "run.R").exists())
+            self.assertEqual(
+                (tree / "__child_spec.yaml").read_text(),
+                'schema_version: "1.0"\nparents: spec.yaml\n',
+            )
+        (staged / "result.csv").write_bytes(b"original\n")
+        (variants / "result.csv").write_bytes(b"variant\n")
+        (variants / "input/target.csv").write_bytes(b"ID\n2\n")
+        self.assertEqual((staged / "result.csv").read_bytes(), b"original\n")
         self.assertEqual((staged / "input/target.csv").read_bytes(), b"ID\n1\n")
-        self.assertFalse((staged / "expected").exists())
-        self.assertFalse((staged / "run.py").exists())
-        self.assertFalse((staged / "run.R").exists())
         moved = self.root / "execution/simple"
         moved.parent.mkdir()
         staged.rename(moved)
