@@ -72,6 +72,13 @@ def equal_files(left, right):
                 return True
 
 
+def verify_original_download(path, artifact):
+    require(
+        path.stat().st_size == artifact["size_in_bytes"],
+        "original Actions ZIP download is truncated or differs from its recorded size",
+    )
+
+
 def producer_name(name):
     for lane, artifact_name in tuples():
         if name == artifact_name:
@@ -80,6 +87,7 @@ def producer_name(name):
             return f"performance-r ({lane['os']}, source)"
     return {
         "performance-native-admission": "Admit exact-source full native qualification",
+        "performance-index": "Retain exact original campaign index",
         "performance-audit": "Independent retained campaign replay",
     }.get(name)
 
@@ -235,6 +243,7 @@ def retain(args):
         )
         original = args.output / filename
         download(args.repository, f"actions/artifacts/{artifact['id']}/zip", original)
+        verify_original_download(original, artifact)
         for segment, offset, count in archive_segments(original):
             release, retained = upload(
                 args.repository, release, tag, args.revision, segment, args.output

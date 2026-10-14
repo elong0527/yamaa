@@ -90,6 +90,15 @@ class RetainedIndex(unittest.TestCase):
 
 
 class UnpublishedRetention(unittest.TestCase):
+    def test_truncated_download_is_refused_with_original_partial_bytes_preserved(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            original = Path(temporary) / "original.zip"
+            original.write_bytes(b"truncated")
+            with self.assertRaisesRegex(ValueError, "truncated"):
+                retention.verify_original_download(original, {"size_in_bytes": 100})
+            self.assertEqual(original.read_bytes(), b"truncated")
+            retention.verify_original_download(original, {"size_in_bytes": len(b"truncated")})
+
     def test_streaming_adapter_uses_original_id_and_removes_only_its_temporary_copy(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
