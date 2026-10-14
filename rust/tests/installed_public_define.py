@@ -36,8 +36,8 @@ class PublicDefine(unittest.TestCase):
     def call(self, directory, created="2026-09-11T00:00:00"):
         original = builtins.__import__
         def guarded(name, *args, **kwargs):
-            if name.startswith(("yamaa.specification", "yamaa.submission", "yamaa.expressions", "yamaa._reference_domain")):
-                raise AssertionError("Define imported reference semantics: " + name)
+            if name == "jsonschema" or name.startswith(("jsonschema.", "yamaa.specification", "yamaa.submission", "yamaa.expressions", "yamaa._reference_domain")):
+                raise AssertionError("Define imported reference or test-only validation: " + name)
             return original(name, *args, **kwargs)
         with patch("builtins.__import__", guarded):
             result = define(directory / "environment.yaml", "sdtm", created=created)
