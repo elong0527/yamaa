@@ -1,6 +1,7 @@
 """Independent public-run truth and comparator failure-mode tests."""
 
 import contextlib
+import copy
 import importlib.util
 import io
 import os
@@ -343,6 +344,158 @@ class PublicConformance(unittest.TestCase):
         self.assertEqual(entries["python"][0]["environment"], "python/environment.yaml")
         self.assertIsNone(entries["r"][0]["environment"])
 
+    def child_variant(self, **overrides):
+        variant = copy.deepcopy(self.build)
+        variant.update(
+            kind="empty_child",
+            entry=0,
+            specification="__child_spec.yaml",
+        )
+        variant.update(overrides)
+        return variant
+
+    def verdict_with_variants(self, variants):
+        return judge.compare_example(
+            self.example,
+            "python",
+            {"builds": [self.build], "variants": variants},
+            self.fixtures,
+            self.observed,
+        )
+
+    def test_metamorphic_empty_child_must_reproduce_its_parent(self):
+        self.assertEqual(
+            self.example["variants"]["python"],
+            [{"kind": "empty_child", "entry": 0, "specification": "__child_spec.yaml"}],
+        )
+        verdict = self.verdict_with_variants([self.child_variant()])
+        self.assertEqual(verdict["verdict"], "pass")
+        self.assertTrue(verdict["metamorphic"]["judged"])
+        changed = self.child_variant()
+        changed["tables"]["output"]["rows"][0][0] = "1"
+        verdict = self.verdict_with_variants([changed])
+        self.assertEqual(verdict["verdict"], "mismatch")
+        self.assertEqual(len(verdict["metamorphic"]["differences"]), 1)
+        self.assertEqual(
+            verdict["metamorphic"]["differences"][0]["check"], "empty_child"
+        )
+        # A record predating the metamorphic checks is reported, not judged.
+        self.assertFalse(self.verdict()["metamorphic"]["judged"])
+        self.assertEqual(self.verdict()["verdict"], "pass")
+
+    def test_metamorphic_expected_failure_is_listed_and_goes_stale(self):
+        path = (
+            self.root / "rust" / "qualification" / "public-conformance-metamorphic.json"
+        )
+        judge.write_json(
+            path,
+            {
+                "protocol": judge.METAMORPHIC_PROTOCOL,
+                "expected_failures": [
+                    {
+                        "benchmark": "simple",
+                        "check": "empty_child",
+                        "issue": "https://github.com/elong0527/yamaa/issues/2190",
+                    }
+                ],
+            },
+        )
+        failing = self.child_variant(
+            issues=[
+                {
+                    "phase": "validation",
+                    "condition": "invalid_clear",
+                    "requirement": "REQ-0660",
+                    "spec_paths": ["intermediates.X.no_match"],
+                    "context": {},
+                }
+            ],
+            saved=False,
+            tables={"output": None, "verification_log": None, "warning_log": None},
+        )
+        verdict = self.verdict_with_variants([failing])
+        self.assertEqual(verdict["verdict"], "pass")
+        self.assertEqual(len(verdict["metamorphic"]["expected_failures"]), 1)
+        verdict = self.verdict_with_variants([self.child_variant()])
+        self.assertEqual(verdict["verdict"], "mismatch")
+        self.assertEqual(len(verdict["metamorphic"]["stale"]), 1)
+
+    def test_key_order_texts_move_key_columns_to_the_front_reversed(self):
+        document = {
+            "keys": ["ID", "VALUE"],
+            "columns": [
+                {"name": "OTHER", "derivation": "SRC.OTHER"},
+                {"name": "ID", "derivation": "SRC.ID"},
+                {"name": "VALUE", "derivation": {"literal": "x"}},
+            ],
+        }
+        control, permuted = judge.key_order_texts(document)
+        self.assertEqual(
+            [c["name"] for c in judge.json.loads(control)["columns"]],
+            ["OTHER", "ID", "VALUE"],
+        )
+        self.assertEqual(
+            [c["name"] for c in judge.json.loads(permuted)["columns"]],
+            ["VALUE", "ID", "OTHER"],
+        )
+        for ineligible in (
+            {**document, "rows": []},
+            {**document, "parents": ["base.yaml"]},
+            {**document, "keys": ["ID"]},
+            {
+                **document,
+                "columns": [
+                    {"name": "ID", "derivation": {"compute": {"expr": "1"}}},
+                    {"name": "VALUE", "derivation": "SRC.VALUE"},
+                ],
+            },
+        ):
+            self.assertIsNone(judge.key_order_texts(ineligible))
+
+    def test_metamorphic_key_order_permutation_compares_against_control(self):
+        fixtures = self.root / "fixtures2"
+        case = fixtures / "ordered"
+        (case / "expected").mkdir(parents=True)
+        (case / "spec.yaml").write_text(SPEC.replace("keys: [ID]", "keys: [ID, VALUE]"))
+        (case / "run.py").write_text(
+            'import yamaa\nx = yamaa.yamaa_domain("spec.yaml").output\n'
+        )
+        (case / "run.R").write_text('x <- yamaa_domain("spec.yaml")$output\n')
+        (case / "expected/result.csv").write_bytes(
+            b'ID,VALUE\n9223372036854775807,""\n2,\n3,"a,b"\n'
+        )
+        observed = self.root / "observed2"
+        candidate = observed / "work/ordered/result.csv"
+        candidate.parent.mkdir(parents=True)
+        shutil.copyfile(case / "expected/result.csv", candidate)
+        example = judge.plan(fixtures)["examples"][0]
+        kinds = [v["kind"] for v in example["variants"]["python"]]
+        self.assertEqual(
+            kinds, ["empty_child", "key_order_control", "key_order_permuted"]
+        )
+
+        def variant(kind, specification):
+            build = copy.deepcopy(self.build)
+            build.update(kind=kind, entry=0, specification=specification)
+            return build
+
+        variants = [
+            variant("empty_child", "__child_spec.yaml"),
+            variant("key_order_control", "__keyorder_control_spec.yaml"),
+            variant("key_order_permuted", "__keyorder_permuted_spec.yaml"),
+        ]
+        record = {"builds": [self.build], "variants": variants}
+        verdict = judge.compare_example(
+            example, "python", record, fixtures, observed, {}
+        )
+        self.assertEqual(verdict["verdict"], "pass")
+        variants[2]["tables"]["output"]["rows"][0][0] = "1"
+        verdict = judge.compare_example(
+            example, "python", record, fixtures, observed, {}
+        )
+        self.assertEqual(verdict["verdict"], "mismatch")
+        self.assertEqual(verdict["metamorphic"]["differences"][0]["check"], "key_order")
+
     def test_corpus_inventory_has_all_entries_and_approved_exclusions(self):
         corpus = judge.plan(ROOT.parent / "benchmarks")
         names = {e["name"]: e for e in corpus["examples"]}
@@ -359,6 +512,27 @@ class PublicConformance(unittest.TestCase):
         self.assertEqual(
             {n for n, e in names.items() if e["excluded"]}, set(judge.EXCLUDED)
         )
+
+    def test_corpus_metamorphic_plan_and_expectations_match_the_reviewed_counts(self):
+        corpus = judge.plan(ROOT.parent / "benchmarks")
+        kinds = {"empty_child": 0, "key_order_control": 0, "key_order_permuted": 0}
+        for example in corpus["examples"]:
+            self.assertEqual(example["variants"]["python"], example["variants"]["r"])
+            for variant in example["variants"]["python"]:
+                kinds[variant["kind"]] += 1
+        # The counts reviewed in #2291: one empty child per active entry, and
+        # 99 key-order-eligible positive entries.
+        self.assertEqual(
+            kinds,
+            {"empty_child": 317, "key_order_control": 99, "key_order_permuted": 99},
+        )
+        expectations = judge.load_metamorphic_expectations(ROOT.parent / "benchmarks")
+        names = {e["name"] for e in corpus["examples"]}
+        self.assertEqual(len(expectations), 47)
+        for (benchmark, check), item in expectations.items():
+            self.assertIn(benchmark, names)
+            self.assertIn(check, {"empty_child", "key_order"})
+            self.assertTrue(item.get("issue") or item.get("permanent"))
 
 
 if __name__ == "__main__":

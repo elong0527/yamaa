@@ -12,12 +12,15 @@ import collections
 import csv
 import datetime as dt
 import json
+import math
 import re
 import shutil
 import struct
 from pathlib import Path
 
 PROTOCOL = "public-conformance/1"
+METAMORPHIC_PROTOCOL = "public-conformance-metamorphic/1"
+FIELD_REFERENCE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$")
 EXCLUDED = {
     "negative-path-absolute": "reference-only path history (#1905)",
     "negative-path-parent-escape": "reference-only path history (#1905)",
@@ -136,10 +139,119 @@ def plan(fixtures):
                         else None,
                     }
                 ]
-        examples.append(
-            {"name": case.name, "entries": entries, "excluded": EXCLUDED.get(case.name)}
-        )
+        example = {
+            "name": case.name,
+            "entries": entries,
+            "excluded": EXCLUDED.get(case.name),
+        }
+        example["variants"], _ = example_variants(fixtures, example)
+        examples.append(example)
     return {"protocol": PROTOCOL, "examples": examples}
+
+
+def json_round_trippable(value):
+    """True when a parsed document survives JSON serialization unchanged."""
+    if value is None or isinstance(value, (str, bool, int)):
+        return True
+    if isinstance(value, float):
+        return math.isfinite(value)
+    if isinstance(value, list):
+        return all(json_round_trippable(item) for item in value)
+    if isinstance(value, dict):
+        return all(
+            isinstance(key, str) and json_round_trippable(item)
+            for key, item in value.items()
+        )
+    return False
+
+
+def key_order_texts(document):
+    """JSON control/permuted texts for the key-order check, or None.
+
+    Eligible documents have no `rows` and no `parents`, at least two keys,
+    and every key column reading one input field or a literal, so key columns
+    may be declared in any order (REQ-0060, REQ-0062, REQ-0220).
+    """
+    if not isinstance(document, dict) or "rows" in document or "parents" in document:
+        return None
+    keys = document.get("keys") or []
+    columns = document.get("columns") or []
+    if len(keys) < 2 or not all(isinstance(key, str) for key in keys):
+        return None
+    if not json_round_trippable(document):
+        return None
+    by_name = {}
+    for column in columns:
+        if not isinstance(column, dict) or not isinstance(column.get("name"), str):
+            return None
+        by_name.setdefault(column["name"], column)
+    for key in keys:
+        column = by_name.get(key)
+        if column is None:
+            return None
+        derivation = column.get("derivation")
+        if isinstance(derivation, str):
+            if not FIELD_REFERENCE.fullmatch(derivation):
+                return None
+        elif not (isinstance(derivation, dict) and set(derivation) == {"literal"}):
+            return None
+    control = json.dumps(document, indent=2, ensure_ascii=True) + "\n"
+    permuted = json.loads(control)
+    names = [column["name"] for column in permuted["columns"]]
+    permuted["columns"] = [
+        permuted["columns"][names.index(name)] for name in reversed(keys)
+    ] + [column for column in permuted["columns"] if column["name"] not in keys]
+    return control, json.dumps(permuted, indent=2, ensure_ascii=True) + "\n"
+
+
+def example_variants(fixtures, example):
+    """Plan one example's metamorphic variants and their file contents.
+
+    Returns (descriptors, contents): descriptors maps each runtime to its
+    variant list; contents maps each variant specification path, relative to
+    the staged case directory, to the text to stage there. Every entry gets
+    an empty child (REQ-0627); positive entries may also get the key-order
+    control and permutation.
+    """
+    descriptors = {"python": [], "r": []}
+    contents = {}
+    if example["excluded"]:
+        return descriptors, contents
+    case = fixtures / example["name"]
+    negative = (case / "expected" / "error.yaml").exists()
+    for runtime in ("python", "r"):
+        for index, entry in enumerate(example["entries"][runtime]):
+            spec = Path(entry["specification"])
+            child = (spec.parent / f"__child_{spec.stem}.yaml").as_posix()
+            descriptors[runtime].append(
+                {"kind": "empty_child", "entry": index, "specification": child}
+            )
+            contents[child] = f'schema_version: "1.0"\nparents: {spec.name}\n'
+            if negative:
+                continue
+            try:
+                document = load_yaml(case / entry["specification"])
+            except Exception:  # noqa: BLE001 -- an unreadable spec has no key-order variant
+                document = None
+            texts = key_order_texts(document)
+            if texts is None:
+                continue
+            control = (spec.parent / f"__keyorder_control_{spec.stem}.yaml").as_posix()
+            permuted = (
+                spec.parent / f"__keyorder_permuted_{spec.stem}.yaml"
+            ).as_posix()
+            descriptors[runtime].append(
+                {"kind": "key_order_control", "entry": index, "specification": control}
+            )
+            descriptors[runtime].append(
+                {
+                    "kind": "key_order_permuted",
+                    "entry": index,
+                    "specification": permuted,
+                }
+            )
+            contents[control], contents[permuted] = texts
+    return descriptors, contents
 
 
 def emit_plan(fixtures, output):
@@ -151,6 +263,18 @@ def emit_plan(fixtures, output):
     # Python's symlink-aware copy, then let R rename each case without copying
     # through its target. Independent expected truth never enters this tree.
     stage_r_inputs(fixtures, output / "r-inputs", payload)
+    # Metamorphic variant specifications are generated, never authored: the
+    # Python runner copies them from the plan tree, the R runner receives them
+    # inside its staged inputs.
+    for example in payload["examples"]:
+        if example["excluded"]:
+            continue
+        _, contents = example_variants(fixtures, example)
+        for relative, text in contents.items():
+            for base in (output / "variants", output / "r-inputs"):
+                target = base / example["name"] / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(text, encoding="utf-8")
     for runtime in ("python", "r"):
         with (output / f"{runtime}.tsv").open(
             "w", encoding="utf-8", newline=""
@@ -158,7 +282,16 @@ def emit_plan(fixtures, output):
             writer = csv.writer(
                 stream, delimiter="\t", lineterminator="\n", quoting=csv.QUOTE_NONE
             )
-            writer.writerow(["example", "specification", "environment", "excluded"])
+            writer.writerow(
+                [
+                    "example",
+                    "specification",
+                    "environment",
+                    "excluded",
+                    "variant",
+                    "entry",
+                ]
+            )
             for example in payload["examples"]:
                 for entry in example["entries"][runtime]:
                     writer.writerow(
@@ -167,6 +300,20 @@ def emit_plan(fixtures, output):
                             entry["specification"],
                             entry["environment"] or "",
                             example["excluded"] or "",
+                            "",
+                            "",
+                        ]
+                    )
+                for variant in example["variants"][runtime]:
+                    entry = example["entries"][runtime][variant["entry"]]
+                    writer.writerow(
+                        [
+                            example["name"],
+                            variant["specification"],
+                            entry["environment"] or "",
+                            example["excluded"] or "",
+                            variant["kind"],
+                            variant["entry"],
                         ]
                     )
     print(f"planned {len(payload['examples'])} benchmarks for Python and R")
@@ -408,13 +555,158 @@ def log_types(path):
     return {c: "int" if c in LOG_INTS else "str" for c in columns}
 
 
-def compare_example(example, runtime, record, fixtures, observed):
+def load_metamorphic_expectations(fixtures):
+    """Reviewed empty-child/key-order differences that are known failures.
+
+    Each entry names its tracking issue, or carries a by-design reason marked
+    permanent. A non-permanent entry whose difference no longer occurs is
+    stale and fails the run, so fixed issues prune their entries.
+    """
+    path = (
+        fixtures.parent
+        / "rust"
+        / "qualification"
+        / "public-conformance-metamorphic.json"
+    )
+    if not path.is_file():
+        return {}
+    payload = read_json(path)
+    if payload.get("protocol") != METAMORPHIC_PROTOCOL:
+        raise ValueError("unknown metamorphic expectations protocol")
+    expectations = {}
+    for item in payload["expected_failures"]:
+        key = (item["benchmark"], item["check"])
+        if key in expectations:
+            raise ValueError(f"duplicate metamorphic expectation: {key}")
+        expectations[key] = item
+    return expectations
+
+
+def build_difference(reference, variant):
+    """None when two builds are metamorphically equal, else the difference."""
+    reference_issues, variant_issues = reference["issues"], variant["issues"]
+    if not reference_issues and not variant_issues:
+        if reference["tables"] != variant["tables"]:
+            return "typed tables differ"
+        if reference.get("saved") != variant.get("saved"):
+            return "saved outcome differs"
+        return None
+    if not reference_issues or not variant_issues:
+        return "exactly one build reports issues"
+    fields = ("phase", "condition", "requirement", "spec_paths")
+    if any(
+        reference_issues[0].get(field) != variant_issues[0].get(field)
+        for field in fields
+    ):
+        return {
+            "first_issue": {
+                "reference": reference_issues[0],
+                "variant": variant_issues[0],
+            }
+        }
+    return None
+
+
+def judge_metamorphic(example, runtime, record, expectations):
+    """Compare an example's variant builds against their reference builds.
+
+    Records written before the metamorphic checks existed carry no
+    "variants" list; those are reported as not judged rather than failed.
+    """
+    outcome = {
+        "judged": False,
+        "differences": [],
+        "expected_failures": [],
+        "stale": [],
+        "problems": [],
+    }
+    observed = record.get("variants")
+    if observed is None:
+        return outcome
+    outcome["judged"] = True
+    planned = example.get("variants", {}).get(runtime) or []
+
+    def identity(variant):
+        return (
+            variant.get("kind"),
+            int(variant.get("entry")),
+            variant.get("specification"),
+        )
+
+    if sorted(map(identity, observed)) != sorted(map(identity, planned)):
+        outcome["problems"].append("observed variant builds do not match the plan")
+        return outcome
+    by_identity = {identity(variant): variant for variant in observed}
+    builds = record.get("builds", [])
+    groups = {}
+    for variant in planned:
+        reference = None
+        if variant["kind"] == "key_order_permuted":
+            control = next(
+                candidate
+                for candidate in planned
+                if candidate["kind"] == "key_order_control"
+                and candidate["entry"] == variant["entry"]
+            )
+            reference = by_identity[identity(control)]
+        elif variant["entry"] < len(builds):
+            reference = builds[variant["entry"]]
+        if reference is None:
+            outcome["problems"].append(
+                f"missing reference build for variant {identity(variant)}"
+            )
+            continue
+        detail = build_difference(reference, by_identity[identity(variant)])
+        if detail is not None:
+            check = (
+                "key_order"
+                if variant["kind"].startswith("key_order")
+                else "empty_child"
+            )
+            groups.setdefault(check, []).append(
+                {"kind": variant["kind"], "entry": variant["entry"], "detail": detail}
+            )
+    for check, differences in groups.items():
+        item = expectations.get((example["name"], check))
+        if item is None:
+            outcome["differences"].extend(
+                {"check": check, **difference} for difference in differences
+            )
+        else:
+            outcome["expected_failures"].append(
+                {
+                    "check": check,
+                    "issue": item.get("issue"),
+                    "reason": item.get("reason"),
+                    "differences": differences,
+                }
+            )
+    for (benchmark, check), item in expectations.items():
+        if (
+            benchmark == example["name"]
+            and not item.get("permanent")
+            and check not in groups
+        ):
+            outcome["stale"].append({"check": check, "issue": item.get("issue")})
+    return outcome
+
+
+def compare_example(example, runtime, record, fixtures, observed, expectations=None):
+    if expectations is None:
+        expectations = load_metamorphic_expectations(fixtures)
     result = {
         "example": example["name"],
         "verdict": "error",
         "unsupported_operations": [],
         "findings": [],
         "not_compared": [],
+        "metamorphic": {
+            "judged": False,
+            "differences": [],
+            "expected_failures": [],
+            "stale": [],
+            "problems": [],
+        },
     }
     if example["excluded"]:
         result.update(verdict="excluded", reason=example["excluded"])
@@ -444,10 +736,31 @@ def compare_example(example, runtime, record, fixtures, observed):
             "observed entry specifications/environments do not match the runner plan"
         )
         return result
+    metamorphic = judge_metamorphic(example, runtime, record, expectations)
+    result["metamorphic"] = metamorphic
+
+    def finish():
+        if (
+            metamorphic["problems"]
+            or metamorphic["differences"]
+            or metamorphic["stale"]
+        ):
+            result["findings"].append(
+                {
+                    "metamorphic": {
+                        key: metamorphic[key]
+                        for key in ("problems", "differences", "stale")
+                    }
+                }
+            )
+            if result["verdict"] == "pass":
+                result["verdict"] = "mismatch"
+        return result
+
     issues = [issue for build in builds for issue in build["issues"]]
     if any(i["phase"] == "engine" for i in issues):
         result["findings"].append({"engine_issues": issues})
-        return result
+        return finish()
     operations = [
         i.get("context", {}).get("operation")
         for i in issues
@@ -458,11 +771,11 @@ def compare_example(example, runtime, record, fixtures, observed):
             result["findings"].append(
                 "unsupported_operation issue omitted its operation"
             )
-            return result
+            return finish()
         result.update(
             verdict="unsupported", unsupported_operations=sorted(set(operations))
         )
-        return result
+        return finish()
     negative = case / "expected/error.yaml"
     if negative.exists():
         want = load_yaml(negative)
@@ -477,11 +790,11 @@ def compare_example(example, runtime, record, fixtures, observed):
         if any(b["tables"].get("output") is not None or b.get("saved") for b in builds):
             result["findings"].append("negative build exposed or saved output")
         result["verdict"] = "mismatch" if result["findings"] else "pass"
-        return result
+        return finish()
     if issues:
         result.update(verdict="mismatch")
         result["findings"].append({"unexpected_issues": issues})
-        return result
+        return finish()
     compared = set()
     for entry, build in zip(entries, builds):
         types, output = declarations(case / entry["specification"])
@@ -553,7 +866,7 @@ def compare_example(example, runtime, record, fixtures, observed):
                 f"independent table artifact was not compared: {truth.name}"
             )
     result["verdict"] = "mismatch" if result["findings"] else "pass"
-    return result
+    return finish()
 
 
 def compare(fixtures, observed, output, ratchet=None):
@@ -568,6 +881,7 @@ def compare(fixtures, observed, output, ratchet=None):
         raise ValueError(
             "unexpected installed runner cases: " + ", ".join(sorted(unexpected))
         )
+    expectations = load_metamorphic_expectations(fixtures)
     results = []
     for example in payload["examples"]:
         try:
@@ -577,7 +891,9 @@ def compare(fixtures, observed, output, ratchet=None):
                 if path.is_file()
                 else {"error": "missing installed runner record"}
             )
-            result = compare_example(example, runtime, record, fixtures, observed)
+            result = compare_example(
+                example, runtime, record, fixtures, observed, expectations
+            )
         except Exception as error:  # noqa: BLE001 -- retain one record for every benchmark
             result = {
                 "example": example["name"],
@@ -597,6 +913,24 @@ def compare(fixtures, observed, output, ratchet=None):
         "summary": counts,
         "unsupported_operations": dict(unsupported.most_common()),
         "benchmarks": results,
+        "metamorphic": {
+            "judged": sum(
+                1 for r in results if (r.get("metamorphic") or {}).get("judged")
+            ),
+            "differences": sum(
+                len((r.get("metamorphic") or {}).get("differences", []))
+                for r in results
+            ),
+            "expected_failures": sum(
+                len((r.get("metamorphic") or {}).get("expected_failures", []))
+                for r in results
+            ),
+            "stale": [
+                {"benchmark": r["example"], **stale}
+                for r in results
+                for stale in (r.get("metamorphic") or {}).get("stale", [])
+            ],
+        },
         "ratchet": {"mode": "report-only"},
     }
     status = 0
