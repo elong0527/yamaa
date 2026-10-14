@@ -4,6 +4,22 @@ on:
   # Only this explicitly pushed qualification branch starts the expensive matrix.
   push:
     branches: [qualification/issue-1998]
+    paths:
+      - 'rust/**'
+      - '!rust/measurements/**'
+      - '!rust/*.md'
+      - '!rust/planning/**/*.md'
+      - 'python/**'
+      - '!python/*.md'
+      - 'R/yamaa/**'
+      - '!R/yamaa/*.md'
+      - 'yaml/**'
+      - 'benchmarks/**'
+      - '!benchmarks/**/*.md'
+      - '.github/workflows/performance.yml'
+      - '.github/workflows/native.yml'
+      - '.github/scripts/ci/native_matrix.py'
+      - '.github/scripts/ci/test_performance_selection.py'
   workflow_call:
     inputs:
       native_run_id:
@@ -175,6 +191,8 @@ jobs:
           baseline_artifact=$(python -c 'from pathlib import Path; import os; print(next((Path(os.environ["RUNNER_TEMP"])/"baseline-distribution").glob("*.whl")))')
           python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "${CANDIDATE_REVISION}" --host python --executable "${CANDIDATE_PYTHON}" --artifact "${candidate_artifact}" --artifact-reference "github-actions:${NATIVE_RUN_ID}/native-python-${{ matrix.os }}-3.14/$(basename "${candidate_artifact}")" --form "${{ matrix.form }}" --build-association "completed native workflow source/package association; current job installs wheel or rebuilds source before measurement" --output "${RUNNER_TEMP}/candidate-installation"
           python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "$(cat "${RUNNER_TEMP}/baseline-revision.txt")" --host python --executable "${BASELINE_PYTHON}" --artifact "${baseline_artifact}" --artifact-reference "source-built:${BASELINE_REF}/$(basename "${baseline_artifact}")" --form wheel --build-association "clean source-built previous release archive; baseline-build.log retained; not a downloaded previous-release binary" --output "${RUNNER_TEMP}/baseline-installation"
+      - name: Create same-runner campaign before original measurements
+        run: python rust/tools/performance_campaign.py create --campaign "${RUNNER_TEMP}/machine-campaign.json"
       - name: Collect candidate with independent truth before timing
         id: candidate
         continue-on-error: true
@@ -190,6 +208,19 @@ jobs:
         id: producer_baseline
         continue-on-error: true
         run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --scope producer-root-build --families producer --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/producer-root-build-baseline"
+      - name: Attach original campaign identity without changing sample admission
+        if: always()
+        run: |
+          python - <<'PY'
+          import os, subprocess, sys
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          campaign=root/'machine-campaign.json'
+          for directory, role in [('candidate-evidence','candidate'), ('baseline-evidence','baseline'), ('producer-root-build-baseline','producer-root-build-baseline')]:
+              collection=root/directory
+              if campaign.is_file() and (collection/'collection.json').is_file():
+                  subprocess.run([sys.executable,'rust/tools/performance_campaign.py','attach','--campaign',str(campaign),'--collection',str(collection),'--role',role],check=True)
+          PY
       - name: Preserve source baseline, distributions and every raw observation
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -198,6 +229,7 @@ jobs:
           retention-days: 90
           path: |
             ${{ runner.temp }}/native-run.json
+            ${{ runner.temp }}/machine-campaign.json
             ${{ runner.temp }}/previous-release.tar.gz
             ${{ runner.temp }}/baseline-revision.txt
             ${{ runner.temp }}/baseline-build.log
@@ -322,6 +354,8 @@ jobs:
           uv pip install --python "${baseline_python}" --no-deps -r "${RUNNER_TEMP}/requirements.txt" "${RUNNER_TEMP}"/baseline-distribution/*.whl
           artifact=$(python -c 'from pathlib import Path; import os; print(next((Path(os.environ["RUNNER_TEMP"])/"baseline-distribution").glob("*.whl")))')
           python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "$(cat "${RUNNER_TEMP}/baseline-revision.txt")" --host python --executable "${baseline_python}" --artifact "${artifact}" --artifact-reference "source-built:${BASELINE_REF}/$(basename "${artifact}")" --form wheel --build-association "clean source-built previous release archive on the R measurement runner; baseline-build.log retained" --output "${RUNNER_TEMP}/baseline-installation"
+      - name: Create same-runner campaign before original measurements
+        run: python rust/tools/performance_campaign.py create --campaign "${RUNNER_TEMP}/machine-campaign.json"
       - name: Collect installed R with independent truth and child lifetime peak RSS
         id: candidate
         continue-on-error: true
@@ -337,6 +371,19 @@ jobs:
         id: producer_baseline
         continue-on-error: true
         run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --scope producer-root-build --families producer --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/producer-root-build-baseline"
+      - name: Attach original campaign identity without changing sample admission
+        if: always()
+        run: |
+          python - <<'PY'
+          import os, subprocess, sys
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          campaign=root/'machine-campaign.json'
+          for directory, role in [('candidate-evidence','candidate'), ('baseline-evidence','baseline'), ('producer-root-build-baseline','producer-root-build-baseline')]:
+              collection=root/directory
+              if campaign.is_file() and (collection/'collection.json').is_file():
+                  subprocess.run([sys.executable,'rust/tools/performance_campaign.py','attach','--campaign',str(campaign),'--collection',str(collection),'--role',role],check=True)
+          PY
       - name: Preserve R package, clock build and every raw observation
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -345,6 +392,7 @@ jobs:
           retention-days: 90
           path: |
             ${{ runner.temp }}/native-run.json
+            ${{ runner.temp }}/machine-campaign.json
             ${{ runner.temp }}/candidate-distribution
             ${{ runner.temp }}/candidate-build.log
             ${{ runner.temp }}/timer-build.log

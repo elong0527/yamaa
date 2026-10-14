@@ -79,6 +79,26 @@ the required evidence audit. Artifact source associations are checked before
 candidate installation. Superseded explicit qualification pushes cancel older
 collection attempts.
 
+Evidence-only and prose commits are excluded from the expensive push selector.
+Runtime/binding/manifests/locks, workload truth, collector/worker/protocol and
+native admission changes still trigger collection, with an independent selector
+control. A later evidence commit preserves each receipt's original measured
+source; source equivalence must compare effective runtime/workload/protocol
+bytes and account for any controller provenance-only extension. It must not
+silently relabel a measured package as a newer revision.
+
+Every hosted tuple creates a `public-performance-campaign/1` receipt with a UUID
+and actual node/system/architecture/kernel/CPU-quota/runner-image observations.
+After candidate and supported reference collection, direct machine identity must
+still equal the original receipt. Each collection retains its campaign ID, exact
+source, role and original lifecycle scope. Attachment preserves failed/diagnostic
+status and never admits a missing sample or incomparable baseline. The local
+receipt explicitly notes that it was recorded while the original frozen candidate
+controller was already running; its observed process command and kernel start
+identity preserve that origin, and denied optional process-link metrics stay null.
+Offline replays may supply strict retained-origin/callable validators; live
+collection continues to use its original installed-origin/source checks.
+
 The workflow builds and installs every candidate/source form and the previous
 release before collecting. Each of the 18 Python tuples and three R source tuples
 requires independent truth before ten fresh cold children and thirty warm Builds
