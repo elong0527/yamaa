@@ -210,7 +210,17 @@ fn shape_and_schema_policy_are_enforced() {
         .map(|_| Arc::new(Int64Array::from(Vec::<i64>::new())) as arrow_array::ArrayRef)
         .collect();
     let batch = RecordBatch::try_new(Arc::new(Schema::new(fields)), arrays).unwrap();
-    assert_eq!(table_snapshot(&stream(&batch)), Err(E::ShapeLimit));
+    // 65 columns sit inside the default 1,024-column budget (#2185); the
+    // shape policy still refuses a schema wider than the selected budget.
+    assert!(table_snapshot(&stream(&batch)).is_ok());
+    let budget = yamaa_adapters::ExecutionBudget {
+        max_columns: 64,
+        ..Default::default()
+    };
+    assert_eq!(
+        yamaa_adapters::ipc_table::decode_snapshot_with_budget(&stream(&batch), budget).err(),
+        Some(E::ShapeLimit)
+    );
 }
 
 /// Build adversarial metadata independently of Arrow's validating record writer.
