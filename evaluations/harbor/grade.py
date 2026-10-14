@@ -1008,24 +1008,30 @@ def _declared_measurements() -> dict[str, frozenset]:
     may scale in addition to the built-in set, for benchmarks whose analysis
     values, doses or ODM item values are measurements but are not covered by
     the built-in column names. It sits next to this grader both in the
-    repository and in a built verifier; a grader copied without it simply
-    declares nothing.
+    repository and in a built verifier. Loading fails closed: a missing or
+    malformed file must never silently turn the declared scaling off.
     """
     global _DECLARED_MEASUREMENTS
     if _DECLARED_MEASUREMENTS is None:
-        _DECLARED_MEASUREMENTS = {}
+        path = Path(__file__).with_name("measurements.json")
         try:
-            text = (
-                Path(__file__)
-                .with_name("measurements.json")
-                .read_text(encoding="utf-8")
-            )
-            for benchmark, columns in json.loads(text).items():
-                _DECLARED_MEASUREMENTS[benchmark] = frozenset(
-                    str(column).upper() for column in columns
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise RuntimeError(
+                f"cannot load declared measurements from {path}"
+            ) from exc
+        if not isinstance(data, dict):
+            raise ValueError(f"{path} must map benchmarks to column lists")
+        declared = {}
+        for benchmark, columns in data.items():
+            if not isinstance(columns, list) or not all(
+                isinstance(column, str) for column in columns
+            ):
+                raise ValueError(
+                    f"{path}: {benchmark} must map to a list of column names"
                 )
-        except (OSError, ValueError):
-            pass
+            declared[benchmark] = frozenset(column.upper() for column in columns)
+        _DECLARED_MEASUREMENTS = declared
     return _DECLARED_MEASUREMENTS
 
 
