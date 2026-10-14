@@ -6,18 +6,18 @@ library(yamaa)
 write_case <- function(root, columns, typed_fields = 0L) {
   dir.create(root, recursive = TRUE, showWarnings = FALSE)
   names <- c("ID", sprintf("C%04d", seq_len(columns - 1L)))
-  fields <- sprintf("F%04d", seq_len(typed_fields))
+  fields <- if (typed_fields > 1L) sprintf("F%04d", seq_len(typed_fields - 1L)) else character()
   header <- paste(c("ID", fields), collapse = ",")
-  row <- paste(c("S-001", rep("x", typed_fields)), collapse = ",")
+  row <- paste(c("S-001", rep("x", length(fields))), collapse = ",")
   writeLines(c(header, row), file.path(root, "input.csv"))
   source <- "input.csv"
   if (typed_fields > 0L) {
-    types <- paste(sprintf("%s: str", fields), collapse = ", ")
+    types <- paste(sprintf("%s: str", c("ID", fields)), collapse = ", ")
     source <- sprintf("{path: input.csv, types: {%s}}", types)
   }
   column_lines <- c(
-    "  - {name: ID, type: str, derivation: SRC.ID}",
-    sprintf("  - {name: %s, type: str, derivation: {literal: x}}", names[-1L])
+    "  - {name: ID, type: str, label: ID, derivation: SRC.ID}",
+    if (length(names) > 1L) sprintf("  - {name: %s, type: str, label: Column, derivation: {literal: x}}", names[-1L])
   )
   spec <- c(
     "schema_version: '1.0'",
@@ -47,12 +47,15 @@ spec <- write_case(file.path(root, "admit-columns"), 1024L)
 stopifnot(nrow(yamaa_check(spec)$issues) == 0L)
 built <- yamaa_domain(spec)
 stopifnot(nrow(built$issues) == 0L, ncol(built$output) == 1024L)
+stopifnot(identical(built$output$ID, "S-001"), all(built$output[1L, -1L] == "x"))
 
 spec <- write_case(file.path(root, "refuse-columns"), 1025L)
 stopifnot(compiler_limit(yamaa_check(spec)))
 
 spec <- write_case(file.path(root, "admit-types"), 1L, 1024L)
 stopifnot(nrow(yamaa_check(spec)$issues) == 0L)
+built <- yamaa_domain(spec)
+stopifnot(nrow(built$issues) == 0L, identical(built$output$ID, "S-001"))
 
 spec <- write_case(file.path(root, "refuse-types"), 1L, 1025L)
 stopifnot(compiler_limit(yamaa_check(spec)))

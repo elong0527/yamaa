@@ -1425,7 +1425,8 @@ fn malformed_assert_carriers_and_numeric_bounds_are_typed_declaration_findings()
 
 fn wide_document(columns: usize, typed_fields: usize) -> SpecificationDocument {
     use Tree::*;
-    let leaked = |text: String| -> &'static str { Box::leak(text.into_boxed_str()) };
+    let column_names: Vec<_> = (1..columns).map(|i| format!("C{i:04}")).collect();
+    let field_names: Vec<_> = (1..=typed_fields).map(|i| format!("F{i:04}")).collect();
     let mut names = vec!["ID"];
     let mut column_trees = vec![Map(vec![
         ("name", Text("ID")),
@@ -1438,9 +1439,8 @@ fn wide_document(columns: usize, typed_fields: usize) -> SpecificationDocument {
             )]),
         ),
     ])];
-    for index in 1..columns {
-        let name = leaked(format!("C{index:04}"));
-        names.push(name);
+    for name in &column_names {
+        names.push(name.as_str());
         column_trees.push(Map(vec![
             ("name", Text(name)),
             ("type", Text("str")),
@@ -1455,8 +1455,9 @@ fn wide_document(columns: usize, typed_fields: usize) -> SpecificationDocument {
     }
     let mut input = vec![("path", Text("input.csv"))];
     if typed_fields > 0 {
-        let types = (1..=typed_fields)
-            .map(|index| (leaked(format!("F{index:04}")), Text("str")))
+        let types = field_names
+            .iter()
+            .map(|name| (name.as_str(), Text("str")))
             .collect::<Vec<_>>();
         input.push(("types", Map(types)));
     }

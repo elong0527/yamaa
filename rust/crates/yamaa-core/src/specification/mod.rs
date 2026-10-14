@@ -78,6 +78,10 @@ pub enum PrepareError {
     OutputSchema(crate::table::SchemaError),
     Internal,
 }
+/// Default width policy shared by compilation, producer contracts and host decoders.
+/// Aggregate cell, text and work budgets are enforced independently.
+pub const DEFAULT_MAX_COLUMNS: usize = 1_024;
+
 /// Trusted compiler policy, not language limits. Aggregate admission precedes
 /// owned names, findings, compiled expressions and reference catalog construction.
 #[derive(Clone, Copy, Debug)]
@@ -94,11 +98,11 @@ pub struct CompilationLimits {
 impl Default for CompilationLimits {
     fn default() -> Self {
         Self {
-            columns: 1_024,
+            columns: DEFAULT_MAX_COLUMNS,
             keys: 64,
             inputs: 16,
-            projected_columns: 1_024,
-            source_fields: 1_024,
+            projected_columns: DEFAULT_MAX_COLUMNS,
+            source_fields: DEFAULT_MAX_COLUMNS,
             model_text_bytes: 262_144,
             numeric_bytes: 65_536,
             source_operands: 64,

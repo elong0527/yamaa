@@ -276,7 +276,7 @@ pub(crate) fn decode_interpreted(
     });
     let table_limits = TableLimits {
         max_rows: yamaa_engine::capacity::SOURCE_ROWS,
-        max_columns: 1_024,
+        max_columns: yamaa_core::specification::DEFAULT_MAX_COLUMNS,
         max_batches: 1,
         max_cells: cells,
     };
@@ -358,7 +358,9 @@ pub(crate) fn bounded_csv_limits(
             .min(limits.storage_bytes)
             .min(limits.work_bytes),
         // Charges precede each temporary field, including at most 1,024 headers.
-        fields: ordinary.fields.min(cells.saturating_add(1_024)),
+        fields: ordinary
+            .fields
+            .min(cells.saturating_add(yamaa_core::specification::DEFAULT_MAX_COLUMNS)),
         records: ordinary.records.min(cells.saturating_add(1)),
     }
 }
@@ -375,7 +377,7 @@ fn decode_parquet(
     use yamaa_core::table::TableAccess;
     let table_limits = TableLimits {
         max_rows: yamaa_engine::capacity::SOURCE_ROWS,
-        max_columns: 1_024,
+        max_columns: yamaa_core::specification::DEFAULT_MAX_COLUMNS,
         max_batches: 1,
         max_cells: bounded.map_or(yamaa_engine::capacity::SOURCE_CELLS, |l| {
             l.cells.min(yamaa_engine::capacity::SOURCE_CELLS)
