@@ -117,6 +117,11 @@ class NativeCoverage(unittest.TestCase):
         self.assertIn(
             "cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}", workflow
         )
+        for command in (
+            "cargo test --locked -p yamaa-engine --features test-support",
+            "cargo test --locked -p yamaa-adapters --features arrow-c-data --test c_data_table",
+        ):
+            self.assertIn(command, workflow)
 
     def test_audit_retains_failed_runs_and_releases_superseded_cancelled_runs(self):
         workflow = (Path(__file__).parents[2] / "workflows/native.yml").read_text()

@@ -82,6 +82,9 @@ The shared-crates step also runs
 Rust platform on main and qualification pushes. This enables both
 `project_preparation` and `test_support` integration binaries, which a plain
 default-feature test invocation omits.
+It also explicitly enables `arrow-c-data` for the adapters' `c_data_table`
+integration binary, so the reviewed Arrow C stream ownership and boundary
+controls run on every selected Rust platform.
 
 Scripts locate repository data relative to their own files, so they can also
 run locally from any working directory. Keep tests and shared helpers beside
