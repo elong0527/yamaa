@@ -17,7 +17,12 @@ PR_PLATFORM = "ubuntu-24.04"
 PR_PYTHONS = ("3.12", "3.14")
 
 
-def plan(event):
+def plan(event, reference=None):
+    if event == "push" and reference is not None:
+        if reference != "refs/heads/main" and not reference.startswith(
+            "refs/heads/qualification/issue-"
+        ):
+            raise ValueError(f"unsupported native qualification push: {reference}")
     if event == "pull_request":
         # Keep PR feedback on Linux and exercise both supported Python endpoints.
         platforms = [PR_PLATFORM]
@@ -115,7 +120,7 @@ def main():
         ).strip()
         compare_cohorts(json.loads(os.environ["QUALIFICATION_MATRIX"]), root, revision)
         return
-    coverage = plan(os.environ["GITHUB_EVENT_NAME"])
+    coverage = plan(os.environ["GITHUB_EVENT_NAME"], os.environ.get("GITHUB_REF"))
     with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
         for key, value in coverage.items():
             encoded = (
@@ -138,7 +143,9 @@ def main():
                 "comparisons run on main pushes or manual full-matrix dispatches.\n"
             )
         summary.write(
-            "Shared Rust checks and cross-platform math run only on pushes to main.\n"
+            "Shared Rust checks and cross-platform math run on main and explicit "
+            "qualification/issue-* pushes. Branch evidence remains separate from "
+            "combined-main acceptance.\n"
         )
 
 

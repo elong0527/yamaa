@@ -153,7 +153,7 @@ def snapshot(repository, run_id, destination):
         }
         for page in pages
         for item in page["artifacts"]
-        if item["name"] != "native-run-audit"
+        if item["name"] not in {"native-run-audit", "native-run-audit-record"}
     ]
     write(destination / "artifacts.json", artifacts)
     errors = []
@@ -1132,6 +1132,9 @@ class Audit:
             "protocol": "native-run-audit/1",
             "run": self.run,
             "source": self.source,
+            "qualification_scope": "combined-main"
+            if self.run["event"] == "push" and self.run["head_branch"] == "main"
+            else "reviewed-branch",
             "scope": "evidence completeness; public report-only counts are not whole-corpus qualification",
             "checks": self.global_checks,
             "summary": summary,
@@ -1152,6 +1155,9 @@ def markdown(record):
         "Parents: " + ", ".join(f"`{p}`" for p in record["source"]["parents"]),
         "",
         f"Run: {record['run']['html_url']}",
+        "",
+        "Qualification scope: "
+        + record.get("qualification_scope", "historical record; inspect run identity"),
         "",
         record["scope"],
         "",

@@ -174,6 +174,15 @@ class NativeAudit(unittest.TestCase):
                 subject.check(checks, "source", subject.check_source)
                 self.assertEqual(checks[0]["result"], "fail")
 
+    def test_branch_evidence_never_claims_combined_main_scope(self):
+        self.auditor.run["head_branch"] = "qualification/issue-1996"
+        record = self.auditor.collect()
+        self.assertEqual(record["qualification_scope"], "reviewed-branch")
+        self.assertIn("Qualification scope: reviewed-branch", audit.markdown(record))
+        self.assertFalse(record["complete"])
+        record = audit.Audit(self.directory).collect()
+        self.assertEqual(record["qualification_scope"], "combined-main")
+
     def test_same_package_bytes_pass_and_stale_cargo_bytes_fail(self):
         _, _, source = self.package()
         detail = self.auditor.package("macos-15", "python")

@@ -22,6 +22,7 @@ class NativeCoverage(unittest.TestCase):
                 environment = dict(
                     os.environ,
                     GITHUB_EVENT_NAME=event,
+                    GITHUB_REF="refs/heads/main",
                     GITHUB_RUN_ID="38146574656",
                     GITHUB_OUTPUT=str(output),
                     GITHUB_STEP_SUMMARY=str(summary),
@@ -73,6 +74,46 @@ class NativeCoverage(unittest.TestCase):
             {key: value for key, value in main.items() if key != "run-rust"},
         )
         self.assertFalse(dispatch["run-rust"])
+
+    def test_explicit_qualification_push_keeps_every_main_check(self):
+        main = native_matrix.plan("push", "refs/heads/main")
+        branch = native_matrix.plan("push", "refs/heads/qualification/issue-1996")
+        self.assertEqual(branch, main)
+        self.assertTrue(branch["run-rust"])
+        for reference in (
+            "refs/heads/feature/example",
+            "refs/tags/qualification/issue-1996",
+        ):
+            with self.subTest(reference=reference), self.assertRaises(ValueError):
+                native_matrix.plan("push", reference)
+
+    def test_workflow_push_trigger_and_full_job_guards_agree_with_plan(self):
+        workflow = (Path(__file__).parents[2] / "workflows/native.yml").read_text()
+        # Feed the declared push branches to Git's own ref matching vocabulary:
+        # main and selected issue branches must qualify, ordinary branches do not.
+        import fnmatch
+        import re
+
+        branches = re.search(r"branches: \[(.*?)\]", workflow).group(1)
+        patterns = [value.strip().strip("'\"") for value in branches.split(",")]
+        for branch, selected in (
+            ("main", True),
+            ("qualification/issue-1996", True),
+            ("qualification/issue-2005-predicates", True),
+            ("feature/example", False),
+        ):
+            with self.subTest(branch=branch):
+                self.assertEqual(
+                    any(fnmatch.fnmatchcase(branch, p) for p in patterns), selected
+                )
+                if selected:
+                    self.assertTrue(
+                        native_matrix.plan("push", "refs/heads/" + branch)["run-rust"]
+                    )
+        self.assertNotIn("outputs.run-rust == 'true' && github.ref", workflow)
+        self.assertIn(
+            "continue-on-error: ${{ github.ref == 'refs/heads/main' }}", workflow
+        )
 
     def test_pr_checks_both_installation_forms_on_linux_and_python_endpoints(self):
         coverage = native_matrix.plan("pull_request")
