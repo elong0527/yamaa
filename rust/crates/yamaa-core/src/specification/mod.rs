@@ -18,6 +18,7 @@ use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
 
 mod binding_diagnostics;
 mod intermediate_admission;
+pub(crate) use intermediate_admission::is_rename_only;
 mod intermediate_derivations;
 mod intermediate_range;
 mod intermediate_sources;

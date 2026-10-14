@@ -82,7 +82,8 @@ dataset, or require that every read selects a record. An intermediate that
 declares nothing beyond `id`, `dataset`, and `no_match: null` reads exactly
 what the implicit join reads ([REQ-0111](lookup.md#req-0111)) and fails as
 `rename_only_intermediate`: read the input dataset directly instead of
-aliasing it.
+aliasing it. Composition preserves this refusal even when no output reads
+the declaration.
 
 ```yaml
 # rejected: CODED adds nothing to CODING

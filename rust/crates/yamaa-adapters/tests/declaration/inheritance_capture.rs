@@ -847,8 +847,7 @@ fn introduced_invalid_nulls_keep_their_schema_constraints() {
             "entry.yaml".into(),
             &mut host,
         )
-        .err()
-        .expect("invalid column field");
+        .expect_err("invalid column field");
         let report = outcome(error);
         assert_eq!(report["outcome"]["diagnostics"][0]["condition"], condition);
         assert_eq!(

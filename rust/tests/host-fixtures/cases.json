@@ -877,6 +877,34 @@
           "run_condition": "invalid_field_type",
           "csv": null,
           "no_match_count": 0
+        },
+        {
+          "name": "invalid_unused_rename_parent",
+          "spec": "schema_version: '1.0'\ndomain: NC\nkeys: [ID]\nbase: OBS\ninput:\n  OBS: {path: obs.csv, types: {ID: int}}\n  REF: ref.csv\noutput: {path: result.csv, columns: [ID, CODE, LABEL]}\nintermediates:\n  - {id: UNUSED, dataset: REF, no_match: null}\n  - id: LOOK\n    dataset: REF\n    key: {CODE: CODE}\n    no_match: null\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: OBS.ID}\n  - {name: CODE, type: str, label: Code, derivation: OBS.CODE}\n  - {name: LABEL, type: str, label: Label, derivation: LOOK.LABEL}\n",
+          "parents": {},
+          "inputs": {
+            "obs.csv": "ID,CODE\n1,A\n2,B\n3,Z\n",
+            "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n"
+          },
+          "check_condition": "rename_only_intermediate",
+          "run_condition": "rename_only_intermediate",
+          "csv": null,
+          "no_match_count": 0
+        },
+        {
+          "name": "invalid_unused_rename_empty_child",
+          "spec": "schema_version: '1.0'\nparents: parent.yaml\n",
+          "parents": {
+            "parent.yaml": "schema_version: '1.0'\ndomain: NC\nkeys: [ID]\nbase: OBS\ninput:\n  OBS: {path: obs.csv, types: {ID: int}}\n  REF: ref.csv\noutput: {path: result.csv, columns: [ID, CODE, LABEL]}\nintermediates:\n  - {id: UNUSED, dataset: REF, no_match: null}\n  - id: LOOK\n    dataset: REF\n    key: {CODE: CODE}\n    no_match: null\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: OBS.ID}\n  - {name: CODE, type: str, label: Code, derivation: OBS.CODE}\n  - {name: LABEL, type: str, label: Label, derivation: LOOK.LABEL}\n"
+          },
+          "inputs": {
+            "obs.csv": "ID,CODE\n1,A\n2,B\n3,Z\n",
+            "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n"
+          },
+          "check_condition": "rename_only_intermediate",
+          "run_condition": "rename_only_intermediate",
+          "csv": null,
+          "no_match_count": 0
         }
       ]
     },
