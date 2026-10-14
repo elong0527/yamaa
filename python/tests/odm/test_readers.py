@@ -303,6 +303,48 @@ def test_nested_metadata_version_is_rejected(tmp_path: Path) -> None:
         list(iter_odm_records(source))
 
 
+def test_nested_study_inside_clinical_data_is_rejected(tmp_path: Path) -> None:
+    # A ClinicalData block nested inside a Study does not clear the active
+    # study context, so a Study inside it is still nested: the clinical-phase
+    # gate must not bypass the active-context check.
+    source = tmp_path / "nested-study-in-clinical.xml"
+    source.write_text(
+        ODM_13.replace(
+            '<Study OID="S.13">',
+            '<Study OID="S.13">'
+            '<ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13">'
+            '<Study OID="EVIL"></Study>'
+            "</ClinicalData>",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ODMError, match="nested Study is not supported"):
+        list(iter_odm_records(source))
+
+
+def test_nested_metadata_version_inside_clinical_data_is_rejected(
+    tmp_path: Path,
+) -> None:
+    # Same bypass for MetaDataVersion: a ClinicalData block nested inside a
+    # MetaDataVersion leaves the version context active, so a MetaDataVersion
+    # inside it is nested and must be rejected.
+    source = tmp_path / "nested-metadata-version-in-clinical.xml"
+    source.write_text(
+        ODM_13.replace(
+            '<MetaDataVersion OID="M.13" Name="Metadata">',
+            '<MetaDataVersion OID="M.13" Name="Metadata">'
+            '<ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13">'
+            '<MetaDataVersion OID="EVIL.M"></MetaDataVersion>'
+            "</ClinicalData>",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ODMError, match="nested MetaDataVersion is not supported"):
+        list(iter_odm_records(source))
+
+
 def test_sequential_clinical_data_blocks_are_read(tmp_path: Path) -> None:
     source = tmp_path / "sequential-clinical.xml"
     source.write_text(
