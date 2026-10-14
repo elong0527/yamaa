@@ -51,26 +51,9 @@ fn predicate(
     };
     let plan = match predicate_compiler::compile(expression, &path, Default::default()) {
         Ok(plan) => plan,
-        Err(predicate_compiler::Error::Parse(crate::predicate_parser::ParseError::Grammar {
-            position,
-            failure: crate::predicate_parser::GrammarFailure::InvalidExpression,
-            message,
-        })) => {
-            return Ok(Err(Diagnostic {
-                code: ConditionCode::PredicateInvalidExpression,
-                spec_paths: vec![path],
-                context: [(
-                    "reason".into(),
-                    ContextValue::Scalar(Value::Str(format!(
-                        "{message} at character {}",
-                        position.character + 1
-                    ))),
-                )]
-                .into(),
-                source_span: None,
-                operand_route: None,
-            }));
-        }
+        // Every grammar failure, including an invalid expression, reports the
+        // shared structured {position, predicate} context that `when` and
+        // `filter` report; verifications add no prose-only variant.
         Err(predicate_compiler::Error::Parse(crate::predicate_parser::ParseError::Grammar {
             position,
             failure,

@@ -108,6 +108,58 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
 }
 
 #[test]
+fn arithmetic_after_an_operand_adds_the_compute_column_suggestion() {
+    use yamaa_core::{
+        diagnostic::ContextValue as V,
+        predicate_parser::{parse_predicate, ParseError},
+        value::Value,
+    };
+    let suggestion = "derive the value as a column with compute, then compare that column";
+    for (text, position) in [
+        ("SBPSTD - SBPSUP <= -20", 7),
+        ("VS.SBPSTD - VS.SBPSUP < 0", 10),
+        ("ASTDT <= TRTEDT + 30", 16),
+    ] {
+        let Err(ParseError::Grammar {
+            position: actual,
+            failure,
+            ..
+        }) = parse_predicate(text, Default::default())
+        else {
+            panic!("predicate must fail: {text}")
+        };
+        assert_eq!(actual.character, position, "{text}");
+        for d in [
+            failure.diagnostic("columns.OHYPO.derivation.case[0].when", text, position),
+            failure
+                .original_diagnostic("columns.OHYPO.derivation.case[0].when", text, position)
+                .unwrap(),
+        ] {
+            assert_eq!(d.definition().condition, "invalid_predicate");
+            assert_eq!(d.definition().requirement, Some("REQ-0188"));
+            assert_eq!(
+                d.context["suggestion"],
+                V::Scalar(Value::Str(suggestion.into())),
+                "{text}"
+            );
+        }
+    }
+    // A failure at any other character keeps the two-field context.
+    for text in ["AGE >> 65", "A >"] {
+        let Err(ParseError::Grammar {
+            position, failure, ..
+        }) = parse_predicate(text, Default::default())
+        else {
+            panic!("predicate must fail: {text}")
+        };
+        let d = failure
+            .original_diagnostic("filter", text, position.character)
+            .unwrap();
+        assert!(!d.context.contains_key("suggestion"), "{text}");
+    }
+}
+
+#[test]
 fn caller_supplied_function_span_cannot_slice_a_different_expression() {
     let Err(N::Grammar { failure, .. }) = parse_numeric("  foo(1)", Default::default()) else {
         panic!("prohibited function");

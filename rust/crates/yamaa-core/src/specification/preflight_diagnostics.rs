@@ -93,8 +93,18 @@ impl PreflightFinding {
             Self::UndeclaredRowColumn { column, .. }
             | Self::MissingDerivation { column }
             | Self::UndeclaredKey { column, .. } => visit(column),
-            Self::DuplicateRowDefault { column, rows }
-            | Self::MissingRowDerivation { column, rows } => {
+            Self::DuplicateRowDefault {
+                column,
+                rows,
+                not_row_local,
+            } => {
+                visit(column);
+                for row in rows {
+                    visit(row);
+                }
+                visit(not_row_local);
+            }
+            Self::MissingRowDerivation { column, rows } => {
                 visit(column);
                 for row in rows {
                     visit(row);
@@ -183,10 +193,18 @@ impl PreflightFinding {
                 vec![format!("rows[{index}].derivations.{column}")],
                 context([("column", text(column))]),
             ),
-            Self::DuplicateRowDefault { column, rows } => (
+            Self::DuplicateRowDefault {
+                column,
+                rows,
+                not_row_local,
+            } => (
                 C::PreflightDuplicateRowDefault,
                 vec![format!("columns.{column}.derivation")],
-                context([("column", text(column)), ("rows", texts(rows))]),
+                context([
+                    ("column", text(column)),
+                    ("rows", texts(rows)),
+                    ("not_row_local", text(not_row_local)),
+                ]),
             ),
             Self::MissingRowDerivation { column, rows } => (
                 C::PreflightMissingRowDerivation,

@@ -142,6 +142,10 @@ pub enum PreflightFinding {
     DuplicateRowDefault {
         column: String,
         rows: Vec<String>,
+        /// Why the column-level derivation is not row-local (REQ-1260): the
+        /// root cause kind, such as `aggregate`, `lookup`, `window` or
+        /// `named_intermediate`.
+        not_row_local: String,
     },
     MissingRowDerivation {
         column: String,
@@ -545,6 +549,7 @@ fn preflight(spec: &SpecificationDocument) -> Result<Vec<PreflightFinding>, Prep
                         findings.push(PreflightFinding::DuplicateRowDefault {
                             column: name.into(),
                             rows: overridden,
+                            not_row_local: "aggregate".into(),
                         });
                     }
                 }

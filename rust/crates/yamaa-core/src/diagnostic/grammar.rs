@@ -87,7 +87,32 @@ impl A {
     }
 }
 
+/// REQ-0162 fixes the standard rewrite for a predicate that stops at an
+/// arithmetic operator after an operand: compute the value as its own column
+/// first, then compare that column.
+const ARITHMETIC_SUGGESTION: &str =
+    "derive the value as a column with compute, then compare that column";
+
 impl P {
+    /// The suggestion applies only when the parser stopped at an arithmetic
+    /// operator (`+ - * /`) that directly follows an operand; a failure at
+    /// any other character keeps the context unchanged.
+    fn arithmetic_suggestion(&self, predicate: &str, position: usize) -> Option<&'static str> {
+        if !matches!(self, Self::InvalidExpression) {
+            return None;
+        }
+        let operator = predicate.chars().nth(position)?;
+        if !matches!(operator, '+' | '-' | '*' | '/') {
+            return None;
+        }
+        let operand_end = predicate
+            .chars()
+            .take(position)
+            .filter(|character| !character.is_whitespace())
+            .last()?;
+        (operand_end.is_alphanumeric() || matches!(operand_end, '_' | '.' | '\'' | '"' | ')'))
+            .then_some(ARITHMETIC_SUGGESTION)
+    }
     pub fn diagnostic_code(&self) -> C {
         match self {
             Self::InvalidExpression | Self::InvalidTemporal { .. } => C::PredicateInvalidExpression,
@@ -101,6 +126,9 @@ impl P {
         let mut context = self.syntax_diagnostic().context;
         context.insert("predicate".into(), text(predicate));
         context.insert("position".into(), V::Integer(position.to_string()));
+        if let Some(suggestion) = self.arithmetic_suggestion(predicate, position) {
+            context.insert("suggestion".into(), text(suggestion));
+        }
         Diagnostic {
             code: self.diagnostic_code(),
             spec_paths: vec![path.into()],
@@ -137,7 +165,8 @@ impl P {
         use super::PredicateGrammarDiagnosticError::OutputLimit;
         let mut remaining = maximum.min(super::MAX_PREDICATE_DIAGNOSTIC_BYTES);
         let definition = self.diagnostic_code().definition();
-        for value in [
+        let suggestion = self.arithmetic_suggestion(predicate, position);
+        let mut accounted = vec![
             "phase",
             definition.phase,
             "condition",
@@ -151,7 +180,12 @@ impl P {
             predicate,
             "position",
             "01234567890123456789",
-        ] {
+        ];
+        if let Some(suggestion) = suggestion {
+            accounted.push("suggestion");
+            accounted.push(suggestion);
+        }
+        for value in accounted {
             let required = value
                 .len()
                 .checked_mul(12)
@@ -159,14 +193,18 @@ impl P {
                 .ok_or(OutputLimit)?;
             remaining = remaining.checked_sub(required).ok_or(OutputLimit)?;
         }
+        let mut context: Context = [
+            ("predicate".into(), text(predicate)),
+            ("position".into(), V::Integer(position.to_string())),
+        ]
+        .into();
+        if let Some(suggestion) = suggestion {
+            context.insert("suggestion".into(), text(suggestion));
+        }
         Ok(Diagnostic {
             code: self.diagnostic_code(),
             spec_paths: vec![path.into()],
-            context: [
-                ("predicate".into(), text(predicate)),
-                ("position".into(), V::Integer(position.to_string())),
-            ]
-            .into(),
+            context,
             source_span: None,
             operand_route: None,
         })
