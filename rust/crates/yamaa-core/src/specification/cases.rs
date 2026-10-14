@@ -122,7 +122,12 @@ pub(super) fn prepare(
                     crate::predicate_parser::ParseError::UnsupportedRegex { .. },
                 )) => return Err(unsupported(&format!("{prefix}.when"), "predicate_regex")),
                 Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
-                Err(error) => return Err(PrepareError::predicate(error.clone(), None)),
+                Err(error) => {
+                    return Err(PrepareError::predicate(
+                        error.clone(),
+                        Some(&format!("{prefix}.when")),
+                    ))
+                }
             };
             (
                 Some(compiled),

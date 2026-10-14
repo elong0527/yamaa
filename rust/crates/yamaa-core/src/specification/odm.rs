@@ -74,7 +74,12 @@ pub(super) fn prepare(
                 Err(crate::predicate_compiler::Error::Internal) => {
                     return Err(PrepareError::Internal)
                 }
-                Err(error) => return Err(PrepareError::predicate(error.clone(), Some(path))),
+                Err(error) => {
+                    return Err(PrepareError::predicate(
+                        error.clone(),
+                        Some(&format!("{path}.filter")),
+                    ))
+                }
             }
             Ok((expression.into(), compiled))
         })
