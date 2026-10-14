@@ -2059,14 +2059,6 @@ columns:
                     entry = work / "spec.yaml"
                     self.assertEqual(entry.read_bytes(), case["specification"].encode())
                     retained = {path: path.read_bytes() for path in work.rglob("*") if path.is_file()}
-                    # REQ-0190 admits predicate types before cell-dependent key reads.
-                    # Keep the historical capture and author the current finding here.
-                    expected_findings = [{
-                        "phase": "validation", "condition": "incompatible_input_type",
-                        "requirement": "REQ-0190",
-                        "spec_paths": ["intermediates[0].filter"],
-                        "context": {"left_type": "int", "right_type": "str"},
-                    }] if name == "dependency_before_bad_filter" else case.get("findings", [])
                     output = work / "out.csv"
                     for attempt in range(2):
                         with self.subTest(attempt=attempt):
