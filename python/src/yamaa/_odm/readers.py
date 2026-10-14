@@ -290,7 +290,9 @@ def iter_odm_records(
                             "1.3" if odm_namespace == ODM_13_NAMESPACE else "2.0"
                         )
                         odm_version = element.get("ODMVersion") or expected_version
-                        if not odm_version.startswith(expected_version):
+                        if odm_version != expected_version and not (
+                            odm_version.startswith(expected_version + ".")
+                        ):
                             raise ODMError(
                                 f"ODMVersion {odm_version!r} conflicts with namespace"
                             )
