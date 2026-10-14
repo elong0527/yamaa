@@ -9,8 +9,8 @@ use yamaa_adapters::{
     arrow_table::physical_schema,
     execute_dataset_with_budget,
     ipc_table::{
-        dataset_batches, decode_snapshot, decode_snapshot_with_budget, encode_dataset_with_budget,
-        snapshot_batches, write_dataset_with_budget, TableError,
+        dataset_batches, decode_snapshot_with_budget, encode_dataset_with_budget, snapshot_batches,
+        write_dataset_with_budget, TableError,
     },
     ExecutionBudget,
 };

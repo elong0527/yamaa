@@ -707,6 +707,7 @@ mod tests {
             Arc,
         },
     };
+    use yamaa_core::diagnostic::ConditionCode;
     static NEXT: AtomicUsize = AtomicUsize::new(0);
     #[test]
     fn primary_encoding_limit_retains_completed_verification_without_warning_authority() {
@@ -759,7 +760,10 @@ mod tests {
         assert!(result.warning_log().is_none());
         assert_eq!(result.log_table(false).unwrap().rows(), 2);
         assert_eq!(result.issues().len(), 1);
-        assert_eq!(result.issues()[0].condition, "engine_rejected");
+        assert_eq!(
+            result.issues()[0].condition,
+            ConditionCode::ApplicationRejected.definition().condition
+        );
         let context: serde_json::Value = serde_json::from_str(&result.issues()[0].context).unwrap();
         assert_eq!(context["stage"], "output");
         assert_eq!(context["code"], "output_limit");
@@ -785,7 +789,10 @@ mod tests {
                 result.observations()["artifacts"].as_array().unwrap().len(),
                 1
             );
-            assert_eq!(result.issues()[0].condition, "engine_rejected");
+            assert_eq!(
+                result.issues()[0].condition,
+                ConditionCode::ApplicationRejected.definition().condition
+            );
         }
     }
 
