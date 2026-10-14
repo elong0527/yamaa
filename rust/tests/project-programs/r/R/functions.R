@@ -7,7 +7,17 @@ project_ratio <- function(numerator, denominator, decimals = 2L,
                           adjust = 0, as_percent = FALSE) {
   value <- numerator / denominator
   if (as_percent) value <- value * 100
-  value <- round(value, as.integer(decimals))
+  decimals <- as.integer(decimals)
+  # printf rounds the stored binary value, matching Python's round() for
+  # decimal places; R's round() can treat a nearby binary value as a tie.
+  value <- if (decimals > 323L) {
+    # More decimal places cannot change a binary64 value.
+    value
+  } else if (decimals >= 0L) {
+    as.numeric(sprintf("%.*f", decimals, value))
+  } else {
+    round(value, decimals)
+  }
   if (is.na(adjust)) adjust <- 0
   value + adjust
 }
@@ -47,7 +57,8 @@ project_value <- function(x) x
   1.1283791670955126 * total
 }
 .erfc_tail <- function(z) {
-  tiny <- 1e-300
+  # R's decimal literal parser can differ from Python by several ulps.
+  tiny <- 0x1.56e1fc2f8f359p-997
   fraction <- numerator <- tiny
   denominator <- 0
   step <- 1
