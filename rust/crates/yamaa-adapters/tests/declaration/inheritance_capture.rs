@@ -693,7 +693,7 @@ fn count_dependency_pruning_keeps_complete_normalized_application_model() {
 }
 
 #[test]
-fn standalone_null_handler_retains_its_raw_origin() {
+fn explicit_null_handler_and_raw_origin_remain_distinct_from_inherited_clear() {
     let mut authored = window();
     authored["intermediates"] = json!([{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":null}]);
     let source = source(authored.to_string().into_bytes());
