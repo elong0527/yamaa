@@ -87,6 +87,7 @@ class PRChanges(unittest.TestCase):
             (root / "python/deleted.py").write_text("pass\n")
             git("add", ".")
             git("commit", "-qm", "base")
+            original_base = git("rev-parse", "HEAD")
             git("checkout", "-qb", "feature")
             (root / "python/old.py").rename(root / "notes.md")
             (root / "python/deleted.py").unlink()
@@ -100,24 +101,44 @@ class PRChanges(unittest.TestCase):
             git("merge", "--no-ff", "-qm", "PR merge", "feature")
             checkout = root / "checkout"
             git("clone", "-q", "--depth=2", root.as_uri(), str(checkout))
-            event = root / "event.json"
-            event.write_text(json.dumps({"pull_request": {"base": {"sha": base}}}))
-            output = root / "output"
-            summary = root / "summary"
-            subprocess.run(
-                [sys.executable, pr_changes.__file__],
+            missing = subprocess.run(
+                ["git", "cat-file", "-e", original_base],
                 cwd=checkout,
-                check=True,
-                env=dict(
-                    os.environ,
-                    GITHUB_EVENT_NAME="pull_request",
-                    GITHUB_EVENT_PATH=str(event),
-                    GITHUB_OUTPUT=str(output),
-                    GITHUB_STEP_SUMMARY=str(summary),
-                ),
+                capture_output=True,
+                check=False,
             )
-            self.assertEqual(output.read_text(), "rust=false\npython=true\n")
-            self.assertIn("Full installed/platform qualification", summary.read_text())
+            self.assertNotEqual(missing.returncode, 0)
+            for name, event_base, expected in (
+                ("current", base, "rust=false\npython=true\n"),
+                ("stale", original_base, "rust=true\npython=true\n"),
+            ):
+                with self.subTest(event_base=name):
+                    event = root / f"event-{name}.json"
+                    event.write_text(
+                        json.dumps({"pull_request": {"base": {"sha": event_base}}})
+                    )
+                    output = root / f"output-{name}"
+                    summary = root / f"summary-{name}"
+                    subprocess.run(
+                        [sys.executable, pr_changes.__file__],
+                        cwd=checkout,
+                        check=True,
+                        env=dict(
+                            os.environ,
+                            GITHUB_EVENT_NAME="pull_request",
+                            GITHUB_EVENT_PATH=str(event),
+                            GITHUB_OUTPUT=str(output),
+                            GITHUB_STEP_SUMMARY=str(summary),
+                        ),
+                    )
+                    self.assertEqual(output.read_text(), expected)
+                    self.assertIn(
+                        "Full installed/platform qualification", summary.read_text()
+                    )
+                    if name == "stale":
+                        self.assertIn(
+                            "Comparison history unavailable", summary.read_text()
+                        )
 
     def test_main_populates_both_caches_without_a_pr_event_file(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -34,21 +34,32 @@ def coverage(paths):
 
 
 def main():
+    history_note = ""
     if os.environ["GITHUB_EVENT_NAME"] == "pull_request":
         event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
-        base = subprocess.check_output(
-            ["git", "merge-base", event["pull_request"]["base"]["sha"], "HEAD"],
-            text=True,
-        ).strip()
-        # Include old and new paths for renames, and deleted files as well.
-        paths = (
-            subprocess.check_output(
-                ["git", "diff", "--no-renames", "--name-only", "-z", base, "HEAD"]
+        try:
+            base = subprocess.check_output(
+                ["git", "merge-base", event["pull_request"]["base"]["sha"], "HEAD"],
+                text=True,
+                stderr=subprocess.PIPE,
+            ).strip()
+            # Include old and new paths for renames, and deleted files as well.
+            paths = (
+                subprocess.check_output(
+                    ["git", "diff", "--no-renames", "--name-only", "-z", base, "HEAD"],
+                    stderr=subprocess.PIPE,
+                )
+                .decode()
+                .split("\0")
             )
-            .decode()
-            .split("\0")
-        )
-        selected = coverage(paths)
+            selected = coverage(paths)
+        except subprocess.CalledProcessError:
+            # A moving base can leave the event's older commit outside a shallow
+            # synthetic merge checkout. Unknown paths must retain both suites.
+            selected = {"rust": True, "python": True}
+            history_note = (
+                "Comparison history unavailable; running both runtime smoke suites.\n"
+            )
     else:
         # Populate compatible caches on main for subsequent PRs.
         selected = {"rust": True, "python": True}
@@ -64,6 +75,7 @@ def main():
             )
             + ". Full installed/platform qualification runs separately.\n"
         )
+        summary.write(history_note)
 
 
 if __name__ == "__main__":
