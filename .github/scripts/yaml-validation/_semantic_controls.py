@@ -32,41 +32,27 @@ def findings(observation, label='spec'):
         for row in observation['issues'] for path in row['spec_paths']]
 
 
-def _order(value):
-    return [{'variable': term} if isinstance(term, str) else copy.deepcopy(term)
-        for term in value]
-
-
 def complete(specification, sources=None, *, fill_derivations=True):
     """Author only omitted scaffold metadata, retaining every written operand."""
     spec = copy.deepcopy(specification)
     spec.setdefault('schema_version', '1.0')
     spec.setdefault('domain', 'TEST')
     spec.setdefault('input', {'SRC': {'path': 'source.csv'}})
-    for dataset, source in list(spec['input'].items()):
-        if isinstance(source, str):
-            spec['input'][dataset] = {'path': source}
     sources = copy.deepcopy(sources or {})
     for dataset, source in spec['input'].items():
         sources.setdefault(dataset, {'ID': 'str'})
-        sources[dataset].update(source.get('types') or {})
+        if isinstance(source, dict):
+            sources[dataset].update(source.get('types') or {})
     if 'columns' not in spec:
         spec['columns'] = [{'name': 'ID', 'type': 'str', 'derivation': {'literal': 'fixture'}}]
     for column in spec['columns']:
         column.setdefault('type', 'str')
         if 'derivation' not in column and fill_derivations and not spec.get('rows'):
             column['derivation'] = {'literal': None}
-        if isinstance(column.get('verifications'), dict):
-            column['verifications'] = [column['verifications']]
     spec.setdefault('keys', [spec['columns'][0]['name']] if spec['columns'] else [])
     spec.setdefault('output', {})
     spec['output'].setdefault('path', 'result.csv')
     spec['output'].setdefault('columns', [column['name'] for column in spec['columns']])
-    if 'order_by' in spec['output']:
-        spec['output']['order_by'] = _order(spec['output']['order_by'])
-    for intermediate in spec.get('intermediates', []):
-        if 'order_by' in intermediate:
-            intermediate['order_by'] = _order(intermediate['order_by'])
     for row in spec.get('rows', []):
         row.setdefault('derivations', {})
     return spec, sources
