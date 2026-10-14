@@ -48,6 +48,7 @@ schema.yaml:match_value.description	See REQ-1259.
 schema.yaml:dataset_source.description	See REQ-1059.
 schema.yaml:dataset_class.path.description	See REQ-1060.
 schema.yaml:dataset_class.types.description	See REQ-1060.
+schema.yaml:dataset_class.encoding.description	See REQ-1311.
 schema.yaml:dataset_class.schema.description	See REQ-1060.
 schema.yaml:dataset_class.empty_string.description	See REQ-1158.
 schema.yaml:dataset_class.ordinal.description	See REQ-1291.
