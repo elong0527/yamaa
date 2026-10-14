@@ -17,6 +17,7 @@ on:
       - '!benchmarks/**/*.md'
       - 'yaml/**'
       - '.github/workflows/native.yml'
+      - '.github/workflows/performance.yml'
       - '.github/scripts/ci/native_matrix.py'
       - '.github/scripts/ci/test_native_matrix.py'
   pull_request:
@@ -29,6 +30,7 @@ on:
       - '!benchmarks/**/*.md'
       - 'yaml/**'
       - '.github/workflows/native.yml'
+      - '.github/workflows/performance.yml'
       - '.github/scripts/ci/native_matrix.py'
       - '.github/scripts/ci/test_native_matrix.py'
 
@@ -729,6 +731,14 @@ jobs:
         run: |
           python rust/tools/audit_native_run.py --run-id "${GITHUB_RUN_ID}" \
             --repository "${GITHUB_REPOSITORY}" --output "${RUNNER_TEMP}/native-run-audit" --check
+      - name: Independently replay the original inputs without network access
+        if: always()
+        run: |
+          python rust/tools/audit_native_run.py \
+            --input "${RUNNER_TEMP}/native-run-audit/input" \
+            --output "${RUNNER_TEMP}/native-run-audit/replay" --check
+          cmp "${RUNNER_TEMP}/native-run-audit/qualification.json" \
+            "${RUNNER_TEMP}/native-run-audit/replay/qualification.json"
       - name: Show the evidence record
         if: always()
         run: |
@@ -750,6 +760,8 @@ jobs:
           path: |
             ${{ runner.temp }}/native-run-audit/qualification.json
             ${{ runner.temp }}/native-run-audit/qualification.md
+            ${{ runner.temp }}/native-run-audit/replay/qualification.json
+            ${{ runner.temp }}/native-run-audit/replay/qualification.md
             ${{ runner.temp }}/native-run-audit/input/run.json
             ${{ runner.temp }}/native-run-audit/input/source.json
             ${{ runner.temp }}/native-run-audit/input/jobs.json
