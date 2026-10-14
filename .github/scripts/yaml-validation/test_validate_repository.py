@@ -1824,9 +1824,6 @@ class TestStaticSemanticContracts(unittest.TestCase):
         )
 
     def test_dependency_cycle_reports_each_participating_derivation(self):
-        root = TOOL_PATH.parents[3]
-        env, env_errors = VALIDATOR.build_schema_env(root)
-        self.assertEqual(env_errors, [])
         spec = {
             'columns': [
                 {
@@ -1845,15 +1842,18 @@ class TestStaticSemanticContracts(unittest.TestCase):
             ]
         }
 
-        cycle = VALIDATOR.find_column_dependency_cycle(spec, env)
+        errors = self.dependency_errors(spec)
 
-        self.assertIsNotNone(cycle)
-        self.assertEqual(set(cycle[:-1]), {'A', 'B'})
+        self.assertEqual(self.dependency_facts(errors), [
+            ('validation', 'dependency_cycle', 'REQ-0072',
+             'example/spec.yaml.columns.A.derivation.first_available',
+             {'cycle': ['A', 'B', 'A']}),
+            ('validation', 'dependency_cycle', 'REQ-0072',
+             'example/spec.yaml.columns.B.derivation.row_value',
+             {'cycle': ['A', 'B', 'A']}),
+        ])
 
     def test_forward_reference_reports_the_later_column(self):
-        root = TOOL_PATH.parents[3]
-        env, env_errors = VALIDATOR.build_schema_env(root)
-        self.assertEqual(env_errors, [])
         spec = {
             'columns': [
                 {
@@ -1867,14 +1867,13 @@ class TestStaticSemanticContracts(unittest.TestCase):
             ]
         }
 
-        self.assertEqual(
-            VALIDATOR.find_forward_reference(spec, env), ('A', 'B')
-        )
+        self.assertEqual(self.dependency_facts(self.dependency_errors(spec)), [
+            ('validation', 'forward_reference', 'REQ-0071',
+             'example/spec.yaml.columns.A.derivation.first_available',
+             {'column': 'A', 'dependency': 'B'}),
+        ])
 
     def test_forward_reference_skips_edges_inside_a_cycle(self):
-        root = TOOL_PATH.parents[3]
-        env, env_errors = VALIDATOR.build_schema_env(root)
-        self.assertEqual(env_errors, [])
         spec = {
             'columns': [
                 {
@@ -1893,7 +1892,126 @@ class TestStaticSemanticContracts(unittest.TestCase):
             ]
         }
 
-        self.assertIsNone(VALIDATOR.find_forward_reference(spec, env))
+        errors = self.dependency_errors(spec)
+        self.assertEqual([error.condition for error in errors],
+                         ['dependency_cycle', 'dependency_cycle'])
+
+    def dependency_errors(self, spec, *, source='ID,V\n1,1.5\n'):
+        """Admit complete authored files with the installed native transport."""
+        columns = [
+            {'name': 'ID', 'type': 'int', 'derivation': 'SRC.ID'},
+            *copy.deepcopy(spec['columns']),
+        ]
+        for column in columns:
+            column['label'] = column['name']
+        complete = {
+            'schema_version': '1.0', 'domain': 'TEST',
+            'input': {'SRC': {'path': 'source.csv',
+                              'types': {'ID': 'int', 'V': 'float'}}},
+            'keys': ['ID'],
+            'columns': columns,
+            'output': {'path': 'result.csv',
+                       'columns': [column['name'] for column in columns]},
+        }
+        complete.update({key: value for key, value in spec.items()
+                         if key != 'columns'})
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = root / 'spec.yaml'
+            path.write_text(yaml.safe_dump(complete), encoding='ascii')
+            if source is not None:
+                (root / 'source.csv').write_text(source, encoding='ascii')
+            errors = VALIDATOR.validate_spec_document(
+                complete, 'example/spec.yaml', path,
+                {'root': str(TOOL_PATH.parents[3])},
+            )
+            self.assertFalse((root / 'result.csv').exists())
+            return errors
+
+    @staticmethod
+    def dependency_facts(errors):
+        return [(error.phase, error.condition, error.requirement,
+                 error.path, error.context) for error in errors]
+
+    def test_key_dependency_preserves_complete_native_order_and_paths(self):
+        errors = self.dependency_errors({
+            'columns': [
+                {'name': 'VALUE', 'type': 'float',
+                 'derivation': {'literal': 1.5}},
+            ],
+            'keys': ['VALUE'],
+        })
+        self.assertEqual(errors, [])
+        errors = self.dependency_errors({
+            'columns': [
+                {'name': 'KEY', 'type': 'float',
+                 'derivation': {'compute': {'expr': 'VALUE'}}},
+                {'name': 'VALUE', 'type': 'float',
+                 'derivation': {'literal': 1.5}},
+            ],
+            'keys': ['ID', 'KEY'],
+        })
+        self.assertEqual(self.dependency_facts(errors), [
+            ('validation', 'forward_reference', 'REQ-0071',
+             'example/spec.yaml.columns.KEY.derivation.compute',
+             {'column': 'KEY', 'dependency': 'VALUE'}),
+            ('validation', 'key_dependency', 'REQ-0074',
+             'example/spec.yaml.columns.KEY.derivation',
+             {'column': 'KEY', 'dependency': 'VALUE'}),
+        ])
+
+    def test_completed_dependencies_are_admitted_without_publication(self):
+        self.assertEqual(self.dependency_errors({'columns': [
+            {'name': 'B', 'type': 'float', 'derivation': {'literal': 1.5}},
+            {'name': 'A', 'type': 'float',
+             'derivation': {'first_available': {'sources': ['B']}}},
+        ]}), [])
+
+    def test_header_binding_failure_precedes_dependency_admission(self):
+        errors = self.dependency_errors({'columns': [
+            {'name': 'A', 'type': 'float',
+             'derivation': {'first_available': {'sources': ['B']}}},
+            {'name': 'B', 'type': 'float', 'derivation': {'literal': 1.5}},
+        ]}, source='WRONG,V\n1,1.5\n')
+        self.assertEqual(self.dependency_facts(errors), [
+            ('validation', 'unknown_field', 'REQ-0532',
+             'example/spec.yaml.input.SRC.types.ID',
+             {'dataset': 'SRC', 'field': 'ID'}),
+        ])
+
+    def test_resource_path_failure_precedes_dependency_admission(self):
+        errors = self.dependency_errors({'columns': [
+            {'name': 'A', 'type': 'float',
+             'derivation': {'first_available': {'sources': ['B']}}},
+            {'name': 'B', 'type': 'float', 'derivation': {'literal': 1.5}},
+        ]}, source=None)
+        self.assertEqual(self.dependency_facts(errors), [
+            ('validation', 'resource_path_missing', 'REQ-0785',
+             'example/spec.yaml.input.SRC.path',
+             {'dataset': 'SRC', 'path': 'source.csv'}),
+        ])
+
+    def test_dependency_transport_failure_is_explicit(self):
+        with (
+            patch.object(VALIDATOR._native_specification, 'validate',
+                         side_effect=RuntimeError('native transport unavailable')),
+            self.assertRaisesRegex(RuntimeError, 'native transport unavailable'),
+        ):
+            self.dependency_errors({'columns': [
+                {'name': 'A', 'type': 'float', 'derivation': {'literal': 1.5}},
+            ]})
+
+    def test_missing_native_installation_cannot_import_semantic_transport(self):
+        native_path = TOOL_PATH.with_name('_native_specification.py')
+        native_spec = importlib.util.spec_from_file_location(
+            '_native_specification_without_native', native_path
+        )
+        module = importlib.util.module_from_spec(native_spec)
+        with (
+            patch.dict(sys.modules, {'yamaa._native': None}),
+            self.assertRaisesRegex(ModuleNotFoundError, 'yamaa._native'),
+        ):
+            native_spec.loader.exec_module(module)
 
 
 class TestExecutionManifestGate(unittest.TestCase):
