@@ -528,7 +528,9 @@ class PublicConformance(unittest.TestCase):
         )
         expectations = judge.load_metamorphic_expectations(ROOT.parent / "benchmarks")
         names = {e["name"] for e in corpus["examples"]}
-        self.assertEqual(len(expectations), 47)
+        # 47 as reviewed in #2291, minus the three dependency-cycle entries
+        # whose fix landed in #2293.
+        self.assertEqual(len(expectations), 44)
         for (benchmark, check), item in expectations.items():
             self.assertIn(benchmark, names)
             self.assertIn(check, {"empty_child", "key_order"})
