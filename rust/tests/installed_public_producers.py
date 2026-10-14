@@ -86,7 +86,8 @@ class PublicProducers(unittest.TestCase):
 
     def test_uneven_seven_to_one_graph_uses_both_artifact_profiles(self):
         # Independent source/count truth: seven authored records, one group,
-        # then one producer record. Both native artifact routes retain7 and1.
+        # then one producer record. Both native artifact routes retain seven and one.
+        # REQ-0047: the copied producer count is an explicit scalar group key.
         self.write("raw/raw.csv", "ID,VALUE\n" + "".join(f"1,{value}\n" for value in range(1, 8)))
         for profile in ("csv", "parquet"):
             with self.subTest(profile=profile):
@@ -111,7 +112,7 @@ input: {{FIRST: {{path: ../generated/producer.{profile}, schema: ../producer/p.y
 rows:
   - id: counted
     dataset: FIRST
-    group_by: [FIRST.ID]
+    group_by: [FIRST.ID, FIRST.VALUE]
     derivations: {{ID: FIRST.ID, SOURCE_COUNT: FIRST.VALUE, VALUE: {{aggregate: 'COUNT(FIRST.*)'}}}}
 columns:
   - {{name: ID, type: int, label: Identifier}}
