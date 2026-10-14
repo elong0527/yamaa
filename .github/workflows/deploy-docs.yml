@@ -39,7 +39,7 @@ jobs:
     if: >-
       github.event_name != 'workflow_run' ||
       (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
+       contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event) &&
        github.event.workflow_run.head_repository.full_name == github.repository)
     environment:
       name: github-pages
@@ -74,7 +74,7 @@ jobs:
           COVERAGE_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           if [ -z "${COVERAGE_RUN_ID}" ]; then
-            COVERAGE_RUN_ID=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/unit-tests.yml/runs?branch=main&event=push&status=success&per_page=1" --jq '.workflow_runs[0].id // empty')
+            COVERAGE_RUN_ID=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/unit-tests.yml/runs?branch=main&status=success&per_page=1" --jq '.workflow_runs[0].id // empty')
           fi
           if [ -z "${COVERAGE_RUN_ID}" ] || \
              ! gh run download "${COVERAGE_RUN_ID}" --name unit-test-coverage --dir docs/coverage; then

@@ -1,4 +1,4 @@
-"""An unavailable coverage artifact must not prevent documentation publication."""
+"""Reuse push/manual coverage reports without blocking docs when unavailable."""
 
 import os
 import shutil
@@ -24,15 +24,18 @@ class CoverageDeployment(unittest.TestCase):
             if step.get("name") == "Prepare coverage report"
         )
         cases = (
-            ("123", "", "success", ["run"], True),
-            ("123", "", "missing", ["run"], False),
-            ("", "", "missing", ["api"], False),
-            ("", "456", "success", ["api", "run"], True),
-            ("", "456", "missing", ["api", "run"], False),
+            ("123", "", "push", "success", ["run"], True),
+            ("123", "", "push", "missing", ["run"], False),
+            ("", "", "push", "missing", ["api"], False),
+            ("", "456", "push", "success", ["api", "run"], True),
+            ("", "456", "push", "missing", ["api", "run"], False),
+            ("", "789", "workflow_dispatch", "success", ["api", "run"], True),
         )
-        for run_id, lookup_id, download, calls, measured in cases:
+        for run_id, lookup_id, event, download, calls, measured in cases:
             with (
-                self.subTest(run_id=run_id, lookup_id=lookup_id, download=download),
+                self.subTest(
+                    run_id=run_id, lookup_id=lookup_id, event=event, download=download
+                ),
                 tempfile.TemporaryDirectory() as temporary,
             ):
                 root = Path(temporary)
@@ -46,10 +49,16 @@ class CoverageDeployment(unittest.TestCase):
                 gh.write_text(
                     f"#!{sys.executable}\n"
                     "import os, sys\nfrom pathlib import Path\n"
+                    "from urllib.parse import parse_qs, urlsplit\n"
                     "with Path('calls').open('a') as log:\n"
                     "    log.write(sys.argv[1] + '\\n')\n"
                     "if sys.argv[1] == 'api':\n"
-                    "    print(os.environ['TEST_LOOKUP_ID'])\n"
+                    "    query = parse_qs(urlsplit(sys.argv[2]).query)\n"
+                    "    assert query['branch'] == ['main']\n"
+                    "    assert query['status'] == ['success']\n"
+                    "    if query.get('event', [os.environ['TEST_LOOKUP_EVENT']]) == "
+                    "[os.environ['TEST_LOOKUP_EVENT']]:\n"
+                    "        print(os.environ['TEST_LOOKUP_ID'])\n"
                     "    raise SystemExit(0)\n"
                     "assert sys.argv[2:5] == ['download', "
                     "os.environ['TEST_DOWNLOAD_ID'], '--name']\n"
@@ -81,6 +90,7 @@ class CoverageDeployment(unittest.TestCase):
                         "GITHUB_REPOSITORY": "elong0527/yamaa",
                         "COVERAGE_RUN_ID": run_id,
                         "TEST_LOOKUP_ID": lookup_id,
+                        "TEST_LOOKUP_EVENT": event,
                         "TEST_DOWNLOAD_ID": run_id or lookup_id,
                         "TEST_DOWNLOAD": download,
                     },
