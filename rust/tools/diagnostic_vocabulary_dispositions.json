@@ -96,9 +96,9 @@
       "kind": "validator",
       "phases": ["validation"],
       "reason": "REQ-0829 remains a live capability obligation. The repository validator's require_regex_binding raises this actual refusal when the portable native binding is unavailable, before pattern evaluation and without a host-library fallback.",
-      "owners": ["rules/operations/text.md", ".github/scripts/yaml-validation/validate_repository.py"],
+      "owners": ["rules/operations/text.md", ".github/scripts/yaml-validation/regex_checks.py"],
       "controls": [".github/scripts/yaml-validation/test_validate_repository.py"],
-      "producer": {"path": ".github/scripts/yaml-validation/validate_repository.py", "symbol": "require_regex_binding"},
+      "producer": {"path": ".github/scripts/yaml-validation/regex_checks.py", "symbol": "require_regex_binding"},
       "history": "Current actual producing validator owner; test_missing_binding_fails_rather_than_falling_back retains the condition and pinned contract. This is not a retired condition or a claim of core emission."
     },
     "unsupported_text_contract": {
