@@ -20,6 +20,9 @@ sys.path.insert(0, str(HERE))
 import mapping_doc
 
 ROOT = HERE.parents[2]
+sys.path.insert(0, str(ROOT / "rust/tools"))
+from public_conformance import EXCLUDED, plan
+
 BENCHMARKS = ROOT / "benchmarks"
 DESTINATION = ROOT / "docs/benchmark"
 # The gallery's prose is authored as a documentation page, beside the other
@@ -1055,6 +1058,11 @@ def render_benchmark(benchmark, previous=None, next=None):
         category=escape(category),
         description=description,
         lifecycle_badge=lifecycle_badge,
+        conformance=escape(
+            f"Public conformance excluded: {EXCLUDED[benchmark.name]}"
+            if benchmark.name in EXCLUDED
+            else "Public entries: Python and R. Passing coverage requires an installed inventory."
+        ),
         failure_section=failure_section,
         datasets_heading=datasets_heading,
         readme_edit_url=readme_edit_url,
@@ -1122,23 +1130,24 @@ def main():
     args = parser.parse_args()
     if args.all and args.benchmarks:
         parser.error("choose --all or explicit benchmark names")
+    inventory = plan(BENCHMARKS)
+    complete = [entry["name"] for entry in inventory["examples"]]
+    missing_readmes = [
+        name for name in complete if not (BENCHMARKS / name / "README.md").is_file()
+    ]
+    if missing_readmes:
+        parser.error("authored benchmarks missing README.md: " + ", ".join(missing_readmes))
     names = args.benchmarks
     if args.all:
-        names = [
-            path.name
-            for path in sorted(BENCHMARKS.iterdir())
-            if benchmark_has_spec(path) and (path / "README.md").is_file()
-        ]
+        names = complete
     elif not names:
         names = [path.stem for path in sorted(args.output_dir.glob("*.html"))]
     if not names:
         parser.error("specify a benchmark name or --all")
     ordered = sorted(set(names))
-    complete = sorted(
-        path.name
-        for path in BENCHMARKS.iterdir()
-        if benchmark_has_spec(path) and (path / "README.md").is_file()
-    )
+    unexpected = sorted(set(ordered) - set(complete))
+    if unexpected:
+        parser.error("unexpected benchmark names: " + ", ".join(unexpected))
     overview_text = OVERVIEW.read_text(encoding="utf-8")
     dangling = [
         target for target in curated_links(overview_text) if target not in set(complete)

@@ -13,28 +13,21 @@ import yaml
 
 def load_blockers(root):
     blockers = {}
-    manifests = (
-        ('validation-manifest.yaml', 'fixtures', False),
-        ('execution-manifest.yaml', 'examples', True),
+    manifest_path = root / 'benchmarks' / 'validation-manifest.yaml'
+    with open(manifest_path, 'r', encoding='utf-8') as handle:
+        manifest = yaml.safe_load(handle)
+    entries = (
+        manifest.get('fixtures', {}) if isinstance(manifest, dict) else {}
     )
-    for filename, collection, blocked_only in manifests:
-        manifest_path = root / 'benchmarks' / filename
-        with open(manifest_path, 'r', encoding='utf-8') as handle:
-            manifest = yaml.safe_load(handle)
-        entries = (
-            manifest.get(collection, {}) if isinstance(manifest, dict) else {}
-        )
-        for name, entry in entries.items():
-            if not isinstance(entry, dict) or 'blocked_by' not in entry:
-                continue
-            if blocked_only and entry.get('status') != 'blocked':
-                continue
-            blocker = entry['blocked_by']
-            if not isinstance(blocker, str) or re.fullmatch(
-                r'#[1-9][0-9]*', blocker
-            ) is None:
-                continue
-            blockers.setdefault(int(blocker[1:]), []).append(name)
+    for name, entry in entries.items():
+        if not isinstance(entry, dict) or 'blocked_by' not in entry:
+            continue
+        blocker = entry['blocked_by']
+        if not isinstance(blocker, str) or re.fullmatch(
+            r'#[1-9][0-9]*', blocker
+        ) is None:
+            continue
+        blockers.setdefault(int(blocker[1:]), []).append(name)
     return blockers
 
 
@@ -73,7 +66,7 @@ def validate_blocker_states(blockers, state_lookup):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Reject closed issues in validation and execution manifests.'
+        description='Reject closed issues in the validation fixture manifest.'
     )
     parser.add_argument(
         '--root', type=Path, default=Path(__file__).resolve().parents[3]

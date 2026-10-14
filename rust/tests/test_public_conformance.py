@@ -97,7 +97,11 @@ class PublicConformance(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             judge.emit_plan(self.fixtures, output)
         staged = output / "r-inputs/simple"
-        for name, target in (("linked.csv", "target.csv"), ("broken.csv", "absent.csv"), ("linked-directory", "directory")):
+        for name, target in (
+            ("linked.csv", "target.csv"),
+            ("broken.csv", "absent.csv"),
+            ("linked-directory", "directory"),
+        ):
             self.assertTrue((staged / "input" / name).is_symlink())
             self.assertEqual(os.readlink(staged / "input" / name), target)
         self.assertEqual((staged / "input/target.csv").read_bytes(), b"ID\n1\n")
@@ -204,6 +208,40 @@ class PublicConformance(unittest.TestCase):
             {"specification": "other.yaml", "environment": None}
         )
         self.assertEqual(self.verdict()["verdict"], "error")
+
+    def test_new_directory_is_required_on_both_hosts_without_a_registry_edit(self):
+        ratchet = self.root / "ratchet.json"
+        judge.write_json(ratchet, {"python": [], "r": []})
+        inventory = self.root / "inventory.json"
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(
+                judge.compare(self.fixtures, self.observed, inventory, ratchet), 1
+            )
+        self.assertEqual(
+            judge.read_json(inventory)["ratchet"]["regressions"], ["simple"]
+        )
+        metadata = judge.read_json(self.observed / "run.json")
+        metadata["runtime"] = "r"
+        judge.write_json(self.observed / "run.json", metadata)
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(
+                judge.compare(self.fixtures, self.observed, inventory, ratchet), 1
+            )
+        self.assertEqual(
+            judge.read_json(inventory)["ratchet"]["regressions"], ["simple"]
+        )
+
+    def test_unexpected_runner_record_and_duplicate_observations_are_rejected(self):
+        judge.write_json(self.observed / "records/unexpected.json", {})
+        with self.assertRaisesRegex(ValueError, "unexpected installed runner"):
+            judge.compare(self.fixtures, self.observed, self.root / "inventory.json")
+        (self.observed / "records/unexpected.json").unlink()
+        ratchet = self.root / "ratchet.json"
+        judge.write_json(ratchet, {"python": ["simple", "simple"]})
+        with self.assertRaisesRegex(ValueError, "duplicate observed"):
+            judge.compare(
+                self.fixtures, self.observed, self.root / "inventory.json", ratchet
+            )
 
     def test_log_types_are_independent_and_saved_logs_are_compared(self):
         with (self.case / "spec.yaml").open("a") as stream:

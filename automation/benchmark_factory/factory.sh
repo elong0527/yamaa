@@ -176,7 +176,7 @@ fi
 if [ "$1" = "retire-check" ]; then
   [ -d "$DIR" ] || die "no such benchmark: $DIR"
   HITS="$(cd "$ROOT" && grep -rln --exclude-dir="$name" "$name" \
-    benchmarks/README.md benchmarks/execution-manifest.yaml \
+    benchmarks/README.md rust/tools/public_conformance.py \
     benchmarks/validation-manifest.yaml benchmarks/vocabulary-coverage.yaml \
     evaluations docs automation mkdocs.yml .github 2>/dev/null)"
   if [ -z "$HITS" ]; then
