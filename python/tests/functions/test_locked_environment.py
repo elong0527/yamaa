@@ -658,13 +658,16 @@ def test_editable_metadata_original_errors_and_interrupts_are_preserved(
 
 
 def test_editable_metadata_invalid_utf8_is_an_invalid_lock(monkeypatch):
+    original = UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+
     class UndecodableMetadata:
         def read_text(self, name):
-            raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+            raise original
 
     monkeypatch.setattr(m.metadata, "packages_distributions", dict)
     monkeypatch.setattr(
         m.metadata, "distributions", lambda: iter([UndecodableMetadata()])
     )
-    with pytest.raises(m.InvalidLock, match="invalid editable metadata"):
+    with pytest.raises(m.InvalidLock, match="invalid editable metadata") as caught:
         m._installed_providers(("project_bmi",))
+    assert caught.value.__cause__ is original
