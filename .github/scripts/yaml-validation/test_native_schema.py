@@ -16,7 +16,7 @@ class TestNativeSchemaFacts(unittest.TestCase):
         }))], 0, 'root_class')
 
     def test_unicode_and_nul_round_trip(self):
-        authored = {'X': 'é🙂\x00'}
+        authored = {'X': '\u00e9\U0001f642\x00'}
         encoded = SCHEMA.bytes_for(authored)
         self.assertTrue(encoded.isascii())
         schema = self.schema({'type': 'str'})
