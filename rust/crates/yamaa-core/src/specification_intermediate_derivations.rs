@@ -4,6 +4,7 @@ use crate::dataset::{
     CurrentField, CurrentRead, Intermediate, IntermediateDerivations, IntermediateSource,
     SecondarySource, SourceSchemas,
 };
+use crate::value::Value;
 
 #[derive(Clone, Debug)]
 pub(super) struct Derivation {
@@ -536,8 +537,43 @@ pub(super) fn bind(
     let catalog = Catalog::compile(&outputs, &datasets, Default::default())
         .map_err(BindError::Catalog)?
         .with_record_derivation();
+    let references = declarations
+        .iter()
+        .flat_map(|item| &item.references)
+        .filter_map(|name| name.split_once('.').map(|(owner, _)| owner))
+        .collect::<alloc::collections::BTreeSet<_>>();
+    let mut required = previous
+        .iter()
+        .enumerate()
+        .filter_map(|(index, item)| {
+            item.as_ref()
+                .filter(|item| references.contains(item.identifier.as_str()))
+                .map(|_| index)
+        })
+        .collect::<alloc::collections::BTreeSet<_>>();
+    // A referenced selector may itself read an earlier selector. Retain its
+    // transitive current-record dependencies, preserving their original slots.
+    for index in (0..previous.len()).rev() {
+        if !required.contains(&index) {
+            continue;
+        }
+        for field in previous[index]
+            .iter()
+            .flat_map(Intermediate::current_fields)
+        {
+            if let CurrentRead::Intermediate { index: child, .. } = field.read {
+                if child >= index {
+                    return Err(BindError::Internal);
+                }
+                required.insert(child);
+            }
+        }
+    }
+    let mut unavailable = BTreeMap::new();
     let earlier = rebase(
         previous,
+        &required,
+        &mut unavailable,
         sources,
         schemas,
         driver,
@@ -547,11 +583,6 @@ pub(super) fn bind(
         outer_output,
         &output,
     )?;
-    let references = declarations
-        .iter()
-        .flat_map(|item| &item.references)
-        .filter_map(|name| name.split_once('.').map(|(owner, _)| owner))
-        .collect::<alloc::collections::BTreeSet<_>>();
     let mut selected = Vec::new();
     for (index, item) in earlier.iter().enumerate() {
         let Some(item) = item else {
@@ -610,7 +641,7 @@ pub(super) fn bind(
             &secondary,
             &earlier,
         )?;
-        donor_scope_findings(&mut findings[start..], reader, named);
+        donor_scope_findings(&mut findings[start..], reader, named, &unavailable);
         if let Some(expression) = expression {
             assignments.push(Assignment {
                 column,
@@ -666,6 +697,7 @@ fn donor_scope_findings(
     findings: &mut [BindFinding],
     reader: &str,
     named: &intermediates::Declarations,
+    unavailable: &BTreeMap<usize, String>,
 ) {
     for finding in findings {
         let reference = match finding {
@@ -683,6 +715,24 @@ fn donor_scope_findings(
             _ => None,
         };
         if let Some((path, reference)) = reference {
+            if let Some((index, _)) = named.reference(reference) {
+                if let Some(identifier) = unavailable.get(&index) {
+                    let mut result = LookupFinding::new(
+                        path,
+                        crate::diagnostic::ConditionCode::IntermediateDerivationDependency,
+                    );
+                    result.text("intermediate", reader);
+                    result.text("identifier", identifier);
+                    result.text(
+                        "read",
+                        reference
+                            .split_once('.')
+                            .map_or(reference, |(owner, _)| owner),
+                    );
+                    *finding = BindFinding::Lookup(result);
+                    continue;
+                }
+            }
             let mut result = LookupFinding::new(
                 path,
                 if named.reference(reference).is_some() {
@@ -715,6 +765,8 @@ fn outer_secondary(
 #[allow(clippy::too_many_arguments)]
 fn rebase(
     previous: &[Option<Intermediate>],
+    required: &alloc::collections::BTreeSet<usize>,
+    unavailable: &mut BTreeMap<usize, String>,
     sources: &[SourceDeclaration],
     schemas: &[&TableSchema],
     driver: usize,
@@ -777,7 +829,52 @@ fn rebase(
             read,
         })
     };
-    for item in result.iter_mut().flatten() {
+    for (index, slot) in result.iter_mut().enumerate() {
+        let Some(item) = slot else {
+            continue;
+        };
+        if !required.contains(&index) {
+            // Donor plans keep original selector indices. An unused slot owns
+            // no matching work, derivations or verifications in this context.
+            *item = Intermediate {
+                identifier: item.identifier.clone(),
+                path: item.path.clone(),
+                source: IntermediateSource::Primary {
+                    name: donor_name.into(),
+                    schema: source.clone(),
+                },
+                keys: vec![crate::dataset::IntermediateKey {
+                    source_column: 0,
+                    path: format!("{}.key", item.path),
+                    value: crate::dataset::MatchValue::Literal(Value::Missing),
+                }],
+                filter: None,
+                selection: None,
+                range: None,
+                columns: None,
+                no_match: Some(Value::Missing),
+                unique: Vec::new(),
+                derivations: None,
+                pending_schema: None,
+            };
+            continue;
+        }
+        let missing = item.current_fields().find_map(|field| match field.read {
+            CurrentRead::Output(column) => (!output
+                .columns()
+                .iter()
+                .any(|field| field.name == outer.columns()[column].name))
+            .then(|| field.identifier.clone()),
+            CurrentRead::Intermediate { index, .. } => unavailable.get(&index).cloned(),
+            CurrentRead::Record { .. } => None,
+        });
+        if let Some(identifier) = missing {
+            // Retain the unavailable name until its actual read is bound, so
+            // the finding belongs to the reading derivation's operand path.
+            unavailable.insert(index, identifier);
+            *slot = None;
+            continue;
+        }
         let name = match &item.source {
             IntermediateSource::Input(index) => Some(original_secondary[*index].name.clone()),
             IntermediateSource::Primary { name, .. } => Some(name.clone()),
