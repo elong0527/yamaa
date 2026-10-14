@@ -131,3 +131,93 @@ fn typed_intermediate_conversion_and_static_checks_match_independent_host_truth(
         }
     }
 }
+
+#[test]
+fn transitive_nested_conversion_handlers_survive_success_and_failure() {
+    let truth: serde_json::Value =
+        serde_json::from_str(include_str!("../../../../tests/host-fixtures/cases.json")).unwrap();
+    let case = truth["families"]["original-specifications"]["typed_intermediates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|case| case["name"] == "nested-conversion-ledger")
+        .unwrap();
+    // QSV -> FIRST -> MIDDLE -> DEEP crosses several donor counters.
+    let specification = case["spec"]
+        .as_str()
+        .unwrap()
+        .replace(
+            "intermediates:\n",
+            "intermediates:\n  - id: DEEP\n    dataset: VS\n    key: {USUBJID: VS.USUBJID}\n    derivations:\n      PICK: {type: int, derivation: {literal: bad}, unconvertible: 2}\n    order_by: [VS.VSSEQ]\n    keep: first\n  - id: MIDDLE\n    dataset: VS\n    key: {USUBJID: VS.USUBJID}\n    derivations:\n      PICK: DEEP.PICK\n    order_by: [VS.VSSEQ]\n    keep: first\n",
+        )
+        .replace(
+            "  - id: FIRST\n    dataset: VS\n    key: {USUBJID: QS.USUBJID}\n    derivations:\n      PICK: {type: int, derivation: {literal: bad}, unconvertible: 2}",
+            "  - id: FIRST\n    dataset: VS\n    key: {USUBJID: QS.USUBJID}\n    derivations:\n      PICK: {type: int, derivation: MIDDLE.PICK, unconvertible: 2}",
+        );
+    for (replacement, expected_count) in [("2", 3), ("bad-replacement", 1)] {
+        let fixture = Fixture::new();
+        for (path, content) in case["inputs"].as_object().unwrap() {
+            let mut content = content.as_str().unwrap().to_owned();
+            if path == "qs.csv" {
+                // The outer donor's own typed handler must still count once.
+                content.push_str("S01,WEEK 9223372036854775808,0\n");
+            }
+            fs::write(fixture.0.join(path), content).unwrap();
+        }
+        fs::write(
+            fixture.0.join("spec.yaml"),
+            specification.replacen(
+                "unconvertible: 2",
+                &format!("unconvertible: {replacement}"),
+                1,
+            ),
+        )
+        .unwrap();
+        let mut domain = fixture.run().unwrap_or_else(|issues| panic!("{issues:?}"));
+        if replacement == "2" {
+            assert!(domain.issues().is_empty(), "{:?}", domain.issues());
+            assert!(domain.save().unwrap());
+            assert_eq!(
+                fs::read(fixture.0.join("result.csv")).unwrap(),
+                case["csv"].as_str().unwrap().as_bytes(),
+            );
+        } else {
+            assert!(
+                domain
+                    .issues()
+                    .iter()
+                    .any(|issue| issue.condition == "conversion_failed"
+                        && issue.spec_paths == ["intermediates[0].derivations.PICK.unconvertible"]),
+                "{:?}",
+                domain.issues()
+            );
+        }
+        let observations = domain.observations();
+        let counts = observations["handler_counts"].as_array().unwrap();
+        assert_eq!(
+            counts
+                .iter()
+                .find(
+                    |entry| entry["spec_path"] == "intermediates[0].derivations.PICK.unconvertible"
+                )
+                .unwrap()["count"],
+            expected_count,
+        );
+        assert_eq!(
+            counts
+                .iter()
+                .find(|entry| entry["spec_path"]
+                    == "intermediates[3].derivations.QSVISITN.unconvertible")
+                .unwrap()["count"],
+            1,
+        );
+        assert_eq!(
+            counts
+                .iter()
+                .filter(|entry| entry["handler"] == "unconvertible")
+                .map(|entry| entry["count"].as_u64().unwrap())
+                .sum::<u64>(),
+            expected_count + 1,
+        );
+    }
+}

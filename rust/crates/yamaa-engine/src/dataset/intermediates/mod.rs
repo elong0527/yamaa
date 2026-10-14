@@ -170,6 +170,20 @@ impl<E> TableAccess for Data<'_, E> {
     }
 }
 
+/// Match descendant handlers; this plan's typed fields use the caller's counter.
+fn has_nested_conversion_handler(plan: &DatasetPlan, spec_path: &str) -> bool {
+    plan.intermediates().iter().any(|item| {
+        item.derivations.as_ref().is_some_and(|derived| {
+            derived
+                .plan
+                .conversion_handlers()
+                .iter()
+                .any(|handler| handler.handler.spec_path == spec_path)
+                || has_nested_conversion_handler(&derived.plan, spec_path)
+        })
+    })
+}
+
 /// An immutable donor snapshot is shared only across contexts supplying the same current row.
 #[allow(clippy::too_many_arguments)]
 fn materialize<E>(
@@ -320,15 +334,7 @@ fn materialize<E>(
             donor_handlers
                 .transfer_selected(state.handlers, |entry| {
                     entry.handler == HandlerKind::Unconvertible
-                        && nested.intermediates().iter().any(|item| {
-                            item.derivations.as_ref().is_some_and(|derived| {
-                                derived
-                                    .plan
-                                    .conversion_handlers()
-                                    .iter()
-                                    .any(|handler| handler.handler.spec_path == entry.spec_path)
-                            })
-                        })
+                        && has_nested_conversion_handler(nested, &entry.spec_path)
                 })
                 .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
             let value = evaluated.map_err(|error| donor_failure(error, item, plan, nested))?;
