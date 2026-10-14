@@ -286,8 +286,8 @@ args <- commandArgs(TRUE)
 expressions <- as.list(parse(args[1]))
 loop <- Filter(function(x) is.call(x) && identical(x[[1]], as.name("for")), expressions)
 f <- Filter(function(x) is.call(x) && identical(x[[1]], as.name("<-")) &&
-            identical(x[[2]], as.name("failure")), expressions)
-stopifnot(length(loop)==1L, length(f)==1L)
+            is.symbol(x[[2]]) && as.character(x[[2]]) %in% c("failure", "write_bytes"), expressions)
+stopifnot(length(loop)==1L, length(f)==2L)
 for (mode in c("metadata", "save", "secondary")) {
   directory <- file.path(args[2], mode); dir.create(directory)
   work <- file.path(directory,"work"); dir.create(work)
@@ -318,7 +318,7 @@ for (mode in c("metadata", "save", "secondary")) {
     writeBin(charToRaw("independent completed prefix"), file.path(work,"out.csv"))
     stop("original late Save cause")
   })
-  eval(f[[1]], envir=e)
+  for (helper in f) eval(helper, envir=e)
   eval(loop[[1]], envir=e)
   row <- get("response.json", envir=stores)$repetitions[[1]]
   stopifnot(identical(row$status,"failure"), is.null(e$result),
@@ -373,8 +373,8 @@ args <- commandArgs(TRUE)
 expressions <- as.list(parse(args[1]))
 loop <- Filter(function(x) is.call(x) && identical(x[[1]], as.name("for")), expressions)
 helper <- Filter(function(x) is.call(x) && identical(x[[1]], as.name("<-")) &&
-                 identical(x[[2]], as.name("failure")), expressions)
-stopifnot(length(loop)==1L, length(helper)==1L)
+                 is.symbol(x[[2]]) && as.character(x[[2]]) %in% c("failure", "write_bytes"), expressions)
+stopifnot(length(loop)==1L, length(helper)==2L)
 for (interrupted in c(FALSE, TRUE)) {
   directory <- file.path(args[2], as.character(interrupted)); dir.create(directory)
   work <- file.path(directory, "work"); dir.create(work)
@@ -415,7 +415,7 @@ for (interrupted in c(FALSE, TRUE)) {
     termination$status <- status
     stop(structure(list(message="synthetic quit",call=NULL),class=c("syntheticQuit","error","condition")))
   }
-  eval(helper[[1]],envir=e)
+  for (definition in helper) eval(definition,envir=e)
   tryCatch(eval(loop[[1]],envir=e),syntheticQuit=function(error) NULL)
   primary <- if(interrupted) "independent original interruption" else "independent original Save cause"
   row <- e$response$repetitions[[1]]

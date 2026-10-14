@@ -170,6 +170,69 @@ class Replay(unittest.TestCase):
                 {"system": "synthetic"},
                 Path("/unused"),
             )
+            for parent in (r"C:\retained", r"\\runner\evidence"):
+                with self.subTest(parent=parent):
+                    portable = copy.deepcopy(before)
+                    for node in portable["nodes"]:
+                        node["specification"] = parent + "\\" + node["specification"]
+                    portable_saved = dict(
+                        portable,
+                        artifacts=saved["artifacts"],
+                        publication=saved["publication"],
+                    )
+                    for stage, report in (
+                        ("build", portable),
+                        ("save_1", portable_saved),
+                        ("save_2", portable_saved),
+                    ):
+                        measure.lifecycle.write_json(child / reports[stage], report)
+                    measure.validate(
+                        case,
+                        authored,
+                        child,
+                        request,
+                        response,
+                        {"system": "synthetic"},
+                        Path("/unused"),
+                    )
+                    changed = copy.deepcopy(portable_saved)
+                    changed["nodes"][0]["specification"] = (
+                        r"D:\other" + "\\" + case["expected_nodes"][0]
+                    )
+                    for stage in ("save_1", "save_2"):
+                        measure.lifecycle.write_json(child / reports[stage], changed)
+                    with self.assertRaisesRegex(
+                        ValueError, "held Save changes completed Build"
+                    ):
+                        measure.validate(
+                            case,
+                            authored,
+                            child,
+                            request,
+                            response,
+                            {"system": "synthetic"},
+                            Path("/unused"),
+                        )
+                    portable["nodes"][0]["specification"] = parent + r"\wrong.yaml"
+                    measure.lifecycle.write_json(child / reports["build"], portable)
+                    with self.assertRaisesRegex(
+                        ValueError, "independently declared graph"
+                    ):
+                        measure.validate(
+                            case,
+                            authored,
+                            child,
+                            request,
+                            response,
+                            {"system": "synthetic"},
+                            Path("/unused"),
+                        )
+            for stage, report in (
+                ("build", before),
+                ("save_1", saved),
+                ("save_2", saved),
+            ):
+                measure.lifecycle.write_json(child / reports[stage], report)
             original = copy.deepcopy(response)
             for report in (
                 dict(saved, artifacts=saved["artifacts"][:1]),
