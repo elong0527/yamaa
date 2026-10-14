@@ -177,6 +177,8 @@ impl Run<'_, '_> {
                     ) => Some(InheritanceReferenceKind::Dataset),
                     Some(
                         ("column_class", "name")
+                        | ("intermediate_class", "key")
+                        | ("aggregate_class", "key")
                         | ("root_class", "keys")
                         | ("output_class", "columns"),
                     ) => Some(InheritanceReferenceKind::Variable),
