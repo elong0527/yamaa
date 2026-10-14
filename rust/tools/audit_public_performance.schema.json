@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "yamaa independent public performance input and item-10 budgets",
-  "description": "Auditor reads original public-performance/1 and public-performance-campaign/1 evidence only. Paths are relative to the manifest, including a self-contained source Git bundle for offline replay. Original absolute runner paths remain immutable identity strings. --check-collection requires harness correctness, native source admission, all 567 candidate tuple/case combinations and 504 required comparator role/case combinations, forbids budgets, and preserves budgets:not_evaluated and accepted:false. Each tuple requires 18 prior Python lookup/aggregate/window cases and six producer-root-Build cases on the same observed runner. Unexpected/duplicate role cases refuse; missing required comparators cannot become policy unavailable dispositions. R retains Python comparator observations while cross-host ratios remain incomparable. Final --check additionally requires original terminal successful completion and approved numeric budgets. No release thresholds are provided by this schema. Post-completion --catalog derives whole/segmented reader units from all 21 original tuples. --unit selector.json --check-unit replays complete unchanged raw evidence and retains accepted:false/no-budgets fragments. aggregate_public_performance.py requires genuine independently fetched reviewed reader job/run/attempt/artifact proof, exact nondeduplicated 567+504 cells and recomputed original raw-vector statistics. --check-collection still never supplies numeric acceptance. Final budget acceptance additionally requires exact original reader completion; canceled/failed original or reader attempts refuse. The measured one-case scheduling pilot does not establish whole-matrix runtime. Full original performance/native/reader API artifact snapshots remain immutable, including older same-named attempts. Eligibility and ambiguity are determined separately inside the exact selected successful producing-job interval; explicit original artifact IDs/names/source/run remain bound. Old-attempt substitution and duplicate artifacts inside the selected interval refuse.",
+  "description": "Auditor reads original public-performance/1 and public-performance-campaign/1 evidence only. Paths are relative to the manifest, including a self-contained source Git bundle for offline replay. Original absolute runner paths remain immutable identity strings. --check-collection requires harness correctness, native source admission, all 567 candidate tuple/case combinations and 504 required comparator role/case combinations, forbids budgets, and preserves budgets:not_evaluated and accepted:false. Each tuple requires 18 prior Python lookup/aggregate/window cases and six producer-root-Build cases on the same observed runner. Unexpected/duplicate role cases refuse; missing required comparators cannot become policy unavailable dispositions. R retains Python comparator observations while cross-host ratios remain incomparable. Final --check additionally requires original terminal successful completion and approved numeric budgets. No release thresholds are provided by this schema. Post-completion --catalog derives whole/segmented reader units from all 21 original tuples. --unit selector.json --check-unit replays complete unchanged raw evidence and retains accepted:false/no-budgets fragments. aggregate_public_performance.py requires genuine independently fetched reviewed reader job/run/attempt/artifact proof, exact nondeduplicated 567+504 cells and recomputed original raw-vector statistics. --check-collection still never supplies numeric acceptance. Final budget acceptance additionally requires exact original reader completion; canceled/failed original or reader attempts refuse. The measured one-case scheduling pilot does not establish whole-matrix runtime. Full original performance/native/reader API artifact snapshots remain immutable, including older same-named attempts. Eligibility and ambiguity are determined separately inside the exact selected successful producing-job interval; explicit original artifact IDs/names/source/run remain bound. Old-attempt substitution and duplicate artifacts inside the selected interval refuse. Both Python and R may use nine approved dimension-variant segments per original logical tuple, retaining complete three-size cases and matching same-runner comparator distributions. All21 tuples segmented derive189 reader units while candidate567/comparator504 identities and all original44-sample records stay unchanged. Legacy whole and mixed scheduling remain valid. Observed pilot pressure motivates scheduling; it does not establish whole-matrix runtime or numeric budgets.",
   "oneOf": [
     {
       "$ref": "#/$defs/input"
@@ -634,7 +634,7 @@
         "variant",
         "cases"
       ],
-      "description": "One approved R dimension variant, with all three row sizes and complete 10 cold/3 warmup/30 warm sampling per case on its original actual runner. Original artifact performance-r-{os}-source-{variant} and producing job performance-r ({os}, source, {variant}) bind this segment independently. Applicable role collections contain exactly these candidate cases, plus prior lookup/aggregate/window baseline cases or producer-root-Build cases. No case distribution or RSS child observation is split or pooled across runners.",
+      "description": "One approved Python or R dimension variant, with all three row sizes and complete 10 cold/3 warmup/30 warm plus truth sampling per case on its original actual runner. Python artifact performance-python-{os}-{python}-{form}-{variant} and job performance-python ({os}, {python}, {form}, {variant}); R artifact performance-r-{os}-source-{variant} and job performance-r ({os}, source, {variant}). Applicable role collections contain exactly these candidate cases, plus matching prior lookup/aggregate/window baseline cases or producer-root-Build cases. No distribution or RSS child observation is split or pooled across runners.",
       "allOf": [
         {
           "if": {
@@ -823,18 +823,7 @@
       "additionalProperties": false,
       "properties": {
         "tuple": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/tuple"
-            },
-            {
-              "properties": {
-                "host": {
-                  "const": "r"
-                }
-              }
-            }
-          ]
+          "$ref": "#/$defs/tuple"
         },
         "segments": {
           "type": "array",
@@ -850,7 +839,7 @@
         "tuple",
         "segments"
       ],
-      "description": "Optional R scheduling: exactly one segment for each of nine approved dimension variants, with non-overlapping complete cases. Auditor refuses duplicate/missing/unapproved variants and wrong role/case coverage. Python tuples remain whole. Logical coverage stays21 tuples,567 candidate cells and504 required comparator cells."
+      "description": "Optional Python and R scheduling: exactly one segment for each of nine approved dimension variants, with non-overlapping complete cases. Every segment retains all three row sizes and complete original sampling plus its matching baseline roles on one actual runner. Legacy whole entries remain valid. Auditor refuses duplicate/missing/unapproved variants and wrong role/case coverage. Logical coverage stays21 tuples,567 candidate cells and504 required comparator cells; all segmented yields189 independent reader units."
     },
     "entry": {
       "oneOf": [
@@ -945,7 +934,7 @@
         "tuple",
         "variant"
       ],
-      "description": "One original whole tuple or approved complete R dimension variant. Source, artifact, paths, case lists and roles cannot be overridden. The auditor derives every selection from the complete original manifest."
+      "description": "One original whole tuple or approved complete Python/R dimension variant. Source, artifact, paths, case lists and roles cannot be overridden. The auditor derives every selection from the complete original manifest."
     },
     "flat_segment": {
       "type": "object",
@@ -1056,7 +1045,7 @@
         "cases",
         "tuple"
       ],
-      "description": "One approved R dimension variant, with all three row sizes and complete 10 cold/3 warmup/30 warm sampling per case on its original actual runner. Original artifact performance-r-{os}-source-{variant} and producing job performance-r ({os}, source, {variant}) bind this segment independently. Applicable role collections contain exactly these candidate cases, plus prior lookup/aggregate/window baseline cases or producer-root-Build cases. No case distribution or RSS child observation is split or pooled across runners.",
+      "description": "One approved Python or R dimension variant, with all three row sizes and complete 10 cold/3 warmup/30 warm plus truth sampling per case on its original actual runner. Python artifact performance-python-{os}-{python}-{form}-{variant} and job performance-python ({os}, {python}, {form}, {variant}); R artifact performance-r-{os}-source-{variant} and job performance-r ({os}, source, {variant}). Applicable role collections contain exactly these candidate cases, plus matching prior lookup/aggregate/window baseline cases or producer-root-Build cases. No distribution or RSS child observation is split or pooled across runners.",
       "allOf": [
         {
           "if": {
@@ -1289,7 +1278,169 @@
         "r-windows-latest-source-window-100",
         "r-windows-latest-source-callback-1",
         "r-windows-latest-source-producer-1",
-        "r-windows-latest-source-producer-3"
+        "r-windows-latest-source-producer-3",
+        "python-ubuntu-24.04-3.12-wheel-lookup-1",
+        "python-ubuntu-24.04-3.12-wheel-lookup-4",
+        "python-ubuntu-24.04-3.12-wheel-aggregate-10",
+        "python-ubuntu-24.04-3.12-wheel-aggregate-100",
+        "python-ubuntu-24.04-3.12-wheel-window-10",
+        "python-ubuntu-24.04-3.12-wheel-window-100",
+        "python-ubuntu-24.04-3.12-wheel-callback-1",
+        "python-ubuntu-24.04-3.12-wheel-producer-1",
+        "python-ubuntu-24.04-3.12-wheel-producer-3",
+        "python-ubuntu-24.04-3.12-source-lookup-1",
+        "python-ubuntu-24.04-3.12-source-lookup-4",
+        "python-ubuntu-24.04-3.12-source-aggregate-10",
+        "python-ubuntu-24.04-3.12-source-aggregate-100",
+        "python-ubuntu-24.04-3.12-source-window-10",
+        "python-ubuntu-24.04-3.12-source-window-100",
+        "python-ubuntu-24.04-3.12-source-callback-1",
+        "python-ubuntu-24.04-3.12-source-producer-1",
+        "python-ubuntu-24.04-3.12-source-producer-3",
+        "python-ubuntu-24.04-3.13-wheel-lookup-1",
+        "python-ubuntu-24.04-3.13-wheel-lookup-4",
+        "python-ubuntu-24.04-3.13-wheel-aggregate-10",
+        "python-ubuntu-24.04-3.13-wheel-aggregate-100",
+        "python-ubuntu-24.04-3.13-wheel-window-10",
+        "python-ubuntu-24.04-3.13-wheel-window-100",
+        "python-ubuntu-24.04-3.13-wheel-callback-1",
+        "python-ubuntu-24.04-3.13-wheel-producer-1",
+        "python-ubuntu-24.04-3.13-wheel-producer-3",
+        "python-ubuntu-24.04-3.13-source-lookup-1",
+        "python-ubuntu-24.04-3.13-source-lookup-4",
+        "python-ubuntu-24.04-3.13-source-aggregate-10",
+        "python-ubuntu-24.04-3.13-source-aggregate-100",
+        "python-ubuntu-24.04-3.13-source-window-10",
+        "python-ubuntu-24.04-3.13-source-window-100",
+        "python-ubuntu-24.04-3.13-source-callback-1",
+        "python-ubuntu-24.04-3.13-source-producer-1",
+        "python-ubuntu-24.04-3.13-source-producer-3",
+        "python-ubuntu-24.04-3.14-wheel-lookup-1",
+        "python-ubuntu-24.04-3.14-wheel-lookup-4",
+        "python-ubuntu-24.04-3.14-wheel-aggregate-10",
+        "python-ubuntu-24.04-3.14-wheel-aggregate-100",
+        "python-ubuntu-24.04-3.14-wheel-window-10",
+        "python-ubuntu-24.04-3.14-wheel-window-100",
+        "python-ubuntu-24.04-3.14-wheel-callback-1",
+        "python-ubuntu-24.04-3.14-wheel-producer-1",
+        "python-ubuntu-24.04-3.14-wheel-producer-3",
+        "python-ubuntu-24.04-3.14-source-lookup-1",
+        "python-ubuntu-24.04-3.14-source-lookup-4",
+        "python-ubuntu-24.04-3.14-source-aggregate-10",
+        "python-ubuntu-24.04-3.14-source-aggregate-100",
+        "python-ubuntu-24.04-3.14-source-window-10",
+        "python-ubuntu-24.04-3.14-source-window-100",
+        "python-ubuntu-24.04-3.14-source-callback-1",
+        "python-ubuntu-24.04-3.14-source-producer-1",
+        "python-ubuntu-24.04-3.14-source-producer-3",
+        "python-macos-15-3.12-wheel-lookup-1",
+        "python-macos-15-3.12-wheel-lookup-4",
+        "python-macos-15-3.12-wheel-aggregate-10",
+        "python-macos-15-3.12-wheel-aggregate-100",
+        "python-macos-15-3.12-wheel-window-10",
+        "python-macos-15-3.12-wheel-window-100",
+        "python-macos-15-3.12-wheel-callback-1",
+        "python-macos-15-3.12-wheel-producer-1",
+        "python-macos-15-3.12-wheel-producer-3",
+        "python-macos-15-3.12-source-lookup-1",
+        "python-macos-15-3.12-source-lookup-4",
+        "python-macos-15-3.12-source-aggregate-10",
+        "python-macos-15-3.12-source-aggregate-100",
+        "python-macos-15-3.12-source-window-10",
+        "python-macos-15-3.12-source-window-100",
+        "python-macos-15-3.12-source-callback-1",
+        "python-macos-15-3.12-source-producer-1",
+        "python-macos-15-3.12-source-producer-3",
+        "python-macos-15-3.13-wheel-lookup-1",
+        "python-macos-15-3.13-wheel-lookup-4",
+        "python-macos-15-3.13-wheel-aggregate-10",
+        "python-macos-15-3.13-wheel-aggregate-100",
+        "python-macos-15-3.13-wheel-window-10",
+        "python-macos-15-3.13-wheel-window-100",
+        "python-macos-15-3.13-wheel-callback-1",
+        "python-macos-15-3.13-wheel-producer-1",
+        "python-macos-15-3.13-wheel-producer-3",
+        "python-macos-15-3.13-source-lookup-1",
+        "python-macos-15-3.13-source-lookup-4",
+        "python-macos-15-3.13-source-aggregate-10",
+        "python-macos-15-3.13-source-aggregate-100",
+        "python-macos-15-3.13-source-window-10",
+        "python-macos-15-3.13-source-window-100",
+        "python-macos-15-3.13-source-callback-1",
+        "python-macos-15-3.13-source-producer-1",
+        "python-macos-15-3.13-source-producer-3",
+        "python-macos-15-3.14-wheel-lookup-1",
+        "python-macos-15-3.14-wheel-lookup-4",
+        "python-macos-15-3.14-wheel-aggregate-10",
+        "python-macos-15-3.14-wheel-aggregate-100",
+        "python-macos-15-3.14-wheel-window-10",
+        "python-macos-15-3.14-wheel-window-100",
+        "python-macos-15-3.14-wheel-callback-1",
+        "python-macos-15-3.14-wheel-producer-1",
+        "python-macos-15-3.14-wheel-producer-3",
+        "python-macos-15-3.14-source-lookup-1",
+        "python-macos-15-3.14-source-lookup-4",
+        "python-macos-15-3.14-source-aggregate-10",
+        "python-macos-15-3.14-source-aggregate-100",
+        "python-macos-15-3.14-source-window-10",
+        "python-macos-15-3.14-source-window-100",
+        "python-macos-15-3.14-source-callback-1",
+        "python-macos-15-3.14-source-producer-1",
+        "python-macos-15-3.14-source-producer-3",
+        "python-windows-latest-3.12-wheel-lookup-1",
+        "python-windows-latest-3.12-wheel-lookup-4",
+        "python-windows-latest-3.12-wheel-aggregate-10",
+        "python-windows-latest-3.12-wheel-aggregate-100",
+        "python-windows-latest-3.12-wheel-window-10",
+        "python-windows-latest-3.12-wheel-window-100",
+        "python-windows-latest-3.12-wheel-callback-1",
+        "python-windows-latest-3.12-wheel-producer-1",
+        "python-windows-latest-3.12-wheel-producer-3",
+        "python-windows-latest-3.12-source-lookup-1",
+        "python-windows-latest-3.12-source-lookup-4",
+        "python-windows-latest-3.12-source-aggregate-10",
+        "python-windows-latest-3.12-source-aggregate-100",
+        "python-windows-latest-3.12-source-window-10",
+        "python-windows-latest-3.12-source-window-100",
+        "python-windows-latest-3.12-source-callback-1",
+        "python-windows-latest-3.12-source-producer-1",
+        "python-windows-latest-3.12-source-producer-3",
+        "python-windows-latest-3.13-wheel-lookup-1",
+        "python-windows-latest-3.13-wheel-lookup-4",
+        "python-windows-latest-3.13-wheel-aggregate-10",
+        "python-windows-latest-3.13-wheel-aggregate-100",
+        "python-windows-latest-3.13-wheel-window-10",
+        "python-windows-latest-3.13-wheel-window-100",
+        "python-windows-latest-3.13-wheel-callback-1",
+        "python-windows-latest-3.13-wheel-producer-1",
+        "python-windows-latest-3.13-wheel-producer-3",
+        "python-windows-latest-3.13-source-lookup-1",
+        "python-windows-latest-3.13-source-lookup-4",
+        "python-windows-latest-3.13-source-aggregate-10",
+        "python-windows-latest-3.13-source-aggregate-100",
+        "python-windows-latest-3.13-source-window-10",
+        "python-windows-latest-3.13-source-window-100",
+        "python-windows-latest-3.13-source-callback-1",
+        "python-windows-latest-3.13-source-producer-1",
+        "python-windows-latest-3.13-source-producer-3",
+        "python-windows-latest-3.14-wheel-lookup-1",
+        "python-windows-latest-3.14-wheel-lookup-4",
+        "python-windows-latest-3.14-wheel-aggregate-10",
+        "python-windows-latest-3.14-wheel-aggregate-100",
+        "python-windows-latest-3.14-wheel-window-10",
+        "python-windows-latest-3.14-wheel-window-100",
+        "python-windows-latest-3.14-wheel-callback-1",
+        "python-windows-latest-3.14-wheel-producer-1",
+        "python-windows-latest-3.14-wheel-producer-3",
+        "python-windows-latest-3.14-source-lookup-1",
+        "python-windows-latest-3.14-source-lookup-4",
+        "python-windows-latest-3.14-source-aggregate-10",
+        "python-windows-latest-3.14-source-aggregate-100",
+        "python-windows-latest-3.14-source-window-10",
+        "python-windows-latest-3.14-source-window-100",
+        "python-windows-latest-3.14-source-callback-1",
+        "python-windows-latest-3.14-source-producer-1",
+        "python-windows-latest-3.14-source-producer-3"
       ]
     },
     "original_reader_source": {
@@ -1509,7 +1660,7 @@
             "$ref": "#/$defs/catalog_unit"
           },
           "minItems": 21,
-          "maxItems": 45,
+          "maxItems": 189,
           "uniqueItems": true
         },
         "accepted": {
@@ -2177,7 +2328,7 @@
             "$ref": "#/$defs/aggregate_fragment"
           },
           "minItems": 21,
-          "maxItems": 45,
+          "maxItems": 189,
           "uniqueItems": true
         }
       },

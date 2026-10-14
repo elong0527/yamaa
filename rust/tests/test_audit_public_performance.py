@@ -1212,25 +1212,34 @@ class CollectionGates(unittest.TestCase):
 class Segments(unittest.TestCase):
     invoke = CollectionGates.invoke
 
-    def setUp(self):
+    def setUp(self, include_python=False):
         CollectionGates.setUp(self)
         artifacts = [
             item
             for item in auditor.read(self.root / "artifacts.json")
-            if "python" in item["name"]
+            if not include_python and "python" in item["name"]
         ]
         jobs = [
             item
             for item in auditor.read(self.root / "jobs.json")
-            if "python" in item["name"]
+            if not include_python and "python" in item["name"]
         ]
         for entry in self.payload["entries"]:
-            if entry["tuple"]["host"] != "r":
+            if not include_python and entry["tuple"]["host"] != "r":
                 continue
             lane = entry["tuple"]
             segments = []
             for variant, cases in auditor.variants().items():
-                name = f"performance-r-{lane['os']}-source-{variant}"
+                python = lane["host"] == "python"
+                name = (
+                    (
+                        f"performance-python-{lane['os']}-{lane['python']}-{lane['form']}"
+                        if python
+                        else f"performance-r-{lane['os']}-source"
+                    )
+                    + "-"
+                    + variant
+                )
                 artifact_id = 2000 + len(artifacts)
                 runner = f"original-runner-{artifact_id}"
                 roles = [
@@ -1258,7 +1267,11 @@ class Segments(unittest.TestCase):
                     dict(
                         self.job,
                         id=10000 + artifact_id,
-                        name=f"performance-r ({lane['os']}, source, {variant})",
+                        name=(
+                            f"performance-python ({lane['os']}, {lane['python']}, {lane['form']}, {variant})"
+                            if python
+                            else f"performance-r ({lane['os']}, source, {variant})"
+                        ),
                         runner_name=runner,
                     )
                 )
@@ -1277,10 +1290,16 @@ class Segments(unittest.TestCase):
                     self.root / name / "candidate/collection.json",
                     {
                         "provenance": {
-                            "artifact_path": "/vanished/yamaa.tar.gz",
+                            "artifact_path": "/vanished/yamaa.whl"
+                            if python
+                            else "/vanished/yamaa.tar.gz",
                             "system": "Linux",
                             "source_revision": "a" * 40,
-                            "artifact_reference": f"github-actions:321/attempt-2/native-r-{lane['os']}/yamaa.tar.gz",
+                            "artifact_reference": (
+                                f"github-actions:321/attempt-2/native-python-{lane['os']}-3.14/yamaa.whl"
+                                if python
+                                else f"github-actions:321/attempt-2/native-r-{lane['os']}/yamaa.tar.gz"
+                            ),
                         }
                     },
                 )
@@ -1304,8 +1323,13 @@ class Segments(unittest.TestCase):
     def admitted_values(self, *arguments):
         values = CollectionGates.admitted_values(self, *arguments)
         name = arguments[0].parent.name
-        if "-source-" in name:
-            cases = auditor.variants()[name.split("-source-", 1)[1]]
+        selected = [
+            cases
+            for variant, cases in auditor.variants().items()
+            if name.endswith("-" + variant)
+        ]
+        if selected:
+            cases = selected[0]
             values = {case: value for case, value in values.items() if case in cases}
         return values
 

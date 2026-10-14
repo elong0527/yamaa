@@ -109,7 +109,7 @@ def logical_entries(entry):
         )
         return [entry]
     exact(entry, ("tuple", "segments"), "segmented logical entry")
-    require(entry["tuple"]["host"] == "r", "only approved R tuples may be segmented")
+    require(entry["tuple"] in tuples(), "only approved tuples may be segmented")
     require(isinstance(entry["segments"], list), "segment inventory must be a list")
     selected = []
     for segment in entry["segments"]:
@@ -121,7 +121,7 @@ def logical_entries(entry):
         )
         require(
             isinstance(segment["variant"], str) and segment["variant"] in variants(),
-            "unapproved R segment variant",
+            "unapproved segment variant",
         )
         require(
             segment["cases"] == variants()[segment["variant"]],
@@ -130,7 +130,7 @@ def logical_entries(entry):
         selected.append(segment["variant"])
     require(
         len(selected) == len(set(selected)) and set(selected) == set(variants()),
-        "duplicate/missing/unexpected R segment variant inventory",
+        "duplicate/missing/unexpected segment variant inventory",
     )
     return [dict(segment, tuple=entry["tuple"]) for segment in entry["segments"]]
 
@@ -1235,9 +1235,11 @@ def admit_artifact(entry, artifacts, run, jobs):
         "wrong/empty/expired original artifact",
     )
     job_name = (
-        f"performance-python ({lane['os']}, {lane['python']}, {lane['form']})"
-        if lane["host"] == "python"
-        else f"performance-r ({lane['os']}, source"
+        (
+            f"performance-python ({lane['os']}, {lane['python']}, {lane['form']}"
+            if lane["host"] == "python"
+            else f"performance-r ({lane['os']}, source"
+        )
         + (", " + entry["variant"] if "variant" in entry else "")
         + ")"
     )
@@ -1821,8 +1823,7 @@ def unit_key(selector):
         "invalid unit selector",
     )
     require(
-        variant is None
-        or (lane["host"] == "r" and isinstance(variant, str) and variant in variants()),
+        variant is None or (isinstance(variant, str) and variant in variants()),
         "unapproved unit variant",
     )
     key = (

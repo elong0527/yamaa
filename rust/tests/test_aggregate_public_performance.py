@@ -112,6 +112,11 @@ class BoundedReaders(unittest.TestCase):
         self.persist()
 
     def admitted_values(self, directory, lane, role, source, *_):
+        selected = [
+            cases
+            for variant, cases in auditor.variants().items()
+            if directory.parent.name.endswith("-" + variant)
+        ]
         boundaries = [
             boundary
             for boundary in auditor.lifecycle.BOUNDARIES[1:]
@@ -166,8 +171,7 @@ class BoundedReaders(unittest.TestCase):
                 "source_revision": source if role == "candidate" else "b" * 40,
             }
             for case in auditor.role_case_names(role)
-            if "-source-" not in directory.parent.name
-            or case in auditor.variants()[directory.parent.name.split("-source-", 1)[1]]
+            if not selected or case in selected[0]
         }
 
     def persist(self):
@@ -288,6 +292,112 @@ class BoundedReaders(unittest.TestCase):
         write(self.root / "input.json", self.payload)
         with self.assertRaisesRegex(ValueError, "missing original logical tuple"):
             auditor.replay_catalog(self.root / "input.json")
+
+    def test_python_segments_keep189_complete_units_and567_504_unpooled_cells(self):
+        import jsonschema
+
+        fixtures.Segments.setUp(self, include_python=True)
+        self.run.update(status="completed", conclusion="success")
+        write(self.root / "run.json", self.run)
+        write(self.root / "input.json", self.payload)
+        self.catalog = auditor.replay_catalog(self.root / "input.json")
+        self.assertEqual(len(self.catalog["units"]), 189)
+        self.assertEqual(len({unit["key"] for unit in self.catalog["units"]}), 189)
+        self.assertEqual(
+            sum(
+                len(unit["cases_by_role"]["candidate"])
+                for unit in self.catalog["units"]
+            ),
+            567,
+        )
+        self.assertEqual(
+            sum(
+                len(cases)
+                for unit in self.catalog["units"]
+                for role, cases in unit["cases_by_role"].items()
+                if role != "candidate"
+            ),
+            504,
+        )
+        for unit in self.catalog["units"]:
+            self.assertEqual(len(unit["cases_by_role"]["candidate"]), 3)
+            self.assertEqual(
+                [case.split("-")[1] for case in unit["cases_by_role"]["candidate"]],
+                ["1000", "10000", "100000"],
+            )
+        self.make_fragments()
+        report = self.report()
+        self.assertEqual(report["collection_gate"]["status"], "pass")
+        self.assertEqual(report["coverage"]["passed"], 567)
+        self.assertEqual(report["comparator_coverage"]["passed"], 504)
+        self.assertEqual(len(report["reader_job_admission"]["admitted_units"]), 189)
+        for cell in report["cells"]:
+            self.assertEqual(
+                cell["candidate"]["metrics"]["warm.child_peak_rss.median_bytes"][
+                    "count"
+                ],
+                1,
+            )
+            association = cell["candidate"]["performance_collection_association"]
+            self.assertIn(cell["case"], auditor.variants()[association["variant"]])
+            self.assertEqual(
+                association["runner_name"],
+                f"original-runner-{association['artifact_id']}",
+            )
+        self.assertFalse(report["accepted"])
+        validator = jsonschema.Draft202012Validator(
+            auditor.read(Path(auditor.__file__).with_suffix(".schema.json"))
+        )
+        for value in (
+            self.payload,
+            self.catalog,
+            self.fragments[0],
+            self.aggregate_input,
+        ):
+            validator.validate(value)
+        self.fragment_entries.append(copy.deepcopy(self.fragment_entries[0]))
+        self.assertEqual(self.report()["collection_gate"]["status"], "fail")
+        self.fragment_entries.pop()
+        self.fragment_entries.pop(0)
+        self.assertEqual(self.report()["coverage"]["missing"], 3)
+
+    def test_python_segment_cases_roles_and_actual_producing_attempt_are_strict(self):
+        fixtures.Segments.setUp(self, include_python=True)
+        self.run.update(status="completed", conclusion="success")
+        write(self.root / "run.json", self.run)
+        original = copy.deepcopy(self.payload["entries"][0])
+        mutations = [
+            lambda entry: entry["segments"].pop(),
+            lambda entry: entry["segments"].append(copy.deepcopy(entry["segments"][0])),
+            lambda entry: entry["segments"][0].update(variant="lookup-2"),
+            lambda entry: entry["segments"][0]["cases"].pop(),
+            lambda entry: entry["segments"][1].update(
+                cases=entry["segments"][0]["cases"]
+            ),
+            lambda entry: entry["segments"][0].update(run_attempt=1),
+            lambda entry: entry["segments"][0]["collections"].pop(),
+        ]
+        for mutate in mutations:
+            self.payload["entries"][0] = copy.deepcopy(original)
+            mutate(self.payload["entries"][0])
+            write(self.root / "input.json", self.payload)
+            with self.assertRaises(ValueError):
+                auditor.replay_catalog(self.root / "input.json")
+        self.payload["entries"][0] = original
+        write(self.root / "input.json", self.payload)
+        jobs = auditor.read(self.root / "jobs.json")
+        good = copy.deepcopy(jobs[0])
+        for changes in (
+            {"run_attempt": 1},
+            {"conclusion": "failure"},
+            {"conclusion": "cancelled"},
+            {"head_sha": "b" * 40},
+            {"name": "performance-python (ubuntu-24.04, 3.12, wheel)"},
+        ):
+            jobs[0] = dict(good, **changes)
+            write(self.root / "jobs.json", jobs)
+            with self.assertRaises(ValueError):
+                auditor.replay_catalog(self.root / "input.json")
 
     def test_unit_retains_failed_original_raw_and_cannot_skip_missing_baseline(self):
         def failed(*args):
