@@ -21,14 +21,21 @@ pub fn inheritance_dependency_diagnostics(
                 budget.field("column", column)?;
                 budget.field("dependency", dependency)?;
             }
-            Issue::Cycle { columns } => {
-                budget.text("columns")?;
+            Issue::Cycle {
+                columns,
+                cycle,
+                paths,
+            } => {
                 budget.text("cycle")?;
-                for column in columns {
+                for column in columns.iter().chain(cycle) {
                     // Each retained sequence member also owns a typed container
                     // and contributes separators, even for an empty spelling.
                     budget.charge(16)?;
                     budget.text(column)?;
+                }
+                for path in paths {
+                    budget.charge(16)?;
+                    budget.text(path)?;
                 }
             }
         }
@@ -37,7 +44,7 @@ pub fn inheritance_dependency_diagnostics(
         .iter()
         .map(|issue| {
             let mut context = super::Context::new();
-            let (code, path) = match issue {
+            let (code, spec_paths) = match issue {
                 Issue::Unknown { column, dependency } => {
                     context.insert(
                         "column".into(),
@@ -49,10 +56,10 @@ pub fn inheritance_dependency_diagnostics(
                     );
                     (
                         C::InheritanceUnknownDependency,
-                        format!("columns.{column}.derivation"),
+                        vec![format!("columns.{column}.derivation")],
                     )
                 }
-                Issue::Cycle { columns } => {
+                Issue::Cycle { columns, paths, .. } => {
                     context.insert(
                         "cycle".into(),
                         ContextValue::Sequence(
@@ -62,12 +69,15 @@ pub fn inheritance_dependency_diagnostics(
                                 .collect(),
                         ),
                     );
-                    (C::ColumnDependencyCycle, "columns".into())
+                    // The paths name the cycle's own derivations, as the flat
+                    // compiler reports them; each path also resolves through
+                    // composed provenance to its contributing file (REQ-0651).
+                    (C::ColumnDependencyCycle, paths.clone())
                 }
             };
             Diagnostic {
                 code,
-                spec_paths: vec![path],
+                spec_paths,
                 context,
                 source_span: None,
                 operand_route: None,

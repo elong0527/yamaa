@@ -640,9 +640,18 @@ fn inheritance_issues<'a>(
                                 budget.text(column)?;
                                 budget.text(dependency)?;
                             }
-                            F::Cycle { columns } => {
-                                budget.entries(columns.len())?;
-                                for text in columns {
+                            F::Cycle {
+                                columns,
+                                cycle,
+                                paths,
+                            } => {
+                                budget.entries(
+                                    columns
+                                        .len()
+                                        .saturating_add(cycle.len())
+                                        .saturating_add(paths.len()),
+                                )?;
+                                for text in columns.iter().chain(cycle).chain(paths) {
                                     budget.text(text)?;
                                 }
                             }

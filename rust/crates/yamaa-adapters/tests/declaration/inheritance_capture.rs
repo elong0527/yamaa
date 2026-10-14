@@ -864,3 +864,59 @@ fn distinct_written_aliases_keep_first_canonical_arena_and_complete_authored_mod
         Some("canonical/base.yaml")
     );
 }
+#[test]
+fn empty_child_reports_the_cycle_derivations_of_its_parent_for_negative_benchmarks() {
+    // #2293: an inherited dependency_cycle names the cycle's derivation paths,
+    // exactly as the flat build of each parent benchmark records in its
+    // committed expected/error.yaml, instead of collapsing to ["columns"].
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks");
+    for (name, paths) in [
+        (
+            "negative-adlb-computed-param",
+            &[
+                "columns.ALTVAL.derivation.aggregate",
+                "columns.AVAL.derivation.case",
+            ][..],
+        ),
+        (
+            "negative-first-available-self",
+            &["columns.SEVAL.derivation.first_available"][..],
+        ),
+        (
+            "negative-row-value-self",
+            &[
+                "columns.AVALF.derivation.first_available",
+                "columns.PRIORF.derivation.row_value",
+            ][..],
+        ),
+    ] {
+        let dir = root.join(name);
+        let parent = std::fs::read(dir.join("spec.yaml")).unwrap();
+        let expected =
+            String::from_utf8(std::fs::read(dir.join("expected/error.yaml")).unwrap()).unwrap();
+        assert!(expected.contains("condition: dependency_cycle"), "{name}");
+        assert!(expected.contains("requirement: REQ-0072"), "{name}");
+        for path in paths {
+            assert!(
+                expected.contains(path),
+                "{name}: flat expectation pins {path}"
+            );
+        }
+        let mut host = new_host(&parent);
+        let error = shipped_schema::prepare(
+            source(b"schema_version: '1.0'\nparents: parent.yaml\n".to_vec()),
+            "entry.yaml".into(),
+            &mut host,
+        )
+        .unwrap_err();
+        let actual = outcome(error);
+        assert_eq!(actual["outcome"]["status"], "invalid", "{name}");
+        let diagnostics = actual["outcome"]["diagnostics"].as_array().unwrap();
+        assert_eq!(diagnostics.len(), 1, "{name}: {diagnostics:?}");
+        let diagnostic = &diagnostics[0];
+        assert_eq!(diagnostic["phase"], "validation", "{name}");
+        assert_eq!(diagnostic["condition"], "dependency_cycle", "{name}");
+        assert_eq!(diagnostic["requirement"], "REQ-0072", "{name}");
+        assert_eq!(diagnostic["spec_paths"], json!(paths), "{name}");
+    }
+}
