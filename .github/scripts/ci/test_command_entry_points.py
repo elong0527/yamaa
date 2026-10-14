@@ -165,7 +165,11 @@ class CommandEntryPoints(unittest.TestCase):
         self.assertNotRegex(native, r"(?m)^  pull_request:")
         smoke = (ROOT / ".github/workflows/pr.yml").read_text()
         self.assertRegex(smoke, r"(?m)^  pull_request:")
-        for path in ("Makefile", ".github/scripts/commands/rust_tests.py"):
+        for path in (
+            "Makefile",
+            ".github/scripts/commands/rust_tests.py",
+            ".github/scripts/commands/installed.py",
+        ):
             self.assertEqual(
                 pr_changes.coverage([path]), {"rust": True, "python": True}
             )
