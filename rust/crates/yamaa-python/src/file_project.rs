@@ -27,6 +27,14 @@ impl Specification {
 }
 #[pymethods]
 impl Specification {
+    fn resolved_document(&self) -> PyResult<String> {
+        let state = self.get()?;
+        let owner = state
+            .as_ref()
+            .map_err(|_| pyo3::exceptions::PyValueError::new_err("project preparation failed"))?;
+        yamaa_adapters::schema_metadata::selected_document(owner)
+            .map_err(pyo3::exceptions::PyValueError::new_err)
+    }
     fn preparation_status(&self) -> PyResult<&'static str> {
         Ok(if self.get()?.is_ok() {
             "ready"

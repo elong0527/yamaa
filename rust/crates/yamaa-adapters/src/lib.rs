@@ -27,6 +27,7 @@ pub mod csv_source;
 pub mod parquet_artifact;
 pub mod parquet_source;
 
+pub mod schema_metadata;
 pub mod shipped_schema;
 pub mod specification_source;
 

@@ -15,6 +15,7 @@ import _native_parquet
 import _r_check_transport
 import yaml12
 from yamaa._native import _prepare_file_project
+import _native_schema
 
 import yaml
 
@@ -56,7 +57,8 @@ def prepare(spec_path, *, project_root=None, environment=None, schema_root=ROOT)
 
 
 def issue_rows(
-    spec_path, *, project_root=None, environment=None, schema_root=ROOT, origins=None
+    spec_path, *, project_root=None, environment=None, schema_root=ROOT, origins=None,
+    metadata=None, document_only=False,
 ):
     owner = prepare(
         spec_path,
@@ -67,6 +69,10 @@ def issue_rows(
     static = owner.check_issues()
     if origins is not None:
         origins.update(owner.diagnostic_origins())
+    if metadata is not None and owner.preparation_status() == "ready":
+        metadata['document'] = _native_schema.decode_document(owner.resolved_document())
+    if document_only:
+        return static
     if static or owner.preparation_status() != "ready":
         return static
     sources = []
@@ -144,6 +150,8 @@ def validate(
     environments=(),
     schema_root=ROOT,
     origins=None,
+    metadata=None,
+    document_only=False,
 ):
     """Native declaration/profile/header facts; R coverage is explicitly scoped."""
     import shutil
@@ -211,7 +219,7 @@ def validate(
         else:
             original_root = project_root
         rows = []
-        if python_environment is not None or not r_environments:
+        if python_environment is not None or not r_environments or document_only:
             rows.extend(
                 issue_rows(
                     spec_path,
@@ -219,9 +227,13 @@ def validate(
                     environment=python_environment,
                     schema_root=schema_root,
                     origins=origins,
+                    metadata=metadata,
+                    document_only=document_only,
                 )
             )
         for environment in r_environments:
+            if document_only:
+                continue
             observed = r_static_rows(spec_path, environment)
             if observed is not None:
                 rows.extend(observed)

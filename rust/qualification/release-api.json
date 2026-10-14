@@ -98,6 +98,14 @@
         "_ProjectSpecification.diagnostic_origins",
         "_ProjectSpecification.input_metadata",
         "_ProjectSpecification.preparation_status",
+        "_ProjectSpecification.resolved_document",
+        "_SchemaMetadata",
+        "_SchemaMetadata.admit",
+        "_SchemaMetadata.defaults",
+        "_SchemaMetadata.fields",
+        "_SchemaMetadata.normalize",
+        "_SchemaMetadata.validate",
+        "_SchemaMetadata.version",
         "_Specification",
         "_Specification.build",
         "_Specification.check_issues",
@@ -109,6 +117,7 @@
         "_Specification.input_metadata",
         "_Specification.report",
         "_Specification.source",
+        "_capture_schema_metadata",
         "_check_file",
         "_define_file",
         "_domain_file",
@@ -262,6 +271,51 @@
         "_ProjectSpecification.check_issues": {
           "disposition": "internal",
           "rationale": "Portable existing static issues from the exact unified held capability or original retained preparation refusal. No source read, recapture or execution occurs."
+        },
+        "_SchemaMetadata": {
+          "disposition": "internal",
+          "issue": "#2156",
+          "rationale": "Internal immutable held captured-schema capability for repository checks; existing shared schema bounds apply, with no filesystem, code activation, execution, callback or publication authority."
+        },
+        "_SchemaMetadata.version": {
+          "disposition": "internal",
+          "issue": "#2156",
+          "rationale": "Read-only admitted bundle version; no source inference or execution."
+        },
+        "_SchemaMetadata.fields": {
+          "disposition": "internal",
+          "issue": "#2156",
+          "rationale": "Read-only field names in the admitted class declaration order; missing classes fail explicitly."
+        },
+        "_SchemaMetadata.defaults": {
+          "disposition": "internal",
+          "issue": "#2156",
+          "rationale": "Shared-core default validation returns complete registry-owned five-field rows; actual encoded aggregate issue bytes are bounded and refusal cannot become a pass."
+        },
+        "_SchemaMetadata.validate": {
+          "disposition": "internal",
+          "issue": "#2156",
+          "rationale": "Shared-core validation of an explicit projected type union against bounded captured YAML; at most 128 query types and 65,536 query text bytes; preserves contexts, paths and fragment semantics without execution."
+        },
+        "_SchemaMetadata.normalize": {
+          "disposition": "internal",
+          "issue": "#2156",
+          "rationale": "Shared-core normalization of explicit types only after admission; tagged scalar arena preserves exact integer text/NUL and original scalar-key kinds within the existing captured-byte bound; failure exposes no normalized document."
+        },
+        "_SchemaMetadata.admit": {
+          "disposition": "internal",
+          "issue": "#2156",
+          "rationale": "Shared versioned/versionless structural-root preparation over one explicit bounded source and identity; original version/default/normalization gates own admission, with no plan/data/function/publication authority."
+        },
+        "_capture_schema_metadata": {
+          "disposition": "internal",
+          "issue": "#2156",
+          "rationale": "Internal capture of explicit schema module bytes, entry index and named root through existing bounded native schema capture; no discovery or IO authority and no reference fallback."
+        },
+        "_ProjectSpecification.resolved_document": {
+          "disposition": "internal",
+          "issue": "#2156",
+          "rationale": "Read-only tagged arena from the successfully held shared-engine resolved root, including producer-root selection; failed project preparation raises, no execution/output artifact or Save authority is granted."
         }
       }
     },
