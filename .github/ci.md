@@ -119,6 +119,9 @@ conclusion as a pass. The small `native-run-audit-record` artifact separately
 retains the verdicts and source/run/job/artifact metadata for review; independent
 replay still requires the canonical files and original artifact bytes retained in
 the full audit. Both records distinguish combined-main from reviewed-branch scope.
+The job also independently replays the original `input` directory without Actions
+credentials in a fresh process, requires its complete verdict and exact JSON
+agreement, and retains the second record under `replay/` in both audit artifacts.
 The audit installs independent report and artifact readers from `python/uv.lock`
 without installing the candidate engine. Missing readers stay explicit missing
 evidence and cannot produce a complete audit.

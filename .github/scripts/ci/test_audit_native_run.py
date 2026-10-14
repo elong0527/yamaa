@@ -588,6 +588,11 @@ class NativeAudit(unittest.TestCase):
 
     def test_check_cli_preserves_json_markdown_and_replays_without_network(self):
         output = Path(self.temporary.name) / "output"
+        original = {
+            path.relative_to(self.directory): path.read_bytes()
+            for path in self.directory.rglob("*")
+            if path.is_file()
+        }
         with patch.object(
             audit, "gh_json", side_effect=AssertionError("offline audit used network")
         ):
@@ -597,6 +602,30 @@ class NativeAudit(unittest.TestCase):
                 ),
                 1,
             )
+            self.assertEqual(
+                audit.main(
+                    [
+                        "--input",
+                        str(self.directory),
+                        "--output",
+                        str(output / "replay"),
+                        "--check",
+                    ]
+                ),
+                1,
+            )
+        self.assertEqual(
+            original,
+            {
+                path.relative_to(self.directory): path.read_bytes()
+                for path in self.directory.rglob("*")
+                if path.is_file()
+            },
+        )
+        self.assertEqual(
+            (output / "qualification.json").read_bytes(),
+            (output / "replay/qualification.json").read_bytes(),
+        )
         record = json.loads((output / "qualification.json").read_text())
         self.assertEqual(len(record["lanes"]), 97)
         self.assertIn("windows-latest", (output / "qualification.md").read_text())
