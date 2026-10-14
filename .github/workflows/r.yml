@@ -60,6 +60,28 @@ jobs:
           R CMD build --no-build-vignettes --no-manual grammar-stage/yamaa
           python "${GITHUB_WORKSPACE}/rust/tools/check_cargo_lock.py" yamaa_0.4.0.tar.gz
           R CMD INSTALL --library="${RUNNER_TEMP}/grammar-r-library" yamaa_0.4.0.tar.gz
+      - name: Install pinned R fixture JSON codec
+        working-directory: ${{ runner.temp }}
+        env:
+          R_LIBS: ${{ runner.temp }}/grammar-r-library
+        run: |
+          Rscript --vanilla - <<'RS'
+          version <- "2.0.0"
+          archive <- paste0("jsonlite_", version, ".tar.gz")
+          urls <- c(paste0("https://cran.r-project.org/src/contrib/", archive),
+                    paste0("https://cran.r-project.org/src/contrib/Archive/jsonlite/", archive))
+          target <- tempfile(fileext = ".tar.gz")
+          downloaded <- FALSE
+          for (url in urls) {
+            downloaded <- tryCatch({
+              download.file(url, target, mode = "wb", quiet = TRUE) == 0L
+            }, error = function(error) FALSE)
+            if (downloaded) break
+          }
+          stopifnot(downloaded)
+          install.packages(target, repos = NULL, type = "source", lib = Sys.getenv("R_LIBS"))
+          stopifnot(as.character(utils::packageVersion("jsonlite")) == version)
+          RS
       - name: Replay shared decisions through the installed public R facade
         working-directory: ${{ runner.temp }}
         env:

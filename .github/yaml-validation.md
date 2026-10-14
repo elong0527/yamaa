@@ -66,7 +66,10 @@ uv run --project python --no-sync python -m yamaa.style benchmarks/*/spec*.yaml
 uv run --project python --no-sync python -m yamaa.style --fix benchmarks/<name>/spec.yaml
 ```
 
-Shared grammar checks use the installed native package and pinned YAML reader:
+Shared grammar checks use the installed native package and pinned YAML reader.
+
+The R grammar replay requires jsonlite 2.0.0 in its selected test library to read
+the shared fixture truth.
 
 ```sh
 uv run --project python --no-sync python rust/tools/check_shared_grammar.py
