@@ -1,8 +1,8 @@
 """Installed public producer builds against independently authored study truth."""
 import gc
-import runpy
 import json
 import os
+import runpy
 import shutil
 import sys
 import tempfile
@@ -432,50 +432,65 @@ class PublicProducers(unittest.TestCase):
         self.assertEqual(self.observe(result)["artifacts"], [])
         self.assertGreater(result.issues.height, 0)
 
-    def test_public_copy_byte_quota_preserves_complete_accepted_graph_without_output_or_save(self):
-        # Text stays below the execution allowance, while IPC offsets and
-        # numeric columns take the public copy beyond its 8 MiB byte cap.
+    def assert_large_projection_admitted(self, result, ids, columns, expected_csv):
+        # The original smaller copy-policy refusals remain explicit-budget
+        # native controls in producer_result.rs. Public defaults now admit this
+        # geometry under the approved longitudinal profile.
+        self.assertTrue(self.entered(result).accepted())
+        self.assertEqual(self.entered(result).entered_nodes(), [1, 0])
+        self.assertEqual(result.issues.height, 0)
+        self.assertIsNone(result._native.producer_projection_failure())
+        self.assertEqual(result.output.columns, columns)
+        self.assertEqual(result.output["ID"].to_list(), ids)
+        self.assertEqual(result.output["VALUE"].to_list(), [2.46] * len(ids))
+        observed = self.observe(result)
+        self.assertEqual(observed["outcome"], "success")
+        self.assertIsNone(observed["error"])
+        self.assertEqual(len(observed["artifacts"]), 2)
+        produced = ("ID,VALUE\n" + "".join(f"{index},1.23\n" for index in ids)).encode()
+        self.assertFalse((self.root / "generated").exists())
+        held = result.output
+        (self.root / "generated").mkdir()
+        for directory in TRUTH["owned_directories"]:
+            shutil.rmtree(self.root / directory)
+        gc.collect()
+        for _ in range(2):
+            self.assertTrue(result.save())
+            self.assertEqual((self.root / "generated/root.csv").read_bytes(), expected_csv)
+            self.assertEqual((self.root / "generated/producer.csv").read_bytes(), produced)
+            self.assertTrue(result.output.equals(held))
+            self.assertTrue(self.entered(result).accepted())
+            self.assertIsNone(result._native.producer_projection_failure())
+
+    def test_public_copy_bytes_admit_original_large_geometry_and_held_saves(self):
         payload = "x" * 2048
         extra = f'  - {{name: PAYLOAD, type: str, label: Payload, derivation: {{literal: "{payload}"}}}}\n'
         self.write("consumer/root.yaml", CONSUMER.replace("output: {path:", extra + "output: {path:").replace("columns: [ID, VALUE], decimals: 2", TRUTH["payload_projection"]))
-        self.write("raw/raw.csv", b"ID,VALUE\n" + "".join(f"{index},1.234\n" for index in range(1, 4096)).encode())
+        ids = list(range(1, 4096))
+        self.write("raw/raw.csv", b"ID,VALUE\n" + "".join(f"{index},1.234\n" for index in ids).encode())
         result = self.build()
-        self.assertTrue(self.entered(result).accepted())
-        self.assertEqual(self.entered(result).entered_nodes(), [1, 0])
-        self.assertIsNone(result.output)
-        self.assertEqual(result._native.producer_projection_failure(), "table output exceeds byte limit")
-        self.assertEqual(json.loads(result.issues["context"][0])["code"], "output_projection")
-        self.assertEqual(self.observe(result)["outcome"], "success")
-        self.assertEqual(len(self.observe(result)["artifacts"]), 2)
-        self.assertFalse((self.root / "generated").exists())
-        shutil.rmtree(self.root)
-        with self.assertRaisesRegex(DomainError, "cannot save a failed build"):
-            result.save()
-        self.assertEqual(result._native.producer_projection_failure(), "table output exceeds byte limit")
-        self.assertTrue(self.entered(result).accepted())
+        self.assertIsNotNone(result.output)
+        self.assertEqual(result.output["PAYLOAD"].to_list(), [payload] * len(ids))
+        expected = ("ID,VALUE,PAYLOAD\n" + "".join(f"{index},2.46,{payload}\n" for index in ids)).encode()
+        self.assert_large_projection_admitted(result, ids, ["ID", "VALUE", "PAYLOAD"], expected)
 
-    def test_public_copy_quota_preserves_complete_accepted_graph_without_output_or_save(self):
+    def test_public_copy_cells_admit_original_large_geometry_and_held_saves(self):
         self.write("producer/layers/base.yaml", PRODUCER.replace("ID: int", "ID: str").replace("name: ID, type: int", "name: ID, type: str"))
-        extra = "".join(f"  - {{name: EXTRA{index}, type: str, label: Extra value, derivation: {{literal: null}}}}\n" for index in range(59))
-        names = ", ".join(["ID", "VALUE"] + [f"EXTRA{index}" for index in range(59)])
+        extras = [f"EXTRA{index}" for index in range(59)]
+        extra = "".join(f"  - {{name: {name}, type: str, label: Extra value, derivation: {{literal: null}}}}\n" for name in extras)
+        columns = ["ID", "VALUE", *extras]
+        names = ", ".join(columns)
         self.write("consumer/root.yaml", CONSUMER.replace("name: ID, type: int", "name: ID, type: str").replace("output: {path:", extra + "output: {path:").replace("columns: [ID, VALUE], decimals: 2", f"columns: [{names}], decimals: 2"))
-        # 23,000 rows with 63 owned columns visit 4,347,000 cells across the
-        # three public-copy passes, exceeding the 4,194,304-cell allowance.
-        self.write("raw/raw.csv", b"ID,VALUE\n" + "".join(f"{index},1.234\n" for index in range(1, 23001)).encode())
+        ids = [str(index) for index in range(1, 23001)]
+        # 23,000 records and 63 internal columns make 4,347,000 visits across
+        # the three copies, now below the approved public default.
+        self.write("raw/raw.csv", b"ID,VALUE\n" + "".join(f"{index},1.234\n" for index in ids).encode())
         result = self.build()
-        self.assertTrue(self.entered(result).accepted())
-        self.assertEqual(self.entered(result).entered_nodes(), [1, 0])
-        self.assertIsNone(result.output)
-        self.assertEqual(result._native.producer_projection_failure(), "table output exceeds byte limit")
-        self.assertEqual(json.loads(result.issues["context"][0])["code"], "output_projection")
-        self.assertEqual(self.observe(result)["outcome"], "success")
-        self.assertEqual(len(self.observe(result)["artifacts"]), 2)
-        self.assertFalse((self.root / "generated").exists())
-        shutil.rmtree(self.root)
-        with self.assertRaisesRegex(DomainError, "cannot save a failed build"):
-            result.save()
-        self.assertEqual(result._native.producer_projection_failure(), "table output exceeds byte limit")
-        self.assertTrue(self.entered(result).accepted())
+        self.assertIsNotNone(result.output)
+        for name in extras:
+            self.assertEqual(result.output[name].to_list(), [None] * len(ids))
+        expected = (",".join(columns) + "\n" + "".join(f"{index},2.46" + "," * len(extras) + "\n" for index in ids)).encode()
+        self.assert_large_projection_admitted(result, ids, columns, expected)
 
     def test_invalid_original_producer_metadata_keeps_rejection_and_never_falls_back(self):
         self.write("consumer/root.yaml", CONSUMER.replace("schema: ../producer/p.yaml", TRUTH["incompatible_reference"]))

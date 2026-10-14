@@ -22,6 +22,7 @@ pub(crate) struct Budget {
     cells: usize,
     work: usize,
     initial_bytes: usize,
+    initial_cells: usize,
     initial_work: usize,
 }
 impl Budget {
@@ -35,7 +36,19 @@ impl Budget {
             cells: yamaa_engine::capacity::REPORT_CELLS,
             work: yamaa_engine::capacity::REPORT_WORK,
             initial_bytes: bytes,
+            initial_cells: yamaa_engine::capacity::REPORT_CELLS,
             initial_work: yamaa_engine::capacity::REPORT_WORK,
+        }
+    }
+    #[cfg(test)]
+    pub(crate) fn selected_projection_limits(bytes: usize, cells: usize, work: usize) -> Self {
+        Self {
+            bytes,
+            cells,
+            work,
+            initial_bytes: bytes,
+            initial_cells: cells,
+            initial_work: work,
         }
     }
     pub(crate) fn remaining_bytes(&self) -> usize {
@@ -69,12 +82,7 @@ impl Budget {
     }
     pub(crate) fn row_shape(&mut self, rows: usize, columns: usize) -> Result<(), Error> {
         let cells = rows.checked_mul(columns);
-        charge(
-            &mut self.cells,
-            yamaa_engine::capacity::REPORT_CELLS,
-            cells,
-            "report_cells",
-        )?;
+        charge(&mut self.cells, self.initial_cells, cells, "report_cells")?;
         let cells = cells.expect("admitted cell multiplication");
         self.entries(columns.checked_add(1).ok_or_else(|| {
             Error::ResourceLimit(Refusal::new(
@@ -105,12 +113,7 @@ impl Budget {
     }
     pub(crate) fn shape(&mut self, rows: usize, columns: usize) -> Result<(), Error> {
         let cells = rows.checked_mul(columns);
-        charge(
-            &mut self.cells,
-            yamaa_engine::capacity::REPORT_CELLS,
-            cells,
-            "report_cells",
-        )?;
+        charge(&mut self.cells, self.initial_cells, cells, "report_cells")?;
         let cells = cells.expect("admitted cell multiplication");
         self.entries(rows)?;
         self.entries(columns)?;
@@ -125,12 +128,7 @@ impl Budget {
     /// UTF-8 builder capacity and schema/array owners. No JSON map is allocated.
     pub(crate) fn typed_shape(&mut self, rows: usize, columns: usize) -> Result<(), Error> {
         let cells = rows.checked_mul(columns);
-        charge(
-            &mut self.cells,
-            yamaa_engine::capacity::REPORT_CELLS,
-            cells,
-            "report_cells",
-        )?;
+        charge(&mut self.cells, self.initial_cells, cells, "report_cells")?;
         let cells = cells.expect("admitted cell multiplication");
         self.work(cells)?;
         self.retained_amount(cells.checked_mul(64))?;
