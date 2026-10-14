@@ -25,5 +25,6 @@ mod nested_windows;
 mod probe_successors;
 mod row_derivations;
 mod row_filter_paths;
+mod row_intermediate_operands;
 mod scoped_windows_checks;
 mod specification_run;

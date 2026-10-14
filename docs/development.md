@@ -92,6 +92,15 @@ The engine feature check in `test-rust` includes integration binaries omitted
 by a default test invocation. Portable math has shared authored golden values in
 `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv`; run
 `cargo test --locked -p yamaa-core --test portable_math_golden` from `rust/`.
+Crate manifests explicitly register integration harnesses by responsibility;
+their directory modules register individual controls. Add each new test module
+to its harness so it participates in discovery. Feature-gated engine support
+and Arrow ownership remain explicit targets. Test factories belong to each
+crate's `tests/support`; tests do not import another crate's source files.
+Paired installed Python/R inputs and expected values have one shared owner in
+`rust/tests/host-fixtures/cases.json`, with codec-only readers and the existing
+host assertions. Their [ownership guide](https://github.com/elong0527/yamaa/blob/main/rust/tests/host-fixtures/README.md)
+maps all paired families and their public conformance coverage.
 Installed supplemental suites require yamaa and `yamaa-benchmarks` installed
 with locked test dependencies in a separate Python interpreter, or yamaa and
 `yamaabenchmarks` in the R library selected by `R_LIBS`. `sync-python` prepares
