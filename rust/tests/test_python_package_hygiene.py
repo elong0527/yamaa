@@ -41,9 +41,10 @@ class PythonPackageHygiene(unittest.TestCase):
             root = Path(directory)
             for filename, prefix in (
                 ("yamaa.whl", ""),
-                ("yamaa.tar.gz", "yamaa-0.2.0/python/src/"),
+                ("yamaa.tar.gz", "yamaa-0.4.0/src/"),
+                ("yamaa.tar.gz", "yamaa-0.4.0/python/src/"),
             ):
-                with self.subTest(filename=filename):
+                with self.subTest(filename=filename, prefix=prefix):
                     path = root / filename
                     write_archive(
                         path,
@@ -81,16 +82,18 @@ class PythonPackageHygiene(unittest.TestCase):
             root = Path(directory)
             for filename, prefix in (
                 ("yamaa.whl", "yamaa/"),
+                ("yamaa.tar.gz", "yamaa-0.4.0/src/yamaa/"),
                 ("yamaa.tar.gz", "yamaa-0.4.0/python/src/yamaa/"),
             ):
                 for name in retired:
-                    with self.subTest(filename=filename, member=name):
+                    with self.subTest(filename=filename, prefix=prefix, member=name):
                         path = root / filename
                         write_archive(path, [prefix + name])
                         with self.assertRaisesRegex(
                             ValueError, "retired Python evaluator/API"
-                        ):
+                        ) as finding:
                             module.check_archive(path)
+                        self.assertIn(prefix + name, str(finding.exception))
 
     def test_wheel_install_schemes_and_windows_member_spellings_cannot_restore_reference(
         self,
@@ -147,6 +150,9 @@ class PythonPackageHygiene(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "yamaa.tar.gz"
             for name in (
+                "yamaa-0.4.0/SRC/YAMAA/IO.py",
+                "yamaa-0.4.0/Src/Yamaa/Verification/__init__.py",
+                "yamaa-0.4.0\\SRC\\YAMAA\\REGEX.PY",
                 "yamaa-0.4.0/PYTHON/SRC/YAMAA/IO.py",
                 "yamaa-0.4.0/Python/Src/Yamaa/Verification/__init__.py",
                 "yamaa-0.4.0\\PYTHON\\SRC\\YAMAA\\REGEX.PY",
@@ -164,9 +170,10 @@ class PythonPackageHygiene(unittest.TestCase):
             root = Path(directory)
             for filename, prefix in (
                 ("yamaa.whl", ""),
+                ("yamaa.tar.gz", "yamaa-0.4.0/src/"),
                 ("yamaa.tar.gz", "yamaa-0.4.0/python/src/"),
             ):
-                with self.subTest(filename=filename):
+                with self.subTest(filename=filename, prefix=prefix):
                     path = root / filename
                     names = [
                         prefix + name
@@ -194,7 +201,8 @@ class PythonPackageHygiene(unittest.TestCase):
             root = Path(directory)
             for filename, prefix in (
                 ("yamaa.whl", ""),
-                ("yamaa.tar.gz", "yamaa-0.2.0/python/src/"),
+                ("yamaa.tar.gz", "yamaa-0.4.0/src/"),
+                ("yamaa.tar.gz", "yamaa-0.4.0/python/src/"),
             ):
                 for name in (
                     "yamaa/__pycache__/__init__.cpython-314.pyc",
@@ -205,7 +213,7 @@ class PythonPackageHygiene(unittest.TestCase):
                     "yamaa/submission/module.pyo",
                     "yamaa\\submission\\__pycache__\\note.txt",
                 ):
-                    with self.subTest(filename=filename, member=name):
+                    with self.subTest(filename=filename, prefix=prefix, member=name):
                         path = root / filename
                         write_archive(path, [prefix + name])
                         with self.assertRaisesRegex(

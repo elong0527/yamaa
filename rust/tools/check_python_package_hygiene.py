@@ -39,6 +39,8 @@ def package_members(member: PurePosixPath, wheel: bool) -> tuple[str, ...]:
             and folded[2] == "yamaa"
         ):
             return parts[3:]
+    elif folded[1:3] == ("src", "yamaa"):
+        return parts[3:]
     elif folded[1:4] == ("python", "src", "yamaa"):
         return parts[4:]
     return ()
