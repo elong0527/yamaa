@@ -2,9 +2,19 @@ name: PR checks
 
 on:
   pull_request:
-  # Refresh smoke-test caches on the default branch for new PRs.
+  # Refresh smoke-test caches on the default branch for new PRs. Cache keys
+  # change only with these inputs; the weekly run keeps unused caches alive.
   push:
     branches: [main]
+    paths:
+      - 'rust/Cargo.lock'
+      - 'rust/Cargo.toml'
+      - 'rust/**/Cargo.toml'
+      - 'rust/rust-toolchain.toml'
+      - '.github/scripts/ci/requirements-pr.txt'
+      - '.github/workflows/pr.yml'
+  schedule:
+    - cron: '43 4 * * 1'
   workflow_dispatch:
 
 concurrency:

@@ -2,11 +2,16 @@ name: Native installation prototype
 
 on:
   # Qualify a reviewed branch's complete installed matrix before issue closure.
+  # A dispatch on main runs every check, like the nightly run.
   workflow_dispatch:
+  # Main is qualified nightly rather than on every merge: queued main pushes
+  # replaced each other before running, and PR feedback uses pr.yml smoke checks.
+  schedule:
+    - cron: '17 5 * * *'
   push:
     # Explicit issue qualification branches exercise the same full checks before
-    # review; ordinary PR feedback uses pr.yml smoke checks.
-    branches: [main, 'qualification/issue-*']
+    # review.
+    branches: ['qualification/issue-*']
     paths:
       - 'rust/**'
       # Prose is checked by repository validation; Markdown fixtures still run.
@@ -64,8 +69,8 @@ jobs:
         id: coverage
         run: python .github/scripts/ci/native_matrix.py plan
 
-  # Main and explicitly selected qualification pushes run all shared checks.
-  # Dispatches qualify the installed R/Python packages.
+  # Nightly main, dispatches on main and explicit qualification pushes run all
+  # shared checks. Branch dispatches qualify the installed R/Python packages.
   rust:
     needs: plan
     if: needs.plan.outputs.run-rust == 'true'
@@ -662,7 +667,7 @@ jobs:
     name: native-run-evidence-audit
     needs: [plan, rust, dist, qualify, r, math-portability, public-cohort]
     # Retain failed-run evidence, but let superseded cancelled runs release refs.
-    if: ${{ !cancelled() && github.event_name == 'push' }}
+    if: ${{ !cancelled() && needs.plan.outputs.run-rust == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     # Main retains its observational audit; qualification branches require it.

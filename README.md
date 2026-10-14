@@ -2,7 +2,7 @@
 
 [![Unit tests](https://github.com/elong0527/yamaa/actions/workflows/unit-tests.yml/badge.svg?branch=main&event=push)](https://github.com/elong0527/yamaa/actions/workflows/unit-tests.yml)
 [![Code coverage](https://elong0527.github.io/yamaa/coverage/badge.svg)](https://elong0527.github.io/yamaa/coverage/)
-[![Native installation](https://github.com/elong0527/yamaa/actions/workflows/native.yml/badge.svg?branch=main&event=push)](https://github.com/elong0527/yamaa/actions/workflows/native.yml)
+[![Native installation](https://github.com/elong0527/yamaa/actions/workflows/native.yml/badge.svg?branch=main&event=schedule)](https://github.com/elong0527/yamaa/actions/workflows/native.yml)
 [![YAML validation](https://github.com/elong0527/yamaa/actions/workflows/yaml-validation.yml/badge.svg)](https://github.com/elong0527/yamaa/actions/workflows/yaml-validation.yml)
 [![Docs](https://github.com/elong0527/yamaa/actions/workflows/deploy-docs.yml/badge.svg)](https://elong0527.github.io/yamaa/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/main/LICENSE)

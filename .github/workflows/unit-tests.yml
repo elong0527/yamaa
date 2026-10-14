@@ -3,6 +3,18 @@ name: Unit tests
 on:
   push:
     branches: [main]
+    # Prose-only pushes are checked by YAML Validation and Deploy docs. Keep
+    # the prose files that unit tests install or read.
+    paths:
+      - '**'
+      - '!docs/**'
+      - 'docs/requirements.txt'
+      - 'docs/assets/**'
+      - '!rules/**/*.md'
+      - 'rules/specification/style.md'
+      - '!README.md'
+      - '!rust/*.md'
+      - '!mkdocs.yml'
   workflow_dispatch:
 
 concurrency:

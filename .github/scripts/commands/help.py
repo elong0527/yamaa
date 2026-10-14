@@ -45,8 +45,9 @@ Independent evidence audit (PYTHON needs locked table dependencies; no engine ru
 
 Release qualification: the approved 21 installed tuples, complete conformance,
 shared Rust/math and independent audit run in .github/workflows/native.yml.
-Use a qualification/issue-* push for complete exact-source native checks.
-An ordinary dispatch omits shared Rust/math; PR feedback samples Linux hosts.
+Main runs every native check nightly, or on a dispatch on main. Use a
+qualification/issue-* push for complete exact-source checks of a branch; a branch
+dispatch omits shared Rust/math. PR feedback samples Linux hosts.
 See docs/development.md and docs/release.md for current architecture/release gates.
 PYTHON selects the command interpreter; CARGO_TARGET_DIR can isolate Rust builds.
 """

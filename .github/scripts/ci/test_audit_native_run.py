@@ -289,6 +289,18 @@ class NativeAudit(unittest.TestCase):
         record = audit.Audit(self.directory).collect()
         self.assertEqual(record["qualification_scope"], "combined-main")
 
+    def test_nightly_and_dispatched_main_runs_are_combined_main_evidence(self):
+        for event in ("schedule", "workflow_dispatch"):
+            with self.subTest(event=event):
+                subject = audit.Audit(self.directory)
+                subject.run["event"] = event
+                checks = []
+                subject.check(checks, "source", subject.check_source)
+                self.assertEqual(checks[0]["result"], "pass")
+                self.assertEqual(
+                    subject.collect()["qualification_scope"], "combined-main"
+                )
+
     def test_missing_independent_reader_is_retained_as_missing_evidence(self):
         with patch.object(
             self.auditor,

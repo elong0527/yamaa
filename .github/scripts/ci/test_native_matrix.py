@@ -18,14 +18,22 @@ import native_matrix
 
 class NativeCoverage(unittest.TestCase):
     def test_actions_outputs_are_valid_matrices_and_plain_runner_names(self):
-        for event in ("push", "workflow_dispatch"):
-            with tempfile.TemporaryDirectory() as directory:
+        for event, reference, run_rust in (
+            ("schedule", "refs/heads/main", True),
+            ("workflow_dispatch", "refs/heads/main", True),
+            ("push", "refs/heads/qualification/issue-1996", True),
+            ("workflow_dispatch", "refs/heads/feature/example", False),
+        ):
+            with (
+                self.subTest(event=event, reference=reference),
+                tempfile.TemporaryDirectory() as directory,
+            ):
                 output = Path(directory) / "output"
                 summary = Path(directory) / "summary"
                 environment = dict(
                     os.environ,
                     GITHUB_EVENT_NAME=event,
-                    GITHUB_REF="refs/heads/main",
+                    GITHUB_REF=reference,
                     GITHUB_RUN_ID="38146574656",
                     GITHUB_OUTPUT=str(output),
                     GITHUB_STEP_SUMMARY=str(summary),
@@ -40,7 +48,7 @@ class NativeCoverage(unittest.TestCase):
                 )
                 self.assertIn(values["compare-os"], native_matrix.PLATFORMS)
                 self.assertEqual(values["full"], "true")
-                self.assertEqual(values["run-rust"], str(event == "push").lower())
+                self.assertEqual(values["run-rust"], str(run_rust).lower())
                 self.assertEqual(
                     len(json.loads(values["qualify"])["include"]),
                     18,
@@ -77,6 +85,20 @@ class NativeCoverage(unittest.TestCase):
             {key: value for key, value in main.items() if key != "run-rust"},
         )
         self.assertFalse(dispatch["run-rust"])
+        branch = native_matrix.plan("workflow_dispatch", "refs/heads/feature/example")
+        self.assertFalse(branch["run-rust"])
+
+    def test_nightly_and_dispatched_main_runs_keep_every_main_check(self):
+        main = native_matrix.plan("push", "refs/heads/main")
+        self.assertEqual(native_matrix.plan("schedule", "refs/heads/main"), main)
+        self.assertEqual(native_matrix.plan("schedule"), main)
+        self.assertEqual(
+            native_matrix.plan("workflow_dispatch", "refs/heads/main"), main
+        )
+        with self.assertRaises(ValueError):
+            native_matrix.plan("schedule", "refs/heads/feature/example")
+        with self.assertRaises(ValueError):
+            native_matrix.plan("pull_request", "refs/pull/1/merge")
 
     def test_explicit_qualification_push_keeps_every_main_check(self):
         main = native_matrix.plan("push", "refs/heads/main")
@@ -93,11 +115,14 @@ class NativeCoverage(unittest.TestCase):
     def test_workflow_push_trigger_and_full_job_guards_agree_with_plan(self):
         workflow = (Path(__file__).parents[2] / "workflows/native.yml").read_text()
         # Match the workflow's explicitly selected push branch patterns:
-        # main and selected issue branches must qualify, ordinary branches do not.
+        # selected issue branches must qualify; main and ordinary branches do
+        # not, because main is qualified by the nightly schedule.
         branches = re.search(r"branches: \[(.*?)\]", workflow).group(1)
         patterns = [value.strip().strip("'\"") for value in branches.split(",")]
+        self.assertRegex(workflow, r"(?m)^  schedule:\n    - cron: '[^']+'$")
+        self.assertRegex(workflow, r"(?m)^  workflow_dispatch:$")
         for branch, selected in (
-            ("main", True),
+            ("main", False),
             ("qualification/issue-1996", True),
             ("qualification/issue-2005-predicates", True),
             ("feature/example", False),
@@ -125,16 +150,17 @@ class NativeCoverage(unittest.TestCase):
             r"  audit:\n.*?    if: \$\{\{ (.*?) \}\}", workflow, re.DOTALL
         ).group(1)
         expression = ast.parse(
-            condition.replace("!", "not ").replace("&&", "and"), mode="eval"
+            condition.replace("needs.plan.outputs.run-rust", "run_rust")
+            .replace("!", "not ")
+            .replace("&&", "and"),
+            mode="eval",
         ).body
 
-        def evaluate(node, event, conclusion):
+        def evaluate(node, run_rust, conclusion):
             if isinstance(node, ast.Constant):
                 return node.value
-            if isinstance(node, ast.Attribute) and node.attr == "event_name":
-                self.assertIsInstance(node.value, ast.Name)
-                self.assertEqual(node.value.id, "github")
-                return event
+            if isinstance(node, ast.Name) and node.id == "run_rust":
+                return str(run_rust).lower()
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
                 self.assertEqual(node.args, [])
                 if node.func.id == "cancelled":
@@ -142,23 +168,32 @@ class NativeCoverage(unittest.TestCase):
                 if node.func.id == "always":
                     return True
             if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
-                return not evaluate(node.operand, event, conclusion)
+                return not evaluate(node.operand, run_rust, conclusion)
             if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.And):
-                return all(evaluate(value, event, conclusion) for value in node.values)
+                return all(
+                    evaluate(value, run_rust, conclusion) for value in node.values
+                )
             if isinstance(node, ast.Compare):
                 self.assertEqual(len(node.ops), 1)
                 self.assertIsInstance(node.ops[0], ast.Eq)
-                return evaluate(node.left, event, conclusion) == evaluate(
-                    node.comparators[0], event, conclusion
+                return evaluate(node.left, run_rust, conclusion) == evaluate(
+                    node.comparators[0], run_rust, conclusion
                 )
             self.fail(f"unsupported audit condition: {ast.dump(node)}")
 
-        for event in ("push", "pull_request", "workflow_dispatch"):
+        # Every run that selects the shared Rust/math checks is audited.
+        for event, reference, audited in (
+            ("schedule", "refs/heads/main", True),
+            ("workflow_dispatch", "refs/heads/main", True),
+            ("push", "refs/heads/qualification/issue-1996", True),
+            ("workflow_dispatch", "refs/heads/feature/example", False),
+        ):
+            run_rust = native_matrix.plan(event, reference)["run-rust"]
             for conclusion in ("success", "failure", "cancelled"):
-                with self.subTest(event=event, conclusion=conclusion):
+                with self.subTest(event=event, ref=reference, conclusion=conclusion):
                     self.assertEqual(
-                        evaluate(expression, event, conclusion),
-                        event == "push" and conclusion != "cancelled",
+                        evaluate(expression, run_rust, conclusion),
+                        audited and conclusion != "cancelled",
                     )
 
     def test_comparison_uses_only_selected_evidence_and_requires_r_on_every_os(self):
@@ -262,7 +297,7 @@ args.output.mkdir(parents=True)
             native_matrix.compare_cohorts(matrix, Path("/repo"), "revision")
 
     def test_unknown_event_cannot_silently_reduce_coverage(self):
-        for event in ("pull_request", "schedule"):
+        for event in ("pull_request", "pull_request_target", "workflow_run"):
             with self.subTest(event=event), self.assertRaises(ValueError):
                 native_matrix.plan(event)
 

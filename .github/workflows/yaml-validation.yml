@@ -50,7 +50,9 @@ jobs:
         with:
           python-version: "3.14"
 
-      - name: Select full dashboard checks
+      # Main pushes rebuild dashboards only when their sources changed since
+      # the previous main commit; dispatches always rebuild them.
+      - name: Select dashboard checks
         id: changes
         run: python .github/scripts/ci/dashboard_changes.py
 
@@ -70,9 +72,6 @@ jobs:
 
       - name: Check formatting and lint once
         run: python .github/scripts/commands/repository.py lint
-
-      - name: Check CI selection and dependencies
-        run: python .github/scripts/commands/repository.py ci-tests
 
       - name: Run unit tests
         run: python .github/scripts/commands/repository.py validator-tests

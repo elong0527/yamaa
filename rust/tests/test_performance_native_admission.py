@@ -70,8 +70,9 @@ class NativeAdmission(unittest.TestCase):
 
     def test_full_exact_source_is_admitted(self):
         self.validate()
-        self.run["event"] = "workflow_dispatch"
-        self.validate()
+        for event in ("workflow_dispatch", "schedule"):
+            self.run["event"] = event
+            self.validate()
 
     def test_fork_merge_pr_different_head_and_failed_run_are_refused(self):
         original = copy.deepcopy(self.run)

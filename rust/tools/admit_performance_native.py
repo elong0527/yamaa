@@ -84,7 +84,7 @@ def validate(run, jobs, artifacts, repository, revision, branch):
         or run["head_sha"] != revision
         or run["head_branch"] != branch
         or run["path"] != ".github/workflows/native.yml"
-        or run["event"] not in {"push", "workflow_dispatch"}
+        or run["event"] not in {"push", "schedule", "workflow_dispatch"}
         or run["status"] != "completed"
         or run["conclusion"] != "success"
         or type(run.get("id")) is not int

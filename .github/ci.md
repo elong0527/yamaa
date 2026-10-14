@@ -48,15 +48,17 @@ runtime steps are intentionally skipped, so required checks always appear.
 The target is under five minutes for most PRs with warm caches, excluding runner
 queue time. The static job has a five-minute timeout. Runtime jobs allow ten
 minutes for cold toolchains or dependency changes; a timeout fails the check.
-Development builds omit debug information and release LTO. Main pushes run the
-same smoke jobs to refresh Rust caches for new PRs. New commits cancel stale PR
-runs. Actual Actions timings should be checked after rollout; local timings do
+Development builds omit debug information and release LTO. Main pushes that
+change a cache key input (the Cargo lock or manifests, the Rust toolchain file,
+the PR requirements or `pr.yml`) and a weekly scheduled run refresh the smoke
+caches for new PRs; other main pushes would only restore an unchanged cache. New
+commits cancel stale PR runs. Actual Actions timings should be checked after rollout; local timings do
 not establish hosted-runner performance.
 
 Configure branch protection to require the three names above, replacing any old
 installed-matrix, R, numerical or Harbor PR requirements. The repository check
-keeps its previous name. Full qualification has separate check names and is
-available on main or by manual dispatch.
+keeps its previous name. Full qualification has separate check names and runs
+nightly on main, by manual dispatch or on a qualification branch push.
 
 ## README test and coverage badges
 
@@ -68,6 +70,10 @@ repository helper tests and installed R package tests on Ubuntu 24.04. The
 skipped. The README status badge is pinned to main push runs. Python coverage is
 measured on 3.14 and R on 4.6.1; installation compatibility across supported
 platforms and interpreters remains in the separate native installation workflow.
+Main pushes that change only prose (`docs/`, rule Markdown, the root README,
+`rust/*.md` or `mkdocs.yml`) skip it; YAML Validation and Deploy docs check
+those. Prose files that unit tests install or read, such as
+`docs/requirements.txt`, `docs/assets/` and the style contract, still run it.
 
 The coverage badge combines executable-line counts from cargo-llvm-cov for the
 three shared Rust crates, coverage.py for the installed Python facade and covr for
@@ -89,25 +95,33 @@ python .github/scripts/ci/coverage_report.py --unavailable --output docs/coverag
 
 ## Native coverage
 
-Pushes to main and explicit `qualification/issue-*` branches retain the full
-three-OS, three-Python, two-package-form matrix, all three R hosts, shared Rust
-checks, the cross-platform math comparison, and the complete public/producer
-cohort gate. Manual native dispatches retain the full installed matrix and
-numerical obligations. PR smoke checks do not establish release or platform
+The nightly main run (05:17 UTC), a manual dispatch on main and pushes to
+explicit `qualification/issue-*` branches retain the full three-OS,
+three-Python, two-package-form matrix, all three R hosts, shared Rust checks, the
+cross-platform math comparison, and the complete public/producer cohort gate.
+Main is not qualified on every merge: merges arrive faster than the matrix
+finishes, so queued per-push runs were replaced before they started. Dispatch
+`native.yml` on main when combined-main evidence is needed sooner. Manual
+dispatches on other branches retain the full installed matrix and numerical
+obligations. PR smoke checks do not establish release or platform
 qualification; source packaging, optimized behavior, the complete integration
 suite and installed R behavior remain covered by these full runs. R lanes install
 declared suggested test dependencies before strict `R CMD check`; installation
-alone does not establish **Status: OK**. Ordinary dispatch omits the shared
-Rust/math qualification and audit; retain a full push run for final acceptance.
+alone does not establish **Status: OK**. A branch dispatch omits the shared
+Rust/math qualification and audit; retain a nightly or dispatched main run for
+final acceptance.
 
 Benchmark Markdown changes trigger documentation checks without rebuilding
 the Python/native runtimes. Specification, input, expected-output, and SDK
 changes still trigger runtime coverage. The full native evidence audit stays
 observational on main and must pass on qualification branches. Complete repository
-semantic validation and deterministic dashboard generation run on main or a
-manual `yaml-validation.yml` dispatch, along with live validation blocker issue
-checks. R grammar/rollback and standalone numerical workflows remain available
-outside automatic PR feedback.
+semantic validation and live validation blocker issue checks run on every main
+push or a manual `yaml-validation.yml` dispatch. Deterministic dashboard
+generation runs on a dispatch, or on a main push that changed a dashboard source
+since the previous main commit. Dashboard sources include the public conformance
+planner, MkDocs configuration and authored dashboard assets used by the checks.
+R grammar/rollback and standalone numerical workflows remain available by manual
+dispatch; native-rust runs the same numerical checks.
 
 For release qualification, platform-specific changes, or changes needing complete
 installed evidence before merge, dispatch the native matrix on the branch head:
@@ -121,9 +135,10 @@ gh run view <run-id>
 The same dispatch is available in GitHub Actions under **Native installation
 prototype**, **Run workflow**, selecting the PR branch. Dispatch runs the same
 eighteen installed Python lanes, three R hosts, and public/producer cohort gate
-as a main push. Require every enabled lane, including Windows R, to pass on that
+as the main run. Require every enabled lane, including Windows R, to pass on that
 exact head when using this qualification gate. Shared Rust checks and the math
-comparison run on main; retain that combined run for work-package acceptance.
+comparison run on main nightly or by dispatch on main; retain that combined run
+for work-package acceptance.
 When dispatch access is unavailable, push the reviewed head to an explicit
 `qualification/issue-<number>` branch. Its complete installed, shared Rust,
 numerical and audit checks supply exact-head premerge evidence. Its audit records
@@ -151,8 +166,9 @@ commands.
 
 ### Independent native run audit
 
-Main pushes append a nonblocking `native-run-evidence-audit` job after all native
-lanes finish. Qualification branch pushes run the same audit as a required job.
+Nightly and dispatched main runs append a nonblocking `native-run-evidence-audit`
+job after all native lanes finish. Qualification branch pushes run the same audit
+as a required job.
 Its `native-run-audit` artifact retains `qualification.json` and
 `qualification.md`, the exact source revision and parents, selected Actions
 attempt metadata, downloaded artifacts, and canonical source files. The audit
@@ -180,7 +196,7 @@ make audit-native RUN_ID="$YAMAA_RUN_ID" REPOSITORY=elong0527/yamaa OUTPUT=/tmp/
 Set `YAMAA_RUN_ID` to the completed run's ID first.
 `PYTHON` must select an interpreter with the locked independent reader
 dependencies from `python/uv.lock`; it need not contain the candidate engine.
-Manual dispatches retain installed package and cohort evidence. Auditing one
+Branch dispatches retain installed package and cohort evidence. Auditing one
 with the same tool reports the missing shared Rust and math evidence; use the
 main run for the complete acceptance check.
 
