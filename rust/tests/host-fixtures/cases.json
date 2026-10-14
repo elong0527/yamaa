@@ -174,7 +174,12 @@
         "unknown-row-driver",
         "omitted-row-driver",
         "different-row-drivers",
-        "adam-adlb-end-of-treatment"
+        "adam-adlb-end-of-treatment",
+        "named-intermediate-column-default",
+        "transitive-named-default",
+        "aggregate-column-default-refused",
+        "wrapped-template-key",
+        "wrapped-extract-key"
       ],
       "successful_case_names": [
         "adam-adlb-ordered-sum",

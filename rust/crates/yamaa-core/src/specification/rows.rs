@@ -220,12 +220,15 @@ fn default_reads(
     // a nested branch or another output-key default depends on it.
     let window_default = contains_window(d, value, 0)?;
     let mut reads = Vec::new();
+    // Input-backed named reads can be row defaults (REQ-1260), while column
+    // SELF reads retain the complete constructed donor pool (REQ-0120).
     let mut names = Vec::new();
     derivations::references(d, value, project, &mut names, 0)?;
     self_relations::template_references(d, value, string_templates, &mut names, 0)?;
-    let mut named_default = false;
+    let mut self_default = false;
     for name in names {
-        named_default |= self_relations::is_named_reference(d, &name)?;
+        self_default |= self_relations::is_self_reference(d, &name)?;
+        reads.extend(row_intermediates::default_dependencies(d, &name, output)?);
     }
     let mut reference = |name: &str| {
         if !name.contains('.') {
@@ -259,7 +262,6 @@ fn default_reads(
         "source" => {
             let name = text(d, field(d, payload, "variable")?)?;
             reference(name);
-            reads.extend(row_intermediates::default_dependencies(d, name, output)?);
         }
         "str_template" => {
             for name in string_templates.get(payload)?.identifiers() {
@@ -331,19 +333,19 @@ fn default_reads(
         }
         _ => {
             return Ok((
-                !named_default,
+                !self_default,
                 reads,
-                named_default.then_some("named_intermediate"),
+                self_default.then_some("named_intermediate"),
             ));
         }
     }
     Ok((
-        !window_default && !named_default,
+        !window_default && !self_default,
         reads,
         if window_default {
             Some("window")
         } else {
-            named_default.then_some("named_intermediate")
+            self_default.then_some("named_intermediate")
         },
     ))
 }

@@ -65,13 +65,18 @@ Write `literal: null` rather than omitting the derivation.
 <a id="req-1260"></a>
 
 **REQ-1260.** A column-level derivation is row-local unless it uses a
-lookup, an aggregate, or a window, reads a named intermediate, or reads a
+lookup, an aggregate, or a window, reads a `SELF` intermediate, or reads a
 column whose column-level derivation is not row-local. A row-local
 column-level derivation is that column's default derivation in either of
 these cases:
 
 - at least one `rows` entry names the column;
 - a row-phase context reads the column.
+
+A read of a named intermediate backed by an input dataset, including a read
+through another row-local column, may be such a default. A column-level read
+of a `SELF` intermediate retains its column-phase meaning under
+[REQ-0120](../operations/lookup.md#req-0120).
 
 A row-phase context is one of these:
 

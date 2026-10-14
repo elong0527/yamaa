@@ -345,8 +345,8 @@ pub(super) fn bind_operand(
     }
 }
 
-/// A default reading a named relation retains its column-phase meaning.
-pub(super) fn is_named_reference(d: &Document, name: &str) -> Result<bool, PrepareError> {
+/// A column default reading SELF retains its completed-donor phase (REQ-0120).
+pub(super) fn is_self_reference(d: &Document, name: &str) -> Result<bool, PrepareError> {
     let Some((relation, _)) = name.split_once('.') else {
         return Ok(false);
     };
@@ -358,7 +358,7 @@ pub(super) fn is_named_reference(d: &Document, name: &str) -> Result<bool, Prepa
     };
     for &item in sequence(d, items)? {
         if text(d, field(d, item, "id")?)? == relation {
-            return Ok(true);
+            return Ok(text(d, field(d, item, "dataset")?)? == "SELF");
         }
     }
     Ok(false)
