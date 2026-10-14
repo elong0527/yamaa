@@ -166,53 +166,6 @@
         "path"
       ]
     },
-    "entry": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "tuple": {
-          "$ref": "#/$defs/tuple"
-        },
-        "artifact_id": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "minimum": 1,
-          "description": "null retains a visible missing matrix tuple; it cannot pass."
-        },
-        "artifact_name": {
-          "type": "string",
-          "minLength": 1
-        },
-        "run_attempt": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "campaign": {
-          "$ref": "#/$defs/path"
-        },
-        "collections": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "$ref": "#/$defs/collection"
-          }
-        },
-        "archive": {
-          "$ref": "#/$defs/path"
-        }
-      },
-      "required": [
-        "tuple",
-        "artifact_id",
-        "artifact_name",
-        "run_attempt",
-        "campaign",
-        "collections"
-      ],
-      "description": "archive optionally names an original Actions ZIP. The auditor safely expands only this tuple and removes private copies before advancing. Without archive, original unpacked evidence is read in place."
-    },
     "input": {
       "type": "object",
       "additionalProperties": false,
@@ -516,6 +469,386 @@
         "dispositions"
       ],
       "description": "Explicit source-specific decision input. Absent or unapproved budgets produce not_evaluated; malformed budgets fail their own gate without replacing harness/coverage verdicts. There are no accepted numeric thresholds implied by collector booleans or this schema."
+    },
+    "plain_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tuple": {
+          "$ref": "#/$defs/tuple"
+        },
+        "artifact_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "description": "null retains a visible missing matrix tuple; it cannot pass."
+        },
+        "artifact_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "run_attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "campaign": {
+          "$ref": "#/$defs/path"
+        },
+        "collections": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/collection"
+          }
+        },
+        "archive": {
+          "$ref": "#/$defs/path"
+        }
+      },
+      "required": [
+        "tuple",
+        "artifact_id",
+        "artifact_name",
+        "run_attempt",
+        "campaign",
+        "collections"
+      ],
+      "description": "archive optionally names an original Actions ZIP. The auditor safely expands only this tuple and removes private copies before advancing. Without archive, original unpacked evidence is read in place."
+    },
+    "segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "description": "null retains a visible missing matrix tuple; it cannot pass."
+        },
+        "artifact_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "run_attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "campaign": {
+          "$ref": "#/$defs/path"
+        },
+        "collections": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/collection"
+          }
+        },
+        "archive": {
+          "$ref": "#/$defs/path"
+        },
+        "variant": {
+          "enum": [
+            "lookup-1",
+            "lookup-4",
+            "aggregate-10",
+            "aggregate-100",
+            "window-10",
+            "window-100",
+            "callback-1",
+            "producer-1",
+            "producer-3"
+          ]
+        },
+        "cases": {
+          "enum": [
+            [
+              "lookup-1000-1",
+              "lookup-10000-1",
+              "lookup-100000-1"
+            ],
+            [
+              "lookup-1000-4",
+              "lookup-10000-4",
+              "lookup-100000-4"
+            ],
+            [
+              "aggregate-1000-10",
+              "aggregate-10000-10",
+              "aggregate-100000-10"
+            ],
+            [
+              "aggregate-1000-100",
+              "aggregate-10000-100",
+              "aggregate-100000-100"
+            ],
+            [
+              "window-1000-10",
+              "window-10000-10",
+              "window-100000-10"
+            ],
+            [
+              "window-1000-100",
+              "window-10000-100",
+              "window-100000-100"
+            ],
+            [
+              "callback-1000-1",
+              "callback-10000-1",
+              "callback-100000-1"
+            ],
+            [
+              "producer-1000-1",
+              "producer-10000-1",
+              "producer-100000-1"
+            ],
+            [
+              "producer-1000-3",
+              "producer-10000-3",
+              "producer-100000-3"
+            ]
+          ]
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_name",
+        "run_attempt",
+        "campaign",
+        "collections",
+        "variant",
+        "cases"
+      ],
+      "description": "One approved R dimension variant, with all three row sizes and complete 10 cold/3 warmup/30 warm sampling per case on its original actual runner. Original artifact performance-r-{os}-source-{variant} and producing job performance-r ({os}, source, {variant}) bind this segment independently. Applicable role collections contain exactly these candidate cases, plus prior lookup/aggregate/window baseline cases or producer-root-Build cases. No case distribution or RSS child observation is split or pooled across runners.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "variant": {
+                "const": "lookup-1"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "const": [
+                  "lookup-1000-1",
+                  "lookup-10000-1",
+                  "lookup-100000-1"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "variant": {
+                "const": "lookup-4"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "const": [
+                  "lookup-1000-4",
+                  "lookup-10000-4",
+                  "lookup-100000-4"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "variant": {
+                "const": "aggregate-10"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "const": [
+                  "aggregate-1000-10",
+                  "aggregate-10000-10",
+                  "aggregate-100000-10"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "variant": {
+                "const": "aggregate-100"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "const": [
+                  "aggregate-1000-100",
+                  "aggregate-10000-100",
+                  "aggregate-100000-100"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "variant": {
+                "const": "window-10"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "const": [
+                  "window-1000-10",
+                  "window-10000-10",
+                  "window-100000-10"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "variant": {
+                "const": "window-100"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "const": [
+                  "window-1000-100",
+                  "window-10000-100",
+                  "window-100000-100"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "variant": {
+                "const": "callback-1"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "const": [
+                  "callback-1000-1",
+                  "callback-10000-1",
+                  "callback-100000-1"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "variant": {
+                "const": "producer-1"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "const": [
+                  "producer-1000-1",
+                  "producer-10000-1",
+                  "producer-100000-1"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "variant": {
+                "const": "producer-3"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "const": [
+                  "producer-1000-3",
+                  "producer-10000-3",
+                  "producer-100000-3"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "segmented_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tuple": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/tuple"
+            },
+            {
+              "properties": {
+                "host": {
+                  "const": "r"
+                }
+              }
+            }
+          ]
+        },
+        "segments": {
+          "type": "array",
+          "minItems": 9,
+          "maxItems": 9,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/segment"
+          }
+        }
+      },
+      "required": [
+        "tuple",
+        "segments"
+      ],
+      "description": "Optional R scheduling: exactly one segment for each of nine approved dimension variants, with non-overlapping complete cases. Auditor refuses duplicate/missing/unapproved variants and wrong role/case coverage. Python tuples remain whole. Logical coverage stays21 tuples,567 candidate cells and504 required comparator cells."
+    },
+    "entry": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/plain_entry"
+        },
+        {
+          "$ref": "#/$defs/segmented_entry"
+        }
+      ]
     }
   },
   "examples": [

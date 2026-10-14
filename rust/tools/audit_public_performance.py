@@ -81,6 +81,53 @@ def role_case_names(role):
     return [case for case in case_names() if case.split("-")[0] in families]
 
 
+def variants():
+    return {
+        f"{family}-{dimension}": [
+            f"{family}-{rows}-{dimension}" for rows in workloads.DEFAULT_ROWS
+        ]
+        for family in workloads.FAMILIES
+        for dimension in workloads.DIMENSIONS[family]
+    }
+
+
+def logical_entries(entry):
+    """Keep complete cases on their original runner; never combine distributions."""
+    keys = ("artifact_id", "artifact_name", "run_attempt", "campaign", "collections")
+    if "segments" not in entry:
+        exact(
+            entry,
+            ("tuple", *keys) + (("archive",) if "archive" in entry else ()),
+            "entry",
+        )
+        return [entry]
+    exact(entry, ("tuple", "segments"), "segmented logical entry")
+    require(entry["tuple"]["host"] == "r", "only approved R tuples may be segmented")
+    require(isinstance(entry["segments"], list), "segment inventory must be a list")
+    selected = []
+    for segment in entry["segments"]:
+        exact(
+            segment,
+            ("variant", "cases", *keys)
+            + (("archive",) if "archive" in segment else ()),
+            "segment",
+        )
+        require(
+            isinstance(segment["variant"], str) and segment["variant"] in variants(),
+            "unapproved R segment variant",
+        )
+        require(
+            segment["cases"] == variants()[segment["variant"]],
+            "segment must declare all three approved complete cases in order",
+        )
+        selected.append(segment["variant"])
+    require(
+        len(selected) == len(set(selected)) and set(selected) == set(variants()),
+        "duplicate/missing/unexpected R segment variant inventory",
+    )
+    return [dict(segment, tuple=entry["tuple"]) for segment in entry["segments"]]
+
+
 def require(condition, message):
     if not condition:
         raise ValueError(message)
@@ -1167,6 +1214,8 @@ def admit_artifact(entry, artifacts, run, jobs):
         if lane["host"] == "python"
         else f"performance-r-{lane['os']}-source"
     )
+    if "variant" in entry:
+        name += "-" + entry["variant"]
     require(
         artifact["name"] == name == entry["artifact_name"]
         and artifact["expired"] is False
@@ -1185,7 +1234,9 @@ def admit_artifact(entry, artifacts, run, jobs):
     job_name = (
         f"performance-python ({lane['os']}, {lane['python']}, {lane['form']})"
         if lane["host"] == "python"
-        else f"performance-r ({lane['os']}, source)"
+        else f"performance-r ({lane['os']}, source"
+        + (", " + entry["variant"] if "variant" in entry else "")
+        + ")"
     )
     matches = [job for job in jobs if job["name"].endswith(job_name)]
     require(len(matches) == 1, "missing/duplicate original producing job")
@@ -1422,26 +1473,21 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
                 capture_output=True,
             )
         seen = set()
+        expanded = []
         for number, entry in enumerate(payload["entries"]):
             try:
-                exact(
-                    entry,
-                    (
-                        "tuple",
-                        "artifact_id",
-                        "artifact_name",
-                        "run_attempt",
-                        "campaign",
-                        "collections",
-                    )
-                    + (("archive",) if "archive" in entry else ()),
-                    "entry",
-                )
                 lane = entry["tuple"]
                 require(lane in tuples(), "unexpected performance tuple")
                 key = json.dumps(lane, sort_keys=True)
                 require(key not in seen, "duplicate performance tuple")
                 seen.add(key)
+                expanded.extend((number, part) for part in logical_entries(entry))
+            except EVIDENCE_ERRORS as error:
+                errors.append({"entry": number, "reason": str(error)})
+        for number, entry in expanded:
+            try:
+                lane = entry["tuple"]
+                key = json.dumps(lane, sort_keys=True)
                 artifact, job = admit_artifact(entry, artifacts, run, jobs)
                 parse_time = native_admission.timestamp
                 with tempfile.TemporaryDirectory(
@@ -1477,6 +1523,16 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
                             and "candidate" in roles,
                             "duplicate/unexpected/absent collection role",
                         )
+                        if "variant" in entry:
+                            require(
+                                set(roles)
+                                == {
+                                    role
+                                    for role in ROLES
+                                    if set(entry["cases"]) & set(role_case_names(role))
+                                },
+                                "segment applicable collection roles differ",
+                            )
                         for collection in entry["collections"]:
                             exact(collection, ("role", "path"), "collection entry")
                             directory = relative(evidence_root, collection["path"])
@@ -1506,9 +1562,27 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
                                 ),
                                 "unexpected admitted workload case for collection role",
                             )
+                            if "variant" in entry:
+                                require(
+                                    set(values)
+                                    == set(entry["cases"])
+                                    & set(role_case_names(collection["role"])),
+                                    "segment collection case coverage differs from declared complete cases",
+                                )
                             for case, result in values.items():
                                 if association is not None:
                                     result["native_package_association"] = association
+                                result["performance_collection_association"] = {
+                                    "artifact_id": artifact["id"],
+                                    "artifact_name": artifact["name"],
+                                    "run_id": run["id"],
+                                    "run_attempt": run["run_attempt"],
+                                    "producing_job": job["name"],
+                                    "producing_job_id": job.get("id"),
+                                    "runner_name": job["runner_name"],
+                                    "campaign_id": campaign["campaign_id"],
+                                    "variant": entry.get("variant"),
+                                }
                                 identity = (key, case, collection["role"])
                                 require(
                                     identity not in accepted,
@@ -1516,7 +1590,13 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
                                 )
                                 accepted[identity] = result
             except EVIDENCE_ERRORS as error:
-                errors.append({"entry": number, "reason": str(error)})
+                errors.append(
+                    {
+                        "entry": number,
+                        "variant": entry.get("variant"),
+                        "reason": str(error),
+                    }
+                )
     cells = []
     for lane in tuples():
         key = json.dumps(lane, sort_keys=True)

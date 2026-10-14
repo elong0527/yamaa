@@ -4,6 +4,7 @@ import contextlib
 import copy
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -944,6 +945,7 @@ class CollectionGates(unittest.TestCase):
             write(
                 collection.parent / "machine-campaign.json",
                 {
+                    "campaign_id": f"00000000-0000-4000-8000-{number:012d}",
                     "created_at": "2026-10-14T01:05:00Z",
                     "measurement_machine": {"runner_name": "fixture-runner"},
                 },
@@ -1186,6 +1188,293 @@ class CollectionGates(unittest.TestCase):
                     ["--input", "input.json", "--output", "output", *arguments]
                 )
             self.assertEqual(failure.exception.code, 2)
+
+
+class Segments(unittest.TestCase):
+    invoke = CollectionGates.invoke
+
+    def setUp(self):
+        CollectionGates.setUp(self)
+        artifacts = [
+            item
+            for item in auditor.read(self.root / "artifacts.json")
+            if "python" in item["name"]
+        ]
+        jobs = [
+            item
+            for item in auditor.read(self.root / "jobs.json")
+            if "python" in item["name"]
+        ]
+        for entry in self.payload["entries"]:
+            if entry["tuple"]["host"] != "r":
+                continue
+            lane = entry["tuple"]
+            segments = []
+            for variant, cases in auditor.variants().items():
+                name = f"performance-r-{lane['os']}-source-{variant}"
+                artifact_id = 2000 + len(artifacts)
+                runner = f"original-runner-{artifact_id}"
+                roles = [
+                    role
+                    for role in auditor.ROLES
+                    if set(cases) & set(auditor.role_case_names(role))
+                ]
+                collections = []
+                for role in roles:
+                    directory = self.root / name / role
+                    directory.mkdir(parents=True)
+                    collections.append({"role": role, "path": name + "/" + role})
+                segment = {
+                    "variant": variant,
+                    "cases": cases,
+                    "artifact_id": artifact_id,
+                    "artifact_name": name,
+                    "run_attempt": 2,
+                    "campaign": name + "/machine-campaign.json",
+                    "collections": collections,
+                }
+                segments.append(segment)
+                artifacts.append(dict(self.artifact, id=artifact_id, name=name))
+                jobs.append(
+                    dict(
+                        self.job,
+                        id=10000 + artifact_id,
+                        name=f"performance-r ({lane['os']}, source, {variant})",
+                        runner_name=runner,
+                    )
+                )
+                write(
+                    self.root / name / "machine-campaign.json",
+                    {
+                        "campaign_id": f"00000000-0000-4000-8000-{artifact_id:012d}",
+                        "created_at": "2026-10-14T01:05:00Z",
+                        "measurement_machine": {"runner_name": runner},
+                    },
+                )
+                shutil.copyfile(
+                    self.root / "native-run.json", self.root / name / "native-run.json"
+                )
+                write(
+                    self.root / name / "candidate/collection.json",
+                    {
+                        "provenance": {
+                            "artifact_path": "/vanished/yamaa.tar.gz",
+                            "system": "Linux",
+                            "source_revision": "a" * 40,
+                            "artifact_reference": f"github-actions:321/attempt-2/native-r-{lane['os']}/yamaa.tar.gz",
+                        }
+                    },
+                )
+            entry.clear()
+            entry.update(tuple=lane, segments=segments)
+        write(self.root / "artifacts.json", artifacts)
+        write(self.root / "jobs.json", jobs)
+        self.segment = self.payload["entries"][-3]["segments"][0]
+        for number, values in enumerate(self.values.values()):
+            values["metrics"]["cold.child_peak_rss.median_bytes"] = {
+                "count": 10,
+                "raw": [number + 1000] * 10,
+                "median": number + 1000,
+            }
+            values["metrics"]["warm.child_peak_rss.median_bytes"] = {
+                "count": 1,
+                "raw": [number + 2000],
+                "median": number + 2000,
+            }
+
+    def admitted_values(self, *arguments):
+        values = CollectionGates.admitted_values(self, *arguments)
+        name = arguments[0].parent.name
+        if "-source-" in name:
+            cases = auditor.variants()[name.split("-source-", 1)[1]]
+            values = {case: value for case, value in values.items() if case in cases}
+        return values
+
+    def test_nine_complete_r_groups_preserve_21_tuples_and_unpooled_observations(self):
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=self.admitted_values
+        ):
+            status, report = self.invoke("--check-collection", "grouped")
+        self.assertEqual(status, 0)
+        self.assertEqual(report["coverage"]["passed"], 567)
+        self.assertEqual(report["comparator_coverage"]["passed"], 504)
+        self.assertEqual(len(self.payload["entries"]), 21)
+        for cell in report["cells"]:
+            candidate = cell["candidate"]
+            self.assertEqual(candidate["metrics"], self.values[cell["case"]]["metrics"])
+            if cell["tuple"]["host"] == "r":
+                association = candidate["performance_collection_association"]
+                self.assertIn(cell["case"], auditor.variants()[association["variant"]])
+                self.assertEqual(
+                    association["runner_name"],
+                    f"original-runner-{association['artifact_id']}",
+                )
+                self.assertEqual(association["run_attempt"], 2)
+        self.assertFalse(report["accepted"])
+
+    def test_missing_duplicate_unapproved_or_overlapping_groups_refuse(self):
+        entry = self.payload["entries"][-3]
+        original = copy.deepcopy(entry)
+        variants = [
+            dict(original, segments=original["segments"][:-1]),
+            dict(original, segments=original["segments"] + [original["segments"][0]]),
+        ]
+        changed = copy.deepcopy(original)
+        changed["segments"][-1] = copy.deepcopy(changed["segments"][0])
+        variants.append(changed)
+        for field, value in (
+            ("variant", "lookup-2"),
+            ("cases", self.segment["cases"][:-1]),
+            ("cases", auditor.variants()["lookup-4"]),
+            ("cases", [self.segment["cases"][0]] * 3),
+        ):
+            changed = copy.deepcopy(original)
+            changed["segments"][0][field] = value
+            variants.append(changed)
+        variants.append(dict(original, tuple=auditor.tuples()[0]))
+        for number, changed in enumerate(variants):
+            with self.subTest(changed=changed):
+                self.payload["entries"][-3] = changed
+                with mock.patch.object(
+                    auditor, "admit_collection", side_effect=self.admitted_values
+                ):
+                    status, report = self.invoke(
+                        "--check-collection", f"bad-group-{number}"
+                    )
+                self.assertEqual(status, 1)
+                self.assertEqual(report["harness_correctness"]["status"], "fail")
+
+    def test_segment_cases_cannot_split_or_move_between_actual_runner_collections(self):
+        def wrong_cases(*arguments):
+            values = self.admitted_values(*arguments)
+            if arguments[0].parent.name == self.segment["artifact_name"]:
+                values.pop(self.segment["cases"][0])
+                values["lookup-1000-4"] = self.values["lookup-1000-4"]
+            return values
+
+        with mock.patch.object(auditor, "admit_collection", side_effect=wrong_cases):
+            status, report = self.invoke("--check-collection", "moved-case")
+        self.assertEqual(status, 1)
+        self.assertIn(
+            "segment collection case coverage differs",
+            str(report["harness_correctness"]["errors"]),
+        )
+        self.segment["collections"] = self.segment["collections"][:1]
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=self.admitted_values
+        ):
+            status, report = self.invoke("--check-collection", "missing-group-baseline")
+        self.assertEqual(status, 1)
+        self.assertIn(
+            "segment applicable collection roles differ",
+            str(report["harness_correctness"]["errors"]),
+        )
+
+    def test_group_archives_use_same_provider_and_keep_original_zip_bytes(self):
+        artifacts = auditor.read(self.root / "artifacts.json")
+        archives = {}
+        for logical in self.payload["entries"]:
+            entries = logical.get("segments", [logical])
+            for entry in entries:
+                entry["archive"] = entry["artifact_name"] + ".zip"
+                path = self.root / entry["archive"]
+                source = self.root / entry["artifact_name"]
+                with zipfile.ZipFile(path, "w") as archive:
+                    for member in sorted(source.rglob("*")):
+                        archive.write(member, member.relative_to(source).as_posix())
+                archives[entry["archive"]] = path.read_bytes()
+                next(item for item in artifacts if item["id"] == entry["artifact_id"])[
+                    "size_in_bytes"
+                ] = path.stat().st_size
+        write(self.root / "artifacts.json", artifacts)
+        write(self.root / "input.json", self.payload)
+        opened, closed = [], []
+
+        @contextlib.contextmanager
+        def provider(entry, manifest_root):
+            self.assertEqual(manifest_root, self.root)
+            self.assertEqual(
+                entry["tuple"]["host"], "r" if "variant" in entry else "python"
+            )
+            opened.append(entry["artifact_id"])
+            try:
+                yield self.root
+            finally:
+                closed.append(entry["artifact_id"])
+
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=self.admitted_values
+        ):
+            report = auditor.audit(
+                self.root / "input.json", self.root, entry_provider=provider
+            )
+        self.assertEqual(report["collection_gate"]["status"], "pass")
+        self.assertEqual(len(opened), 45)
+        self.assertEqual(opened, closed)
+        for name, original in archives.items():
+            self.assertEqual((self.root / name).read_bytes(), original)
+
+    def test_original_artifact_job_attempt_campaign_and_native_bind_each_group(self):
+        input_files = [
+            self.root / "artifacts.json",
+            self.root / "jobs.json",
+            self.root / self.segment["campaign"],
+            self.root / self.segment["artifact_name"] / "native-run.json",
+        ]
+        originals = [path.read_bytes() for path in input_files]
+        for number, (path, mutate) in enumerate(
+            (
+                (
+                    input_files[0],
+                    lambda value: next(
+                        item
+                        for item in value
+                        if item["id"] == self.segment["artifact_id"]
+                    )["workflow_run"].update(head_sha="b" * 40),
+                ),
+                (
+                    input_files[1],
+                    lambda value: next(
+                        item
+                        for item in value
+                        if item.get("id") == 10000 + self.segment["artifact_id"]
+                    ).update(run_attempt=1),
+                ),
+                (
+                    input_files[1],
+                    lambda value: next(
+                        item
+                        for item in value
+                        if item.get("id") == 10000 + self.segment["artifact_id"]
+                    ).update(conclusion="failure"),
+                ),
+                (
+                    input_files[2],
+                    lambda value: value["measurement_machine"].update(
+                        runner_name="other-runner"
+                    ),
+                ),
+                (
+                    input_files[2],
+                    lambda value: value.update(created_at="2026-10-13T01:05:00Z"),
+                ),
+                (input_files[3], lambda value: value.update(run_attempt=1)),
+            )
+        ):
+            with self.subTest(path=path, number=number):
+                value = auditor.read(path)
+                mutate(value)
+                write(path, value)
+                with mock.patch.object(
+                    auditor, "admit_collection", side_effect=self.admitted_values
+                ):
+                    status, report = self.invoke(
+                        "--check-collection", f"bad-binding-{number}"
+                    )
+                self.assertEqual(status, 1)
+                self.assertEqual(report["harness_correctness"]["status"], "fail")
+                for original_path, original_bytes in zip(input_files, originals):
+                    original_path.write_bytes(original_bytes)
 
 
 class NativeSourceBinding(unittest.TestCase):
