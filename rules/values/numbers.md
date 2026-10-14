@@ -64,8 +64,13 @@ operand returns `float`.
 
 <a id="req-0421"></a>
 
-**REQ-0421.** `/` always returns `float`. There is no integer division. Write
-`FLOOR(a / b)` for a floor-divided integer.
+**REQ-0421.** `/` always returns `float`. Each `int` operand first widens to
+binary64 under [REQ-0017](numbers.md#req-0017), including when both operands
+are `int`; the result is the binary64 quotient of those widened operands.
+Above `2^53`, this need not equal the exact integer quotient rounded once
+to binary64: `9007199254740993 / 3` returns `3002399751580330.5`, although the
+exact quotient `3002399751580331` is representable as a float. There is no
+integer division. Write `FLOOR(a / b)` for a floor-divided integer.
 
 <a id="req-0422"></a>
 
