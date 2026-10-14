@@ -17,7 +17,14 @@ import subprocess
 import urllib.request
 from pathlib import Path
 
-from index_public_performance import api, tuples, without_digests, write
+from index_public_performance import (
+    R_VARIANTS,
+    api,
+    producer_job,
+    tuples,
+    without_digests,
+    write,
+)
 from prepare_r_rollback import StripRedirectCredentials
 
 TRUSTED_REFS = {
@@ -49,7 +56,8 @@ def download(repository, endpoint, destination, binary=False):
         f"https://api.github.com/repos/{repository}/{endpoint}",
         headers={
             "Authorization": "Bearer " + os.environ["GH_TOKEN"],
-            "Accept": "application/octet-stream" if binary
+            "Accept": "application/octet-stream"
+            if binary
             else "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
         },
@@ -82,9 +90,11 @@ def verify_original_download(path, artifact):
 def producer_name(name):
     for lane, artifact_name in tuples():
         if name == artifact_name:
-            if lane["host"] == "python":
-                return f"performance-python ({lane['os']}, {lane['python']}, {lane['form']})"
-            return f"performance-r ({lane['os']}, source)"
+            return producer_job(lane)
+        if lane["host"] == "r":
+            for variant in R_VARIANTS:
+                if name == f"{artifact_name}-{variant}":
+                    return producer_job(lane, variant)
     return {
         "performance-native-admission": "Admit exact-source full native qualification",
         "performance-index": "Retain exact original campaign index",
@@ -94,13 +104,21 @@ def producer_name(name):
 
 
 def original_attempt(artifact, jobs):
-    created = datetime.datetime.fromisoformat(artifact["created_at"].replace("Z", "+00:00"))
+    created = datetime.datetime.fromisoformat(
+        artifact["created_at"].replace("Z", "+00:00")
+    )
     matches = []
     for job in jobs:
-        if job["name"] != producer_name(artifact["name"]) or not job.get("completed_at"):
+        if job["name"] != producer_name(artifact["name"]) or not job.get(
+            "completed_at"
+        ):
             continue
-        start = datetime.datetime.fromisoformat(job["started_at"].replace("Z", "+00:00"))
-        end = datetime.datetime.fromisoformat(job["completed_at"].replace("Z", "+00:00"))
+        start = datetime.datetime.fromisoformat(
+            job["started_at"].replace("Z", "+00:00")
+        )
+        end = datetime.datetime.fromisoformat(
+            job["completed_at"].replace("Z", "+00:00")
+        )
         if start <= created <= end:
             matches.append(job)
     return matches[0]["run_attempt"] if len(matches) == 1 else None
@@ -133,9 +151,19 @@ def upload(repository, release, tag, revision, path, work):
     if not matches:
         # Omitting --clobber preserves all existing asset identities. This only
         # uploads to the already admitted draft; it cannot publish a release.
-        subprocess.run([
-            "gh", "release", "upload", tag, str(path), "--repo", repository,
-        ], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(
+            [
+                "gh",
+                "release",
+                "upload",
+                tag,
+                str(path),
+                "--repo",
+                repository,
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
         release = api(f"repos/{repository}/releases/{release['id']}")
         admit_release(release, tag, revision)
         matches = [asset for asset in release["assets"] if asset["name"] == path.name]
@@ -146,8 +174,10 @@ def upload(repository, release, tag, revision, path, work):
     download(repository, f"releases/assets/{asset['id']}", retrieved, binary=True)
     require(equal_files(path, retrieved), "retained bytes differ; never overwrite")
     return release, {
-        "asset_id": asset["id"], "name": asset["name"],
-        "bytes": path.stat().st_size, "bytes_equal": True,
+        "asset_id": asset["id"],
+        "name": asset["name"],
+        "bytes": path.stat().st_size,
+        "bytes_equal": True,
         "reused_without_overwrite": reused,
         "authenticated_api_reference": asset["url"],
     }
@@ -166,7 +196,8 @@ def retain(args):
     require(
         re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repository)
         and re.fullmatch(r"[0-9a-f]{40}", args.revision)
-        and args.run_id > 0 and args.attempt > 0,
+        and args.run_id > 0
+        and args.attempt > 0,
         "invalid exact campaign identity",
     )
     args.output.mkdir(parents=True, exist_ok=False)
@@ -176,8 +207,10 @@ def retain(args):
     tag_command = ["git", "ls-remote", "--tags", "origin", f"refs/tags/{tag}"]
     require(not subprocess.check_output(tag_command), "evidence label is a Git tag")
     releases = [
-        release for page in api(f"repos/{args.repository}/releases?per_page=100", True)
-        for release in page if release["tag_name"] == tag
+        release
+        for page in api(f"repos/{args.repository}/releases?per_page=100", True)
+        for release in page
+        if release["tag_name"] == tag
     ]
     require(len(releases) <= 1, "ambiguous unpublished evidence draft")
     if releases:
@@ -186,9 +219,11 @@ def retain(args):
         # Create an unpublished storage container through the releases endpoint.
         # No Git refs endpoint, release edit or publication command is used.
         body = {
-            "tag_name": tag, "target_commitish": args.revision,
+            "tag_name": tag,
+            "target_commitish": args.revision,
             "name": f"Public performance evidence: run {args.run_id}, attempt {args.attempt}",
-            "draft": True, "prerelease": True,
+            "draft": True,
+            "prerelease": True,
             "body": (
                 f"Original migration evidence for {args.revision}, performance run "
                 f"{args.run_id}, attempt {args.attempt}. Raw failures and partial "
@@ -196,42 +231,67 @@ def retain(args):
                 "approve transition/release publication. Keep unpublished."
             ),
         }
-        release = json.loads(subprocess.check_output([
-            "gh", "api", f"repos/{args.repository}/releases", "--method", "POST",
-            "--input", "-",
-        ], input=json.dumps(body), text=True))
+        release = json.loads(
+            subprocess.check_output(
+                [
+                    "gh",
+                    "api",
+                    f"repos/{args.repository}/releases",
+                    "--method",
+                    "POST",
+                    "--input",
+                    "-",
+                ],
+                input=json.dumps(body),
+                text=True,
+            )
+        )
     admit_release(release, tag, args.revision)
     original_ids = {asset["name"]: asset["id"] for asset in release["assets"]}
     pages = api(
-        f"repos/{args.repository}/actions/runs/{args.run_id}/artifacts?per_page=100", True
+        f"repos/{args.repository}/actions/runs/{args.run_id}/artifacts?per_page=100",
+        True,
     )
-    artifacts = without_digests([
-        artifact for page in pages for artifact in page["artifacts"]
-        if producer_name(artifact["name"]) is not None
-    ])
+    artifacts = without_digests(
+        [
+            artifact
+            for page in pages
+            for artifact in page["artifacts"]
+            if producer_name(artifact["name"]) is not None
+        ]
+    )
     write(args.output / "original-artifacts.json", artifacts)
     require(bool(artifacts), "no original performance evidence was retained")
     jobs = [
-        job for attempt in range(1, args.attempt + 1)
+        job
+        for attempt in range(1, args.attempt + 1)
         for page in api(
-            f"repos/{args.repository}/actions/runs/{args.run_id}/attempts/{attempt}/jobs?per_page=100", True
-        ) for job in page["jobs"]
+            f"repos/{args.repository}/actions/runs/{args.run_id}/attempts/{attempt}/jobs?per_page=100",
+            True,
+        )
+        for job in page["jobs"]
     ]
     write(args.output / "original-jobs.json", jobs)
     receipt = {
         "protocol": "public-performance-retention/1",
-        "repository": args.repository, "source_revision": args.revision,
-        "run_id": args.run_id, "run_attempt": args.attempt,
-        "release_id": release["id"], "release_label": tag,
-        "draft": True, "accepted": False,
+        "repository": args.repository,
+        "source_revision": args.revision,
+        "run_id": args.run_id,
+        "run_attempt": args.attempt,
+        "release_id": release["id"],
+        "release_label": tag,
+        "draft": True,
+        "accepted": False,
         "scope": "durable authenticated original artifact bytes; no budget acceptance",
         "archive_reassembly": "group by original_artifact_id and concatenate verified asset bytes in byte_offset order; no recompression",
-        "existing_assets_preserved": original_ids, "assets": [],
+        "existing_assets_preserved": original_ids,
+        "assets": [],
     }
     write(args.output / "retention.json", receipt)
     for artifact in sorted(artifacts, key=lambda item: item["id"]):
         require(
-            artifact["expired"] is False and artifact["size_in_bytes"] > 0
+            artifact["expired"] is False
+            and artifact["size_in_bytes"] > 0
             and artifact["workflow_run"]["id"] == args.run_id
             and artifact["workflow_run"]["head_sha"] == args.revision
             and re.fullmatch(r"[A-Za-z0-9_.-]+", artifact["name"]),
@@ -249,14 +309,17 @@ def retain(args):
             release, retained = upload(
                 args.repository, release, tag, args.revision, segment, args.output
             )
-            retained.update({
-                "original_artifact_id": artifact["id"],
-                "original_artifact_name": artifact["name"],
-                "original_artifact_created_at": artifact["created_at"],
-                "original_run_attempt": producing_attempt,
-                "original_zip_bytes": original.stat().st_size,
-                "byte_offset": offset, "segment_count": count,
-            })
+            retained.update(
+                {
+                    "original_artifact_id": artifact["id"],
+                    "original_artifact_name": artifact["name"],
+                    "original_artifact_created_at": artifact["created_at"],
+                    "original_run_attempt": producing_attempt,
+                    "original_zip_bytes": original.stat().st_size,
+                    "byte_offset": offset,
+                    "segment_count": count,
+                }
+            )
             receipt["assets"].append(retained)
             write(args.output / "retention.json", receipt)
             (args.output / f"retrieved-{retained['asset_id']}").unlink()
@@ -275,7 +338,9 @@ def retain(args):
     receipt["retrieval_verified"] = True
     write(args.output / "retention.json", receipt)
     # Give the durable draft its own compact manifest, using a distinct name.
-    manifest_path = args.output / f"run-{args.run_id}-attempt-{args.attempt}-retention.json"
+    manifest_path = (
+        args.output / f"run-{args.run_id}-attempt-{args.attempt}-retention.json"
+    )
     write(manifest_path, receipt)
     upload(args.repository, final, tag, args.revision, manifest_path, args.output)
     return receipt

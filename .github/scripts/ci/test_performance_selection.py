@@ -7,6 +7,39 @@ from pathlib import Path
 
 
 class PerformanceSelection(unittest.TestCase):
+    def test_r_dimension_jobs_keep_all_sizes_and_complete_case_distributions(self):
+        root = Path(__file__).resolve().parents[3]
+        source = (root / ".github/workflows/performance.yml").read_text()
+        r_job = re.search(r"(?ms)^  r:\n(.*?)(?=^  \S|\Z)", source).group(1)
+        variants = re.search(r"(?m)^        variant: \[(.*?)\]$", r_job).group(1)
+        self.assertEqual(
+            [part.strip() for part in variants.split(",")],
+            [
+                "lookup-1",
+                "lookup-4",
+                "aggregate-10",
+                "aggregate-100",
+                "window-10",
+                "window-100",
+                "callback-1",
+                "producer-1",
+                "producer-3",
+            ],
+        )
+        self.assertIn("variant_cases(os.environ['PERFORMANCE_VARIANT'])", r_job)
+        self.assertEqual(r_job.count('--cases "${case_args[@]}"'), 3)
+        self.assertIn(
+            "name: performance-r-${{ matrix.os }}-source-${{ matrix.variant }}", r_job
+        )
+        self.assertIn(
+            "name: performance-r (${{ matrix.os }}, source, ${{ matrix.variant }})",
+            r_job,
+        )
+        python_job = re.search(r"(?ms)^  python:\n(.*?)(?=^  \S|\Z)", source).group(1)
+        self.assertNotIn("variant:", python_job)
+        self.assertIn("python: ['3.12', '3.13', '3.14']", python_job)
+        self.assertIn("form: [wheel, source]", python_job)
+
     def test_collection_completion_and_numeric_replay_are_separate_routes(self):
         root = Path(__file__).resolve().parents[3]
         campaign = (root / ".github/workflows/performance.yml").read_text()

@@ -166,6 +166,15 @@ available for an explicit native run and purpose. Reusable workflow calls are
 not a campaign entry point: their caller context does not identify this exact
 performance workflow run.
 
+The eighteen Python jobs each retain all 27 cases. R uses nine approved dimension
+variants per OS: each job retains its variant's 1k, 10k and 100k cases, complete
+sampling distributions, and applicable prior Python comparison on that same
+actual runner. The index still names three logical R tuples, each with nine
+independently bound original artifact segments. No individual case distribution
+is split across runners. The auditor rejects unexpected, overlapping, duplicate
+or missing segments/cases; the required counts remain 567 candidate cells and
+504 prior lifecycle/root-Build comparator cells.
+
 Every attempt preserves its raw failures and partial collections. The independent
 replay job retains all 21 tuple slots, source and baseline histories in a Git
 bundle, original run/attempt/job/artifact identities, and a compact report. A

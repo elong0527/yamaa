@@ -21,6 +21,30 @@ ROLES = (
     ("baseline", "baseline-evidence"),
     ("producer-root-build-baseline", "producer-root-build-baseline"),
 )
+R_VARIANTS = (
+    "lookup-1",
+    "lookup-4",
+    "aggregate-10",
+    "aggregate-100",
+    "window-10",
+    "window-100",
+    "callback-1",
+    "producer-1",
+    "producer-3",
+)
+
+
+def variant_cases(variant):
+    if variant not in R_VARIANTS:
+        raise ValueError("unexpected R performance variant")
+    family, dimension = variant.split("-")
+    return [f"{family}-{rows}-{dimension}" for rows in (1000, 10000, 100000)]
+
+
+def producer_job(item, variant=None):
+    if item["host"] == "python":
+        return f"performance-python ({item['os']}, {item['python']}, {item['form']})"
+    return f"performance-r ({item['os']}, source{', ' + variant if variant else ''})"
 
 
 def write(path, value):
@@ -37,9 +61,7 @@ def api(endpoint, pages=False):
 def without_digests(value):
     if isinstance(value, dict):
         return {
-            key: without_digests(item)
-            for key, item in value.items()
-            if key != "digest"
+            key: without_digests(item) for key, item in value.items() if key != "digest"
         }
     if isinstance(value, list):
         return [without_digests(item) for item in value]
@@ -50,13 +72,15 @@ def tuples():
     for host, version, form in itertools.product(
         PLATFORMS, PYTHONS, ("wheel", "source")
     ):
-        yield {
-            "host": "python", "os": host, "python": version, "form": form
-        }, f"performance-python-{host}-{version}-{form}"
+        yield (
+            {"host": "python", "os": host, "python": version, "form": form},
+            f"performance-python-{host}-{version}-{form}",
+        )
     for host in PLATFORMS:
-        yield {
-            "host": "r", "os": host, "python": None, "form": "source"
-        }, f"performance-r-{host}-source"
+        yield (
+            {"host": "r", "os": host, "python": None, "form": "source"},
+            f"performance-r-{host}-source",
+        )
 
 
 def timestamp(value):
@@ -69,24 +93,44 @@ def timestamp(value):
     return parsed if parsed.utcoffset() is not None else None
 
 
-def artifact_matches_attempt(artifact, jobs, item, attempt):
+def artifact_matches_attempt(artifact, jobs, item, attempt, variant=None):
     created = timestamp(artifact.get("created_at"))
     if created is None:
         return False
-    producer = (f"performance-python ({item['os']}, {item['python']}, {item['form']})"
-                if item["host"] == "python" else f"performance-r ({item['os']}, source)")
+    producer = producer_job(item, variant)
     matches = 0
     for job in jobs:
-        if (job.get("name") != producer or type(job.get("run_attempt")) is not int
-                or job["run_attempt"] != attempt or job.get("status") != "completed"):
+        if (
+            job.get("name") != producer
+            or type(job.get("run_attempt")) is not int
+            or job["run_attempt"] != attempt
+            or job.get("status") != "completed"
+        ):
             continue
-        started, completed = timestamp(job.get("started_at")), timestamp(job.get("completed_at"))
-        if started is not None and completed is not None and started <= created <= completed:
+        started, completed = (
+            timestamp(job.get("started_at")),
+            timestamp(job.get("completed_at")),
+        )
+        if (
+            started is not None
+            and completed is not None
+            and started <= created <= completed
+        ):
             matches += 1
     return matches == 1
 
 
-def manifest(run, artifacts, repository, revision, attempt, native=False, *, jobs):
+def manifest(
+    run,
+    artifacts,
+    repository,
+    revision,
+    attempt,
+    native=False,
+    *,
+    jobs,
+    r_variants=False,
+):
     if (
         run["repository"]["full_name"] != repository
         or run["head_repository"]["full_name"] != repository
@@ -96,15 +140,26 @@ def manifest(run, artifacts, repository, revision, attempt, native=False, *, job
         or run["event"] not in {"push", "workflow_dispatch"}
     ):
         raise ValueError("performance run differs from the exact source/attempt")
-    entries = []
-    for item, name in tuples():
-        matches = [artifact for artifact in artifacts if artifact["name"] == name
-                   and artifact_matches_attempt(artifact, jobs, item, attempt)]
+
+    def original_entry(item, name, variant=None):
+        matches = [
+            artifact
+            for artifact in artifacts
+            if artifact["name"] == name
+            and artifact_matches_attempt(artifact, jobs, item, attempt, variant)
+        ]
         # Missing/ambiguous evidence remains a named gap rather than shrinking
         # the approved matrix or selecting an arbitrary artifact.
         identity = matches[0]["id"] if len(matches) == 1 else None
-        entries.append({
-            "tuple": item,
+        roles = ROLES
+        if variant is not None:
+            applicable = {"candidate"}
+            if variant.startswith(("lookup-", "aggregate-", "window-")):
+                applicable.add("baseline")
+            elif variant.startswith("producer-"):
+                applicable.add("producer-root-build-baseline")
+            roles = [pair for pair in ROLES if pair[0] in applicable]
+        return {
             "artifact_id": identity,
             "artifact_name": name,
             "run_attempt": attempt,
@@ -112,9 +167,28 @@ def manifest(run, artifacts, repository, revision, attempt, native=False, *, job
             "campaign": f"{name}/machine-campaign.json",
             "collections": [
                 {"role": role, "path": f"{name}/{directory}"}
-                for role, directory in ROLES
+                for role, directory in roles
             ],
-        })
+        }
+
+    entries = []
+    for item, name in tuples():
+        if item["host"] == "r" and r_variants:
+            entries.append(
+                {
+                    "tuple": item,
+                    "segments": [
+                        {
+                            "variant": variant,
+                            "cases": variant_cases(variant),
+                            **original_entry(item, f"{name}-{variant}", variant),
+                        }
+                        for variant in R_VARIANTS
+                    ],
+                }
+            )
+        else:
+            entries.append({"tuple": item, **original_entry(item, name)})
     result = {
         "protocol": "public-performance-audit-input/1",
         "repository": repository,
@@ -126,11 +200,13 @@ def manifest(run, artifacts, repository, revision, attempt, native=False, *, job
         "entries": entries,
     }
     if native:
-        result.update({
-            "native_run": "native-run.json",
-            "native_jobs": "native-jobs.json",
-            "native_artifacts": "native-artifacts.json",
-        })
+        result.update(
+            {
+                "native_run": "native-run.json",
+                "native_jobs": "native-jobs.json",
+                "native_artifacts": "native-artifacts.json",
+            }
+        )
     return result
 
 
@@ -138,16 +214,22 @@ def native_snapshot(root, repository, run_id, attempt):
     prefix = f"repos/{repository}/actions/runs/{run_id}"
     run = api(f"{prefix}/attempts/{attempt}")
     jobs = [
-        item for page in api(
-            f"{prefix}/attempts/{attempt}/jobs?per_page=100", True
-        ) for item in page["jobs"]
+        item
+        for page in api(f"{prefix}/attempts/{attempt}/jobs?per_page=100", True)
+        for item in page["jobs"]
     ]
-    artifacts = without_digests([
-        item for page in api(f"{prefix}/artifacts?per_page=100", True)
-        for item in page["artifacts"]
-    ])
-    for name, value in (("native-run.json", run), ("native-jobs.json", jobs),
-                        ("native-artifacts.json", artifacts)):
+    artifacts = without_digests(
+        [
+            item
+            for page in api(f"{prefix}/artifacts?per_page=100", True)
+            for item in page["artifacts"]
+        ]
+    )
+    for name, value in (
+        ("native-run.json", run),
+        ("native-jobs.json", jobs),
+        ("native-artifacts.json", artifacts),
+    ):
         if (root / name).exists():
             raise ValueError("cannot replace original native admission metadata")
         write(root / name, value)
@@ -162,8 +244,10 @@ def index(args):
         raise ValueError("invalid performance run/attempt")
     native = bool(args.native_run_id or args.native_attempt)
     if native and not (
-        args.native_run_id.isdecimal() and int(args.native_run_id) > 0
-        and args.native_attempt.isdecimal() and int(args.native_attempt) > 0
+        args.native_run_id.isdecimal()
+        and int(args.native_run_id) > 0
+        and args.native_attempt.isdecimal()
+        and int(args.native_attempt) > 0
     ):
         raise ValueError("invalid original native run/attempt")
     head = subprocess.check_output(
@@ -175,34 +259,58 @@ def index(args):
     prefix = f"repos/{args.repository}/actions/runs/{args.run_id}"
     run = api(f"{prefix}/attempts/{args.attempt}")
     artifact_pages = api(f"{prefix}/artifacts?per_page=100", pages=True)
-    artifacts = without_digests([
-        item for page in artifact_pages for item in page["artifacts"]
-    ])
+    artifacts = without_digests(
+        [item for page in artifact_pages for item in page["artifacts"]]
+    )
     jobs = [
-        item for page in api(
+        item
+        for page in api(
             f"{prefix}/attempts/{args.attempt}/jobs?per_page=100", pages=True
-        ) for item in page["jobs"]
+        )
+        for item in page["jobs"]
     ]
     root.mkdir(parents=True, exist_ok=True)
-    for name, value in (("run.json", run), ("artifacts.json", artifacts),
-                        ("jobs.json", jobs)):
+    for name, value in (
+        ("run.json", run),
+        ("artifacts.json", artifacts),
+        ("jobs.json", jobs),
+    ):
         if (root / name).exists():
             raise ValueError("cannot replace an original metadata snapshot")
         write(root / name, value)
     if native:
         native_snapshot(root, args.repository, args.native_run_id, args.native_attempt)
-    value = manifest(run, artifacts, args.repository, args.revision, args.attempt, native, jobs=jobs)
+    value = manifest(
+        run,
+        artifacts,
+        args.repository,
+        args.revision,
+        args.attempt,
+        native,
+        jobs=jobs,
+        r_variants=getattr(args, "r_variants", False),
+    )
     if (root / "source.bundle").exists() or (root / "manifest.json").exists():
         raise ValueError("cannot replace an original performance index")
     # Include complete candidate/baseline histories. Direct commit identities
     # and retained source bytes, rather than content digests, pin the replay.
-    subprocess.run([
-        "git", "bundle", "create", str(root / "source.bundle"),
-        "HEAD", args.baseline_ref,
-    ], cwd=args.checkout, check=True)
-    subprocess.run([
-        "git", "bundle", "verify", str(root / "source.bundle")
-    ], cwd=args.checkout, check=True)
+    subprocess.run(
+        [
+            "git",
+            "bundle",
+            "create",
+            str(root / "source.bundle"),
+            "HEAD",
+            args.baseline_ref,
+        ],
+        cwd=args.checkout,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "bundle", "verify", str(root / "source.bundle")],
+        cwd=args.checkout,
+        check=True,
+    )
     write(root / "manifest.json", value)
     return value
 
@@ -218,4 +326,5 @@ if __name__ == "__main__":
     parser.add_argument("--baseline-ref", default="yamaa-py-0.3.0")
     parser.add_argument("--native-run-id", default="")
     parser.add_argument("--native-attempt", default="")
+    parser.add_argument("--r-variants", action="store_true")
     index(parser.parse_args())
