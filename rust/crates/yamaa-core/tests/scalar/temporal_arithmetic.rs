@@ -352,6 +352,12 @@ fn duration_handler_metadata_and_operand_indices_remain_bounded() {
     use yamaa_core::{dataset::InvalidTemporal, diagnostic::MAX_PROJECTION_BYTES};
     let duration = operation(K::DurationValue { unit: U::Hour });
     assert_eq!(duration.validate_operand(1, &Value::Missing), None);
-    assert_eq!(duration.with_invalid(Value::Str("x".repeat(MAX_PROJECTION_BYTES / 6))), Err(InvalidTemporal::Limit));
-    assert_eq!(operation(K::DateShift).with_invalid(Value::Missing), Err(InvalidTemporal::Shape));
+    assert_eq!(
+        duration.with_invalid(Value::Str("x".repeat(MAX_PROJECTION_BYTES / 6))),
+        Err(InvalidTemporal::Limit)
+    );
+    assert_eq!(
+        operation(K::DateShift).with_invalid(Value::Missing),
+        Err(InvalidTemporal::Shape)
+    );
 }
