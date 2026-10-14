@@ -507,6 +507,21 @@ jobs:
           if [ "${{ runner.os }}" = Windows ]; then
             python -c 'from pathlib import Path; import shutil; dlls = list(Path("native-r-library/yamaa/libs").rglob("yamaa.dll")); assert len(dlls) == 1, "installed R DLL is missing or ambiguous"; shutil.copy2(dlls[0], "windows-r-toolchain/yamaa.dll")'
           fi
+      - name: Install R package test dependencies
+        working-directory: ${{ runner.temp }}
+        env:
+          R_LIBS: ${{ runner.temp }}/native-r-library
+        run: |
+          Rscript --vanilla - <<'RS'
+          repository <- Sys.getenv("RSPM")
+          if (!nzchar(repository)) repository <- "https://cloud.r-project.org"
+          options(repos = c(CRAN = repository))
+          description <- read.dcf(file.path(Sys.getenv("GITHUB_WORKSPACE"), "R/yamaa/DESCRIPTION"))
+          suggests <- strsplit(description[1, "Suggests"], ",", fixed = TRUE)[[1]]
+          packages <- trimws(sub("[[:space:]]*[(][^)]*[)]", "", suggests))
+          install.packages(packages, lib = Sys.getenv("R_LIBS"))
+          stopifnot(all(vapply(packages, requireNamespace, logical(1), quietly = TRUE)))
+          RS
       - name: Report installed R public benchmark conformance
         if: ${{ always() && steps.r_install.outcome == 'success' }}
         working-directory: ${{ runner.temp }}
