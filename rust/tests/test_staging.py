@@ -53,10 +53,16 @@ class StagingTests(unittest.TestCase):
                 self.assertIn(
                     (
                         staging.WORKSPACE
-                        / f"vendor/saphyr-parser/.licenses/{author}-MIT"
+                        / f"vendor/saphyr-parser/LICENSES/{author}-MIT"
                     ).read_bytes(),
                     (destination / "inst/LICENSE-YAML.txt").read_bytes(),
                 )
+            self.assertFalse(
+                any(
+                    path.name.startswith(".")
+                    for path in (embedded / "vendor/saphyr-parser").rglob("*")
+                )
+            )
             self.assertFalse((embedded / "target").exists())
             grammar = destination / "inst/grammar-original/grammar"
             for source in (staging.REPOSITORY / "yaml/grammar").glob("*.yaml"):
