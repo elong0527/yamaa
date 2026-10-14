@@ -46,12 +46,19 @@ fn admit_queries(types: &[String]) -> Result<(), String> {
 }
 
 /// Native YAML discovery facts grant no filesystem authority or schema admission.
-pub fn includes(bytes: &[u8]) -> Result<Vec<String>, String> {
-    if bytes.len() > Limits::default().captured_bytes {
+pub fn includes(bytes: &[u8], identity: &str) -> Result<Vec<String>, String> {
+    let limits = Limits::default();
+    if bytes.len() > limits.captured_bytes || identity.len() > limits.identity_bytes {
         return Err(refused());
     }
-    let input =
-        crate::yaml_decode::decode_yaml(bytes, Default::default()).map_err(|_| refused())?;
+    let input = crate::yaml_decode::decode_yaml(bytes, Default::default()).map_err(|error| {
+        crate::specification_diagnostics::capture_failure(
+            &crate::specification_source::Error::Decode {
+                identity: identity.into(),
+                error,
+            },
+        )
+    })?;
     let Some(index) = input.document.field(input.document.root(), "includes") else {
         return Ok(Vec::new());
     };

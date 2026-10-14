@@ -82,7 +82,8 @@ pub fn _capture_schema_metadata(
 }
 
 #[pyfunction]
-pub fn _schema_include_names(source: &Bound<'_, PyBytes>) -> PyResult<Vec<String>> {
-    yamaa_adapters::schema_metadata::includes(source.as_bytes())
+#[pyo3(signature=(source, identity="schema module"))]
+pub fn _schema_include_names(source: &Bound<'_, PyBytes>, identity: &str) -> PyResult<Vec<String>> {
+    yamaa_adapters::schema_metadata::includes(source.as_bytes(), identity)
         .map_err(pyo3::exceptions::PyValueError::new_err)
 }

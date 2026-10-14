@@ -120,7 +120,7 @@ def capture_modules(directory, entrypoint):
         if byte_count > 16_777_216:
             raise ValueError("schema byte capture limit")
         captured[name] = source
-        pending.extend(_schema_include_names(source))
+        pending.extend(_schema_include_names(source, str(path)))
     return list(captured.items())
 
 
