@@ -1083,7 +1083,10 @@ def _perturb_values(input_dir: Path, randomizer: random.Random) -> list[dict]:
                 return updated
             if isinstance(value, str):
                 return format(updated.normalize(), "f")
-            updated = float(updated)
+            if kind is not None and arrow.types.is_decimal(kind):
+                updated = updated.quantize(Decimal(1).scaleb(-kind.scale))
+            else:
+                updated = float(updated)
         if isinstance(value, str):
             return str(int(updated)) if updated.is_integer() else str(updated)
         return int(updated) if isinstance(value, int) else updated

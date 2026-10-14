@@ -675,6 +675,36 @@ def test_integer_parquet_measurements_change_within_schema_and_match_text(
 
 
 @pytest.mark.parametrize("domain", ["LB", "VS"])
+def test_decimal_parquet_measurements_stay_decimal_and_match_text(tmp_path, domain):
+    import random
+    from decimal import Decimal
+
+    arrow = pytest.importorskip("pyarrow")
+    parquet = pytest.importorskip("pyarrow.parquet")
+    numeric, textual = domain + "STRESN", domain + "STRESC"
+    dtype = arrow.decimal128(10, 2)
+    originals = [Decimal("12.34"), Decimal("-12.34"), Decimal("0.00"), None]
+    expected = [Decimal("12.46"), Decimal("-12.46"), Decimal("0.00"), None]
+    arrays = {
+        numeric: arrow.array(originals, type=dtype),
+        textual: arrow.array(
+            [str(value) if value is not None else None for value in originals]
+        ),
+    }
+    table = arrow.table(arrays)
+    path = tmp_path / "measurements.parquet"
+    parquet.write_table(table, path)
+    changes = grade._perturb_values(tmp_path, random.Random(1))
+    actual = parquet.read_table(path)
+    assert actual.schema == table.schema
+    assert actual[numeric].to_pylist() == expected
+    assert actual[textual].to_pylist() == [
+        str(value) if value is not None else None for value in expected
+    ]
+    assert changes == [{"file": path.name, "columns": {column: 2 for column in arrays}}]
+
+
+@pytest.mark.parametrize("domain", ["LB", "VS"])
 @pytest.mark.parametrize("reverse", [False, True])
 @pytest.mark.parametrize("kind", ["float32", "float64"])
 def test_small_parquet_measurements_match_the_float_value_actually_written(
@@ -709,7 +739,7 @@ def test_small_parquet_measurements_match_the_float_value_actually_written(
         strict=True,
     ):
         assert abs(after) > abs(before) > 0
-        assert after == pytest.approx(before * 1.01, rel=1e-6)
+        assert after == pytest.approx(before * 1.01, rel=1e-6, abs=0)
         assert float(text) == after
     assert actual[numeric].to_pylist()[4:] == [0, None]
     assert actual[textual].to_pylist()[4:] == ["0.0", None]
