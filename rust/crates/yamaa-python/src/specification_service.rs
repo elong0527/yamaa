@@ -220,9 +220,12 @@ fn captured_modules_mode(
             })
         })
         .collect::<PyResult<Vec<_>>>()?;
+    // Complete carrier admission above precedes these metadata-only diagnostic
+    // snapshots. They expose source identities/one offending scalar, not documents.
+    let retained = metadata.then(|| sources.clone());
     CapturedSchema::admit_root(sources, entry, root, limits).map_err(|e| {
         pyo3::exceptions::PyValueError::new_err(if metadata {
-            yamaa_adapters::schema_metadata::capture_failure(&e)
+            yamaa_adapters::schema_metadata::capture_failure(&e, retained.as_deref().unwrap_or(&[]))
         } else {
             capture_failure(&e)
         })

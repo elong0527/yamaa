@@ -389,9 +389,20 @@ def spec_path_exists(spec, path):
     parts = path.split('.')
     for position, part in enumerate(parts):
         if isinstance(node, str) and (previous == 'derivation' or position == 2 and parts[0] == 'input'):
-            selected = 'expression' if previous == 'derivation' else 'dataset_source'
-            node = _native_schema.decode_document(_contract_schema().normalize(
+            selected = 'derivation' if previous == 'derivation' else 'dataset_source'
+            schema = _contract_schema()
+            findings = schema.validate(_native_schema.bytes_for(node), [selected], True)
+            if findings:
+                # A native path refusal retains the authored source operand in
+                # its diagnostic context. This proves that leaf's occurrence,
+                # while exposing no normalized document after failed admission.
+                return parts[position:] == ['path'] and any(
+                    json.loads(context).get('path') == node
+                    for _phase, _condition, _requirement, _paths, context in findings)
+            node = _native_schema.decode_document(schema.normalize(
                 _native_schema.bytes_for(node), [selected], True))
+            if previous == 'derivation':
+                node = node['value']
         match = re.fullmatch(r'([A-Za-z_][A-Za-z0-9_]*)(?:\[([0-9]+)\])?', part)
         if match is None:
             return False

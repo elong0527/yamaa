@@ -135,7 +135,9 @@ def schema_errors(error, label):
         defects = json.loads(str(error))['schema_defects']
     except (ValueError, TypeError, KeyError):
         return [f'ERROR: {label}: {error}']
-    return [f"ERROR: {label}.module[{item['module']}].{item['path']}: {item['kind']}"
+    return [f"ERROR: {Path(label).parent / item.get('identity', Path(label).name)}."
+            f"{item['path']}: {item['kind']}"
+            + (f" (authored {item['authored']!r})" if item.get('authored') is not None else '')
             for item in defects]
 
 

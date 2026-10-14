@@ -69,13 +69,49 @@ pub fn includes(bytes: &[u8]) -> Result<Vec<String>, String> {
 
 /// Schema authoring defects retain their original core-owned kind and location.
 /// They are repository structure findings, not fabricated language issue rows.
-pub fn capture_failure(error: &crate::specification_source::Error) -> String {
-    use yamaa_core::schema::BundleError;
+pub fn capture_failure(error: &crate::specification_source::Error, sources: &[Source]) -> String {
+    use yamaa_core::schema::{BundleError, BundleIssueKind, DescriptorIssue};
     if let crate::specification_source::Error::Bundle(BundleError::Invalid(defects)) = error {
-        return json!({"schema_defects":defects.iter().map(|defect|json!({
-            "module":defect.module,"path":defect.path,"kind":format!("{:?}",defect.kind)
-        })).collect::<Vec<_>>()})
-        .to_string();
+        let mut projected = Vec::new();
+        let mut remaining = crate::specification_check::MAX_ISSUE_BYTES;
+        for defect in defects {
+            let source = match sources.get(defect.module) {
+                Some(source) => source,
+                None => return refused(),
+            };
+            let key = match defect.kind {
+                BundleIssueKind::Descriptor(DescriptorIssue::UnknownKeyword { key }) => Some(key),
+                BundleIssueKind::UnsafeInclude { node } => Some(node),
+                _ => None,
+            };
+            let authored = if let Some(index) = key {
+                let decoded =
+                    match crate::yaml_decode::decode_yaml(&source.bytes, Default::default()) {
+                        Ok(decoded) => decoded,
+                        Err(_) => return refused(),
+                    };
+                decoded
+                    .document
+                    .nodes()
+                    .get(index)
+                    .and_then(yamaa_core::schema::scalar_diagnostic_label)
+            } else {
+                None
+            };
+            let item = json!({"module":defect.module,"identity":source.identity,
+                "path":defect.path,"kind":format!("{:?}",defect.kind),"authored":authored});
+            remaining = match remaining.checked_sub(item.to_string().len().saturating_add(1)) {
+                Some(remaining) => remaining,
+                None => return refused(),
+            };
+            projected.push(item);
+        }
+        let encoded = json!({"schema_defects":projected}).to_string();
+        return if encoded.len() <= crate::specification_check::MAX_ISSUE_BYTES {
+            encoded
+        } else {
+            refused()
+        };
     }
     crate::specification_diagnostics::capture_failure(error)
 }
