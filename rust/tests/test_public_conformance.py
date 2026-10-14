@@ -510,7 +510,7 @@ class PublicConformance(unittest.TestCase):
     def test_corpus_inventory_has_all_entries_and_approved_exclusions(self):
         corpus = judge.plan(ROOT.parent / "benchmarks")
         names = {e["name"]: e for e in corpus["examples"]}
-        self.assertEqual(len(names), 318)
+        self.assertEqual(len(names), 321)
         self.assertEqual(len(names["sdtm-dm-race-ethnicity"]["entries"]["python"]), 2)
         self.assertEqual(
             names["schema-inheritance"]["entries"]["r"][0]["specification"],
@@ -535,7 +535,7 @@ class PublicConformance(unittest.TestCase):
         # 99 key-order-eligible positive entries.
         self.assertEqual(
             kinds,
-            {"empty_child": 317, "key_order_control": 99, "key_order_permuted": 99},
+            {"empty_child": 321, "key_order_control": 100, "key_order_permuted": 100},
         )
         expectations = judge.load_metamorphic_expectations(ROOT.parent / "benchmarks")
         names = {e["name"] for e in corpus["examples"]}

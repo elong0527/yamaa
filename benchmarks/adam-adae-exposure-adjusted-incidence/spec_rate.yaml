@@ -1,0 +1,88 @@
+schema_version: '1.0'
+domain: ADINC
+keys:
+- STUDYID
+- TRT01A
+- AEDECOD
+input:
+  ADRISK:
+    path: adrisk.csv
+    schema: spec_risk.yaml
+
+output:
+  path: adinc.csv
+  columns:
+  - STUDYID
+  - TRT01A
+  - AEDECOD
+  - NSUBJ
+  - PERSONDAYS
+  - PERSONYRS
+  - EAIR100
+  order_by:
+  - STUDYID
+  - TRT01A
+  - AEDECOD
+
+columns:
+- name: STUDYID
+  type: str
+  label: Study Identifier
+  derivation: ADRISK.STUDYID
+
+- name: TRT01A
+  type: str
+  label: Actual Treatment for Period 01
+  derivation: ADRISK.TRT01A
+
+- name: AEDECOD
+  type: str
+  label: Dictionary Derived Event Term
+  derivation: ADRISK.AEDECOD
+
+- name: NSUBJ
+  type: int
+  label: Subjects with At Least One Eligible Event
+
+- name: PERSONDAYS
+  type: int
+  label: Total Time at Risk in Days
+
+- name: PERSONYRS
+  type: float
+  label: Total Time at Risk in Person Years
+  derivation:
+    compute:
+      expr: PERSONDAYS / 365.25
+
+- name: EAIR100
+  type: float
+  label: Incidence per 100 Person Years
+  derivation:
+    compute:
+      expr: 100 * NSUBJ / PERSONYRS
+
+rows:
+- id: incidence
+  dataset: ADRISK
+  group_by:
+  - ADRISK.STUDYID
+  - ADRISK.TRT01A
+  - ADRISK.AEDECOD
+  derivations:
+    NSUBJ:
+      aggregate:
+        expr: SUM(ADRISK.EVENTN)
+    PERSONDAYS:
+      aggregate:
+        expr: SUM(ADRISK.RISKDAYS)
+
+verifications:
+- unique:
+    columns:
+    - STUDYID
+    - TRT01A
+    - AEDECOD
+- assert:
+    id: positive-person-time
+    require: PERSONDAYS > 0 AND PERSONYRS > 0
