@@ -15,7 +15,7 @@ owns the sequence of a run.
 | --- | --- | --- |
 | [Specification structure](https://github.com/elong0527/yamaa/blob/main/rules/specification/structure.md) | normative | Declare identifiers, columns, derivation coverage, and source notation. |
 | [Specification composition](https://github.com/elong0527/yamaa/blob/main/rules/specification/composition.md) | normative | Resolve inherited layers into one minimal, ordered specification. |
-| [Name binding](https://github.com/elong0527/yamaa/blob/main/rules/specification/binding.md) | normative | Resolve input datasets, current-output columns, and ODM item reads. |
+| [Name binding](https://github.com/elong0527/yamaa/blob/main/rules/specification/binding.md) | normative | Resolve input datasets, constructed output columns, and ODM item reads. |
 | [Specification style](https://github.com/elong0527/yamaa/blob/main/rules/specification/style.md) | normative | Fix one written form of a specification and report departures without changing its meaning. |
 
 ## Values
@@ -35,7 +35,7 @@ owns the sequence of a run.
 | [Row construction](https://github.com/elong0527/yamaa/blob/main/rules/execution/rows.md) | normative | Construct output rows from declared input records or groups. |
 | [Ordering](https://github.com/elong0527/yamaa/blob/main/rules/execution/ordering.md) | normative | Apply ordering terms, missing placement, stable ties, and final artifact order. |
 | [Local handlers](https://github.com/elong0527/yamaa/blob/main/rules/execution/handlers.md) | normative | Handle conditions at their expression or conversion site and report substitutions. |
-| [Verification](https://github.com/elong0527/yamaa/blob/main/rules/execution/verification.md) | normative | Apply assertions, severity, grouped counts, and warning logs to completed values. |
+| [Verification](https://github.com/elong0527/yamaa/blob/main/rules/execution/verification.md) | normative | Apply assertions, severity, and grouped counts to completed values, and record what ran in the warning log and the verification log. |
 
 ## Operations
 
@@ -46,10 +46,10 @@ owns the sequence of a run.
 | [Numeric computation](https://github.com/elong0527/yamaa/blob/main/rules/operations/computation.md) | normative | Evaluate written arithmetic formulas without reassociation or presentation rounding. |
 | [Aggregation](https://github.com/elong0527/yamaa/blob/main/rules/operations/aggregation.md) | normative | Reduce eligible records in one of the three permitted key scopes. |
 | [Lookup and joins](https://github.com/elong0527/yamaa/blob/main/rules/operations/lookup.md) | normative | Match declared keys, narrow records, select a result, and answer absence. |
-| [Windows](https://github.com/elong0527/yamaa/blob/main/rules/operations/windows.md) | normative | Partition constructed output rows and compute ranks, neighbors, and baseline selections. |
+| [Windows](https://github.com/elong0527/yamaa/blob/main/rules/operations/windows.md) | normative | Declare complete named windows and compute partitions, ranks, neighbors, and baseline selections. |
 | [Text operations](https://github.com/elong0527/yamaa/blob/main/rules/operations/text.md) | normative | Apply casing, inline mapping, templates, and portable regular expressions. |
 | [Temporal operations](https://github.com/elong0527/yamaa/blob/main/rules/operations/temporal.md) | normative | Compute calendar differences, study days, date completion, and precision. |
-| [Project functions](https://github.com/elong0527/yamaa/blob/main/rules/operations/functions.md) | normative | Verify installed packages against the held lock and validate function inputs, results, and inline activation tests. |
+| [Project functions](https://github.com/elong0527/yamaa/blob/main/rules/operations/functions.md) | normative | Resolve immutable runtimes and validate function inputs, results, and activation conformance. |
 
 ## Storage
 
