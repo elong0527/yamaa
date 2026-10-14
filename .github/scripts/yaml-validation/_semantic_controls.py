@@ -58,7 +58,7 @@ def complete(specification, sources=None, *, fill_derivations=True):
     return spec, sources
 
 
-def observation(specification, sources=None, *, fill_derivations=True):
+def observation(specification, sources=None, *, fill_derivations=True, bind=True):
     spec, sources = complete(specification, sources,
         fill_derivations=fill_derivations)
     source = _native_schema.bytes_for(spec)
@@ -72,7 +72,18 @@ def observation(specification, sources=None, *, fill_derivations=True):
     spec = _native_schema.decode_document(_schema().normalize(
         source, ['root_class'], True))
     return _typed_fixtures.observe('semantic', json.dumps({
-        'specification': spec, 'sources': sources}))
+        'specification': spec, 'sources': sources, 'bind': bind}))
+
+
+def declarations(specification, label='spec', *, fill_derivations=True):
+    """Observe complete native declaration rows without source binding authority."""
+    return findings(observation(specification,
+        fill_derivations=fill_derivations, bind=False), label)
+
+
+def driver(specification):
+    """Return the held model's driver selection fact without Python inference."""
+    return observation(specification, bind=False)['driver']
 
 
 @lru_cache(maxsize=1)

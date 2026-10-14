@@ -76,6 +76,9 @@ pub fn observe(input: Value) -> Value {
         .into_iter()
         .map(row)
         .collect::<Vec<_>>();
+    if input["bind"].as_bool() == Some(false) {
+        return json!({"issues":issues, "driver":driver});
+    }
     let sources = prepared
         .sources()
         .iter()
