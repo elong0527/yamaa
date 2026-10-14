@@ -99,7 +99,7 @@ jobs:
         run: |
           cargo test --locked -p yamaa-core --test numeric_tests --test scalar_tests --test portable_math_golden
           cargo test --locked -p yamaa-engine --features test-support --test preparation_tests --test test_support --test service_tests
-          cargo test --locked -p yamaa-adapters --test project_run --test file_workflow --test public_table
+          cargo test --locked -p yamaa-adapters --test project_tests --test file_tests --test table_tests
 
   python:
     name: pr-python-smoke

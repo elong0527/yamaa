@@ -32,7 +32,7 @@
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -43,7 +43,7 @@
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -54,7 +54,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -64,7 +64,7 @@
       "family": "odm",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/parquet_source.rs"
+        "rust/crates/yamaa-adapters/tests/table/parquet_source.rs"
       ]
     },
     {
@@ -72,7 +72,7 @@
       "family": "odm",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/parquet_source.rs"
+        "rust/crates/yamaa-adapters/tests/table/parquet_source.rs"
       ]
     },
     {
@@ -80,7 +80,7 @@
       "family": "odm",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/parquet_source.rs"
+        "rust/crates/yamaa-adapters/tests/table/parquet_source.rs"
       ]
     },
     {
@@ -88,7 +88,7 @@
       "family": "odm",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/parquet_source.rs"
+        "rust/crates/yamaa-adapters/tests/table/parquet_source.rs"
       ]
     },
     {
@@ -96,7 +96,7 @@
       "family": "odm",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/parquet_source.rs"
+        "rust/crates/yamaa-adapters/tests/table/parquet_source.rs"
       ]
     },
     {
@@ -104,7 +104,7 @@
       "family": "odm",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/parquet_source.rs"
+        "rust/crates/yamaa-adapters/tests/table/parquet_source.rs"
       ]
     },
     {
@@ -113,7 +113,7 @@
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/declarative_text_template.rs",
+        "rust/crates/yamaa-adapters/tests/scalar/declarative_text_template.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -124,7 +124,7 @@
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/declarative_text_extract.rs",
+        "rust/crates/yamaa-adapters/tests/scalar/declarative_text_extract.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -135,7 +135,7 @@
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/declarative_intermediate_keys.rs",
+        "rust/crates/yamaa-adapters/tests/execution/declarative_intermediate_keys.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -146,7 +146,7 @@
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/declarative_flags.rs",
+        "rust/crates/yamaa-adapters/tests/execution/declarative_flags.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -157,7 +157,7 @@
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/declarative_case_predicates.rs",
+        "rust/crates/yamaa-adapters/tests/execution/declarative_case_predicates.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -167,7 +167,7 @@
       "family": "inheritance",
       "level": "compile",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/inheritance_capture.rs"
+        "rust/crates/yamaa-adapters/tests/declaration/inheritance_capture.rs"
       ]
     },
     {
@@ -176,7 +176,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/inheritance_capture.rs",
+        "rust/crates/yamaa-adapters/tests/declaration/inheritance_capture.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -206,7 +206,7 @@
       "family": "predicate",
       "level": "compile",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/predicate_diagnostics.rs"
+        "rust/crates/yamaa-adapters/tests/table/predicate_diagnostics.rs"
       ]
     },
     {
@@ -215,7 +215,7 @@
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/declarative_row_intermediates.rs",
+        "rust/crates/yamaa-adapters/tests/execution/declarative_row_intermediates.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -226,7 +226,7 @@
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/declarative_text_pad.rs",
+        "rust/crates/yamaa-adapters/tests/scalar/declarative_text_pad.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -237,7 +237,7 @@
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/declarative_text_case.rs",
+        "rust/crates/yamaa-adapters/tests/scalar/declarative_text_case.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -248,7 +248,7 @@
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/declarative_temporal_imputation.rs",
+        "rust/crates/yamaa-adapters/tests/scalar/declarative_temporal_imputation.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -315,7 +315,7 @@
       "family": "tables",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/ipc_table.rs"
+        "rust/crates/yamaa-adapters/tests/table/ipc_table.rs"
       ]
     },
     {
@@ -323,8 +323,8 @@
       "family": "yaml",
       "level": "compile",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/schema_capture.rs",
-        "rust/crates/yamaa-adapters/tests/shipped_schema.rs"
+        "rust/crates/yamaa-adapters/tests/declaration/schema_capture.rs",
+        "rust/crates/yamaa-adapters/tests/declaration/shipped_schema.rs"
       ]
     },
     {
@@ -454,7 +454,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
     },
@@ -464,7 +464,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
     },
@@ -474,7 +474,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
     },
@@ -484,7 +484,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
     },
@@ -493,7 +493,7 @@
       "family": "specification",
       "level": "compile",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
     },
@@ -503,7 +503,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
     },
@@ -512,7 +512,7 @@
       "family": "specification",
       "level": "compile",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
     },
@@ -522,7 +522,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
     },
@@ -532,7 +532,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -543,7 +543,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -554,7 +554,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -565,7 +565,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -576,7 +576,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -587,7 +587,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -598,7 +598,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -609,7 +609,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -620,7 +620,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -631,7 +631,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -642,7 +642,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -653,7 +653,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
     },
@@ -663,7 +663,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
     },
@@ -673,7 +673,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
     },
@@ -684,7 +684,7 @@
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
         "R/yamaa/tests/public_file_resources.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_file_resources.py",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
@@ -697,7 +697,7 @@
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
         "R/yamaa/tests/public_file_resources.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_file_resources.py",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
@@ -709,7 +709,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -720,7 +720,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
     },
@@ -730,7 +730,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -741,7 +741,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
     },
@@ -751,7 +751,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -762,7 +762,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
     },
@@ -772,7 +772,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -783,7 +783,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -794,7 +794,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
     },
@@ -804,7 +804,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -815,7 +815,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
     },
@@ -825,7 +825,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
     },
@@ -835,7 +835,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -846,7 +846,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
     },
@@ -856,7 +856,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
     },
@@ -866,7 +866,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -877,7 +877,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -888,7 +888,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -899,7 +899,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -910,7 +910,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -921,7 +921,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -933,7 +933,7 @@
       "consumers": [
         "R/yamaa/tests/producer_logs.R",
         "R/yamaa/tests/verification_logs.R",
-        "rust/crates/yamaa-adapters/tests/verification_logs.rs",
+        "rust/crates/yamaa-adapters/tests/scalar/verification_logs.rs",
         "rust/tests/installed_producer_logs.py",
         "rust/tests/installed_verification_logs.py"
       ]
@@ -944,7 +944,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -955,7 +955,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -966,7 +966,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/crates/yamaa-adapters/tests/execution/specification_run.rs",
         "rust/tests/installed_original_specifications.py",
         "rust/tools/stage_specification_inputs.py"
       ]
@@ -984,7 +984,7 @@
       "family": "lookup",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/declarative_source_selection.rs",
+        "rust/crates/yamaa-adapters/tests/execution/declarative_source_selection.rs",
         "rust/tools/stage_specification_inputs.py",
         "rust/tests/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications.R"
@@ -995,7 +995,7 @@
       "family": "lookup",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/declarative_source_selection.rs",
+        "rust/crates/yamaa-adapters/tests/execution/declarative_source_selection.rs",
         "rust/tools/stage_specification_inputs.py",
         "rust/tests/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications.R"
@@ -1006,7 +1006,7 @@
       "family": "lookup",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/declarative_source_selection.rs",
+        "rust/crates/yamaa-adapters/tests/execution/declarative_source_selection.rs",
         "rust/tools/stage_specification_inputs.py",
         "rust/tests/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications.R"
@@ -1017,7 +1017,7 @@
       "family": "predicate",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/declarative_case_predicates.rs",
+        "rust/crates/yamaa-adapters/tests/execution/declarative_case_predicates.rs",
         "rust/tools/stage_specification_inputs.py",
         "rust/tests/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications.R"
@@ -1028,7 +1028,7 @@
       "family": "completed selected-record assertion scope and eager ordering",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/completed_lookup_assertions.rs",
+        "rust/crates/yamaa-adapters/tests/execution/completed_lookup_assertions.rs",
         "rust/tools/stage_specification_inputs.py",
         "rust/tests/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications.R"

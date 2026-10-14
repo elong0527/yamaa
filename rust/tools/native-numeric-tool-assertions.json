@@ -67,7 +67,7 @@
         "rust/crates/yamaa-core/tests/numeric/aggregate_parser.rs",
         "rust/crates/yamaa-core/tests/relations/aggregate_compiler.rs",
         "rust/crates/yamaa-adapters/examples/aggregate_syntax_fixture.rs",
-        "rust/crates/yamaa-adapters/tests/aggregate_record_operations.rs",
+        "rust/crates/yamaa-adapters/tests/execution/aggregate_record_operations.rs",
         "rust/tests/installed_public_grammar.py"
       ]
     },
@@ -91,7 +91,7 @@
         "rust/crates/yamaa-core/tests/numeric/predicate_compiler.rs",
         "rust/crates/yamaa-adapters/examples/predicate_syntax_fixture.rs",
         "rust/tests/test_predicate_syntax_encoding.py",
-        "rust/crates/yamaa-adapters/tests/predicate_diagnostics.rs",
+        "rust/crates/yamaa-adapters/tests/table/predicate_diagnostics.rs",
         "rust/tests/installed_public_grammar.py",
         "rust/tests/installed_original_specifications.py"
       ]
@@ -144,7 +144,7 @@
         "rust/crates/yamaa-core/tests/scalar/rounding.rs",
         "rust/tests/test_rounding_assessment.py",
         "rust/tests/test_rounding_check.py",
-        "rust/crates/yamaa-adapters/tests/declarative_rounding.rs",
+        "rust/crates/yamaa-adapters/tests/scalar/declarative_rounding.rs",
         "rust/tests/installed_original_specifications.py"
       ],
       "disposition": "Keep the existing independent rational oracle and corpus; active assessment observes compiled policy outputs rather than the retiring private scalar helper."

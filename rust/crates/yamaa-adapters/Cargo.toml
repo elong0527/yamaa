@@ -1,4 +1,5 @@
 [package]
+autotests = false
 name = "yamaa-adapters"
 version.workspace = true
 edition.workspace = true
@@ -47,3 +48,33 @@ windows-sys = { version = "=0.61.2", features = ["Wdk_Foundation", "Wdk_Storage_
 
 [dev-dependencies]
 yamaa-engine = { path = "../yamaa-engine", features = ["test-support"] }
+
+# Integration targets are finite and explicit; support files are never discovered as binaries.
+[[test]]
+name = "declaration_tests"
+path = "tests/declaration_tests.rs"
+
+[[test]]
+name = "execution_tests"
+path = "tests/execution_tests.rs"
+
+[[test]]
+name = "scalar_tests"
+path = "tests/scalar_tests.rs"
+
+[[test]]
+name = "project_tests"
+path = "tests/project_tests.rs"
+
+[[test]]
+name = "file_tests"
+path = "tests/file_tests.rs"
+
+[[test]]
+name = "table_tests"
+path = "tests/table_tests.rs"
+
+[[test]]
+name = "c_data_table"
+path = "tests/c_data_table.rs"
+required-features = ["arrow-c-data"]

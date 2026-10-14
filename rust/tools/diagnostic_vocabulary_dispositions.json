@@ -25,7 +25,7 @@
       "phases": ["validation"],
       "reason": "Mapping dictionary files remain supported under REQ-1110. The shared compiler applies the inline dict[str, literal_value] schema and reports its typed schema findings with original field/key context before study access, replacing the reference planner's single generic spelling.",
       "owners": ["rust/crates/yamaa-core/src/schema/dictionary_resources.rs", "rust/crates/yamaa-engine/src/dictionary_preparation.rs"],
-      "controls": ["rust/crates/yamaa-adapters/tests/file_preparation.rs", "rust/crates/yamaa-engine/tests/preparation/dictionary_preparation.rs"],
+      "controls": ["rust/crates/yamaa-adapters/tests/file/file_preparation.rs", "rust/crates/yamaa-engine/tests/preparation/dictionary_preparation.rs"],
       "producer": null,
       "history": "845a91ff9ba4ab6599efbd79fafe1c4e1dd14255:python/tests/planning/test_workflow.py:test_mapping_dict_path_rejects_non_mapping_content; unique rejection semantics remain mapped at 43bb4437d9c0890ec7877ec7575a517c771a8147."
     },
@@ -43,7 +43,7 @@
       "phases": ["validation"],
       "reason": "Approved absolute and parent-relative declaring-file paths replace the reference containment policy. The repository validator and two explicitly excluded reference path fixtures retain the old vocabulary; current runtime must not restore containment or fallback.",
       "owners": ["rules/storage/resources.md", ".github/scripts/yaml-validation/validate_repository.py"],
-      "controls": [".github/scripts/yaml-validation/test_validate_repository.py", "rust/crates/yamaa-adapters/tests/local_paths.rs", "rust/qualification/public-conformance.json"],
+      "controls": [".github/scripts/yaml-validation/test_validate_repository.py", "rust/crates/yamaa-adapters/tests/file/local_paths.rs", "rust/qualification/public-conformance.json"],
       "producer": null,
       "history": "#1905/#1973; negative-path-absolute and negative-path-parent-escape keep independent historical truth; prior Python source 845a91ff9ba4ab6599efbd79fafe1c4e1dd14255."
     },
@@ -52,7 +52,7 @@
       "phases": ["validation"],
       "reason": "Approved declaring-file paths may leave their directory and name permitted absolute locations. The validator and excluded reference fixtures preserve containment-era observations; current missing paths fail where declared, without root discovery or fallback.",
       "owners": ["rules/storage/resources.md", ".github/scripts/yaml-validation/validate_repository.py"],
-      "controls": [".github/scripts/yaml-validation/test_validate_repository.py", "rust/crates/yamaa-adapters/tests/local_paths.rs", "rust/qualification/public-conformance.json"],
+      "controls": [".github/scripts/yaml-validation/test_validate_repository.py", "rust/crates/yamaa-adapters/tests/file/local_paths.rs", "rust/qualification/public-conformance.json"],
       "producer": null,
       "history": "#1905/#1973; immutable reference Python path tests at 845a91ff9ba4ab6599efbd79fafe1c4e1dd14255 and retirement map at 43bb4437d9c0890ec7877ec7575a517c771a8147."
     },
@@ -115,7 +115,7 @@
       "phases": ["output"],
       "reason": "The retired build_artifact(TypedTable, ...) API accepted mutable Polars objects and rejected invalid dtype, subsecond/timezone datetime and calendar values here. Closed finite/temporal values and typed Arrow boundaries now refuse those representations before held output. REQ-0763 preserve-or-error and immutable Save semantics remain required, not retired.",
       "owners": ["rules/storage/publication.md", "rust/crates/yamaa-core/src/value.rs", "rust/crates/yamaa-core/src/temporal.rs", "rust/crates/yamaa-adapters/src/arrow_table.rs"],
-      "controls": ["rust/crates/yamaa-adapters/tests/arrow_table.rs", "rust/crates/yamaa-core/tests/scalar/temporal.rs", "rust/tests/installed_public_contract.py"],
+      "controls": ["rust/crates/yamaa-adapters/tests/table/arrow_table.rs", "rust/crates/yamaa-core/tests/scalar/temporal.rs", "rust/tests/installed_public_contract.py"],
       "producer": null,
       "history": "Three invalid host-object artifact assertions at 845a91ff9ba4ab6599efbd79fafe1c4e1dd14255:python/tests/io/test_artifact.py remain mapped by 43bb4437d9c0890ec7877ec7575a517c771a8147; direct IO/typed-object extension API retirement under #1973."
     }
