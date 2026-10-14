@@ -122,9 +122,11 @@ class NativeAdmission(unittest.TestCase):
                 output=Path(directory) / "retained",
             )
             self.run["conclusion"] = "failure"
-            with mock.patch.object(admission, "api", return_value=self.run) as api:
-                with self.assertRaisesRegex(ValueError, "qualification failed"):
-                    admission.admit(args)
+            with (
+                mock.patch.object(admission, "api", return_value=self.run) as api,
+                self.assertRaisesRegex(ValueError, "qualification failed"),
+            ):
+                admission.admit(args)
             self.assertEqual(api.call_count, 1)
             self.assertTrue((args.output / "native-run.json").is_file())
 
@@ -141,7 +143,7 @@ class NativeAdmission(unittest.TestCase):
             with (
                 mock.patch.object(admission, "api", return_value={"workflow_runs": []}),
                 mock.patch.object(admission.time, "sleep") as sleep,
+                self.assertRaisesRegex(ValueError, "timed out"),
             ):
-                with self.assertRaisesRegex(ValueError, "timed out"):
-                    admission.admit(args)
+                admission.admit(args)
             sleep.assert_not_called()
