@@ -64,13 +64,19 @@ def test_explicit_unsupported_opensas_case_fails_instead_of_silently_staging(
 
 
 def test_every_opensas_board_ranks_the_same_confident_set():
-    for tier in build.TIERS:
+    for path in sorted((HARBOR / "leaderboards").glob("*-opensas.yaml")):
+        parts = path.stem.split("-")
+        version, tier = parts[2], parts[3] if len(parts) == 5 else "full"
         suffix = "opensas" if tier == "full" else f"{tier}-opensas"
-        board = yaml.safe_load(
-            (HARBOR / "leaderboards" / f"sdtm-adam-v4-{suffix}.yaml").read_text()
+        board = yaml.safe_load(path.read_text())
+        reference = yaml.safe_load(
+            (HARBOR / "leaderboards" / f"sdtm-adam-{version}-r.yaml").read_text()
         )
+        population = {task.removesuffix("-r") for task in reference["tasks"]}
+        confident = population - set(build.OPENSAS_EXCLUSIONS)
+        assert confident <= set(CONFIDENT)
         assert sorted(board["tasks"]) == sorted(
-            build.task_name(n, "opensas", tier) for n in CONFIDENT
+            build.task_name(n, "opensas", tier) for n in confident
         )
         assert board["image_reference"] == build.AGENT_IMAGES["opensas"]
         assert board["package"] == build.dataset_name(

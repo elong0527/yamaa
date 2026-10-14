@@ -475,7 +475,9 @@ rules, and whose rows are uploaded runs that point back to their trials.
 
 A leaderboard's tasks are its fixed question, as a Hub leaderboard is
 pinned to dataset versions: adding a task leaves earlier runs without it,
-and `export` then refuses them. Start a new leaderboard instead. There is
+and `export` then refuses them. Start a new leaderboard instead. New
+benchmarks may be built and evaluated before a successor board is assembled;
+their admission leaves historical task lists and scores unchanged. There is
 one leaderboard per dataset, so one per language and prompt tier
 (`yamaa/yamaa-sdtm-adam-r/sdtm-adam-v4-r`,
 `yamaa/yamaa-sdtm-adam-brief-r/sdtm-adam-v4-brief-r`, ...), and R, Python,
