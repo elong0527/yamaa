@@ -575,6 +575,7 @@ pub fn build_result<'a, C, E>(
                             if let Some(refusal) = crate::resource_diagnostics::execution(
                                 other,
                                 run.compiled().sources(),
+                                run.compiled().driver_index(),
                             ) {
                                 diagnostics.push(
                                     refusal
