@@ -117,6 +117,23 @@ fn walk(
         if let Some(payload) = d.field(id, "str_template") {
             visit(payload, &format!("{path}.str_template"), rows, multiplicity)?;
         }
+        if let Some(bindings) = d
+            .field(id, "aggregate")
+            .and_then(|payload| d.field(payload, "derive"))
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        {
+            for (index, &binding) in sequence(d, bindings)?.iter().enumerate() {
+                expression(
+                    d,
+                    field(d, field(d, binding, "derivation")?, "value")?,
+                    &format!("{path}.aggregate.derive[{index}].derivation"),
+                    true,
+                    multiplicity,
+                    depth + 1,
+                    visit,
+                )?;
+            }
+        }
         if let Some(payload) = d.field(id, "str_concat") {
             for (index, &child) in sequence(d, field(d, payload, "sources")?)?
                 .iter()
