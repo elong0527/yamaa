@@ -170,3 +170,125 @@ fn grouped_window_filter_runs_once_after_complete_windows_without_renumbering() 
         );
     }
 }
+
+#[test]
+fn grouped_postwindow_filters_use_contextual_join_and_named_lookup_reads_lazily() {
+    use alloc::{boxed::Box, sync::Arc};
+    use yamaa_core::dataset::{
+        AggregateSource, Intermediate, IntermediateKey, IntermediateSource, JoinedRead, MatchKey,
+        MatchRead, MatchValue, SourceSchemas,
+    };
+    for (named, keep) in [(false, true), (true, true), (false, false), (true, false)] {
+        let input = schema(&["ID", "MATCH"]);
+        let table = Table {
+            schema: input.clone(),
+            rows: [1, 2, 3]
+                .into_iter()
+                .map(|id| vec![Value::Int(id), Value::Int(id)])
+                .collect(),
+            reads: RefCell::default(),
+        };
+        let item = Intermediate {
+            identifier: "MATCHED".into(),
+            path: "intermediates[0]".into(),
+            source: IntermediateSource::Primary {
+                schema: input.clone(),
+                name: "SRC".into(),
+            },
+            keys: vec![IntermediateKey {
+                source_column: 0,
+                path: "intermediates[0].key".into(),
+                value: MatchValue::Variable(MatchRead::Output {
+                    column: 0,
+                    identifier: "ID".into(),
+                }),
+            }],
+            filter: None,
+            selection: None,
+            range: None,
+            columns: None,
+            no_match: None,
+            unique: Vec::new(),
+            derivations: None,
+            pending_schema: None,
+        };
+        let mut template = plan("SEQ > 1", "SEQ", 1).templates()[0].clone();
+        template.filter = Some(
+            BoundPredicate::new_contextual(
+                yamaa_core::predicate_compiler::compile(
+                    if keep {
+                        "SEQ > 1 AND MATCH = 2"
+                    } else {
+                        "SEQ < 0 AND MATCH = 2"
+                    },
+                    "row.filter",
+                    Default::default(),
+                )
+                .unwrap(),
+                vec![
+                    Binding {
+                        name: "SEQ".into(),
+                        read: Read::Column(1),
+                    },
+                    Binding {
+                        name: "MATCH".into(),
+                        read: if named {
+                            Read::Intermediate {
+                                index: 0,
+                                column: 1,
+                            }
+                        } else {
+                            Read::Joined(Box::new(JoinedRead {
+                                source: AggregateSource::Primary,
+                                column: 1,
+                                keys: vec![MatchKey {
+                                    source_column: 0,
+                                    output_column: 0,
+                                }],
+                                name: "SRC".into(),
+                                schema: Arc::new(input.clone()),
+                            }))
+                        },
+                    },
+                ],
+                Vec::new(),
+            )
+            .unwrap(),
+        );
+        let plan = DatasetPlan::new_with_intermediates(
+            SourceSchemas {
+                primary: input,
+                secondary: vec![],
+            },
+            if named { vec![item] } else { vec![] },
+            schema(&["ID", "SEQ", "ALIAS"]),
+            vec![template],
+            vec![],
+            vec![0],
+            vec![],
+        )
+        .unwrap();
+        let expected = if keep {
+            vec![vec![Value::Int(2), Value::Int(2), Value::Int(2)]]
+        } else {
+            vec![]
+        };
+        assert_eq!(
+            plan.execute(&table, limits()).unwrap().dataset.rows(),
+            expected
+        );
+        // The source value column is captured once. Contextual evaluation over
+        // the completed window store must not revisit those original cells,
+        // including when the window operand short-circuits every donor read.
+        assert_eq!(
+            table
+                .reads
+                .borrow()
+                .iter()
+                .filter(|(_, column)| *column == 1)
+                .copied()
+                .collect::<Vec<_>>(),
+            vec![(0, 1), (1, 1), (2, 1)]
+        );
+    }
+}

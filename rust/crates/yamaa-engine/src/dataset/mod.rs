@@ -1777,19 +1777,54 @@ impl Executor<'_> {
                     for row in first..candidates.len() {
                         let candidate = &candidates[row];
                         let source_row = candidate.members[0];
-                        let truth = crate::dataset_predicate::evaluate(
-                            filter,
-                            table,
-                            source_row,
-                            &candidate.values,
-                            budget.predicate(),
-                        )
-                        .map_err(|error| match error.kind {
-                            yamaa_core::predicate::ErrorKind::Limit(limit) => {
-                                Box::new(predicate_limit(limit))
-                            }
-                            _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                        })?;
+                        let truth = if filter.bindings().iter().any(|binding| {
+                            matches!(
+                                binding.read,
+                                yamaa_core::bound_expression::Read::Intermediate { .. }
+                                    | yamaa_core::bound_expression::Read::Joined(_)
+                            )
+                        }) {
+                            let assignment = Assignment {
+                                column: 0,
+                                path: filter.plan().spec_path().into(),
+                                expression: Expression::Literal(Value::Missing),
+                            };
+                            case_predicates::evaluate(
+                                filter,
+                                table,
+                                candidate,
+                                self,
+                                row,
+                                &assignment,
+                                &mut EvaluationState {
+                                    primary: &primary,
+                                    functions,
+                                    secondary,
+                                    self_rows: &candidates[..first],
+                                    budget,
+                                    handlers,
+                                    intermediates: &mut intermediate_run,
+                                    output_rows: &candidates[first..],
+                                    output_offset: first,
+                                    windows: &mut windows::Cache::default(),
+                                    aggregate_row: None,
+                                },
+                            )?
+                        } else {
+                            crate::dataset_predicate::evaluate(
+                                filter,
+                                table,
+                                source_row,
+                                &candidate.values,
+                                budget.predicate(),
+                            )
+                            .map_err(|error| match error.kind {
+                                yamaa_core::predicate::ErrorKind::Limit(limit) => {
+                                    Box::new(predicate_limit(limit))
+                                }
+                                _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                            })?
+                        };
                         if truth == yamaa_core::predicate::Truth::True {
                             candidates.swap(retained, row);
                             retained += 1;
