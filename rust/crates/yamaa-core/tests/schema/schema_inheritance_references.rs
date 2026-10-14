@@ -714,7 +714,9 @@ fn cycle_reports_all_unscheduled_columns_in_original_order() {
     assert_eq!(
         schema().resolve_inheritance_dependencies(&input, &mut budget()),
         Err(E::Invalid(vec![I::Cycle {
-            columns: vec!["DOWNSTREAM".into(), "A".into(), "B".into()]
+            columns: vec!["DOWNSTREAM".into(), "A".into(), "B".into()],
+            cycle: vec!["A".into(), "B".into(), "A".into()],
+            paths: vec!["columns.A.derivation".into(), "columns.B.derivation".into()],
         }]))
     );
 }
@@ -854,6 +856,8 @@ fn shared_schedule_keeps_inheritance_residuals_distinct_from_first_cycle() {
         schema().resolve_inheritance_dependencies(&input, &mut budget()),
         Err(E::Invalid(vec![I::Cycle {
             columns: vec!["DOWNSTREAM".into(), "A".into(), "B".into(), "SELF".into()],
+            cycle: vec!["A".into(), "B".into(), "A".into()],
+            paths: vec!["columns.A.derivation".into(), "columns.B.derivation".into()],
         }]))
     );
     let analyzed = analyze(

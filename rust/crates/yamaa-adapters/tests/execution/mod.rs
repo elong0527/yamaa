@@ -20,6 +20,7 @@ mod declarative_self;
 mod declarative_source_selection;
 mod inherited_aggregate_bindings;
 mod inherited_identifier_collision;
+mod inherited_intermediate_verification;
 mod inherited_key_shorthand;
 mod nested_windows;
 mod probe_successors;

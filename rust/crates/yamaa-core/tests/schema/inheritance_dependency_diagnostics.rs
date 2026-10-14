@@ -13,6 +13,11 @@ fn complete_ordered_facts_keep_dependency_cycles_distinct_from_traversal_loops()
         },
         Issue::Cycle {
             columns: vec!["DOWNSTREAM".into(), "A".into(), "B".into()],
+            cycle: vec!["A".into(), "B".into(), "A".into()],
+            paths: vec![
+                "columns.A.derivation.compute".into(),
+                "columns.B.derivation.compute".into(),
+            ],
         },
     ];
     let findings = inheritance_dependency_diagnostics(&issues, 4096).unwrap();
@@ -22,7 +27,13 @@ fn complete_ordered_facts_keep_dependency_cycles_distinct_from_traversal_loops()
         findings[0].context["dependency"],
         ContextValue::Scalar(Value::Str("MISSING🙂".into()))
     );
-    assert_eq!(findings[1].spec_paths, ["columns"]);
+    assert_eq!(
+        findings[1].spec_paths,
+        [
+            "columns.A.derivation.compute",
+            "columns.B.derivation.compute"
+        ]
+    );
     assert_eq!(
         findings[1].context["cycle"],
         ContextValue::Sequence(
@@ -87,6 +98,8 @@ fn whole_report_admission_has_an_inclusive_boundary_and_no_fitting_prefix() {
 fn sequence_members_consume_capacity_even_with_empty_text() {
     let issues = [Issue::Cycle {
         columns: vec![String::new(); 1000],
+        cycle: vec![String::new(); 2],
+        paths: vec![String::new()],
     }];
     assert_eq!(
         inheritance_dependency_diagnostics(&issues, 4096),

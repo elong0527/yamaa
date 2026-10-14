@@ -217,21 +217,6 @@
       "issue": "https://github.com/elong0527/yamaa/issues/2292"
     },
     {
-      "benchmark": "negative-adlb-computed-param",
-      "check": "empty_child",
-      "issue": "https://github.com/elong0527/yamaa/issues/2293"
-    },
-    {
-      "benchmark": "negative-first-available-self",
-      "check": "empty_child",
-      "issue": "https://github.com/elong0527/yamaa/issues/2293"
-    },
-    {
-      "benchmark": "negative-row-value-self",
-      "check": "empty_child",
-      "issue": "https://github.com/elong0527/yamaa/issues/2293"
-    },
-    {
       "benchmark": "negative-forward-reference",
       "check": "empty_child",
       "reason": "by design: REQ-0643 orders composed columns, so the empty child builds instead of reporting the parent's forward reference",
