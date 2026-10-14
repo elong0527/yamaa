@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Same-original public performance replay request",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "protocol": {"const": "public-performance-replay/1"},
+    "repository": {"const": "elong0527/yamaa"},
+    "source_revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "run_id": {"type": "integer", "minimum": 1},
+    "run_attempt": {"type": "integer", "minimum": 1}
+  },
+  "required": ["protocol", "repository", "source_revision", "run_id", "run_attempt"],
+  "description": "An actual completed trusted characterization run and original attempt. On evidence/issue-1998-replay, rust/qualification/performance-replay.json selects this immutable campaign; reviewed source-specific performance-budgets.json is required independently. No samples are recollected. The trusted auditor revision and replay run are recorded separately, and original API metadata, source bundle, ZIP bytes and draft asset identities stay unchanged."
+}

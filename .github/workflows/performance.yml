@@ -467,17 +467,13 @@ jobs:
           python -m pip install uv==0.11.6
           uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/audit-requirements.txt"
           python -m pip install --no-deps -r "${RUNNER_TEMP}/audit-requirements.txt"
-      - name: Replay raw evidence and require the explicit measured budget decision
+      - name: Qualify all original collections without approving numeric budgets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          budget_args=()
-          if test -f rust/qualification/performance-budgets.json; then
-            budget_args+=(--budgets rust/qualification/performance-budgets.json)
-          fi
           python rust/tools/replay_public_performance.py --input "${RUNNER_TEMP}/performance-input/manifest.json" \
             --repository "${GITHUB_WORKSPACE}" --output "${RUNNER_TEMP}/performance-audit" \
-            "${budget_args[@]}" --check
+            --check-collection
       - name: Show independent replay and all unresolved acceptance gates
         if: always()
         run: |

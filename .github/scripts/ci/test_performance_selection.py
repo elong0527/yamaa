@@ -7,6 +7,26 @@ from pathlib import Path
 
 
 class PerformanceSelection(unittest.TestCase):
+    def test_collection_completion_and_numeric_replay_are_separate_routes(self):
+        root = Path(__file__).resolve().parents[3]
+        campaign = (root / ".github/workflows/performance.yml").read_text()
+        audit = re.search(r"(?ms)^  audit:\n(.*?)(?=^  \S|\Z)", campaign).group(1)
+        self.assertIn("--check-collection", audit)
+        self.assertNotIn("--budgets", audit)
+        replay = (root / ".github/workflows/performance-replay.yml").read_text()
+        push = re.search(r"(?ms)^  push:\n(.*?)(?=^  \S|\Z)", replay).group(1)
+        self.assertIn("branches: [evidence/issue-1998-replay]", push)
+        self.assertNotIn("evidence/issue-1998-replay", campaign)
+        self.assertIn("types: [completed]", replay)
+        self.assertIn("github.repository == 'elong0527/yamaa'", replay)
+        self.assertIn("github.event.workflow_run.event == 'push'", replay)
+        self.assertIn(
+            "github.event.workflow_run.head_branch == 'qualification/issue-1998'",
+            replay,
+        )
+        self.assertIn("ref: ${{ github.sha }}", replay)
+        self.assertIn("persist-credentials: false", replay)
+
     def test_runtime_protocol_truth_and_admission_changes_require_collection(self):
         root = Path(__file__).resolve().parents[3]
         # This CI selection suite deliberately runs in the setup interpreter,

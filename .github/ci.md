@@ -169,9 +169,13 @@ performance workflow run.
 Every attempt preserves its raw failures and partial collections. The independent
 replay job retains all 21 tuple slots, source and baseline histories in a Git
 bundle, original run/attempt/job/artifact identities, and a compact report. A
-missing or unapproved `rust/qualification/performance-budgets.json` leaves full
-acceptance unsuccessful. Frontier preserves its index and independent truth or
-refusals, and skips the timing auditor instead of claiming timing acceptance.
+first characterization uses `--check-collection`: harness correctness, all 567
+candidate cells and original full native source admission must pass. Numeric
+budgets remain `not_evaluated` and full acceptance stays false. This allows the
+original collection run to succeed before a reviewed budget decision exists;
+genuine failed collections still fail. Frontier preserves its index and
+independent truth or refusals, and skips the timing auditor instead of claiming
+timing acceptance.
 Neither root-Build producer baselines nor cross-host Python comparators establish
 full-graph or R replacement ratios without an explicit scope disposition.
 
@@ -182,6 +186,22 @@ beyond the 90-day Actions expiration. It never publishes a release, creates a Gi
 tag, replaces an asset, or approves a budget. The compact current campaign index
 can link the resulting draft asset IDs and original Actions identities once the
 required evidence and decision exist.
+
+`performance-replay.yml` follows a completed trusted characterization push with
+a separately fetched original completion receipt. It preserves the immutable
+in-progress `run.json`, adds `completion-run.json` and a separate completed
+manifest, then independently replays one unchanged durable original ZIP at a
+time. Completion and replay records are appended to the same unpublished draft.
+The trusted auditor checkout revision is recorded separately from the measured
+candidate source. Failed or cancelled original attempts cannot pass.
+
+After a source-specific item-10 budget decision is reviewed, push the reviewed
+evidence changes to `evidence/issue-1998-replay`. An actual
+`rust/qualification/performance-replay.json`, conforming to
+`rust/tools/finalize_public_performance.schema.json`, selects the repository,
+original candidate source, original run ID and attempt. This route requires the
+approved `rust/qualification/performance-budgets.json` and full auditor `--check`
+against those same raw observations; it neither recompiles nor recollects samples.
 
 ## Harbor Oracle coverage
 

@@ -1,0 +1,101 @@
+name: Replay retained public performance evidence
+
+on:
+  workflow_run:
+    workflows: [Public performance evidence]
+    types: [completed]
+  push:
+    branches: [evidence/issue-1998-replay]
+    paths:
+      - 'rust/qualification/performance-replay.json'
+      - 'rust/qualification/performance-budgets.json'
+      - 'rust/tools/finalize_public_performance.py'
+      - 'rust/tools/audit_public_performance.py'
+      - 'rust/tools/audit_public_performance.schema.json'
+      - '.github/workflows/performance-replay.yml'
+
+permissions: {}
+
+concurrency:
+  group: public-performance-replay-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  replay:
+    # workflow_run supplies write-capable authentication, so admit only the
+    # original trusted repository push. Never check out or execute artifact code.
+    if: >-
+      github.repository == 'elong0527/yamaa' &&
+      ((github.event_name == 'push' && github.ref == 'refs/heads/evidence/issue-1998-replay') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.repository.full_name == github.repository &&
+       github.event.workflow_run.head_branch == 'qualification/issue-1998'))
+    name: Complete original campaign proof or replay its reviewed budgets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: write
+      actions: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # On workflow_run this is the trusted default-branch workflow source,
+          # not the completed campaign/artifact contents. Record it separately.
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install locked independent evidence readers
+        run: |
+          python -m pip install uv==0.11.6
+          uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/audit-requirements.txt"
+          python -m pip install --no-deps -r "${RUNNER_TEMP}/audit-requirements.txt"
+      - name: Preserve separate completion proof and replay the unchanged original ZIPs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          request_args=()
+          if test "${GITHUB_EVENT_NAME}" = push; then
+            request_args+=(--request rust/qualification/performance-replay.json)
+          fi
+          python rust/tools/finalize_public_performance.py \
+            "${request_args[@]}" --output "${RUNNER_TEMP}/performance-replay"
+      - name: Show original source, collection, completion and numeric verdicts
+        if: always()
+        run: |
+          if test -f "${RUNNER_TEMP}/performance-replay/audit/performance-audit.md"; then
+            cat "${RUNNER_TEMP}/performance-replay/audit/performance-audit.md" >> "${GITHUB_STEP_SUMMARY}"
+          fi
+      - name: Preserve compact completion and replay record
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: performance-completion-record
+          retention-days: 90
+          path: |
+            ${{ runner.temp }}/performance-replay/replay-receipt.json
+            ${{ runner.temp }}/performance-replay/replay-storage.json
+            ${{ runner.temp }}/performance-replay/replay-refusal.json
+            ${{ runner.temp }}/performance-replay/completion-run.json
+            ${{ runner.temp }}/performance-replay/original-retention.json
+            ${{ runner.temp }}/performance-replay/input/*.json
+            ${{ runner.temp }}/performance-replay/performance-budgets.json
+            ${{ runner.temp }}/performance-replay/audit/*
+          if-no-files-found: error
+      - name: Preserve original retrieval refusals and byte differences
+        if: failure()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: performance-completion-failure-${{ github.run_attempt }}
+          retention-days: 90
+          path: |
+            ${{ runner.temp }}/performance-replay/*.zip*
+            ${{ runner.temp }}/performance-replay/retrieved-*
+            ${{ runner.temp }}/performance-replay/refused-artifact-*/**
+            ${{ runner.temp }}/run-*-replay-*.zip
+          if-no-files-found: ignore
