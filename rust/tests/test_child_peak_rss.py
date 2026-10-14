@@ -38,6 +38,7 @@ class ActualChild(unittest.TestCase):
                     "a[::4096]=b'x'*len(a[::4096]); "
                     "Path(sys.argv[1]).write_text(json.dumps({"
                     "'pid':os.getpid(), 'executable':sys.executable, "
+                    "'base_executable':sys._base_executable, "
                     "'prefix':sys.prefix, 'site_packages':site.getsitepackages()})); "
                     "time.sleep(0.1); raise SystemExit(7)"
                 ),
@@ -61,6 +62,7 @@ class ActualChild(unittest.TestCase):
             self.assertEqual(actual["exit_code"], 7)
             self.assertEqual(actual["pid"], identity["pid"])
             self.assertEqual(identity["executable"], sys.executable)
+            self.assertEqual(identity["base_executable"], sys._base_executable)
             self.assertEqual(identity["prefix"], sys.prefix)
             self.assertEqual(identity["site_packages"], site.getsitepackages())
             rss.validate(actual["peak_rss"], platform.system())

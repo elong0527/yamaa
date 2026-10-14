@@ -38,8 +38,7 @@ def launch(command, python_worker=False):
             os.path.abspath(base)
         ):
             return subprocess.Popen(
-                command,
-                executable=base,
+                [base, *command[1:]],
                 env={**os.environ, "__PYVENV_LAUNCHER__": invoked},
             )
     return subprocess.Popen(command)
