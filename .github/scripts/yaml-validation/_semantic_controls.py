@@ -95,7 +95,8 @@ def _schema():
 
 @lru_cache(maxsize=1)
 def _modules():
-    return _native_schema.capture_modules(Path(__file__).resolve().parents[3] / 'yaml')
+    return _native_schema.capture_modules(
+        Path(__file__).resolve().parents[3] / 'yaml', 'schema.yaml')
 
 
 def document(specification, label='spec', path=None, _environment=None, *, sources=None,
