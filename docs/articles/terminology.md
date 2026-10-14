@@ -149,8 +149,9 @@ checking.
 In this example, changing `SEX` to `INVALID` or `AGEGR1` to `OTHER` fails the
 build's value check. Changing `DTYPE` to `OTHER` is admitted because that list
 is extensible. A text list binds to `str`, an integer list to `int`, and a
-float list to `float`. If both item-based binding and `allowed_values` are
-declared, their value sets must agree, including for an extensible list.
+float list to `float`. For a non-extensible list with `items`, a binding and
+`allowed_values` must declare the same value set. For an extensible or external
+list, an explicit `allowed_values` verification stands alone.
 
 See the [environment schema](https://github.com/elong0527/yamaa/blob/main/yaml/schema_environment.yaml)
 for the accepted fields and the [controlled terminology rule](https://github.com/elong0527/yamaa/blob/main/rules/submission/terminology.md)
