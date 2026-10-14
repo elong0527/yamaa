@@ -160,11 +160,19 @@ mod tests {
         let maximum = yamaa_engine::capacity::SOURCE_STORAGE_BYTES;
         let mut used = 0;
         // Physical/canonical slots and payload admission need no giant fixture.
-        charge(&mut used, 32 * 640_000_000, maximum).unwrap();
-        charge(&mut used, 1024 * 1024 * 1024, maximum).unwrap();
+        charge(&mut used, Some(32 * 640_000_000), maximum).unwrap();
+        charge(&mut used, Some(1024 * 1024 * 1024), maximum).unwrap();
         let remaining = maximum - used;
-        charge(&mut used, remaining, maximum).unwrap();
-        assert_eq!(charge(&mut used, 1, maximum), Err(Error::Limit));
+        charge(&mut used, Some(remaining), maximum).unwrap();
+        assert_eq!(
+            charge(&mut used, Some(1), maximum),
+            Err(Error::ResourceLimit {
+                resource: "expanded_bytes",
+                limit: maximum,
+                actual: Some(maximum + 1),
+            })
+        );
+        assert_eq!(used, maximum);
     }
 
     use parquet::{

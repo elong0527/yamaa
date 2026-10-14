@@ -576,6 +576,7 @@ mod width_tests {
             path: "input.parquet".into(),
             types: vec![],
             profile: SourceProfile::Parquet,
+            encoding: None,
             empty_string_present: false,
             ordinal: None,
         };
