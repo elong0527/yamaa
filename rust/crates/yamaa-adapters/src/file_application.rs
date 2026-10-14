@@ -26,6 +26,9 @@ pub fn rejected(stage: &str, code: &str) -> Failure {
             .expect("application issue"),
     ]
 }
+pub(crate) fn classified_resource(diagnostic: &yamaa_core::diagnostic::Diagnostic) -> Failure {
+    vec![Issue::from_core(diagnostic.clone()).expect("classified resource finding")]
+}
 pub(crate) fn resource_failure(stage: &str, error: &crate::file_resources::Error) -> Failure {
     use crate::file_resources::Error as E;
     let code = match error {
@@ -35,6 +38,7 @@ pub(crate) fn resource_failure(stage: &str, error: &crate::file_resources::Error
         E::InvalidRoot => "resource_root",
         E::InvalidBase => "resource_base",
         E::InvalidPath => "resource_path",
+        E::WrittenForm(_) => "resource_path",
         E::OutsideRoots => "resource_outside_roots",
         E::Symlink => "resource_link",
         E::Changed => "resource_changed",

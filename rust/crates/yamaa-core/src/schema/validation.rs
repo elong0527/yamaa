@@ -666,7 +666,33 @@ impl Run<'_, '_> {
                         "time_rule" => ConstraintOwner::TimeRule,
                         _ => ConstraintOwner::Descriptor,
                     };
-                    self.constraints(descriptor, site, owner)
+                    let diagnostics = self.constraints(descriptor, site, owner)?;
+                    if !diagnostics.is_empty() {
+                        return Ok(diagnostics);
+                    }
+                    if name == "project_path" {
+                        if let N::Text(written) = &self.input.nodes()[site.value] {
+                            self.budget.work(written.len().saturating_mul(3))?;
+                            if let Some(failure) = crate::resource::written_path_failure(written) {
+                                let mut path = site.path.to_string();
+                                let mut context =
+                                    vec![("path", SchemaContext::InputValue(site.value))];
+                                if let Some(input) = site.path.strip_prefix("input.") {
+                                    let dataset = input.split('.').next().unwrap_or(input);
+                                    context.insert(0, ("dataset", Self::text(dataset)));
+                                    if !input.contains('.') {
+                                        path = self.joined(site.path, "path", false)?;
+                                    }
+                                }
+                                return Ok(vec![self.diagnostic(
+                                    site.child(site.value, &path),
+                                    failure.code(),
+                                    context,
+                                )?]);
+                            }
+                        }
+                    }
+                    Ok(diagnostics)
                 }
             }
         })();

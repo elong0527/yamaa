@@ -21,6 +21,10 @@ pub enum Failure {
         written: String,
         error: file_resources::Error,
     },
+    ClassifiedResource {
+        error: file_resources::Error,
+        diagnostic: Diagnostic,
+    },
     Metadata(Vec<Finding>),
     Diagnostic(Vec<Diagnostic>),
     TargetAdmission {
@@ -54,6 +58,9 @@ impl Define {
         let mut ports = NativePorts {
             resources: None,
             host,
+            environment: None,
+            environment_written: String::new(),
+            specifications: Vec::new(),
         };
         let attempt = service::Application::prepare(
             &mut ports,
@@ -140,6 +147,9 @@ fn native_failure(failure: service::Failure<Failure, file_publication::Error>) -
 struct NativePorts {
     resources: Option<Resources>,
     host: Language,
+    environment: Option<std::sync::Arc<OwnedEnvironment>>,
+    environment_written: String,
+    specifications: Vec<(String, String, std::sync::Arc<PreparedDocument>)>,
 }
 impl NativePorts {
     fn resources(&self) -> &Resources {
@@ -148,10 +158,62 @@ impl NativePorts {
     fn resources_mut(&mut self) -> &mut Resources {
         self.resources.as_mut().expect("selected resource owner")
     }
+    fn metadata_diagnostic(&self, identity: &str) -> Option<yamaa_core::diagnostic::Diagnostic> {
+        use yamaa_core::{resource::ResourceFailure as R, schema::DocumentNode as N};
+        for (field, written, document) in &self.specifications {
+            if document.source().identity == identity {
+                return Some(R::ContentChanged.field_diagnostic(field, written));
+            }
+            if let Some(diagnostic) =
+                document.resource_diagnostic_for_identity(identity, R::ContentChanged)
+            {
+                return Some(diagnostic);
+            }
+        }
+        let environment = self.environment.as_ref()?;
+        let root = environment.root();
+        if root.source().identity == identity {
+            return Some(
+                R::ContentChanged.field_diagnostic("environment", &self.environment_written),
+            );
+        }
+        let raw = &root.normalized().document;
+        let text = |node: usize| match &raw.nodes()[node] {
+            N::Text(written) => Some(written.as_str()),
+            _ => None,
+        };
+        if environment
+            .lock()
+            .is_some_and(|lock| lock.source.identity == identity)
+        {
+            let written = text(raw.field(raw.root(), "lock")?)?;
+            return Some(R::ContentChanged.field_diagnostic("lock", written));
+        }
+        let capture = environment
+            .captures()
+            .iter()
+            .find(|capture| capture.document.source().identity == identity)?;
+        match &capture.origin {
+            crate::project_source::Origin::Function(name) => {
+                let functions = raw.field(raw.root(), "functions")?;
+                let written = text(raw.field(functions, name)?)?;
+                Some(R::ContentChanged.field_diagnostic(&format!("functions.{name}"), written))
+            }
+            crate::project_source::Origin::Codelist(index) => {
+                let codelists = raw.field(raw.root(), "codelists")?;
+                let N::Sequence(codelists) = &raw.nodes()[codelists] else {
+                    return None;
+                };
+                let written = text(*codelists.get(*index)?)?;
+                Some(R::ContentChanged.field_diagnostic(&format!("codelists[{index}]"), written))
+            }
+            crate::project_source::Origin::Lock => None,
+        }
+    }
 }
 impl Ports for NativePorts {
-    type Environment = OwnedEnvironment;
-    type Specification = PreparedDocument;
+    type Environment = std::sync::Arc<OwnedEnvironment>;
+    type Specification = std::sync::Arc<PreparedDocument>;
     type Error = Failure;
     type PublicationError = file_publication::Error;
     type Bytes = std::sync::Arc<[u8]>;
@@ -181,11 +243,19 @@ impl Ports for NativePorts {
             })
             .map_err(|error| resource(written, written, error))?;
         self.resources = Some(resources);
+        self.resources_mut()
+            .charge_metadata_text(written.len())
+            .map_err(|error| resource("environment", written, error))?;
+        self.environment_written = written.into();
         let schema = crate::shipped_schema::capture_environment()
             .map_err(|error| Failure::Project(project_application::Error::Schema(error)))?;
         let host = self.host;
-        file_project::capture_environment(self.resources_mut(), &entry, host, schema)
-            .map_err(|error| Failure::Project(project_application::Error::Project(error)))
+        let environment =
+            file_project::capture_environment(self.resources_mut(), &entry, host, schema)
+                .map_err(|error| Failure::Project(project_application::Error::Project(error)))?;
+        let environment = std::sync::Arc::new(environment);
+        self.environment = Some(std::sync::Arc::clone(&environment));
+        Ok(environment)
     }
     fn environment(environment: &Self::Environment) -> service::EnvironmentView<'_> {
         service::EnvironmentView {
@@ -199,7 +269,21 @@ impl Ports for NativePorts {
         declaring: &str,
         written: &str,
     ) -> Result<Self::Specification, Failure> {
-        file_preparation::prepare_document_from(
+        self.capture_specification_at("specification", declaring, written)
+    }
+    fn capture_specification_at(
+        &mut self,
+        path: &str,
+        declaring: &str,
+        written: &str,
+    ) -> Result<Self::Specification, Failure> {
+        if self.specifications.len() >= service::METADATA_LIMITS.snapshots {
+            return Err(resource(path, written, file_resources::Error::Limit));
+        }
+        self.resources_mut()
+            .charge_metadata_text(path.len().saturating_add(written.len()))
+            .map_err(|error| resource(path, written, error))?;
+        let document = file_preparation::prepare_document_from(
             self.resources_mut(),
             Some(declaring),
             written,
@@ -207,9 +291,16 @@ impl Ports for NativePorts {
         )
         .map_err(|error| {
             Failure::Project(project_application::Error::Project(
-                file_project::Error::Document(error),
+                file_project::Error::Document(error.entry_field(path, written)),
             ))
-        })
+        })?;
+        let document = std::sync::Arc::new(document);
+        self.specifications.push((
+            path.into(),
+            written.into(),
+            std::sync::Arc::clone(&document),
+        ));
+        Ok(document)
     }
     fn specification(document: &Self::Specification) -> service::SpecificationView<'_> {
         service::SpecificationView {
@@ -254,7 +345,19 @@ impl Ports for NativePorts {
     fn verify_metadata(&mut self, path: &str, source: &str) -> Result<(), Failure> {
         self.resources()
             .verify_captured()
-            .map_err(|(_, error)| resource(path, source, error))
+            .map_err(|(identity, error)| {
+                if error == file_resources::Error::Changed {
+                    if let Some(diagnostic) = self.metadata_diagnostic(&identity) {
+                        return Failure::ClassifiedResource { error, diagnostic };
+                    }
+                    // Keep the original cause opaque when no retained authored
+                    // occurrence can supply its required diagnostic context.
+                    return Failure::Project(project_application::Error::Project(
+                        file_project::Error::Resource(error),
+                    ));
+                }
+                resource(path, source, error)
+            })
     }
     fn finish_metadata(&mut self) {
         self.resources_mut().finish_metadata_budget();
@@ -351,11 +454,18 @@ fn issues(failure: &Failure, host: Language) -> Vec<Issue> {
             .cloned()
             .map(|finding| Issue::from_core(finding).expect("admitted shared diagnostic"))
             .collect(),
+        Failure::ClassifiedResource { diagnostic, .. } => {
+            vec![Issue::from_core(diagnostic.clone()).expect("classified Define resource finding")]
+        }
         Failure::Resource {
             path,
             written,
             error,
         } => {
+            if let file_resources::Error::WrittenForm(failure) = error {
+                return vec![Issue::from_core(failure.field_diagnostic(path, written))
+                    .expect("admitted Define resource finding")];
+            }
             use file_resources::Error as E;
             use service::ResourceObservation as R;
             let observation = match error {
@@ -364,7 +474,7 @@ fn issues(failure: &Failure, host: Language) -> Vec<Issue> {
                 E::NotRegularFile => R::NotRegularFile,
                 E::InvalidRoot => R::InvalidRoot,
                 E::InvalidBase => R::InvalidBase,
-                E::InvalidPath => R::InvalidPath,
+                E::InvalidPath | E::WrittenForm(_) => R::InvalidPath,
                 E::InvalidLock => R::InvalidLock,
                 E::OutsideRoots => R::OutsideRoots,
                 E::Symlink => R::Symlink,
