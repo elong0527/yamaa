@@ -706,7 +706,10 @@ class ActionsAdmission(unittest.TestCase):
         for artifact in (
             dict(self.artifact, expired=True),
             dict(self.artifact, size_in_bytes=0),
+            dict(self.artifact, size_in_bytes=True),
+            dict(self.artifact, size_in_bytes=1.0),
             dict(self.artifact, created_at="2026-10-13T01:10:00Z"),
+            dict(self.artifact, created_at="2026-10-14T01:10:00"),
         ):
             with self.assertRaises(ValueError):
                 auditor.admit_artifact(self.entry, [artifact], self.run, [self.job])
@@ -895,6 +898,18 @@ class NativeSourceBinding(unittest.TestCase):
         self.artifacts[0]["id"] = self.artifacts[1]["id"]
         write(self.root / "native-artifacts.json", self.artifacts)
         self.assertEqual(self.inputs()["status"], "fail")
+
+    def test_native_availability_and_size_must_be_original_typed_observations(self):
+        original = copy.deepcopy(self.artifacts)
+        for changed in (
+            {"expired": None},
+            {"size_in_bytes": True},
+            {"size_in_bytes": 1.0},
+        ):
+            self.artifacts = copy.deepcopy(original)
+            self.artifacts[0].update(changed)
+            write(self.root / "native-artifacts.json", self.artifacts)
+            self.assertEqual(self.inputs()["status"], "fail")
 
 
 class Archives(unittest.TestCase):

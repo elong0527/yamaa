@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import datetime
 import email.parser
 import fnmatch
 import json
@@ -1114,6 +1113,7 @@ def admit_artifact(entry, artifacts, run, jobs):
         and artifact["expired"] is False
         and type(artifact["id"]) is int
         and artifact["id"] > 0
+        and type(artifact["size_in_bytes"]) is int
         and artifact["size_in_bytes"] > 0
         and artifact["workflow_run"]["id"] == run["id"]
         and artifact["workflow_run"]["head_sha"] == run["head_sha"],
@@ -1139,7 +1139,7 @@ def admit_artifact(entry, artifacts, run, jobs):
         and job["conclusion"] == "success",
         "producing job source/attempt failed or incomplete",
     )
-    parse_time = datetime.datetime.fromisoformat
+    parse_time = native_admission.timestamp
     require(
         parse_time(job["started_at"])
         <= parse_time(artifact["created_at"])
@@ -1176,6 +1176,16 @@ def native_inputs(payload, root, performance_run):
             all(type(value) is int and value > 0 for value in ids)
             and len(ids) == len(set(ids)),
             "duplicate/invalid original native artifact ID",
+        )
+        require(
+            all(
+                item["expired"] is False
+                and type(item["size_in_bytes"]) is int
+                and item["size_in_bytes"] > 0
+                for item in artifacts
+                if item["name"] in native_admission.required_artifacts()
+            ),
+            "invalid original native artifact availability/size",
         )
         return {"status": "pass", "run": run, "jobs": jobs, "artifacts": artifacts}
     except EVIDENCE_ERRORS as error:
@@ -1361,7 +1371,7 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
                 require(key not in seen, "duplicate performance tuple")
                 seen.add(key)
                 artifact, job = admit_artifact(entry, artifacts, run, jobs)
-                parse_time = datetime.datetime.fromisoformat
+                parse_time = native_admission.timestamp
                 with tempfile.TemporaryDirectory(
                     dir=scratch, prefix=f"entry-{number}-"
                 ) as entry_temporary:
