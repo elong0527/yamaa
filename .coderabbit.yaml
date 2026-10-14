@@ -61,7 +61,7 @@ reviews:
       mode: "warning"
   path_instructions:
     - path: "rust/**"
-      instructions: "Core engine (crates: core, engine, adapters, python, r). Flag unsafe or unwrap/expect on untrusted data, silent error swallowing, and any reintroduction of content hashing (digest/SHA-256 as identity) — repo rule: identity is the canonical RFC 8785 JSON / artifact reference, never a hash; Cargo.lock and uv.lock checksums are packaging-tool exceptions. Tests must accompany behavior changes."
+      instructions: "Core engine (crates: core, engine, adapters, python, r). Flag unsafe or unwrap/expect on untrusted data, silent error swallowing, and any reintroduction of content hashing (digest/SHA-256 as identity) \u2014 repo rule: identity is the canonical RFC 8785 JSON / artifact reference, never a hash; Cargo.lock and uv.lock checksums are packaging-tool exceptions. Tests must accompany behavior changes."
     - path: "python/**"
       instructions: "Verify the change matches the PR description, tests are added for behavior changes, and no public API signatures break without intent. Python bindings sit over the Rust core; flag semantics that diverge from the Rust implementation."
     - path: "R/**"
@@ -69,7 +69,7 @@ reviews:
     - path: "automation/benchmark_factory/**"
       instructions: "Judge work against the factory docs: task-spec rules, proposer/judge protocols. Flag any change that would break Harbor checks (e.g. conventions.md prompt-tier line limits)."
     - path: "benchmarks/**"
-      instructions: "Pre-existing golden values must remain byte-identical unless the work item explicitly changes them; flag silent regressions. YAMAA-01 in input/ and expected/ is a CDISC STUDYID data value, not the project name — do not flag its capitalization. Label the benchmark runtime opensas."
+      instructions: "Pre-existing golden values must remain byte-identical unless the work item explicitly changes them; flag silent regressions. YAMAA-01 in input/ and expected/ is a CDISC STUDYID data value, not the project name \u2014 do not flag its capitalization. Label the benchmark runtime opensas."
     - path: "yaml/**"
       instructions: "Benchmark YAMLs must follow conventions.md (prompt-tier limits, criterion pair structure). Flag malformed or over-limit criteria."
     - path: "rules/**"
@@ -77,7 +77,7 @@ reviews:
     - path: ".github/workflows/**"
       instructions: "Flag unpinned action versions, secrets in logs, and jobs without timeouts. Note: bot tokens cannot push workflow-file changes, so findings here are for the maintainer."
     - path: "docs/**"
-      instructions: "The project name is written yamaa, never YAMAA, including in headings. docs/stylesheets/extra.css and .github/scripts/benchmark-docs/dashboard.css share one palette — flag a color or bar-treatment change in one without the other."
+      instructions: "The project name is written yamaa, never YAMAA, including in headings. docs/stylesheets/extra.css and .github/scripts/benchmark-docs/dashboard.css share one palette \u2014 flag a color or bar-treatment change in one without the other."
     - path: "**"
       instructions: "The project name is yamaa (lowercase, even at the start of a sentence). Do not flag YAMAA-01 STUDYID data values in benchmark fixtures."
 
