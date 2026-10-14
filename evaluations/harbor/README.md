@@ -484,13 +484,21 @@ one leaderboard per dataset, so one per language and prompt tier
 opensas and each tier are ranked independently. All boards rank by complete task pass
 rate before cell accuracy. Shorter prompts can leave sponsor choices unstated,
 so their strict pass rates include the model's ability to infer those choices.
-The boards are `v4` because protocol 4 separates the language images,
+The v4 boards introduced protocol 4, which separates the language images,
 records both runtime references, and applies the helper-runtime restriction
 to every track. Protocol 3's changed-input checks, regenerated partial credit
 and complete job evidence remain required. Older scores stay on their
 existing boards. Export appends the full source commit to the Hub board name
 and pins that commit and both image references in its metadata schema, so separately
 published runs cannot mix releases. Compared jobs must share the same commit.
+
+The `v5` boards retain protocol 4 and add completed-history intercurrent
+event priority, event-specific time-at-risk incidence and ARS-style adverse
+event results. Their task populations are pinned independently in
+`leaderboards/task-populations.json`, alongside the frozen v4 population.
+The v4 definitions and historical scores remain unchanged. The proposed
+PK/QT contributor batch is not included until its authored files are public
+and admitted; it will require another successor population.
 
 A row is one job: one agent, model, and variant, so the variants of a model
 sit side by side. Its metadata comes from the job (agent, version, model,
