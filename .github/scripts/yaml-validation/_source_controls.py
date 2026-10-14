@@ -4,6 +4,7 @@ Only fixture scaffolding and codecs live here. The installed owner decides path
 admission, graph/schema resolution, source binding, and snapshot reuse/refusal.
 No execution, activation, publication, or Python language evaluator is requested.
 """
+import _native_json
 
 import csv
 import io
@@ -26,7 +27,7 @@ import _typed_fixtures
 class Finding(str):
     def __new__(cls, row, label):
         phase, condition, requirement, paths, encoded = row
-        context = json.loads(encoded)
+        context = _native_json.loads(encoded)
         path = label + ("." + paths[0] if paths[0] else "")
         messages = {
             "resource_path_missing": "does not exist",
@@ -38,7 +39,7 @@ class Finding(str):
         detail = (
             repr(context["path"]) + " " + messages[condition]
             if condition in messages and "path" in context
-            else json.dumps(context, sort_keys=True)
+            else _native_json.dumps(context, sort_keys=True)
         )
         value = super().__new__(cls, f"ERROR: {path}: {condition}: {detail}")
         value.path, value.condition, value.context = path, condition, context
@@ -117,7 +118,7 @@ def source_fields(owner):
                         error.condition,
                         error.requirement,
                         [f"input.{dataset}.path"],
-                        json.dumps(error.context),
+                        _native_json.dumps(error.context),
                     )
                 )
                 continue
@@ -147,7 +148,7 @@ def catalog(specification, path, _environment=None):
     normalized, _ = _semantic_controls.complete(specification)
     normalized = _native_schema.decode_document(
         _semantic_controls._schema().normalize(
-            json.dumps(normalized).encode("utf-8"), ["root_class"], True
+            _native_json.dumps(normalized).encode("utf-8"), ["root_class"], True
         )
     )
     published = {}
@@ -163,12 +164,12 @@ def catalog(specification, path, _environment=None):
     if published:
         observation = _typed_fixtures.observe(
             "source-catalog",
-            json.dumps(
+            _native_json.dumps(
                 {
-                    "specification": json.dumps(normalized),
+                    "specification": _native_json.dumps(normalized),
                     "sources": [],
                     "published": {
-                        name: json.dumps(document)
+                        name: _native_json.dumps(document)
                         for name, document in published.items()
                     },
                 }
@@ -183,9 +184,9 @@ def catalog(specification, path, _environment=None):
                 return {name: {} for name in normalized["input"]}
             observation = _typed_fixtures.observe(
                 "source-catalog",
-                json.dumps(
+                _native_json.dumps(
                     {
-                        "specification": json.dumps(normalized),
+                        "specification": _native_json.dumps(normalized),
                         "sources": [
                             (name, fields) for _identity, name, fields in sources
                         ],
@@ -210,7 +211,7 @@ class ResourceOwner:
         self.request({"operation": "open", "base": str(Path(base).absolute())})
 
     def request(self, request):
-        self.process.stdin.write(json.dumps(request) + "\n")
+        self.process.stdin.write(_native_json.dumps(request) + "\n")
         self.process.stdin.flush()
         line = self.process.stdout.readline()
         if not line:
@@ -218,7 +219,7 @@ class ResourceOwner:
                 "native resource component refused transport: "
                 + self.process.stderr.read()
             )
-        return json.loads(line)
+        return _native_json.loads(line)
 
     def close(self):
         if self.process.poll() is None:
@@ -324,7 +325,7 @@ def odm(specification, label, path):
                 row["condition"],
                 row["requirement"],
                 row["spec_paths"],
-                json.dumps(row["context"]),
+                _native_json.dumps(row["context"]),
             )
             for row in _native_odm.issues(observation)
         ],
@@ -353,7 +354,7 @@ def producing(specification, label, path, _environment=None, *_args):
                             finding.condition,
                             finding.requirement,
                             [f"input.{dataset}.schema"],
-                            json.dumps(finding.context),
+                            _native_json.dumps(finding.context),
                         ),
                         label,
                     )
@@ -393,16 +394,16 @@ def producing(specification, label, path, _environment=None, *_args):
             root, _ = _semantic_controls.complete(specification)
             root = _native_schema.decode_document(
                 _semantic_controls._schema().normalize(
-                    json.dumps(root).encode("utf-8"), ["root_class"], True
+                    _native_json.dumps(root).encode("utf-8"), ["root_class"], True
                 )
             )
             observation = _typed_fixtures.observe(
                 "source-catalog",
-                json.dumps(
+                _native_json.dumps(
                     {
-                        "specification": json.dumps(root),
+                        "specification": _native_json.dumps(root),
                         "sources": [],
-                        "published": {dataset: json.dumps(document)},
+                        "published": {dataset: _native_json.dumps(document)},
                     }
                 ),
             )
@@ -414,7 +415,7 @@ def producing(specification, label, path, _environment=None, *_args):
                             row["condition"],
                             row["requirement"],
                             row["spec_paths"],
-                            json.dumps(row["context"]),
+                            _native_json.dumps(row["context"]),
                         )
                         for row in observation["issues"]
                     ],

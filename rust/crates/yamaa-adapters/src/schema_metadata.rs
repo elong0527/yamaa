@@ -59,18 +59,9 @@ pub fn includes(bytes: &[u8], identity: &str) -> Result<Vec<String>, String> {
             },
         )
     })?;
-    let Some(index) = input.document.field(input.document.root(), "includes") else {
-        return Ok(Vec::new());
-    };
-    let DocumentNode::Sequence(entries) = &input.document.nodes()[index] else {
-        return Ok(Vec::new());
-    };
-    Ok(entries
-        .iter()
-        .filter_map(|&entry| match &input.document.nodes()[entry] {
-            DocumentNode::Text(value) => Some(value.clone()),
-            _ => None,
-        })
+    Ok(yamaa_engine::schema_capture::include_names(&input.document)
+        .into_iter()
+        .map(str::to_owned)
         .collect())
 }
 

@@ -20,6 +20,7 @@ mod type_expression;
 mod validation;
 mod windows;
 
+pub use bundle::safe_include as schema_include_name;
 pub use bundle::{
     BundleError, BundleIssue, BundleIssueKind, BundleLimits, BundleResource, LocatedDescriptor,
     SchemaAlias, SchemaAliasKind, SchemaClass, SchemaField, SchemaModule, SchemaRegistry,

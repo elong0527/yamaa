@@ -1,9 +1,9 @@
 """Installed native schema, inheritance and declaration facts."""
 
-import json
 from pathlib import Path
 
 import _native_csv
+import _native_json
 import _native_schema
 import _native_specification
 from _repository_yaml import UniqueKeyLoader
@@ -16,7 +16,7 @@ import yaml
 def native_diagnostics(rows, label):
     errors = []
     for phase, condition, requirement, paths, encoded in rows:
-        context = json.loads(encoded)
+        context = _native_json.loads(encoded)
         for path in paths or [""]:
             location = label + ("." + path if path else "")
             finding = validation_diagnostic(
@@ -188,7 +188,7 @@ def validate_spec_functions_against(
     )
     errors = []
     for phase, condition, requirement, paths, encoded in rows:
-        facts = json.loads(encoded) if encoded else {}
+        facts = _native_json.loads(encoded) if encoded else {}
         for path in paths or [None]:
             finding = validation_diagnostic(
                 f"{spec_label}.{path}" if path is not None else str(environment_path),
@@ -248,7 +248,7 @@ def validate_spec_document(
         if phase != "validation":
             # Ingest fixtures are independently proved by validate_csv_shapes.
             continue
-        context = json.loads(encoded)
+        context = _native_json.loads(encoded)
         if condition in RESOURCE_PATH_MESSAGES and isinstance(context.get("path"), str):
             message = (
                 condition

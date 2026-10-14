@@ -4,6 +4,7 @@ Static admission and header/type binding accept no project activation, cell
 execution or Save authority. Source bytes enter only by an explicitly requested
 native descriptor slot; profile fixtures contain no project functions.
 """
+import _native_json
 
 import csv
 import io
@@ -82,7 +83,7 @@ def issue_rows(
             if refused:
                 observations = []
                 for row in refused:
-                    context = json.loads(row["context"])
+                    context = _native_json.loads(row["context"])
                     if "dataset" in context:
                         context["dataset"] = dataset
                     if "path" in context:
@@ -93,7 +94,7 @@ def issue_rows(
                             row["condition"],
                             row["requirement"],
                             [f"input.{dataset}.path"],
-                            json.dumps(context),
+                            _native_json.dumps(context),
                         )
                     )
                 return observations
@@ -114,7 +115,7 @@ def issue_rows(
                         failure.condition,
                         failure.requirement,
                         [f"input.{dataset}.path"],
-                        json.dumps(context),
+                        _native_json.dumps(context),
                     )
                 ]
         sources.append((identity, dataset, list(fields)))
@@ -200,7 +201,7 @@ def validate(
             staged = relocated / relative
             staged.parent.mkdir(parents=True, exist_ok=True)
             if existing != specification:
-                staged.write_text(json.dumps(specification), encoding="ascii")
+                staged.write_text(_native_json.dumps(specification), encoding="ascii")
             if python_environment is not None:
                 python_environment = relocated / python_environment.relative_to(
                     project_root
@@ -247,10 +248,10 @@ def validate(
                 )
             def remap_context(text):
                 text = text.replace(str(relocated), str(original_root))
-                escaped = json.dumps(str(relocated))[1:-1]
+                escaped = _native_json.dumps(str(relocated))[1:-1]
                 if escaped != str(relocated):
                     text = text.replace(
-                        escaped, json.dumps(str(original_root))[1:-1]
+                        escaped, _native_json.dumps(str(original_root))[1:-1]
                     )
                 return text
 

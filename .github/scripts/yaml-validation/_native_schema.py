@@ -4,11 +4,13 @@ This module captures an explicit schema closure. Rust owns descriptor admission,
 type validation, defaults and normalization; no reference interpreter is used.
 """
 
-import json
 import stat
 from collections import deque
 from pathlib import Path
 
+import _native_json
+from _native_json import integer as _integer
+from _native_json import integer_text as _integer_text
 from yamaa._native import _capture_schema_metadata, _schema_include_names
 
 import yaml
@@ -18,30 +20,6 @@ ROOT_CLASSES = {
     "schema_environment.yaml": "environment_class",
     "schema_define.yaml": "define_class",
 }
-
-
-def _integer(text):
-    """Decode exact native decimal text without changing Python's global limit."""
-    negative = text.startswith("-")
-    digits = text[1:] if negative else text
-    result = 0
-    for offset in range(0, len(digits), 9):
-        chunk = digits[offset : offset + 9]
-        result = result * 10 ** len(chunk) + int(chunk)
-    return -result if negative else result
-
-
-def _integer_text(value):
-    negative = value < 0
-    value = abs(value)
-    chunks = []
-    while value:
-        value, chunk = divmod(value, 1_000_000_000)
-        chunks.append(chunk)
-    if not chunks:
-        return "0"
-    text = str(chunks.pop()) + "".join(f"{chunk:09d}" for chunk in reversed(chunks))
-    return "-" + text if negative else text
 
 
 class _Dumper(yaml.SafeDumper):
@@ -62,7 +40,7 @@ _Dumper.add_representer(int, _represent_integer)
 
 def decode_document(encoded):
     """Decode tagged native values without interpreting their schema or meaning."""
-    arena = json.loads(encoded)
+    arena = _native_json.loads(encoded)
     nodes = arena["nodes"]
 
     def value(index):
@@ -134,7 +112,7 @@ def capture(directory, entrypoint="schema.yaml"):
 
 def schema_errors(error, label):
     try:
-        defects = json.loads(str(error))["schema_defects"]
+        defects = _native_json.loads(str(error))["schema_defects"]
     except (ValueError, TypeError, KeyError):
         return [f"ERROR: {label}: {error}"]
     return [
@@ -174,7 +152,7 @@ def bytes_for(value):
 def failure_rows(error):
     """Only a complete native semantic response can be a language finding."""
     try:
-        observed = json.loads(str(error))["outcome"]
+        observed = _native_json.loads(str(error))["outcome"]
     except (ValueError, TypeError, KeyError):
         raise error
     if observed.get("status") != "invalid":
@@ -185,7 +163,7 @@ def failure_rows(error):
             row["condition"],
             row["requirement"],
             row["spec_paths"],
-            json.dumps(row["context"]),
+            _native_json.dumps(row["context"]),
         )
         for row in observed["diagnostics"]
     ]

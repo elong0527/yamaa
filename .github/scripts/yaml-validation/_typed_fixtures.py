@@ -3,6 +3,7 @@
 These examples serve independently authored grammar and partial-AST assertions.
 A parsed fixture grants no source binding or execution capability.
 """
+import _native_json
 
 import json
 import os
@@ -52,7 +53,7 @@ def _observation(contract, text, strict=True):
             *(["--spans"] if contract in {"numeric", "aggregate"} else []),
             *(["--non-strict"] if contract == "windows" and not strict else []),
         ],
-        input=(text if contract in {"odm", "schema", "semantic", "resource-capture", "source-catalog"} else json.dumps(text)) + "\n",
+        input=(text if contract in {"odm", "schema", "semantic", "resource-capture", "source-catalog"} else _native_json.dumps(text)) + "\n",
         text=True,
         capture_output=True,
         check=True,
@@ -60,13 +61,13 @@ def _observation(contract, text, strict=True):
     rows = result.stdout.splitlines()
     if len(rows) != 1:
         raise RuntimeError("incomplete typed grammar fixture observation")
-    value = json.loads(rows[0])
+    value = _native_json.loads(rows[0])
     return value if contract in {"windows", "odm", "schema", "semantic", "resource-capture", "source-catalog"} else value["outcome"]
 
 
 def observe(contract, text, *, strict=True):
     # Consumers attach spans and diagnostic prose; protect the cached typed fact.
-    return json.loads(json.dumps(_observation(contract, text, strict)))
+    return _native_json.loads(_native_json.dumps(_observation(contract, text, strict)))
 
 
 def spans(value):

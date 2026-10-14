@@ -4,6 +4,27 @@ use crate::project_preparation::Source;
 use alloc::{string::String, vec::Vec};
 use yamaa_core::schema::{BundleError, BundleLimits, Document, SchemaModule, SchemaStructure};
 
+/// Discovery grants read authority only to names accepted by the existing core
+/// include grammar. Unsafe authored names remain for final bundle diagnostics.
+pub fn include_names(input: &Document) -> Vec<&str> {
+    use yamaa_core::schema::DocumentNode;
+    let Some(index) = input.field(input.root(), "includes") else {
+        return Vec::new();
+    };
+    let DocumentNode::Sequence(entries) = &input.nodes()[index] else {
+        return Vec::new();
+    };
+    entries
+        .iter()
+        .filter_map(|&entry| match &input.nodes()[entry] {
+            DocumentNode::Text(value) if yamaa_core::schema::schema_include_name(value) => {
+                Some(value.as_str())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
 /// Read-only queries over an already admitted closure share core request budgets.
 /// Physical codecs, host query carriers and result serialization stay in adapters.
 pub fn validate_query(

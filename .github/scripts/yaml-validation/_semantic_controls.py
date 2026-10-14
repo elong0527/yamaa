@@ -4,6 +4,7 @@ The controls author complete model fixtures around the historical partial inputs
 Python assembles documents and represents canonical observations; Rust owns every
 name, type, operation, phase and diagnostic decision. No execution is requested.
 """
+import _native_json
 import copy
 import csv
 import json
@@ -18,7 +19,7 @@ class Finding(str):
     def __new__(cls, row, label):
         path = label + ('.' + row['spec_paths'][0] if row['spec_paths'][0] else '')
         value = super().__new__(cls, f"ERROR: {path}: {row['condition']}: "
-            + json.dumps(row['context'], sort_keys=True))
+            + _native_json.dumps(row['context'], sort_keys=True))
         value.path, value.condition = path, row['condition']
         value.context, value.requirement = row['context'], row['requirement']
         value.phase = row['phase']
@@ -67,12 +68,12 @@ def observation(specification, sources=None, *, fill_derivations=True, bind=True
     if admission:
         return {'issues': [{'phase': phase, 'condition': condition,
             'requirement': requirement, 'spec_paths': paths,
-            'context': json.loads(context), 'span': None}
+            'context': _native_json.loads(context), 'span': None}
             for phase, condition, requirement, paths, context in admission],
             'driver': None}
     spec = _native_schema.decode_document(_schema().normalize(
         source, ['root_class'], True))
-    return _typed_fixtures.observe('semantic', json.dumps({
+    return _typed_fixtures.observe('semantic', _native_json.dumps({
         'specification': spec, 'sources': sources, 'bind': bind, 'output': output,
         'source': source.decode('ascii'),
         'schema_modules': [(name, raw.decode('utf-8')) for name, raw in _modules()]}))
@@ -150,7 +151,7 @@ def aggregate_syntax(text):
 
 
 def result_type(contract, expression, path):
-    return _typed_fixtures.observe('semantic', json.dumps({
+    return _typed_fixtures.observe('semantic', _native_json.dumps({
         'mode': contract + '-type', 'expression': expression, 'path': path}))['result_type']
 
 
@@ -277,7 +278,7 @@ def aggregate(payload, path, context):
         if admission:
             return findings({'issues': [{'phase': phase, 'condition': condition,
                 'requirement': requirement, 'spec_paths': paths,
-                'context': json.loads(context), 'span': None}
+                'context': _native_json.loads(context), 'span': None}
                 for phase, condition, requirement, paths, context in admission]}, path)
     context = {**context.get('aggregate', {}), **context}
     errors = operation({'aggregate': payload}, path.rsplit('.aggregate', 1)[0], context)

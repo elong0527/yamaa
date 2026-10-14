@@ -1,10 +1,10 @@
 """Repository manifest and authored diagnostic contract checks."""
 
-import json
 import re
 from functools import lru_cache
 from pathlib import Path
 
+import _native_json
 import _native_schema
 from _repository_yaml import UniqueKeyLoader
 from editorial import example_spec_paths
@@ -379,7 +379,7 @@ def spec_path_exists(spec, path):
                 # its diagnostic context. This proves that leaf's occurrence,
                 # while exposing no normalized document after failed admission.
                 return parts[position:] == ["path"] and any(
-                    json.loads(context).get("path") == node
+                    _native_json.loads(context).get("path") == node
                     for _phase, _condition, _requirement, _paths, context in findings
                 )
             node = _native_schema.decode_document(
