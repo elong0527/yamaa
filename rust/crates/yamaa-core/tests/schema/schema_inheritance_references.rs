@@ -191,6 +191,12 @@ fn variable(name: &str) -> InheritanceReference {
         name: name.into(),
     }
 }
+fn predicate_variable(name: &str) -> InheritanceReference {
+    InheritanceReference {
+        kind: K::PredicateVariable,
+        name: name.into(),
+    }
+}
 fn dataset(name: &str) -> InheritanceReference {
     InheritanceReference {
         kind: K::Dataset,
@@ -346,7 +352,7 @@ fn closed_languages_retain_field_and_record_count_dependencies() {
         (
             "predicate",
             "A = 'LITERAL' AND DM.X > 0",
-            vec![variable("A"), variable("DM.X")],
+            vec![predicate_variable("A"), predicate_variable("DM.X")],
         ),
         (
             "string_template",
@@ -965,7 +971,11 @@ fn aggregate_binding_scope_preserves_filters_external_reads_and_invalid_forward_
     )]);
     assert_eq!(
         refs(&schema, aggregate, &["expression"], None, &mut budget()).unwrap(),
-        vec![variable("A"), variable("DM.X"), variable("OFFSET")]
+        vec![
+            predicate_variable("A"),
+            variable("DM.X"),
+            variable("OFFSET")
+        ]
     );
     let forward = Map(vec![(
         "aggregate",

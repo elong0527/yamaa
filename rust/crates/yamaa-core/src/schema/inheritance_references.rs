@@ -13,6 +13,10 @@ use alloc::{format, string::String, vec::Vec};
 pub enum InheritanceReferenceKind {
     Dataset,
     Variable,
+    /// An identifier inside a predicate. It still drives reachability and
+    /// ordering, but predicate validation owns its diagnosis, so dependency
+    /// resolution must not report it as an unknown column dependency.
+    PredicateVariable,
 }
 
 /// Distinct semantic reference; a record count uses the qualified spelling `D.*`.
@@ -68,7 +72,10 @@ impl Run<'_, '_> {
     }
 
     fn add(&mut self, kind: InheritanceReferenceKind, name: &str) -> Result<(), Error> {
-        if kind == InheritanceReferenceKind::Variable {
+        if matches!(
+            kind,
+            InheritanceReferenceKind::Variable | InheritanceReferenceKind::PredicateVariable
+        ) {
             self.budget.work(
                 self.local_variables
                     .len()
@@ -218,6 +225,15 @@ impl Run<'_, '_> {
         if let N::Text(text) = &self.input.nodes()[value] {
             if kind == "variable" {
                 return self.add(InheritanceReferenceKind::Variable, text);
+            }
+            if kind == "odm_item" {
+                // An ODM item spelling names its dataset before the first dot
+                // (REQ-1265); the read keeps that input live like any other
+                // dataset reference.
+                if let Some((dataset, _)) = text.split_once('.') {
+                    return self.add(InheritanceReferenceKind::Dataset, dataset);
+                }
+                return Ok(());
             }
             if kind == "identifier" {
                 let reference_kind = match scope {
@@ -379,7 +395,7 @@ impl Run<'_, '_> {
             "predicate" => match predicate_parser::parse_predicate(text, limits) {
                 Ok(parsed) => {
                     for name in parsed.identifiers() {
-                        self.add(Variable, name)?;
+                        self.add(InheritanceReferenceKind::PredicateVariable, name)?;
                     }
                 }
                 Err(predicate_parser::ParseError::Grammar { .. }) => {}
