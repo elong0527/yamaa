@@ -45,6 +45,15 @@ class DiagnosticGuardTests(unittest.TestCase):
         self.core_seed = {}
         self.core_active = {}
         self.save_core_sites()
+        self.dispositions = {
+            "version": 1,
+            "scope": "Static test dispositions, not execution proof.",
+            "conditions": {},
+        }
+        self.save_dispositions()
+
+    def save_dispositions(self):
+        self.write(str(guard.DISPOSITIONS), json.dumps(self.dispositions))
 
     def write(self, relative, text):
         path = self.root / relative
@@ -74,7 +83,9 @@ class DiagnosticGuardTests(unittest.TestCase):
     def allow_core(self, relative, source, count=1):
         identifier = relative + ":1"
         self.core_seed[identifier] = {
-            "path": relative, "source": source.strip(), "occurrences": count
+            "path": relative,
+            "source": source.strip(),
+            "occurrences": count,
         }
         self.core_active[identifier] = count
         self.save_core_sites()
@@ -195,6 +206,218 @@ class DiagnosticGuardTests(unittest.TestCase):
 
     def test_registered_core_mapping_passes(self):
         self.assertEqual(self.errors(), [])
+
+    def register_non_core(
+        self, condition, kind="historical_policy", phase="validation"
+    ):
+        path = self.root / "yaml/conditions.yaml"
+        path.write_text(path.read_text() + f"  {condition}: {{phases: [{phase}]}}\n")
+        self.write(
+            "rules/history.md",
+            f"**REQ-0002.** Historical policy names condition `{condition}`.\n",
+        )
+        self.write(
+            "rust/tests/history_control.py", "def test_retained_history():\n    pass\n"
+        )
+        entry = {
+            "kind": kind,
+            "phases": [phase],
+            "reason": "Approved historical behavior is preserved as history while retained semantics have their own current controls.",
+            "owners": ["rules/history.md"],
+            "controls": ["rust/tests/history_control.py"],
+            "producer": None,
+            "history": "Explicit synthetic historical fixture; this adds no claim about pre-removal reverse coverage.",
+        }
+        self.dispositions["conditions"][condition] = entry
+        self.save_dispositions()
+        return entry
+
+    def test_rule_table_catches_original_missing_content_change_without_a_core_cause(
+        self,
+    ):
+        self.write(
+            "rules/resources.md",
+            "**REQ-0788.** Held bytes cannot change.\n\n## Error conditions\n\n| Condition | Rejects |\n| --- | --- |\n| `resource_path_content_changed` | content changed after validation |\n",
+        )
+        self.assertEqual(
+            self.errors(),
+            [
+                "rules/resources.md:7: rule names unregistered condition resource_path_content_changed"
+            ],
+        )
+        path = self.root / "yaml/conditions.yaml"
+        path.write_text(
+            path.read_text() + "  resource_path_content_changed: {phases: [ingest]}\n"
+        )
+        self.assertEqual(
+            self.errors(),
+            [
+                "vocabulary:resource_path_content_changed: registered condition has no core cause or explicit disposition"
+            ],
+        )
+
+    def test_new_unexplained_dormant_name_is_not_a_passing_registration(self):
+        path = self.root / "yaml/conditions.yaml"
+        path.write_text(path.read_text() + "  newly_unused: {phases: [validation]}\n")
+        self.assertEqual(
+            self.errors(),
+            [
+                "vocabulary:newly_unused: registered condition has no core cause or explicit disposition"
+            ],
+        )
+
+    def test_explicit_historical_condition_passes_without_inventing_core_emission(self):
+        self.register_non_core("resource_path_outside_project")
+        self.assertEqual(self.errors(), [])
+
+    def test_disposition_cannot_hide_a_new_core_cause_or_removed_name(self):
+        self.register_non_core("old_condition")
+        path = self.root / "rust/crates/yamaa-core/src/diagnostic.rs"
+        path.write_text(
+            path.read_text().replace(
+                "}\n",
+                '    Old => ("validation", "old_condition", Some("REQ-0001")),\n}\n',
+            )
+        )
+        self.assertEqual(
+            self.errors(),
+            [
+                "vocabulary:old_condition: core-owned condition cannot retain a non-core disposition"
+            ],
+        )
+        path = self.root / "yaml/conditions.yaml"
+        path.write_text(
+            path.read_text().replace("  old_condition: {phases: [validation]}\n", "")
+        )
+        self.assertTrue(
+            any(
+                "disposition names an unregistered condition" in error
+                for error in self.errors()
+            )
+        )
+
+    def test_disposition_requires_matching_phase_reason_and_available_owners_controls(
+        self,
+    ):
+        entry = self.register_non_core("old_condition")
+        for field, value, expected in [
+            ("phases", ["output"], "phases differ"),
+            ("phases", ["validation", "validation"], "phases differ"),
+            ("reason", "", "missing reason"),
+            ("history", "", "missing history"),
+            ("owners", ["rules/missing.md"], "unavailable owners path"),
+            ("controls", ["rust/tests/missing.py"], "unavailable controls path"),
+            ("owners", ["../outside.md"], "unavailable owners path"),
+            ("kind", [], "invalid disposition kind"),
+        ]:
+            previous = entry[field]
+            entry[field] = value
+            self.save_dispositions()
+            self.assertTrue(
+                any(expected in error for error in self.errors()),
+                (field, self.errors()),
+            )
+            entry[field] = previous
+
+    def test_duplicate_disposition_keys_and_missing_file_cannot_silently_pass(self):
+        path = self.root / guard.DISPOSITIONS
+        path.write_text(
+            '{"version":1,"scope":"fixture","conditions":{},"conditions":{}}'
+        )
+        self.assertTrue(
+            any("duplicate disposition key" in error for error in self.errors())
+        )
+        path.unlink()
+        self.assertTrue(
+            any(
+                "unavailable vocabulary dispositions" in error
+                for error in self.errors()
+            )
+        )
+
+    def test_live_validator_requires_actual_refusal_in_its_named_producer(self):
+        entry = self.register_non_core("unsupported_regex_engine", kind="validator")
+        owner = "rust/tools/validator_fixture.py"
+        self.write(
+            owner,
+            'def require_binding():\n    raise RuntimeError("unsupported_regex_engine")\n',
+        )
+        entry["owners"].append(owner)
+        entry["producer"] = {"path": owner, "symbol": "require_binding"}
+        self.save_dispositions()
+        self.assertEqual(self.errors(), [])
+        self.write(
+            owner,
+            'def require_binding():\n    raise RuntimeError("cannot validate: unsupported_regex_engine under R022")\n',
+        )
+        self.assertEqual(self.errors(), [])
+        for source in [
+            'def require_binding():\n    return "unsupported_regex_engine"\n',
+            'CONDITION = "unsupported_regex_engine"\ndef require_binding():\n    raise RuntimeError("opaque")\n',
+            'def require_binding():\n    def unused():\n        raise RuntimeError("unsupported_regex_engine")\n    return True\n',
+            'def require_binding():\n    raise RuntimeError("unsupported_regex_engine_bogus")\n',
+            'def require_binding():\n    raise RuntimeError("bogus_unsupported_regex_engine")\n',
+            'def require_binding():\n    raise RuntimeError("unsupported_regex_engine2")\n',
+            'def require_binding():\n    raise RuntimeError("éunsupported_regex_engine")\n',
+        ]:
+            self.write(owner, source)
+            self.assertEqual(
+                self.errors(),
+                [
+                    "vocabulary:unsupported_regex_engine: unavailable actual producing owner"
+                ],
+            )
+
+    def test_conditional_capability_remains_normative_and_does_not_invent_a_producer(
+        self,
+    ):
+        entry = self.register_non_core("unsupported_text_contract", kind="capability")
+        self.assertEqual(self.errors(), [])
+        entry["producer"] = {"path": "rules/history.md", "symbol": "fictional_runtime"}
+        self.save_dispositions()
+        self.assertTrue(
+            any(
+                "only validator dispositions may supply an explicit producer" in error
+                for error in self.errors()
+            )
+        )
+        entry["producer"] = None
+        self.write(
+            "rules/history.md", "**REQ-0002.** No named capability obligation.\n"
+        )
+        self.save_dispositions()
+        self.assertEqual(
+            self.errors(),
+            [
+                "vocabulary:unsupported_text_contract: capability disposition lacks its named normative owner"
+            ],
+        )
+
+    def test_rule_refusals_keep_wrapped_lists_and_condition_column_identity(self):
+        source = "A field `group_by` and operation `str_contains` are not diagnostic declarations.\n\nA failure must fail before evaluation with\n`unsupported_text_contract`, `invalid_value`, or\n`missing_binding`, reporting the position.\n\n| Field | Condition | Phase |\n| --- | --- | --- |\n| `input_path` | `resource_path_content_changed` | ingest |\n"
+        self.assertEqual(
+            guard.rule_condition_references(source),
+            [
+                (4, "invalid_value"),
+                (4, "unsupported_text_contract"),
+                (5, "missing_binding"),
+                (9, "resource_path_content_changed"),
+            ],
+        )
+
+    def test_rule_parser_does_not_turn_examples_comments_fields_or_phases_into_conditions(
+        self,
+    ):
+        source = "<!-- fail with `comment_example`. -->\n\n```yaml\nfail with `fenced_example`\n```\n\n### Error conditions\n`group_by`, `dataset_json`, `validation` and `row_count` are fields/phases.\n\n| Field | Type |\n| --- | --- |\n| `input_path` | `project_path` |\n\nThe condition named `actual_condition` is a declared diagnostic.\n"
+        self.assertEqual(
+            guard.rule_condition_references(source), [(14, "actual_condition")]
+        )
+
+    def test_input_state_table_and_field_compatibility_prose_are_not_diagnostic_declarations(
+        self,
+    ):
+        source = "| Condition | Result |\n| --- | --- |\n| No records after `filter` | missing |\n\nStatic checking rejects a lock format incompatible with `language`.\n"
+        self.assertEqual(guard.rule_condition_references(source), [])
 
     def test_new_null_language_cause_is_rejected(self):
         path = self.root / "rust/crates/yamaa-core/src/diagnostic.rs"
@@ -324,7 +547,9 @@ class DiagnosticGuardTests(unittest.TestCase):
             + "\n",
         )
         self.assertEqual(len(self.errors()), 2)
-        self.assertTrue(any("undefined requirement REQ-999999" in e for e in self.errors()))
+        self.assertTrue(
+            any("undefined requirement REQ-999999" in e for e in self.errors())
+        )
         self.assertTrue(any("outside canonical registry" in e for e in self.errors()))
 
     def test_comments_quoted_prose_and_character_literals_are_irrelevant(self):
@@ -421,7 +646,10 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         )
         self.assertEqual(
             self.errors(),
-            ["core diagnostic registry:Invalid: unregistered condition invalid_value"],
+            [
+                "core diagnostic registry:Invalid: unregistered condition invalid_value",
+                "vocabulary:other_value: registered condition has no core cause or explicit disposition",
+            ],
         )
         path.write_text(
             "conditions:\n  invalid_value: {phases: [derivation]}\n"
@@ -478,10 +706,15 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         for crate in sorted(guard.CORE_CRATES):
             for source in sources:
                 with self.subTest(crate=crate, source=source):
-                    path = self.write(f"rust/crates/{crate}/src/errors.rs", source + "\n")
+                    path = self.write(
+                        f"rust/crates/{crate}/src/errors.rs", source + "\n"
+                    )
                     errors = self.errors()
                     self.assertEqual(len(errors), 1)
-                    self.assertIn("new diagnostic literal site outside canonical registry", errors[0])
+                    self.assertIn(
+                        "new diagnostic literal site outside canonical registry",
+                        errors[0],
+                    )
                     path.unlink()
 
     def test_core_exact_sites_cannot_move_duplicate_or_change(self):
@@ -511,7 +744,12 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         self.core_active[identifier] = 2
         self.save_core_sites()
         self.write(relative, source + "\n" + source + "\n")
-        self.assertTrue(any("literal allowlist grew from HEAD" in e for e in guard.violations(self.root, "HEAD")))
+        self.assertTrue(
+            any(
+                "literal allowlist grew from HEAD" in e
+                for e in guard.violations(self.root, "HEAD")
+            )
+        )
         self.core_active.clear()
         self.save_core_sites()
         self.write(relative, "// moved to canonical registry\n")
@@ -523,15 +761,25 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         self.assertEqual(guard.violations(self.root, "HEAD"), [])
         relative = "rust/crates/yamaa-core/src/errors.rs"
         self.allow_core(relative, '"REQ-0001"')
-        self.assertTrue(any(str(guard.CORE_SEED) + ": frozen literal seed changed" in e for e in guard.violations(self.root, "HEAD")))
+        self.assertTrue(
+            any(
+                str(guard.CORE_SEED) + ": frozen literal seed changed" in e
+                for e in guard.violations(self.root, "HEAD")
+            )
+        )
         self.allow("rust/crates/yamaa-core/src/host_seed.rs", '"REQ-0001"')
         self.allow_core("rust/crates/yamaa-adapters/src/core_seed.rs", '"REQ-0001"')
-        self.assertEqual(sum("invalid frozen literal site" in e for e in self.errors()), 2)
+        self.assertEqual(
+            sum("invalid frozen literal site" in e for e in self.errors()), 2
+        )
 
     def test_core_initial_introduction_is_separate_from_existing_host_guard(self):
         (self.root / guard.CORE_SEED).unlink()
         (self.root / guard.CORE_ALLOWLIST).unlink()
-        self.write(str(guard.CHECKER), f"# Requires {guard.SEED.name} and {guard.ALLOWLIST.name}\n")
+        self.write(
+            str(guard.CHECKER),
+            f"# Requires {guard.SEED.name} and {guard.ALLOWLIST.name}\n",
+        )
         self.commit_baseline()
         self.save_core_sites()
         self.assertEqual(guard.violations(self.root, "HEAD"), [])
@@ -542,19 +790,37 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
                 (self.root / guard.CORE_ALLOWLIST).unlink()
                 if not partial:
                     (self.root / guard.CORE_SEED).unlink()
-                self.write(str(guard.CHECKER), f"# Requires {guard.CORE_SEED.name} and {guard.CORE_ALLOWLIST.name}\n")
+                self.write(
+                    str(guard.CHECKER),
+                    f"# Requires {guard.CORE_SEED.name} and {guard.CORE_ALLOWLIST.name}\n",
+                )
                 self.commit_baseline()
                 self.save_core_sites()
                 errors = guard.violations(self.root, "HEAD")
-                expected = "incomplete seed and allowlist" if partial else "existing guard is missing"
+                expected = (
+                    "incomplete seed and allowlist"
+                    if partial
+                    else "existing guard is missing"
+                )
                 self.assertTrue(any(expected in e for e in errors), errors)
 
-    def test_core_comments_prose_and_generated_filename_are_not_registry_exemptions(self):
+    def test_core_comments_prose_and_generated_filename_are_not_registry_exemptions(
+        self,
+    ):
         relative = "rust/crates/yamaa-core/src/prose.rs"
-        self.write(relative, '// "REQ-999999"\n/* "invalid_value" */\nconst PROSE: &str = "about \\"invalid_value\\"";\n')
+        self.write(
+            relative,
+            '// "REQ-999999"\n/* "invalid_value" */\nconst PROSE: &str = "about \\"invalid_value\\"";\n',
+        )
         self.assertEqual(self.errors(), [])
-        self.write("rust/crates/yamaa-engine/src/diagnostic.rs", 'const REQ: &str = "REQ-0001";\n')
-        self.write("rust/crates/yamaa-core/src/shipped_schema_data.rs", 'const CONDITION: &str = "invalid_value";\n')
+        self.write(
+            "rust/crates/yamaa-engine/src/diagnostic.rs",
+            'const REQ: &str = "REQ-0001";\n',
+        )
+        self.write(
+            "rust/crates/yamaa-core/src/shipped_schema_data.rs",
+            'const CONDITION: &str = "invalid_value";\n',
+        )
         self.assertEqual(len(self.errors()), 2)
         self.assertTrue(all("outside canonical registry" in e for e in self.errors()))
 

@@ -13,7 +13,10 @@ pub enum ResourceFailure {
     Missing,
     NotRegularFile,
     UriScheme,
+    Backslash,
+    EmptySegment,
     Symlink,
+    ContentChanged,
 }
 impl ResourceFailure {
     pub fn code(self) -> ConditionCode {
@@ -21,7 +24,10 @@ impl ResourceFailure {
             Self::Missing => ConditionCode::ResourceMissing,
             Self::NotRegularFile => ConditionCode::ResourceNotRegularFile,
             Self::UriScheme => ConditionCode::ResourceUriScheme,
+            Self::Backslash => ConditionCode::ResourceBackslash,
+            Self::EmptySegment => ConditionCode::ResourceEmptySegment,
             Self::Symlink => ConditionCode::ResourceSymlink,
+            Self::ContentChanged => ConditionCode::ResourceContentChanged,
         }
     }
 
@@ -62,6 +68,31 @@ impl ResourceFailure {
             operand_route: None,
         }
     }
+}
+
+/// Written-form admission precedes profiles and filesystem access. Root and
+/// drive prefixes are separators, while dot and parent segments remain valid.
+pub fn written_path_failure(path: &str) -> Option<ResourceFailure> {
+    if has_uri_scheme(path) {
+        return Some(ResourceFailure::UriScheme);
+    }
+    if path.contains('\\') {
+        return Some(ResourceFailure::Backslash);
+    }
+    let segments = if let Some(relative) = path.strip_prefix('/') {
+        relative
+    } else if path.len() >= 3
+        && path.as_bytes()[0].is_ascii_alphabetic()
+        && &path.as_bytes()[1..3] == b":/"
+    {
+        &path[3..]
+    } else {
+        path
+    };
+    segments
+        .split('/')
+        .any(str::is_empty)
+        .then_some(ResourceFailure::EmptySegment)
 }
 
 /// URI spelling is a static declaration finding. Absolute Windows drive paths

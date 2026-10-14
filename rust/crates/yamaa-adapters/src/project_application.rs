@@ -57,6 +57,10 @@ pub fn failure(error: &Error, host: Language) -> Failure {
             crate::file_preparation::Error::Resource(error) => {
                 file_application::resource_failure("prepare", error)
             }
+            crate::file_preparation::Error::ResourceFinding { diagnostic, .. }
+            | crate::file_preparation::Error::PreparationFinding { diagnostic, .. } => {
+                file_application::classified_resource(diagnostic)
+            }
             crate::file_preparation::Error::Preparation(error) => {
                 crate::specification_diagnostics::inheritance_failure_ref(error)
                     .map(file_application::preparation_failure)
@@ -167,6 +171,10 @@ pub fn selection_failure(error: &crate::file_workflow::SelectionError, host: Lan
             crate::file_preparation::Error::Resource(error) => {
                 file_application::resource_failure("prepare", error)
             }
+            crate::file_preparation::Error::ResourceFinding { diagnostic, .. }
+            | crate::file_preparation::Error::PreparationFinding { diagnostic, .. } => {
+                file_application::classified_resource(diagnostic)
+            }
             crate::file_preparation::Error::Preparation(error) => {
                 crate::specification_diagnostics::inheritance_failure_ref(error)
                     .map(file_application::preparation_failure)
@@ -231,6 +239,10 @@ fn workflow_failure(error: &crate::file_workflow::Error) -> Failure {
         W::Graph(graph) => match graph.error() {
             G::Resource(error) | G::Document(D::Resource(error)) => {
                 file_application::resource_failure("prepare", error)
+            }
+            G::Document(D::ResourceFinding { diagnostic, .. })
+            | G::Document(D::PreparationFinding { diagnostic, .. }) => {
+                file_application::classified_resource(diagnostic)
             }
             G::Document(D::Preparation(error)) => preparation_boundary(error),
             G::Document(D::Compile(_)) => refused("prepare"),

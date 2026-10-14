@@ -1037,9 +1037,9 @@ impl PreparedSpecification {
         for &(name, id) in inputs {
             let prefix = format!("input.{}", text(d, name)?);
             let written = text(d, field(d, id, "path")?)?;
-            if crate::resource::has_uri_scheme(written) {
+            if let Some(failure) = crate::resource::written_path_failure(written) {
                 source_findings.push(PreflightFinding::Scalar(
-                    crate::resource::ResourceFailure::UriScheme.diagnostic(text(d, name)?, written),
+                    failure.diagnostic(text(d, name)?, written),
                 ));
                 continue;
             }

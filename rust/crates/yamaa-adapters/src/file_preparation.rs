@@ -11,15 +11,60 @@ use std::sync::Arc;
 pub enum Error {
     Resource(ResourceError),
     Preparation(InheritanceError<ResourceError>),
+    ResourceFinding {
+        error: ResourceError,
+        diagnostic: Box<yamaa_core::diagnostic::Diagnostic>,
+    },
+    PreparationFinding {
+        error: InheritanceError<ResourceError>,
+        diagnostic: Box<yamaa_core::diagnostic::Diagnostic>,
+    },
     Compile(crate::specification_run::Error),
 }
 impl Error {
+    pub(crate) fn resource_at(error: ResourceError, field: &str, written: &str) -> Self {
+        if error == ResourceError::Changed {
+            Self::ResourceFinding {
+                error,
+                diagnostic: Box::new(
+                    yamaa_core::resource::ResourceFailure::ContentChanged
+                        .field_diagnostic(field, written),
+                ),
+            }
+        } else {
+            Self::Resource(error)
+        }
+    }
+    pub(crate) fn entry_field(self, field: &str, written: &str) -> Self {
+        match self {
+            Self::ResourceFinding {
+                error,
+                mut diagnostic,
+            } if diagnostic.spec_paths == ["specification"] => {
+                *diagnostic = yamaa_core::resource::ResourceFailure::ContentChanged
+                    .field_diagnostic(field, written);
+                Self::ResourceFinding { error, diagnostic }
+            }
+            error => error,
+        }
+    }
     pub fn into_message(self) -> String {
         match self {
             Self::Resource(error) => error.message().into(),
             Self::Preparation(error) => {
                 crate::specification_diagnostics::inheritance_failure(error)
                     .unwrap_or_else(|error| error.message().into())
+            }
+            Self::ResourceFinding { diagnostic, .. }
+            | Self::PreparationFinding { diagnostic, .. } => {
+                serde_json::json!({
+                    "protocol": "specification/prototype",
+                    "outcome": {
+                        "status": "invalid",
+                        "diagnostics": [crate::specification_diagnostics::portable_diagnostic(*diagnostic)
+                            .expect("classified resource facts")],
+                    },
+                }).to_string()
             }
             Self::Compile(error) => crate::specification_diagnostics::failure(&error, None),
         }
@@ -184,6 +229,12 @@ pub(crate) fn prepare_document_from(
     .map_err(|error| match error {
         Failure::Resource(error) => Error::Resource(error),
         Failure::Preparation(error) => Error::Preparation(error),
+        Failure::ResourceFinding { error, diagnostic } => {
+            Error::ResourceFinding { error, diagnostic }
+        }
+        Failure::PreparationFinding { error, diagnostic } => {
+            Error::PreparationFinding { error, diagnostic }
+        }
     })
 }
 
@@ -194,6 +245,39 @@ pub fn opaque_resource_failure(attempt: &CapturedAttempt<ResourceError>) -> Opti
             if !matches!(
                 error,
                 ResourceError::Missing | ResourceError::NotRegularFile | ResourceError::Symlink
+            ) =>
+        {
+            Some(error)
+        }
+        Err(PortError::Inspect(errors)) => errors
+            .iter()
+            .find(|error| {
+                error.failure.is_none()
+                    || matches!(
+                        error.error,
+                        ResourceError::Changed | ResourceError::WrittenForm(_)
+                    )
+            })
+            .map(|error| &error.error),
+        _ => None,
+    }
+}
+
+/// Public domain reports project these observed causes into owned issue rows.
+/// Private file-build transports retain the original native error contract.
+pub fn public_opaque_resource_failure(
+    attempt: &CapturedAttempt<ResourceError>,
+) -> Option<&ResourceError> {
+    use crate::specification_run::PortError;
+    match &attempt.result {
+        Err(PortError::Capture(error))
+            if !matches!(
+                error,
+                ResourceError::Missing
+                    | ResourceError::NotRegularFile
+                    | ResourceError::Symlink
+                    | ResourceError::WrittenForm(_)
+                    | ResourceError::Changed
             ) =>
         {
             Some(error)
@@ -476,6 +560,113 @@ mod dispatch_policy_tests {
     struct ChangeAfterSuccess {
         path: PathBuf,
     }
+    fn assert_content_change(
+        diagnostic: &yamaa_core::diagnostic::Diagnostic,
+        field: &str,
+        written: &str,
+    ) {
+        assert_eq!(diagnostic.definition().phase, "ingest");
+        assert_eq!(
+            diagnostic.code,
+            yamaa_core::diagnostic::ConditionCode::ResourceContentChanged
+        );
+        assert_eq!(diagnostic.spec_paths, [field]);
+        assert_eq!(
+            diagnostic.context,
+            [(
+                "path".into(),
+                yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                    written.into()
+                ))
+            )]
+            .into()
+        );
+    }
+    #[test]
+    fn changed_entry_rejects_replacement_before_decoding_and_keeps_original_error() {
+        let study = Study::new(ROOT);
+        let mut resources = study.resources();
+        let original_base = resources.resolve("root.yaml").unwrap();
+        let original = resources.capture("entry/root.yaml", ROOT.len()).unwrap().0;
+        fs::write(study.0.join("entry/root.yaml"), b"invalid replacement").unwrap();
+        let Err(Error::ResourceFinding { error, diagnostic }) =
+            prepare_document_from(&mut resources, None, "entry/root.yaml", None)
+        else {
+            panic!("changed entry retains its original native error");
+        };
+        assert_eq!(error, ResourceError::Changed);
+        assert_content_change(&diagnostic, "specification", "entry/root.yaml");
+        assert_eq!(original.as_ref(), ROOT.as_bytes());
+        assert_eq!(resources.capture_reads(), 1);
+        assert_eq!(resources.resolve("root.yaml").unwrap(), original_base);
+    }
+    #[test]
+    fn changed_parent_capture_keeps_original_host_payload_before_semantic_success() {
+        let study = Study::new(ROOT);
+        let mut resources = study.resources();
+        let original_base = resources.resolve("root.yaml").unwrap();
+        let entry = resources.resolve("entry/root.yaml").unwrap();
+        let original = resources
+            .capture_from(&entry, "../parent/base.yaml", PARENT.len())
+            .unwrap()
+            .0;
+        fs::write(study.0.join("parent/base.yaml"), b"invalid replacement").unwrap();
+        let Err(Error::PreparationFinding { error, diagnostic }) =
+            prepare_document_from(&mut resources, None, "entry/root.yaml", None)
+        else {
+            panic!("changed parent capture retains original preparation");
+        };
+        assert!(matches!(error, InheritanceError::Preparation { error, .. }
+        if matches!(*error, yamaa_engine::inheritance_preparation::Error::Traversal(
+            yamaa_engine::inheritance::Error::Host(crate::specification_source::SourceFailure::Host(ResourceError::Changed))
+        ))));
+        assert_content_change(&diagnostic, "parents", "../parent/base.yaml");
+        assert_eq!(original.as_ref(), PARENT.as_bytes());
+        assert_eq!(resources.capture_reads(), 2);
+        assert_eq!(resources.resolve("root.yaml").unwrap(), original_base);
+        assert!(!study.0.join("entry/never-read.csv").exists());
+        assert!(!study.0.join("entry/never-written.csv").exists());
+    }
+    #[test]
+    fn changed_dictionary_capture_uses_exact_declaring_expression_without_replacement() {
+        let root = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns: [{name: ID, type: str, derivation: {mapping: {source: SRC.ID, dict: dict.yaml}}}]\n";
+        let study = Study::new(root);
+        fs::write(study.0.join("entry/dict.yaml"), b"A: answer\n").unwrap();
+        let mut resources = study.resources();
+        let entry = resources.resolve("entry/root.yaml").unwrap();
+        let original = resources.capture_from(&entry, "dict.yaml", 64).unwrap().0;
+        fs::write(study.0.join("entry/dict.yaml"), b"B: replaced\n").unwrap();
+        let Err(Error::Preparation(error)) =
+            prepare_document_from(&mut resources, None, "entry/root.yaml", None)
+        else {
+            panic!("changed dictionary keeps original preparation error");
+        };
+        let message = crate::specification_diagnostics::inheritance_failure_ref(&error).unwrap();
+        let finding = &serde_json::from_str::<serde_json::Value>(&message).unwrap()["outcome"]
+            ["diagnostics"][0];
+        let definition = yamaa_core::diagnostic::ConditionCode::ResourceContentChanged.definition();
+        assert_eq!(
+            finding,
+            &serde_json::json!({
+                "phase":definition.phase, "condition":definition.condition, "requirement":definition.requirement,
+                "spec_paths":["columns.ID.derivation.mapping.dict"], "context":{"path":"dict.yaml"},
+            })
+        );
+        let InheritanceError::Dictionary { error, .. } = error else {
+            panic!("dictionary owner missing");
+        };
+        assert!(matches!(
+            error.cause,
+            yamaa_engine::dictionary_preparation::Cause::Capture {
+                error: yamaa_engine::inheritance::SourceError::Raised(ResourceError::Changed),
+                ..
+            }
+        ));
+        assert_eq!(original.as_ref(), b"A: answer\n");
+        assert_eq!(resources.capture_reads(), 2);
+        assert!(!study.0.join("entry/never-read.csv").exists());
+        assert!(!study.0.join("entry/never-written.csv").exists());
+    }
     impl yamaa_engine::file_preparation::DocumentPort<ResourceError> for ChangeAfterSuccess {
         type Prepared = crate::specification_source::PreparedDocument;
         type Error = InheritanceError<ResourceError>;
@@ -510,12 +701,31 @@ mod dispatch_policy_tests {
             "entry/root.yaml",
             Limits::default().captured_bytes,
         );
-        assert!(matches!(
-            result,
-            Err(yamaa_engine::file_preparation::Error::Resource(
-                ResourceError::Changed
-            ))
-        ));
+        let Err(yamaa_engine::file_preparation::Error::ResourceFinding { error, diagnostic }) =
+            result
+        else {
+            panic!("original changed dictionary with authored diagnostic");
+        };
+        assert_eq!(error, ResourceError::Changed);
+        assert_eq!(diagnostic.definition().phase, "ingest");
+        assert_eq!(
+            diagnostic.code,
+            yamaa_core::diagnostic::ConditionCode::ResourceContentChanged
+        );
+        assert_eq!(
+            diagnostic.spec_paths,
+            ["columns.ID.derivation.mapping.dict"]
+        );
+        assert_eq!(
+            diagnostic.context,
+            [(
+                "path".into(),
+                yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                    "dict.yaml".into()
+                ))
+            )]
+            .into()
+        );
         assert_eq!(resources.capture_reads(), 2);
         assert_eq!(resources.resolve("root.yaml").unwrap(), original);
         assert!(!study.0.join("entry/never-read.csv").exists());
@@ -536,12 +746,28 @@ mod dispatch_policy_tests {
             "entry/root.yaml",
             Limits::default().captured_bytes,
         );
-        assert!(matches!(
-            result,
-            Err(yamaa_engine::file_preparation::Error::Resource(
-                ResourceError::Changed
-            ))
-        ));
+        let Err(yamaa_engine::file_preparation::Error::ResourceFinding { error, diagnostic }) =
+            result
+        else {
+            panic!("original changed parent with authored diagnostic");
+        };
+        assert_eq!(error, ResourceError::Changed);
+        assert_eq!(diagnostic.definition().phase, "ingest");
+        assert_eq!(
+            diagnostic.code,
+            yamaa_core::diagnostic::ConditionCode::ResourceContentChanged
+        );
+        assert_eq!(diagnostic.spec_paths, ["parents[0]"]);
+        assert_eq!(
+            diagnostic.context,
+            [(
+                "path".into(),
+                yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                    "../parent/base.yaml".into()
+                ))
+            )]
+            .into()
+        );
         assert_eq!(resources.capture_reads(), 2);
         assert_eq!(resources.resolve("root.yaml").unwrap(), original);
     }
