@@ -310,6 +310,64 @@ mod tests {
     use super::*;
 
     #[test]
+    fn cumulative_projection_counters_accept_equality_and_stop_before_one_more() {
+        let mut budget = Budget::new(usize::MAX);
+        assert_eq!(budget.bytes, yamaa_engine::capacity::REPORT_RETAINED_BYTES);
+        assert_eq!(budget.cells, yamaa_engine::capacity::REPORT_CELLS);
+        assert_eq!(budget.work, yamaa_engine::capacity::REPORT_WORK);
+
+        // Two independent projections consume the same cell frontier. Empty
+        // projections remain valid after equality; another cell is refused.
+        let half = yamaa_engine::capacity::REPORT_CELLS / 2;
+        budget.row_shape(half, 1).unwrap();
+        budget.row_shape(half, 1).unwrap();
+        budget.row_shape(0, 1).unwrap();
+        assert!(matches!(budget.row_shape(1, 1), Err(Error::OutputLimit)));
+        assert_eq!(budget.cells, 0);
+
+        let mut budget = Budget::new(usize::MAX);
+        budget
+            .work(yamaa_engine::capacity::REPORT_WORK - 1)
+            .unwrap();
+        budget.work(1).unwrap();
+        budget.work(0).unwrap();
+        assert!(matches!(budget.work(1), Err(Error::OutputLimit)));
+        assert_eq!(budget.work, 0);
+
+        let mut budget = Budget::new(usize::MAX);
+        budget
+            .retained_bytes(yamaa_engine::capacity::REPORT_RETAINED_BYTES - 1)
+            .unwrap();
+        budget.retained_bytes(1).unwrap();
+        budget.retained_bytes(0).unwrap();
+        assert!(matches!(budget.retained_bytes(1), Err(Error::OutputLimit)));
+        assert_eq!(budget.bytes, 0);
+    }
+
+    #[test]
+    fn projection_shape_overflow_is_refused_before_any_retained_charge() {
+        for project in [Budget::row_shape, Budget::shape, Budget::typed_shape] {
+            let mut budget = Budget::new(usize::MAX);
+            let before = (budget.bytes, budget.cells, budget.work);
+            assert!(matches!(
+                project(&mut budget, usize::MAX, 2),
+                Err(Error::OutputLimit)
+            ));
+            assert_eq!((budget.bytes, budget.cells, budget.work), before);
+        }
+        // Exercise the checked byte multiplication independently of the work
+        // frontier. No overflowing count can become a small accepted charge.
+        let mut budget = Budget::new(usize::MAX);
+        budget.work = usize::MAX;
+        let bytes = budget.bytes;
+        assert!(matches!(
+            budget.entries(usize::MAX / 128 + 1),
+            Err(Error::OutputLimit)
+        ));
+        assert_eq!(budget.bytes, bytes);
+    }
+
+    #[test]
     fn encoded_ceiling_counts_unicode_escaping_and_container_syntax_exactly() {
         let value = serde_json::json!({"value": ["é\n\"", null, true, -17]});
         let exact = serde_json::to_vec(&value).unwrap().len();

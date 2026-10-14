@@ -1,7 +1,7 @@
 #![cfg(feature = "arrow-c-data")]
 use arrow_array::{
-    Array, ArrayRef, Float64Array, Int32Array, Int64Array, LargeStringArray, RecordBatch,
-    RecordBatchIterator, RecordBatchReader, StringArray, StringViewArray,
+    Array, ArrayRef, Float64Array, Int32Array, Int64Array, Int8Array, LargeStringArray,
+    RecordBatch, RecordBatchIterator, RecordBatchReader, StringArray, StringViewArray,
     TimestampMicrosecondArray,
 };
 use arrow_buffer::ScalarBuffer;
@@ -247,6 +247,52 @@ fn aliased_text_and_multiple_sources_use_cumulative_limits() {
         unsafe { budget.import(stream(vec![empty.clone(); 129], empty.schema())) },
         Err(Error::Limit)
     ));
+}
+
+#[test]
+fn cumulative_rows_and_cells_accept_exact_limits_and_keep_prior_source_ownership() {
+    for accepted_rows in [
+        c_data_table::LIMITS.max_rows - 1,
+        c_data_table::LIMITS.max_rows,
+    ] {
+        let source = batch(vec![(
+            "I",
+            Arc::new(Int64Array::from(vec![7; accepted_rows])),
+        )]);
+        let mut budget = ImportBudget::default();
+        let held = unsafe { budget.import(stream(vec![source.clone()], source.schema())) }.unwrap();
+        let additional = batch(vec![("I", Arc::new(Int64Array::from(vec![9])))]);
+        let accepted =
+            unsafe { budget.import(stream(vec![additional.clone()], additional.schema())) };
+        assert_eq!(
+            accepted.is_ok(),
+            accepted_rows < c_data_table::LIMITS.max_rows
+        );
+        drop(source);
+        assert_eq!(held.row_count(), accepted_rows);
+        assert_eq!(held.cell(accepted_rows - 1, 0).unwrap(), ValueRef::Int(7));
+    }
+
+    // Eight narrow arrays keep input buffers far below the byte ceiling, so
+    // the next single cell independently crosses only the logical-cell limit.
+    let rows = c_data_table::LIMITS.max_cells / 8;
+    let values = Arc::new(Int8Array::from(vec![7; rows])) as ArrayRef;
+    let source = batch(
+        ["A", "B", "C", "D", "E", "F", "G", "H"]
+            .into_iter()
+            .map(|name| (name, values.clone()))
+            .collect(),
+    );
+    let mut budget = ImportBudget::default();
+    let held = unsafe { budget.import(stream(vec![source.clone()], source.schema())) }.unwrap();
+    let additional = batch(vec![("I", Arc::new(Int8Array::from(vec![9])))]);
+    assert!(matches!(
+        unsafe { budget.import(stream(vec![additional.clone()], additional.schema())) },
+        Err(Error::Limit)
+    ));
+    drop(source);
+    assert_eq!(held.row_count(), rows);
+    assert_eq!(held.cell(rows - 1, 7).unwrap(), ValueRef::Int(7));
 }
 
 fn prepared(spec: &str) -> PreparedRun {
