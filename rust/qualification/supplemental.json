@@ -437,7 +437,7 @@
       "family": "functions",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-engine/tests/function_invocation.rs"
+        "rust/crates/yamaa-engine/tests/project/function_invocation.rs"
       ]
     },
     {
@@ -445,7 +445,7 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs"
+        "rust/crates/yamaa-engine/tests/execution/numeric_lifecycle.rs"
       ]
     },
     {

@@ -11,3 +11,8 @@ test-support = []
 
 [dependencies]
 yamaa-core = { path = "../yamaa-core" }
+
+# This integration boundary must be requested explicitly, never an empty default binary.
+[[test]]
+name = "test_support"
+required-features = ["test-support"]
