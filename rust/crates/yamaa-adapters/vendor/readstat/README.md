@@ -42,6 +42,11 @@ read budget, row/cell allowance, column allowance, and fixed framing overhead;
 there is no lower fixed million-operation or 16 MiB allocation ceiling.
 The SAS header/page sizes are bounded by the captured snapshot framing, rather
 than a separate 16 MiB threshold. Their minimum framing sizes still apply.
+Text-blob count follows the 65,536 slots addressable by source uint16 references;
+cumulative blob bytes and both metadata arrays still pass work admission before
+allocation. A small independently repacked haven fixture with 4,097 valid text
+blobs preserves all twenty numeric cells and is accepted by the independent
+pandas SAS reader; no lower 4,096-blob ceiling is applied.
 
 The independent adapter controls cover XPT v5/v8, long field names, multiple
 members, numeric missing tags, declared Unicode decoding, exact narrowing and

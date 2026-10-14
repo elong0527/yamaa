@@ -169,7 +169,9 @@ static readstat_error_t sas7bdat_parse_column_text_subheader(const char *subhead
         retval = READSTAT_ERROR_PARSE;
         goto cleanup;
     }
-    if (len < signature_len + 2 || ctx->text_blob_count >= 4096 ||
+    /* A uint16 text reference addresses 65536 blobs. Actual header ownership
+     * remains bounded by cumulative work admission before either array grows. */
+    if (len < signature_len + 2 || ctx->text_blob_count > UINT16_MAX ||
             len > SIZE_MAX - ctx->text_blob_bytes)
         return READSTAT_ERROR_PARSE;
     ctx->text_blob_bytes += len;

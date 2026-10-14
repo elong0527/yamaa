@@ -941,6 +941,100 @@ mod tests {
     }
 
     #[test]
+    fn valid_sas_metadata_above_four_thousand_blobs_keeps_exact_cells() {
+        // Repack the independent haven MIX page using its documented u32
+        // offsets/lengths and twelve-byte subheader pointers. Keep the original
+        // COLUMN_TEXT blob first so every existing uint16 reference is stable.
+        // Duplicate it 4096 times as valid unused text metadata. pandas 2.3.3's
+        // independent SAS reader accepts this 525312-byte file and all four rows.
+        const EXTRA: usize = 4096;
+        const ORIGINAL: usize = 13;
+        const PAGE: usize = 524288;
+        let fixture = include_bytes!("../tests/fixtures/sas/datetime.sas7bdat");
+        let original = &fixture[1024..];
+        let mut page = vec![0; PAGE];
+        page[..24].copy_from_slice(&original[..24]);
+        page[18..20].copy_from_slice(&((17 + EXTRA) as u16).to_le_bytes());
+        page[20..22].copy_from_slice(&((ORIGINAL + EXTRA) as u16).to_le_bytes());
+        let row_start = (24 + (ORIGINAL + EXTRA) * 12).div_ceil(8) * 8;
+        page[row_start..row_start + 160].copy_from_slice(&original[184..344]);
+        let mut position = row_start + 160;
+        for index in 0..ORIGINAL + EXTRA {
+            position = position.div_ceil(8) * 8;
+            let (blob, flag) = if index < ORIGINAL {
+                let pointer = 24 + index * 12;
+                let offset =
+                    u32::from_le_bytes(original[pointer..pointer + 4].try_into().unwrap()) as usize;
+                let length =
+                    u32::from_le_bytes(original[pointer + 4..pointer + 8].try_into().unwrap())
+                        as usize;
+                (
+                    &original[offset..offset + length],
+                    &original[pointer + 8..pointer + 12],
+                )
+            } else {
+                (&original[3200..3300], &original[68..72])
+            };
+            let pointer = 24 + index * 12;
+            page[pointer..pointer + 4].copy_from_slice(&(position as u32).to_le_bytes());
+            page[pointer + 4..pointer + 8].copy_from_slice(&(blob.len() as u32).to_le_bytes());
+            page[pointer + 8..pointer + 12].copy_from_slice(flag);
+            page[position..position + blob.len()].copy_from_slice(blob);
+            position += blob.len();
+        }
+        let mut bytes = fixture[..1024].to_vec();
+        bytes[200..204].copy_from_slice(&(PAGE as u32).to_le_bytes());
+        bytes.extend_from_slice(&page);
+        assert_eq!(bytes.len(), 525312);
+        let mut source = receipt_source();
+        source.profile = SourceProfile::Sas7bdat;
+        source.path = "datetime.sas7bdat".into();
+        let mut usage = Usage::default();
+        let table = parse_with_usage(
+            &bytes,
+            &source,
+            receipt_limits(),
+            receipt_table_limits(),
+            &mut usage,
+        )
+        .unwrap();
+        let expected = [
+            [1_738_507_332.0, 20_121.0, 20_121.0, 20_121.0, 52_932.0],
+            [1_704_190_463.0, 19_724.0, 19_724.0, 19_724.0, 36_863.0],
+            [1_736_921_722.0, 20_254.0, 20_254.0, 20_254.0, 22_522.0],
+            [-356_840_880.0, -4_124.0, -4_124.0, -4_124.0, 77_520.0],
+        ];
+        assert_eq!(table.row_count(), expected.len());
+        assert_eq!(table.schema().columns().len(), 5);
+        for (row, values) in expected.into_iter().enumerate() {
+            for (column, value) in values.into_iter().enumerate() {
+                assert_eq!(
+                    table.cell(row, column).unwrap(),
+                    ValueRef::Float(yamaa_core::value::FiniteFloat::new(value).unwrap()),
+                );
+            }
+        }
+        assert!(usage.complete);
+        assert!(usage.work_bytes <= receipt_limits().work_bytes);
+        assert!(matches!(
+            parse(
+                &bytes,
+                &source,
+                Limits {
+                    work_bytes: PAGE - 1,
+                    ..receipt_limits()
+                },
+                receipt_table_limits(),
+            ),
+            Err(Error::Limit {
+                resource: "work_bytes",
+                limit: 524287,
+                actual: Some(524288),
+            })
+        ));
+    }
+
+    #[test]
     fn measured_work_uses_actual_snapshot_reads_and_exact_small_quota() {
         let bytes = padded_xport();
         let source = receipt_source();
