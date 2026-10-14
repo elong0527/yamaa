@@ -186,6 +186,12 @@ Every member is the one the Define-XML document carries for the same column:
 - `keySequence` is the `ItemRef` `KeySequence`
   [REQ-0990](define-xml.md#req-0990) writes.
 
+`keySequence` therefore describes the same non-missing identity in `keys`;
+it is not independently declarable. Sponsor ordering and a separate `unique`
+verification, including combinations with missing values, follow the
+[output identity example](../storage/publication.md#req-0221) and do not change
+this metadata.
+
 <a id="req-1210"></a>
 
 **REQ-1210.** `dataType` maps [Submission metadata](metadata.md)'s resolved submission data type
