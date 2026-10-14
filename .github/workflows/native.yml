@@ -73,7 +73,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     # Cold optimized test builds on Windows can consume more than 20 minutes.
     # Leave time for the complete shared guard and assessment suites afterward.
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 60 || 30 }}
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 60 || matrix.os == 'macos-15' && 45 || 30 }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.build) }}
