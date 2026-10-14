@@ -550,5 +550,4 @@ fn read_parquet(
 }
 
 #[cfg(test)]
-#[path = "../tests/support/file_define_publication.rs"]
 mod publication_failure_tests;

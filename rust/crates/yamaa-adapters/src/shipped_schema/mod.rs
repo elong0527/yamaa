@@ -5,7 +5,6 @@ use crate::specification_source::{
     CapturedSchema, Error, InheritanceError, InheritancePort, PreparedDocument, Source,
 };
 use std::sync::Arc;
-#[path = "shipped_schema_data.rs"]
 mod data;
 
 /// Admit the exact generated closure retained inside both native packages.

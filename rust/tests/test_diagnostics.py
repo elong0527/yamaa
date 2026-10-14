@@ -630,7 +630,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
 
     def test_generated_schema_is_exempt_from_ownership_but_not_normative_ids(self):
         path = self.write(
-            "rust/crates/yamaa-adapters/src/shipped_schema_data.rs",
+            "rust/crates/yamaa-adapters/src/shipped_schema/data.rs",
             'const DATA: &str = "invalid_value";\nconst REQ: &str = "REQ-0001";\n',
         )
         self.assertEqual(self.errors(), [])
@@ -834,6 +834,47 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         )
         self.assertTrue(
             any("undefined requirement REQ-0002" in e for e in self.errors())
+        )
+
+    def publication_unit_module(self):
+        self.write(
+            "rust/crates/yamaa-adapters/src/file_define/mod.rs",
+            "#[cfg(test)]\nmod publication_failure_tests;\n",
+        )
+        self.write(
+            str(guard.PRIVATE_TEST_MODULE),
+            '#[test]\nfn independent_expectation() { assert_eq!("invalid_value", "invalid_value"); }\n',
+        )
+
+    def test_private_cfg_unit_assertions_do_not_gain_production_literal_credit(self):
+        self.publication_unit_module()
+        self.assertEqual(self.errors(), [])
+        self.assertEqual(self.active, {})
+
+    def test_unit_source_loaded_without_test_cfg_remains_production(self):
+        self.publication_unit_module()
+        self.write(
+            "rust/crates/yamaa-adapters/src/file_define/mod.rs",
+            "mod publication_failure_tests;\n",
+        )
+        self.assertTrue(any("new diagnostic literal site" in e for e in self.errors()))
+
+    def test_unit_source_reused_by_production_alias_remains_production(self):
+        self.publication_unit_module()
+        self.write(
+            "rust/crates/yamaa-adapters/src/lib.rs",
+            '#[path = "file_define/publication_failure_tests.rs"]\nmod exposed;\n',
+        )
+        self.assertTrue(any("new diagnostic literal site" in e for e in self.errors()))
+
+    def test_private_unit_assertions_still_require_defined_requirements(self):
+        self.publication_unit_module()
+        self.write(
+            str(guard.PRIVATE_TEST_MODULE),
+            '#[test]\nfn independent_expectation() { assert_eq!("REQ-999999", "REQ-999999"); }\n',
+        )
+        self.assertTrue(
+            any("undefined requirement REQ-999999" in e for e in self.errors())
         )
 
     def test_missing_rules_and_sources_do_not_pass(self):
