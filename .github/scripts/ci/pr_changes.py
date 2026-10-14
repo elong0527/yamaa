@@ -24,7 +24,9 @@ def coverage(paths):
         elif path.startswith(("python/", "R/yamaa/", "evaluations/harbor/")):
             if not path.endswith(".md"):
                 python = True
-        elif path.startswith((".github/workflows/", ".github/scripts/ci/")):
+        elif path == "Makefile" or path.startswith(
+            (".github/workflows/", ".github/scripts/ci/", ".github/scripts/commands/")
+        ):
             rust = python = True
         elif path.startswith(".github/scripts/yaml-validation/"):
             python = True

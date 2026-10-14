@@ -1,113 +1,101 @@
 #!/usr/bin/env python3
-"""Check the #101 execution manifest against benchmark directories.
+"""Check directory-derived benchmark inventory and observed conformance coverage."""
 
-Fails on missing, duplicate, or stale entries, unknown statuses, and
-executable entries without a declared runtime. Run from the repository root:
-
-    python3 .github/scripts/yaml-validation/check_execution_manifest.py
-"""
-
-import re
+import argparse
 import sys
 from pathlib import Path
 
-import yaml
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from validate_repository import UniqueKeyLoader
-
-
 ROOT = Path(__file__).resolve().parents[3]
-EXAMPLES = ROOT / "benchmarks"
-MANIFEST = EXAMPLES / "execution-manifest.yaml"
-BLOCKED_BY_PATTERN = re.compile(r"#[1-9][0-9]*")
+sys.path.insert(0, str(ROOT / "rust/tools"))
+from public_conformance import (
+    EXCLUDED,
+    PROTOCOL,
+    benchmark_directories,
+    plan,
+    read_json,
+)
 
 
-def load_manifest(path):
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            return yaml.load(handle, Loader=UniqueKeyLoader), None
-    except (OSError, yaml.YAMLError) as exc:
-        detail = getattr(exc, "problem", None) or str(exc)
-        return None, f"execution-manifest.yaml: {detail}"
-
-
-def check_manifest(manifest, actual_examples=None):
-    if not isinstance(manifest, dict):
-        return ["execution-manifest.yaml: root must be a mapping"]
-
+def check_inventory(payload, actual_examples, observations=None):
     errors = []
-    if manifest.get("version") != "1.0":
-        errors.append('execution-manifest.yaml: \'version\' must be "1.0"')
-
-    entries = manifest.get("examples")
-    if not isinstance(entries, dict):
-        errors.append("execution-manifest.yaml: 'examples' must be a mapping")
-        return errors
-
-    if actual_examples is not None:
-        actual = set(actual_examples)
-        for name in sorted(actual):
-            if name not in entries:
-                errors.append(f"missing entry: {name}")
-        for name in entries:
-            if name not in actual:
-                errors.append(f"stale entry (no such example): {name}")
-
-    for name, entry in entries.items():
-        if not isinstance(entry, dict):
-            errors.append(f"{name}: entry must be a mapping")
-            continue
-        status = entry.get("status")
-        if status == "executable":
-            if not entry.get("runtimes"):
-                errors.append(f"{name}: executable entries must declare runtimes")
-        elif status == "blocked":
-            blocker = entry.get("blocked_by")
-            if not isinstance(blocker, str) or BLOCKED_BY_PATTERN.fullmatch(
-                blocker
-            ) is None:
-                errors.append(
-                    f"{name}: blocked entries must declare blocked_by as a "
-                    "string matching #[1-9][0-9]*"
-                )
-        else:
-            errors.append(f"{name}: unknown status {status!r}")
-        if "reference_retired_by" in entry:
-            retirement = entry["reference_retired_by"]
-            if (
-                not isinstance(retirement, str)
-                or BLOCKED_BY_PATTERN.fullmatch(retirement) is None
-                or status != "executable"
-                or "python" not in entry.get("runtimes", [])
-            ):
-                errors.append(
-                    f"{name}: reference_retired_by requires an issue '#N' "
-                    "and an executable Python entry"
-                )
+    if not isinstance(payload, dict) or payload.get("protocol") != PROTOCOL:
+        return ["unknown benchmark inventory protocol"]
+    entries = payload.get("examples")
+    if not isinstance(entries, list):
+        return ["benchmark inventory examples must be a list"]
+    names = [entry["name"] for entry in entries]
+    actual = set(actual_examples)
+    for name in sorted(set(names)):
+        if names.count(name) > 1:
+            errors.append(f"duplicate case: {name}")
+    for name in sorted(actual - set(names)):
+        errors.append(f"missing case: {name}")
+    for name in sorted(set(names) - actual):
+        errors.append(f"unexpected case: {name}")
+    for name in sorted(set(EXCLUDED) - actual):
+        errors.append(f"exclusion has no authored case: {name}")
+    active = set()
+    for entry in entries:
+        name = entry["name"]
+        if entry.get("excluded") != EXCLUDED.get(name):
+            errors.append(f"exclusion reason differs: {name}")
+        if not entry.get("excluded"):
+            active.add(name)
+        hosts = entry.get("entries", {})
+        if set(hosts) != {"python", "r"} or not all(hosts.values()):
+            errors.append(f"missing public host entry: {name}")
+    if observations is not None:
+        if observations.get("protocol") != "public-conformance-ratchet/1":
+            errors.append("unknown observed conformance protocol")
+        if observations.get("benchmarks") != len(actual):
+            errors.append("observed authored denominator differs")
+        excluded = observations.get("exclusions", [])
+        observed_exclusions = {row["example"]: row["reason"] for row in excluded}
+        if len(excluded) != len(observed_exclusions) or observed_exclusions != EXCLUDED:
+            errors.append("observed exclusions differ")
+        for host in ("python", "r"):
+            observed = observations.get(host, [])
+            if len(observed) != len(set(observed)):
+                errors.append(f"duplicate observed {host} case")
+            for name in sorted(active - set(observed)):
+                errors.append(f"missing observed {host} case: {name}")
+            for name in sorted(set(observed) - active):
+                errors.append(f"unexpected observed {host} case: {name}")
     return errors
 
 
-def main() -> int:
-    manifest, load_error = load_manifest(MANIFEST)
-    if load_error:
-        print(load_error)
-        return 1
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", type=Path, default=ROOT)
+    args = parser.parse_args()
+    fixtures = args.root / "benchmarks"
+    try:
+        payload = plan(fixtures)
+        errors = check_inventory(
+            payload,
+            [p.name for p in benchmark_directories(fixtures)],
+            read_json(args.root / "rust/qualification/public-conformance.json"),
+        )
+        sys.path.insert(0, str(ROOT / ".github/scripts/benchmark-docs"))
+        from build_index import render_index
 
-    actual = sorted(
-        d.name for d in EXAMPLES.iterdir()
-        if d.is_dir() and list(d.glob("spec*.yaml"))
-    )
-    errors = check_manifest(manifest, actual)
-
+        index = fixtures / "README.md"
+        if index.read_text(encoding="utf-8") != render_index(
+            fixtures, index.read_text(encoding="utf-8")
+        ):
+            errors.append(
+                "stale benchmark index; run .github/scripts/benchmark-docs/build_index.py"
+            )
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        errors = [str(exc)]
     if errors:
-        print(f"{len(errors)} execution-manifest problem(s):")
         for error in errors:
-            print(f"  - {error}")
+            print(f"ERROR: {error}")
         return 1
-    entries = manifest["examples"]
-    print(f"execution manifest ok: {len(entries)} examples, "
-          f"{sum(1 for e in entries.values() if e.get('status') == 'executable')} executable")
+    active = sum(not entry["excluded"] for entry in payload["examples"])
+    print(
+        f"benchmark inventory ok: {len(payload['examples'])} authored, {active} active on Python and R, {len(EXCLUDED)} explicitly excluded"
+    )
     return 0
 
 

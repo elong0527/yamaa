@@ -2014,158 +2014,70 @@ class TestStaticSemanticContracts(unittest.TestCase):
             native_spec.loader.exec_module(module)
 
 
-class TestExecutionManifestGate(unittest.TestCase):
-    def load_text(self, text):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / 'execution-manifest.yaml'
-            path.write_text(text, encoding='utf-8')
-            return EXECUTION_CHECK.load_manifest(path)
-
-    def blocked_entry(self):
-        return {'status': 'blocked', 'blocked_by': '#101'}
-
-    def test_duplicate_keys_are_rejected(self):
-        manifest, error = self.load_text(
-            'version: "1.0"\n'
-            'examples:\n'
-            '  duplicate:\n'
-            '    status: blocked\n'
-            '    blocked_by: "#101"\n'
-            '  duplicate:\n'
-            '    status: blocked\n'
-            '    blocked_by: "#101"\n'
-        )
-
-        self.assertIsNone(manifest)
-        self.assertIsNotNone(error)
-        self.assertTrue(error.startswith('execution-manifest.yaml: '))
-        self.assertIn("found duplicate key 'duplicate'", error)
-
-    def test_missing_mistyped_and_unsupported_versions_are_rejected(self):
-        documents = (
-            {'examples': {}},
-            {'versions': '1.0', 'examples': {}},
-            {'version': 1.0, 'examples': {}},
-            {'version': '2.0', 'examples': {}},
-        )
-
-        for document in documents:
-            with self.subTest(document=document):
-                errors = EXECUTION_CHECK.check_manifest(document)
-                self.assertIn(
-                    'execution-manifest.yaml: \'version\' must be "1.0"',
-                    errors,
-                )
-
-    def test_non_mapping_root_is_a_clean_error(self):
-        manifest, load_error = self.load_text('')
-
-        self.assertIsNone(load_error)
-        self.assertEqual(
-            EXECUTION_CHECK.check_manifest(manifest),
-            ['execution-manifest.yaml: root must be a mapping'],
-        )
-
-    def test_bad_blocked_by_shapes_are_rejected(self):
-        entries = (
-            {'status': 'blocked', 'blocked_by': 101},
-            {'status': 'blocked', 'blocked_by': 'issue-101'},
-            {'status': 'blocked'},
-        )
-
-        for entry in entries:
-            with self.subTest(entry=entry):
-                document = {'version': '1.0', 'examples': {'one': entry}}
-                errors = EXECUTION_CHECK.check_manifest(document)
-                self.assertEqual(len(errors), 1)
-                self.assertIn('blocked_by', errors[0])
-
-    def test_unknown_status_is_rejected(self):
-        document = {
-            'version': '1.0',
-            'examples': {'one': {'status': 'pending'}},
-        }
-
-        errors = EXECUTION_CHECK.check_manifest(document)
-
-        self.assertEqual(errors, ["one: unknown status 'pending'"])
-
-    def test_executable_without_runtimes_is_rejected(self):
-        document = {
-            'version': '1.0',
-            'examples': {'one': {'status': 'executable'}},
-        }
-
-        errors = EXECUTION_CHECK.check_manifest(document)
-
-        self.assertEqual(
-            errors,
-            ['one: executable entries must declare runtimes'],
-        )
-
-    def test_missing_and_stale_entries_are_rejected(self):
-        document = {
-            'version': '1.0',
-            'examples': {
-                'present': self.blocked_entry(),
-                'stale': self.blocked_entry(),
-            },
-        }
-
-        errors = EXECUTION_CHECK.check_manifest(
-            document, ['present', 'missing']
-        )
-
-        self.assertEqual(
-            errors,
-            [
-                'missing entry: missing',
-                'stale entry (no such example): stale',
+class TestDerivedBenchmarkInventory(unittest.TestCase):
+    def payload(self):
+        names = ['active', *EXECUTION_CHECK.EXCLUDED]
+        return {
+            'protocol': EXECUTION_CHECK.PROTOCOL,
+            'examples': [
+                {'name': name, 'entries': {'python': [{}], 'r': [{}]},
+                 'excluded': EXECUTION_CHECK.EXCLUDED.get(name)}
+                for name in names
             ],
-        )
+        }, names
 
-    def test_reference_retirement_requires_an_issue_and_executable_python_entry(self):
-        entries = (
-            {'status': 'executable', 'runtimes': ['python'], 'reference_retired_by': 1757},
-            {'status': 'executable', 'runtimes': ['python'], 'reference_retired_by': '1757'},
-            {'status': 'blocked', 'blocked_by': '#1', 'reference_retired_by': '#1757'},
-            {'status': 'executable', 'runtimes': ['r'], 'reference_retired_by': '#1757'},
-        )
-        for entry in entries:
-            with self.subTest(entry=entry):
-                errors = EXECUTION_CHECK.check_manifest(
-                    {'version': '1.0', 'examples': {'one': entry}}, ['one']
-                )
-                self.assertEqual(len(errors), 1)
-                self.assertIn('reference_retired_by', errors[0])
-        self.assertEqual(
-            EXECUTION_CHECK.check_manifest(
-                {'version': '1.0', 'examples': {'one': {
-                    'status': 'executable', 'runtimes': ['python'],
-                    'reference_retired_by': '#1757',
-                }}}, ['one']
-            ),
-            [],
-        )
-
-    def test_valid_minimal_manifest_passes(self):
-        document = {
-            'version': '1.0',
-            'examples': {
-                'blocked': self.blocked_entry(),
-                'executable': {
-                    'status': 'executable',
-                    'runtimes': ['python'],
-                },
-            },
+    def observations(self):
+        return {
+            'protocol': 'public-conformance-ratchet/1', 'benchmarks': 3,
+            'python': ['active'], 'r': ['active'],
+            'exclusions': [{'example': n, 'reason': r}
+                           for n, r in EXECUTION_CHECK.EXCLUDED.items()],
         }
 
-        self.assertEqual(
-            EXECUTION_CHECK.check_manifest(
-                document, ['blocked', 'executable']
-            ),
-            [],
-        )
+    def test_derived_cases_include_both_hosts_and_explicit_exclusions(self):
+        payload, names = self.payload()
+        self.assertEqual(EXECUTION_CHECK.check_inventory(payload, names, self.observations()), [])
+
+    def test_missing_duplicate_and_unexpected_cases_are_rejected(self):
+        payload, names = self.payload()
+        payload['examples'][0]['name'] = 'unexpected'
+        payload['examples'].append(payload['examples'][0])
+        errors = EXECUTION_CHECK.check_inventory(payload, names)
+        self.assertIn('missing case: active', errors)
+        self.assertIn('unexpected case: unexpected', errors)
+        self.assertIn('duplicate case: unexpected', errors)
+
+    def test_missing_host_and_changed_exclusion_are_rejected(self):
+        payload, names = self.payload()
+        del payload['examples'][0]['entries']['r']
+        payload['examples'][1]['excluded'] = 'unreviewed reason'
+        errors = EXECUTION_CHECK.check_inventory(payload, names)
+        self.assertIn('missing public host entry: active', errors)
+        self.assertIn('exclusion reason differs: ' + names[1], errors)
+
+    def test_runnable_labels_cannot_replace_observed_passing_cases(self):
+        payload, names = self.payload()
+        observed = self.observations()
+        observed['r'] = ['unexpected', 'unexpected']
+        errors = EXECUTION_CHECK.check_inventory(payload, names, observed)
+        self.assertIn('duplicate observed r case', errors)
+        self.assertIn('missing observed r case: active', errors)
+        self.assertIn('unexpected observed r case: unexpected', errors)
+
+    def test_stale_exclusions_and_observed_denominator_are_rejected(self):
+        payload, names = self.payload()
+        observed = self.observations()
+        observed['benchmarks'] = 2
+        observed['exclusions'] = []
+        errors = EXECUTION_CHECK.check_inventory(payload, names, observed)
+        self.assertIn('observed authored denominator differs', errors)
+        self.assertIn('observed exclusions differ', errors)
+        self.assertIn('exclusion has no authored case: ' + names[1],
+                      EXECUTION_CHECK.check_inventory(payload, names[:1]))
+
+    def test_unknown_protocol_is_rejected(self):
+        self.assertEqual(EXECUTION_CHECK.check_inventory({}, []),
+                         ['unknown benchmark inventory protocol'])
 
 
 class TestConditionRegistry(unittest.TestCase):
@@ -2332,7 +2244,7 @@ class TestValidationManifest(unittest.TestCase):
             [],
         )
 
-    def test_load_blockers_includes_execution_manifest(self):
+    def test_load_blockers_uses_only_current_validation_manifest(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             examples = root / 'benchmarks'
@@ -2343,22 +2255,12 @@ class TestValidationManifest(unittest.TestCase):
                 '    blocked_by: "#103"\n',
                 encoding='utf-8',
             )
-            (examples / 'execution-manifest.yaml').write_text(
-                'examples:\n'
-                '  execution-one:\n'
-                '    status: blocked\n'
-                '    blocked_by: "#101"\n'
-                '  executable:\n'
-                '    status: executable\n'
-                '    blocked_by: "#102"\n',
-                encoding='utf-8',
-            )
 
             blockers = BLOCKER_CHECK.load_blockers(root)
 
         self.assertEqual(
             blockers,
-            {101: ['execution-one'], 103: ['validation-one']},
+            {103: ['validation-one']},
         )
 
 

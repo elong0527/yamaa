@@ -14,8 +14,13 @@ def affects_dashboard(path):
             "evaluations/harbor/solutions/",
             ".github/scripts/benchmark-docs/",
             ".github/scripts/ci/",
+            ".github/scripts/commands/",
         )
-    ) or path in ("docs/articles/benchmark.md", ".github/workflows/yaml-validation.yml")
+    ) or path in (
+        "Makefile",
+        "docs/articles/benchmark.md",
+        ".github/workflows/yaml-validation.yml",
+    )
 
 
 def main():

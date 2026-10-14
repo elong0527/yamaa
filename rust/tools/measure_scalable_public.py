@@ -131,7 +131,7 @@ def validate(case, authored, child, request, response, record, repository, *, or
         }:
             raise ValueError("Build published a declared artifact before Save")
         nodes = before.get("nodes", [])
-        if [Path(node["specification"]).name for node in nodes] != case[
+        if [phases.node_name(node["specification"]) for node in nodes] != case[
             "expected_nodes"
         ]:
             raise ValueError("node ledger differs from independently declared graph")

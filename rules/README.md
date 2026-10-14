@@ -4,8 +4,8 @@ Every contract indexed below is normative. Files have one semantic owner;
 requirements use permanent global IDs independent of that owner's filename.
 The schema owns shape, defaults, and structural constraints. Contracts state
 shared and operation-local behavior and failure conditions. The
-[benchmark manifest](../benchmarks/execution-manifest.yaml) identifies
-executable examples.
+[generated benchmark index](../benchmarks/README.md#benchmarks) accounts for
+authored examples, public host entries, and explicit conformance exclusions.
 
 Read the relevant block, then follow its requirement links. The blocks are
 reading order, not execution phases; [execution/lifecycle](execution/lifecycle.md)

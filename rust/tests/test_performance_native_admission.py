@@ -192,6 +192,36 @@ class NativeAdmission(unittest.TestCase):
             self.assertEqual(api.call_count, 1)
             self.assertTrue((args.output / "native-run.json").is_file())
 
+    def test_admitted_run_exports_selected_original_attempt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            args = SimpleNamespace(
+                repository=self.repository,
+                revision=self.revision,
+                branch=self.branch,
+                run_id="42",
+                wait_seconds=0,
+                output=root / "retained",
+            )
+            export = root / "output"
+            with (
+                mock.patch.object(
+                    admission,
+                    "api",
+                    side_effect=[
+                        self.run,
+                        [{"jobs": self.jobs}],
+                        [{"artifacts": self.artifacts}],
+                    ],
+                ),
+                mock.patch.dict(admission.os.environ, GITHUB_OUTPUT=str(export)),
+            ):
+                admission.admit(args)
+            self.assertEqual(
+                export.read_text(),
+                f"run-id=42\nrun-attempt=2\nrevision={self.revision}\n",
+            )
+
     def test_missing_native_run_expires_at_declared_wait_bound(self):
         with tempfile.TemporaryDirectory() as directory:
             args = SimpleNamespace(

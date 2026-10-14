@@ -375,13 +375,13 @@
     "item 11 transition approval"
   ],
   "python_complete_matrix_retention": {
-    "proof_run": 38488955022,
-    "proof_head": "6b88f6dba0023cb09f630487e00e6adb548f33da",
-    "proof_artifact": 11861515419,
+    "proof_run": 38489655777,
+    "proof_head": "85b20ec0a229f2b376d0449c387c366947a45e19",
+    "proof_artifact": 11860743673,
     "retention": {
-      "run_id": "38488955022",
+      "run_id": "38489655777",
       "run_attempt": "1",
-      "preparation_head": "6b88f6dba0023cb09f630487e00e6adb548f33da",
+      "preparation_head": "85b20ec0a229f2b376d0449c387c366947a45e19",
       "status": "pass",
       "release_id": 411980272,
       "release_tag": "yamaa-py-reference-845a91ff",
@@ -392,7 +392,7 @@
           "name": "prior-python-rollback-38460509078.json",
           "bytes": 6437,
           "bytes_equal": true,
-          "reused_without_overwrite": false,
+          "reused_without_overwrite": true,
           "authenticated_api_reference": "https://api.github.com/repos/elong0527/yamaa/releases/assets/638657299"
         },
         {
@@ -400,7 +400,7 @@
           "name": "prior-python-rollback-38460509078.zip",
           "bytes": 23465236,
           "bytes_equal": true,
-          "reused_without_overwrite": false,
+          "reused_without_overwrite": true,
           "authenticated_api_reference": "https://api.github.com/repos/elong0527/yamaa/releases/assets/638657402"
         },
         {
@@ -408,7 +408,7 @@
           "name": "yamaa-0.3.0-cp312-abi3-macosx_11_0_arm64.whl",
           "bytes": 6305751,
           "bytes_equal": true,
-          "reused_without_overwrite": false,
+          "reused_without_overwrite": true,
           "authenticated_api_reference": "https://api.github.com/repos/elong0527/yamaa/releases/assets/638657539"
         },
         {
@@ -416,7 +416,7 @@
           "name": "yamaa-0.3.0-cp312-abi3-win_amd64.whl",
           "bytes": 6273722,
           "bytes_equal": true,
-          "reused_without_overwrite": false,
+          "reused_without_overwrite": true,
           "authenticated_api_reference": "https://api.github.com/repos/elong0527/yamaa/releases/assets/638657631"
         }
       ],
@@ -424,9 +424,13 @@
         "baseline-dependencies.txt": 637944785,
         "fresh-install-receipts.zip": 637944830,
         "fresh-source-rebuilt-wheel.zip": 637944905,
+        "prior-python-rollback-38460509078.json": 638657299,
+        "prior-python-rollback-38460509078.zip": 638657402,
         "retention-manifest.json": 637945011,
         "uv.lock": 637944703,
         "yamaa-0.3.0-cp312-abi3-linux_x86_64.whl": 637944633,
+        "yamaa-0.3.0-cp312-abi3-macosx_11_0_arm64.whl": 638657539,
+        "yamaa-0.3.0-cp312-abi3-win_amd64.whl": 638657631,
         "yamaa-0.3.0.tar.gz": 637944563,
         "yamaa-reference-845a91ff.tar.gz": 637944446
       },
@@ -710,5 +714,55 @@
         "combined transition approval"
       ]
     }
+  },
+  "independent_raw_readmission": {
+    "review_date": "2026-10-13 (America/New_York)",
+    "scope": "original raw representative reinstall evidence; not final combined-main, performance budget, particular study lock or transition acceptance",
+    "python": {
+      "source_revision": "845a91ff9ba4ab6599efbd79fafe1c4e1dd14255",
+      "run_id": 38460509078,
+      "run_attempt": 1,
+      "verifier_revision": "7acd9bce2fd7943083ad9afe748d31a97fe97aef",
+      "original_artifact_inventory": "rust/qualification/prior-python-rollback-run.json",
+      "reader": "polars 1.44.2",
+      "raw_installed_tuples": 18,
+      "committed_domain_outputs": 54,
+      "exact_held_saves": 108,
+      "raw_arrow_issues_and_tables": "pass",
+      "original_canonical_uv_lock_bytes": "equal",
+      "result": "pass"
+    },
+    "r": {
+      "source_revision": "a1a9c2d216075f331ac108aa4d3638573f103cea",
+      "run_id": 38435902670,
+      "run_attempt": 1,
+      "preparation_revision": "d909928c94f308550c7f584c12b6b42506c4c84c",
+      "original_artifact_ids": [
+        11832953460,
+        11837325176,
+        11834482773
+      ],
+      "raw_installed_tuples": 3,
+      "identical_source_archive_bytes": 3290128,
+      "canonical_workspace_lock_toolchain_bytes": "equal",
+      "exact_domain_save_and_define_truth_bytes": "pass",
+      "prior_saved_candidate_bytes": "preserved",
+      "version_before_study_effects": "pass",
+      "result": "pass"
+    },
+    "latest_retention": {
+      "run_id": 38489655777,
+      "run_attempt": 1,
+      "original_asset_ids_preserved": true,
+      "python_draft_asset_count": 12,
+      "r_draft_asset_count": 3
+    },
+    "remaining_scope": [
+      "final combined-main native qualification",
+      "full performance coverage and comparable/incomparable baseline dispositions",
+      "particular complete study-lock restoration",
+      "public download URL restoration after publication",
+      "item 11 transition acceptance"
+    ]
   }
 }

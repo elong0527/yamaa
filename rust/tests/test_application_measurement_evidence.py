@@ -59,3 +59,26 @@ class ActualEvidence(unittest.TestCase):
         phases.validate_repetition(case,Path("/retained"),row,lambda path: values[path.name])
         values["save_2"]["stages"][0]["entered_ns"]-=1
         with self.assertRaisesRegex(ValueError,"fabricated original events"):phases.validate_repetition(case,Path("/retained"),row,lambda path: values[path.name])
+
+    def test_original_windows_producer_identities_replay_without_rewriting_them(self):
+        case={"family":"producer", "expected_nodes":["producer.yaml"]}
+        row={"measurements":{name:name for name in ("build","save_1","save_2")}}
+        for identity in (r"C:\retained\producer.yaml", r"\\runner\evidence\producer.yaml", "/retained/producer.yaml"):
+            with self.subTest(identity=identity):
+                values={}
+                for name,count in (("build",0),("save_1",1),("save_2",2)):
+                    value=evidence()
+                    value["nodes"]=[{"index":0,"identity":identity}]
+                    value["save_attempts"]=count
+                    value["saves"]=[{"attempt":i+1,"entered_ns":2**53+100+i*2,"completed_ns":2**53+101+i*2,"outcome":"succeeded"} for i in range(count)]
+                    values[name]=value
+                phases.validate_repetition(case,Path("/retained"),row,lambda path: values[path.name])
+                self.assertEqual(values["build"]["nodes"][0]["identity"],identity)
+                for value in values.values():
+                    value["nodes"][0]["identity"]=identity.replace("producer.yaml","wrong.yaml")
+                with self.assertRaisesRegex(ValueError,"independently declared graph"):
+                    phases.validate_repetition(case,Path("/retained"),row,lambda path: values[path.name])
+                for value in values.values(): value["nodes"][0]["identity"]=identity
+                values["save_2"]["nodes"][0]["identity"]=r"D:\other\producer.yaml"
+                with self.assertRaisesRegex(ValueError,"fabricated original events"):
+                    phases.validate_repetition(case,Path("/retained"),row,lambda path: values[path.name])

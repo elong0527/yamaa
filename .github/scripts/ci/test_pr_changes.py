@@ -47,6 +47,8 @@ class PRChanges(unittest.TestCase):
             "benchmarks/example/expected/result.csv",
             ".github/workflows/native.yml",
             ".github/scripts/ci/pr_changes.py",
+            ".github/scripts/commands/rust_tests.py",
+            "Makefile",
         ):
             with self.subTest(path=path):
                 self.assertEqual(
