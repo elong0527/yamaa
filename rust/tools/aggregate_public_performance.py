@@ -413,7 +413,9 @@ def validate_case_associations(value, role, case, unit, catalog, native):
             if lane["host"] == "python"
             else f"native-r-{lane['os']}"
         )
-        (artifact,) = [item for item in native["artifacts"] if item["name"] == name]
+        (artifact,) = [
+            item for item in native["selected_artifacts"] if item["name"] == name
+        ]
         require(
             all(
                 association[key] == expected

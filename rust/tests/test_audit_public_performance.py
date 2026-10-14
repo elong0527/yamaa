@@ -735,6 +735,23 @@ class ActionsAdmission(unittest.TestCase):
             with self.assertRaises(ValueError):
                 auditor.validate_run(run, self.payload)
 
+    def test_original_full_artifact_snapshot_preserves_old_attempts_without_substitution(
+        self,
+    ):
+        older = dict(self.artifact, id=789, created_at="2026-10-13T01:10:00Z")
+        snapshot = [self.artifact, older]
+        original = copy.deepcopy(snapshot)
+        artifact, _ = auditor.admit_artifact(self.entry, snapshot, self.run, [self.job])
+        self.assertEqual(artifact["id"], self.entry["artifact_id"])
+        self.assertEqual(snapshot, original)
+        with self.assertRaisesRegex(ValueError, "outside producing"):
+            auditor.admit_artifact(
+                dict(self.entry, artifact_id=789), snapshot, self.run, [self.job]
+            )
+        older["created_at"] = self.artifact["created_at"]
+        with self.assertRaisesRegex(ValueError, "ambiguous artifact"):
+            auditor.admit_artifact(self.entry, snapshot, self.run, [self.job])
+
     def test_always_retains_all_567_gaps_and_budget_errors_stay_separate(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -1521,6 +1538,25 @@ class NativeSourceBinding(unittest.TestCase):
         self.payload["native_jobs"] = "native-jobs.json"
         self.jobs[0]["run_attempt"] = 1
         write(self.root / "native-jobs.json", self.jobs)
+        self.assertEqual(self.inputs()["status"], "fail")
+
+    def test_full_native_snapshot_explicitly_selects_current_attempt_and_preserves_old(
+        self,
+    ):
+        older = dict(
+            self.artifacts[0], id=2000, expired=True, created_at="2026-10-12T01:10:00Z"
+        )
+        self.artifacts.append(older)
+        write(self.root / "native-artifacts.json", self.artifacts)
+        original = (self.root / "native-artifacts.json").read_bytes()
+        native = self.inputs()
+        self.assertEqual(native["status"], "pass")
+        self.assertIn(older, native["artifacts"])
+        self.assertNotIn(older, native["selected_artifacts"])
+        self.assertEqual((self.root / "native-artifacts.json").read_bytes(), original)
+        auditor.native_collection(self.directory, auditor.tuples()[0], native)
+        older["created_at"] = self.artifacts[0]["created_at"]
+        write(self.root / "native-artifacts.json", self.artifacts)
         self.assertEqual(self.inputs()["status"], "fail")
 
     def test_outer_native_attempt_and_unattempted_or_wrong_candidate_references_refuse(

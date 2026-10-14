@@ -1234,10 +1234,6 @@ def admit_artifact(entry, artifacts, run, jobs):
         and artifact["workflow_run"]["head_sha"] == run["head_sha"],
         "wrong/empty/expired original artifact",
     )
-    require(
-        len([a for a in artifacts if a["name"] == name]) == 1,
-        "ambiguous artifact names from different attempts",
-    )
     job_name = (
         f"performance-python ({lane['os']}, {lane['python']}, {lane['form']})"
         if lane["host"] == "python"
@@ -1257,6 +1253,17 @@ def admit_artifact(entry, artifacts, run, jobs):
         "producing job source/attempt failed or incomplete",
     )
     parse_time = native_admission.timestamp
+    require(
+        sum(
+            a["name"] == name
+            and parse_time(job["started_at"])
+            <= parse_time(a["created_at"])
+            <= parse_time(job["completed_at"])
+            for a in artifacts
+        )
+        == 1,
+        "ambiguous artifact names in selected producing attempt",
+    )
     require(
         parse_time(job["started_at"])
         <= parse_time(artifact["created_at"])
@@ -1278,12 +1285,33 @@ def native_inputs(payload, root, performance_run):
         jobs = jobs["jobs"] if isinstance(jobs, dict) else jobs
         artifacts = artifacts["artifacts"] if isinstance(artifacts, dict) else artifacts
         nonempty(performance_run["head_branch"], "original source branch")
+        # Keep full immutable API snapshots. Eligibility is a separate explicit
+        # selection inside each named producing job's exact selected attempt.
+        selected = []
+        for name in native_admission.required_artifacts():
+            matches = [
+                job
+                for job in jobs
+                if job["name"] == native_admission.artifact_job(name)
+            ]
+            require(
+                len(matches) == 1, "missing/duplicate original native producing job"
+            )
+            job = matches[0]
+            selected.extend(
+                item
+                for item in artifacts
+                if item["name"] == name
+                and native_admission.timestamp(job["started_at"])
+                <= native_admission.timestamp(item["created_at"])
+                <= native_admission.timestamp(job["completed_at"])
+            )
         # Reuse #2137's full native admission, including exact producing-job
         # attempts and original artifact creation intervals.
         native_admission.validate(
             run,
             jobs,
-            artifacts,
+            selected,
             payload["repository"],
             payload["source_revision"],
             performance_run["head_branch"],
@@ -1299,12 +1327,17 @@ def native_inputs(payload, root, performance_run):
                 item["expired"] is False
                 and type(item["size_in_bytes"]) is int
                 and item["size_in_bytes"] > 0
-                for item in artifacts
-                if item["name"] in native_admission.required_artifacts()
+                for item in selected
             ),
             "invalid original native artifact availability/size",
         )
-        return {"status": "pass", "run": run, "jobs": jobs, "artifacts": artifacts}
+        return {
+            "status": "pass",
+            "run": run,
+            "jobs": jobs,
+            "artifacts": artifacts,
+            "selected_artifacts": selected,
+        }
     except EVIDENCE_ERRORS as error:
         return {"status": "fail", "reason": str(error)}
 
@@ -1335,7 +1368,9 @@ def native_collection(directory, lane, native):
         if lane["host"] == "python"
         else f"native-r-{lane['os']}"
     )
-    (artifact,) = [item for item in native["artifacts"] if item["name"] == name]
+    (artifact,) = [
+        item for item in native["selected_artifacts"] if item["name"] == name
+    ]
     record = read(relative(directory, "collection.json"))["provenance"]
     filename = original_path(record["artifact_path"], record["system"]).name
     reference = f"github-actions:{original['id']}/attempt-{original['run_attempt']}/{name}/{filename}"
