@@ -1,12 +1,14 @@
 name: Public performance evidence
 
 on:
-  # Only this explicitly pushed qualification branch starts the expensive matrix.
+  # Explicit pushes select final characterization or the untimed capacity frontier.
   push:
-    branches: [qualification/issue-1998]
+    branches: [qualification/issue-1998, qualification/issue-2142-frontier]
     paths:
       - 'rust/**'
       - '!rust/measurements/**'
+      - '!rust/qualification/performance-campaign.json'
+      - '!rust/qualification/performance-budgets.json'
       - '!rust/*.md'
       - 'python/**'
       - '!python/*.md'
@@ -58,8 +60,9 @@ on:
         type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/qualification/issue-1998' }}
+  # A newer source must not cancel an original collection or its retention.
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -73,7 +76,7 @@ env:
   RUSTUP_TOOLCHAIN: 1.90.0
   CARGO_BUILD_JOBS: '2'
   CARGO_INCREMENTAL: '0'
-  COLLECTION_PURPOSE: ${{ inputs.purpose || 'characterization' }}
+  COLLECTION_PURPOSE: ${{ github.ref == 'refs/heads/qualification/issue-2142-frontier' && 'capacity-frontier' || inputs.purpose || 'characterization' }}
   BASELINE_REF: ${{ inputs.baseline_ref || 'yamaa-py-0.3.0' }}
   PHASE_MEASUREMENTS: ${{ github.event_name == 'push' || inputs.phase_measurements }}
 
@@ -84,6 +87,7 @@ jobs:
     timeout-minutes: 125
     outputs:
       run-id: ${{ steps.admit.outputs.run-id }}
+      run-attempt: ${{ steps.admit.outputs.run-attempt }}
       revision: ${{ steps.admit.outputs.revision }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -114,6 +118,7 @@ jobs:
     needs: native
     env:
       NATIVE_RUN_ID: ${{ needs.native.outputs.run-id }}
+      NATIVE_RUN_ATTEMPT: ${{ needs.native.outputs.run-attempt }}
     name: performance-python (${{ matrix.os }}, ${{ matrix.python }}, ${{ matrix.form }})
     runs-on: ${{ matrix.os }}
     # Approved reference producer 100k Build alone takes about 30-42 seconds;
@@ -144,7 +149,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           BASELINE_REF: ${{ inputs.baseline_ref || 'yamaa-py-0.3.0' }}
         run: |
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${NATIVE_RUN_ID}" > "${RUNNER_TEMP}/native-run.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${NATIVE_RUN_ID}/attempts/${NATIVE_RUN_ATTEMPT}" > "${RUNNER_TEMP}/native-run.json"
           python - <<'PY'
           import json, os
           from pathlib import Path
@@ -191,7 +196,7 @@ jobs:
         run: |
           candidate_artifact=$(python -c 'from pathlib import Path; import os; print(next((Path(os.environ["RUNNER_TEMP"])/"candidate-distribution").glob("*.whl" if "${{ matrix.form }}"=="wheel" else "*.tar.gz")))')
           baseline_artifact=$(python -c 'from pathlib import Path; import os; print(next((Path(os.environ["RUNNER_TEMP"])/"baseline-distribution").glob("*.whl")))')
-          python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "${CANDIDATE_REVISION}" --host python --executable "${CANDIDATE_PYTHON}" --artifact "${candidate_artifact}" --artifact-reference "github-actions:${NATIVE_RUN_ID}/native-python-${{ matrix.os }}-3.14/$(basename "${candidate_artifact}")" --form "${{ matrix.form }}" --build-association "completed native workflow source/package association; current job installs wheel or rebuilds source before measurement" --output "${RUNNER_TEMP}/candidate-installation"
+          python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "${CANDIDATE_REVISION}" --host python --executable "${CANDIDATE_PYTHON}" --artifact "${candidate_artifact}" --artifact-reference "github-actions:${NATIVE_RUN_ID}/attempt-${NATIVE_RUN_ATTEMPT}/native-python-${{ matrix.os }}-3.14/$(basename "${candidate_artifact}")" --form "${{ matrix.form }}" --build-association "completed native workflow source/package association; current job installs wheel or rebuilds source before measurement" --output "${RUNNER_TEMP}/candidate-installation"
           python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "$(cat "${RUNNER_TEMP}/baseline-revision.txt")" --host python --executable "${BASELINE_PYTHON}" --artifact "${baseline_artifact}" --artifact-reference "source-built:${BASELINE_REF}/$(basename "${baseline_artifact}")" --form wheel --build-association "clean source-built previous release archive; baseline-build.log retained; not a downloaded previous-release binary" --output "${RUNNER_TEMP}/baseline-installation"
       - name: Create same-runner campaign before original measurements
         run: python rust/tools/performance_campaign.py create --campaign "${RUNNER_TEMP}/machine-campaign.json"
@@ -201,6 +206,7 @@ jobs:
         run: |
           phase_args=()
           if [[ "${PHASE_MEASUREMENTS}" == "true" ]]; then phase_args+=(--phase-measurements); fi
+          if [[ "${COLLECTION_PURPOSE}" == "capacity-frontier" ]]; then export YAMAA_REPORT_CAPACITY_TRACE=1; fi
           python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${CANDIDATE_PYTHON}" --provenance "${RUNNER_TEMP}/candidate-installation/provenance.json" --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/candidate-evidence" "${phase_args[@]}"
       - name: Collect compatible previous-release Python reference on the same runner
         id: baseline
@@ -251,6 +257,7 @@ jobs:
     needs: native
     env:
       NATIVE_RUN_ID: ${{ needs.native.outputs.run-id }}
+      NATIVE_RUN_ATTEMPT: ${{ needs.native.outputs.run-attempt }}
     name: performance-r (${{ matrix.os }}, source)
     runs-on: ${{ matrix.os }}
     timeout-minutes: 240
@@ -282,7 +289,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           R_LIBS: ${{ runner.temp }}/performance-r-library
         run: |
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${NATIVE_RUN_ID}" > "${RUNNER_TEMP}/native-run.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${NATIVE_RUN_ID}/attempts/${NATIVE_RUN_ATTEMPT}" > "${RUNNER_TEMP}/native-run.json"
           python - <<'PY'
           import json, os, tarfile, urllib.request
           from pathlib import Path
@@ -329,7 +336,7 @@ jobs:
       - name: Record actual installed R origins and source association
         run: |
           artifact=$(python -c 'from pathlib import Path; import os; print(next((Path(os.environ["RUNNER_TEMP"])/"candidate-distribution").glob("*.tar.gz")))')
-          python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "${CANDIDATE_REVISION}" --host r --executable "$(command -v Rscript)" --artifact "${artifact}" --artifact-reference "github-actions:${NATIVE_RUN_ID}/native-r-${{ matrix.os }}/$(basename "${artifact}")" --form source --build-association "completed native workflow source archive; rebuilt before collection; candidate-build.log retained" --clock-config "${TIMER_CONFIG}" --clock-library "${TIMER_LIBRARY}" --output "${RUNNER_TEMP}/candidate-installation"
+          python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "${CANDIDATE_REVISION}" --host r --executable "$(command -v Rscript)" --artifact "${artifact}" --artifact-reference "github-actions:${NATIVE_RUN_ID}/attempt-${NATIVE_RUN_ATTEMPT}/native-r-${{ matrix.os }}/$(basename "${artifact}")" --form source --build-association "completed native workflow source archive; rebuilt before collection; candidate-build.log retained" --clock-config "${TIMER_CONFIG}" --clock-library "${TIMER_LIBRARY}" --output "${RUNNER_TEMP}/candidate-installation"
       - name: Secure and install previous-release Python reference on the R runner
         env:
           BASELINE_REF: ${{ inputs.baseline_ref || 'yamaa-py-0.3.0' }}
@@ -364,6 +371,7 @@ jobs:
         run: |
           phase_args=()
           if [[ "${PHASE_MEASUREMENTS}" == "true" ]]; then phase_args+=(--phase-measurements); fi
+          if [[ "${COLLECTION_PURPOSE}" == "capacity-frontier" ]]; then export YAMAA_REPORT_CAPACITY_TRACE=1; fi
           python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host r --executable "$(command -v Rscript)" --provenance "${RUNNER_TEMP}/candidate-installation/provenance.json" --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/candidate-evidence" "${phase_args[@]}"
       - name: Collect compatible previous-release reference on the same R runner
         id: baseline
@@ -414,3 +422,98 @@ jobs:
       - name: Require complete evidence after preserving failures
         if: always()
         run: test "${{ steps.candidate.outcome }}" = success && test "${{ steps.baseline.outcome }}" = success && test "${{ steps.producer_baseline.outcome }}" = success
+
+  audit:
+    needs: [native, python, r]
+    if: always()
+    name: Independent retained campaign replay
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Retain exact attempt metadata and self-contained source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python rust/tools/index_public_performance.py --input "${RUNNER_TEMP}/performance-input" \
+            --checkout "${GITHUB_WORKSPACE}" --repository "${GITHUB_REPOSITORY}" \
+            --revision "${GITHUB_SHA}" --run-id "${GITHUB_RUN_ID}" \
+            --attempt "${GITHUB_RUN_ATTEMPT}" --baseline-ref "${BASELINE_REF}"
+      - name: Install locked independent evidence readers
+        run: |
+          python -m pip install uv==0.11.6
+          uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/audit-requirements.txt"
+          python -m pip install --no-deps -r "${RUNNER_TEMP}/audit-requirements.txt"
+      - name: Replay raw evidence and require the explicit measured budget decision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          budget_args=()
+          if test -f rust/qualification/performance-budgets.json; then
+            budget_args+=(--budgets rust/qualification/performance-budgets.json)
+          fi
+          python rust/tools/replay_public_performance.py --input "${RUNNER_TEMP}/performance-input/manifest.json" \
+            --repository "${GITHUB_WORKSPACE}" --output "${RUNNER_TEMP}/performance-audit" \
+            "${budget_args[@]}" --check
+      - name: Show independent replay and all unresolved acceptance gates
+        if: always()
+        run: |
+          if test -f "${RUNNER_TEMP}/performance-audit/performance-audit.md"; then
+            cat "${RUNNER_TEMP}/performance-audit/performance-audit.md" >> "${GITHUB_STEP_SUMMARY}"
+          fi
+      - name: Preserve replay inputs and compact report without duplicating raw collections
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: performance-audit
+          retention-days: 90
+          path: |
+            ${{ runner.temp }}/performance-input/manifest.json
+            ${{ runner.temp }}/performance-input/run.json
+            ${{ runner.temp }}/performance-input/jobs.json
+            ${{ runner.temp }}/performance-input/artifacts.json
+            ${{ runner.temp }}/performance-input/source.bundle
+            ${{ runner.temp }}/performance-audit/performance-audit.json
+            ${{ runner.temp }}/performance-audit/performance-audit.md
+          if-no-files-found: error
+
+  retain:
+    needs: [native, python, r, audit]
+    if: always() && github.event_name == 'push' && (github.ref == 'refs/heads/qualification/issue-1998' || github.ref == 'refs/heads/qualification/issue-2142-frontier')
+    name: Preserve original campaign bytes in an unpublished draft
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Store original ZIPs additively and verify authenticated byte retrieval
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python rust/tools/retain_public_performance.py --repository "${GITHUB_REPOSITORY}" \
+            --revision "${GITHUB_SHA}" --run-id "${GITHUB_RUN_ID}" \
+            --attempt "${GITHUB_RUN_ATTEMPT}" --output "${RUNNER_TEMP}/performance-retention"
+      - name: Preserve storage receipt and original artifact identities
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: performance-retention
+          retention-days: 90
+          path: |
+            ${{ runner.temp }}/performance-retention/retention.json
+            ${{ runner.temp }}/performance-retention/original-artifacts.json
+            ${{ runner.temp }}/performance-retention/original-jobs.json
+          if-no-files-found: error
