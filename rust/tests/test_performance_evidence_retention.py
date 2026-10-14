@@ -27,6 +27,41 @@ def selected_run(revision="a" * 40):
 
 
 class RetainedIndex(unittest.TestCase):
+    def test_rerun_does_not_select_a_unique_artifact_from_an_earlier_attempt(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            checkout = root / "checkout"
+            checkout.mkdir()
+            def git(*arguments):
+                return subprocess.check_output(["git", *arguments], cwd=checkout, text=True).strip()
+            git("init", "-q")
+            git("config", "user.name", "Fixture")
+            git("config", "user.email", "fixture@example.invalid")
+            (checkout / "truth").write_bytes(b"independent prior source")
+            git("add", "truth")
+            git("commit", "-qm", "baseline")
+            git("tag", "yamaa-py-0.3.0")
+            revision = git("rev-parse", "HEAD")
+            args = SimpleNamespace(
+                input=root / "input", checkout=checkout, repository="elong0527/yamaa",
+                revision=revision, run_id=123, attempt=2, baseline_ref="yamaa-py-0.3.0",
+                native_run_id="", native_attempt="",
+            )
+            run = dict(selected_run(revision), run_attempt=2)
+            artifact = {"id": 77, "name": "performance-python-ubuntu-24.04-3.12-wheel",
+                        "created_at": "2026-10-14T00:00:10Z"}
+            job = {"id": 88, "name": "performance-python (ubuntu-24.04, 3.12, wheel)",
+                   "run_attempt": 2, "status": "completed", "started_at": "2026-10-14T00:02:00Z",
+                   "completed_at": "2026-10-14T00:03:00Z"}
+            with mock.patch.object(index, "api", side_effect=[run, [{"artifacts": [artifact]}],
+                                                              [{"jobs": [job]}]]):
+                value = index.index(args)
+            self.assertEqual(len(value["entries"]), 21)
+            self.assertIsNone(value["entries"][0]["artifact_id"])
+            self.assertEqual(value["entries"][0]["run_attempt"], 2)
+            self.assertEqual(json.loads((args.input / "artifacts.json").read_text()), [artifact])
+            self.assertEqual(json.loads((args.input / "jobs.json").read_text()), [job])
+
     def test_native_snapshot_reads_selected_attempt_and_preserves_original_artifact_ids(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -47,13 +82,18 @@ class RetainedIndex(unittest.TestCase):
 
     def test_missing_and_ambiguous_artifacts_keep_all_twenty_one_tuples_visible(self):
         lanes = list(index.tuples())
-        artifacts = [{"id": number + 1, "name": name}
+        artifacts = [{"id": number + 1, "name": name, "created_at": "2026-10-14T00:00:10Z"}
                      for number, (_, name) in enumerate(lanes[1:])]
         artifacts.append(dict(artifacts[0], id=999))
-        result = index.manifest(selected_run(), artifacts, "elong0527/yamaa", "a" * 40, 1)
+        jobs = [{"name": (f"performance-python ({item['os']}, {item['python']}, {item['form']})"
+                          if item["host"] == "python" else f"performance-r ({item['os']}, source)"),
+                 "run_attempt": 1, "status": "completed", "started_at": "2026-10-14T00:00:00Z",
+                 "completed_at": "2026-10-14T00:01:00Z"} for item, _ in lanes]
+        result = index.manifest(selected_run(), artifacts, "elong0527/yamaa", "a" * 40, 1, jobs=jobs)
         self.assertEqual(len(result["entries"]), 21)
         self.assertIsNone(result["entries"][0]["artifact_id"])
         self.assertIsNone(result["entries"][1]["artifact_id"])
+        self.assertTrue(all(entry["artifact_id"] is not None for entry in result["entries"][2:]))
         self.assertTrue(all(len(entry["collections"]) == 3 for entry in result["entries"]))
         self.assertEqual(sum(entry["tuple"]["host"] == "r" for entry in result["entries"]), 3)
 
@@ -64,7 +104,27 @@ class RetainedIndex(unittest.TestCase):
             run = selected_run()
             run[field] = value
             with self.subTest(field=field), self.assertRaisesRegex(ValueError, "exact source/attempt"):
-                index.manifest(run, [], "elong0527/yamaa", "a" * 40, 1)
+                index.manifest(run, [], "elong0527/yamaa", "a" * 40, 1, jobs=[])
+
+    def test_wrong_ambiguous_or_unfinished_job_never_labels_artifact_with_selected_attempt(self):
+        item = {"host": "r", "os": "ubuntu-24.04", "python": None, "form": "source"}
+        artifact = {"id": 77, "name": "performance-r-ubuntu-24.04-source",
+                    "created_at": "2026-10-14T00:00:10Z"}
+        job = {"name": "performance-r (ubuntu-24.04, source)", "run_attempt": 2,
+               "status": "completed", "started_at": "2026-10-14T00:00:00Z",
+               "completed_at": "2026-10-14T00:01:00Z"}
+        self.assertTrue(index.artifact_matches_attempt(artifact, [job], item, 2))
+        self.assertTrue(index.artifact_matches_attempt(artifact, [dict(job, conclusion="failure")], item, 2))
+        cases = [[], [job, dict(job)], [dict(job, run_attempt=1)],
+                 [dict(job, status="in_progress")], [dict(job, name="unrelated")],
+                 [dict(job, completed_at=None)], [dict(job, started_at="malformed")],
+                 [dict(job, started_at="2026-10-14T00:02:00Z")]]
+        for jobs in cases:
+            with self.subTest(jobs=jobs):
+                self.assertFalse(index.artifact_matches_attempt(artifact, jobs, item, 2))
+        for value in (None, 0, "malformed", "2026-10-14T00:00:10"):
+            with self.subTest(created_at=value):
+                self.assertFalse(index.artifact_matches_attempt(dict(artifact, created_at=value), [job], item, 2))
 
     def test_api_metadata_discards_digests_without_rewriting_other_observations(self):
         original = [{"id": 1, "digest": "irrelevant", "workflow_run": {"head_sha": "a" * 40},

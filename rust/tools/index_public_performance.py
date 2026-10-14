@@ -7,6 +7,7 @@ Its source bundle and relative paths allow replay after Actions runners disappea
 from __future__ import annotations
 
 import argparse
+import datetime
 import itertools
 import json
 import re
@@ -58,7 +59,34 @@ def tuples():
         }, f"performance-r-{host}-source"
 
 
-def manifest(run, artifacts, repository, revision, attempt, native=False):
+def timestamp(value):
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.utcoffset() is not None else None
+
+
+def artifact_matches_attempt(artifact, jobs, item, attempt):
+    created = timestamp(artifact.get("created_at"))
+    if created is None:
+        return False
+    producer = (f"performance-python ({item['os']}, {item['python']}, {item['form']})"
+                if item["host"] == "python" else f"performance-r ({item['os']}, source)")
+    matches = 0
+    for job in jobs:
+        if (job.get("name") != producer or type(job.get("run_attempt")) is not int
+                or job["run_attempt"] != attempt or job.get("status") != "completed"):
+            continue
+        started, completed = timestamp(job.get("started_at")), timestamp(job.get("completed_at"))
+        if started is not None and completed is not None and started <= created <= completed:
+            matches += 1
+    return matches == 1
+
+
+def manifest(run, artifacts, repository, revision, attempt, native=False, *, jobs):
     if (
         run["repository"]["full_name"] != repository
         or run["head_repository"]["full_name"] != repository
@@ -70,7 +98,8 @@ def manifest(run, artifacts, repository, revision, attempt, native=False):
         raise ValueError("performance run differs from the exact source/attempt")
     entries = []
     for item, name in tuples():
-        matches = [artifact for artifact in artifacts if artifact["name"] == name]
+        matches = [artifact for artifact in artifacts if artifact["name"] == name
+                   and artifact_matches_attempt(artifact, jobs, item, attempt)]
         # Missing/ambiguous evidence remains a named gap rather than shrinking
         # the approved matrix or selecting an arbitrary artifact.
         identity = matches[0]["id"] if len(matches) == 1 else None
@@ -162,7 +191,7 @@ def index(args):
         write(root / name, value)
     if native:
         native_snapshot(root, args.repository, args.native_run_id, args.native_attempt)
-    value = manifest(run, artifacts, args.repository, args.revision, args.attempt, native)
+    value = manifest(run, artifacts, args.repository, args.revision, args.attempt, native, jobs=jobs)
     if (root / "source.bundle").exists() or (root / "manifest.json").exists():
         raise ValueError("cannot replace an original performance index")
     # Include complete candidate/baseline histories. Direct commit identities
