@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "yamaa independent public performance input and item-10 budgets",
-  "description": "Auditor reads original public-performance/1 and public-performance-campaign/1 evidence only. Paths are relative to the manifest, including a self-contained source Git bundle for offline replay. Original absolute runner paths remain immutable identity strings. JSON and Markdown outputs distinguish harness correctness, all 567 tuple/case combinations, and numeric budget acceptance. --check requires all three gates. No release thresholds are provided by this schema.",
+  "description": "Auditor reads original public-performance/1 and public-performance-campaign/1 evidence only. Paths are relative to the manifest, including a self-contained source Git bundle for offline replay. Original absolute runner paths remain immutable identity strings. --check-collection requires harness correctness, native source admission and all 567 tuple/case combinations, forbids budgets, and preserves budgets:not_evaluated and accepted:false. Final --check additionally requires original terminal successful completion and approved numeric budgets. No release thresholds are provided by this schema.",
   "oneOf": [
     {
       "$ref": "#/$defs/input"
@@ -231,6 +231,10 @@
         "run": {
           "$ref": "#/$defs/path"
         },
+        "completion_run": {
+          "$ref": "#/$defs/path",
+          "description": "Separately obtained original selected-run-attempt API snapshot after terminal success. Preserve run.json unchanged. Required for final acceptance when the original snapshot was in_progress; different source/run/attempt or terminal failure is refused."
+        },
         "artifacts": {
           "$ref": "#/$defs/path"
         },
@@ -264,7 +268,7 @@
         "artifacts",
         "entries"
       ],
-      "description": "run/artifacts/jobs contain original Actions API snapshots for the selected performance.yml run attempt, with digest fields omitted. Successful actual producing jobs and artifact/campaign timestamps bind the attempt. An in-progress workflow snapshot is admitted only when its named producers have succeeded. Missing jobs fail admission. source_bundle is a self-contained Git bundle containing candidate, baseline, harness and generator truth revisions; otherwise --repository supplies pinned source. Full Actions admission requires native_run/native_jobs/native_artifacts original API snapshots for the exact successful native attempt. The auditor reuses the full native admission protocol, verifies each tuple native-run.json and the existing github-actions:<run>/attempt-<attempt>/<artifact>/<filename> reference, and records original native artifact IDs. Absent native proof remains unavailable and cannot pass; local raw-collection sample replay makes no Actions qualification claim."
+      "description": "run/artifacts/jobs contain original Actions API snapshots for the selected performance.yml run attempt, with digest fields omitted. Successful actual producing jobs and artifact/campaign timestamps bind the attempt. An in-progress workflow snapshot can supply a collection-only gate when its named producers have succeeded; final acceptance requires a separate completion_run receipt for that same original attempt. Failed/cancelled attempts remain refused. Missing jobs fail admission. source_bundle is a self-contained Git bundle containing candidate, baseline, harness and generator truth revisions; otherwise --repository supplies pinned source. Full Actions admission requires native_run/native_jobs/native_artifacts original API snapshots for the exact successful native attempt. The auditor reuses the full native admission protocol, verifies each tuple native-run.json and the existing github-actions:<run>/attempt-<attempt>/<artifact>/<filename> reference, and records original native artifact IDs. Absent native proof remains unavailable and cannot pass; local raw-collection sample replay makes no Actions qualification claim."
     },
     "rule": {
       "type": "object",

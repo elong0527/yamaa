@@ -850,7 +850,7 @@ class ActionsAdmission(unittest.TestCase):
                         str(root / "input.json"),
                         "--output",
                         str(root / "report"),
-                        "--check",
+                        "--check-collection",
                     ]
                 ),
                 1,
@@ -863,6 +863,213 @@ class ActionsAdmission(unittest.TestCase):
                 "replace", report["harness_correctness"]["errors"][0]["reason"]
             )
             self.assertTrue((root / "report/performance-audit.md").is_file())
+
+
+class CollectionGates(unittest.TestCase):
+    """Gate composition with authored API metadata; raw validation has own fixtures."""
+
+    def setUp(self):
+        ActionsAdmission.setUp(self)
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.payload.update(
+            protocol=auditor.PROTOCOL,
+            run="run.json",
+            artifacts="artifacts.json",
+            jobs="jobs.json",
+            entries=[],
+        )
+        native_run, _, _ = native_fixture(self.root, self.payload)
+        artifacts, jobs = [], []
+        for number, lane in enumerate(auditor.tuples()):
+            python = lane["host"] == "python"
+            name = (
+                f"performance-python-{lane['os']}-{lane['python']}-{lane['form']}"
+                if python
+                else f"performance-r-{lane['os']}-source"
+            )
+            collection = self.root / name / "candidate-evidence"
+            collection.mkdir(parents=True)
+            entry = dict(
+                self.entry,
+                tuple=lane,
+                artifact_id=456 + number,
+                artifact_name=name,
+                campaign=name + "/machine-campaign.json",
+                collections=[
+                    {"role": "candidate", "path": name + "/candidate-evidence"}
+                ],
+            )
+            self.payload["entries"].append(entry)
+            artifacts.append(dict(self.artifact, id=entry["artifact_id"], name=name))
+            jobs.append(
+                dict(
+                    self.job,
+                    name=(
+                        f"performance-python ({lane['os']}, {lane['python']}, {lane['form']})"
+                        if python
+                        else f"performance-r ({lane['os']}, source)"
+                    ),
+                    runner_name="fixture-runner",
+                )
+            )
+            native_name = (
+                f"native-python-{lane['os']}-3.14"
+                if python
+                else f"native-r-{lane['os']}"
+            )
+            write(collection.parent / "native-run.json", native_run)
+            write(
+                collection / "collection.json",
+                {
+                    "provenance": {
+                        "artifact_path": "/vanished/yamaa.whl",
+                        "system": "Linux",
+                        "source_revision": "a" * 40,
+                        "artifact_reference": f"github-actions:321/attempt-2/{native_name}/yamaa.whl",
+                    }
+                },
+            )
+            write(
+                collection.parent / "machine-campaign.json",
+                {
+                    "created_at": "2026-10-14T01:05:00Z",
+                    "measurement_machine": {"runner_name": "fixture-runner"},
+                },
+            )
+        self.original_run = json.dumps(self.run).encode()
+        (self.root / "run.json").write_bytes(self.original_run)
+        write(self.root / "artifacts.json", artifacts)
+        write(self.root / "jobs.json", jobs)
+        self.values = {
+            case: {
+                "status": "pass",
+                "metrics": {"cold.public_build.median_ns": {"median": 10}},
+                "unavailable": [],
+            }
+            for case in auditor.case_names()
+        }
+
+    def invoke(self, flag, name, budgets=False):
+        write(self.root / "input.json", self.payload)
+        arguments = [
+            "--input",
+            str(self.root / "input.json"),
+            "--output",
+            str(self.root / name),
+            flag,
+        ]
+        if budgets:
+            arguments.extend(["--budgets", str(self.root / "budgets.json")])
+        status = auditor.main(arguments)
+        return status, auditor.read(self.root / name / "performance-audit.json")
+
+    def test_collection_only_passes_567_without_claiming_final_acceptance(self):
+        with mock.patch.object(auditor, "admit_collection", return_value=self.values):
+            status, report = self.invoke("--check-collection", "collection-report")
+        self.assertEqual(status, 0)
+        self.assertEqual(report["coverage"]["passed"], 567)
+        self.assertEqual(report["collection_gate"]["status"], "pass")
+        self.assertEqual(report["collection_gate"]["scope"], "collection-only")
+        self.assertEqual(report["run_completion"]["status"], "incomplete")
+        self.assertEqual(report["budgets"]["status"], "not_evaluated")
+        self.assertFalse(report["accepted"])
+
+    def test_final_budgets_need_original_terminal_success_and_leave_snapshot_unchanged(
+        self,
+    ):
+        budget_fixture = Budgets()
+        budget_fixture.setUp()
+        write(self.root / "budgets.json", budget_fixture.value)
+        with mock.patch.object(auditor, "admit_collection", return_value=self.values):
+            status, report = self.invoke("--check", "before-completion", budgets=True)
+            self.assertEqual(report["budgets"]["status"], "pass")
+            self.assertEqual(status, 1)
+            self.assertFalse(report["accepted"])
+            self.payload["completion_run"] = "completion-run.json"
+            write(
+                self.root / "completion-run.json",
+                dict(self.run, status="completed", conclusion="success"),
+            )
+            status, report = self.invoke("--check", "after-completion", budgets=True)
+        self.assertEqual(status, 0)
+        self.assertTrue(report["accepted"])
+        self.assertEqual(report["run_completion"]["evidence"], "completion-receipt")
+        self.assertEqual((self.root / "run.json").read_bytes(), self.original_run)
+
+    def test_completion_receipt_wrong_identity_failed_or_still_running_refuses(self):
+        self.payload["completion_run"] = "completion-run.json"
+        success = dict(self.run, status="completed", conclusion="success")
+        for number, change in enumerate(
+            (
+                {"id": 124},
+                {"run_attempt": 3},
+                {"head_sha": "b" * 40},
+                {"head_branch": "other"},
+                {"event": "push"},
+                {"repository": {"full_name": "other/repository"}},
+                {"conclusion": "failure"},
+                {"conclusion": "cancelled"},
+                {"status": "in_progress", "conclusion": None},
+            )
+        ):
+            with self.subTest(change=change):
+                write(self.root / "completion-run.json", dict(success, **change))
+                status, report = self.invoke("--check-collection", f"bad-{number}")
+                self.assertEqual(status, 1)
+                self.assertEqual(report["collection_gate"]["status"], "fail")
+                self.assertFalse(report["accepted"])
+
+    def test_collection_only_refuses_actual_failed_raw_child_and_missing_case(self):
+        raw = Replay()
+        raw.setUp()
+        self.addCleanup(raw.doCleanups)
+        raw.change(raw.cold, "process.json", lambda value: value.update(exit_code=1))
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=lambda *args: raw.replay()
+        ):
+            status, report = self.invoke("--check-collection", "failed-child")
+        self.assertEqual(status, 1)
+        self.assertEqual(report["collection_gate"]["status"], "fail")
+        self.assertIn("failed child/PID", str(report["harness_correctness"]["errors"]))
+        self.values.pop(auditor.case_names()[0])
+        with mock.patch.object(auditor, "admit_collection", return_value=self.values):
+            status, report = self.invoke("--check-collection", "missing-case")
+        self.assertEqual(status, 1)
+        self.assertEqual(report["collection_gate"]["status"], "incomplete")
+        self.assertEqual(report["coverage"]["missing"], 21)
+
+    def test_collection_only_never_admits_failed_source_run_or_native_attempt(self):
+        write(
+            self.root / "run.json",
+            dict(self.run, status="completed", conclusion="failure"),
+        )
+        status, report = self.invoke("--check-collection", "failed-source")
+        self.assertEqual(status, 1)
+        self.assertFalse(report["accepted"])
+        (self.root / "run.json").write_bytes(self.original_run)
+        native = auditor.read(self.root / "native-run.json")
+        write(self.root / "native-run.json", dict(native, conclusion="failure"))
+        with mock.patch.object(auditor, "admit_collection", return_value=self.values):
+            status, report = self.invoke("--check-collection", "failed-native")
+        self.assertEqual(status, 1)
+        self.assertFalse(report["accepted"])
+
+    def test_collection_cli_refuses_budgets_and_conflicting_check_flags(self):
+        for arguments in (
+            ["--check-collection", "--budgets", "budgets.json"],
+            ["--check-collection", "--check"],
+        ):
+            with (
+                self.subTest(arguments=arguments),
+                self.assertRaises(SystemExit) as failure,
+                mock.patch.object(sys, "stderr"),
+            ):
+                auditor.main(
+                    ["--input", "input.json", "--output", "output", *arguments]
+                )
+            self.assertEqual(failure.exception.code, 2)
 
 
 class NativeSourceBinding(unittest.TestCase):

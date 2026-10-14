@@ -1094,6 +1094,51 @@ def validate_run(run, payload):
     )
 
 
+def performance_completion(payload, root, run):
+    """A running audit snapshot cannot establish the original terminal outcome."""
+    completion = (
+        read(relative(root, payload["completion_run"]))
+        if "completion_run" in payload
+        else run
+    )
+    if "completion_run" in payload:
+        validate_run(completion, payload)
+        require(
+            all(
+                completion[key] == run[key]
+                for key in (
+                    "id",
+                    "run_attempt",
+                    "head_sha",
+                    "head_branch",
+                    "path",
+                    "event",
+                )
+            )
+            and all(
+                key not in run or completion.get(key) == run[key]
+                for key in ("created_at", "run_number", "workflow_id", "run_started_at")
+            ),
+            "completion receipt belongs to another original performance attempt",
+        )
+        require(
+            completion["status"] == "completed"
+            and completion["conclusion"] == "success",
+            "performance completion receipt is not terminal success",
+        )
+    return {
+        "status": "pass" if completion["status"] == "completed" else "incomplete",
+        "evidence": "completion-receipt"
+        if "completion_run" in payload
+        else "original-snapshot",
+        "run_id": run["id"],
+        "run_attempt": run["run_attempt"],
+        "reason": None
+        if completion["status"] == "completed"
+        else "original running snapshot has no retained terminal completion receipt",
+    }
+
+
 def admit_artifact(entry, artifacts, run, jobs):
     lane = entry["tuple"]
     require(
@@ -1314,6 +1359,7 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
                 "native_run",
                 "native_jobs",
                 "native_artifacts",
+                "completion_run",
             )
             if key in payload
         ),
@@ -1333,6 +1379,7 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
     artifacts = read(relative(root, payload["artifacts"]))
     artifacts = artifacts["artifacts"] if isinstance(artifacts, dict) else artifacts
     validate_run(run, payload)
+    completion = performance_completion(payload, root, run)
     jobs = read(relative(root, payload["jobs"])) if "jobs" in payload else []
     jobs = jobs["jobs"] if isinstance(jobs, dict) else jobs
     native = native_inputs(payload, root, run)
@@ -1475,6 +1522,7 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
         "source_revision": payload["source_revision"],
         "run_id": run["id"],
         "run_attempt": run["run_attempt"],
+        "run_completion": completion,
         "harness_correctness": {"status": correctness, "errors": errors},
         "native_source_admission": (
             {"status": native["status"], "reason": native.get("reason")}
@@ -1502,9 +1550,21 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
         "warm_rss_scope": child_peak_rss.SCOPE
         + "; one actual warm-child peak, never 30 invented per-repetition peaks",
     }
+    collection_statuses = {
+        report[key]["status"]
+        for key in ("harness_correctness", "coverage", "native_source_admission")
+    }
+    report["collection_gate"] = {
+        "scope": "collection-only",
+        "status": "fail"
+        if "fail" in collection_statuses
+        else "pass"
+        if collection_statuses == {"pass"}
+        else "incomplete",
+    }
     report["accepted"] = all(
         report[key]["status"] == "pass"
-        for key in ("harness_correctness", "coverage", "budgets")
+        for key in ("collection_gate", "run_completion", "budgets")
     )
     return report
 
@@ -1514,6 +1574,9 @@ def markdown(report):
         f"# public performance replay\n\nSource: `{report['source_revision']}`; original run {report['run_id']}, attempt {report['run_attempt']}.\n\n"
         f"| Gate | Verdict |\n| --- | --- |\n| Harness correctness | {report['harness_correctness']['status']} |\n"
         f"| Coverage | {report['coverage']['status']} ({report['coverage']['passed']}/567) |\n"
+        f"| Native source admission | {report['native_source_admission']['status']} |\n"
+        f"| Collection-only gate | {report['collection_gate']['status']} |\n"
+        f"| Original run completion | {report['run_completion']['status']} |\n"
         f"| Numeric budgets | {report['budgets']['status']} |\n\n{report['baseline_gaps']}\n\n"
         f"Warm RSS: {report['warm_rss_scope']}.\n\nAcceptance: {'pass' if report['accepted'] else 'incomplete or failed'}.\n"
     )
@@ -1527,8 +1590,18 @@ def main(argv=None, entry_provider=None):
     )
     parser.add_argument("--budgets", type=Path)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--check", action="store_true")
+    checks = parser.add_mutually_exclusive_group()
+    checks.add_argument("--check", action="store_true")
+    checks.add_argument(
+        "--check-collection",
+        action="store_true",
+        help="require correctness, native source admission and all 567 cells; no numeric acceptance",
+    )
     args = parser.parse_args(argv)
+    if args.check_collection and args.budgets:
+        parser.error(
+            "--check-collection forbids --budgets; replay final --check separately"
+        )
     args.output.mkdir(parents=True, exist_ok=False)
     try:
         report = audit(args.input, args.repository, args.budgets, entry_provider)
@@ -1539,6 +1612,8 @@ def main(argv=None, entry_provider=None):
             "harness_correctness": {"status": "fail", "errors": [str(error)]},
             "coverage": {"status": "incomplete", "required": 567, "passed": 0},
             "budgets": {"status": "not_evaluated"},
+            "collection_gate": {"scope": "collection-only", "status": "fail"},
+            "run_completion": {"status": "incomplete"},
         }
     lifecycle.write_json(args.output / "performance-audit.json", report)
     text = (
@@ -1547,6 +1622,8 @@ def main(argv=None, entry_provider=None):
         else f"# public performance replay\n\nRefused: {report['harness_correctness']['errors']}\n"
     )
     (args.output / "performance-audit.md").write_text(text, encoding="utf-8")
+    if args.check_collection:
+        return 1 if report["collection_gate"]["status"] != "pass" else 0
     return 1 if args.check and not report["accepted"] else 0
 
 
