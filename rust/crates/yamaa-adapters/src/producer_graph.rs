@@ -1,5 +1,5 @@
-//! Retained complete graph metadata from supplied prepared documents. No IO or
-//! host port exists here; native graph resolution and execution remain #1741.
+//! Retained complete graph metadata from supplied prepared documents.
+//! Graph preparation uses supplied documents; Build owns execution and host ports.
 use crate::{
     producer_admission::{self, SuppliedProducer},
     specification_source::PreparedDocument,

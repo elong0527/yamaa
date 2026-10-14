@@ -134,7 +134,7 @@ impl InheritancePort for Port<'_, '_> {
         )
     }
 }
-/// Internal prototype: callbacks supply identity/raw bytes/path authority only.
+/// Callbacks supply identity, raw bytes and path authority to shared preparation.
 #[pyfunction]
 pub fn _prepare_inherited_specification(
     modules: &Bound<'_, PyList>,

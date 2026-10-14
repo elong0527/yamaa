@@ -4,7 +4,7 @@ version: "1.0"
 # raise it. Negative benchmarks must reference a registered condition whose
 # phases include the fixture's phase. Conditions are raised under REQ
 # citations in the contracts; old R0xx diagnostic families survive only as
-# compatibility names in rules/migration.yaml.
+# historical records in Git history. Current citations use REQ IDs.
 
 conditions:
   aggregate_identifier_not_grouped: {phases: [validation]}

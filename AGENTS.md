@@ -37,7 +37,7 @@ The repository does not hash content. A runtime artifact is pinned by
 `runtime.artifact.reference` alone, a contract fingerprint is its canonical
 RFC 8785 JSON rather than a hash of it, the activation cache key is the
 joined identities themselves, and a resource snapshot compares the bytes it
-already holds. `migration.yaml` records provenance without digests.
+already holds.
 
 Do not reintroduce SHA-256 (or any digest field) to give something an
 identity. Compare the canonical form directly, and keep the bytes when
