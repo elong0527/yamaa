@@ -1,6 +1,9 @@
 name: Public performance evidence
 
 on:
+  # Only this explicitly pushed qualification branch starts the expensive matrix.
+  push:
+    branches: [qualification/issue-1998]
   workflow_call:
     inputs:
       native_run_id:
@@ -36,6 +39,10 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/qualification/issue-1998' }}
+
 permissions:
   contents: read
   actions: read
@@ -48,13 +55,47 @@ env:
   RUSTUP_TOOLCHAIN: 1.90.0
   CARGO_BUILD_JOBS: '2'
   CARGO_INCREMENTAL: '0'
-  COLLECTION_PURPOSE: ${{ inputs.purpose }}
-  BASELINE_REF: ${{ inputs.baseline_ref }}
-  NATIVE_RUN_ID: ${{ inputs.native_run_id }}
-  PHASE_MEASUREMENTS: ${{ inputs.phase_measurements }}
+  COLLECTION_PURPOSE: ${{ inputs.purpose || 'characterization' }}
+  BASELINE_REF: ${{ inputs.baseline_ref || 'yamaa-py-0.3.0' }}
+  PHASE_MEASUREMENTS: ${{ github.event_name == 'push' || inputs.phase_measurements }}
 
 jobs:
+  native:
+    name: Admit exact-source full native qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 125
+    outputs:
+      run-id: ${{ steps.admit.outputs.run-id }}
+      revision: ${{ steps.admit.outputs.revision }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Wait for the complete native matrix on this exact trusted source
+        id: admit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_NATIVE_RUN: ${{ inputs.native_run_id }}
+        run: |
+          python rust/tools/admit_performance_native.py --repository "${GITHUB_REPOSITORY}" \
+            --revision "${GITHUB_SHA}" --branch "${GITHUB_REF_NAME}" \
+            --run-id "${REQUESTED_NATIVE_RUN}" --output "${RUNNER_TEMP}/native-admission"
+      - name: Retain exact native admission and any refusal
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: performance-native-admission
+          path: ${{ runner.temp }}/native-admission
+          retention-days: 90
+          if-no-files-found: error
+
   python:
+    needs: native
+    env:
+      NATIVE_RUN_ID: ${{ needs.native.outputs.run-id }}
     name: performance-python (${{ matrix.os }}, ${{ matrix.python }}, ${{ matrix.form }})
     runs-on: ${{ matrix.os }}
     # Approved reference producer 100k Build alone takes about 30-42 seconds;
@@ -77,14 +118,13 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           github-token: ${{ github.token }}
-          run-id: ${{ inputs.native_run_id }}
+          run-id: ${{ needs.native.outputs.run-id }}
           name: native-python-${{ matrix.os }}-3.14
           path: ${{ runner.temp }}/candidate-distribution
       - name: Admit candidate source identity and prepare previous release source
         env:
           GH_TOKEN: ${{ github.token }}
-          NATIVE_RUN_ID: ${{ inputs.native_run_id }}
-          BASELINE_REF: ${{ inputs.baseline_ref }}
+          BASELINE_REF: ${{ inputs.baseline_ref || 'yamaa-py-0.3.0' }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${NATIVE_RUN_ID}" > "${RUNNER_TEMP}/native-run.json"
           python - <<'PY'
@@ -93,6 +133,7 @@ jobs:
           run=json.loads((Path(os.environ['RUNNER_TEMP'])/'native-run.json').read_text())
           assert run['status']=='completed' and run['conclusion']=='success', 'candidate native run is not successful'
           assert run['path']=='.github/workflows/native.yml', 'candidate distributions need native workflow provenance'
+          assert run['head_sha']==os.environ['GITHUB_SHA'], 'candidate differs from exact collector source'
           with open(os.environ['GITHUB_ENV'],'a') as env:
               env.write('CANDIDATE_REVISION='+run['head_sha']+'\n')
           PY
@@ -173,6 +214,9 @@ jobs:
         run: test "${{ steps.candidate.outcome }}" = success && test "${{ steps.baseline.outcome }}" = success && test "${{ steps.producer_baseline.outcome }}" = success
 
   r:
+    needs: native
+    env:
+      NATIVE_RUN_ID: ${{ needs.native.outputs.run-id }}
     name: performance-r (${{ matrix.os }}, source)
     runs-on: ${{ matrix.os }}
     timeout-minutes: 240
@@ -196,13 +240,12 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           github-token: ${{ github.token }}
-          run-id: ${{ inputs.native_run_id }}
+          run-id: ${{ needs.native.outputs.run-id }}
           name: native-r-${{ matrix.os }}
           path: ${{ runner.temp }}/candidate-distribution
       - name: Admit source identity and build R and its admitted monotonic timer
         env:
           GH_TOKEN: ${{ github.token }}
-          NATIVE_RUN_ID: ${{ inputs.native_run_id }}
           R_LIBS: ${{ runner.temp }}/performance-r-library
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${NATIVE_RUN_ID}" > "${RUNNER_TEMP}/native-run.json"
@@ -213,6 +256,7 @@ jobs:
           run=json.loads((root/'native-run.json').read_text())
           assert run['status']=='completed' and run['conclusion']=='success', 'candidate native run is not successful'
           assert run['path']=='.github/workflows/native.yml', 'unexpected candidate artifact workflow'
+          assert run['head_sha']==os.environ['GITHUB_SHA'], 'candidate differs from exact collector source'
           (root/'performance-r-library').mkdir()
           archive=root/'microbenchmark_1.5.0.tar.gz'
           with urllib.request.urlopen('https://cran.r-project.org/src/contrib/microbenchmark_1.5.0.tar.gz') as source:
@@ -254,7 +298,7 @@ jobs:
           python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "${CANDIDATE_REVISION}" --host r --executable "$(command -v Rscript)" --artifact "${artifact}" --artifact-reference "github-actions:${NATIVE_RUN_ID}/native-r-${{ matrix.os }}/$(basename "${artifact}")" --form source --build-association "completed native workflow source archive; rebuilt before collection; candidate-build.log retained" --clock-config "${TIMER_CONFIG}" --clock-library "${TIMER_LIBRARY}" --output "${RUNNER_TEMP}/candidate-installation"
       - name: Secure and install previous-release Python reference on the R runner
         env:
-          BASELINE_REF: ${{ inputs.baseline_ref }}
+          BASELINE_REF: ${{ inputs.baseline_ref || 'yamaa-py-0.3.0' }}
         run: |
           python -m pip install uv==0.11.6
           uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/requirements.txt"

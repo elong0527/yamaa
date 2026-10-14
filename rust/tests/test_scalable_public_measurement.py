@@ -1,6 +1,7 @@
 """Scalable collector refusal/replay controls; synthetic clocks are not samples."""
 
 import copy
+import gzip
 import importlib.util
 import sys
 import tempfile
@@ -15,6 +16,25 @@ with mock.patch.object(sys, "path", [str(TOOLS), *sys.path]):
     )
     measure = importlib.util.module_from_spec(SPEC)
     SPEC.loader.exec_module(measure)
+
+
+class RetainedReportEquality(unittest.TestCase):
+    def test_original_multichunk_utf8_plain_and_gzip_bytes_match(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = ('{"rows":["' + "\u00e9" * 1_100_000 + '"]}').encode()
+            plain = root / "ordinary.json"
+            compressed = root / "held.json.gz"
+            plain.write_bytes(original)
+            compressed.write_bytes(gzip.compress(original, compresslevel=1))
+            self.assertTrue(measure.retained_equal(plain, compressed))
+            # A mutation after the first retained buffer must also be rejected.
+            changed = bytearray(original)
+            changed[1_048_579] = ord("a")
+            compressed.write_bytes(gzip.compress(changed, compresslevel=9))
+            self.assertFalse(measure.retained_equal(plain, compressed))
+            compressed.write_bytes(gzip.compress(original + b" "))
+            self.assertFalse(measure.retained_equal(plain, compressed))
 
 
 class Replay(unittest.TestCase):
