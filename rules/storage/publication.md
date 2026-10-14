@@ -68,6 +68,31 @@ String key values use [Text values](../values/text.md) equality. Key order is si
 which joins on the output keys a right side also carries. The applicable
 keys are used for enrichment and do not change the identity asserted here.
 
+Sponsor variables that may be missing can still define the presentation order
+and a separate uniqueness check. Declare a non-missing row identity in `keys`,
+the sponsor variables in `output.order_by`, and a dataset `unique` verification
+over those variables. For example, when `AENDT` is missing for an ongoing
+exposure, these fields accompany the declared exposure columns:
+
+```yaml
+keys: [USUBJID, EXSEQ]
+output:
+  path: adex.csv
+  columns: [USUBJID, EXSEQ, EXTRT, ASTDT, AENDT]
+  order_by: [USUBJID, EXTRT, ASTDT, AENDT]
+verifications:
+  - unique: {columns: [USUBJID, EXTRT, ASTDT, AENDT], id: sponsor-keys}
+```
+
+[Ordering](../execution/ordering.md#req-0299) places missing values last by
+default. [REQ-0381](../execution/verification.md#req-0381) treats missing values
+as values in the uniqueness check, so two rows with the same subject,
+treatment, start date, and missing end date fail that check. The missing end
+date remains missing. Submission key metadata describes the identity in
+`keys`, as [REQ-0990](../submission/define-xml.md#req-0990) and
+[REQ-1209](../submission/dataset-json.md#req-1209) require; neither ordering nor
+the separate uniqueness check changes it.
+
 ### The artifact's path selects its profile
 
 <a id="req-0715"></a>
