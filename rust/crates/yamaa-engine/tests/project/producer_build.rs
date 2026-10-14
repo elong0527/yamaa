@@ -2432,3 +2432,165 @@ fn native_uneven_graph_uses_actual_row_and_decoder_pools_without_grant_multiplic
         assert_eq!(ports.study.reads, 1);
     }
 }
+
+struct PrefixStudy(usize);
+impl StudyPort for PrefixStudy {
+    type Error = &'static str;
+    fn capture_reads(&self) -> usize {
+        self.0
+    }
+    fn inspect(&mut self, _: &Node, _: &SourceDeclaration) -> Result<(), Self::Error> {
+        Ok(())
+    }
+    fn capture(
+        &mut self,
+        _: &Node,
+        _: &SourceDeclaration,
+        _: usize,
+    ) -> Result<Arc<[u8]>, Self::Error> {
+        self.0 += 1;
+        Ok(Arc::from(b"ID,VALUE\n1,1\n".as_slice()))
+    }
+}
+struct PrefixDecoder {
+    inner: Decoder,
+    known: bool,
+    unwind: Option<Arc<()>>,
+    used: Option<build::DecodeUsage>,
+    admitted: Vec<build::DecodeLimits>,
+}
+impl SourceDecoder for PrefixDecoder {
+    type Error = &'static str;
+    type Table = Table;
+    fn continue_after(&self, error: &Self::Error) -> bool {
+        *error == "original semantic decode failure"
+    }
+    fn decode(&mut self, source: &SourceDeclaration, bytes: &[u8]) -> Result<Table, Self::Error> {
+        self.inner.decode(source, bytes)
+    }
+}
+impl build::DecodePort for PrefixDecoder {
+    fn pool_capacity(&self) -> bool {
+        true
+    }
+    fn usage(&self) -> Option<build::DecodeUsage> {
+        self.used
+    }
+    fn decode_bounded(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        _: Option<&yamaa_core::producer_contract::Contract>,
+        limits: build::DecodeLimits,
+    ) -> Result<Table, build::DecodeError<Self::Error>> {
+        self.used = None;
+        self.admitted.push(limits);
+        let usage = build::DecodeUsage {
+            storage_bytes: 2 * std::mem::size_of::<Value>(),
+            work_bytes: if source.name == "RAW" { 5 } else { bytes.len() },
+        };
+        if usage.storage_bytes > limits.storage_bytes || usage.work_bytes > limits.work_bytes {
+            return Err(build::DecodeError::Codec("original bounded codec refusal"));
+        }
+        // The codec admits these fixed slots and encoded bytes before entering
+        // the modeled stage; semantic failure keeps that actual admitted prefix.
+        self.used = self.known.then_some(usage);
+        if source.name == "RAW" {
+            if let Some(payload) = &self.unwind {
+                std::panic::panic_any(Arc::clone(payload));
+            }
+            return Err(build::DecodeError::Codec(
+                "original semantic decode failure",
+            ));
+        }
+        self.decode(source, bytes)
+            .map_err(build::DecodeError::Codec)
+    }
+}
+#[test]
+fn native_semantic_decode_prefixes_refund_only_known_capacity_and_preserve_unwind() {
+    let root = document(&[("RAW", None), ("NEXT", None)], None);
+    let prepared = yamaa_engine::producer_graph::check(
+        "/p",
+        &[node("/p", &root, &[])],
+        environment(&[]),
+        Default::default(),
+    )
+    .unwrap()
+    .into_build();
+    for (known, unwind) in [(true, false), (false, false), (true, true)] {
+        let mut ports = Ports::new();
+        let payload = Arc::new(());
+        let mut decoder = PrefixDecoder {
+            inner: ports.decoder,
+            known,
+            unwind: unwind.then(|| Arc::clone(&payload)),
+            used: None,
+            admitted: Vec::new(),
+        };
+        let limits = build::Limits {
+            source_storage_bytes: 4 * std::mem::size_of::<Value>(),
+            decode_work_bytes: 30,
+            ..Default::default()
+        };
+        let mut study = PrefixStudy(0);
+        let mut attempt =
+            build::BuildAttempt::<Activation, PrefixStudy, PrefixDecoder, Report, Codec>::default();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            prepared.build_into(
+                build::Ports {
+                    activation: &mut ports.activation,
+                    study: &mut study,
+                    decoder: &mut decoder,
+                    report: &mut ports.report,
+                    codec: &mut ports.codec,
+                },
+                limits,
+                &mut attempt,
+            );
+        }));
+        assert_eq!(attempt.nodes.len(), 1);
+        if unwind {
+            let held = result.unwrap_err();
+            assert!(Arc::ptr_eq(
+                held.downcast_ref::<Arc<()>>().unwrap(),
+                &payload
+            ));
+            assert_eq!(decoder.admitted.len(), 1);
+            assert!(attempt.nodes[0].dataset.result.is_err());
+            assert!(attempt.nodes[0].dataset.sources[0].table.is_none());
+        } else {
+            result.unwrap();
+            assert_eq!(decoder.admitted.len(), 2);
+            let second = decoder.admitted[1];
+            assert_eq!(
+                (second.storage_bytes, second.work_bytes),
+                if known {
+                    (2 * std::mem::size_of::<Value>(), 25)
+                } else {
+                    (0, 0)
+                }
+            );
+            assert_eq!(attempt.nodes[0].dataset.sources[1].table.is_some(), known);
+            let Err(PortError::Run(yamaa_engine::specification_run::RunError::Sources(errors))) =
+                &attempt.nodes[0].dataset.result
+            else {
+                panic!("original source failure survives later decode");
+            };
+            assert!(matches!(
+                errors.first(),
+                Some((
+                    0,
+                    build::DecodeError::Codec("original semantic decode failure")
+                ))
+            ));
+            assert_eq!(errors.len(), if known { 1 } else { 2 });
+        }
+        assert!(!ports
+            .activation
+            .trace
+            .borrow()
+            .iter()
+            .any(|event| event.starts_with("encode:")));
+    }
+}
