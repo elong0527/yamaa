@@ -14,8 +14,9 @@ and safety flag, and adverse event analysis records with emergence flag.
 
 - `ANALYSISID`, `ANALYSISSETID`, `DATASET`, `VARIABLE` and `METHODID` are
   AEINC, SAFETY, ADAE, USUBJID and AEINCIDENCE, respectively.
-- `ANALYSISSET` is SAFFL = 'Y'; `DATASUBSET` is TRTEMFL = 'Y'. These
-  conditions limit both the safety denominator and qualifying event count.
+- `ANALYSISSET` is SAFFL = 'Y', limiting the numerator and denominator to
+  safety subjects. `DATASUBSET` is TRTEMFL = 'Y', limiting qualifying events
+  to treatment-emergent events.
 - `GROUPINGID` is TRT01P. `GROUPORDER` and `GROUPLEVEL` are the planned
   treatment code and name from subject analysis records.
 - `OPERATIONID` is COUNT or PERCENT. `RESULT` is the number of safety
