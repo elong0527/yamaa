@@ -314,6 +314,8 @@ def finalize(args):
         "replay_run_attempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
         "scope": "collection-only" if collection_only else "numeric-budget-acceptance",
         "accepted": False,
+        "completed_workflow_acceptance": False,
+        "acceptance_scope": "numeric evidence verdict only; independent actual terminal finalizer/storage verification is still required",
         "status": "preparing",
     }
     write(args.output / "replay-receipt.json", record)

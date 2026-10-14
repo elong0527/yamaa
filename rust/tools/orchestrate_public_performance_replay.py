@@ -209,12 +209,19 @@ def execution_receipt(record, reader, output, code):
     return value
 
 
+def source_asset_identity(release):
+    """Freeze the preparation-time draft identity before additive uploads."""
+    return {"release_id": release["id"],
+            "assets": {asset["name"]: asset["id"] for asset in release["assets"]}}
+
+
 def unchanged_source_assets(record, before):
     identity = record["original"]
-    release = api(f"repos/{identity['repository']}/releases/{before['id']}")
+    release = api(f"repos/{identity['repository']}/releases/{before['release_id']}")
     admit_release(release, record["release_label"], identity["source_revision"])
     assets = {asset["name"]: asset["id"] for asset in release["assets"]}
-    require(all(assets.get(asset["name"]) == asset["id"] for asset in before["assets"]),
+    require(release["id"] == before["release_id"]
+            and all(assets.get(name) == identifier for name, identifier in before["assets"].items()),
             "original unpublished evidence asset identities changed")
     require(not subprocess.check_output(["git", "ls-remote", "--tags", "origin",
                                          f"refs/tags/{record['release_label']}"]),
@@ -226,6 +233,7 @@ def aggregate(args):
     import aggregate_public_performance as independent
 
     record, release, _ = prepared(args.input)
+    original_assets = source_asset_identity(release)
     args.output.mkdir(parents=True, exist_ok=False)
     reader = record["reader"] or {"run_id": record["current_run_id"],
                                  "run_attempt": record["current_run_attempt"],
@@ -299,7 +307,7 @@ def aggregate(args):
                              "archive_name": metadata.name, "assets": rows})
         upload(identity["repository"], release, record["release_label"],
                identity["source_revision"], storage_path, args.output)
-        unchanged_source_assets(record, release)
+        unchanged_source_assets(record, original_assets)
         return code
     require(args.budgets is not None and args.budgets.is_file(), "reviewed budgets are required")
     # Reuse the SAME authentic qualified fragments, never run unit capture just
@@ -360,13 +368,14 @@ def aggregate(args):
                          "completed_workflow_acceptance": False})
     upload(identity["repository"], release, record["release_label"],
            identity["source_revision"], storage_path, args.output)
-    unchanged_source_assets(record, release)
+    unchanged_source_assets(record, original_assets)
     return code
 
 
 def retain_refusal(args):
     """Append failed reader metadata/actual retrieval bytes without qualifying it."""
     record, release, _ = prepared(args.input)
+    original_assets = source_asset_identity(release)
     identity = record["original"]
     release = api(f"repos/{identity['repository']}/releases/{release['id']}")
     admit_release(release, record["release_label"], identity["source_revision"])
@@ -396,7 +405,7 @@ def retain_refusal(args):
                          "archive_name": archive_path.name, "assets": rows, "accepted": False})
     upload(identity["repository"], release, record["release_label"],
            identity["source_revision"], storage_path, args.output)
-    unchanged_source_assets(record, release)
+    unchanged_source_assets(record, original_assets)
 
 
 def safe_metadata(path, destination):
