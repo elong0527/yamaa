@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression checks for lost contracts, aliases, and duplicate authorities."""
+"""Regression checks for current contracts and duplicate authorities."""
 
 import shutil
 import subprocess
@@ -8,7 +8,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from check_rule_rewrite import check, load_migration, resolve_requirement
+from check_rule_rewrite import (
+    check,
+    load_schema,
+    requirement_owners,
+    schema_descriptions,
+)
 from generate_rule_reference import generated
 
 REPO = Path(__file__).resolve().parents[3]
@@ -45,26 +50,45 @@ class RuleRewriteTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn(f"ERROR: {error}", result.stdout.splitlines())
 
-    def test_complete_cutover_and_legacy_aliases_resolve(self):
-        errors, coverage = check(self.root)
-        self.assertEqual(errors, [])
-        self.assertEqual(sum(total for _, total in coverage.values()), 1071)
-        self.assertTrue(all(mapped == total for mapped, total in coverage.values()))
-        migration = load_migration(self.root)
-        self.assertEqual(resolve_requirement("R011-35", migration), ["REQ-0005"])
-        self.assertEqual(resolve_requirement("REQ-0005", migration), ["REQ-0005"])
-        self.assertEqual(resolve_requirement("R001-42", migration), ["REQ-0033"])
-        self.assertEqual(resolve_requirement("REQ-0073", migration), ["REQ-0033"])
-        self.assertEqual(resolve_requirement("R002-28", migration), ["REQ-0080"])
-        self.assertEqual(resolve_requirement("REQ-0104", migration), ["REQ-0080"])
-        self.assertEqual(resolve_requirement("REQ-0096", migration), ["REQ-1269"])
-        self.assertEqual(
-            resolve_requirement("R002-22", migration), ["REQ-1269", "REQ-1271"]
+    def navigation_errors(self):
+        """Keep independent current owners; generation never rewrites this fixture."""
+        fixture = Path(__file__).with_name("fixtures") / "schema-navigation.tsv"
+        expected = dict(
+            line.split("\t")
+            for line in fixture.read_text(encoding="ascii").splitlines()
         )
-        self.assertEqual(resolve_requirement("REQ-0332", migration), [])
-        self.assertGreater(len(resolve_requirement("R007-9", migration)), 1)
-        self.assertEqual(resolve_requirement("R999-1", migration), [])
-        self.assertTrue(resolve_requirement("R001-12a", migration))
+        actual = {
+            f"{path.name}:{field}": value
+            for path in sorted((self.root / "yaml").glob("schema*.yaml"))
+            for field, value in schema_descriptions(load_schema(path))
+        }
+        return [
+            f"schema navigation owner changed: {source}: expected {expected.get(source)!r}, got {actual.get(source)!r}"
+            for source in sorted(expected.keys() | actual.keys())
+            if expected.get(source) != actual.get(source)
+        ]
+
+    def test_every_schema_owner_matches_independent_current_expectations(self):
+        self.assertEqual(self.navigation_errors(), [])
+
+    def test_wrong_existing_requirement_owner_is_rejected(self):
+        self.replace(
+            self.root / "yaml/schema_shared.yaml",
+            "description: See REQ-1149.",
+            "description: See REQ-0005.",
+        )
+        self.assertIn(
+            "schema navigation owner changed: schema_shared.yaml:literal_value.description: expected 'See REQ-1149.', got 'See REQ-0005.'",
+            self.navigation_errors(),
+        )
+
+    def test_current_contracts_resolve_without_history_inventory(self):
+        errors, owners = check(self.root)
+        self.assertEqual(errors, [])
+        self.assertEqual(owners, requirement_owners(self.root))
+        self.assertEqual(owners["REQ-0005"], "values/types.md")
+        self.assertEqual(owners["REQ-1269"], "specification/binding.md")
+        self.assertFalse((self.rules / "migration.yaml").exists())
 
     def test_contract_defining_an_unregistered_verification_fails(self):
         # REQ-1153 and REQ-1155 once defined checks no registry declared.
@@ -117,56 +141,21 @@ class RuleRewriteTests(unittest.TestCase):
         errors, _ = check(self.root)
         self.assertEqual(errors, [])
         self.assertEqual(
-            resolve_requirement("R011-24", load_migration(self.root)), ["REQ-0017"]
+            requirement_owners(self.root)["REQ-0017"], "values/representation.md"
         )
-
-    def test_missing_source_record_fails(self):
-        path = self.rules / "migration.yaml"
-        text = path.read_text()
-        path.write_text(
-            "\n".join(
-                line for line in text.splitlines() if not line.startswith("  R011-6:")
-            )
-            + "\n"
-        )
-        errors, _ = check(self.root)
-        self.assertTrue(any("retain all 1071" in error for error in errors))
-        self.assertTrue(any("unknown provenance" in error for error in errors))
+        index = generated(self.root)[self.rules / "reference/requirements.md"]
+        self.assertIn("[REQ-0017](../values/representation.md#req-0017)", index)
 
     def test_deleted_target_and_dangling_reference_fail(self):
         self.replace(self.rules / "values/numbers.md", "**REQ-0021.**", "**REQ-9999.**")
         errors, _ = check(self.root)
         self.assertIn("unresolved requirement reference: REQ-0021", errors)
-        self.assertIn("migration target missing or in wrong file: REQ-0021", errors)
 
     def test_duplicate_definitions_across_files_fail(self):
         self.replace(self.rules / "values/text.md", "**REQ-0022.**", "**REQ-0001.**")
         errors, _ = check(self.root)
         self.assertIn("duplicate requirement: REQ-0001", errors)
 
-    def test_retired_requirement_cannot_be_redefined(self):
-        path = self.rules / "execution/lifecycle.md"
-        path.write_text(path.read_text() + "\n**REQ-0073.** Restored.\n")
-        errors, _ = check(self.root)
-        self.assertIn("retired requirement still defined: REQ-0073", errors)
-
-    def test_retired_replacement_must_exist(self):
-        self.replace(
-            self.rules / "migration.yaml",
-            '"replacement": ["REQ-0033"]',
-            '"replacement": ["REQ-9999"]',
-        )
-        errors, _ = check(self.root)
-        self.assertIn("invalid retired requirement replacement: REQ-0073", errors)
-
-    def test_redirected_legacy_alias_must_match_retired_replacement(self):
-        self.replace(
-            self.rules / "migration.yaml",
-            'R002-28: {"file": "R002-source-binding.md", "targets": ["REQ-0080"]}',
-            'R002-28: {"file": "R002-source-binding.md", "targets": ["REQ-0081"]}',
-        )
-        errors, _ = check(self.root)
-        self.assertIn("invalid reverse legacy alias: REQ-0104 -> R002-28", errors)
     def test_retired_requirement_stub_fails(self):
         self.replace(
             self.rules / "values/text.md",
@@ -181,10 +170,114 @@ class RuleRewriteTests(unittest.TestCase):
 
     def test_duplicate_yaml_keys_fail(self):
         self.replace(
-            self.rules / "migration.yaml", "version: 2", "version: 2\nversion: 2"
+            self.root / "yaml/schema_shared.yaml",
+            'version: "1.0"',
+            'version: "1.0"\nversion: "1.0"',
         )
         errors, _ = check(self.root)
-        self.assertTrue(any("duplicate migration key" in error for error in errors))
+        self.assertTrue(any("found duplicate key" in error for error in errors))
+
+    def test_present_non_string_description_fails_checker_and_generator(self):
+        path = self.root / "yaml/schema_shared.yaml"
+        original = path.read_text()
+        source = "schema_shared.yaml:literal_value.description"
+        for malformed in ("null", "true", "17", "[]", "{}"):
+            with self.subTest(value=malformed):
+                path.write_text(
+                    original.replace(
+                        "description: See REQ-1149.", f"description: {malformed}"
+                    )
+                )
+                error = f"schema description must be a string: {source}"
+                self.assert_rejected(error)
+                with self.assertRaisesRegex(ValueError, error):
+                    generated(self.root)
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(CHECKER.with_name("generate_rule_reference.py")),
+                        "--root",
+                        str(self.root),
+                        "--check",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(f"ERROR: {error}", result.stdout.splitlines())
+                self.assertEqual(result.stderr, "")
+
+    def test_description_without_descriptor_type_is_also_checked(self):
+        path = self.root / "yaml/schema_shared.yaml"
+        path.write_text(path.read_text() + "\nnavigation:\n    description: null\n")
+        error = "schema description must be a string: schema_shared.yaml:navigation.description"
+        self.assert_rejected(error)
+        with self.assertRaisesRegex(ValueError, error):
+            generated(self.root)
+
+    def test_schema_sources_share_strict_yaml_loader(self):
+        path = self.root / "yaml/schema_shared.yaml"
+        original = path.read_text()
+        cases = (
+            ("description: &owner See REQ-1149.", "YAML anchors are not allowed"),
+            ("description: *owner", "YAML aliases are not allowed"),
+            ("description: !!str See REQ-1149.", "explicit YAML tags are not allowed"),
+            (
+                "description: See REQ-1149.\n    <<: {}",
+                "YAML merge keys are not allowed",
+            ),
+        )
+        for replacement, message in cases:
+            with self.subTest(feature=message):
+                path.write_text(
+                    original.replace("description: See REQ-1149.", replacement)
+                )
+                errors, _ = check(self.root)
+                self.assertTrue(
+                    any(
+                        "schema_shared.yaml: invalid schema source:" in error
+                        and message in error
+                        for error in errors
+                    ),
+                    errors,
+                )
+                with self.assertRaisesRegex(ValueError, message):
+                    generated(self.root)
+
+    def test_malformed_verification_schema_does_not_hide_independent_errors(self):
+        self.replace(
+            self.root / "yaml/schema_verification.yaml",
+            'version: "1.0"',
+            'version: !!str "1.0"',
+        )
+        self.replace(
+            self.rules / "values/text.md", "status: normative", "status: proposed"
+        )
+        errors, _ = check(self.root)
+        self.assertIn(
+            "values/text.md: expected id, title, and normative status", errors
+        )
+        self.assertTrue(
+            any(
+                "schema_verification.yaml: invalid schema source:" in error
+                and "explicit YAML tags are not allowed" in error
+                for error in errors
+            ),
+            errors,
+        )
+        result = subprocess.run(
+            [sys.executable, str(CHECKER), "--root", str(self.root)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr, "")
+        with self.assertRaisesRegex(
+            ValueError, "schema_verification.yaml: invalid schema source"
+        ):
+            generated(self.root)
 
     def test_schema_prose_cannot_become_a_second_contract(self):
         path = self.root / "yaml/schema_shared.yaml"
@@ -227,9 +320,34 @@ class RuleRewriteTests(unittest.TestCase):
             self.assertEqual(path.read_text(), expected)
         index = (self.rules / "reference/requirements.md").read_text()
         self.assertNotIn("| [REQ-0073]", index)
-        self.assertIn("R001-42", next(
-            line for line in index.splitlines() if line.startswith("| [REQ-0033]")
-        ))
+        self.assertNotIn("Historical citations", index)
+
+    def test_schema_navigation_tracks_current_requirement_without_manual_map(self):
+        path = self.rules / "values/numbers.md"
+        path.write_text(path.read_text() + "\n**REQ-9999.** New current requirement.\n")
+        self.replace(
+            self.root / "yaml/schema_shared.yaml",
+            "description: See REQ-1149.",
+            "description: See REQ-9999.",
+        )
+        errors, _ = check(self.root)
+        self.assertEqual(errors, [])
+        fields = generated(self.root)[self.rules / "reference/schema-fields.md"]
+        self.assertIn("[REQ-9999](../values/numbers.md#req-9999)", fields)
+
+    def test_schema_navigation_to_an_undefined_requirement_fails(self):
+        self.replace(
+            self.root / "yaml/schema_shared.yaml",
+            "description: See REQ-1149.",
+            "description: See REQ-9999.",
+        )
+        errors, _ = check(self.root)
+        self.assertIn(
+            "schema description has no canonical owner: schema_shared.yaml:literal_value.description",
+            errors,
+        )
+        with self.assertRaisesRegex(ValueError, "unknown requirement: REQ-9999"):
+            generated(self.root)
 
 
 if __name__ == "__main__":

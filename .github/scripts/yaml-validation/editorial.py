@@ -228,7 +228,7 @@ def rule_identity_errors(meta: dict, stem: str, label: str) -> list[str]:
 
 
 def validate_rule_metadata(root: Path):
-    if (root / 'rules/migration.yaml').is_file():
+    if any((root / "rules").glob("*/*.md")):
         from check_rule_rewrite import check
         return check(root)[0]
     errors = []

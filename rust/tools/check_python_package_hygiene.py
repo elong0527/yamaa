@@ -5,7 +5,7 @@ import tarfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
-# #1994 retires these import roots; the retained helpers are _odm and style.
+# Retired evaluator import roots; the retained helpers are _odm and style.
 RETIRED_IMPORTS = {
     "_reference_domain",
     "application",

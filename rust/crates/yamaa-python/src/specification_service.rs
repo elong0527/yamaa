@@ -110,7 +110,7 @@ impl Specification {
     }
 }
 /// Capture host-provided raw modules and entry YAML. Limits precede owned copies.
-/// This prototype's error rendering is not yet a qualified frontend contract.
+/// Internal preparation errors use the shared captured-diagnostic encoding.
 #[pyfunction]
 pub fn _prepare_specification(
     modules: &Bound<'_, PyList>,

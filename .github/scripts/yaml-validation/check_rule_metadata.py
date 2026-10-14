@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Check canonical contracts and resolve new or historical benchmark citations.
+"""Check canonical contracts and current benchmark citations.
 
 The legacy check_rule helper remains available for archived-contract tooling.
-The repository gate reads the recursive canonical index and migration map.
+The repository gate derives the recursive current requirement index.
 """
 
 import re
@@ -26,7 +26,7 @@ CITATION = re.compile(r"(?:REQ-[0-9]{4,}|R[0-9]{3}-[1-9][0-9]*[a-z]?)$")
 
 def frontmatter(path):
     text = path.read_text(encoding="utf-8")
-    match = re.match(r"---\n(.*?)\n---\n", text, re.S)
+    match = re.match(r"---\n(.*?)\n---\n", text, re.DOTALL)
     if match is None:
         return None, text
     return yaml.safe_load(match.group(1)), text[match.end():]
@@ -45,7 +45,7 @@ def check_rule(path, errors, requirements):
     errors.extend(rule_identity_errors(meta, stem, label))
     if not isinstance(meta.get("applies_to"), list) or not meta.get("applies_to"):
         errors.append(f"ERROR: {label}: applies_to must be a non-empty list")
-    headings = re.findall(r"^## (.+)$", body, re.M)
+    headings = re.findall(r"^## (.+)$", body, re.MULTILINE)
     for section in REQUIRED_SECTIONS:
         if section not in headings:
             errors.append(f"ERROR: {label}: missing ## {section}")
@@ -89,11 +89,10 @@ def check_error(path, requirements, errors):
 def main():
     errors = []
     requirements = set()
-    from check_rule_rewrite import check, load_migration
-    errors.extend(check(REPO)[0])
-    migration = load_migration(REPO)
-    requirements.update(migration["requirements"])
-    requirements.update(migration["sources"])
+    from check_rule_rewrite import check
+    rule_errors, owners = check(REPO)
+    errors.extend(rule_errors)
+    requirements.update(owners)
     for path in sorted(EXAMPLES.glob("negative-*/expected/error.yaml")):
         check_error(path, requirements, errors)
     for error in errors:
