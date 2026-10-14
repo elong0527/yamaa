@@ -2105,14 +2105,22 @@ fn native_report_admission_stops_dependents_and_whole_report_limits_keep_earlier
     assert!(!first.accepted());
     assert_eq!(first.graph.nodes.len(), 1);
     assert!(matches!(
-        first.graph.nodes[0].output,
-        Err(CompleteError::Report(Error::OutputLimit))
+        &first.graph.nodes[0].output,
+        Err(CompleteError::Report(Error::ResourceLimit(refusal)))
+            if refusal.resource == "report_retained_bytes" && refusal.limit == 6
     ));
     assert_eq!(activation.trace.len(), 6);
-    assert_eq!(
-        attempt_report(&first, report_id(), 16_777_216).unwrap()["error"]["code"],
-        "output_limit"
-    );
+    let report = attempt_report(&first, report_id(), 16_777_216).unwrap();
+    assert_eq!(report["error"]["stage"], "report");
+    assert_eq!(report["error"]["code"], "output_limit");
+    assert!(report["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|finding| {
+            finding["context"]["resource"] == "report_retained_bytes"
+                && finding["context"]["limit"] == 6
+        }));
     limits.engine.report_bytes = 8192;
     let later = build.build_reported(&mut activation, report_id(), limits);
     assert!(!later.accepted());
@@ -2126,8 +2134,9 @@ fn native_report_admission_stops_dependents_and_whole_report_limits_keep_earlier
         .artifact()
         .is_some());
     assert!(matches!(
-        later.graph.nodes[1].output,
-        Err(CompleteError::Report(Error::OutputLimit))
+        &later.graph.nodes[1].output,
+        Err(CompleteError::Report(Error::ResourceLimit(refusal)))
+            if refusal.resource == "report_retained_bytes" && refusal.limit == 49_152
     ));
     let value = attempt_report(&later, report_id(), 16_777_216).unwrap();
     assert_eq!(value["outcome"], "failure");
@@ -2143,7 +2152,8 @@ fn native_report_admission_stops_dependents_and_whole_report_limits_keep_earlier
     assert_eq!(original.bytes(), b"ID,VALUE\n1,1.23\n2,2.35\n");
     assert!(matches!(
         attempt_report(&later, report_id(), 1),
-        Err(ProjectionError::Report(Error::OutputLimit))
+        Err(ProjectionError::Report(Error::ResourceLimit(refusal)))
+            if refusal.resource == "report_retained_bytes" && refusal.limit == 6
     ));
     assert_eq!(original.bytes(), b"ID,VALUE\n1,1.23\n2,2.35\n");
     assert!(!study.0.join("generated").exists());
