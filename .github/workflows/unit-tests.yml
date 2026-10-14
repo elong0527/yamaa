@@ -19,7 +19,8 @@ on:
 
 concurrency:
   group: unit-tests-${{ github.ref }}
-  cancel-in-progress: true
+  # Let the active run finish so frequent main pushes can still publish coverage.
+  cancel-in-progress: false
 
 permissions:
   contents: read
