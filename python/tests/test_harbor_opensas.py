@@ -26,7 +26,7 @@ PROMPTED = sorted(p.parent.name for p in build.PROMPTS.glob("*/full.md"))
 CONFIDENT = sorted(set(PROMPTED) - set(build.OPENSAS_EXCLUSIONS))
 
 
-def test_opensas_selection_builds_all_134_native_input_cases(tmp_path):
+def test_opensas_selection_builds_all_142_native_input_cases(tmp_path):
     tasks, skipped = build.build_selection(
         PROMPTED,
         languages=["opensas"],
@@ -35,7 +35,7 @@ def test_opensas_selection_builds_all_134_native_input_cases(tmp_path):
         commit="test",
         strict=False,
     )
-    assert len(tasks) == len(CONFIDENT) == 134
+    assert len(tasks) == len(CONFIDENT) == 142
     assert sorted(t.name for t in tasks) == sorted(
         f"{name}-opensas" for name in CONFIDENT
     )
@@ -67,7 +67,7 @@ def test_every_opensas_board_ranks_the_same_confident_set():
     for tier in build.TIERS:
         suffix = "opensas" if tier == "full" else f"{tier}-opensas"
         board = yaml.safe_load(
-            (HARBOR / "leaderboards" / f"sdtm-adam-v4-{suffix}.yaml").read_text()
+            (HARBOR / "leaderboards" / f"sdtm-adam-v5-{suffix}.yaml").read_text()
         )
         assert sorted(board["tasks"]) == sorted(
             build.task_name(n, "opensas", tier) for n in CONFIDENT

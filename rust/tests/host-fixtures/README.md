@@ -45,8 +45,8 @@ range failures and reached `invalid` handler counts across Rust, Python and R.
 
 ## Public conformance mapping
 
-The existing public-conformance plan owns 318 authored benchmark names, including
-316 active cases. Its runtime observations, saved outputs and independent golden
+The existing public-conformance plan owns 326 authored benchmark names, including
+324 active cases. Its runtime observations, saved outputs and independent golden
 comparison remain the complete public benchmark gate. The following supplemental
 controls reuse those same independently authored source/report owners while
 adding host or private lifecycle assertions:

@@ -601,18 +601,22 @@ def _board_named(name: str) -> dict:
     raise AssertionError(f"no leaderboard {name!r}")
 
 
-def _board_name(language: str, tier: str) -> str:
+BOARD_VERSIONS = ("v4", "v5")  # v4 frozen with its history; v5 is current
+
+
+def _board_name(language: str, tier: str, version: str = BOARD_VERSIONS[-1]) -> str:
     if tier == "full":
-        return f"sdtm-adam-v4-{language}"
-    return f"sdtm-adam-v4-{tier}-{language}"
+        return f"sdtm-adam-{version}-{language}"
+    return f"sdtm-adam-{version}-{tier}-{language}"
 
 
 def test_each_language_has_a_board_per_prompt_tier():
     boards = {b["harbor"]["name"]: b for b in leaderboard.load_leaderboards()}
     assert set(boards) == {
-        _board_name(language, tier)
+        _board_name(language, tier, version)
         for language in build.LANGUAGES
         for tier in build.TIERS
+        for version in BOARD_VERSIONS
     }
     buildable = []
     for benchmark in PROMPTED:
@@ -628,6 +632,9 @@ def test_each_language_has_a_board_per_prompt_tier():
                 build.task_name(b, language, tier) for b in buildable
             )
             assert board["harbor"]["rank_by"][0]["accessor"] == "metrics.reward"
+            for version in BOARD_VERSIONS[:-1]:
+                frozen = boards[_board_name(language, tier, version)]
+                assert set(frozen["tasks"]) <= set(board["tasks"])
 
 
 def _on(run: dict, board: dict) -> dict:
@@ -678,7 +685,7 @@ def test_a_row_names_its_variant_and_a_job_may_not_mix_them(tmp_path):
 
 def test_each_board_names_its_language_and_tier_dataset():
     for board in leaderboard.load_leaderboards():
-        # sdtm-adam-v4-<language> or sdtm-adam-v4-<tier>-<language>
+        # sdtm-adam-v<N>-<language> or sdtm-adam-v<N>-<tier>-<language>
         parts = board["harbor"]["name"].split("-")
         language, tier = parts[-1], parts[3] if len(parts) == 5 else "full"
         assert board["grading_protocol"] == build.GRADING_PROTOCOL

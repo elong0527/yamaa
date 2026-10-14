@@ -635,3 +635,91 @@ def test_site_parse_accepts_any_prefix_and_exactly_two_dashes(tmp_path, language
     invalid = next(r for r in rows if r["USUBJID"] == "OTHER-EXTRA-SITE-1234")
     assert invalid["SITEIDP"] == ""
     assert invalid["SITEID"] == "FALLBACK"
+
+
+@pytest.fixture(params=["yamaa", "python", "r", "opensas"])
+def qtc_track(request):
+    return request.param
+
+
+def test_replicate_qtc_average_pairs_by_replicate_and_skips_absent_rr(
+    tmp_path, qtc_track
+):
+    # Edges the prompt states but the fixture does not hold: an RR record
+    # absent rather than not done, a time point without any RR, RR records
+    # before QT, replicate numbers other than 1-3, and decimal results.
+    name = "adam-adeg-replicate-qtc-average"
+    row = _input(name, "eg.csv")[0]
+
+    def ecg(seq, test, rep, value, tpt, tptnum):
+        label = {"QTAG": "QT Interval, Aggregate", "RRAG": "RR Interval, Aggregate"}
+        return {
+            **row,
+            "USUBJID": "EDGE-01",
+            "EGSEQ": str(seq),
+            "EGTESTCD": test,
+            "EGTEST": label[test],
+            "EGREPNUM": str(rep),
+            "EGSTAT": "",
+            "EGSTRESN": value,
+            "EGSTRESU": "msec",
+            "EGTPT": tpt,
+            "EGTPTNUM": tptnum,
+            "EGDTC": "2026-03-04T08:00",
+        }
+
+    records = [
+        ecg(1, "RRAG", 1, "950.5", "0.5 HR", "0.5"),
+        ecg(2, "RRAG", 3, "1010", "0.5 HR", "0.5"),
+        ecg(3, "QTAG", 1, "401.5", "0.5 HR", "0.5"),
+        ecg(4, "QTAG", 2, "399", "0.5 HR", "0.5"),
+        ecg(5, "QTAG", 3, "403", "0.5 HR", "0.5"),
+        ecg(6, "QTAG", 1, "400", "1 HR", "1"),
+        ecg(7, "QTAG", 2, "404", "1 HR", "1"),
+        ecg(8, "QTAG", 4, "396", "2 HR", "2"),
+        ecg(9, "RRAG", 4, "980", "2 HR", "2"),
+        ecg(10, "QTAG", 7, "398", "2 HR", "2"),
+        ecg(11, "RRAG", 7, "1000", "2 HR", "2"),
+    ]
+    changes = {"eg.csv": records}
+    if qtc_track == "yamaa":
+        try:
+            import_module("yamaa._native")
+        except ModuleNotFoundError as error:
+            if error.name != "yamaa._native":
+                raise
+            pytest.skip("the compiled native extension is not installed")
+        from yamaa import domain
+
+        study = tmp_path / "study"
+        shutil.copytree(ROOT / "benchmarks" / name, study)
+        with (study / "input" / "eg.csv").open("w", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=list(row))
+            writer.writeheader()
+            writer.writerows(records)
+        domain(study / "spec.yaml").output.write_csv(study / "actual.csv")
+        rows = _read(study / "actual.csv")[1]
+    else:
+        rows = _run(tmp_path, name, qtc_track, changes)["adeg.csv"]
+
+    def qtcf(qt, rr):
+        return qt / (rr / 1000) ** (1 / 3)
+
+    expected = {
+        ("QTAG", 0.5): (401.5 + 399 + 403) / 3,
+        ("RRAG", 0.5): (950.5 + 1010) / 2,
+        ("QTCF", 0.5): (qtcf(401.5, 950.5) + qtcf(403, 1010)) / 2,
+        ("QTAG", 1.0): (400 + 404) / 2,
+        ("QTAG", 2.0): (396 + 398) / 2,
+        ("RRAG", 2.0): (980 + 1000) / 2,
+        ("QTCF", 2.0): (qtcf(396, 980) + qtcf(398, 1000)) / 2,
+    }
+    actual = {
+        (r["PARAMCD"], float(r["ATPTN"])): float(r["AVAL"])
+        for r in rows
+        if r["USUBJID"] == "EDGE-01"
+    }
+    assert set(actual) == set(expected)
+    for key, value in expected.items():
+        assert actual[key] == pytest.approx(value, rel=1e-9), key
+    assert {r["DTYPE"] for r in rows} == {"AVERAGE"}

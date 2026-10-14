@@ -236,5 +236,5 @@ PR Python smoke runs lightweight image, hardening and fairness regression tests
 without installing Harbor or building Docker images. Full R/Python reference
 grading runs on relevant main pushes or manual `harbor-evaluation.yml` dispatches.
 Oracle verification runs on relevant main pushes, the weekly schedule, or manual
-dispatch. It retains all 134 confident opensas cases and the ten-task R/Python
+dispatch. It retains all 142 confident opensas cases and the ten-task R/Python
 preflight. The summary and `harbor-verification` artifact record the full selection.
