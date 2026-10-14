@@ -1,0 +1,155 @@
+schema_version: "1.0"
+domain: ADPP
+keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
+input:
+  PP: {path: input/pp.csv, types: {PPSTRESN: float}}
+  ADSL: {path: input/adsl.csv}
+
+output:
+  path: adpp.csv
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, AVAL, AVALU]
+
+# The subject's planned arm. No `no_match`: a PP subject missing from ADSL
+# stops the run instead of losing its ratios.
+intermediates:
+  - id: SUBJARM
+    dataset: ADSL
+    key: [STUDYID, USUBJID]
+    columns: [ARMCD]
+
+  # Each PP record with its subject's arm and the arm's steady-state visit:
+  # the last planned dosing day (arm A doses on days 1 to 7, arm B on days 1
+  # to 5). Another arm gives no visit and fails the arm assertion below.
+  - id: PPARM
+    dataset: PP
+    derivations:
+      ARMCD: SUBJARM.ARMCD
+      SSVISIT:
+        case:
+          - when: "ARMCD = 'A'"
+            then: {literal: DAY 7}
+          - when: "ARMCD = 'B'"
+            then: {literal: DAY 5}
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: PARAM
+    type: str
+    label: Parameter
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+
+  # The subject's planned arm, kept for the arm assertion; not in the output.
+  - name: ARMCD
+    type: str
+    label: Planned Arm Code
+
+  # The steady-state and day-1 values of a ratio record; empty on the
+  # collected records and not in the output.
+  - name: SSVAL
+    type: float
+    label: Steady-State Value
+
+  - name: D1VAL
+    type: float
+    label: Day 1 Value
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+
+  - name: AVALU
+    type: str
+    label: Analysis Value Unit
+
+rows:
+  # Every PP record, also one whose parameter was not calculated.
+  - id: collected
+    dataset: PPARM
+    derivations:
+      STUDYID: PPARM.STUDYID
+      USUBJID: PPARM.USUBJID
+      PARAMCD: PPARM.PPTESTCD
+      PARAM: PPARM.PPTEST
+      AVISIT: PPARM.VISIT
+      ARMCD: PPARM.ARMCD
+      SSVAL: {literal: null}
+      D1VAL: {literal: null}
+      AVAL: PPARM.PPSTRESN
+      AVALU: PPARM.PPSTRESU
+
+  # One AUCTAU ratio per subject, at the steady-state visit, when both the
+  # steady-state and the day-1 value are present; ONLY() fails on a second
+  # record for one subject, parameter and visit.
+  - id: arauc
+    dataset: PPARM
+    group_by: [PPARM.STUDYID, PPARM.USUBJID, PPARM.ARMCD, PPARM.SSVISIT]
+    filter: "AVAL IS NOT NULL"
+    derivations:
+      STUDYID: PPARM.STUDYID
+      USUBJID: PPARM.USUBJID
+      PARAMCD: {literal: ARAUC}
+      PARAM: {literal: Accumulation Ratio AUCTAU}
+      AVISIT: PPARM.SSVISIT
+      ARMCD: PPARM.ARMCD
+      SSVAL:
+        aggregate:
+          filter: "PPARM.PPTESTCD = 'AUCTAU' AND PPARM.VISIT = PPARM.SSVISIT"
+          expr: "ONLY(PPARM.PPSTRESN)"
+      D1VAL:
+        aggregate:
+          filter: "PPARM.PPTESTCD = 'AUCTAU' AND PPARM.VISIT = 'DAY 1'"
+          expr: "ONLY(PPARM.PPSTRESN)"
+      AVAL:
+        compute:
+          expr: "SSVAL / NULLIF(D1VAL, 0)"
+      AVALU: {literal: RATIO}
+
+  # The same for CMAX.
+  - id: arcmax
+    dataset: PPARM
+    group_by: [PPARM.STUDYID, PPARM.USUBJID, PPARM.ARMCD, PPARM.SSVISIT]
+    filter: "AVAL IS NOT NULL"
+    derivations:
+      STUDYID: PPARM.STUDYID
+      USUBJID: PPARM.USUBJID
+      PARAMCD: {literal: ARCMAX}
+      PARAM: {literal: Accumulation Ratio Cmax}
+      AVISIT: PPARM.SSVISIT
+      ARMCD: PPARM.ARMCD
+      SSVAL:
+        aggregate:
+          filter: "PPARM.PPTESTCD = 'CMAX' AND PPARM.VISIT = PPARM.SSVISIT"
+          expr: "ONLY(PPARM.PPSTRESN)"
+      D1VAL:
+        aggregate:
+          filter: "PPARM.PPTESTCD = 'CMAX' AND PPARM.VISIT = 'DAY 1'"
+          expr: "ONLY(PPARM.PPSTRESN)"
+      AVAL:
+        compute:
+          expr: "SSVAL / NULLIF(D1VAL, 0)"
+      AVALU: {literal: RATIO}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD, AVISIT]
+  - assert:
+      id: every-subject-has-a-planned-arm-a-or-b
+      require: "ARMCD = 'A' OR ARMCD = 'B'"
+  - assert:
+      id: ratio-records-carry-ratio-unit
+      when: "PARAMCD = 'ARAUC' OR PARAMCD = 'ARCMAX'"
+      require: "AVALU = 'RATIO' AND AVAL IS NOT NULL"
