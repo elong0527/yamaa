@@ -4,10 +4,10 @@ The language admits four closed grammars. Each one is defined once, here:
 
 | Contract | Rule | Written in |
 |---|---|---|
-| [`predicate.yaml`](predicate.yaml) | [R004](../rules/operations/predicates.md) | a field typed `predicate` |
-| [`numeric.yaml`](numeric.yaml) | [R010](../rules/operations/computation.md) | `compute.expr` |
-| [`string-template.yaml`](string-template.yaml) | [R012](../rules/operations/text.md) | `str_template.template` |
-| [`aggregate.yaml`](aggregate.yaml) | [R013](../rules/operations/aggregation.md) | `aggregate.expr` |
+| [`predicate.yaml`](predicate.yaml) | [R004](../../rules/operations/predicates.md) | a field typed `predicate` |
+| [`numeric.yaml`](numeric.yaml) | [R010](../../rules/operations/computation.md) | `compute.expr` |
+| [`string-template.yaml`](string-template.yaml) | [R012](../../rules/operations/text.md) | `str_template.template` |
+| [`aggregate.yaml`](aggregate.yaml) | [R013](../../rules/operations/aggregation.md) | `aggregate.expr` |
 
 These files are the single authored grammar truth for the shared Rust parser
 used by Python and R. Repository validation renders each rule's grammar block
