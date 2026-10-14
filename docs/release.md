@@ -184,6 +184,15 @@ schema navigation use [the current rules](articles/rules.md), schema sources and
 the independent owner controls above. No active reader requires the retired
 [migration map](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rules/migration.yaml);
 its former aliases, retirement decisions and prose provenance remain in Git.
+The original native audit for [run 38497098490, attempt 1](https://github.com/elong0527/yamaa/actions/runs/38497098490)
+at source `89b1fa90b0edfa03bc367f73426b630b36b20e85` remains in
+[artifact 11866226197](https://github.com/elong0527/yamaa/actions/runs/38497098490/artifacts/11866226197).
+[Offline replay 38545207097](https://github.com/elong0527/yamaa/actions/runs/38545207097)
+retrieved that exact ZIP and reproduced its original `qualification.json` bytes
+with the original reader. The reader at `140d936b37a40e0d4250983372f38079189b1b0a`
+preserved all 97 lane identities and verdicts: 42 pass, 49 fail and 6 missing.
+The original record remains incomplete, with its captured run metadata unchanged;
+this historical replay does not qualify a new source or replace capacity inputs.
 [#2154](https://github.com/elong0527/yamaa/issues/2154) owns physical history removal
 and durable replay. Raw `rust/measurements/` remains pending verified retention
 of its original external inputs; a scratch path or expiring Actions URL is not a
