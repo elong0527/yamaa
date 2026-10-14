@@ -21,6 +21,14 @@ pending there until all evidence gates pass.
 | Pending evidence/decisions | Final combined-main installed/numerical audit, adopted capacity bounds, complete performance campaign and item-10 budgets, item-11 transition acceptance and exact artifact handoff. |
 | Published | [Python source release 0.3.0](https://github.com/elong0527/yamaa/releases/tag/yamaa-py-0.3.0), source `845a91ff`, published 2026-10-11, with no package assets. No shared 0.4.0 release is listed. Prior source-built Python rollback packages and the pre-cutover R 0.3.0 candidate remain unpublished drafts. |
 
+PR [#2165](https://github.com/elong0527/yamaa/pull/2165) merged without a passing
+exact-head installed matrix. Its main run
+[38503400832](https://github.com/elong0527/yamaa/actions/runs/38503400832) began
+after merge, and qualification run
+[38503459253](https://github.com/elong0527/yamaa/actions/runs/38503459253) was
+canceled. Neither satisfies the required pre-merge gate; no approved exception
+superseded that requirement. Final combined-main acceptance remains pending.
+
 Removal and version changes landed **before** final evidence-based item-10/item-11
 acceptance. Planning removal in PR #2161 and math-record replacement in PR #2162
 also preceded this consolidated guide. Record the actual chronology; completed
