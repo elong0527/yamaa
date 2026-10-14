@@ -24,6 +24,15 @@ Core and engine remain `no_std` and exclude host/storage frameworks. Diagnostics
 belong to the shared registry. Host callbacks carry typed values; diagnostic
 JSON text does not introduce a callback request/reply protocol. Build computes
 and retains results; explicit Save publishes held bytes in the contract's order.
+
+Rust module paths follow their directories. Core `dataset/`, `diagnostic/` and
+`specification/` own their related child modules; engine `dataset/` owns execution
+and intermediate helpers; adapters group schema data, specification sources,
+diagnostics and define publication controls under their matching parents.
+Start at each family's `mod.rs` and follow its ordinary `mod` declarations.
+The sole production `#[path]` exception selects the Windows implementation of
+`file_publication` while preserving its existing public and private namespace.
+
 The [Python guide](https://github.com/elong0527/yamaa/blob/main/python/README.md)
 and [R guide](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md)
 describe public usage and installation. The
