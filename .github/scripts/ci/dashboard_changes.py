@@ -15,10 +15,13 @@ def affects_dashboard(path):
             ".github/scripts/benchmark-docs/",
             ".github/scripts/ci/",
             ".github/scripts/commands/",
+            "docs/assets/",
         )
     ) or path in (
         "Makefile",
+        "mkdocs.yml",
         "docs/articles/benchmark.md",
+        "rust/tools/public_conformance.py",
         ".github/workflows/yaml-validation.yml",
     )
 

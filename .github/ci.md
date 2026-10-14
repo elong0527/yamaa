@@ -118,9 +118,10 @@ observational on main and must pass on qualification branches. Complete reposito
 semantic validation and live validation blocker issue checks run on every main
 push or a manual `yaml-validation.yml` dispatch. Deterministic dashboard
 generation runs on a dispatch, or on a main push that changed a dashboard source
-since the previous main commit. R grammar/rollback and standalone numerical
-workflows remain available by manual dispatch; native-rust runs the same
-numerical checks.
+since the previous main commit. Dashboard sources include the public conformance
+planner, MkDocs configuration and authored dashboard assets used by the checks.
+R grammar/rollback and standalone numerical workflows remain available by manual
+dispatch; native-rust runs the same numerical checks.
 
 For release qualification, platform-specific changes, or changes needing complete
 installed evidence before merge, dispatch the native matrix on the branch head:

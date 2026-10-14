@@ -89,8 +89,29 @@ class DashboardChanges(unittest.TestCase):
             "Makefile",
             ".github/workflows/yaml-validation.yml",
             "docs/articles/benchmark.md",
+            "docs/assets/giscus-yamaa.css",
+            "mkdocs.yml",
+            "rust/tools/public_conformance.py",
         ):
             self.assertTrue(affects_dashboard(path), path)
+
+    def test_main_push_checks_dashboard_imports_and_authored_site_contracts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repository(root)
+            commit(root, "README.md", "prose\n")
+            for path in (
+                "rust/tools/public_conformance.py",
+                "mkdocs.yml",
+                "docs/assets/giscus-yamaa.css",
+                "docs/articles/benchmark.md",
+            ):
+                with self.subTest(path=path):
+                    before = git(root, "rev-parse", "HEAD")
+                    commit(root, path, "dashboard dependency\n")
+                    self.assertEqual(
+                        select(root, "push", {"before": before}), "dashboards=true\n"
+                    )
 
     def test_runtime_and_unrelated_docs_do_not_need_preview(self):
         for path in ("rust/Cargo.toml", "python/src/yamaa/style.py", "docs/index.md"):
