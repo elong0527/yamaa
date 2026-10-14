@@ -107,7 +107,8 @@ make test-python HOST_PYTHON=/path/to/installed-env/bin/python \
 Replace the example paths with the actual installed artifacts and run reference.
 `SOURCE_REVISION` defaults to the checkout's HEAD and must match the tested
 source. `HOST_WORK` must be outside the checkout; output directories must be
-fresh to preserve previous evidence. For R source staging and package checks:
+fresh to preserve previous evidence. `check-r` also requires a fresh `HOST_WORK`
+directory that does not already exist. For R source staging and package checks:
 
 ```sh
 make stage-r PYTHON=/path/to/build-env/bin/python R_STAGE=/tmp/yamaa-r-stage/yamaa
