@@ -183,7 +183,7 @@ def test_odm_dotted_sub_version_is_accepted(
 
 def test_nested_clinical_data_is_rejected(tmp_path: Path) -> None:
     # SubjectData/StudyEventData/FormData all reject nesting; ClinicalData
-    # must too — without a guard the inner StudyOID silently re-attributes
+    # must too; without a guard the inner StudyOID silently re-attributes
     # every row that follows and strips their metadata names.
     source = tmp_path / "nested-clinical.xml"
     source.write_text(
