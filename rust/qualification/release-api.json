@@ -125,6 +125,7 @@
         "_prepare_file_project",
         "_prepare_inherited_specification",
         "_prepare_specification",
+        "_schema_include_names",
         "_style_same_value",
         "_temporal_result"
       ],
@@ -316,6 +317,11 @@
           "disposition": "internal",
           "issue": "#2156",
           "rationale": "Read-only tagged arena from the successfully held shared-engine resolved root, including producer-root selection; failed project preparation raises, no execution/output artifact or Save authority is granted."
+        },
+        "_schema_include_names": {
+          "disposition": "internal",
+          "issue": "#2156",
+          "rationale": "Bounded native YAML include-name discovery from explicit captured bytes only; no schema admission, file reads, callbacks or publication. The repository IO caller retains confinement and closure capture bounds."
         }
       }
     },

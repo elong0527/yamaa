@@ -7,11 +7,65 @@ use crate::{
 use serde_json::{json, Value};
 use std::sync::Arc;
 use yamaa_core::schema::{
-    admit_schema_diagnostics, Document, DocumentNode, NormalizationBudget, SchemaDiagnostic,
-    SchemaDiagnosticBudget, SchemaDiagnosticValue, ValidationBudget,
+    admit_schema_diagnostics, Document, DocumentNode, SchemaDiagnostic, SchemaDiagnosticBudget,
+    SchemaDiagnosticValue,
 };
 
 pub struct Schema(pub Arc<CapturedSchema>);
+
+/// Host query-carrier capacity admission belongs to the adapter, before copies.
+#[derive(Default)]
+pub struct Query {
+    values: Vec<String>,
+    bytes: usize,
+}
+impl Query {
+    pub fn push(&mut self, value: &str) -> Result<(), String> {
+        if self.values.len() >= 128 {
+            return Err(refused());
+        }
+        self.bytes = self
+            .bytes
+            .checked_add(value.len())
+            .filter(|&size| size <= 65_536)
+            .ok_or_else(refused)?;
+        self.values.push(value.into());
+        Ok(())
+    }
+    pub fn into_values(self) -> Vec<String> {
+        self.values
+    }
+}
+
+fn admit_queries(types: &[String]) -> Result<(), String> {
+    let mut query = Query::default();
+    for value in types {
+        query.push(value)?;
+    }
+    Ok(())
+}
+
+/// Native YAML discovery facts grant no filesystem authority or schema admission.
+pub fn includes(bytes: &[u8]) -> Result<Vec<String>, String> {
+    if bytes.len() > Limits::default().captured_bytes {
+        return Err(refused());
+    }
+    let input =
+        crate::yaml_decode::decode_yaml(bytes, Default::default()).map_err(|_| refused())?;
+    let Some(index) = input.document.field(input.document.root(), "includes") else {
+        return Ok(Vec::new());
+    };
+    let DocumentNode::Sequence(entries) = &input.document.nodes()[index] else {
+        return Ok(Vec::new());
+    };
+    Ok(entries
+        .iter()
+        .filter_map(|&entry| match &input.document.nodes()[entry] {
+            DocumentNode::Text(value) => Some(value.clone()),
+            _ => None,
+        })
+        .collect())
+}
 
 /// Schema authoring defects retain their original core-owned kind and location.
 /// They are repository structure findings, not fabricated language issue rows.
@@ -134,9 +188,8 @@ impl Schema {
     }
     pub fn defaults(&self) -> Result<Vec<Issue>, String> {
         let schema = self.0.structure();
-        let defaults = schema
-            .validate_defaults(&mut ValidationBudget::new(Default::default()))
-            .map_err(|_| refused())?;
+        let defaults =
+            yamaa_engine::schema_capture::default_findings(schema).map_err(|_| refused())?;
         let mut result = Vec::new();
         let mut remaining = crate::specification_check::MAX_ISSUE_BYTES.saturating_sub(2);
         for default in defaults {
@@ -171,23 +224,16 @@ impl Schema {
         if source.len() > Limits::default().captured_bytes {
             return Err(refused());
         }
+        admit_queries(types)?;
         let input =
             crate::yaml_decode::decode_yaml(source, Default::default()).map_err(|_| refused())?;
-        let schema = self.0.structure();
-        let mut budget = ValidationBudget::new(Default::default());
-        let types = schema
-            .parse_query_types(types, &mut budget)
-            .map_err(|_| refused())?;
-        let findings = schema
-            .validate_types(
-                &types,
-                &input.document,
-                input.document.root(),
-                "",
-                fragment,
-                &mut budget,
-            )
-            .map_err(|_| refused())?;
+        let findings = yamaa_engine::schema_capture::validate_query(
+            self.0.structure(),
+            &input.document,
+            types,
+            fragment,
+        )
+        .map_err(|_| refused())?;
         issues(&self.0, Some(&input.document), &findings)
     }
     pub fn normalize(
@@ -199,21 +245,16 @@ impl Schema {
         if source.len() > Limits::default().captured_bytes {
             return Err(refused());
         }
+        admit_queries(types)?;
         let input =
             crate::yaml_decode::decode_yaml(source, Default::default()).map_err(|_| refused())?;
-        let schema = self.0.structure();
-        let types = schema
-            .parse_query_types(types, &mut ValidationBudget::new(Default::default()))
-            .map_err(|_| refused())?;
-        let normalized = schema
-            .normalize_types(
-                &types,
-                &input.document,
-                input.document.root(),
-                fragment,
-                &mut NormalizationBudget::new(Default::default()),
-            )
-            .map_err(|_| refused())?;
+        let normalized = yamaa_engine::schema_capture::normalize_query(
+            self.0.structure(),
+            &input.document,
+            types,
+            fragment,
+        )
+        .map_err(|_| refused())?;
         document(&normalized.document)
     }
 }

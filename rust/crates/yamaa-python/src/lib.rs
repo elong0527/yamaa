@@ -30,6 +30,10 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
         schema_metadata::_capture_schema_metadata,
         module
     )?)?;
+    module.add_function(wrap_pyfunction!(
+        schema_metadata::_schema_include_names,
+        module
+    )?)?;
     module.add_class::<define_entry::Define>()?;
     module.add(
         "DefineError",

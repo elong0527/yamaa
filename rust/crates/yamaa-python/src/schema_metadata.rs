@@ -10,22 +10,14 @@ pub struct Schema {
 }
 
 fn types(values: &Bound<'_, PyList>) -> PyResult<Vec<String>> {
-    if values.len() > 128 {
-        return Err(pyo3::exceptions::PyValueError::new_err(
-            "schema query type count limit",
-        ));
-    }
-    let mut result = Vec::new();
-    let mut size = 0usize;
+    let mut query = yamaa_adapters::schema_metadata::Query::default();
     for value in values {
         let value = value.cast::<PyString>()?.to_str()?;
-        size = size
-            .checked_add(value.len())
-            .filter(|&size| size <= 65_536)
-            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("schema query text limit"))?;
-        result.push(value.into());
+        query
+            .push(value)
+            .map_err(pyo3::exceptions::PyValueError::new_err)?;
     }
-    Ok(result)
+    Ok(query.into_values())
 }
 #[pymethods]
 impl Schema {
@@ -87,4 +79,10 @@ pub fn _capture_schema_metadata(
     Ok(Schema {
         inner: yamaa_adapters::schema_metadata::Schema(captured),
     })
+}
+
+#[pyfunction]
+pub fn _schema_include_names(source: &Bound<'_, PyBytes>) -> PyResult<Vec<String>> {
+    yamaa_adapters::schema_metadata::includes(source.as_bytes())
+        .map_err(pyo3::exceptions::PyValueError::new_err)
 }

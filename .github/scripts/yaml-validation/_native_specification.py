@@ -24,14 +24,7 @@ MAX_CAPTURE = 8_388_608
 
 
 def schema_closure(directory, entry):
-    pending, captured = [entry], {}
-    while pending:
-        name = pending.pop(0)
-        if name not in captured:
-            source = (directory / name).read_bytes()
-            captured[name] = source
-            pending.extend(yaml.safe_load(source).get("includes", []))
-    return list(captured.items())
+    return _native_schema.capture_modules(directory, entry)
 
 
 def prepare(spec_path, *, project_root=None, environment=None, schema_root=ROOT):
@@ -60,6 +53,8 @@ def issue_rows(
     spec_path, *, project_root=None, environment=None, schema_root=ROOT, origins=None,
     metadata=None, document_only=False,
 ):
+    if metadata is not None:
+        metadata.clear()
     owner = prepare(
         spec_path,
         project_root=project_root,
@@ -154,6 +149,10 @@ def validate(
     document_only=False,
 ):
     """Native declaration/profile/header facts; R coverage is explicitly scoped."""
+    if metadata is not None:
+        metadata.clear()
+    if origins is not None:
+        origins.clear()
     import shutil
     from contextlib import ExitStack
     from tempfile import TemporaryDirectory
