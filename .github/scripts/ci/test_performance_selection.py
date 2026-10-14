@@ -1,21 +1,26 @@
 """The expensive performance route covers effective code, excluding evidence."""
 
+import ast
 import re
 import unittest
 from pathlib import Path
-
-import yaml
 
 
 class PerformanceSelection(unittest.TestCase):
     def test_runtime_protocol_truth_and_admission_changes_require_collection(self):
         root = Path(__file__).resolve().parents[3]
-        workflow = yaml.safe_load(
-            (root / ".github/workflows/performance.yml").read_text()
-        )
-        events = workflow.get("on", workflow.get(True))
-        self.assertEqual(events["push"]["branches"], ["qualification/issue-1998"])
-        patterns = events["push"]["paths"]
+        # This CI selection suite deliberately runs in the setup interpreter,
+        # before project dependencies are selected. Read this workflow's explicit
+        # quoted scalar list with stdlib only; GitHub validates the whole YAML.
+        source = (root / ".github/workflows/performance.yml").read_text()
+        push = re.search(r"(?ms)^  push:\n(.*?)(?=^  \S|\Z)", source).group(1)
+        branches = re.search(r"(?m)^    branches: \[(.*?)\]$", push).group(1)
+        self.assertEqual(branches, "qualification/issue-1998")
+        patterns = [
+            ast.literal_eval(value) for value in re.findall(r"(?m)^      - (.+)$", push)
+        ]
+        self.assertTrue(patterns)
+        self.assertTrue(all(isinstance(pattern, str) for pattern in patterns))
 
         def selected(path):
             included = False
