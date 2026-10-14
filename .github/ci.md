@@ -70,9 +70,9 @@ numerical and audit checks supply exact-head premerge evidence. Its audit record
 
 The shared-crates step also runs
 `cargo test --locked -p yamaa-engine --features test-support` on every selected
-Rust platform on main and qualification pushes. This enables both `project_preparation` and
-`test_support` integration binaries, which a plain default-feature test
-invocation omits.
+Rust platform on main and qualification pushes. This enables the feature-gated
+project-preparation and test-support coverage omitted by a default-feature test
+invocation, including the explicit `test_support` integration suite.
 
 Scripts locate repository data relative to their own files, so they can also
 run locally from any working directory. Keep tests and shared helpers beside
@@ -106,7 +106,7 @@ To audit a completed main run locally, authenticate `gh` for
 repository and Actions reads, then use a fresh output directory:
 
 ```sh
-python rust/tools/audit_native_run.py --run-id 38167427581 \
+python rust/tools/audit_native_run.py --run-id <run-id> \
   --repository elong0527/yamaa --output /tmp/yamaa-native-audit --check
 ```
 

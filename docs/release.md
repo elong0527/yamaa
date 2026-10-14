@@ -93,7 +93,12 @@ Supported qualification is 18 CPython tuples: 3.12/3.13/3.14, wheel and independ
 source rebuild, on Linux x86_64, macOS arm64 and Windows x64; plus R 4.6.1 source
 installation and strict `R CMD check` **Status: OK** on the same three platforms.
 R sources declare Rust 1.90.0/Cargo and include the unchanged canonical lock; Windows
-requires Rtools45 and the GNU Rust target. Only packaging-tool checksums in
+requires Rtools45 and the GNU Rust target. Other runtime versions or Python
+implementations, free-threaded Python, other architectures, musl/Alpine and R
+binary distributions are explicitly excluded from this first release. The
+qualification images are Ubuntu 24.04/glibc, macOS 15/arm64 and Windows x64;
+record actual image/runtime versions rather than promising additional baselines.
+Only packaging-tool checksums in
 `python/uv.lock`, `rust/Cargo.lock` and unchanged staged copies are allowed;
 runtime/contract/cache/resource identity digests remain prohibited.
 
@@ -132,14 +137,38 @@ The identical R source candidate at
 reinstalls in [run 38435902670](https://github.com/elong0527/yamaa/actions/runs/38435902670).
 
 The current durable source assets are Python release 411980272 / asset 637944563
-and R release 411979803 / asset 637944247. Both releases remain drafts; public
+and R release 411979803 / asset 637944247. Python receipt bundle 638657402 retains
+the original 22 artifact ZIPs; R receipt asset 637944307 retains its earlier
+same-archive replay. Both releases remain drafts; public
 release-download URLs are not usable publication pins. Authorized review uses
 authenticated release-asset downloads and compares actual bytes with the retained
 receipts. The [original exact pin recipes](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/rollback-pins.md)
-remain in Git. After selecting the verified source archive, Python restoration
-uses the prior project's `uv.lock` with `uv sync --locked`; R restoration uses
-the compatible prior `renv.lock` and a fresh project library. Verify Python
-distribution version or R `packageVersion("yamaa")` equals `0.3.0` before reads.
+remain in Git. Fetch the source bytes using an identity authorized to read drafts:
+
+```sh
+mkdir retained-prior-packages
+gh api repos/elong0527/yamaa/releases/assets/637944563 \
+  --header 'Accept: application/octet-stream' > retained-prior-packages/yamaa-0.3.0.tar.gz
+gh api repos/elong0527/yamaa/releases/assets/637944247 \
+  --header 'Accept: application/octet-stream' > retained-prior-packages/yamaa_0.3.0.tar.gz
+```
+
+In a fresh compatible prior Python study checkout, preserve the calling code,
+`yamaa==0.3.0` and every other dependency pin, then select the verified archive:
+
+```toml
+[tool.uv.sources]
+yamaa = { path = "retained-prior-packages/yamaa-0.3.0.tar.gz" }
+```
+
+Regenerate the selected source record with `uv lock`, then `uv sync --locked`;
+retain both the original and restored study locks. The source backend pins
+maturin 1.9.6; use Rust 1.90.0 and the unchanged prior Cargo lock. R restoration
+uses the compatible prior `renv.lock` and a fresh project library; authenticated
+review can install the fetched archive with `R CMD INSTALL --library=<fresh-library>`.
+Verify Python distribution version or R `packageVersion("yamaa")` equals `0.3.0`
+before reads or callbacks. Study-specific complete-lock restoration remains a
+separate check from the earlier package rehearsals.
 Published study-lock restoration, the full producer graph Save baseline and
 current asset accessibility still require acceptance under #2147/#1999.
 
@@ -189,8 +218,12 @@ B19 (transition/rollback), B03/B05/B13 (removal) and B15/B19 (exact handoff).
 readers before further cleanup. #2161 already moved `release-api.json` and its
 checker/test to `rust/qualification/`, then removed `rust/planning/` and root
 Rust architecture/status documents. Retired Python/validator assertion maps have
-no current path readers; their original bytes remain at
-[revision 43bb4437](https://github.com/elong0527/yamaa/tree/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning).
+no current path readers; the original
+[Python retirement map](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/python-retirement-inventory.json)
+and [validator assertion map](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/validator-assertion-disposition.json)
+remain retrievable at revision 43bb4437. #2147 must reconcile every unique
+retired assertion replacement with the final installed evidence. Git retrieval
+establishes map availability, not access to external replay artifacts.
 Retirement verification now uses `test_python_package_hygiene.py`, the installed
 supplemental suites and source guards; restoring an old map would not qualify
 those replacements.

@@ -25,6 +25,14 @@ describe the public calls, installation and host representations.
 
 ## Local checks
 
+Read [AGENTS.md](https://github.com/elong0527/yamaa/blob/main/AGENTS.md) before
+editing. [#2153](https://github.com/elong0527/yamaa/issues/2153) owns consolidation
+of the existing tool recipes into a root Makefile in
+[PR #2178](https://github.com/elong0527/yamaa/pull/2178), with `make help` as its
+target/prerequisite entry point. That interface is still under review. Until it
+lands, use the current recipes below and the package guides. Installed checks
+require a separate noneditable package outside the checkout.
+
 Use Rust 1.90.0 and the canonical `rust/Cargo.lock`. Python and R source archives
 stage the unchanged workspace and lock. From the repository root:
 
