@@ -35,6 +35,10 @@ CSV preservation controls also remain. Exact float bit witnesses, NUL/invalid
 UTF-8 refusals, native ownership, callback order/identity, interrupts, provenance,
 publication retries and argument/class assertions stay in each actual host.
 No paired suite is replaced by a reference result or removed from the catalog.
+The `original-specifications.typed_intermediates` cases additionally share
+authored conversion inputs, expected CSV bytes, refusal conditions and reached
+handler counts with the Rust adapter execution controls. Python and R exercise
+the same typed bindings through their installed public entry points.
 
 ## Public conformance mapping
 

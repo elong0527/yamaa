@@ -873,8 +873,61 @@ impl Declarations {
 }
 
 impl Declarations {
-    pub(super) fn check_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+    pub(super) fn check_findings(
+        &self,
+        sources: &[SourceDeclaration],
+        output: &TableSchema,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<(), BindError> {
+        let output_fields = output
+            .columns()
+            .iter()
+            .map(|column| reference_binding::Field {
+                name: &column.name,
+                column_type: column.kind,
+            })
+            .collect::<Vec<_>>();
+        let source_fields = sources
+            .iter()
+            .map(|source| {
+                source
+                    .types
+                    .iter()
+                    .map(|(name, kind)| reference_binding::Field {
+                        name,
+                        column_type: *kind,
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        let datasets = sources
+            .iter()
+            .zip(&source_fields)
+            .map(|(source, fields)| reference_binding::Dataset {
+                name: &source.name,
+                fields,
+            })
+            .collect::<Vec<_>>();
+        let catalog = Catalog::compile(&output_fields, &datasets, Default::default())
+            .map_err(BindError::Catalog)?;
+        let mut known = BTreeMap::<String, ColumnType>::new();
         for declaration in self.0.iter() {
+            let dataset = match declaration.source {
+                self_relations::Relation::Input(index) => sources[index].name.as_str(),
+                self_relations::Relation::SelfRows => "SELF",
+            };
+            let mut donor = match declaration.source {
+                self_relations::Relation::Input(index) => sources[index]
+                    .types
+                    .iter()
+                    .cloned()
+                    .collect::<BTreeMap<_, _>>(),
+                self_relations::Relation::SelfRows => output
+                    .columns()
+                    .iter()
+                    .map(|column| (column.name.clone(), column.kind))
+                    .collect(),
+            };
             if let (Some(expression), Some(compiled)) =
                 (&declaration.filter_text, &declaration.filter)
             {
@@ -887,6 +940,45 @@ impl Declarations {
             }
             for derived in &declaration.derivations {
                 static_checks::branch(&derived.branch, findings)?;
+                if let Some(kind) = derived.result_kind(&|name| {
+                    let (owner, field) = name.split_once('.').unwrap_or((dataset, name));
+                    if owner == dataset {
+                        donor.get(field).copied()
+                    } else if let Some(kind) = known.get(name) {
+                        Some(*kind)
+                    } else {
+                        sources
+                            .iter()
+                            .find(|source| source.name == owner)
+                            .and_then(|source| {
+                                source
+                                    .types
+                                    .iter()
+                                    .find(|(name, _)| name == field)
+                                    .map(|(_, kind)| *kind)
+                            })
+                    }
+                }) {
+                    donor.insert(derived.name.clone(), kind);
+                }
+            }
+            for (field, value) in declaration.keys.iter().flatten() {
+                if let (Some(actual), Some(expected)) =
+                    (donor.get(field), value.result_type(&catalog)?)
+                {
+                    if !crate::key_relation::comparable(expected, (*actual).into()) {
+                        findings.push(BindFinding::Lookup(LookupFinding::key_type(
+                            &format!("{}.key", declaration.path),
+                            &declaration.name,
+                            &value.display_name(field),
+                            expected,
+                            *actual,
+                        )));
+                    }
+                }
+            }
+            for (field, kind) in donor {
+                known.insert(format!("{}.{field}", declaration.name), kind);
             }
         }
         Ok(())

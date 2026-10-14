@@ -121,7 +121,7 @@ intermediate_class:
         required: false
         description: See REQ-1048.
     - derivations:
-        type: "dict[identifier, derivation]"
+        type: "dict[identifier, intermediate_derivation]"
         required: false
         description: See REQ-1185.
     - verifications:
@@ -295,6 +295,21 @@ derivation:
 
 handled_expression_class:
     - value: {type: expression, required: true}
+    - unconvertible: {type: literal_value, required: false}
+
+# See REQ-1185.
+intermediate_derivation:
+    type: [untyped_intermediate_derivation, intermediate_binding_class]
+
+untyped_intermediate_derivation:
+    type: [str, expression, intermediate_expression_class]
+
+intermediate_expression_class:
+    - value: {type: expression, required: true}
+
+intermediate_binding_class:
+    - type: {type: column_type, required: true}
+    - derivation: {type: untyped_intermediate_derivation, required: true}
     - unconvertible: {type: literal_value, required: false}
 
 expression:

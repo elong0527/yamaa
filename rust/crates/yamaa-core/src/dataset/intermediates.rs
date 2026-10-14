@@ -72,13 +72,15 @@ impl IntermediateUnique {
     }
 }
 
-/// A donor plan evaluates raw values in declaration order before filter/key/order.
+/// A donor plan evaluates values in declaration order before filter/key/order.
 #[derive(Clone, Debug, PartialEq)]
 pub struct IntermediateDerivations {
     pub plan: alloc::rc::Rc<DatasetPlan>,
     pub current: Vec<CurrentField>,
     pub stored_columns: usize,
     pub driver_kinds: Vec<Option<ColumnType>>,
+    /// Explicitly typed results convert before completing their donor slot.
+    pub typed_columns: Vec<usize>,
 }
 
 /// A named secondary record selector with literal absence handling.

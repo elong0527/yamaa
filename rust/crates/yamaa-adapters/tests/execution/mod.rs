@@ -1,6 +1,7 @@
 //! Execution contracts in the yamaa-adapters integration suite.
 
 mod aggregate_record_operations;
+mod check_output_validation;
 mod compiled_model;
 mod completed_intermediate_scopes;
 mod completed_lookup_assertions;
@@ -20,6 +21,7 @@ mod declarative_self;
 mod declarative_source_selection;
 mod inherited_aggregate_bindings;
 mod inherited_identifier_collision;
+mod inherited_intermediate_verification;
 mod inherited_key_shorthand;
 mod nested_windows;
 mod probe_successors;
@@ -28,3 +30,4 @@ mod row_filter_paths;
 mod row_intermediate_operands;
 mod scoped_windows_checks;
 mod specification_run;
+mod typed_intermediate_derivations;

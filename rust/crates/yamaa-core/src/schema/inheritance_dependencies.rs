@@ -7,7 +7,7 @@ use super::{
     ValidationError,
 };
 use crate::dependency_analysis;
-use alloc::{string::String, vec, vec::Vec};
+use alloc::{format, string::String, vec, vec::Vec};
 
 /// Ordered semantic findings; hosts render paths without discovering dependencies again.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -16,9 +16,14 @@ pub enum InheritanceDependencyIssue {
         column: String,
         dependency: String,
     },
-    /// Residual unscheduled columns in their initial collection order, including dependents.
     Cycle {
+        /// Residual unscheduled columns in their initial collection order, including dependents.
         columns: Vec<String>,
+        /// The first dependency cycle among the residuals, as a closed traversal
+        /// loop of column names whose final entry repeats the first.
+        cycle: Vec<String>,
+        /// The authored derivation path of each distinct cycle member, in cycle order.
+        paths: Vec<String>,
     },
 }
 
@@ -276,6 +281,18 @@ impl<'a> Run<'a, '_> {
                 add(&mut self.live_columns, column.name, self.budget)?;
             }
         }
+        // REQ-0638: an intermediate carrying its own verification is a
+        // declared assertion, so it is a reachability root even when no
+        // column reads it; an absent or empty list keeps ordinary pruning.
+        for i in 0..self.intermediates.len() {
+            let intermediate = self.intermediates[i];
+            let has_assertion = self.field(intermediate.node, "verifications")?.is_some_and(
+                |node| matches!(&self.input.nodes()[node], N::Sequence(items) if !items.is_empty()),
+            );
+            if has_assertion {
+                add(&mut self.live_intermediates, intermediate.name, self.budget)?;
+            }
+        }
         let base = self.field(root, "base")?;
         if let Some(name) = base.and_then(|id| self.text(id)) {
             add(&mut self.live_inputs, name, self.budget)?;
@@ -492,15 +509,84 @@ impl<'a> Run<'a, '_> {
                     columns.push(column.name.into());
                 }
             }
-            let text_bytes = columns.iter().fold(12usize, |total, name: &String| {
-                total.saturating_add(name.len())
-            });
+            // Name the cycle itself, not only the residuals it blocks: the shared
+            // analysis spells the first cycle the same way the flat compiler does.
+            // Charge its bounded scheduler state like the first scheduling pass.
+            self.budget
+                .reserve(0, dependency_analysis::stable_order_slots(&dependencies))?;
+            let analysis = dependency_analysis::analyze_admitted(dependencies);
+            let (cycle_indices, closed) = match analysis.cycle {
+                Some(cycle) => (cycle, true),
+                None => (
+                    selected
+                        .iter()
+                        .enumerate()
+                        .filter(|(i, _)| !emitted[*i])
+                        .map(|(i, _)| i)
+                        .collect::<Vec<_>>(),
+                    false,
+                ),
+            };
+            // A closed loop's final entry repeats its first member and adds no path.
+            let members = if closed {
+                &cycle_indices[..cycle_indices.len() - 1]
+            } else {
+                &cycle_indices[..]
+            };
+            let mut cycle = Vec::new();
+            for &index in &cycle_indices {
+                let column = selected[index];
+                self.budget.reserve(column.name.len(), 1)?;
+                cycle.push(column.name.into());
+            }
+            let mut paths = Vec::new();
+            for &index in members {
+                paths.push(self.derivation_path(selected[index])?);
+            }
+            let text_bytes = columns
+                .iter()
+                .chain(&cycle)
+                .chain(&paths)
+                .fold(12usize, |total, name: &String| {
+                    total.saturating_add(name.len())
+                });
             self.budget.validation.reserve_diagnostic(text_bytes)?;
             return Err(Error::Invalid(vec![InheritanceDependencyIssue::Cycle {
                 columns,
+                cycle,
+                paths,
             }]));
         }
         Ok(())
+    }
+    /// The authored derivation path of one column, naming its operation when the
+    /// derivation is a single-operation mapping, as the flat compiler reports it.
+    fn derivation_path(&mut self, column: Named<'a>) -> Result<String, Error> {
+        let mut derivation = self.field(column.node, "derivation")?;
+        if derivation.is_none() {
+            for i in 0..self.row_derivations.len() {
+                if let Some(node) = self.field(self.row_derivations[i], column.name)? {
+                    derivation = Some(node);
+                    break;
+                }
+            }
+        }
+        // The expanded document wraps each derivation in a `value` member;
+        // the authored operation is the single key beneath it.
+        if let Some(node) = derivation {
+            if let Some(value) = self.field(node, "value")? {
+                derivation = Some(value);
+            }
+        }
+        let path = match derivation.map(|node| &self.input.nodes()[node]) {
+            Some(N::Mapping(items)) if items.len() == 1 => match self.text(items[0].0) {
+                Some(operation) => format!("columns.{}.derivation.{operation}", column.name),
+                None => format!("columns.{}.derivation", column.name),
+            },
+            _ => format!("columns.{}.derivation", column.name),
+        };
+        self.budget.reserve(path.len(), 1)?;
+        Ok(path)
     }
     fn copy(&mut self, node: usize, depth: usize) -> Result<usize, Error> {
         let limit = self.budget.limits.depth.min(128);

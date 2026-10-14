@@ -538,14 +538,17 @@ impl Run<'_, '_> {
             SchemaAliasKind::Descriptor(descriptor) => {
                 let members = schema.descriptors()[descriptor].descriptor.members();
                 self.budget.work(members.len())?;
-                if name == "derivation" || name == "case_result" {
+                if matches!(
+                    name,
+                    "derivation" | "untyped_intermediate_derivation" | "case_result"
+                ) {
                     let members: Vec<_> = members
                         .iter()
                         .map(Member::root)
                         .filter(|m| m.text() != "str")
                         .collect();
                     if let N::Text(text) = &site.input.nodes()[site.value] {
-                        let generated = self.derivation(text, name == "derivation")?;
+                        let generated = self.derivation(text, name != "case_result")?;
                         let scope = self.scope()?;
                         return self.members(
                             &members,

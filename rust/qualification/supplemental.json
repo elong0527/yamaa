@@ -1039,6 +1039,7 @@
       "family": "installed-host-semantics",
       "level": "component",
       "consumers": [
+        "rust/crates/yamaa-adapters/tests/execution/typed_intermediate_derivations.rs",
         "rust/tests/installed_producer_builds.py",
         "rust/tests/installed_public_producers.py",
         "rust/tests/installed_producer_cohort.py",
