@@ -40,7 +40,16 @@ import subprocess
 import tempfile
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import (
+    ROUND_CEILING,
+    ROUND_FLOOR,
+    ROUND_HALF_EVEN,
+    Decimal,
+    Inexact,
+    InvalidOperation,
+    Rounded,
+    localcontext,
+)
 from pathlib import Path
 
 NULL_TOKENS = frozenset({"", "NA", "NaN", "nan", ".", "NULL", "None"})
@@ -1006,16 +1015,28 @@ def _perturb_values(input_dir: Path, randomizer: random.Random) -> list[dict]:
     measurements = {
         "HEIGHT",
         "HEIGHTCM",
+        "HEIGHTBL",
         "HT",
         "WEIGHT",
         "WEIGHTKG",
+        "WEIGHTBL",
         "WT",
         "LBORRES",
+        "LBSTRESN",
         "VSORRES",
+        "VSSTRESN",
     }
+    # A stored age group may be sponsor-defined. Without its rule, leave ages
+    # unchanged across every joined input rather than create inconsistent groups.
+    grouped_ages = any(
+        column.upper().startswith("AGEGR")
+        for path in input_dir.rglob("*")
+        if path.suffix in {".csv", ".parquet"}
+        for column in _columns(path)
+    )
     changes = []
 
-    def change(column: str, value: object) -> object:
+    def change(column: str, value: object, kind=None) -> object:
         if value is None or value == "":
             return value
         if isinstance(value, (date, datetime)):
@@ -1037,7 +1058,11 @@ def _perturb_values(input_dir: Path, randomizer: random.Random) -> list[dict]:
             except ValueError:
                 pass
         name = column.upper()
+        if grouped_ages and name in {"AGE", "AGE_YEARS"}:
+            return value
         if name not in measurements and name not in {"AGE", "AGE_YEARS"}:
+            return value
+        if isinstance(value, bool):
             return value
         try:
             number = float(value)
@@ -1045,11 +1070,53 @@ def _perturb_values(input_dir: Path, randomizer: random.Random) -> list[dict]:
             return value
         if not math.isfinite(number):
             return value
-        updated = (
-            number + age_shift
-            if name in {"AGE", "AGE_YEARS"}
-            else round(number * factor, 6)
-        )
+        if name in {"AGE", "AGE_YEARS"}:
+            updated = number + age_shift
+        else:
+            # Fixed decimal places can erase a nonzero measurement. Scale its
+            # decimal value instead, retaining the precision of small inputs.
+            if kind is not None and arrow.types.is_decimal(kind):
+                # Arrow decimal precision can exceed the ambient Decimal context.
+                # Reserve the multiplier's digits before any arithmetic, then
+                # admit the result into the field's declared precision and scale.
+                with localcontext() as context:
+                    context.prec = kind.precision + 4
+                    context.rounding = ROUND_HALF_EVEN
+                    context.traps[Inexact] = False
+                    context.traps[Rounded] = False
+                    original = Decimal(str(value))
+                    quantum = Decimal(1).scaleb(-kind.scale)
+                    maximum = Decimal(10**kind.precision - 1).scaleb(-kind.scale)
+                    updated = (original * Decimal(str(factor))).quantize(quantum)
+                    updated = min(maximum, max(-maximum, updated))
+                    if updated == original and original:
+                        step = quantum if original > 0 else -quantum
+                        candidate = original + step
+                        # At a precision edge, change by one quantum inward.
+                        updated = (
+                            candidate
+                            if -maximum <= candidate <= maximum
+                            else original - step
+                        )
+                    return updated
+            updated = Decimal(str(value)) * Decimal(str(factor))
+            if isinstance(value, int):
+                updated = int(
+                    updated.to_integral_value(
+                        rounding=ROUND_CEILING if number > 0 else ROUND_FLOOR
+                    )
+                )
+                if kind is not None and arrow.types.is_integer(kind):
+                    signed = arrow.types.is_signed_integer(kind)
+                    lower = -(1 << (kind.bit_width - 1)) if signed else 0
+                    upper = (1 << (kind.bit_width - int(signed))) - 1
+                    updated = min(upper, max(lower, updated))
+                    if updated == value and value:
+                        updated = value - 1 if value > 0 else value + 1
+                return updated
+            if isinstance(value, str):
+                return format(updated.normalize(), "f")
+            updated = float(updated)
         if isinstance(value, str):
             return str(int(updated)) if updated.is_integer() else str(updated)
         return int(updated) if isinstance(value, int) else updated
@@ -1059,15 +1126,39 @@ def _perturb_values(input_dir: Path, randomizer: random.Random) -> list[dict]:
             continue
         if path.suffix == ".csv":
             columns, rows = read_rows(path)
+            kinds = {}
         else:
             arrow, parquet, _ = _parquet()
             table = parquet.read_table(path)
             columns, rows = table.column_names, table.to_pylist()
+            kinds = {field.name: field.type for field in table.schema}
         counts = {}
         for row in rows:
+            # A textual standardized result follows its numeric partner only
+            # when it represents the same number, preserving missing/categories.
+            partners = {}
+            for domain in ("LB", "VS"):
+                numeric, textual = domain + "STRESN", domain + "STRESC"
+                if numeric in row and textual in row:
+                    try:
+                        if Decimal(str(row[numeric])) == Decimal(str(row[textual])):
+                            partners[textual] = numeric
+                    except InvalidOperation:
+                        pass
+            updated = {}
             for column in columns:
                 before = row[column]
-                after = change(column, before)
+                after = change(column, before, kinds.get(column))
+                if column in kinds:
+                    after = arrow.scalar(after, type=kinds[column]).as_py()
+                updated[column] = after
+            # Match text to the numeric value actually stored in its schema,
+            # after changing all numeric fields regardless of column order.
+            for textual, numeric in partners.items():
+                if updated[numeric] != row[numeric]:
+                    updated[textual] = display(updated[numeric])
+            for column in columns:
+                before, after = row[column], updated[column]
                 if after != before:
                     row[column] = after
                     counts[column] = counts.get(column, 0) + 1

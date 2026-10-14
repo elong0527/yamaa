@@ -95,7 +95,12 @@ How to write a prompt is in
   identifiers keep their width and leading zero through one shared shift per
   width; if there is no room to shift upward, they rotate within that padded
   domain. The one-character identifier `0` has no distinct padded replacement
-  and stays unchanged. The grade records
+  and stays unchanged. Supported measurements include numeric laboratory/vital
+  standardized results and baseline height and weight. Numeric standardized
+  text follows the matching numeric value actually stored. Ages stay unchanged
+  when an input stores an age group whose rule is unknown. ADaM `AVAL`, dose
+  and ODM `Value` items still need measurement declarations before they can
+  be scaled safely. The grade records
   the shared seed and changed columns. The shared day shift preserves chronology
   among complete dates only. Partial dates, dates collected in separate
   year/month/day items, and interval strings stay unchanged; their alignment
