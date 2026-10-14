@@ -971,6 +971,8 @@ fn failed_observations<'a, E>(
         Err(yamaa_engine::specification_output::CompleteError::Report(Error::ResourceLimit(
             refusal,
         ))) => {
+            budget.entries(16)?;
+            value["error"] = json!({"stage":"report","code":"output_limit"});
             push_diagnostic(
                 budget,
                 &mut diagnostics,
