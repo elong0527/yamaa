@@ -518,7 +518,7 @@ jobs:
           options(repos = c(CRAN = repository))
           description <- read.dcf(file.path(Sys.getenv("GITHUB_WORKSPACE"), "R/yamaa/DESCRIPTION"))
           suggests <- strsplit(description[1, "Suggests"], ",", fixed = TRUE)[[1]]
-          packages <- trimws(sub("\\s*\\([^)]*\\)", "", suggests))
+          packages <- trimws(sub("[[:space:]]*[(][^)]*[)]", "", suggests))
           install.packages(packages, lib = Sys.getenv("R_LIBS"))
           stopifnot(all(vapply(packages, requireNamespace, logical(1), quietly = TRUE)))
           RS
