@@ -148,6 +148,7 @@ pub(super) fn prepare(
                     let mut references = Vec::new();
                     let mut intermediate_names = Vec::<String>::new();
                     derivations::current_references(d, value, project, &mut references, 0)?;
+                    self_relations::template_references(d, value, templates, &mut references, 0)?;
                     for reference in references {
                         if let Some((relation, _)) = reference.split_once('.') {
                             if !named.contains(relation) {

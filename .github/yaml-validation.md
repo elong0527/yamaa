@@ -22,6 +22,7 @@ separate qualification workflow.
 | Schemas | Included files stay within `yaml/`, types/registries/constraints resolve and entry points validate. |
 | Specifications | Native admission, inherited declarations, static bindings, original declaring-file paths, closed source metadata and producer contracts. Metadata capture does not grant project activation, derivation execution or Save authority. |
 | Fixture diagnostics | `benchmarks/validation-manifest.yaml` declares negative cases, conditions, paths and blockers. Every implemented expected validation condition must appear at its declared paths; unrelated findings fail. |
+| Benchmark inventory | Benchmark directories and the public-conformance configuration derive case membership, both host entries and explicit exclusions. `check_execution_manifest.py` checks that inventory, prior observations and the generated index; no execution manifest is maintained. |
 | Sources and artifacts | Native source-profile checks, CSV quoting/missingness/header/field contracts, expected output names/types/representation and key order. Expected golden values are authored truth, not regenerated results. |
 | Layout and prose | Required example files, negative remediation sections, variant layout, benchmark index, badges, line width, described columns and rule metadata. |
 | Grammar and regex | Shared grammar/vocabulary vectors and pinned R022 regex conformance through native bindings. Missing bindings fail rather than falling back. |

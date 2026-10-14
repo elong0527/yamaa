@@ -34,40 +34,93 @@ and pending acceptance.
 ## Local checks
 
 Read [AGENTS.md](https://github.com/elong0527/yamaa/blob/main/AGENTS.md) before
-editing. Run `make help` from the repository root for supported targets and
-prerequisites. The Makefile and CI call the same owned Python command runners.
-The recipes below describe component checks; package guides describe installation.
-Installed checks require a separate noneditable package outside the checkout.
+editing. Run `make help` at the repository root to discover supported targets,
+their prerequisites and configuration variables. The root
+[Makefile](https://github.com/elong0527/yamaa/blob/main/Makefile) calls the same
+owned scripts as full repository and native CI. GNU make and Python 3.12 or
+later are sufficient to read the help inventory; individual checks need the
+tools listed there.
 
 Use Rust 1.90.0 and the canonical `rust/Cargo.lock`. Python and R source archives
 stage the unchanged workspace and lock. From the repository root:
 
 ```sh
-uv sync --project python --extra test --locked
-uv run --project python --no-sync python rust/tools/check_release_api.py
-uv run --project python --no-sync python rust/tools/check_shared_release_versions.py
-uv run --project python --no-sync python .github/scripts/yaml-validation/test_validate_repository.py
-uv run --project python --no-sync python .github/scripts/yaml-validation/validate_repository.py
+make help
+make sync-python
+make check-fast
+make check-repository
+make test-rust
 ```
 
-From `rust/`:
+`sync-python` requires uv 0.11.6 and installs the locked development test
+environment. The other targets keep repository feedback, shared Rust checks,
+installed-host checks and release qualification separate:
+
+| Target | Checks and context |
+| --- | --- |
+| `check-fast` | Python formatting/lint and CI selector/command controls in the synced development environment. |
+| `check-repository` | Validator controls, available-host repository validation, style, inventory, documentation and generated rule/reference guards. R semantic coverage still requires installed R CI. |
+| `check-blockers` | Live validation-blocker issues; requires GitHub API access and its token. |
+| `test-rust` | Locked shared-workspace debug tests, engine `test-support`, then optimized `release-test` tests using the pinned Rust toolchain. |
+| `stage-python`, `test-python` | Stage the cataloged supplemental suites and run them through a separately installed noneditable Python package outside the checkout. |
+| `stage-r`, `stage-r-tests`, `test-r`, `check-r` | Stage the standalone source and cataloged R suites; run installed supplemental checks or a fresh package check requiring `Status: OK`. |
+| `docs-test`, `docs-generate`, `docs-build`, `docs` | Canonical-page tests, dashboard generation and strict site build with the pinned documentation dependencies. |
+| `audit-native`, `audit-replay` | Independent exact-run fetch or offline retained-input replay, both requiring the auditor's `--check` verdict. |
+
+For boundary/API guards and focused component checks beyond these targets:
+
+```sh
+uv run --project python --no-sync python rust/tools/check_release_api.py
+uv run --project python --no-sync python rust/tools/check_shared_release_versions.py
+uv run --project python --no-sync python rust/tools/check_dependencies.py
+uv run --project python --no-sync python -m unittest discover -s rust/tests -p 'test_*.py'
+```
+
+Rust formatting and lint checks run from `rust/`:
 
 ```sh
 cargo fmt --all --check
 cargo clippy --locked -p yamaa-core -p yamaa-engine -p yamaa-adapters -p yamaa-python --all-targets -- -D warnings
-cargo test --locked
-cargo test --locked -p yamaa-engine --features test-support
-python tools/check_dependencies.py
-uv run --project ../python --no-sync python -m unittest discover -s tests -p 'test_*.py'
 ```
 
-The engine feature check includes the integration binaries omitted by a default
-test invocation. Portable math has shared authored golden values in
+The engine feature check in `test-rust` includes integration binaries omitted
+by a default test invocation. Portable math has shared authored golden values in
 `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv`; run
 `cargo test --locked -p yamaa-core --test portable_math_golden` from `rust/`.
-Installed package suites run outside the checkout, against built wheel/source
-packages. Their commands and comparison rules are in
+Installed supplemental suites require yamaa and `yamaa-benchmarks` installed
+with locked test dependencies in a separate Python interpreter, or yamaa and
+`yamaabenchmarks` in the R library selected by `R_LIBS`. `sync-python` prepares
+the development environment; installed-host checks verify distribution ownership
+and refuse checkout execution. Their commands and comparison rules are in
 [qualification](https://github.com/elong0527/yamaa/blob/main/rust/qualification/README.md).
+
+For Python, select the staging interpreter and installed host explicitly:
+
+```sh
+make stage-python PYTHON=/path/to/build-env/bin/python HOST_WORK=/tmp/yamaa-python-checks
+make test-python HOST_PYTHON=/path/to/installed-env/bin/python \
+  HOST_WORK=/tmp/yamaa-python-checks OUTPUT=/tmp/yamaa-python-reports \
+  PACKAGE_FORM=wheel ARTIFACT_REFERENCE=/path/to/installed.whl \
+  HOST_ARTIFACT_REFERENCE=/path/to/reference.whl EVIDENCE=/path/to/actual-run
+```
+
+Replace the example paths with the actual installed artifacts and run reference.
+`SOURCE_REVISION` defaults to the checkout's HEAD and must match the tested
+source. `HOST_WORK` must be outside the checkout; output directories must be
+fresh to preserve previous evidence. `check-r` also requires a fresh `HOST_WORK`
+directory that does not already exist. For R source staging and package checks:
+
+```sh
+make stage-r PYTHON=/path/to/build-env/bin/python R_STAGE=/tmp/yamaa-r-stage/yamaa
+R_LIBS=/path/to/installed-r-library make check-r \
+  R_ARCHIVE=/path/to/yamaa_0.4.0.tar.gz HOST_WORK=/tmp/yamaa-r-check
+```
+
+Build/install the staged source, its project program and dependencies first,
+following the R package guide. `stage-r-tests` uses an external `HOST_WORK`;
+`test-r` additionally takes fresh `OUTPUT`, actual `ARTIFACT_REFERENCE` and
+`EVIDENCE`. Python and R supplemental tests do not replace public benchmark
+conformance or the complete installed native matrix defined in CI guidance.
 Expected benchmark files and Parquet fixtures are independent truth; do not
 regenerate them to accommodate implementation changes.
 
@@ -87,18 +140,14 @@ uv run --project python --no-sync python .github/scripts/commands/repository.py 
 
 Edit the root `README.md` for the site home and `rules/README.md` for its rules
 index. The MkDocs hook reads those canonical sources; no copied pages exist.
-Other site pages live in `docs/`. From the repository root:
-
-```sh
-python -m pip install -r docs/requirements.txt -r .github/scripts/benchmark-docs/requirements.txt
-python -m unittest discover -s .github/scripts/docs -p 'test_*.py'
-python .github/scripts/benchmark-docs/generate.py --all --quiet
-python -m mkdocs build --strict
-```
+Other site pages live in `docs/`. The
+[documentation command guide](https://github.com/elong0527/yamaa/blob/main/.github/scripts/docs/README.md)
+owns dependency setup, interpreter selection and the shared Make targets for
+tests and builds. Deployment also renders the Quarto decks.
 
 [CI guidance](https://github.com/elong0527/yamaa/blob/main/.github/ci.md)
-defines scoped checks and the required complete native matrix before merging
-native, R glue, packaging or native CI changes. [Release guidance](release.md)
+defines the scoped Linux PR smoke checks and full native qualification route.
+PR feedback does not establish complete installed or release qualification. [Release guidance](release.md)
 separates merged implementation, qualified revisions, pending decisions and
 publication. Keep current guidance here and there; retain historical plans in
 Git and put new evidence in the relevant PR/issue and qualification records.

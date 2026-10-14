@@ -117,6 +117,7 @@ class NativeCoverage(unittest.TestCase):
         self.assertIn(
             "cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}", workflow
         )
+        self.assertIn("python ../.github/scripts/commands/rust_tests.py", workflow)
 
     def test_audit_retains_failed_runs_and_releases_superseded_cancelled_runs(self):
         workflow = (Path(__file__).parents[2] / "workflows/native.yml").read_text()
