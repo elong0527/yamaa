@@ -39,6 +39,7 @@ mod preflight;
 mod producer;
 mod project_activation;
 mod project_codelist_binding;
+mod sas;
 use crate::support::project_environment;
 mod project_functions;
 mod project_lock;
@@ -510,6 +511,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     reached.extend(csv::reached());
     reached.extend(csv::typing_reached());
     reached.extend(parquet::reached());
+    reached.extend(sas::reached());
     let check = yamaa_core::dataset::Check::Codelist {
         id: "SEX".into(),
         values: vec![Value::Str("F".into())],

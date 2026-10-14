@@ -544,6 +544,31 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             vec![(condition, Some(requirement), vec![spec_path], fields)],
         ));
     }
+    for (path, encoding) in [
+        ("source.xpt", None),
+        ("source.sas7bdat", None),
+        ("source.csv", Some("windows-1252")),
+        ("source.parquet", Some("utf-8")),
+    ] {
+        let mut input = vec![("path", Text(path))];
+        if let Some(encoding) = encoding {
+            input.push(("encoding", Text(encoding)));
+        }
+        log_codes.extend(check(
+            base(
+                "TEST",
+                Map(vec![("SRC", Map(input))]),
+                vec![column("ID", Some(source()))],
+                vec![Text("ID")],
+            ),
+            vec![(
+                "source_encoding_required",
+                Some("REQ-1311"),
+                vec!["input.SRC.encoding"],
+                vec![("dataset", text("SRC"))],
+            )],
+        ));
+    }
     for (warning, verification, condition, requirement, paths) in [
         (
             Some("result.csv"),
