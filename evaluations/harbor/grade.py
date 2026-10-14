@@ -65,6 +65,7 @@ HOLDOUT_SUBJECT = "USUBJID"
 HOLDOUT_INPUT_SUBJECTS = ("USUBJID", "SubjectKey", "SUBJID", "PATNUM")
 HOLDOUT_EVERY = 3
 CHALLENGE_SEED = 20261001
+_DECLARED_MEASUREMENTS: dict[str, frozenset] | None = None
 # How each track's script is run, and what counts as reaching for the other
 # language: running one of its programs in a shell call, or a bridge in the
 # script. Only a call counts: the program's name in a grep pattern, a quoted
@@ -1000,7 +1001,43 @@ def _rename_subjects(source: Path, target: Path, offset: int, suffix: str) -> bo
     return changed
 
 
-def _perturb_values(input_dir: Path, randomizer: random.Random) -> list[dict]:
+def _declared_measurements() -> dict[str, frozenset]:
+    """Extra per-benchmark measurement columns declared in measurements.json.
+
+    That file maps a benchmark to input columns the changed-input challenge
+    may scale in addition to the built-in set, for benchmarks whose analysis
+    values, doses or ODM item values are measurements but are not covered by
+    the built-in column names. It sits next to this grader both in the
+    repository and in a built verifier. Loading fails closed: a missing or
+    malformed file must never silently turn the declared scaling off.
+    """
+    global _DECLARED_MEASUREMENTS
+    if _DECLARED_MEASUREMENTS is None:
+        path = Path(__file__).with_name("measurements.json")
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise RuntimeError(
+                f"cannot load declared measurements from {path}"
+            ) from exc
+        if not isinstance(data, dict):
+            raise ValueError(f"{path} must map benchmarks to column lists")
+        declared = {}
+        for benchmark, columns in data.items():
+            if not isinstance(columns, list) or not all(
+                isinstance(column, str) for column in columns
+            ):
+                raise ValueError(
+                    f"{path}: {benchmark} must map to a list of column names"
+                )
+            declared[benchmark] = frozenset(column.upper() for column in columns)
+        _DECLARED_MEASUREMENTS = declared
+    return _DECLARED_MEASUREMENTS
+
+
+def _perturb_values(
+    input_dir: Path, randomizer: random.Random, benchmark: str | None = None
+) -> list[dict]:
     """Change supported measurements and complete dates in existing inputs.
 
     One date shift is shared by every table, preserving chronology and joins
@@ -1008,6 +1045,10 @@ def _perturb_values(input_dir: Path, randomizer: random.Random) -> list[dict]:
     interval strings stay intact, so their alignment with complete dates can
     change. Identifiers, missing values and categorical codes stay intact.
     The reference computes the answers; changes are recorded for replay.
+
+    A benchmark may declare extra measurement columns in measurements.json
+    (analysis values, doses, ODM item values); only those columns are scaled
+    beyond the built-in set, and only for that benchmark.
     """
     date_shift = randomizer.randint(1, 7)
     age_shift = randomizer.choice((1, 2, 3))
@@ -1026,6 +1067,7 @@ def _perturb_values(input_dir: Path, randomizer: random.Random) -> list[dict]:
         "VSORRES",
         "VSSTRESN",
     }
+    scalable = measurements | _declared_measurements().get(benchmark, frozenset())
     # A stored age group may be sponsor-defined. Without its rule, leave ages
     # unchanged across every joined input rather than create inconsistent groups.
     grouped_ages = any(
@@ -1060,7 +1102,7 @@ def _perturb_values(input_dir: Path, randomizer: random.Random) -> list[dict]:
         name = column.upper()
         if grouped_ages and name in {"AGE", "AGE_YEARS"}:
             return value
-        if name not in measurements and name not in {"AGE", "AGE_YEARS"}:
+        if name not in scalable and name not in {"AGE", "AGE_YEARS"}:
             return value
         if isinstance(value, bool):
             return value
@@ -1236,7 +1278,7 @@ def challenge_rerun(
                     "required challenges have no subject identifiers to rename"
                 )
             result["value_changes"] = _perturb_values(
-                work / "renamed-input", randomizer
+                work / "renamed-input", randomizer, contract["benchmark"]
             )
             shutil.rmtree(app / "input")
             shutil.copytree(work / "renamed-input", app / "input")

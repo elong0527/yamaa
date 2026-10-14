@@ -348,6 +348,46 @@ def test_value_perturbations_preserve_parquet_types_and_partial_dates(tmp_path):
     assert changes[0]["columns"] == {"AGE": 1, "VISITDT": 1}
 
 
+def test_declared_measurement_columns_scale_only_for_their_benchmark(tmp_path):
+    import random
+
+    source = build.BENCHMARKS / "adam-advs-map" / "input"
+    staged = tmp_path / "input"
+    shutil.copytree(source, staged)
+    # Without the benchmark, AVAL is not a built-in measurement: nothing in
+    # this input changes.
+    assert grade._perturb_values(staged, random.Random(1)) == []
+    shutil.rmtree(staged)
+    shutil.copytree(source, staged)
+    changes = grade._perturb_values(staged, random.Random(1), "adam-advs-map")
+    assert changes == [{"file": "advs.csv", "columns": {"AVAL": 8}}]
+    _, rows = grade.read_rows(staged / "advs.csv")
+    _, originals = grade.read_rows(source / "advs.csv")
+    for before, after in zip(originals, rows):
+        assert after["USUBJID"] == before["USUBJID"]
+        if before["AVAL"] == "":
+            assert after["AVAL"] == ""
+        else:
+            assert float(after["AVAL"]) != float(before["AVAL"])
+
+
+def test_declared_measurements_name_columns_the_inputs_carry():
+    declared = grade._declared_measurements()
+    assert declared
+    for benchmark, columns in declared.items():
+        input_dir = build.BENCHMARKS / benchmark / "input"
+        assert input_dir.is_dir(), benchmark
+        carried = set()
+        for path in input_dir.rglob("*"):
+            if path.suffix == ".csv":
+                header, _ = grade.read_rows(path)
+                carried.update(name.upper() for name in header)
+            elif path.suffix == ".parquet":
+                _, parquet, _ = grade._parquet()
+                carried.update(name.upper() for name in parquet.read_schema(path).names)
+        assert columns <= carried, benchmark
+
+
 @pytest.mark.parametrize(
     ("original", "expected"),
     [
