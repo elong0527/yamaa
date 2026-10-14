@@ -37,11 +37,29 @@ pub trait StudyPort {
 /// engine independently admits the resulting complete shape before retaining it.
 #[derive(Clone, Copy, Debug)]
 pub struct DecodeLimits {
+    pub rows: usize,
     pub cells: usize,
     pub storage_bytes: usize,
     pub work_bytes: usize,
 }
+/// Actual modeled charges admitted by independently bounded decoder stages.
+/// Reused stage allowances report their maximum; cumulative stages retain sums.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DecodeUsage {
+    pub storage_bytes: usize,
+    pub work_bytes: usize,
+}
 pub trait DecodePort: SourceDecoder {
+    /// Opt into graph pools only with complete, bounded native charge receipts.
+    /// Legacy ports retain their existing conservative reservations.
+    fn pool_capacity(&self) -> bool {
+        false
+    }
+    /// The most recent bounded decode's admitted prefix, including failures.
+    /// None keeps the complete reservation; an unknown prefix is never guessed.
+    fn usage(&self) -> Option<DecodeUsage> {
+        None
+    }
     fn decode_bounded(
         &mut self,
         source: &SourceDeclaration,
@@ -593,6 +611,7 @@ impl<D: DecodePort> SourceDecoder for NodeDecoder<'_, D> {
             bytes,
             declaration.map(|p| p.contract()),
             DecodeLimits {
+                rows: crate::capacity::SOURCE_ROWS,
                 cells: *self.cells_left,
                 storage_bytes: self.storage_bytes,
                 work_bytes: self.work_bytes,
