@@ -6,7 +6,6 @@ use yamaa_core::{
         Assignment, DatasetPlan, Expression, FirstAvailable, OrderTerm, PlanError, RowMode,
         RowTemplate, SecondarySource, SelectionRead, SelectionSource, Window, WindowKind,
     },
-    table::Column,
     value::Value,
 };
 fn assignment(column: usize, expression: Expression) -> Assignment {

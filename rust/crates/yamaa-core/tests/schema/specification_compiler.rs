@@ -8,7 +8,6 @@ use yamaa_core::{
     specification::{
         BindError, BindFinding, CompilationLimits, PrepareError, PreparedSpecification,
     },
-    table::Column,
     value::{ColumnType, Value},
 };
 
