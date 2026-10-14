@@ -71,8 +71,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # The synthetic PR merge commit and both parents suffice for the diff.
-          fetch-depth: 2
+          # The event base can predate the synthetic merge's current main parent.
+          # Keep its ancestry so selection uses the original event base identity.
+          fetch-depth: 0
       - name: Select runtime smoke coverage
         id: changes
         run: python3 .github/scripts/ci/pr_changes.py
@@ -108,7 +109,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 2
+          # Retain the original event base even when main advanced before checkout.
+          fetch-depth: 0
       - name: Select runtime smoke coverage
         id: changes
         run: python3 .github/scripts/ci/pr_changes.py
