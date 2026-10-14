@@ -117,7 +117,13 @@ def _is_specification(path: str | Path, root_fields: Sequence[str]) -> bool:
         return False
     if not isinstance(node, yaml.MappingNode):
         return False
-    names = {key.value for key, _ in node.value}
+    names: set[str] = set()
+    for key, _ in node.value:
+        if not isinstance(key, yaml.ScalarNode):
+            # A complex key can never be a root field name, so the file is
+            # not a specification; its node value is also unhashable.
+            return False
+        names.add(key.value)
     return "schema_version" in names and names <= set(root_fields)
 
 
