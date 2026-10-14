@@ -10,11 +10,19 @@ Keep workflow definitions in `workflows/` and their supporting code in
 - `scripts/ci/`: native matrix selection, cohort orchestration, and dashboard
   change detection, with their unit tests.
 
-The repository-validation job also checks README/landing-page synchronization,
-runs Python formatting and linting once, and generates deterministic dashboard
-previews when their sources change in a PR. The R package workflow replays the
-shared grammar vectors and runs the complete package suite; grammar changes
-trigger that workflow as well.
+The separate canonical-site-pages job tests the real MkDocs hook against the
+root README and rules index. Those pages have no Markdown copies to synchronize.
+The repository-validation job runs formatting/linting and structural/native
+validation, and generates deterministic dashboard previews when their sources
+change in a PR. The R package workflow replays shared grammar vectors and runs
+the complete package suite; grammar changes trigger that workflow as well.
+
+Documentation-only changes use the relevant canonical-page, dashboard and strict
+site checks in [scripts/docs/README.md](scripts/docs/README.md). Native workflow
+path selection excludes benchmark Markdown and top-level Rust prose. Native
+code, R glue, packaging and native selectors require the complete installed
+qualification route below. Current gate ownership and publication state live in
+[docs/release.md](../docs/release.md).
 
 ## Native coverage
 
@@ -24,7 +32,9 @@ and 3.14. The workflow summary records this reduced matrix. macOS, Windows,
 Python 3.13, and complete public/producer cohort comparisons run on main pushes,
 explicit `qualification/issue-*` branch pushes, or manual full-matrix dispatches.
 Shared Rust checks and cross-platform math run on main and qualification branch
-pushes. Ordinary PR sampling and manual dispatch coverage remain unchanged.
+pushes. Ordinary manual dispatch omits those shared checks, the nine math
+assessments/exact comparison and the run audit; its three-platform numeric-tool
+component checks do not substitute for them.
 
 Pushes to main retain the full three-OS, three-Python, two-package-form matrix,
 all three R hosts, the cross-platform math comparison, and the complete
@@ -32,12 +42,18 @@ public/producer cohort gate. PR artifacts cover the reduced Linux matrix;
 they do not establish full platform qualification. Platform-specific regressions
 and Python 3.13 compatibility are checked in the full matrix.
 
+R qualification installs the package's declared `Suggests` into the isolated R
+library before running the complete suites and strict package check. Missing
+suggested test dependencies are failures, not a reason to disable
+`_R_CHECK_FORCE_SUGGESTS_` or accept a warning in place of `Status: OK`.
+
 Benchmark Markdown changes trigger documentation checks without rebuilding
 the Python/native runtimes. Specification, input, expected-output, and SDK
-changes still trigger runtime coverage. Native PR runs use seven jobs: the
-selection job, a Linux distribution build, four installed Python qualifications,
-and Linux R package checks. Main and qualification pushes add three shared Rust
-jobs, the cross-platform math comparison, and the evidence audit. The audit stays
+changes still trigger runtime coverage. The PR matrix selects a Linux
+distribution build, four installed Python qualifications and Linux R package
+checks, plus the selected public/producer cohort comparison. Main and
+qualification pushes add three shared Rust jobs, the cross-platform math
+comparison and the evidence audit. The audit stays
 observational on main and must pass on qualification branches.
 
 Before merging changes to native code, R glue, package builds or native CI,
@@ -63,9 +79,9 @@ numerical and audit checks supply exact-head premerge evidence. Its audit record
 
 The shared-crates step also runs
 `cargo test --locked -p yamaa-engine --features test-support` on every selected
-Rust platform on main pushes. This enables both `project_preparation` and
-`test_support` integration binaries, which a plain default-feature test
-invocation omits.
+Rust platform on main and qualification pushes. This enables both
+`project_preparation` and `test_support` integration binaries, which a plain
+default-feature test invocation omits.
 
 Scripts locate repository data relative to their own files, so they can also
 run locally from any working directory. Keep tests and shared helpers beside
@@ -99,7 +115,7 @@ To audit a completed main run locally, authenticate `gh` for
 repository and Actions reads, then use a fresh output directory:
 
 ```sh
-python rust/tools/audit_native_run.py --run-id 38167427581 \
+python rust/tools/audit_native_run.py --run-id <run-id> \
   --repository elong0527/yamaa --output /tmp/yamaa-native-audit --check
 ```
 
