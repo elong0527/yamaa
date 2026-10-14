@@ -147,7 +147,7 @@ jobs:
             python tools/check_diagnostics.py --baseline-ref HEAD^
             # The frozen original math fixtures invoke the installed benchmark
             # project distribution through ordinary public runtime admission.
-            uv run --project ../python --locked --no-editable --group benchmark python -m unittest discover -s tests -p 'test_*.py'
+            uv run --project ../python --locked --no-editable --extra test --group benchmark python -m unittest discover -s tests -p 'test_*.py'
           ) 2>&1 | tee "${RUNNER_TEMP}/shared-crates-check.log"
       - name: Preserve locked Rust dependency evidence
         if: always()
@@ -339,7 +339,7 @@ jobs:
       - name: Record source revision and table requirements
         run: |
           echo "QUALIFICATION_SOURCE_REVISION=$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
-          uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/table-requirements.txt"
+          uv export --project python --locked --extra test --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/table-requirements.txt"
       - name: Stage installed checks outside checkout
         working-directory: ${{ runner.temp }}
         run: |
