@@ -347,7 +347,7 @@ pub(super) fn bind(
                     .map(|column| column.kind)
             }
         };
-        let kind = declaration.kind.infer(&lookup).unwrap_or_else(|| {
+        let kind = declaration.kind.infer(&lookup).unwrap_or({
             // An unresolved numeric operand must not turn a later read of this
             // computed field into a spurious text-input diagnostic.
             if matches!(declaration.kind, Kind::Numeric(_)) {
