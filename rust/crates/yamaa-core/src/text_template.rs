@@ -28,6 +28,7 @@ pub struct StringTemplate {
 pub enum AdmissionError {
     Shape,
     Limit,
+    Work { limit: usize, actual: Option<usize> },
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MaterializeError {
@@ -41,11 +42,13 @@ impl CompileBudget {
         Self(0)
     }
     pub(crate) fn charge(&mut self, amount: usize) -> Result<(), AdmissionError> {
-        self.0 = self
-            .0
-            .checked_add(amount)
+        let actual = self.0.checked_add(amount);
+        self.0 = actual
             .filter(|n| *n <= MAX_COMPILE_WORK)
-            .ok_or(AdmissionError::Limit)?;
+            .ok_or(AdmissionError::Work {
+                limit: MAX_COMPILE_WORK,
+                actual,
+            })?;
         Ok(())
     }
 }

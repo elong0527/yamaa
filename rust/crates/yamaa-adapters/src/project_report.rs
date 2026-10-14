@@ -404,9 +404,13 @@ pub fn build_result<'a, C, E>(
     }
     let activation = crate::project_activation_observations::activation(run, &attempt.activation)
         .map_err(|error| match error {
-        crate::project_activation_observations::Error::Limit => {
-            Error::Report(report::Error::OutputLimit)
-        }
+        crate::project_activation_observations::Error::Limit {
+            resource,
+            limit,
+            actual,
+        } => Error::Report(report::Error::ResourceLimit(
+            crate::resource_diagnostics::Refusal::new(resource, limit, actual, Vec::new()),
+        )),
         _ => invalid(),
     })?;
     let boundary = match &attempt.boundary {
@@ -571,6 +575,7 @@ pub fn build_result<'a, C, E>(
                             if let Some(refusal) = crate::resource_diagnostics::execution(
                                 other,
                                 run.compiled().sources(),
+                                run.compiled().driver_index(),
                             ) {
                                 diagnostics.push(
                                     refusal

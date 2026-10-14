@@ -28,17 +28,27 @@ impl Prepared {
             let amount = StringTemplate::declaration_bytes(template, path, handler)
                 .and_then(|n| n.checked_mul(multiplicity))
                 .ok_or_else(|| {
-                    PrepareError::limit("str_template_metadata", MAX_DECLARATION_BYTES, None, None)
+                    PrepareError::limit(
+                        "str_template_metadata",
+                        MAX_DECLARATION_BYTES,
+                        None,
+                        Some(path),
+                    )
                 })?;
             bytes = bytes
                 .checked_add(amount)
                 .filter(|n| *n <= MAX_DECLARATION_BYTES)
                 .ok_or_else(|| {
-                    PrepareError::limit("str_template_metadata", MAX_DECLARATION_BYTES, None, None)
+                    PrepareError::limit(
+                        "str_template_metadata",
+                        MAX_DECLARATION_BYTES,
+                        None,
+                        Some(path),
+                    )
                 })?;
             Ok(())
         })?;
-        walk(d, &mut |payload, _path, _rows, multiplicity| {
+        walk(d, &mut |payload, path, _rows, multiplicity| {
             let template = template(d, payload)?;
             let query = template
                 .len()
@@ -49,16 +59,14 @@ impl Prepared {
                         "str_template_work",
                         crate::text_template::MAX_COMPILE_WORK,
                         None,
-                        None,
+                        Some(path),
                     )
                 })?;
-            budget.charge(query).map_err(|_| {
-                PrepareError::limit(
-                    "str_template_work",
-                    crate::text_template::MAX_COMPILE_WORK,
-                    None,
-                    None,
-                )
+            budget.charge(query).map_err(|error| match error {
+                AdmissionError::Work { limit, actual } => {
+                    PrepareError::limit("str_template_work", limit, actual, Some(path))
+                }
+                _ => PrepareError::Internal,
             })?;
             Ok(())
         })?;
@@ -74,9 +82,15 @@ impl Prepared {
             )
             .map_err(|error| match error {
                 AdmissionError::Shape => PrepareError::Internal,
-                AdmissionError::Limit => {
-                    PrepareError::limit("str_template_compile", MAX_DECLARATION_BYTES, None, None)
+                AdmissionError::Work { limit, actual } => {
+                    PrepareError::limit("str_template_work", limit, actual, Some(path))
                 }
+                AdmissionError::Limit => PrepareError::limit(
+                    "str_template_compile",
+                    MAX_DECLARATION_BYTES,
+                    None,
+                    Some(path),
+                ),
             })?;
             if let Some(error) = operation.declaration_diagnostic() {
                 findings.push(PreflightFinding::TextTemplate(error.clone()));

@@ -219,6 +219,7 @@ pub fn failure<E>(
                 Some("limit") => vec![crate::resource_diagnostics::outcome(
                     &value["outcome"],
                     run.compiled().sources(),
+                    run.compiled().driver_index(),
                 )
                 .and_then(|refusal| refusal.value("execute", "execution_limit"))
                 .ok_or(Error::UnsupportedOutcome)?],

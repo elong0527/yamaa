@@ -293,7 +293,7 @@ pub(super) fn prepare(
                 "row_templates",
                 16,
                 Some(rows.len()),
-                None,
+                Some("rows"),
             ));
         }
         for (row, &node) in rows.iter().enumerate() {

@@ -70,7 +70,7 @@ pub(super) fn prepare(
             "imputation_metadata",
             16_777_216,
             None,
-            None,
+            Some(path),
         ));
     }
     let kind = match op {
@@ -100,7 +100,7 @@ pub(super) fn prepare(
                         PrepareError::Invalid(vec![PreflightFinding::Imputation(diagnostic)])
                     }
                     DatePolicyError::Limit => {
-                        PrepareError::limit("imputation_metadata", 16_777_216, None, None)
+                        PrepareError::limit("imputation_metadata", 16_777_216, None, Some(path))
                     }
                     DatePolicyError::Shape => PrepareError::Internal,
                 })?
@@ -184,7 +184,7 @@ pub(super) fn declaration_findings(
                     .and_then(|n| n.checked_add(512))
                     .filter(|n| *n <= 16_777_216)
                     .ok_or_else(|| {
-                        PrepareError::limit("imputation_metadata", 16_777_216, None, None)
+                        PrepareError::limit("imputation_metadata", 16_777_216, None, Some(&path))
                     })?;
                 for &(key, value) in mapping(d, payload)? {
                     for id in [key, value] {
@@ -197,7 +197,7 @@ pub(super) fn declaration_findings(
                                         "imputation_metadata",
                                         16_777_216,
                                         None,
-                                        None,
+                                        Some(&path),
                                     )
                                 })?;
                         }

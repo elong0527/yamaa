@@ -584,15 +584,18 @@ fn window_compiler_binds_output_dependencies_without_engine_or_records() {
         source_fields: 0,
         ..Default::default()
     };
-    assert!(matches!(
-        PreparedSpecification::prepare_with_limits(&window_document("ID > 0"), policy),
-        Err(PrepareError::Limit(
-            yamaa_core::specification::CompilerLimit {
-                resource: "window_order",
-                ..
-            }
-        ))
-    ));
+    let Err(PrepareError::Limit(refusal)) =
+        PreparedSpecification::prepare_with_limits(&window_document("ID > 0"), policy)
+    else {
+        panic!("window order must retain its declaration quota")
+    };
+    assert_eq!(refusal.resource, "window_order");
+    assert_eq!(refusal.limit, 0);
+    assert_eq!(refusal.actual, Some(1));
+    assert_eq!(
+        refusal.spec_paths,
+        ["columns.VALUE.derivation.row_number.window.order_by"]
+    );
     let qualified = PreparedSpecification::prepare(&window_document("SRC.ID > 0"))
         .unwrap()
         .bind(&source())

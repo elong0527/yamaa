@@ -207,7 +207,7 @@ impl Verifications {
                 "verifications",
                 16,
                 Some(entries.len()),
-                None,
+                Some(prefix),
             ));
         }
         let mut extra = Vec::new();
