@@ -416,16 +416,37 @@ mod typed_copy_tests {
         }
         let mut exact = Budget::new(capacity::REPORT_ENCODED_BYTES);
         exact.row_shape(capacity::REPORT_CELLS, 1).unwrap();
-        assert!(matches!(exact.row_shape(1, 1), Err(Error::OutputLimit)));
+        assert!(matches!(
+            exact.row_shape(1, 1),
+            Err(Error::ResourceLimit(Refusal {
+                resource: "report_cells",
+                limit,
+                actual: Some(actual),
+                ..
+            })) if limit == capacity::REPORT_CELLS && actual == limit + 1
+        ));
         assert!(matches!(
             Budget::new(1).typed_shape(1, 1),
-            Err(Error::OutputLimit)
+            Err(Error::ResourceLimit(Refusal {
+                resource: "report_retained_bytes",
+                limit,
+                actual: Some(64),
+                ..
+            })) if limit == capacity::REPORT_RETAINED_FACTOR
         ));
         let mut broad = Budget::new(usize::MAX);
         broad
             .retained_bytes(capacity::REPORT_RETAINED_BYTES)
             .unwrap();
-        assert!(matches!(broad.retained_bytes(1), Err(Error::OutputLimit)));
+        assert!(matches!(
+            broad.retained_bytes(1),
+            Err(Error::ResourceLimit(Refusal {
+                resource: "report_retained_bytes",
+                limit,
+                actual: Some(actual),
+                ..
+            })) if limit == capacity::REPORT_RETAINED_BYTES && actual == limit + 1
+        ));
     }
 
     #[test]
