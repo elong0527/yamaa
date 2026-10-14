@@ -36,7 +36,7 @@ SEED = Path("rust/tools/diagnostic_literal_seed.json")
 ALLOWLIST = Path("rust/tools/diagnostic_literal_allowlist.json")
 CORE_SEED = Path("rust/tools/core_diagnostic_literal_seed.json")
 CORE_ALLOWLIST = Path("rust/tools/core_diagnostic_literal_allowlist.json")
-REGISTRY = Path("rust/crates/yamaa-core/src/diagnostic.rs")
+REGISTRY = Path("rust/crates/yamaa-core/src/diagnostic/mod.rs")
 SHIPPED_SCHEMA = Path("rust/crates/yamaa-adapters/src/shipped_schema_data.rs")
 CHECKER = Path("rust/tools/check_diagnostics.py")
 NULL_POLICY = Path("rules/execution/lifecycle.md")
@@ -713,7 +713,7 @@ def null_conditions(
 def registry_errors(
     root: Path, registered: dict[str, set[str]], nullable: set[tuple[str, str]]
 ) -> list[str]:
-    path = root / "rust/crates/yamaa-core/src/diagnostic.rs"
+    path = root / REGISTRY
     try:
         source = path.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as error:

@@ -35,7 +35,7 @@ class DiagnosticGuardTests(unittest.TestCase):
             "  engine_rejected: {phases: [engine]}\n",
         )
         self.write(
-            "rust/crates/yamaa-core/src/diagnostic.rs",
+            "rust/crates/yamaa-core/src/diagnostic/mod.rs",
             'conditions! {\n    Invalid => ("validation", "invalid_value", Some("REQ-0001")),\n'
             '    Rejected => ("engine", "engine_rejected", None),\n}\n',
         )
@@ -272,7 +272,7 @@ class DiagnosticGuardTests(unittest.TestCase):
 
     def test_disposition_cannot_hide_a_new_core_cause_or_removed_name(self):
         self.register_non_core("old_condition")
-        path = self.root / "rust/crates/yamaa-core/src/diagnostic.rs"
+        path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
         path.write_text(
             path.read_text().replace(
                 "}\n",
@@ -420,7 +420,7 @@ class DiagnosticGuardTests(unittest.TestCase):
         self.assertEqual(guard.rule_condition_references(source), [])
 
     def test_new_null_language_cause_is_rejected(self):
-        path = self.root / "rust/crates/yamaa-core/src/diagnostic.rs"
+        path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
         path.write_text(path.read_text().replace('Some("REQ-0001")', "None"))
         self.assertTrue(
             any(
@@ -430,7 +430,7 @@ class DiagnosticGuardTests(unittest.TestCase):
         )
 
     def test_implementation_condition_must_retain_null(self):
-        path = self.root / "rust/crates/yamaa-core/src/diagnostic.rs"
+        path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
         path.write_text(path.read_text().replace("None", 'Some("REQ-0001")'))
         self.assertTrue(
             any("must retain a null requirement" in e for e in self.errors())
@@ -675,7 +675,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         self.assertTrue(any("duplicate registration" in e for e in self.errors()))
 
     def test_unparseable_or_missing_registry_and_vocabulary_fail_closed(self):
-        path = self.root / "rust/crates/yamaa-core/src/diagnostic.rs"
+        path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
         path.write_text("conditions! {\n    malformed => (),\n}\n")
         self.assertTrue(any("unrecognized cause" in e for e in self.errors()))
         path.unlink()
@@ -840,7 +840,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         (self.root / "rules/values.md").unlink()
         self.assertEqual(self.errors(), ["no normative requirement definitions found"])
         self.write("rules/values.md", "**REQ-0001.** Required.\n")
-        (self.root / "rust/crates/yamaa-core/src/diagnostic.rs").unlink()
+        (self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs").unlink()
         self.assertEqual(self.errors(), ["no Rust crate sources found"])
 
 
