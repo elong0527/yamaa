@@ -581,13 +581,27 @@ pub fn build_result<E>(
     attempt: &CapturedAttempt<E>,
     id: Identity<'_>,
 ) -> Result<BuildResult, Error> {
+    build_result_with_output_limit(
+        run,
+        attempt,
+        id,
+        yamaa_engine::dataset::ExecutionBudget::longitudinal().max_output_bytes,
+    )
+}
+
+pub(crate) fn build_result_with_output_limit<E>(
+    run: &dyn RunView,
+    attempt: &CapturedAttempt<E>,
+    id: Identity<'_>,
+    maximum: usize,
+) -> Result<BuildResult, Error> {
     let execution = attempt
         .result
         .as_ref()
         .ok()
         .and_then(|r| r.execution.as_ref());
     let observations = observations(run, attempt, &id)?;
-    prepare_result(run, execution, id, observations)
+    prepare_result_with_output_limit(run, execution, id, observations, maximum)
 }
 
 pub(crate) fn prepare_result(
@@ -595,6 +609,22 @@ pub(crate) fn prepare_result(
     execution: Option<&yamaa_engine::dataset::Execution>,
     id: Identity<'_>,
     observations: StoredReport,
+) -> Result<BuildResult, Error> {
+    prepare_result_with_output_limit(
+        run,
+        execution,
+        id,
+        observations,
+        yamaa_engine::dataset::ExecutionBudget::longitudinal().max_output_bytes,
+    )
+}
+
+fn prepare_result_with_output_limit(
+    run: &dyn RunView,
+    execution: Option<&yamaa_engine::dataset::Execution>,
+    id: Identity<'_>,
+    observations: StoredReport,
+    maximum: usize,
 ) -> Result<BuildResult, Error> {
     use yamaa_engine::specification_output::{self as output, CompleteError as E};
     let success = execution.is_some() && run.compiled().output_findings().is_empty();
@@ -611,7 +641,7 @@ pub(crate) fn prepare_result(
         output::prepare(
             run.compiled(),
             execution,
-            yamaa_engine::dataset::ExecutionBudget::longitudinal().max_output_bytes,
+            maximum.min(yamaa_engine::dataset::ExecutionBudget::longitudinal().max_output_bytes),
             &mut Report {
                 run,
                 id,
