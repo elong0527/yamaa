@@ -197,6 +197,7 @@ jobs:
           path: |
             ${{ runner.temp }}/performance-replay/aggregate-execution.json
             ${{ runner.temp }}/performance-replay/replay-refusal.json
+            ${{ runner.temp }}/performance-replay/*storage*.json
             ${{ runner.temp }}/performance-replay/reader-*.json
             ${{ runner.temp }}/performance-replay/aggregate-input.json
             ${{ runner.temp }}/performance-replay/performance-budgets.json

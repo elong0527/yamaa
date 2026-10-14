@@ -345,10 +345,56 @@ def aggregate(args):
             archive.write(args.output / name, name)
         archive.write(metadata_root / "reader-completion-run.json", "reader-completion-run.json")
         archive.write(args.output / "original/completion-run.json", "source-completion-run.json")
-    retain_file(identity["repository"], release, record["release_label"],
-                identity["source_revision"], numeric, args.output)
+    release, rows = retain_file(identity["repository"], release, record["release_label"],
+                                identity["source_revision"], numeric, args.output)
+    storage_path = args.output / (numeric.stem + "-storage.json")
+    write(storage_path, {"protocol": "public-performance-numeric-storage/1",
+                         "original": identity, "reader": reader,
+                         "aggregate": {"revision": record["current_revision"],
+                                       "run_id": record["current_run_id"],
+                                       "run_attempt": record["current_run_attempt"]},
+                         "release_id": release["id"], "release_label": record["release_label"],
+                         "archive_name": numeric.name, "assets": rows,
+                         "completed_workflow_acceptance": False})
+    upload(identity["repository"], release, record["release_label"],
+           identity["source_revision"], storage_path, args.output)
     unchanged_source_assets(record, release)
     return code
+
+
+def retain_refusal(args):
+    """Append failed reader metadata/actual retrieval bytes without qualifying it."""
+    record, release, _ = prepared(args.input)
+    identity = record["original"]
+    release = api(f"repos/{identity['repository']}/releases/{release['id']}")
+    admit_release(release, record["release_label"], identity["source_revision"])
+    stem = (f"refused-reader-{record['current_run_id']}-attempt-{record['current_run_attempt']}-"
+            f"revision-{record['current_revision']}")
+    archive_path = args.output.parent / (stem + ".zip")
+    with zipfile.ZipFile(archive_path, "x", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(args.output.rglob("*")):
+            if path.is_file():
+                # Only authored metadata/reports and original failed transport
+                # bytes live here; the raw SDK never executes in a reader job.
+                archive.write(path, path.relative_to(args.output).as_posix())
+        archive.write(args.input / "preparation.json", "preparation.json")
+    release, rows = retain_file(identity["repository"], release, record["release_label"],
+                                identity["source_revision"], archive_path, args.output)
+    storage_path = args.output / (stem + "-storage.json")
+    write(storage_path, {"protocol": "public-performance-reader-refusal-storage/1",
+                         "original": identity,
+                         "reader": record["reader"] or {
+                             "revision": record["current_revision"],
+                             "run_id": record["current_run_id"],
+                             "run_attempt": record["current_run_attempt"]},
+                         "replay": {"revision": record["current_revision"],
+                                    "run_id": record["current_run_id"],
+                                    "run_attempt": record["current_run_attempt"]},
+                         "release_id": release["id"], "release_label": record["release_label"],
+                         "archive_name": archive_path.name, "assets": rows, "accepted": False})
+    upload(identity["repository"], release, record["release_label"],
+           identity["source_revision"], storage_path, args.output)
+    unchanged_source_assets(record, release)
 
 
 def safe_metadata(path, destination):
@@ -401,6 +447,12 @@ def main(argv=None):
     except (ValueError, KeyError, TypeError, OSError, subprocess.CalledProcessError, zipfile.BadZipFile) as error:
         args.output.mkdir(parents=True, exist_ok=True)
         write(args.output / "replay-refusal.json", {"accepted": False, "reason": str(error)})
+        if args.mode == "aggregate" and args.input is not None:
+            try:
+                retain_refusal(args)
+            except (ValueError, KeyError, TypeError, OSError, subprocess.CalledProcessError, zipfile.BadZipFile) as retention_error:
+                write(args.output / "refusal-storage-error.json",
+                      {"accepted": False, "reason": str(retention_error)})
         return 1
 
 
