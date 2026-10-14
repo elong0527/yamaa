@@ -751,6 +751,42 @@ class ActionsAdmission(unittest.TestCase):
             self.assertEqual(result["budgets"]["status"], "fail")
             self.assertFalse(result["accepted"])
 
+    def test_original_archive_size_binds_to_actions_metadata_before_replay(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            entry = dict(
+                self.entry,
+                archive="original.zip",
+                campaign=self.entry["artifact_name"] + "/machine-campaign.json",
+                collections=[],
+            )
+            with zipfile.ZipFile(root / entry["archive"], "w") as archive:
+                archive.writestr("machine-campaign.json", b"original raw bytes")
+            original = (root / entry["archive"]).read_bytes()
+            payload = dict(
+                self.payload,
+                protocol=auditor.PROTOCOL,
+                run="run.json",
+                artifacts="artifacts.json",
+                jobs="jobs.json",
+                entries=[entry],
+            )
+            write(root / "input.json", payload)
+            write(root / "run.json", self.run)
+            write(
+                root / "artifacts.json",
+                [dict(self.artifact, size_in_bytes=len(original) + 1)],
+            )
+            write(root / "jobs.json", [self.job])
+            result = auditor.audit(root / "input.json", root)
+            self.assertEqual(result["harness_correctness"]["status"], "fail")
+            self.assertIn(
+                "ZIP size differs from admitted artifact metadata",
+                result["harness_correctness"]["errors"][0]["reason"],
+            )
+            self.assertEqual(result["coverage"]["missing"], 567)
+            self.assertEqual((root / entry["archive"]).read_bytes(), original)
+
     def test_malformed_campaign_still_writes_both_reports_and_all_matrix_gaps(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -938,7 +974,7 @@ class Archives(unittest.TestCase):
                     calls.append("closed")
 
             with auditor.entry_root(
-                root, entry, root / "scratch", provider
+                root, entry, root / "scratch", provider, expected_size=len(original)
             ) as evidence:
                 self.assertEqual(
                     auditor.read(
@@ -950,6 +986,109 @@ class Archives(unittest.TestCase):
                 )
             self.assertEqual(calls, ["opened", "closed"])
             self.assertEqual((root / "original.zip").read_bytes(), original)
+
+    def test_archive_size_mismatch_closes_provider_before_extraction(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with zipfile.ZipFile(root / "original.zip", "w") as archive:
+                archive.writestr("nested/receipt.json", b"original bytes")
+            original = (root / "original.zip").read_bytes()
+            calls = []
+
+            @contextlib.contextmanager
+            def provider(entry, manifest_root):
+                try:
+                    yield root
+                finally:
+                    calls.append("closed")
+
+            with (
+                self.assertRaisesRegex(ValueError, "ZIP size differs"),
+                auditor.entry_root(
+                    root,
+                    {"archive": "original.zip", "artifact_name": "artifact"},
+                    root / "scratch",
+                    provider,
+                    expected_size=len(original) + 1,
+                ),
+            ):
+                pass
+            self.assertEqual(calls, ["closed"])
+            self.assertFalse((root / "scratch").exists())
+            self.assertEqual((root / "original.zip").read_bytes(), original)
+            # Unpacked local retained samples have no original Actions ZIP to size.
+            with auditor.entry_root(
+                root, {}, root / "scratch", None, expected_size=100
+            ) as evidence:
+                self.assertEqual(evidence, root)
+
+    def test_original_unsafe_names_refuse_before_host_zipinfo_normalization(self):
+        for separator in ("/", "\\"):
+            for name in (
+                "nested\\receipt.json",
+                "\\\\server\\share\\receipt.json",
+                "safe\x00hidden",
+                "C:escape",
+                "nested/C:escape",
+                "nested/C:/escape",
+            ):
+                with (
+                    self.subTest(separator=separator, name=name),
+                    tempfile.TemporaryDirectory() as temporary,
+                    mock.patch.object(zipfile.os, "sep", separator),
+                ):
+                    root = Path(temporary)
+                    with zipfile.ZipFile(root / "bad.zip", "w") as archive:
+                        member = zipfile.ZipInfo(name)
+                        # Author the original ZIP spelling, including names that
+                        # ZipInfo would normalize before an ordinary writer call.
+                        member.filename = name
+                        archive.writestr(member, b"original bytes")
+                    original = (root / "bad.zip").read_bytes()
+                    self.assertIn(name.encode(), original)
+                    with zipfile.ZipFile(root / "bad.zip") as archive:
+                        member = archive.infolist()[0]
+                        self.assertEqual(member.orig_filename, name)
+                        if separator == "\\" and name == "nested\\receipt.json":
+                            self.assertEqual(member.filename, "nested/receipt.json")
+                    with (
+                        self.assertRaisesRegex(ValueError, "unsafe original archive"),
+                        auditor.entry_root(
+                            root,
+                            {"archive": "bad.zip", "artifact_name": "artifact"},
+                            root / "scratch",
+                            None,
+                            expected_size=len(original),
+                        ),
+                    ):
+                        pass
+                    self.assertEqual((root / "bad.zip").read_bytes(), original)
+
+    def test_safe_original_names_preserve_exact_payload_on_both_hosts(self):
+        payload = b"original\x00retained\xffbytes\n"
+        for separator in ("/", "\\"):
+            with (
+                self.subTest(separator=separator),
+                tempfile.TemporaryDirectory() as temporary,
+                mock.patch.object(zipfile.os, "sep", separator),
+            ):
+                root = Path(temporary)
+                with zipfile.ZipFile(root / "original.zip", "w") as archive:
+                    archive.writestr("nested/", b"")
+                    archive.writestr("nested/receipt.json", payload)
+                original = (root / "original.zip").read_bytes()
+                with auditor.entry_root(
+                    root,
+                    {"archive": "original.zip", "artifact_name": "artifact"},
+                    root / "scratch",
+                    None,
+                    expected_size=len(original),
+                ) as evidence:
+                    self.assertEqual(
+                        (evidence / "artifact/nested/receipt.json").read_bytes(),
+                        payload,
+                    )
+                self.assertEqual((root / "original.zip").read_bytes(), original)
 
     def test_traversal_absolute_duplicate_and_symlink_archive_members_refuse(self):
         for names in (

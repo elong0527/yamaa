@@ -1239,7 +1239,7 @@ def native_collection(directory, lane, native):
 
 
 @contextlib.contextmanager
-def entry_root(root, entry, scratch, entry_provider):
+def entry_root(root, entry, scratch, entry_provider, expected_size=None):
     """Only one original ZIP is expanded at a time; original bytes stay intact."""
     with contextlib.ExitStack() as stack:
         archive_root = (
@@ -1253,18 +1253,29 @@ def entry_root(root, entry, scratch, entry_provider):
             yield root
             return
         archive_path = relative(Path(archive_root), entry["archive"])
+        if expected_size is not None:
+            require(
+                type(expected_size) is int
+                and expected_size > 0
+                and archive_path.stat().st_size == expected_size,
+                "original Actions ZIP size differs from admitted artifact metadata",
+            )
         destination = scratch / "evidence" / entry["artifact_name"]
         destination.mkdir(parents=True)
         seen = set()
         with zipfile.ZipFile(archive_path) as archive:
             require(bool(archive.infolist()), "empty original Actions ZIP")
             for member in archive.infolist():
-                name = PurePosixPath(member.filename)
+                # ZipInfo.filename loses NUL suffixes and normalizes backslashes
+                # on Windows. Admit the original spelling before joining paths.
+                original_name = member.orig_filename
+                name = PurePosixPath(original_name)
                 require(
                     not name.is_absolute()
-                    and not PureWindowsPath(member.filename).is_absolute()
                     and ".." not in name.parts
-                    and "\\" not in member.filename,
+                    and "\\" not in original_name
+                    and "\x00" not in original_name
+                    and not any(PureWindowsPath(part).drive for part in name.parts),
                     "unsafe original archive member",
                 )
                 require(
@@ -1377,7 +1388,11 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
                 ) as entry_temporary:
                     entry_scratch = Path(entry_temporary)
                     with entry_root(
-                        root, entry, entry_scratch, entry_provider
+                        root,
+                        entry,
+                        entry_scratch,
+                        entry_provider,
+                        expected_size=artifact["size_in_bytes"],
                     ) as evidence_root:
                         campaign = read(relative(evidence_root, entry["campaign"]))
                         require(
