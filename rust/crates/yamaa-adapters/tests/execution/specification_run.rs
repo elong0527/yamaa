@@ -1928,7 +1928,7 @@ fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
     assert_eq!(
         specification_diagnostics::findings(&error, None).unwrap(),
         vec![
-            json!({"phase":"validation","condition":"duplicate_derivation","requirement":"REQ-1260","spec_paths":["columns.AVAL.derivation"],"context":{"column":"AVAL","rows":["collected","total"]}})
+            json!({"phase":"validation","condition":"duplicate_derivation","requirement":"REQ-1260","spec_paths":["columns.AVAL.derivation"],"context":{"column":"AVAL","rows":["collected","total"],"not_row_local":"aggregate"}})
         ]
     );
     // Unknown row names are reported first, then missing coverage in declared

@@ -674,6 +674,20 @@ fn column_windows_stay_global_and_scalar_row_defaults_remain_local() {
                         .any(|finding| finding.diagnostic().definition().condition == condition),
                     "{findings:?}"
                 );
+                if overridden {
+                    // REQ-1260 names why the column-level derivation cannot
+                    // be a row default: it is a window derivation.
+                    let duplicate = findings
+                        .iter()
+                        .find(|finding| {
+                            finding.diagnostic().definition().condition == "duplicate_derivation"
+                        })
+                        .expect("duplicate finding");
+                    assert_eq!(
+                        duplicate.diagnostic().context["not_row_local"],
+                        ContextValue::Scalar(Value::Str("window".into()))
+                    );
+                }
                 continue;
             }
             let prepared = prepared.unwrap();

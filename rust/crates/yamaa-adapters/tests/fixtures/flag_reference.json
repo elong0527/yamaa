@@ -588,7 +588,8 @@
           "requirement": "REQ-0188",
           "context": {
             "predicate": "ASTDT <= TRTEDT + 30",
-            "position": 16
+            "position": 16,
+            "suggestion": "derive the value as a column with compute, then compare that column"
           }
         }
       ]

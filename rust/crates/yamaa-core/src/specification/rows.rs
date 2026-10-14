@@ -164,13 +164,15 @@ fn declaration(
 }
 /// Inspect references in supported row-local defaults without reading source data.
 /// Literal text and qualified stored fields never promote an output declaration.
+/// The third element names why the default is not row-local (REQ-1260) when
+/// it is not: the derivation kind that breaks row locality.
 fn default_reads(
     d: &Document,
     declaration: usize,
     output: &TableSchema,
     project: Option<&functions::Prepared>,
     string_templates: &str_template::Prepared,
-) -> Result<(bool, Vec<usize>), PrepareError> {
+) -> Result<(bool, Vec<usize>, Option<&'static str>), PrepareError> {
     let value = field(d, declaration, "value")?;
     let &[(operation, payload)] = mapping(d, value)? else {
         return Err(PrepareError::Internal);
@@ -318,10 +320,34 @@ fn default_reads(
                 Err(_) => return Err(PrepareError::Limit("numeric_parser")),
             }
         }
-        "aggregate" | "lookup" | "window" => return Ok((false, reads)),
-        _ => return Ok((!named_default, reads)),
+        "aggregate" | "lookup" | "window" => {
+            return Ok((
+                false,
+                reads,
+                Some(match operation {
+                    "aggregate" => "aggregate",
+                    "lookup" => "lookup",
+                    _ => "window",
+                }),
+            ));
+        }
+        _ => {
+            return Ok((
+                !named_default,
+                reads,
+                named_default.then_some("named_intermediate"),
+            ));
+        }
     }
-    Ok((!window_default && !named_default, reads))
+    Ok((
+        !window_default && !named_default,
+        reads,
+        if window_default {
+            Some("window")
+        } else {
+            named_default.then_some("named_intermediate")
+        },
+    ))
 }
 
 fn select_defaults(
@@ -340,10 +366,10 @@ fn select_defaults(
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
                 .map(|id| default_reads(d, id, output, project, string_templates))
                 .transpose()
-                .map(|default| default.unwrap_or((true, Vec::new())))
+                .map(|default| default.unwrap_or((true, Vec::new(), None)))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let edges = defaults.iter().try_fold(0usize, |n, (_, edges)| {
+    let edges = defaults.iter().try_fold(0usize, |n, (_, edges, _)| {
         n.checked_add(edges.len())
             .ok_or(PrepareError::Limit("row_dependencies"))
     })?;
@@ -354,13 +380,25 @@ fn select_defaults(
     {
         return Err(PrepareError::Limit("row_dependencies"));
     }
-    let mut local = defaults.iter().map(|(local, _)| *local).collect::<Vec<_>>();
+    let mut local = defaults
+        .iter()
+        .map(|(local, _, _)| *local)
+        .collect::<Vec<_>>();
+    // A default that only reads a non-row-local column inherits that column's
+    // root cause, so the finding names the original kind (REQ-1260).
+    let mut not_row_local = defaults
+        .iter()
+        .map(|(_, _, reason)| *reason)
+        .collect::<Vec<_>>();
     loop {
         let mut changed = false;
-        for (column, (_, reads)) in defaults.iter().enumerate() {
-            if local[column] && reads.iter().any(|&read| !local[read]) {
-                local[column] = false;
-                changed = true;
+        for (column, (_, reads, _)) in defaults.iter().enumerate() {
+            if local[column] {
+                if let Some(&read) = reads.iter().find(|&&read| !local[read]) {
+                    local[column] = false;
+                    not_row_local[column] = not_row_local[read];
+                    changed = true;
+                }
             }
         }
         if !changed {
@@ -400,7 +438,7 @@ fn select_defaults(
                     .or_default()
                     .push(text(d, field(d, row, "id")?)?);
             }
-            let (_, reads) = default_reads(d, declaration, output, project, string_templates)?;
+            let (_, reads, _) = default_reads(d, declaration, output, project, string_templates)?;
             for read in reads {
                 if local[read] {
                     selected[read] = true;
@@ -410,7 +448,7 @@ fn select_defaults(
     }
     loop {
         let mut changed = false;
-        for (column, (_, reads)) in defaults.iter().enumerate() {
+        for (column, (_, reads, _)) in defaults.iter().enumerate() {
             if selected[column] {
                 for &read in reads {
                     if local[read] && !selected[read] {
@@ -445,6 +483,9 @@ fn select_defaults(
         .map(|(column, rows)| PreflightFinding::DuplicateRowDefault {
             column: output.columns()[column].name.clone(),
             rows: rows.into_iter().map(String::from).collect(),
+            // Every non-row-local column carries a root cause by
+            // construction; the fallback only guards future classifications.
+            not_row_local: not_row_local[column].unwrap_or("non_row_local").into(),
         })
         .collect::<Vec<_>>();
     if !findings.is_empty() {

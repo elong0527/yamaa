@@ -711,6 +711,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
                 vec![
                     ("column", text("X")),
                     ("rows", texts(&["first", "second", "third"])),
+                    ("not_row_local", text("aggregate")),
                 ],
             ),
             (
