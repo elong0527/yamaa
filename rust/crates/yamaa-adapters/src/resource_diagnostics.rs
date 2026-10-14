@@ -76,9 +76,27 @@ fn input_paths(sources: &[SourceDeclaration]) -> Vec<String> {
         .map(|source| format!("input.{}", source.name))
         .collect()
 }
+fn source_path(
+    sources: &[SourceDeclaration],
+    driver_index: usize,
+    source_index: usize,
+) -> Option<String> {
+    let source = if source_index == 0 {
+        sources.get(driver_index)?
+    } else {
+        sources
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| *index != driver_index)
+            .nth(source_index - 1)?
+            .1
+    };
+    Some(format!("input.{}", source.name))
+}
 pub(crate) fn execution<E>(
     error: &ExecutionError<E>,
     sources: &[SourceDeclaration],
+    driver_index: usize,
 ) -> Option<Refusal> {
     let (resource, limit, actual, mut spec_paths) = match error {
         ExecutionError::Limit {
@@ -86,6 +104,17 @@ pub(crate) fn execution<E>(
             limit,
             required,
         } => (resource_name(*resource), *limit, *required, Vec::new()),
+        ExecutionError::SourceLimit {
+            resource,
+            limit,
+            required,
+            source_index,
+        } => (
+            resource_name(*resource),
+            *limit,
+            *required,
+            vec![source_path(sources, driver_index, *source_index)?],
+        ),
         ExecutionError::ScopedLimit {
             resource,
             limit,
@@ -200,7 +229,11 @@ pub(crate) fn run_limit<E>(
     Some(Refusal::new(resource, limit, actual, spec_paths))
 }
 
-pub(crate) fn outcome(value: &Value, sources: &[SourceDeclaration]) -> Option<Refusal> {
+pub(crate) fn outcome(
+    value: &Value,
+    sources: &[SourceDeclaration],
+    driver_index: usize,
+) -> Option<Refusal> {
     let resource = match value["resource"].as_str()? {
         "rows" => "rows",
         "cells" => "cells",
@@ -234,7 +267,13 @@ pub(crate) fn outcome(value: &Value, sources: &[SourceDeclaration]) -> Option<Re
             .collect::<Option<Vec<_>>>()?,
         None => Vec::new(),
     };
-    if paths.is_empty() && matches!(resource, "rows" | "cells" | "columns" | "sources") {
+    if let Some(source_index) = value.get("source_index") {
+        paths = vec![source_path(
+            sources,
+            driver_index,
+            usize::try_from(source_index.as_u64()?).ok()?,
+        )?];
+    } else if paths.is_empty() && matches!(resource, "rows" | "cells" | "columns" | "sources") {
         paths = input_paths(sources);
     }
     Some(Refusal::new(resource, limit, actual, paths))
@@ -251,6 +290,26 @@ mod tests {
             types: Vec::new(),
             ordinal: None,
             empty_string_present: false,
+        }
+    }
+    #[test]
+    fn column_refusal_projects_the_source_coordinate_with_a_non_first_driver() {
+        let sources = ["FIRST", "DRIVER", "LAST"].map(|name| SourceDeclaration {
+            name: name.into(),
+            ..input()
+        });
+        for (source_index, owner) in [(0, "DRIVER"), (1, "FIRST"), (2, "LAST")] {
+            let error = ExecutionError::<core::convert::Infallible>::SourceLimit {
+                resource: Resource::SourceColumns,
+                limit: 1,
+                required: Some(2),
+                source_index,
+            };
+            let projected = execution(&error, &sources, 1).unwrap();
+            assert_eq!(projected.spec_paths, [format!("input.{owner}")]);
+            let encoded = crate::dataset_result::semantic_condition(&error).unwrap();
+            assert_eq!(encoded["source_index"], source_index);
+            assert_eq!(outcome(&encoded, &sources, 1), Some(projected));
         }
     }
     #[test]

@@ -127,14 +127,21 @@ fn source_shape_refusals_precede_reads_and_do_not_spend_future_budgets() {
         let result = plan
             .execute_with_budget(&source, &[&secondary], tiny)
             .result;
-        assert_eq!(
-            *result.unwrap_err(),
+        let expected = if resource == Resource::SourceColumns {
+            ExecutionError::SourceLimit {
+                resource,
+                limit,
+                required,
+                source_index: 0,
+            }
+        } else {
             ExecutionError::Limit {
                 resource,
                 limit,
-                required
+                required,
             }
-        );
+        };
+        assert_eq!(*result.unwrap_err(), expected);
         assert_eq!(source.reads.get(), 0);
         assert_eq!(secondary.reads.get(), 0);
     }
@@ -148,6 +155,62 @@ fn source_shape_refusals_precede_reads_and_do_not_spend_future_budgets() {
             &[vec![Value::Int(0)], vec![Value::Int(1)]]
         );
     }
+}
+
+#[test]
+fn secondary_width_refusal_retains_only_the_refused_source_coordinate() {
+    let primary = Source::new(1, 1);
+    let narrow = Source::new(1, 1);
+    let wide = Source::new(1, 2);
+    let plan = DatasetPlan::new_with_sources(
+        primary.schema.clone(),
+        [&narrow, &wide]
+            .into_iter()
+            .enumerate()
+            .map(|(index, source)| SecondarySource {
+                name: format!("S{index}"),
+                schema: source.schema.clone(),
+            })
+            .collect(),
+        primary.schema.clone(),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![Assignment {
+                column: 0,
+                expression: Expression::Source(0),
+                path: "columns.C0".into(),
+            }],
+            filter: None,
+        }],
+        vec![],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    let result = plan.execute_with_budget(
+        &primary,
+        &[&narrow, &wide],
+        ExecutionBudget {
+            max_columns: 1,
+            ..ExecutionBudget::default()
+        },
+    );
+    assert_eq!(
+        *result.result.unwrap_err(),
+        ExecutionError::SourceLimit {
+            resource: Resource::SourceColumns,
+            limit: 1,
+            required: Some(2),
+            source_index: 2,
+        }
+    );
+    assert_eq!(primary.reads.get(), 0);
+    assert_eq!(narrow.reads.get(), 0);
+    assert_eq!(wide.reads.get(), 0);
+    assert!(plan
+        .execute_with_budget(&primary, &[&narrow, &wide], ExecutionBudget::default())
+        .result
+        .is_ok());
 }
 
 #[test]
