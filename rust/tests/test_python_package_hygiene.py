@@ -47,13 +47,70 @@ class PythonPackageHygiene(unittest.TestCase):
                             for name in (
                                 "yamaa/__init__.py",
                                 "yamaa/_native.pyi",
-                                "yamaa/submission/schema.xsd",
+                                "yamaa/_odm/schema.py",
                                 "yamaa/__pycache__notes.py",
                             )
                         ],
                     )
                     self.assertEqual(module.check_archive(path), 4)
             module.check_distributions(root)
+
+    def test_every_retired_import_family_is_rejected_in_both_distribution_forms(self):
+        retired = (
+            "_reference_domain.py", "application.py", "regex.py",
+            "adapters/__init__.py", "expressions/scalar.py", "io/project.py",
+            "models/__init__.py", "odm/bindings.py", "planning/__init__.py",
+            "runtime/context.py", "schema/__init__.py", "specification/__init__.py",
+            "submission/schema.xsd", "verification/__init__.py",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for filename, prefix in (
+                ("yamaa.whl", "yamaa/"),
+                ("yamaa.tar.gz", "yamaa-0.4.0/python/src/yamaa/"),
+            ):
+                for name in retired:
+                    with self.subTest(filename=filename, member=name):
+                        path = root / filename
+                        write_archive(path, [prefix + name])
+                        with self.assertRaisesRegex(ValueError, "retired Python evaluator/API"):
+                            module.check_archive(path)
+
+    def test_wheel_install_schemes_and_windows_member_spellings_cannot_restore_reference(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "yamaa.whl"
+            for name in (
+                "yamaa-0.4.0.data/purelib/yamaa/runtime/context.py",
+                "yamaa-0.4.0.data/platlib/yamaa/_reference_domain.pyd",
+                "yamaa\\Runtime\\context.py",
+                "yamaa/regex.pyi",
+            ):
+                with self.subTest(member=name):
+                    write_archive(path, [name])
+                    with self.assertRaisesRegex(ValueError, "retired Python evaluator/API"):
+                        module.check_archive(path)
+
+    def test_retained_helpers_and_independent_native_truth_are_allowed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for filename, prefix in (
+                ("yamaa.whl", ""),
+                ("yamaa.tar.gz", "yamaa-0.4.0/python/src/"),
+            ):
+                with self.subTest(filename=filename):
+                    path = root / filename
+                    names = [prefix + name for name in (
+                        "yamaa/_odm/readers.py", "yamaa/_odm/parquet.py",
+                        "yamaa/style/__main__.py", "yamaa/style/_fields.json",
+                        "yamaa/_native.pyi", "yamaa/__init__.py",
+                    )]
+                    names.extend((
+                        "yamaa-0.4.0/rust/crates/yamaa-core/src/regex.rs",
+                        "yamaa-0.4.0/rust/crates/yamaa-adapters/tests/fixtures/expressions.tsv",
+                        "yamaa-0.4.0/rust/qualification/producer-cohort/shared-producer-parquet/reference.json",
+                    ))
+                    write_archive(path, names)
+                    self.assertEqual(module.check_archive(path), len(names))
 
     def test_nested_cache_directories_and_bytecode_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

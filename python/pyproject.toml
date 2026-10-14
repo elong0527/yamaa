@@ -13,7 +13,6 @@ license = "MIT AND Unicode-3.0"
 license-files = ["LICENSE-UNICODE.txt", "LICENSE-WINDOWS.txt"]
 authors = [{ name = "yamaa contributors" }]
 dependencies = [
-  "jsonschema>=4.25",
   "lxml>=6.1.0",
   "polars>=1.35.2",
   "py-yaml12>=0.2",
@@ -25,6 +24,8 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
+  # Independent Dataset-JSON validation belongs to qualification, not runtime.
+  "jsonschema>=4.25",
   "pytest>=9.1.1",
   "ruff>=0.16.7",
 ]

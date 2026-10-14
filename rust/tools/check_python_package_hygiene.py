@@ -1,13 +1,51 @@
-"""Reject generated Python caches in the wheel and source distribution."""
+"""Reject generated caches and retired evaluator families in Python distributions."""
 
 import argparse
 import tarfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
+# #1994 retires these import roots; the retained helpers are _odm and style.
+RETIRED_IMPORTS = {
+    "_reference_domain",
+    "application",
+    "regex",
+    "adapters",
+    "expressions",
+    "io",
+    "models",
+    "odm",
+    "planning",
+    "runtime",
+    "schema",
+    "specification",
+    "submission",
+    "verification",
+}
+
+
+def package_members(member: PurePosixPath, wheel: bool) -> tuple[str, ...]:
+    """Locate Python package members without confusing retained Rust/test assets."""
+    parts = member.parts
+    if wheel:
+        if parts[:1] == ("yamaa",):
+            return parts[1:]
+        # A wheel's data scheme can also install files into the import namespace.
+        if (
+            len(parts) >= 4
+            and parts[0].endswith(".data")
+            and parts[1] in {"purelib", "platlib"}
+            and parts[2] == "yamaa"
+        ):
+            return parts[3:]
+    elif parts[1:4] == ("python", "src", "yamaa"):
+        return parts[4:]
+    return ()
+
 
 def check_archive(path: Path) -> int:
-    if path.suffix == ".whl":
+    wheel = path.suffix == ".whl"
+    if wheel:
         with zipfile.ZipFile(path) as archive:
             names = archive.namelist()
     elif path.name.endswith(".tar.gz"):
@@ -17,13 +55,22 @@ def check_archive(path: Path) -> int:
         raise ValueError(f"unsupported Python distribution: {path}")
 
     generated = []
+    retired = []
     for name in names:
         member = PurePosixPath(name.replace("\\", "/"))
         if "__pycache__" in member.parts or member.suffix.lower() in {".pyc", ".pyo"}:
             generated.append(name)
+        package = package_members(member, wheel)
+        if package and package[0].split(".", 1)[0].casefold() in RETIRED_IMPORTS:
+            retired.append(name)
     if generated:
         raise ValueError(
             f"{path.name} contains generated Python caches:\n" + "\n".join(generated)
+        )
+    if retired:
+        raise ValueError(
+            f"{path.name} contains retired Python evaluator/API members:\n"
+            + "\n".join(retired)
         )
     return len(names)
 
@@ -35,7 +82,7 @@ def check_distributions(directory: Path) -> None:
         raise ValueError("expected exactly one wheel and one source archive")
     for path in wheels + sources:
         count = check_archive(path)
-        print(f"{path.name}: {count} members, no generated Python caches")
+        print(f"{path.name}: {count} members, no generated caches or retired evaluator/API members")
 
 
 if __name__ == "__main__":

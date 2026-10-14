@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -2530,7 +2530,6 @@ name = "yamaa"
 version = "0.4.0"
 source = { editable = "." }
 dependencies = [
-    { name = "jsonschema" },
     { name = "lxml" },
     { name = "packaging" },
     { name = "polars" },
@@ -2542,6 +2541,7 @@ dependencies = [
 
 [package.optional-dependencies]
 test = [
+    { name = "jsonschema" },
     { name = "pytest" },
     { name = "ruff" },
 ]
@@ -2556,7 +2556,7 @@ harbor = [
 
 [package.metadata]
 requires-dist = [
-    { name = "jsonschema", specifier = ">=4.25" },
+    { name = "jsonschema", marker = "extra == 'test'", specifier = ">=4.25" },
     { name = "lxml", specifier = ">=6.1.0" },
     { name = "packaging", specifier = ">=25" },
     { name = "polars", specifier = ">=1.35.2" },
