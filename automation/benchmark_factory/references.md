@@ -15,6 +15,15 @@ Conventions used below:
 
 ## PharmaSUG proceedings
 
+- **Risk-based and Exposure-based Adjusted Safety Incidence Rates**
+  (Jia, Kuo, Wu, Xu, 2020, SA-103) -
+  https://pharmasug.org/proceedings/2020/SA/PharmaSUG-2020-SA-103.pdf -
+  Pages 3-4 distinguish full-exposure denominators from term-specific time
+  at risk: first eligible onset or 30 days after last dose, inclusive days,
+  365.25 days per year and incidence per 100 person-years. TA: cross-TA
+  (safety). Grounding: `adam-adae-exposure-adjusted-incidence`, including
+  event-free subjects, repeated events and observation-window boundaries.
+
 - **ADaM Design for Prostate Cancer Efficacy Endpoints Based on PCWG3**
   (Deng, Fan, Li, 2024) -
   https://pharmasug.org/conferences/pharmasug-2024-us/pharmasug-2024-paper-presentations/ -
