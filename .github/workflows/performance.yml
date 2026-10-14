@@ -166,7 +166,7 @@ jobs:
         run: |
           rustup toolchain install 1.90.0 --profile minimal
           python -m pip install uv==0.11.6
-          uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/requirements.txt"
+          uv export --project python --locked --extra test --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/requirements.txt"
           uv venv --python "$(command -v python)" "${RUNNER_TEMP}/candidate-env"
           uv venv --python "$(command -v python)" "${RUNNER_TEMP}/baseline-env"
           if [ "${{ runner.os }}" = Windows ]; then
@@ -333,7 +333,7 @@ jobs:
           BASELINE_REF: ${{ inputs.baseline_ref || 'yamaa-py-0.3.0' }}
         run: |
           python -m pip install uv==0.11.6
-          uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/requirements.txt"
+          uv export --project python --locked --extra test --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/requirements.txt"
           git archive --format=tar.gz --prefix=previous-release/ -o "${RUNNER_TEMP}/previous-release.tar.gz" "${BASELINE_REF}"
           git rev-parse "${BASELINE_REF}^{commit}" > "${RUNNER_TEMP}/baseline-revision.txt"
           python - <<'PY'
