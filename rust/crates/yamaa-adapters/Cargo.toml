@@ -17,9 +17,9 @@ yamaa-engine = { path = "../yamaa-engine" }
 toml = { version = "=0.9.8", default-features = false, features = ["parse", "std", "serde"] }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.145", features = ["arbitrary_precision", "raw_value"] }
-# Same parser revision used by the existing Python/R yaml12 packages. Keep
-# source parsing at the adapter boundary; the core accepts owned documents.
-saphyr-parser = { git = "https://github.com/t-kalinowski/saphyr", rev = "bd5bf9624347b24fa77cc2ef4a67ab2ef5c2cf8b", default-features = false }
+# Source parsing stays at the adapter boundary; the core accepts owned documents.
+# 0.0.11 fixes comments interrupting multiline plain scalars (YAML case BS4K).
+saphyr-parser = { version = ">=0.0.11", default-features = false }
 num-bigint = { version = "=0.5.1", default-features = false }
 
 arrow-array = { version = "=60.0.0", default-features = false }

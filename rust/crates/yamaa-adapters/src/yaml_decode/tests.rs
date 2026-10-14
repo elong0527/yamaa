@@ -87,6 +87,66 @@ fn core_booleans_nulls_and_text_do_not_use_yaml11_resolvers() {
 }
 
 #[test]
+fn implicit_empty_nodes_are_null_while_quoted_empty_scalars_are_text() {
+    assert_eq!(scalar("''"), N::Text(String::new()));
+    assert_eq!(scalar("\"\""), N::Text(String::new()));
+    assert_eq!(
+        decode("empty:\nquoted: ''\nexplicit: null\n")
+            .document
+            .nodes(),
+        &[
+            N::Text("empty".into()),
+            N::Null,
+            N::Text("quoted".into()),
+            N::Text(String::new()),
+            N::Text("explicit".into()),
+            N::Null,
+            N::Mapping(vec![(0, 1), (2, 3), (4, 5)]),
+        ]
+    );
+    assert_eq!(
+        decode("-\n- ''\n- null\n").document.nodes(),
+        &[
+            N::Null,
+            N::Text(String::new()),
+            N::Null,
+            N::Sequence(vec![0, 1, 2]),
+        ]
+    );
+}
+
+#[test]
+fn implicit_empty_mapping_keys_share_null_duplicate_identity() {
+    yaml_error(
+        ": first\nnull: second\n",
+        2,
+        1,
+        "found duplicate key 'None'",
+    );
+    yaml_error(": first\n~: second\n", 2, 1, "found duplicate key 'None'");
+    assert!(decode_yaml(b"'': text\n: empty\n", DecodeLimits::default()).is_ok());
+}
+
+#[test]
+fn comments_cannot_interrupt_multiline_plain_scalars() {
+    for (source, column) in [
+        ("first  # comment\nsecond\n", 8),
+        ("key: first  # comment\n  second\n", 13),
+    ] {
+        yaml_error(source, 1, column, "comment intercepting the multiline text");
+    }
+    assert_eq!(scalar("first\nsecond\n"), N::Text("first second".into()));
+    assert_eq!(
+        decode("key: first\n  second\n").document.nodes(),
+        &[
+            N::Text("key".into()),
+            N::Text("first second".into()),
+            N::Mapping(vec![(0, 1)]),
+        ]
+    );
+}
+
+#[test]
 fn integers_keep_exact_identity_before_runtime_range_admission() {
     for (source, expected) in [
         ("+00077", "77"),
@@ -198,6 +258,18 @@ fn forbidden_metadata_reports_its_prefix_and_precedes_later_errors() {
         ("x: !!str 1\n", 1, 4, "explicit YAML tags are not allowed"),
         (
             "x: !<tag:yaml.org,2002:str> 1\n",
+            1,
+            4,
+            "explicit YAML tags are not allowed",
+        ),
+        (
+            "x: !<tag:yaml.org,2002:seq> []\n",
+            1,
+            4,
+            "explicit YAML tags are not allowed",
+        ),
+        (
+            "x: !<tag:yaml.org,2002:map> {}\n",
             1,
             4,
             "explicit YAML tags are not allowed",
