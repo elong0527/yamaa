@@ -33,7 +33,7 @@ pub fn observe(text: &str) -> Value {
         }
         Err(error) => json!({"status":match error {
             AdmissionError::Shape => "invalid_shape",
-            AdmissionError::Limit => "resource_limit",
+            AdmissionError::Limit | AdmissionError::Work { .. } => "resource_limit",
         }}),
     };
     json!({"outcome":outcome})

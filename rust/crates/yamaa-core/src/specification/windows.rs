@@ -153,7 +153,7 @@ impl Declaration {
                         "window_groups",
                         limits.keys,
                         Some(items.len()),
-                        None,
+                        Some(&format!("{path}.window.group_by")),
                     ));
                 }
                 groups = items
@@ -171,7 +171,7 @@ impl Declaration {
                         "window_order",
                         limits.source_fields,
                         Some(items.len()),
-                        None,
+                        Some(&format!("{path}.window.order_by")),
                     ));
                 }
                 for &term in items {
