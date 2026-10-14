@@ -9,7 +9,6 @@ use crate::{
 };
 use alloc::{format, string::String, vec, vec::Vec};
 
-#[path = "project_environment_projection.rs"]
 pub mod projection;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

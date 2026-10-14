@@ -6,7 +6,6 @@ use crate::{
     predicate_compiler,
     value::Value,
 };
-#[path = "specification_source_rows.rs"]
 mod row_sources;
 pub(super) use row_sources::bind as bind_row;
 

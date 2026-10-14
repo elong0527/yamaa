@@ -8,91 +8,69 @@ use crate::{
     value::Value,
 };
 use alloc::{collections::BTreeMap, string::String, vec, vec::Vec};
-#[path = "dataset_compiler.rs"]
 mod compiler;
 pub use compiler::{
     compile_dataset, validate_window_form, AssignmentDeclaration, CompiledDataset,
     DatasetCompileError, DatasetCompileLimits, DatasetCompiler, DatasetDeclaration,
     DatasetMetadata, ExpressionDeclaration, TemplateDeclaration, WindowDeclarationKind,
 };
-#[path = "dataset_conversion.rs"]
 mod conversion;
 pub use conversion::ConversionHandler;
-#[path = "dataset_count.rs"]
 mod count;
 pub use count::{CountBoundError, RowCount, RowCountBound, MAX_COUNT_BOUND_BYTES};
-#[path = "dataset_flag.rs"]
 mod flags;
 pub use flags::{
     flag_condition_diagnostic, Flag, FlagBinding, FlagError, FlagRead, MAX_FLAG_METADATA_BYTES,
 };
-#[path = "dataset_functions.rs"]
 mod functions;
 pub use functions::{BoundFunction, BoundProjectFunction, FunctionArgument, FunctionInput};
-#[path = "dataset_aggregate.rs"]
 mod aggregate;
 pub use aggregate::{
     AggregateBinding, AggregateBindingError, AggregateDerivation, AggregatePhase,
     AggregateRelation, AggregateRowContext, AggregateSource, BoundAggregate,
 };
-#[path = "dataset_odm.rs"]
 pub(crate) mod odm;
 pub use odm::{BoundOdm, OdmRead, OdmScope, OdmTemplateScope};
-#[path = "dataset_intermediates.rs"]
 mod intermediates;
 pub use intermediates::{
     visit_output_dependencies, Intermediate, IntermediateDerivations, IntermediateUnique,
     RecordMatchKey, SourceSchemas,
 };
-#[path = "dataset_relation_predicate.rs"]
 pub(crate) mod relation_predicates;
 pub use relation_predicates::{CurrentField, CurrentRead, RelationPredicate};
-#[path = "dataset_relation_shape.rs"]
 mod relation_shape;
 pub use relation_shape::{
     RelationField, RelationFieldOrigin, RelationShape, RelationShapeError, RelationShapeLimits,
 };
-#[path = "dataset_relation_range.rs"]
 mod relation_range;
 pub use relation_range::{
     RelationRange, RelationRangeBound, RelationRangeError, RelationRangeFailure, RelationRangeTypes,
 };
-#[path = "dataset_self.rs"]
 mod self_relations;
 pub use self_relations::IntermediateSource;
-#[path = "dataset_match_values.rs"]
 mod match_values;
 pub use match_values::{ContextualMatch, IntermediateKey, MatchRead, MatchValue};
-#[path = "dataset_joined.rs"]
 mod joined;
-#[path = "dataset_lookup.rs"]
 mod lookup;
 pub use joined::JoinedRead;
-#[path = "dataset_rounding.rs"]
 mod rounding;
 pub use rounding::{InvalidDigits, Rounding};
-#[path = "dataset_temporal_imputation.rs"]
 mod imputation;
 pub use imputation::{
     date_policy, DatePolicyError, DayDeclaration, DayRule, Imputation, ImputationKind,
     ImputationStep, PartialDate, TimeRule, MAX_IMPUTATION_POLICY_BYTES,
 };
-#[path = "dataset_temporal.rs"]
 mod temporal;
 pub use crate::text_case::StringCase;
 pub use crate::text_extract::StringExtract;
 pub use crate::text_pad::StringPad;
 pub use crate::text_template::StringTemplate;
 pub use temporal::{CalendarUnit, DateBounds, InvalidTemporal, Temporal, TemporalKind};
-#[path = "dataset_selection.rs"]
 mod selection;
 pub use selection::{FirstAvailable, SelectionRead, SelectionSource};
-#[path = "dataset_row_stages.rs"]
 mod row_stages;
 pub use row_stages::window_stages;
-#[path = "dataset_row_drivers.rs"]
 mod row_drivers;
-#[path = "dataset_windows.rs"]
 mod windows;
 pub use windows::{ContextWindow, OrderTerm, Window, WindowKind};
 
@@ -2050,10 +2028,7 @@ impl DatasetPlan {
 }
 
 #[cfg(test)]
-#[path = "dataset_donor_admission.rs"]
 mod donor_admission_tests;
 
-#[path = "dataset_metadata_types.rs"]
 mod metadata_types;
-#[path = "dataset_verification_predicate.rs"]
 mod verification_predicates;

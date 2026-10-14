@@ -1039,5 +1039,4 @@ fn like<R: EvaluationContext>(
     Ok(Truth::from_bool(previous[tokens.len()]))
 }
 
-#[path = "predicate_type_facts.rs"]
 mod type_facts;
