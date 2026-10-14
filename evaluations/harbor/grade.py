@@ -40,7 +40,16 @@ import subprocess
 import tempfile
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
-from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal, InvalidOperation
+from decimal import (
+    ROUND_CEILING,
+    ROUND_FLOOR,
+    ROUND_HALF_EVEN,
+    Decimal,
+    Inexact,
+    InvalidOperation,
+    Rounded,
+    localcontext,
+)
 from pathlib import Path
 
 NULL_TOKENS = frozenset({"", "NA", "NaN", "nan", ".", "NULL", "None"})
@@ -1066,6 +1075,30 @@ def _perturb_values(input_dir: Path, randomizer: random.Random) -> list[dict]:
         else:
             # Fixed decimal places can erase a nonzero measurement. Scale its
             # decimal value instead, retaining the precision of small inputs.
+            if kind is not None and arrow.types.is_decimal(kind):
+                # Arrow decimal precision can exceed the ambient Decimal context.
+                # Reserve the multiplier's digits before any arithmetic, then
+                # admit the result into the field's declared precision and scale.
+                with localcontext() as context:
+                    context.prec = kind.precision + 4
+                    context.rounding = ROUND_HALF_EVEN
+                    context.traps[Inexact] = False
+                    context.traps[Rounded] = False
+                    original = Decimal(str(value))
+                    quantum = Decimal(1).scaleb(-kind.scale)
+                    maximum = Decimal(10**kind.precision - 1).scaleb(-kind.scale)
+                    updated = (original * Decimal(str(factor))).quantize(quantum)
+                    updated = min(maximum, max(-maximum, updated))
+                    if updated == original and original:
+                        step = quantum if original > 0 else -quantum
+                        candidate = original + step
+                        # At a precision edge, change by one quantum inward.
+                        updated = (
+                            candidate
+                            if -maximum <= candidate <= maximum
+                            else original - step
+                        )
+                    return updated
             updated = Decimal(str(value)) * Decimal(str(factor))
             if isinstance(value, int):
                 updated = int(
@@ -1083,10 +1116,7 @@ def _perturb_values(input_dir: Path, randomizer: random.Random) -> list[dict]:
                 return updated
             if isinstance(value, str):
                 return format(updated.normalize(), "f")
-            if kind is not None and arrow.types.is_decimal(kind):
-                updated = updated.quantize(Decimal(1).scaleb(-kind.scale))
-            else:
-                updated = float(updated)
+            updated = float(updated)
         if isinstance(value, str):
             return str(int(updated)) if updated.is_integer() else str(updated)
         return int(updated) if isinstance(value, int) else updated

@@ -706,6 +706,159 @@ def test_decimal_parquet_measurements_stay_decimal_and_match_text(tmp_path, doma
 
 @pytest.mark.parametrize("domain", ["LB", "VS"])
 @pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize(
+    "storage,precision,scale,originals,expected",
+    [
+        (
+            "decimal128",
+            1,
+            0,
+            ["1", "-1", "9", "-9", "0", None],
+            ["2", "-2", "8", "-8", "0", None],
+        ),
+        (
+            "decimal128",
+            10,
+            2,
+            [
+                "0.01",
+                "-0.01",
+                "0.50",
+                "-0.50",
+                "99999999.99",
+                "-99999999.99",
+                "0.00",
+                None,
+            ],
+            [
+                "0.02",
+                "-0.02",
+                "0.51",
+                "-0.51",
+                "99999999.98",
+                "-99999999.98",
+                "0.00",
+                None,
+            ],
+        ),
+        (
+            "decimal128",
+            38,
+            2,
+            [
+                "1234567890123456789012345678.12",
+                "-1234567890123456789012345678.12",
+                "999999999999999999999999999999999999.99",
+                "0.00",
+                None,
+            ],
+            [
+                "1246913569024691356902469134.90",
+                "-1246913569024691356902469134.90",
+                "999999999999999999999999999999999999.98",
+                "0.00",
+                None,
+            ],
+        ),
+        (
+            "decimal128",
+            38,
+            30,
+            [
+                "0.000000000000000000000000000001",
+                "-0.000000000000000000000000000001",
+                "12.345678901234567890123456789012",
+                "-12.345678901234567890123456789012",
+                "0",
+                None,
+            ],
+            [
+                "0.000000000000000000000000000002",
+                "-0.000000000000000000000000000002",
+                "12.469135690246913569024691356902",
+                "-12.469135690246913569024691356902",
+                "0",
+                None,
+            ],
+        ),
+        (
+            "decimal256",
+            76,
+            2,
+            [
+                "123456789012345678901234567890123456789012345678901234567890.12",
+                "-123456789012345678901234567890123456789012345678901234567890.12",
+                "99999999999999999999999999999999999999999999999999999999999999999999999999.99",
+                "0.00",
+                None,
+            ],
+            [
+                "124691356902469135690246913569024691356902469135690246913569.02",
+                "-124691356902469135690246913569024691356902469135690246913569.02",
+                "99999999999999999999999999999999999999999999999999999999999999999999999999.98",
+                "0.00",
+                None,
+            ],
+        ),
+    ],
+)
+def test_decimal_parquet_measurements_respect_precision_scale_and_nonzero_changes(
+    tmp_path, domain, reverse, storage, precision, scale, originals, expected
+):
+    import random
+    from decimal import ROUND_DOWN, Decimal, Inexact, Rounded, localcontext
+
+    arrow = pytest.importorskip("pyarrow")
+    parquet = pytest.importorskip("pyarrow.parquet")
+    numeric, textual = domain + "STRESN", domain + "STRESC"
+    dtype = getattr(arrow, storage)(precision, scale)
+    values = [Decimal(value) if value is not None else None for value in originals]
+    expected_values = [
+        Decimal(value) if value is not None else None for value in expected
+    ]
+    arrays = {
+        numeric: arrow.array(values, type=dtype),
+        textual: arrow.array(originals),
+    }
+    if reverse:
+        arrays = dict(reversed(list(arrays.items())))
+    table = arrow.table(arrays)
+    path = tmp_path / "measurements.parquet"
+    parquet.write_table(table, path)
+    # Field quantization intentionally rounds without altering caller context.
+    with localcontext() as context:
+        context.prec = 6
+        context.rounding = ROUND_DOWN
+        context.traps[Inexact] = True
+        context.traps[Rounded] = True
+        changes = grade._perturb_values(tmp_path, random.Random(1))
+        assert context.prec == 6
+        assert context.rounding == ROUND_DOWN
+        assert context.traps[Inexact]
+        assert context.traps[Rounded]
+    actual = parquet.read_table(path)
+    actual_values = actual[numeric].to_pylist()
+    assert actual.schema == table.schema
+    assert actual_values == expected_values
+    for original_text, original, expected_value, text in zip(
+        originals, values, actual_values, actual[textual].to_pylist(), strict=True
+    ):
+        if original:
+            assert expected_value and expected_value != original
+            assert Decimal(text) == expected_value
+        else:
+            assert expected_value == original
+            assert text == original_text
+    assert changes == [
+        {
+            "file": path.name,
+            "columns": {column: len(originals) - 2 for column in arrays},
+        }
+    ]
+
+
+@pytest.mark.parametrize("domain", ["LB", "VS"])
+@pytest.mark.parametrize("reverse", [False, True])
 @pytest.mark.parametrize("kind", ["float32", "float64"])
 def test_small_parquet_measurements_match_the_float_value_actually_written(
     tmp_path, domain, reverse, kind
