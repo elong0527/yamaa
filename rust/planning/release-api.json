@@ -274,6 +274,7 @@
         "S3:as.character.yamaa_int64",
         "S3:as.character.yamaa_int64_vector",
         "S3:as.character.yamaa_utf8",
+        "S3:as.character.yamaa_utf8_vector",
         "S3:as.double.yamaa_int64",
         "S3:as.double.yamaa_int64_vector",
         "S3:as.integer.yamaa_int64",
@@ -313,6 +314,10 @@
         "S3:as.character.yamaa_int64_vector": {
           "disposition": "retain_candidate",
           "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
+        },
+        "S3:as.character.yamaa_utf8_vector": {
+          "disposition": "retain_candidate",
+          "rationale": "Exact Unicode conversion with separate missingness; reject NUL rather than stringify raw storage. Installed matrix qualification remains required."
         },
         "S3:is.na.yamaa_utf8_vector": {
           "disposition": "retain_candidate",

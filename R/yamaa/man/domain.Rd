@@ -2,6 +2,7 @@
 \alias{yamaa_domain}
 \alias{yamaa_check}
 \alias{as.character.yamaa_int64_vector}
+\alias{as.character.yamaa_utf8_vector}
 \alias{[.yamaa_int64_vector}
 \alias{is.na.yamaa_utf8_vector}
 \alias{[.yamaa_utf8_vector}
@@ -10,17 +11,23 @@
 yamaa_domain(specification, environment = NULL)
 yamaa_check(specification, environment = NULL)
 \method{as.character}{yamaa_int64_vector}(x, ...)
+\method{as.character}{yamaa_utf8_vector}(x, ...)
 }
 \arguments{
 \item{specification}{One domain-specification path.}
 \item{environment}{Optional study environment path for functions and codelists.}
-\item{x}{A lossless signed 64-bit output vector.}
+\item{x}{A lossless signed 64-bit integer or UTF-8 output vector.}
 \item{...}{Unused arguments.}
 }
 \value{A build result containing output, issues, optional logs and a save method,
 or a check result containing issues. Integer columns use canonical decimal text
 with the \code{yamaa_int64_vector} class and preserve the full signed 64-bit range.
 Text containing NUL uses raw values in a \code{yamaa_utf8_vector}; NULL is missing.}
+\details{\code{as.character} converts a UTF-8 vector or subset to exact Unicode
+text, preserving names and missingness. If any present value contains NUL, the
+conversion raises an error because R character cannot preserve that value.
+Use \code{unclass} to access the held raw bytes. Conversion leaves the original
+output and \code{save()} publication unchanged.}
 \description{Runs native preparation and static checks. A build additionally captures
 study inputs and derives output. Save publishes retained bytes to the declared path.
 Failed-build saves signal \code{yamaa_domain_error}; operational save failures return

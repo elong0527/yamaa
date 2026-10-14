@@ -87,6 +87,28 @@ yamaa_check <- function(specification, environment = NULL) {
 #' @export
 as.character.yamaa_int64_vector <- function(x, ...) unclass(x)
 
+#' Convert lossless UTF-8 output to character only when every value is exact
+#' @param x A yamaa UTF-8 output vector.
+#' @param ... Unused.
+#' @export
+as.character.yamaa_utf8_vector <- function(x, ...) {
+  if (!identical(class(x), "yamaa_utf8_vector")) {
+    stop("invalid UTF-8 output vector class", call. = FALSE)
+  }
+  values <- unclass(x)
+  if (!is.list(values) || any(!(names(attributes(values)) %in% "names"))) {
+    stop("invalid UTF-8 output vector storage", call. = FALSE)
+  }
+  vapply(values, function(value) {
+    if (is.null(value)) return(NA_character_)
+    if (!is.raw(value) || !is.null(attributes(value))) {
+      stop("invalid UTF-8 output value storage", call. = FALSE)
+    }
+    # Reuse strict scalar admission and its preserve-or-error R conversion.
+    as.character(.scalar_unpack(.scalar_native(3L, value)))
+  }, character(1L))
+}
+
 #' @export
 `[.yamaa_int64_vector` <- function(x, ...) structure(unclass(x)[...], class = "yamaa_int64_vector")
 
