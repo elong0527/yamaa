@@ -142,15 +142,15 @@ The [#2300](https://github.com/elong0527/yamaa/issues/2300) inheritance policy u
 four times the flat allowance for the same total input size: one share each for
 layer admission, composition/dependencies, final normalization and model
 admission. Thus `W_flat(N, B) = 67,108,864 + N + B` and
-`W_layered(N, B) = 4 × W_flat(N, B)`, with `N` and `B` summed over unique captured
+`W_layered(N, B) = 4 * W_flat(N, B)`, with `N` and `B` summed over unique captured
 layers, including the entry. Input nodes and text bytes retain their separate
 131,072 and 8,388,608 limits, so layered work stops at at most 302,514,176 units.
 All stages and failed attempts share cumulative charges; branches and repeated
 parents cannot reset them. Custom Rust work allowances keep a finite size credit
 of at most their original work allowance.
 
-Flat preparation permits `65,536 + 2 × N` attempted diagnostics and
-`8,388,608 + 128 × N + B` bytes of diagnostic text. These counters include failed
+Flat preparation permits `65,536 + 2 * N` attempted diagnostics and
+`8,388,608 + 128 * N + B` bytes of diagnostic text. These counters include failed
 union alternatives that are discarded after another alternative succeeds;
 emitted findings and their ordering remain unchanged. Layered preparation uses
 four times those same allowances, capped at 1,310,720 attempts and 134,217,728
