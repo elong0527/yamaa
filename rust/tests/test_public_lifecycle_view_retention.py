@@ -60,7 +60,11 @@ class RCheckpointRetention(unittest.TestCase):
                 self.skipTest("explicit jsonlite collector unavailable")
             self.assertEqual(result.returncode, 0, result.stderr)
             record = root / "control.json"
-            return json.loads(record.read_text()) if record.exists() else None
+            return (
+                json.loads(record.read_text(encoding="utf-8"))
+                if record.exists()
+                else None
+            )
 
     def test_every_plain_and_gzip_checkpoint_matches_original_bytes_and_field_order(
         self,

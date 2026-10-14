@@ -76,7 +76,9 @@ def retained_parts():
 
 
 class CompletionIdentity(unittest.TestCase):
-    def test_standalone_numeric_receipt_never_attests_its_own_terminal_storage_completion(self):
+    def test_standalone_numeric_receipt_never_attests_its_own_terminal_storage_completion(
+        self,
+    ):
         import audit_public_performance
 
         with tempfile.TemporaryDirectory() as temporary:
@@ -84,20 +86,42 @@ class CompletionIdentity(unittest.TestCase):
             output = root / "output"
             budget = root / "budget.json"
             budget.write_text('{"scope":"synthetic finalizer transport fixture"}')
-            release = {"id": 111, "tag_name": "fixture-source-label",
-                       "target_commitish": "a" * 40, "draft": True,
-                       "published_at": None, "assets": []}
-            receipt = {"assets": [{"original_artifact_id": 42,
-                                   "original_artifact_name": "performance-index",
-                                   "original_run_attempt": 2}]}
+            release = {
+                "id": 111,
+                "tag_name": "fixture-source-label",
+                "target_commitish": "a" * 40,
+                "draft": True,
+                "published_at": None,
+                "assets": [],
+            }
+            receipt = {
+                "assets": [
+                    {
+                        "original_artifact_id": 42,
+                        "original_artifact_name": "performance-index",
+                        "original_run_attempt": 2,
+                    }
+                ]
+            }
 
-            def index_archive(_identity, _release, _receipt, _identifier, _name, destination):
-                payload = {"repository": "elong0527/yamaa", "source_revision": "a" * 40,
-                           "run": "run.json", "entries": []}
+            def index_archive(
+                _identity, _release, _receipt, _identifier, _name, destination
+            ):
+                payload = {
+                    "repository": "elong0527/yamaa",
+                    "source_revision": "a" * 40,
+                    "run": "run.json",
+                    "entries": [],
+                }
                 with zipfile.ZipFile(destination, "x") as archive:
                     for name in finalize.INDEX_FILES:
-                        value = (json.dumps(payload) if name == "manifest.json" else
-                                 json.dumps(original_run()) if name == "run.json" else "{}")
+                        value = (
+                            json.dumps(payload)
+                            if name == "manifest.json"
+                            else json.dumps(original_run())
+                            if name == "run.json"
+                            else "{}"
+                        )
                         archive.writestr(name, value)
 
             def completion(_identity, destination):
@@ -106,8 +130,9 @@ class CompletionIdentity(unittest.TestCase):
             def audit(arguments, **_kwargs):
                 destination = Path(arguments[arguments.index("--output") + 1])
                 destination.mkdir()
-                (destination / "performance-audit.json").write_text(json.dumps({
-                    "accepted": True, "run_completion": {"status": "pass"}}))
+                (destination / "performance-audit.json").write_text(
+                    json.dumps({"accepted": True, "run_completion": {"status": "pass"}})
+                )
                 return 0
 
             def upload(_repository, current, _tag, _revision, archive, work):
@@ -117,24 +142,45 @@ class CompletionIdentity(unittest.TestCase):
             def git(arguments, **_kwargs):
                 return "c" * 40 if arguments[1] == "rev-parse" else b""
 
-            with (mock.patch.object(finalize, "selected_campaign", return_value=(identity(), False)),
-                  mock.patch.object(finalize, "completion_snapshot", side_effect=completion),
-                  mock.patch.object(finalize, "release_receipt", return_value=(release, receipt, release["tag_name"])),
-                  mock.patch.object(finalize, "retained_zip", side_effect=index_archive),
-                  mock.patch.object(finalize, "api", return_value=release),
-                  mock.patch.object(finalize, "upload", side_effect=upload),
-                  mock.patch.object(finalize.subprocess, "check_output", side_effect=git),
-                  mock.patch.dict(os.environ, {"GITHUB_SHA": "c" * 40,
-                                              "GITHUB_RUN_ID": "456", "GITHUB_RUN_ATTEMPT": "3"}),
-                  mock.patch.object(audit_public_performance, "main", side_effect=audit)):
-                code = finalize.finalize(SimpleNamespace(request=None, output=output, budgets=budget))
+            with (
+                mock.patch.object(
+                    finalize, "selected_campaign", return_value=(identity(), False)
+                ),
+                mock.patch.object(
+                    finalize, "completion_snapshot", side_effect=completion
+                ),
+                mock.patch.object(
+                    finalize,
+                    "release_receipt",
+                    return_value=(release, receipt, release["tag_name"]),
+                ),
+                mock.patch.object(finalize, "retained_zip", side_effect=index_archive),
+                mock.patch.object(finalize, "api", return_value=release),
+                mock.patch.object(finalize, "upload", side_effect=upload),
+                mock.patch.object(finalize.subprocess, "check_output", side_effect=git),
+                mock.patch.dict(
+                    os.environ,
+                    {
+                        "GITHUB_SHA": "c" * 40,
+                        "GITHUB_RUN_ID": "456",
+                        "GITHUB_RUN_ATTEMPT": "3",
+                    },
+                ),
+                mock.patch.object(audit_public_performance, "main", side_effect=audit),
+            ):
+                code = finalize.finalize(
+                    SimpleNamespace(request=None, output=output, budgets=budget)
+                )
             self.assertEqual(code, 0)
             for filename in ("replay-receipt.json", "replay-storage.json"):
                 record = json.loads((output / filename).read_text())
                 self.assertTrue(record["accepted"])
                 self.assertEqual(record["status"], "pass")
                 self.assertFalse(record["completed_workflow_acceptance"])
-                self.assertIn("independent actual terminal finalizer/storage verification", record["acceptance_scope"])
+                self.assertIn(
+                    "independent actual terminal finalizer/storage verification",
+                    record["acceptance_scope"],
+                )
 
     def test_untrusted_completion_repository_events_and_branches_are_refused_before_reads(
         self,

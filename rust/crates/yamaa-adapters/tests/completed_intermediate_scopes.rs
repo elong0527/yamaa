@@ -460,3 +460,143 @@ fn a_self_donor_derived_key_can_read_an_input_backed_selector() {
         b"ID,STAGE,VALUE\n1,1,10\n1,2,21\n1,3,21\n"
     );
 }
+
+fn between_spec(intermediates: &str, x: &str, kind: &str, donor_time: bool) -> String {
+    let dm = if donor_time {
+        "{path: dm.csv, types: {ADTM: datetime}}"
+    } else {
+        "dm.csv"
+    };
+    format!("schema_version: '1.0'\ndomain: ADPC\nkeys: [USUBJID, PCSEQ]\nbase: PC\ninput:\n  PC: {{path: pc.csv, types: {{PCSEQ: int, PCDTC: datetime}}}}\n  EX: {{path: ex.csv, types: {{EXSTDTC: datetime}}}}\n  DM: {dm}\nintermediates:\n{intermediates}columns:\n  - {{name: USUBJID, type: str, derivation: PC.USUBJID}}\n  - {{name: PCSEQ, type: int, derivation: PC.PCSEQ}}\n  - {{name: ADTM, type: datetime, derivation: PC.PCDTC}}\n  - {{name: LDOSEDTM, type: datetime, derivation: LAST_DOSE.EXSTDTC}}\n  - {{name: X, type: {kind}, derivation: {x}}}\noutput: {{path: out.csv, columns: [USUBJID, PCSEQ, ADTM, LDOSEDTM, X]}}\n")
+}
+fn between_fixture(spec: &str, donor_time: bool) -> Fixture {
+    let fixture = Fixture::new();
+    fs::write(fixture.0.join("spec.yaml"), spec).unwrap();
+    fs::write(fixture.0.join("pc.csv"), "USUBJID,PCSEQ,PCDTC\nS1,1,2030-01-01T09:00:00\nS1,2,2030-01-02T09:00:00\nS2,1,2030-01-01T10:00:00\n").unwrap();
+    fs::write(fixture.0.join("ex.csv"), "USUBJID,EXTRT,EXSTDTC\nS1,DRUG A,2030-01-01T07:00:00\nS1,DRUG B,2030-01-02T07:00:00\nS2,DRUG A,2030-01-01T07:30:00\n").unwrap();
+    let dm = if donor_time {
+        "USUBJID,SEX,ADTM\nS1,F,2030-01-02T09:00:00\nS2,M,2030-01-01T10:00:00\n"
+    } else {
+        "USUBJID,SEX\nS1,F\nS2,M\n"
+    };
+    fs::write(fixture.0.join("dm.csv"), dm).unwrap();
+    fixture
+}
+fn between_run(fixture: &Fixture) -> file_application::Domain {
+    let path = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
+    file_application::domain(
+        Request {
+            specification: &path,
+            environment: None,
+        },
+        Identity {
+            runtime: "test",
+            runtime_version: "test",
+            engine_version: yamaa_core::VERSION,
+            example: "between-donor-scope",
+            specification: &path,
+            base_directory: ".",
+        },
+    )
+    .unwrap_or_else(|issues| panic!("preparation {issues:?}"))
+}
+const LAST_DOSE: &str = "  - id: LAST_DOSE\n    dataset: EX\n    key: [USUBJID]\n    between: {value: ADTM, lower: EXSTDTC}\n    order_by: [EX.EXSTDTC]\n    keep: last\n";
+const SUBJ: &str = "  - id: SUBJ\n    dataset: DM\n    key: [USUBJID]\n    derivations:\n      SEXL: {str_case: {source: SEX, to: lower}}\n";
+const LAST_TRT: &str = "  - id: LAST_TRT\n    dataset: EX\n    key: [USUBJID]\n    between: {value: ADTM, lower: EXSTDTC}\n    derivations:\n      TRT: EX.EXTRT\n    order_by: [EX.EXSTDTC]\n    keep: last\n";
+
+#[test]
+fn unrelated_donor_derivations_do_not_rebase_earlier_between_values() {
+    for (intermediates, x, expected) in [
+        (format!("{LAST_DOSE}{SUBJ}"), "SUBJ.SEXL", ["f", "f", "m"]),
+        (format!("{SUBJ}{LAST_DOSE}"), "SUBJ.SEXL", ["f", "f", "m"]),
+        (
+            format!(
+                "{}{SUBJ}",
+                LAST_DOSE.replace("value: ADTM", "value: PC.PCDTC")
+            ),
+            "SUBJ.SEXL",
+            ["f", "f", "m"],
+        ),
+        (
+            format!("{LAST_DOSE}  - id: SUBJ\n    dataset: DM\n    key: [USUBJID]\n"),
+            "SUBJ.SEX",
+            ["F", "F", "M"],
+        ),
+        (
+            format!("{LAST_DOSE}{LAST_TRT}"),
+            "LAST_TRT.TRT",
+            ["DRUG A", "DRUG B", "DRUG A"],
+        ),
+        (
+            format!("{LAST_TRT}{LAST_DOSE}"),
+            "LAST_TRT.TRT",
+            ["DRUG A", "DRUG B", "DRUG A"],
+        ),
+    ] {
+        let spec = between_spec(&intermediates, x, "str", false);
+        let fixture = between_fixture(&spec, false);
+        let mut result = between_run(&fixture);
+        assert!(result.issues().is_empty(), "{spec}: {:?}", result.issues());
+        assert!(result.save().unwrap());
+        let expected = format!("USUBJID,PCSEQ,ADTM,LDOSEDTM,X\nS1,1,2030-01-01T09:00:00,2030-01-01T07:00:00,{}\nS1,2,2030-01-02T09:00:00,2030-01-02T07:00:00,{}\nS2,1,2030-01-01T10:00:00,2030-01-01T07:30:00,{}\n", expected[0], expected[1], expected[2]);
+        assert_eq!(
+            fs::read_to_string(fixture.0.join("out.csv")).unwrap(),
+            expected
+        );
+    }
+}
+
+#[test]
+fn a_read_of_between_requires_its_value_in_the_reading_donor_scope() {
+    let reader = "  - id: SUBJ\n    dataset: DM\n    key: [USUBJID]\n    derivations:\n      LD: LAST_DOSE.EXSTDTC\n";
+    let spec = between_spec(
+        &format!("{LAST_DOSE}{reader}"),
+        "SUBJ.LD",
+        "datetime",
+        false,
+    );
+    let fixture = between_fixture(&spec, false);
+    let mut result = between_run(&fixture);
+    assert_eq!(
+        result.issues().iter().map(issue).collect::<Vec<_>>(),
+        vec![serde_json::json!({
+            "phase": "validation", "condition": "unknown_field", "requirement": "REQ-1263",
+            "spec_paths": ["intermediates[1].derivations.LD.source"],
+            "context": {"intermediate": "SUBJ", "identifier": "ADTM", "read": "LAST_DOSE"}
+        })]
+    );
+    assert!(result.output().is_none());
+    assert!(result.save().is_err());
+    assert!(!fixture.0.join("out.csv").exists());
+
+    let spec = between_spec(&format!("{LAST_DOSE}{reader}"), "SUBJ.LD", "datetime", true);
+    let fixture = between_fixture(&spec, true);
+    let mut result = between_run(&fixture);
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    assert!(result.save().unwrap());
+    assert_eq!(fs::read_to_string(fixture.0.join("out.csv")).unwrap(), "USUBJID,PCSEQ,ADTM,LDOSEDTM,X\nS1,1,2030-01-01T09:00:00,2030-01-01T07:00:00,2030-01-02T07:00:00\nS1,2,2030-01-02T09:00:00,2030-01-02T07:00:00,2030-01-02T07:00:00\nS2,1,2030-01-01T10:00:00,2030-01-01T07:30:00,2030-01-01T07:30:00\n");
+}
+
+#[test]
+fn rebasing_retains_transitive_selector_dependencies_and_missing_names() {
+    let second = "  - id: SECOND\n    dataset: EX\n    key: [USUBJID]\n    between: {value: LAST_DOSE.EXSTDTC, lower: EXSTDTC}\n    order_by: [EX.EXSTDTC]\n    keep: last\n";
+    let reader = "  - id: SUBJ\n    dataset: DM\n    key: [USUBJID]\n    derivations:\n      LD: SECOND.EXSTDTC\n";
+    let declarations = format!("{LAST_DOSE}{second}{reader}");
+    let spec = between_spec(&declarations, "SUBJ.LD", "datetime", false);
+    let fixture = between_fixture(&spec, false);
+    let result = between_run(&fixture);
+    assert_eq!(
+        result.issues().iter().map(issue).collect::<Vec<_>>(),
+        vec![serde_json::json!({
+            "phase": "validation", "condition": "unknown_field", "requirement": "REQ-1263",
+            "spec_paths": ["intermediates[2].derivations.LD.source"],
+            "context": {"intermediate": "SUBJ", "identifier": "ADTM", "read": "SECOND"}
+        })]
+    );
+    let spec = between_spec(&declarations, "SUBJ.LD", "datetime", true);
+    let fixture = between_fixture(&spec, true);
+    let mut result = between_run(&fixture);
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    assert!(result.save().unwrap());
+    assert_eq!(fs::read_to_string(fixture.0.join("out.csv")).unwrap(), "USUBJID,PCSEQ,ADTM,LDOSEDTM,X\nS1,1,2030-01-01T09:00:00,2030-01-01T07:00:00,2030-01-02T07:00:00\nS1,2,2030-01-02T09:00:00,2030-01-02T07:00:00,2030-01-02T07:00:00\nS2,1,2030-01-01T10:00:00,2030-01-01T07:30:00,2030-01-01T07:30:00\n");
+}

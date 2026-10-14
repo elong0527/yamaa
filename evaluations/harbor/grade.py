@@ -686,6 +686,12 @@ def _same_subject(value: str, drop: set[str]) -> bool:
     )
 
 
+def _csv_line_ending(path: Path) -> str:
+    """Keep the authored line ending when rewriting a CSV input."""
+    with path.open("rb") as handle:
+        return "\r\n" if handle.readline().endswith(b"\r\n") else "\n"
+
+
 def _subset_inputs(source: Path, target: Path, drop: set[str]) -> None:
     """Copy the input directory without the rows of the dropped subjects, in
     every table and under whichever subject column it carries."""
@@ -706,7 +712,9 @@ def _subset_inputs(source: Path, target: Path, drop: set[str]) -> None:
                 if not any(i < len(r) and _same_subject(r[i], drop) for i in at)
             ]
             with dest.open("w", newline="", encoding="utf-8") as handle:
-                csv.writer(handle, lineterminator="\n").writerows(rows)
+                csv.writer(handle, lineterminator=_csv_line_ending(path)).writerows(
+                    rows
+                )
         elif columns and path.suffix == ".parquet":
             _, parquet, _ = _parquet()
             table = parquet.read_table(path)
@@ -766,14 +774,12 @@ def held_out_rerun(
     run: RunScript = run_script,
     timeout: float = RERUN_TIMEOUT_SEC,
 ) -> dict:
-    """Rerun the script on the inputs without every third subject and grade
-    it against the golden restricted to the subjects kept.
+    """Rerun without selected subjects, using the restricted golden when it
+    agrees with the reference, otherwise the validated reference's answer.
 
-    The check applies only when the task's reference solution, run the same
-    way, writes exactly that restricted golden. A successful reference whose
-    data differs skips the check; a reference crash is a harness error.
-    Destructive while it runs
-    (it swaps the input directory), but it restores `/app` afterwards.
+    Validate the reference against the original golden before trusting any
+    recomputed answer. Reference crashes and invalid outputs are harness errors.
+    Restore the original input and output directories after every exit.
     """
     result: dict = {"checked": False, "passed": True, "problems": [], "notes": []}
     name, language = contract.get("script"), contract.get("language")
@@ -788,8 +794,6 @@ def held_out_rerun(
         return skip("no script to rerun")
     if reference is None or not reference.is_file():
         return skip("no reference solution")
-    if not all(HOLDOUT_SUBJECT in o["columns"] for o in contract["outputs"]):
-        return skip(f"an output has no {HOLDOUT_SUBJECT}")
     try:
         column, subjects = _input_subjects(input_dir)
     except ImportError:
@@ -798,13 +802,15 @@ def held_out_rerun(
         return skip("the inputs carry no subject id")
     if len(subjects) < 2:
         return skip("fewer than two subjects")
-    drop, restricted = _drop_set(contract, expected_dir, subjects)
+    drop, restricted = None, {}
+    if all(HOLDOUT_SUBJECT in o["columns"] for o in contract["outputs"]):
+        drop, restricted = _drop_set(contract, expected_dir, subjects)
     if drop is None:
-        return skip("no subjects to drop change the output")
+        drop = set(subjects[HOLDOUT_EVERY - 1 :: HOLDOUT_EVERY] or subjects[-1:])
     result["subject_column"], result["dropped"] = column, sorted(drop)
     work = Path(tempfile.mkdtemp(prefix="yamaa-held-out-"))
     saved_input, saved_output = work / "input", work / "output"
-    shutil.move(str(input_dir), saved_input)
+    shutil.copytree(input_dir, saved_input)
     shutil.copytree(output_dir, saved_output)
 
     def run_and_grade(script: Path, expected: Path) -> tuple[list[str], list[dict]]:
@@ -819,24 +825,48 @@ def held_out_rerun(
             problems.extend(f"{graded['file']}: {p}" for p in graded["problems"])
         return problems, outputs
 
+    def validate_reference(script: Path, expected: Path) -> list[dict]:
+        problems, outputs = run_and_grade(script, expected)
+        if problems and problems[0].startswith(f"{name} failed:"):
+            raise RuntimeError(f"held-out reference failed: {problems[0]}")
+        return outputs
+
     try:
+        own_reference = work / "reference" / name
+        own_reference.parent.mkdir()
+        shutil.copyfile(reference, own_reference)
+        baseline = validate_reference(own_reference, expected_dir)
+        if not all(o["passed"] for o in baseline):
+            raise RuntimeError("held-out reference does not match the original golden")
+        shutil.rmtree(input_dir)
         _subset_inputs(saved_input, input_dir, drop)
         expected = work / "expected"
         expected.mkdir()
         for name_, rows in restricted.items():
             with (expected / name_).open("w", newline="", encoding="utf-8") as h:
                 csv.writer(h, lineterminator="\n").writerows(rows)
-        own_reference = work / "reference" / name
-        own_reference.parent.mkdir()
-        shutil.copyfile(reference, own_reference)
-        reference_problems, _ = run_and_grade(own_reference, expected)
-        if reference_problems and reference_problems[0].startswith(f"{name} failed:"):
-            raise RuntimeError(f"held-out reference failed: {reference_problems[0]}")
-        if reference_problems:
-            return skip(
-                "the reference solution does not write the restricted golden, "
-                "so the derivation is not per subject"
-            )
+        reduced = validate_reference(
+            own_reference, expected if restricted else expected_dir
+        )
+        for spec in contract["outputs"]:
+            checked = grade_output(spec, output_dir, output_dir)
+            if not checked["passed"]:
+                raise RuntimeError(f"invalid held-out reference output: {checked}")
+        if restricted and all(o["passed"] for o in reduced):
+            result["expected_source"] = "restricted_golden"
+        else:
+            result["expected_source"] = "reference"
+            if all(
+                grade_output(spec, expected_dir, output_dir)["passed"]
+                for spec in contract["outputs"]
+            ):
+                result["discriminates"] = False
+                return skip(
+                    "the reference answer does not discriminate after subject removal"
+                )
+            for spec in contract["outputs"]:
+                shutil.copyfile(output_dir / spec["file"], expected / spec["file"])
+        result["discriminates"] = True
         result["checked"] = True
         result["problems"], result["outputs"] = run_and_grade(
             output_dir / name, expected
@@ -848,44 +878,97 @@ def held_out_rerun(
         return result
     finally:
         shutil.rmtree(input_dir, ignore_errors=True)
-        shutil.move(str(saved_input), input_dir)
+        shutil.copytree(saved_input, input_dir)
         shutil.rmtree(output_dir, ignore_errors=True)
         shutil.copytree(saved_output, output_dir)
         shutil.rmtree(work, ignore_errors=True)
 
 
-def _renamed_subject(value: object, offset: int, suffix: str) -> object:
+def _subject_number(value: object) -> str | None:
+    text = str(value)
+    tail = text.rpartition("-")[2]
+    return tail if re.fullmatch(r"[0-9]+", tail) else None
+
+
+def _renamed_subject(
+    value: object,
+    offset: int,
+    suffix: str,
+    padded_offsets: dict[int, tuple[int, int]] | None = None,
+) -> object:
     if value in (None, ""):
         return value
     if isinstance(value, int):
         return value + offset
     text = str(value)
-    prefix, separator, tail = text.rpartition("-")
-    if (tail if separator else text).isdigit():
-        number = str(int(tail if separator else text) + offset)
-        return prefix + separator + number if separator else number
+    number = _subject_number(value)
+    if number is not None:
+        width = len(number)
+        if number.startswith("0") and padded_offsets and width in padded_offsets:
+            step, domain = padded_offsets[width]
+            renamed = str((int(number) + step) % domain).zfill(width)
+        else:
+            renamed = str(int(number) + offset)
+        return text[:-width] + renamed
     return text + suffix
 
 
 def _rename_subjects(source: Path, target: Path, offset: int, suffix: str) -> bool:
-    """Change subject identifiers while preserving numeric parquet types."""
+    """Change subject ids, keeping zero-padded widths and numeric parquet types."""
     shutil.copytree(source, target)
-    changed = False
-    for path in sorted(target.rglob("*")):
-        if not path.is_file():
+    tables = {
+        path: [c for c in HOLDOUT_INPUT_SUBJECTS if c in _columns(path)]
+        for path in sorted(target.rglob("*"))
+        if path.is_file()
+    }
+    maxima: dict[int, int] = {}
+    for path, columns in tables.items():
+        if not columns:
             continue
-        columns = [c for c in HOLDOUT_INPUT_SUBJECTS if c in _columns(path)]
+        if path.suffix == ".csv":
+            _, rows = read_rows(path)
+            values = (row[c] for row in rows for c in columns)
+        else:
+            _, parquet, _ = _parquet()
+            table = parquet.read_table(path, columns=columns)
+            values = (v for c in columns for v in table[c].to_pylist())
+        for value in values:
+            number = _subject_number(value)
+            if isinstance(value, str) and number and number.startswith("0"):
+                width = len(number)
+                maxima[width] = max(maxima.get(width, 0), int(number))
+    padded_offsets = {}
+    for width, maximum in maxima.items():
+        domain = 10 ** (width - 1)
+        room = domain - 1 - maximum
+        if room > 0:
+            # Prefer an order-preserving shift within the padded domain.
+            padded_offsets[width] = (1 + offset % room, domain)
+        elif domain > 1:
+            # When the largest padded value leaves no room, rotate the domain
+            # to preserve width, leading zeros, distinctness and joins.
+            padded_offsets[width] = (1 + offset % (domain - 1), domain)
+        else:
+            # The one-character padded domain contains only "0".
+            padded_offsets[width] = (0, domain)
+    changed = False
+    for path, columns in tables.items():
         if not columns:
             continue
         changed = True
         if path.suffix == ".csv":
             header, rows = read_rows(path)
+            line_ending = _csv_line_ending(path)
             with path.open("w", newline="", encoding="utf-8") as handle:
-                writer = csv.DictWriter(handle, fieldnames=header)
+                writer = csv.DictWriter(
+                    handle, fieldnames=header, lineterminator=line_ending
+                )
                 writer.writeheader()
                 writer.writerows(
                     {
-                        k: _renamed_subject(v, offset, suffix) if k in columns else v
+                        k: _renamed_subject(v, offset, suffix, padded_offsets)
+                        if k in columns
+                        else v
                         for k, v in row.items()
                     }
                     for row in rows
@@ -896,7 +979,7 @@ def _rename_subjects(source: Path, target: Path, offset: int, suffix: str) -> bo
             for column in columns:
                 field = table.schema.field(column)
                 values = [
-                    _renamed_subject(v, offset, suffix)
+                    _renamed_subject(v, offset, suffix, padded_offsets)
                     for v in table[column].to_pylist()
                 ]
                 table = table.set_column(
@@ -911,8 +994,10 @@ def _rename_subjects(source: Path, target: Path, offset: int, suffix: str) -> bo
 def _perturb_values(input_dir: Path, randomizer: random.Random) -> list[dict]:
     """Change supported measurements and complete dates in existing inputs.
 
-    One date shift is shared by every table, preserving chronology and joins.
-    Identifiers, missing values, partial dates and categorical codes stay intact.
+    One date shift is shared by every table, preserving chronology and joins
+    among complete dates. Partial dates, separate year/month/day items and
+    interval strings stay intact, so their alignment with complete dates can
+    change. Identifiers, missing values and categorical codes stay intact.
     The reference computes the answers; changes are recorded for replay.
     """
     date_shift = randomizer.randint(1, 7)
@@ -990,8 +1075,11 @@ def _perturb_values(input_dir: Path, randomizer: random.Random) -> list[dict]:
             continue
         changes.append({"file": str(path.relative_to(input_dir)), "columns": counts})
         if path.suffix == ".csv":
+            line_ending = _csv_line_ending(path)
             with path.open("w", newline="", encoding="utf-8") as handle:
-                writer = csv.DictWriter(handle, fieldnames=columns)
+                writer = csv.DictWriter(
+                    handle, fieldnames=columns, lineterminator=line_ending
+                )
                 writer.writeheader()
                 writer.writerows(rows)
         else:

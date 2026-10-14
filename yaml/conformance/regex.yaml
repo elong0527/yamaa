@@ -7,13 +7,18 @@
 #   matches         the R009 matches column verification, a search
 #   str_extract     the str_extract expression, a search keeping one group
 #
+# The matches outcome also governs the str_contains expression and predicate
+# call. Those consumers share search semantics but retain their own result
+# type, missing behavior, and invalid-pattern condition.
+#
 # A str_extract outcome is null when the pattern matched nowhere. It is a
 # mapping of the requested group and its value when the pattern matched, and
 # that value is null when the match did not enter the group.
 #
 # A case carrying `invalid: true` records a pattern the portable contract
-# rejects. Such a pattern is rejected identically in all three consumers, so
-# it names no subject and no outcome.
+# rejects. Every consumer rejects such a pattern, using invalid_regex except
+# the str_contains predicate call, which uses invalid_predicate. It therefore
+# names no subject and no outcome.
 #
 # Subjects are YAML double-quoted scalars so that a non-ASCII scalar value is
 # written as an escape and this file stays ASCII under R019. Patterns are
@@ -212,6 +217,27 @@ cases:
     schema_pattern: true
     matches: true
     str_extract: {group: 1, value: null}
+  - id: repeated-alternative-clears-an-unentered-capture
+    covers: [capture-groups, dialect]
+    pattern: '(?:(a)|b){2,3}'
+    subject: "abb"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 1, value: null}
+  - id: empty-optional-repetition-preserves-the-last-consuming-capture
+    covers: [capture-groups, empty-match, dialect]
+    pattern: '(a|){1,3}b'
+    subject: "ab"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 1, value: "a"}
+  - id: nested-repeated-alternative-clears-an-unentered-capture
+    covers: [capture-groups, dialect]
+    pattern: '(a|(b))+'
+    subject: "aba"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 2, value: null}
   - id: escaped-dot-matches-only-a-full-stop
     covers: [escaping]
     pattern: '^a\.b$'

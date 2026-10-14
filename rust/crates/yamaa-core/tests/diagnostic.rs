@@ -227,6 +227,16 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
             "REQ-0775",
         ),
         (
+            yamaa_core::resource::ResourceFailure::Backslash,
+            "resource_path_not_normalized",
+            "REQ-0776",
+        ),
+        (
+            yamaa_core::resource::ResourceFailure::EmptySegment,
+            "resource_path_not_normalized",
+            "REQ-0777",
+        ),
+        (
             yamaa_core::resource::ResourceFailure::Symlink,
             "resource_path_symlink",
             "REQ-0783",
@@ -254,6 +264,24 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         assert_eq!(diagnostic.context.len(), 2);
         reached.insert(diagnostic.code);
     }
+    let changed = yamaa_core::resource::ResourceFailure::ContentChanged
+        .diagnostic("SRC", "../authored/data.csv");
+    assert_eq!(changed.definition().phase, "ingest");
+    assert_eq!(
+        changed.definition().condition,
+        "resource_path_content_changed"
+    );
+    assert_eq!(changed.definition().requirement, Some("REQ-0788"));
+    assert_eq!(changed.spec_paths, ["input.SRC.path"]);
+    assert_eq!(
+        changed.context["path"],
+        ContextValue::Scalar(Value::Str("../authored/data.csv".into()))
+    );
+    assert_eq!(
+        changed.context["dataset"],
+        ContextValue::Scalar(Value::Str("SRC".into()))
+    );
+    reached.insert(changed.code);
     reached.extend(submission::reached());
     reached.extend(schema::reached());
     reached.extend(yaml_source::reached());

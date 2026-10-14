@@ -516,7 +516,6 @@ fn resource_observations_keep_original_normative_and_implementation_wire_owners(
         (R::InvalidLock, "invalid_packaging_lock"),
         (R::OutsideRoots, "resource_outside_roots"),
         (R::Symlink, "resource_link"),
-        (R::Changed, "resource_changed"),
         (R::Limit, "resource_limit"),
     ] {
         let finding = define::resource_diagnostic("sdtm.specs[0]", "declared.yaml", observation);
@@ -534,6 +533,34 @@ fn resource_observations_keep_original_normative_and_implementation_wire_owners(
             .into()
         );
     }
+}
+#[test]
+fn changed_resource_uses_the_authored_define_field_and_ingest_cause() {
+    use yamaa_core::{
+        diagnostic::{ConditionCode, ContextValue as C},
+        value::Value,
+    };
+    let finding = define::resource_diagnostic(
+        "datasets.DM.artifact",
+        "../declared.csv",
+        define::ResourceObservation::Changed,
+    );
+    assert_eq!(finding.code, ConditionCode::ResourceContentChanged);
+    assert_eq!(finding.definition().phase, "ingest");
+    assert_eq!(
+        finding.definition().condition,
+        "resource_path_content_changed"
+    );
+    assert_eq!(finding.definition().requirement, Some("REQ-0788"));
+    assert_eq!(finding.spec_paths, ["datasets.DM.artifact"]);
+    assert_eq!(
+        finding.context,
+        [(
+            "path".into(),
+            C::Scalar(Value::Str("../declared.csv".into()))
+        )]
+        .into()
+    );
 }
 #[test]
 fn publication_stage_projection_preserves_full_width_artifact_index_and_cause_text() {

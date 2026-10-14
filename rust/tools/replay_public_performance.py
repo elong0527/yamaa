@@ -27,11 +27,13 @@ def original_archive(entry, manifest_root):
         if type(entry["artifact_id"]) is int and entry["artifact_id"] > 0:
             download(
                 manifest["repository"],
-                f"actions/artifacts/{entry['artifact_id']}/zip", root / archive,
+                f"actions/artifacts/{entry['artifact_id']}/zip",
+                root / archive,
             )
         yield root
 
 
 if __name__ == "__main__":
     import audit_public_performance
+
     raise SystemExit(audit_public_performance.main(entry_provider=original_archive))

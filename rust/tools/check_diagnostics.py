@@ -1,13 +1,17 @@
 """Guard normative mappings and ratchet diagnostic literals into their registry.
 
-Core registry conditions and phases must be in the shared vocabulary. The frozen
-seed records the original literal sites; the active allowlist may only shrink.
+Core registry conditions and phases must be in the shared vocabulary. Rule error
+tables/refusal clauses must name registered conditions; vocabulary without a core
+cause needs a finite, source-owned disposition. These are static ownership checks,
+not a claim that every registered condition has executable release coverage. The
+frozen seed records the original literal sites; the active allowlist may only shrink.
 Sites match a path and complete source line, with an occurrence count, rather
 than a condition spelling or current line number. Source line numbers in seed
 keys identify the original sites and survive unrelated insertions above them.
 """
 
 import argparse
+import ast
 import json
 import re
 import subprocess
@@ -39,6 +43,299 @@ NULL_POLICY = Path("rules/execution/lifecycle.md")
 NULL_START = "<!-- normative-null-conditions:start -->"
 NULL_END = "<!-- normative-null-conditions:end -->"
 NULL_ENTRY = re.compile(r"- `([a-z][a-z0-9_]*)` \(`([a-z_]+)`\)")
+DISPOSITIONS = Path("rust/tools/diagnostic_vocabulary_dispositions.json")
+DISPOSITION_KINDS = {
+    "reserved",
+    "reference_invariant",
+    "reference_route",
+    "historical_policy",
+    "validator",
+    "capability",
+}
+CONDITION_NAME = re.compile(r"[a-z][a-z0-9_]*\Z")
+CONDITION_SPAN = r"`[a-z][a-z0-9_]*`"
+CONDITION_LIST = (
+    rf"{CONDITION_SPAN}(?:\s*(?:,\s*(?:(?:or|and)\s+)?|(?:or|and)\s+){CONDITION_SPAN})*"
+)
+REFUSAL = re.compile(
+    rf"\b(?:fail(?:s|ed)?|refus(?:e|es|ed)|reject(?:s|ed)?|report(?:s|ed)?)\b"
+    rf"(?:\s+(?:validation|evaluation|execution|derivation|ingestion|verification|output|parsing|mapping|before|during|at|in|under|the|entry|boundary|phase))*"
+    rf"\s+with\s+({CONDITION_LIST})",
+    re.IGNORECASE,
+)
+NAMED_CONDITION = re.compile(
+    rf"\b(?:condition|diagnostic)\s+(?:named\s+)?({CONDITION_LIST})",
+    re.IGNORECASE,
+)
+
+
+def rule_condition_references(source: str) -> list[tuple[int, str]]:
+    """Read actual condition columns and refusal prose, not arbitrary code spans.
+
+    Fenced examples and HTML comments do not declare vocabulary. Refusal clauses
+    are joined across Markdown paragraph wraps, including comma/or lists. A
+    condition column explicitly declares its cells regardless of surrounding
+    headings; field/operation columns and ordinary inline code remain opaque.
+    """
+    source = re.sub(
+        r"<!--.*?-->",
+        lambda match: "\n" * match[0].count("\n"),
+        source,
+        flags=re.DOTALL,
+    )
+    lines = source.splitlines()
+    fence = None
+    for index, line in enumerate(lines):
+        marker = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+        if fence is None and marker:
+            fence = (marker[1][0], len(marker[1]))
+            lines[index] = ""
+        elif fence is not None:
+            if (
+                marker
+                and marker[1][0] == fence[0]
+                and len(marker[1]) >= fence[1]
+                and not line[marker.end() :].strip()
+            ):
+                fence = None
+            lines[index] = ""
+    result = []
+    condition_column = None
+    for index, line in enumerate(lines):
+        if not line.lstrip().startswith("|"):
+            condition_column = None
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        headers = [cell.strip("`* ").casefold() for cell in cells]
+        if "condition" in headers or "conditions" in headers:
+            condition_column = next(
+                i
+                for i, header in enumerate(headers)
+                if header in {"condition", "conditions"}
+            )
+            continue
+        if condition_column is None or all(
+            re.fullmatch(r"[-: ]+", cell) for cell in cells
+        ):
+            continue
+        if condition_column < len(cells):
+            cell = cells[condition_column]
+            names = (
+                re.findall(r"`([a-z][a-z0-9_]*)`", cell)
+                if re.fullmatch(CONDITION_LIST, cell)
+                else []
+            )
+            if not names and CONDITION_NAME.fullmatch(cell):
+                names = [cell]
+            result.extend((index + 1, name) for name in names)
+    start = 0
+    while start < len(lines):
+        if not lines[start].strip() or lines[start].lstrip().startswith(("|", "#")):
+            start += 1
+            continue
+        end = start + 1
+        while (
+            end < len(lines)
+            and lines[end].strip()
+            and not lines[end].lstrip().startswith(("|", "#"))
+        ):
+            end += 1
+        paragraph = "\n".join(lines[start:end])
+        for pattern in (REFUSAL, NAMED_CONDITION):
+            for match in pattern.finditer(paragraph):
+                offset = match.start(1)
+                for name in re.finditer(r"`([a-z][a-z0-9_]*)`", match[1]):
+                    line = start + 1 + paragraph[: offset + name.start()].count("\n")
+                    result.append((line, name[1]))
+        start = end
+    return sorted(set(result))
+
+
+def rule_vocabulary_errors(root: Path, registered: dict[str, set[str]]) -> list[str]:
+    errors = []
+    for path in sorted((root / "rules").rglob("*.md")):
+        for line, condition in rule_condition_references(
+            path.read_text(encoding="utf-8")
+        ):
+            if condition not in registered:
+                errors.append(
+                    f"{path.relative_to(root).as_posix()}:{line}: "
+                    f"rule names unregistered condition {condition}"
+                )
+    return errors
+
+
+def disposition_errors(
+    root: Path, registered: dict[str, set[str]], core_conditions: set[str]
+) -> list[str]:
+    """Reconcile the exact non-core vocabulary with reviewed static dispositions."""
+
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"duplicate disposition key {key}")
+            result[key] = value
+        return result
+
+    try:
+        record = json.loads(
+            (root / DISPOSITIONS).read_text(encoding="utf-8"),
+            object_pairs_hook=unique_object,
+        )
+    except (OSError, UnicodeError, ValueError) as error:
+        return [f"{DISPOSITIONS}: unavailable vocabulary dispositions: {error}"]
+    if (
+        not isinstance(record, dict)
+        or set(record) != {"version", "scope", "conditions"}
+        or type(record["version"]) is not int
+        or record["version"] != 1
+        or not isinstance(record["scope"], str)
+        or not record["scope"].strip()
+        or not isinstance(record["conditions"], dict)
+    ):
+        return [f"{DISPOSITIONS}: invalid vocabulary dispositions"]
+    entries = record["conditions"]
+    errors = []
+    for condition in sorted(set(registered) - core_conditions - set(entries)):
+        errors.append(
+            f"vocabulary:{condition}: registered condition has no core cause "
+            "or explicit disposition"
+        )
+    for condition, entry in sorted(entries.items()):
+        prefix = f"vocabulary:{condition}"
+        if condition not in registered:
+            errors.append(f"{prefix}: disposition names an unregistered condition")
+        elif condition in core_conditions:
+            errors.append(
+                f"{prefix}: core-owned condition cannot retain a non-core disposition"
+            )
+        if not isinstance(entry, dict) or set(entry) != {
+            "kind",
+            "phases",
+            "reason",
+            "owners",
+            "controls",
+            "producer",
+            "history",
+        }:
+            errors.append(f"{prefix}: invalid disposition fields")
+            continue
+        if not isinstance(entry["kind"], str) or entry["kind"] not in DISPOSITION_KINDS:
+            errors.append(f"{prefix}: invalid disposition kind")
+        phases = entry["phases"]
+        if (
+            not isinstance(phases, list)
+            or any(not isinstance(phase, str) for phase in phases)
+            or len(phases) != len(set(phases))
+            or set(phases) != registered.get(condition, set())
+        ):
+            errors.append(f"{prefix}: disposition phases differ from vocabulary")
+        for field in ("reason", "history"):
+            if not isinstance(entry[field], str) or not entry[field].strip():
+                errors.append(f"{prefix}: missing {field}")
+        safe_owners = set()
+        for field in ("owners", "controls"):
+            paths = entry[field]
+            if (
+                not isinstance(paths, list)
+                or not paths
+                or any(not isinstance(path, str) for path in paths)
+            ):
+                errors.append(f"{prefix}: missing {field}")
+                continue
+            for relative in paths:
+                path = Path(relative)
+                if (
+                    path.is_absolute()
+                    or ".." in path.parts
+                    or "\\" in relative
+                    or not relative.startswith(
+                        ("rules/", "rust/", ".github/", "R/", "python/")
+                    )
+                    or path.as_posix() != relative
+                    or not (root / path).is_file()
+                ):
+                    errors.append(f"{prefix}: unavailable {field} path {relative}")
+                elif field == "owners":
+                    safe_owners.add(relative)
+        producer = entry["producer"]
+        if entry["kind"] == "validator":
+            if (
+                not isinstance(producer, dict)
+                or set(producer) != {"path", "symbol"}
+                or not all(
+                    isinstance(value, str) and value.strip()
+                    for value in producer.values()
+                )
+            ):
+                errors.append(
+                    f"{prefix}: validator disposition requires its actual producing owner"
+                )
+            else:
+                path = Path(producer["path"])
+                try:
+                    source = (
+                        (root / path).read_text(encoding="utf-8")
+                        if producer["path"] in safe_owners
+                        else ""
+                    )
+                except (OSError, UnicodeError):
+                    source = ""
+                try:
+                    nodes = ast.walk(ast.parse(source))
+                    functions = [
+                        node
+                        for node in nodes
+                        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and node.name == producer["symbol"]
+                    ]
+                except SyntaxError:
+                    functions = []
+                identifier = re.compile(rf"(?<!\w){re.escape(condition)}(?!\w)")
+
+                def owns_refusal(function, identifier=identifier):
+                    pending = list(function.body)
+                    while pending:
+                        node = pending.pop()
+                        if isinstance(
+                            node,
+                            (
+                                ast.FunctionDef,
+                                ast.AsyncFunctionDef,
+                                ast.ClassDef,
+                                ast.Lambda,
+                            ),
+                        ):
+                            continue
+                        if (
+                            isinstance(node, ast.Raise)
+                            and node.exc is not None
+                            and any(
+                                isinstance(value, ast.Constant)
+                                and isinstance(value.value, str)
+                                and identifier.search(value.value)
+                                for value in ast.walk(node.exc)
+                            )
+                        ):
+                            return True
+                        pending.extend(ast.iter_child_nodes(node))
+                    return False
+
+                if not any(owns_refusal(function) for function in functions):
+                    errors.append(f"{prefix}: unavailable actual producing owner")
+        elif producer is not None:
+            errors.append(
+                f"{prefix}: only validator dispositions may supply an explicit producer"
+            )
+        if entry["kind"] == "capability" and not any(
+            condition in (root / path).read_text(encoding="utf-8")
+            for path in safe_owners
+        ):
+            errors.append(
+                f"{prefix}: capability disposition lacks its named normative owner"
+            )
+    return errors
 
 
 def decode_rust_string(source: str) -> str:
@@ -427,6 +724,7 @@ def registry_errors(
     errors = []
     count = 0
     used_nulls = set()
+    core_conditions = set()
     for line in block[1].splitlines():
         if not line.strip() or line.lstrip().startswith("//"):
             continue
@@ -438,6 +736,7 @@ def registry_errors(
             continue
         count += 1
         name, phase, condition, requirement = cause.groups()
+        core_conditions.add(condition)
         if requirement == "None":
             used_nulls.add((condition, phase))
             if (condition, phase) not in nullable:
@@ -464,6 +763,7 @@ def registry_errors(
         errors.append(
             f"{NULL_POLICY}: unused normative null condition {condition} at {phase}"
         )
+    errors.extend(disposition_errors(root, registered, core_conditions))
     return errors
 
 
@@ -483,6 +783,7 @@ def violations(root: Path, baseline_ref: str | None = None) -> list[str]:
     nullable, null_errors = null_conditions(root, registered)
     errors.extend(null_errors)
     errors.extend(registry_errors(root, registered, nullable))
+    errors.extend(rule_vocabulary_errors(root, registered))
     namespaces = {}
     for seed_path, allowlist_path, crates in (
         (SEED, ALLOWLIST, HOST_CRATES),
@@ -491,7 +792,9 @@ def violations(root: Path, baseline_ref: str | None = None) -> list[str]:
         sites, active, site_errors = load_sites(root, seed_path, allowlist_path, crates)
         errors.extend(site_errors)
         if baseline_ref is not None:
-            errors.extend(baseline_errors(root, baseline_ref, seed_path, allowlist_path))
+            errors.extend(
+                baseline_errors(root, baseline_ref, seed_path, allowlist_path)
+            )
         namespaces[seed_path] = (sites, active, Counter(), allowlist_path)
     for path in sources:
         relative = path.relative_to(root).as_posix()

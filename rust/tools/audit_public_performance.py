@@ -9,6 +9,7 @@ Correctness, complete 567-cell coverage and numeric acceptance are distinct gate
 from __future__ import annotations
 
 import argparse
+import ast
 import contextlib
 import email.parser
 import fnmatch
@@ -198,8 +199,261 @@ def stats(values, unit):
         "median": statistics.median(values),
         "min": min(values),
         "max": max(values),
-        "quartiles": statistics.quantiles(values, n=4, method="inclusive"),
+        "quartiles": statistics.quantiles(values, n=4, method="inclusive")
+        if len(values) > 1
+        else [values[0]] * 3,
     }
+
+
+def r_probe_source(helper_source):
+    """Read the original helper's authored probe without executing runner code."""
+    try:
+        tree = ast.parse(helper_source)
+        values = [
+            node.value
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "R_ORIGIN_PROBE"
+                for target in node.targets
+            )
+        ]
+        if not values:
+            return None
+        require(len(values) == 1, "ambiguous original R origin probe")
+        value = ast.literal_eval(values[0])
+    except (SyntaxError, TypeError) as error:
+        raise ValueError("unsupported original R origin probe source") from error
+    nonempty(value, "original R origin probe source")
+    return value.encode("utf-8")
+
+
+def admit_r_resolution(child, process, command, identity, helper_source):
+    """Re-admit original resolver bytes; probe peaks never become timing RSS."""
+    source = r_probe_source(helper_source)
+    names = {path.name for path in child.iterdir() if path.name.startswith("r-worker-")}
+    if "r_worker" not in process:
+        require(source is None and not names, "missing original R resolution evidence")
+        return
+    require(source is not None, "R resolution absent from original pinned helper")
+    resolution = process["r_worker"]
+    system = identity["system"]
+    keys = {
+        "protocol",
+        "system",
+        "requested_executable",
+        "requested_command",
+        "observed_executable",
+        "observed_command",
+        "private_library_environment",
+        "resolution",
+    }
+    if system == "Windows":
+        keys.update(("requested_origin", "observed_origin"))
+    exact(resolution, keys, "original R resolution")
+    require(
+        resolution == read(relative(child, "r-worker-resolution.json"))
+        and resolution["protocol"] == "r-worker-resolution/1"
+        and resolution["system"] == system,
+        "R resolution record/protocol/system differs",
+    )
+    require(
+        isinstance(command, list)
+        and len(command) == 4
+        and all(isinstance(value, str) and value for value in command)
+        and command[1] == "--vanilla"
+        and resolution["requested_command"] == command
+        and resolution["requested_executable"] == command[0]
+        and resolution["observed_command"]
+        == [resolution["observed_executable"], *command[1:]],
+        "original R worker argv differs",
+    )
+    expected_libraries = [
+        original_path(path, system) for path in identity["private_libraries"]
+    ]
+    require(bool(expected_libraries), "missing declared private R libraries")
+    environment = resolution["private_library_environment"]
+    nonempty(environment, "original private R library environment")
+    libraries = environment.split(";" if system == "Windows" else ":")
+    require(
+        [original_path(path, system) for path in libraries] == expected_libraries,
+        "R resolver private library environment differs",
+    )
+    expected_names = {"r-worker-resolution.json"}
+    if system != "Windows":
+        require(
+            system in ("Linux", "Darwin")
+            and resolution["resolution"] == "plain Unix Rscript"
+            and resolution["observed_command"] == command
+            and resolution["observed_executable"] == command[0]
+            and names == expected_names,
+            "Unix R worker resolution differs",
+        )
+        return
+    require(
+        resolution["resolution"] == "installed R architecture executable",
+        "Windows R resolution scope differs",
+    )
+    original_child = original_path(command[3], system).parent
+    probe_keys = {
+        "command",
+        "source",
+        "stdout",
+        "stderr",
+        "response",
+        "launcher_pid",
+        "exit_code",
+        "origin",
+    }
+    origin_keys = {
+        "pid",
+        "runtime_version",
+        "home",
+        "bin",
+        "architecture",
+        "r_arch",
+        "jsonlite_version",
+        "private_libraries",
+        "codec_origin",
+        "direct_executable",
+    }
+    for label, key, executable in (
+        ("requested", "requested_origin", command[0]),
+        ("direct", "observed_origin", resolution["observed_executable"]),
+    ):
+        probe = resolution[key]
+        exact(probe, probe_keys, "original R " + label + " probe")
+        prefix = "r-worker-" + label
+        filenames = {
+            "source": "r-worker-origin-probe.R",
+            "stdout": prefix + "-stdout.txt",
+            "stderr": prefix + "-stderr.txt",
+            "response": prefix + "-origin.json",
+        }
+        expected_names.add(prefix + "-probe.json")
+        expected_names.update(filenames.values())
+        require(
+            probe == read(relative(child, prefix + "-probe.json"))
+            and all(probe[name] == value for name, value in filenames.items()),
+            "R probe receipt/retained filenames differ",
+        )
+        argv = probe["command"]
+        require(
+            isinstance(argv, list)
+            and len(argv) == 4
+            and argv[:2] == [executable, "--vanilla"]
+            and original_path(argv[2], system) == original_child / filenames["source"]
+            and original_path(argv[3], system)
+            == original_child / filenames["response"],
+            "original R probe argv/path differs",
+        )
+        for name in filenames.values():
+            require(relative(child, name).is_file(), "missing retained R probe member")
+        require(
+            relative(child, filenames["source"]).read_bytes() == source,
+            "R origin probe differs from original Git-pinned helper source",
+        )
+        origin = probe["origin"]
+        exact(origin, origin_keys, "original R " + label + " origin")
+        require(
+            origin == read(relative(child, filenames["response"]))
+            and type(probe["exit_code"]) is int
+            and probe["exit_code"] == 0
+            and type(probe["launcher_pid"]) is int
+            and probe["launcher_pid"] > 0
+            and type(origin["pid"]) is int
+            and origin["pid"] > 0,
+            "failed/missing original R probe/PID association",
+        )
+        require(
+            origin["runtime_version"] == identity["runtime_version"] == "4.6.1"
+            and origin["jsonlite_version"] == identity["jsonlite_version"] == "2.0.0"
+            and isinstance(origin["private_libraries"], list)
+            and [original_path(path, system) for path in origin["private_libraries"]]
+            == expected_libraries
+            and original_path(origin["codec_origin"], system)
+            == original_path(identity["jsonlite_origin"], system),
+            "R probe runtime/private codec origin differs",
+        )
+        require(
+            original_path(origin["codec_origin"], system).parent in expected_libraries,
+            "R probe codec outside declared private libraries",
+        )
+        home = original_path(origin["home"], system)
+        binary = original_path(origin["bin"], system)
+        direct = original_path(origin["direct_executable"], system)
+        require(
+            binary.is_relative_to(home / "bin")
+            and direct.is_relative_to(home / "bin")
+            and direct.name.lower() == "rscript.exe"
+            and original_path(command[0], system).is_relative_to(home / "bin")
+            and original_path(command[0], system).name.lower()
+            in ("rscript", "rscript.exe")
+            and origin["architecture"] in ("x86_64", "x86-64")
+            and isinstance(origin["r_arch"], str)
+            and re.fullmatch(r"[A-Za-z0-9_-]*", origin["r_arch"]) is not None,
+            "R probe installed architecture executable differs",
+        )
+    requested = resolution["requested_origin"]["origin"]
+    observed = resolution["observed_origin"]["origin"]
+    require(
+        all(requested[key] == observed[key] for key in origin_keys - {"pid"})
+        and resolution["observed_executable"] == requested["direct_executable"]
+        and observed["pid"] == resolution["observed_origin"]["launcher_pid"]
+        and names == expected_names,
+        "resolved R runtime/origin/direct PID differs",
+    )
+
+
+def admit_r_worker(child, process, observation, request, plan, record, repository):
+    """Bind new resolver evidence to the original public worker declaration."""
+    if record["host"] != "r":
+        require(
+            "r_worker" not in process
+            and not any(path.name.startswith("r-worker-") for path in child.iterdir()),
+            "R resolver evidence attached to another host",
+        )
+        return
+    helper = lifecycle.git_bytes(
+        repository, plan["harness_checkout_head"], "rust/tools/child_peak_rss.py"
+    )
+    if r_probe_source(helper) is None and "r_worker" not in process:
+        require(
+            not any(path.name.startswith("r-worker-") for path in child.iterdir()),
+            "unassociated original R resolver evidence",
+        )
+        return
+    command = observation.get("command")
+    require(
+        isinstance(command, list) and len(command) == 4,
+        "missing original pre-launch R worker command",
+    )
+    system = record["system"]
+    original_child = original_path(request["output"], system)
+    original_collection = original_path(
+        plan["measurement_campaign"]["collection"], system
+    ).parent
+    require(
+        original_path(command[2], system)
+        == original_collection / "harness" / lifecycle.WORKERS["r"]
+        and original_path(command[3], system) == original_child / "request.json",
+        "original R worker harness/request command differs",
+    )
+    libraries = [
+        str(original_path(record["installed_origins"]["package"], system).parent)
+    ]
+    libraries += [
+        str(original_path(spec["origin"], system).parent)
+        for spec in record["collectors"].values()
+    ]
+    identity = {
+        "system": system,
+        "runtime_version": record["runtime_version"],
+        "private_libraries": list(dict.fromkeys(libraries)),
+        "jsonlite_version": record["collectors"]["jsonlite"]["version"],
+        "jsonlite_origin": record["collectors"]["jsonlite"]["origin"],
+    }
+    admit_r_resolution(child, process, command, identity, helper)
 
 
 def offline_origins(observed, declared, repository):
@@ -563,6 +817,7 @@ def admit_case(directory, plan, row, case, authored, record, role, repository):
             and original_child == original_collection.parent / name,
             "worker belongs to another campaign collection",
         )
+        admit_r_worker(child, process, observation, request, plan, record, repository)
         require(
             request["reference_schema"] is None
             if role == "candidate"

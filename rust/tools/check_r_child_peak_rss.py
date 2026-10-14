@@ -20,7 +20,7 @@ import child_peak_rss
 ALLOCATION = 64 * 1024 * 1024
 PAGE_STRIDE = 4096
 EXIT_CODE = 7
-CONTROL = r'''
+CONTROL = r"""
 args <- commandArgs(TRUE)
 library(jsonlite)
 root <- normalizePath(Sys.getenv("R_LIBS"), winslash="/", mustWork=TRUE)
@@ -39,7 +39,7 @@ jsonlite::write_json(list(
   touched_page_count=length(pages), touched_byte_sum=sum(as.integer(buffer[pages])),
   requested_exit_code=7L), args[1], auto_unbox=TRUE, pretty=TRUE)
 quit(save="no", status=7L, runLast=FALSE)
-'''
+"""
 
 
 def validate(process, response, system, private_library):
@@ -75,27 +75,49 @@ def check(args):
     response_path = args.output / "r-process.json"
     process_path = args.output / "process.json"
     command = [str(args.rscript), "--vanilla", str(script), str(response_path)]
-    broker = [sys.executable, "-I", str(Path(child_peak_rss.__file__)),
-              "--command", json.dumps(command), "--record", str(process_path)]
+    broker = [
+        sys.executable,
+        "-I",
+        str(Path(child_peak_rss.__file__)),
+        "--command",
+        json.dumps(command),
+        "--record",
+        str(process_path),
+    ]
     # R is deliberately a plain launch: never apply Python venv redirectors.
-    record = {"scope": "authored plain-R PID/RSS/exit control; no timing samples",
-              "system": platform.system(), "command": command,
-              "broker_command": broker, "private_library": os.environ["R_LIBS"],
-              "accepted": False}
+    record = {
+        "scope": "authored plain-R PID/RSS/exit control; no timing samples",
+        "system": platform.system(),
+        "command": command,
+        "broker_command": broker,
+        "private_library": os.environ["R_LIBS"],
+        "accepted": False,
+    }
     destination = args.output / "r-child-rss-control.json"
     destination.write_text(json.dumps(record, indent=2) + "\n")
     try:
-        with (args.output / "stdout.txt").open("xb") as stdout, (
-            args.output / "stderr.txt").open("xb") as stderr:
+        with (
+            (args.output / "stdout.txt").open("xb") as stdout,
+            (args.output / "stderr.txt").open("xb") as stderr,
+        ):
             subprocess.run(broker, stdout=stdout, stderr=stderr, check=True)
         process = json.loads(process_path.read_text())
         response = json.loads(response_path.read_text())
         private = Path(os.environ["R_LIBS"]).resolve().as_posix()
         validate(process, response, platform.system(), private)
-        record.update(accepted=True, observed_pid=response["pid"],
-                      observed_exit_code=process["exit_code"],
-                      observed_peak_rss_bytes=process["peak_rss"]["bytes"])
-    except (ValueError, KeyError, TypeError, OSError, subprocess.CalledProcessError) as error:
+        record.update(
+            accepted=True,
+            observed_pid=response["pid"],
+            observed_exit_code=process["exit_code"],
+            observed_peak_rss_bytes=process["peak_rss"]["bytes"],
+        )
+    except (
+        ValueError,
+        KeyError,
+        TypeError,
+        OSError,
+        subprocess.CalledProcessError,
+    ) as error:
         record["failure"] = {"class": type(error).__name__, "reason": str(error)}
         raise
     finally:

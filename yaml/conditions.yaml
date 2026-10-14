@@ -142,6 +142,7 @@ conditions:
   regex_group_out_of_range: {phases: [validation]}
   rename_only_intermediate: {phases: [validation]}
   reserved_metadata_key: {phases: [validation]}
+  resource_path_content_changed: {phases: [ingest]}
   resource_path_missing: {phases: [validation]}
   resource_path_not_normalized: {phases: [validation]}
   resource_path_not_regular_file: {phases: [validation]}

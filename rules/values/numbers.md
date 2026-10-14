@@ -64,8 +64,13 @@ operand returns `float`.
 
 <a id="req-0421"></a>
 
-**REQ-0421.** `/` always returns `float`. There is no integer division. Write
-`FLOOR(a / b)` for a floor-divided integer.
+**REQ-0421.** `/` always returns `float`. Each `int` operand first widens to
+binary64 under [REQ-0017](numbers.md#req-0017), including when both operands
+are `int`; the result is the binary64 quotient of those widened operands.
+Above `2^53`, this need not equal the exact integer quotient rounded once
+to binary64: `9007199254740993 / 3` returns `3002399751580330.5`, although the
+exact quotient `3002399751580331` is representable as a float. There is no
+integer division. Write `FLOOR(a / b)` for a floor-divided integer.
 
 <a id="req-0422"></a>
 
@@ -82,6 +87,15 @@ and [Types and conversion](types.md) defines that conversion.
 **REQ-0424.** `ABS`, `GREATEST`, `LEAST`, `MOD`, `NULLIF`, and `COALESCE`
 return the promoted type of their arguments: `int` when every argument is
 `int`, otherwise `float`.
+
+`NULLIF` compares two `int` arguments exactly. For a mixed `int`/`float`
+pair, it first widens the integer under [REQ-0017](numbers.md#req-0017) and
+compares the binary64 values, like a predicate comparison under
+[REQ-0167](../operations/predicates.md#req-0167). Thus
+`NULLIF(9007199254740993, 9007199254740992.0)` returns missing, while
+`GREATEST` and `LEAST` select using the exact comparison under
+[REQ-0005](types.md#req-0005) before converting the selected result to the
+promoted return type.
 
 ### Overflow and precision
 

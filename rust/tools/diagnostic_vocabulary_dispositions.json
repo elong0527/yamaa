@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "scope": "Finite ownership of registered names without current core causes. These source dispositions preserve historical, validator and conditional capability obligations; they neither establish executable coverage nor approve migration acceptance. Current replacements still require final installed qualification.",
+  "conditions": {
+    "function_contract_mismatch": {
+      "kind": "reserved",
+      "phases": ["validation"],
+      "reason": "Already an unused registration in the published prior source. Current function argument, result, conformance and original-exception contracts have their own closed causes; no removed assertion depended on this spelling.",
+      "owners": ["rust/crates/yamaa-core/src/project_function_result.rs", "rust/crates/yamaa-core/src/diagnostic.rs"],
+      "controls": ["rust/crates/yamaa-core/tests/project_function_result.rs", "rust/crates/yamaa-engine/tests/function_invocation.rs"],
+      "producer": null,
+      "history": "Published prior source 845a91ff9ba4ab6599efbd79fafe1c4e1dd14255 registered the name without a producer; #1973 retires reference extension objects while retaining function semantics."
+    },
+    "incomplete_output_row": {
+      "kind": "reference_invariant",
+      "phases": ["derivation"],
+      "reason": "The reference executor checked mutable candidate dictionaries and completed-column sets. Those Python objects and extension hooks are retired. Complete typed output schema, dependency admission and original output truth remain required; this is not permission to produce incomplete rows.",
+      "owners": ["rust/crates/yamaa-core/src/dataset.rs", "rust/crates/yamaa-core/src/table.rs"],
+      "controls": ["rust/crates/yamaa-core/tests/dataset_model.rs", "rust/crates/yamaa-engine/tests/dataset.rs", "rust/tests/installed_original_specifications.py"],
+      "producer": null,
+      "history": "845a91ff9ba4ab6599efbd79fafe1c4e1dd14255:python/src/yamaa/runtime/executor.py; retirement map and scope authority retained at 43bb4437d9c0890ec7877ec7575a517c771a8147."
+    },
+    "invalid_mapping_dictionary": {
+      "kind": "reference_invariant",
+      "phases": ["validation"],
+      "reason": "Mapping dictionary files remain supported under REQ-1110. The shared compiler applies the inline dict[str, literal_value] schema and reports its typed schema findings with original field/key context before study access, replacing the reference planner's single generic spelling.",
+      "owners": ["rust/crates/yamaa-core/src/schema/dictionary_resources.rs", "rust/crates/yamaa-engine/src/dictionary_preparation.rs"],
+      "controls": ["rust/crates/yamaa-adapters/tests/file_preparation.rs", "rust/crates/yamaa-engine/tests/dictionary_preparation.rs"],
+      "producer": null,
+      "history": "845a91ff9ba4ab6599efbd79fafe1c4e1dd14255:python/tests/planning/test_workflow.py:test_mapping_dict_path_rejects_non_mapping_content; unique rejection semantics remain mapped at 43bb4437d9c0890ec7877ec7575a517c771a8147."
+    },
+    "producer_not_completed": {
+      "kind": "reference_invariant",
+      "phases": ["validation"],
+      "reason": "The former workflow added a consumer failure when generated producer content was unavailable. Current graph execution retains the producer's original failure and entered prefix and stops dependent execution/publication, without replacing that cause with a later consumer diagnostic.",
+      "owners": ["rust/crates/yamaa-engine/src/producer_build.rs", "rust/crates/yamaa-engine/src/producer_publication.rs"],
+      "controls": ["rust/crates/yamaa-engine/tests/producer_build.rs", "rust/tests/installed_public_producers.py"],
+      "producer": null,
+      "history": "845a91ff9ba4ab6599efbd79fafe1c4e1dd14255:python/src/yamaa/planning/workflow.py; approved producer lifecycle/original-failure policy at #1973 and 43bb4437d9c0890ec7877ec7575a517c771a8147."
+    },
+    "resource_path_not_relative": {
+      "kind": "historical_policy",
+      "phases": ["validation"],
+      "reason": "Approved absolute and parent-relative declaring-file paths replace the reference containment policy. The repository validator and two explicitly excluded reference path fixtures retain the old vocabulary; current runtime must not restore containment or fallback.",
+      "owners": ["rules/storage/resources.md", ".github/scripts/yaml-validation/validate_repository.py"],
+      "controls": [".github/scripts/yaml-validation/test_validate_repository.py", "rust/crates/yamaa-adapters/tests/local_paths.rs", "rust/qualification/public-conformance.json"],
+      "producer": null,
+      "history": "#1905/#1973; negative-path-absolute and negative-path-parent-escape keep independent historical truth; prior Python source 845a91ff9ba4ab6599efbd79fafe1c4e1dd14255."
+    },
+    "resource_path_outside_project": {
+      "kind": "historical_policy",
+      "phases": ["validation"],
+      "reason": "Approved declaring-file paths may leave their directory and name permitted absolute locations. The validator and excluded reference fixtures preserve containment-era observations; current missing paths fail where declared, without root discovery or fallback.",
+      "owners": ["rules/storage/resources.md", ".github/scripts/yaml-validation/validate_repository.py"],
+      "controls": [".github/scripts/yaml-validation/test_validate_repository.py", "rust/crates/yamaa-adapters/tests/local_paths.rs", "rust/qualification/public-conformance.json"],
+      "producer": null,
+      "history": "#1905/#1973; immutable reference Python path tests at 845a91ff9ba4ab6599efbd79fafe1c4e1dd14255 and retirement map at 43bb4437d9c0890ec7877ec7575a517c771a8147."
+    },
+    "row_count_changed": {
+      "kind": "reference_invariant",
+      "phases": ["derivation"],
+      "reason": "This reference-executor guard protected mutable candidate/column-enrichment lengths. Those Python planner/model objects retire; typed row construction, completed dependencies, cardinality and independent output ordering/count assertions remain required.",
+      "owners": ["rust/crates/yamaa-core/src/dataset.rs", "rust/crates/yamaa-core/src/dataset_row_stages.rs"],
+      "controls": ["rust/crates/yamaa-core/tests/dataset_model.rs", "rust/crates/yamaa-engine/tests/row_derivations.rs", "rust/tests/installed_original_specifications.py"],
+      "producer": null,
+      "history": "845a91ff9ba4ab6599efbd79fafe1c4e1dd14255:python/tests/runtime/test_executor.py:test_column_enrichment_keeps_the_constructed_row_count; assertion replacement map at 43bb4437d9c0890ec7877ec7575a517c771a8147."
+    },
+    "unknown_standard": {
+      "kind": "reference_route",
+      "phases": ["validation"],
+      "reason": "REQ-1016 belongs to arbitrary named declarations in the retired generate_study_document/load_study_document define.yaml route. REQ-0959 records that input as history. Current environment-section Define uses REQ-0924 unknown_standard_family for a different guide/family failure; the two are not interchangeable.",
+      "owners": ["rules/submission/define-xml.md", "rust/crates/yamaa-core/src/submission_composition.rs"],
+      "controls": ["rust/tests/installed_public_define.py", "rust/tests/test_release_api.py", "rust/qualification/release-api.json"],
+      "producer": null,
+      "history": "The retained native define and retired generate_study_document exports already coexisted at 845a91ff9ba4ab6599efbd79fafe1c4e1dd14255; #1973 public API scope and 43bb4437d9c0890ec7877ec7575a517c771a8147 retirement inventory."
+    },
+    "unmapped_key": {
+      "kind": "reserved",
+      "phases": ["mapping"],
+      "reason": "Already unused in the published prior source and absent from its semantic assertions. Current normative present-but-unlisted mapping failures use unmapped_value; missing_input stays distinct, with handler and case-fold behavior preserved.",
+      "owners": ["rules/execution/handlers.md", "rust/crates/yamaa-core/src/mapping_cut.rs"],
+      "controls": ["rust/crates/yamaa-core/tests/mapping_cut.rs", "rust/crates/yamaa-core/tests/diagnostic/mapping_cut.rs"],
+      "producer": null,
+      "history": "Published prior source 845a91ff9ba4ab6599efbd79fafe1c4e1dd14255 registered this unused spelling; no removed producer or unique condition assertion is claimed."
+    },
+    "unreferenced_codelist": {
+      "kind": "historical_policy",
+      "phases": ["validation"],
+      "reason": "Current REQ-0946 deliberately includes only codelists bound by the selected output columns, allowing unbound environment lists for another section. The installed Define control adds UNUSED, requires success and proves omission; the former all-codelists-used rule is history.",
+      "owners": ["rules/submission/terminology.md", "rust/crates/yamaa-core/src/submission_composition.rs"],
+      "controls": ["rust/tests/installed_public_define.py", "R/yamaa/tests/public_define.R"],
+      "producer": null,
+      "history": "845a91ff9ba4ab6599efbd79fafe1c4e1dd14255:python/tests/specification/test_terminology.py:test_rejects_unreferenced_codelist; current REQ-0946 supersedes that policy."
+    },
+    "unsupported_regex_engine": {
+      "kind": "validator",
+      "phases": ["validation"],
+      "reason": "REQ-0829 remains a live capability obligation. The repository validator's require_regex_binding raises this actual refusal when the portable native binding is unavailable, before pattern evaluation and without a host-library fallback.",
+      "owners": ["rules/operations/text.md", ".github/scripts/yaml-validation/validate_repository.py"],
+      "controls": [".github/scripts/yaml-validation/test_validate_repository.py"],
+      "producer": {"path": ".github/scripts/yaml-validation/validate_repository.py", "symbol": "require_regex_binding"},
+      "history": "Current actual producing validator owner; test_missing_binding_fails_rather_than_falling_back retains the condition and pinned contract. This is not a retired condition or a claim of core emission."
+    },
+    "unsupported_text_contract": {
+      "kind": "capability",
+      "phases": ["validation"],
+      "reason": "REQ-0030 remains a conditional capability obligation, not retirement. There is no current literal emitter or alternate native text-contract selector. Fixed core text/scalar owners must preserve the contract; final installed Unicode/NUL and ordering qualification must prove supported capability, with no host-default fallback. This disposition does not invent an executable refusal path.",
+      "owners": ["rules/values/text.md", "rust/crates/yamaa-core/src/value.rs", "rust/crates/yamaa-core/src/text_case.rs"],
+      "controls": ["rust/crates/yamaa-core/tests/values.rs", "rust/crates/yamaa-core/tests/text_case.rs", "rust/tests/installed_public_contract.py", "R/yamaa/tests/scalars.R"],
+      "producer": null,
+      "history": "Current normative REQ-0030 and fixed-contract source/control ownership. The absence of an emitter is explicit; successful static disposition is not unavailable-capability replay or migration acceptance."
+    },
+    "unwritable_value": {
+      "kind": "reference_invariant",
+      "phases": ["output"],
+      "reason": "The retired build_artifact(TypedTable, ...) API accepted mutable Polars objects and rejected invalid dtype, subsecond/timezone datetime and calendar values here. Closed finite/temporal values and typed Arrow boundaries now refuse those representations before held output. REQ-0763 preserve-or-error and immutable Save semantics remain required, not retired.",
+      "owners": ["rules/storage/publication.md", "rust/crates/yamaa-core/src/value.rs", "rust/crates/yamaa-core/src/temporal.rs", "rust/crates/yamaa-adapters/src/arrow_table.rs"],
+      "controls": ["rust/crates/yamaa-adapters/tests/arrow_table.rs", "rust/crates/yamaa-core/tests/temporal.rs", "rust/tests/installed_public_contract.py"],
+      "producer": null,
+      "history": "Three invalid host-object artifact assertions at 845a91ff9ba4ab6599efbd79fafe1c4e1dd14255:python/tests/io/test_artifact.py remain mapped by 43bb4437d9c0890ec7877ec7575a517c771a8147; direct IO/typed-object extension API retirement under #1973."
+    }
+  }
+}

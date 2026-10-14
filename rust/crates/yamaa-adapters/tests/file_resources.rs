@@ -98,17 +98,21 @@ fn declaration_locations_keep_approved_containment_and_file_intent() {
     fs::write(study.path("project/spec/producer.yaml"), b"metadata").unwrap();
     let resources = study.resources();
     let declaring = resources.resolve("producer.yaml").unwrap();
-    for written in [
-        "",
-        "output.csv/",
-        "output.csv/.",
-        "output.csv/..",
-        "folder\\output.csv",
-        "https://example.invalid/output.csv",
+    use yamaa_core::resource::ResourceFailure as R;
+    for (written, error) in [
+        ("", Error::WrittenForm(R::EmptySegment)),
+        ("output.csv/", Error::WrittenForm(R::EmptySegment)),
+        ("output.csv/.", Error::InvalidPath),
+        ("output.csv/..", Error::InvalidPath),
+        ("folder\\output.csv", Error::WrittenForm(R::Backslash)),
+        (
+            "https://example.invalid/output.csv",
+            Error::WrittenForm(R::UriScheme),
+        ),
     ] {
         assert_eq!(
             resources.location_from(&declaring, written),
-            Err(Error::InvalidPath),
+            Err(error),
             "{written}"
         );
     }
@@ -148,6 +152,15 @@ fn metadata_and_bounded_capture_reuse_only_exact_retained_bytes() {
     );
     assert_eq!(first.as_ref(), b"ID,V\n1,2\n");
     assert_eq!(resources.capture_reads(), 1);
+    use yamaa_core::resource::ResourceFailure;
+    use yamaa_engine::specification_run::SourcePort;
+    assert_eq!(
+        resources.resource_failure(&Error::Changed),
+        Some(ResourceFailure::ContentChanged)
+    );
+    for opaque in [Error::Limit, Error::Unreadable, Error::InvalidPath] {
+        assert_eq!(resources.resource_failure(&opaque), None);
+    }
 }
 
 #[test]
@@ -226,20 +239,17 @@ fn links_are_terminal_and_paths_cannot_escape_the_selected_roots() {
         resources.capture(&study.text("outside/secret"), 32),
         Err(Error::OutsideRoots)
     );
-    for malformed in [
-        "",
-        "a//b",
-        "a\\b",
-        "https://example.org/a",
-        "/tmp/../a",
-        "a:é",
-        "a\0b",
+    use yamaa_core::resource::ResourceFailure as R;
+    for (malformed, error) in [
+        ("", Error::WrittenForm(R::EmptySegment)),
+        ("a//b", Error::WrittenForm(R::EmptySegment)),
+        ("a\\b", Error::WrittenForm(R::Backslash)),
+        ("https://example.org/a", Error::WrittenForm(R::UriScheme)),
+        ("/tmp/../a", Error::InvalidPath),
+        ("a:é", Error::WrittenForm(R::UriScheme)),
+        ("a\0b", Error::InvalidPath),
     ] {
-        assert_eq!(
-            resources.inspect(malformed),
-            Err(Error::InvalidPath),
-            "{malformed:?}"
-        );
+        assert_eq!(resources.inspect(malformed), Err(error), "{malformed:?}");
     }
     assert_eq!(resources.capture_reads(), 0);
 }

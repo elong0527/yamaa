@@ -310,3 +310,53 @@ def test_minute_precision_fever_reference_passes_complete_changed_input_challeng
     )
     assert result["checked"] and result["passed"], result
     assert (app / "input/vs.csv").read_bytes() == original
+
+
+@pytest.mark.parametrize(
+    "benchmark", ["bimo-clinsite-site-level", "adam-adsl-flag-chain"]
+)
+@pytest.mark.parametrize("agent", ["reference", "hardcode"])
+def test_held_out_recomputes_aggregate_and_cross_subject_answers(
+    tmp_path, benchmark, agent
+):
+    result = _held_out_case(tmp_path, agent, "reference", benchmark)
+    assert result["held_out"]["checked"]
+    assert result["held_out"]["expected_source"] == "reference"
+    assert result["held_out"]["discriminates"]
+    assert result["passed"] == (agent == "reference")
+    assert result["reward"]["reward"] == (1 if agent == "reference" else 0)
+
+
+def test_held_out_rejects_an_incorrect_baseline_reference_and_restores_inputs(tmp_path):
+    app = _app(tmp_path)
+    contract = build.contract_for(AGE_GROUP, "python")
+    text = (build.SOLUTIONS / AGE_GROUP.name / "result.py").read_text()
+    text = text.replace("/app/", f"{app.as_posix()}/")
+    reference = tmp_path / "reference.py"
+    reference.write_text(text.replace("<18", "<17"))
+    (app / "output/result.py").write_text(text)
+    before = (app / "input/dm.csv").read_bytes()
+    with pytest.raises(RuntimeError, match="does not match the original golden"):
+        grade.held_out_rerun(
+            contract, AGE_GROUP / "expected", app / "output", reference, _run("python")
+        )
+    assert (app / "input/dm.csv").read_bytes() == before
+    assert (app / "output/result.py").read_text() == text
+
+
+def test_held_out_rejects_invalid_recomputed_reference_output(tmp_path):
+    app = _app(tmp_path)
+    contract = build.contract_for(AGE_GROUP, "python")
+    text = (build.SOLUTIONS / AGE_GROUP.name / "result.py").read_text()
+    text = text.replace("/app/", f"{app.as_posix()}/")
+    count = len(grade.read_rows(app / "input/dm.csv")[1])
+    reference = tmp_path / "reference.py"
+    reference.write_text(
+        text
+        + f"\nif len(dm) < {count}:\n    adsl.with_columns(pl.lit('bad').alias('AGE')).write_csv({str(app / 'output/adsl.csv')!r})\n"
+    )
+    (app / "output/result.py").write_text(text)
+    with pytest.raises(RuntimeError, match="invalid int value in AGE"):
+        grade.held_out_rerun(
+            contract, AGE_GROUP / "expected", app / "output", reference, _run("python")
+        )

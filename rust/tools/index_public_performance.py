@@ -176,7 +176,9 @@ def manifest(
 
     entries = []
     for item, name in tuples():
-        if (item["host"] == "r" and r_variants) or (item["host"] == "python" and python_variants):
+        if (item["host"] == "r" and r_variants) or (
+            item["host"] == "python" and python_variants
+        ):
             entries.append(
                 {
                     "tuple": item,

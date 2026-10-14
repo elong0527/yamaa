@@ -57,7 +57,9 @@ class NativeAdmission(unittest.TestCase):
                 "workflow_run": {"id": 42, "head_sha": self.revision},
                 "created_at": "2026-10-13T12:05:00Z",
             }
-            for identity, name in enumerate(sorted(admission.required_artifacts()), start=1)
+            for identity, name in enumerate(
+                sorted(admission.required_artifacts()), start=1
+            )
         ]
 
     def validate(self):
@@ -224,7 +226,9 @@ class NativeAdmission(unittest.TestCase):
                 f"run-id=42\nrun-attempt=2\nrevision={self.revision}\n",
             )
             exported = json.loads(export.read_text().split("artifact-ids=", 1)[1])
-            self.assertEqual(exported, {item["name"]: item["id"] for item in self.artifacts})
+            self.assertEqual(
+                exported, {item["name"]: item["id"] for item in self.artifacts}
+            )
 
     def test_invalid_original_artifact_ids_cannot_admit_a_download(self):
         original = self.artifacts[0]["id"]

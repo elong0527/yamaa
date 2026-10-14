@@ -224,13 +224,16 @@ impl<'a> Run<'a, '_> {
         let Some((qualifier, _)) = reference.name.split_once('.') else {
             return add(&mut self.live_columns, &reference.name, self.budget);
         };
+        // A qualifier shared by an input and a lookup is ambiguous. Preserve
+        // both declarations so semantic naming validation can report the collision.
+        let mut changed = false;
         if lookup(&self.inputs, qualifier, self.budget)?.is_some() {
-            add(&mut self.live_inputs, qualifier, self.budget)
-        } else if lookup(&self.intermediates, qualifier, self.budget)?.is_some() {
-            add(&mut self.live_intermediates, qualifier, self.budget)
-        } else {
-            Ok(false)
+            changed |= add(&mut self.live_inputs, qualifier, self.budget)?;
         }
+        if lookup(&self.intermediates, qualifier, self.budget)?.is_some() {
+            changed |= add(&mut self.live_intermediates, qualifier, self.budget)?;
+        }
+        Ok(changed)
     }
     fn mark_all(&mut self, refs: Vec<InheritanceReference>) -> Result<bool, Error> {
         let mut changed = false;
@@ -359,7 +362,7 @@ impl<'a> Run<'a, '_> {
                             continue;
                         }
                         let refs =
-                            self.refs_field(member.node, "intermediate_class", name, false)?;
+                            self.refs_field(member.node, "intermediate_class", name, true)?;
                         changed |= self.mark_all(refs)?;
                     }
                 }
