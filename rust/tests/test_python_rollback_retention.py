@@ -66,6 +66,19 @@ class PriorRetentionAdmission(unittest.TestCase):
                 module.retain(Path("unused"), Path("unused"), prior)
         prior.github.assert_not_called()
 
+    def test_actions_redirect_request_uses_json_media_type_and_get_only(self):
+        prior = mock.Mock(REPOSITORY="elong0527/yamaa")
+        opener = mock.MagicMock()
+        opener.open.return_value.__enter__.return_value.read.return_value = b"zip bytes"
+        with mock.patch.dict("os.environ", {"GH_TOKEN": "unit-token"}), mock.patch(
+            "urllib.request.build_opener", return_value=opener
+        ):
+            self.assertEqual(module.download_artifact(123, prior), b"zip bytes")
+        request = opener.open.call_args.args[0]
+        self.assertEqual(request.get_method(), "GET")
+        self.assertEqual(request.get_header("Accept"), "application/vnd.github+json")
+        self.assertIsNone(request.data)
+
 
 if __name__ == "__main__":
     unittest.main()

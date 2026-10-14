@@ -8,6 +8,8 @@ import os
 import shutil
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 import zipfile
 from pathlib import Path, PurePosixPath
 
@@ -65,6 +67,24 @@ def admit_run(run, artifacts, expected):
             and item["workflow_run"].get("head_sha") == expected["head"],
             "prior artifact identity differs: " + approved["name"],
         )
+
+
+def download_artifact(artifact_id, prior):
+    # The Actions ZIP endpoint requires the JSON API media type on its initial
+    # redirect; release assets instead require application/octet-stream.
+    request = urllib.request.Request(
+        f"https://api.github.com/repos/{prior.REPOSITORY}/actions/artifacts/{artifact_id}/zip",
+        headers={"Authorization": "Bearer " + os.environ["GH_TOKEN"],
+                 "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
+        method="GET",
+    )
+    try:
+        with urllib.request.build_opener(prior.StripRedirectCredentials()).open(request, timeout=90) as response:
+            return response.read()
+    except urllib.error.HTTPError as error:
+        raise RuntimeError(f"GitHub artifact retrieval failed with HTTP {error.code}") from None
+    except urllib.error.URLError:
+        raise RuntimeError("GitHub artifact retrieval failed during transport") from None
 
 
 def load_prior_tools(directory, expected):
@@ -197,8 +217,7 @@ def main():
     raw = args.work / "raw"
     raw.mkdir()
     for item in expected["artifacts"]:
-        (raw / (item["name"] + ".zip")).write_bytes(prior.github(
-            f'/repos/{prior.REPOSITORY}/actions/artifacts/{item["id"]}/zip', binary=True))
+        (raw / (item["name"] + ".zip")).write_bytes(download_artifact(item["id"], prior))
     assets = args.work / "assets"
     prior.download(assets)
     uploads = assemble(raw, assets, args.work, prior, audit, expected)
