@@ -214,10 +214,12 @@ preserved all 97 lane identities and verdicts: 42 pass, 49 fail and 6 missing.
 The original record remains incomplete, with its captured run metadata unchanged;
 this historical replay does not qualify a new source or replace capacity inputs.
 [#2154](https://github.com/elong0527/yamaa/issues/2154) owns physical history removal
-and durable replay. Raw `rust/measurements/` remains pending verified retention
-of its original external inputs; a scratch path or expiring Actions URL is not a
-durable archive. Add evidence to PR/issues and this compact index, without new
-per-issue ledgers or rewriting previous observations.
+and durable replay. Historical
+[measurement reports](https://github.com/elong0527/yamaa/tree/558d3671d920872bb8b509cc726eaf5fd94f21fd/rust/measurements)
+remain retrievable from Git. Retention and replay of their original external
+inputs remain unverified; a scratch path or expiring Actions URL is not a durable
+archive. Add evidence to PR/issues and this compact index, without new per-issue
+ledgers or rewriting previous observations.
 
 ## Rollback and artifact handoff
 
