@@ -143,8 +143,6 @@ jobs:
             uv run --project ../python --locked --no-editable python tools/assess_regex_reference.py > "${RUNNER_TEMP}/regex-native-assessment.json"
             python tools/check_dependencies.py
             python tools/check_diagnostics.py --baseline-ref HEAD^
-            # The frozen original math fixtures invoke the installed benchmark
-            # project distribution through ordinary public runtime admission.
             uv run --project ../python --locked --no-editable --extra test --group benchmark python -m unittest discover -s tests -p 'test_*.py'
           ) 2>&1 | tee "${RUNNER_TEMP}/shared-crates-check.log"
       - name: Preserve locked Rust dependency evidence
@@ -551,6 +549,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_contract.R" public_contract.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_grammar.R" public_grammar.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_file_resources.R" public_file_resources.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/arrow_input.R" arrow_input.R
           YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/r-source/public-reports" R_LIBS="${RUNNER_TEMP}/native-r-library" python -I "${GITHUB_WORKSPACE}/rust/tools/supplemental_inventory.py" \
             --root "${GITHUB_WORKSPACE}" --catalog "${GITHUB_WORKSPACE}/rust/qualification/supplemental.json" \
             --output qualification/r-source --runtime r --staged-root "${RUNNER_TEMP}" \
@@ -776,8 +775,8 @@ jobs:
           python -m pip install uv==0.11.6
       - name: Preserve original spans, parser precedence and numerical policy truth
         working-directory: rust
-        run: cargo test --locked -p yamaa-core --test numeric_parser --test aggregate_parser --test predicate_parser --test rounding --test regex
-      - name: Replay independent truth and retain historical coverage disposition
+        run: cargo test --locked -p yamaa-core --test numeric_parser --test aggregate_parser --test predicate_parser --test rounding --test regex --test math_policy --test portable_math_golden
+      - name: Replay independent syntax and numeric checks
         working-directory: rust
         run: |
           set -e
@@ -791,7 +790,7 @@ jobs:
           uv run --project ../python --locked --no-editable python tools/assess_rounding.py --output "${RUNNER_TEMP}/rounding-assessment.json"
           uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_native_numeric_tools.py -v
           uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_predicate_syntax_encoding.py -v
-          uv run --project ../python --locked --no-editable --group benchmark python -m unittest discover -s tests -p test_math_decision.py -v
+          uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_portable_math.py -v
           uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_rounding_assessment.py -v
           uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_rounding_check.py -v
       - name: Retain component evidence without claiming installed matrix qualification

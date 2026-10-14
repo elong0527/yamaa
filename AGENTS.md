@@ -63,3 +63,11 @@ Language contracts live in `rules/`, and host usage lives in `python/README.md`
 and `R/yamaa/README.md`. The declared API inventory is
 `rust/qualification/release-api.json`; check it from the repository root with
 `uv run --project python --no-sync python rust/tools/check_release_api.py`.
+
+Portable math golden values live in
+`rust/crates/yamaa-core/tests/fixtures/portable_math.tsv` and are shared by the
+Rust and Python tests. Run
+`cargo test --locked -p yamaa-core --test portable_math_golden` from `rust/`.
+Public math conversion, verification and publication checks run from the
+repository root with
+`uv run --project python --no-sync python -m unittest discover -s rust/tests -p test_portable_math.py`.

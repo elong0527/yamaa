@@ -2,7 +2,6 @@
 
 import builtins
 import importlib
-import json
 import sys
 import unittest
 from pathlib import Path
@@ -39,27 +38,9 @@ class NativeToolConsumers(unittest.TestCase):
                 "check_predicate_syntax",
                 "assess_regex_reference",
                 "assess_rounding",
-                "assess_math_decision",
             ):
                 with self.subTest(tool=name):
                     importlib.reload(importlib.import_module(name))
-            decision = importlib.import_module("assess_math_decision")
-            from math_decision_corpus import cases
-
-            archive = json.loads(
-                (TOOLS.parent / "qualification/math-decision-v1.json").read_text()
-            )
-            for case, row in zip(cases(), archive["boundaries"], strict=True):
-                self.assertEqual(decision.historical(case), row["historical"])
-            for row in archive["integer_handlers"]:
-                self.assertEqual(
-                    decision.historical(row["input"], "int", True), row["historical"]
-                )
-            changed = {**cases()[0], "inputs": ["4000000000000000"]}
-            with self.assertRaises(ValueError):
-                decision.historical(changed)
-            with self.assertRaises(ValueError):
-                decision.historical(cases()[0], "int", False)
 
     def test_former_differential_input_counts_and_independent_controls_remain_visible(
         self,
