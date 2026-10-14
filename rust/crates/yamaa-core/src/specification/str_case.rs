@@ -27,7 +27,7 @@ pub(super) fn prepare(
             "str_case_metadata",
             MAX_DECLARATION_BYTES,
             None,
-            None,
+            Some(path),
         ));
     }
     let mode = match text(d, field(d, payload, "to")?)? {
@@ -88,7 +88,12 @@ pub(super) fn declaration_findings(
                 .and_then(|n| n.checked_add(512))
                 .filter(|n| *n <= MAX_DECLARATION_BYTES)
                 .ok_or_else(|| {
-                    PrepareError::limit("str_case_metadata", MAX_DECLARATION_BYTES, None, None)
+                    PrepareError::limit(
+                        "str_case_metadata",
+                        MAX_DECLARATION_BYTES,
+                        None,
+                        Some(path),
+                    )
                 })?;
             for &(key, value) in mapping(d, payload)? {
                 for id in [key, value] {
@@ -101,7 +106,7 @@ pub(super) fn declaration_findings(
                                     "str_case_metadata",
                                     MAX_DECLARATION_BYTES,
                                     None,
-                                    None,
+                                    Some(path),
                                 )
                             })?;
                     }

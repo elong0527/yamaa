@@ -25,15 +25,23 @@ impl Prepared {
                     N::Text(text) | N::Integer(text) => text.len(),
                     _ => 0,
                 });
-            let amount =
-                StringExtract::declaration_bytes(source, path, pattern, group, handlers).ok_or(
-                    PrepareError::limit("str_extract_metadata", MAX_DECLARATION_BYTES, None, None),
-                )?;
+            let amount = StringExtract::declaration_bytes(source, path, pattern, group, handlers)
+                .ok_or(PrepareError::limit(
+                "str_extract_metadata",
+                MAX_DECLARATION_BYTES,
+                None,
+                Some(path),
+            ))?;
             bytes = bytes
                 .checked_add(amount)
                 .filter(|n| *n <= MAX_DECLARATION_BYTES)
                 .ok_or_else(|| {
-                    PrepareError::limit("str_extract_metadata", MAX_DECLARATION_BYTES, None, None)
+                    PrepareError::limit(
+                        "str_extract_metadata",
+                        MAX_DECLARATION_BYTES,
+                        None,
+                        Some(path),
+                    )
                 })?;
             Ok(())
         })?;

@@ -294,7 +294,7 @@ pub(super) fn prepare(
             "intermediate_derivations",
             limits.columns,
             Some(items.len()),
-            None,
+            Some(&format!("{path}.derivations")),
         ));
     }
     let mut result = Vec::new();
