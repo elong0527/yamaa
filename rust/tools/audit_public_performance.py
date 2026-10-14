@@ -9,12 +9,13 @@ Correctness, complete 567-cell coverage and numeric acceptance are distinct gate
 from __future__ import annotations
 
 import argparse
+import ast
 import contextlib
-import datetime
 import email.parser
 import fnmatch
 import json
 import math
+import os
 import re
 import statistics
 import subprocess
@@ -70,6 +71,69 @@ def case_names():
         for rows in workloads.DEFAULT_ROWS
         for dimension in workloads.DIMENSIONS[family]
     ]
+
+
+def role_case_names(role):
+    require(role in ROLES, "unexpected collection role")
+    families = {
+        "candidate": workloads.FAMILIES,
+        "baseline": ("lookup", "aggregate", "window"),
+        "producer-root-build-baseline": ("producer",),
+    }[role]
+    return [case for case in case_names() if case.split("-")[0] in families]
+
+
+def variants():
+    return {
+        f"{family}-{dimension}": [
+            f"{family}-{rows}-{dimension}" for rows in workloads.DEFAULT_ROWS
+        ]
+        for family in workloads.FAMILIES
+        for dimension in workloads.DIMENSIONS[family]
+    }
+
+
+def measurement_scopes():
+    return read(Path(__file__).with_suffix(".schema.json"))["$defs"][
+        "measurement_scopes"
+    ]["const"]
+
+
+def logical_entries(entry):
+    """Keep complete cases on their original runner; never combine distributions."""
+    keys = ("artifact_id", "artifact_name", "run_attempt", "campaign", "collections")
+    if "segments" not in entry:
+        exact(
+            entry,
+            ("tuple", *keys) + (("archive",) if "archive" in entry else ()),
+            "entry",
+        )
+        return [entry]
+    exact(entry, ("tuple", "segments"), "segmented logical entry")
+    require(entry["tuple"] in tuples(), "only approved tuples may be segmented")
+    require(isinstance(entry["segments"], list), "segment inventory must be a list")
+    selected = []
+    for segment in entry["segments"]:
+        exact(
+            segment,
+            ("variant", "cases", *keys)
+            + (("archive",) if "archive" in segment else ()),
+            "segment",
+        )
+        require(
+            isinstance(segment["variant"], str) and segment["variant"] in variants(),
+            "unapproved segment variant",
+        )
+        require(
+            segment["cases"] == variants()[segment["variant"]],
+            "segment must declare all three approved complete cases in order",
+        )
+        selected.append(segment["variant"])
+    require(
+        len(selected) == len(set(selected)) and set(selected) == set(variants()),
+        "duplicate/missing/unexpected segment variant inventory",
+    )
+    return [dict(segment, tuple=entry["tuple"]) for segment in entry["segments"]]
 
 
 def require(condition, message):
@@ -135,8 +199,261 @@ def stats(values, unit):
         "median": statistics.median(values),
         "min": min(values),
         "max": max(values),
-        "quartiles": statistics.quantiles(values, n=4, method="inclusive"),
+        "quartiles": statistics.quantiles(values, n=4, method="inclusive")
+        if len(values) > 1
+        else [values[0]] * 3,
     }
+
+
+def r_probe_source(helper_source):
+    """Read the original helper's authored probe without executing runner code."""
+    try:
+        tree = ast.parse(helper_source)
+        values = [
+            node.value
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "R_ORIGIN_PROBE"
+                for target in node.targets
+            )
+        ]
+        if not values:
+            return None
+        require(len(values) == 1, "ambiguous original R origin probe")
+        value = ast.literal_eval(values[0])
+    except (SyntaxError, TypeError) as error:
+        raise ValueError("unsupported original R origin probe source") from error
+    nonempty(value, "original R origin probe source")
+    return value.encode("utf-8")
+
+
+def admit_r_resolution(child, process, command, identity, helper_source):
+    """Re-admit original resolver bytes; probe peaks never become timing RSS."""
+    source = r_probe_source(helper_source)
+    names = {path.name for path in child.iterdir() if path.name.startswith("r-worker-")}
+    if "r_worker" not in process:
+        require(source is None and not names, "missing original R resolution evidence")
+        return
+    require(source is not None, "R resolution absent from original pinned helper")
+    resolution = process["r_worker"]
+    system = identity["system"]
+    keys = {
+        "protocol",
+        "system",
+        "requested_executable",
+        "requested_command",
+        "observed_executable",
+        "observed_command",
+        "private_library_environment",
+        "resolution",
+    }
+    if system == "Windows":
+        keys.update(("requested_origin", "observed_origin"))
+    exact(resolution, keys, "original R resolution")
+    require(
+        resolution == read(relative(child, "r-worker-resolution.json"))
+        and resolution["protocol"] == "r-worker-resolution/1"
+        and resolution["system"] == system,
+        "R resolution record/protocol/system differs",
+    )
+    require(
+        isinstance(command, list)
+        and len(command) == 4
+        and all(isinstance(value, str) and value for value in command)
+        and command[1] == "--vanilla"
+        and resolution["requested_command"] == command
+        and resolution["requested_executable"] == command[0]
+        and resolution["observed_command"]
+        == [resolution["observed_executable"], *command[1:]],
+        "original R worker argv differs",
+    )
+    expected_libraries = [
+        original_path(path, system) for path in identity["private_libraries"]
+    ]
+    require(bool(expected_libraries), "missing declared private R libraries")
+    environment = resolution["private_library_environment"]
+    nonempty(environment, "original private R library environment")
+    libraries = environment.split(";" if system == "Windows" else ":")
+    require(
+        [original_path(path, system) for path in libraries] == expected_libraries,
+        "R resolver private library environment differs",
+    )
+    expected_names = {"r-worker-resolution.json"}
+    if system != "Windows":
+        require(
+            system in ("Linux", "Darwin")
+            and resolution["resolution"] == "plain Unix Rscript"
+            and resolution["observed_command"] == command
+            and resolution["observed_executable"] == command[0]
+            and names == expected_names,
+            "Unix R worker resolution differs",
+        )
+        return
+    require(
+        resolution["resolution"] == "installed R architecture executable",
+        "Windows R resolution scope differs",
+    )
+    original_child = original_path(command[3], system).parent
+    probe_keys = {
+        "command",
+        "source",
+        "stdout",
+        "stderr",
+        "response",
+        "launcher_pid",
+        "exit_code",
+        "origin",
+    }
+    origin_keys = {
+        "pid",
+        "runtime_version",
+        "home",
+        "bin",
+        "architecture",
+        "r_arch",
+        "jsonlite_version",
+        "private_libraries",
+        "codec_origin",
+        "direct_executable",
+    }
+    for label, key, executable in (
+        ("requested", "requested_origin", command[0]),
+        ("direct", "observed_origin", resolution["observed_executable"]),
+    ):
+        probe = resolution[key]
+        exact(probe, probe_keys, "original R " + label + " probe")
+        prefix = "r-worker-" + label
+        filenames = {
+            "source": "r-worker-origin-probe.R",
+            "stdout": prefix + "-stdout.txt",
+            "stderr": prefix + "-stderr.txt",
+            "response": prefix + "-origin.json",
+        }
+        expected_names.add(prefix + "-probe.json")
+        expected_names.update(filenames.values())
+        require(
+            probe == read(relative(child, prefix + "-probe.json"))
+            and all(probe[name] == value for name, value in filenames.items()),
+            "R probe receipt/retained filenames differ",
+        )
+        argv = probe["command"]
+        require(
+            isinstance(argv, list)
+            and len(argv) == 4
+            and argv[:2] == [executable, "--vanilla"]
+            and original_path(argv[2], system) == original_child / filenames["source"]
+            and original_path(argv[3], system)
+            == original_child / filenames["response"],
+            "original R probe argv/path differs",
+        )
+        for name in filenames.values():
+            require(relative(child, name).is_file(), "missing retained R probe member")
+        require(
+            relative(child, filenames["source"]).read_bytes() == source,
+            "R origin probe differs from original Git-pinned helper source",
+        )
+        origin = probe["origin"]
+        exact(origin, origin_keys, "original R " + label + " origin")
+        require(
+            origin == read(relative(child, filenames["response"]))
+            and type(probe["exit_code"]) is int
+            and probe["exit_code"] == 0
+            and type(probe["launcher_pid"]) is int
+            and probe["launcher_pid"] > 0
+            and type(origin["pid"]) is int
+            and origin["pid"] > 0,
+            "failed/missing original R probe/PID association",
+        )
+        require(
+            origin["runtime_version"] == identity["runtime_version"] == "4.6.1"
+            and origin["jsonlite_version"] == identity["jsonlite_version"] == "2.0.0"
+            and isinstance(origin["private_libraries"], list)
+            and [original_path(path, system) for path in origin["private_libraries"]]
+            == expected_libraries
+            and original_path(origin["codec_origin"], system)
+            == original_path(identity["jsonlite_origin"], system),
+            "R probe runtime/private codec origin differs",
+        )
+        require(
+            original_path(origin["codec_origin"], system).parent in expected_libraries,
+            "R probe codec outside declared private libraries",
+        )
+        home = original_path(origin["home"], system)
+        binary = original_path(origin["bin"], system)
+        direct = original_path(origin["direct_executable"], system)
+        require(
+            binary.is_relative_to(home / "bin")
+            and direct.is_relative_to(home / "bin")
+            and direct.name.lower() == "rscript.exe"
+            and original_path(command[0], system).is_relative_to(home / "bin")
+            and original_path(command[0], system).name.lower()
+            in ("rscript", "rscript.exe")
+            and origin["architecture"] in ("x86_64", "x86-64")
+            and isinstance(origin["r_arch"], str)
+            and re.fullmatch(r"[A-Za-z0-9_-]*", origin["r_arch"]) is not None,
+            "R probe installed architecture executable differs",
+        )
+    requested = resolution["requested_origin"]["origin"]
+    observed = resolution["observed_origin"]["origin"]
+    require(
+        all(requested[key] == observed[key] for key in origin_keys - {"pid"})
+        and resolution["observed_executable"] == requested["direct_executable"]
+        and observed["pid"] == resolution["observed_origin"]["launcher_pid"]
+        and names == expected_names,
+        "resolved R runtime/origin/direct PID differs",
+    )
+
+
+def admit_r_worker(child, process, observation, request, plan, record, repository):
+    """Bind new resolver evidence to the original public worker declaration."""
+    if record["host"] != "r":
+        require(
+            "r_worker" not in process
+            and not any(path.name.startswith("r-worker-") for path in child.iterdir()),
+            "R resolver evidence attached to another host",
+        )
+        return
+    helper = lifecycle.git_bytes(
+        repository, plan["harness_checkout_head"], "rust/tools/child_peak_rss.py"
+    )
+    if r_probe_source(helper) is None and "r_worker" not in process:
+        require(
+            not any(path.name.startswith("r-worker-") for path in child.iterdir()),
+            "unassociated original R resolver evidence",
+        )
+        return
+    command = observation.get("command")
+    require(
+        isinstance(command, list) and len(command) == 4,
+        "missing original pre-launch R worker command",
+    )
+    system = record["system"]
+    original_child = original_path(request["output"], system)
+    original_collection = original_path(
+        plan["measurement_campaign"]["collection"], system
+    ).parent
+    require(
+        original_path(command[2], system)
+        == original_collection / "harness" / lifecycle.WORKERS["r"]
+        and original_path(command[3], system) == original_child / "request.json",
+        "original R worker harness/request command differs",
+    )
+    libraries = [
+        str(original_path(record["installed_origins"]["package"], system).parent)
+    ]
+    libraries += [
+        str(original_path(spec["origin"], system).parent)
+        for spec in record["collectors"].values()
+    ]
+    identity = {
+        "system": system,
+        "runtime_version": record["runtime_version"],
+        "private_libraries": list(dict.fromkeys(libraries)),
+        "jsonlite_version": record["collectors"]["jsonlite"]["version"],
+        "jsonlite_origin": record["collectors"]["jsonlite"]["origin"],
+    }
+    admit_r_resolution(child, process, command, identity, helper)
 
 
 def offline_origins(observed, declared, repository):
@@ -500,6 +817,7 @@ def admit_case(directory, plan, row, case, authored, record, role, repository):
             and original_child == original_collection.parent / name,
             "worker belongs to another campaign collection",
         )
+        admit_r_worker(child, process, observation, request, plan, record, repository)
         require(
             request["reference_schema"] is None
             if role == "candidate"
@@ -880,6 +1198,10 @@ def admit_collection(
         and [r["case"] for r in plan["cases"]] == [c["name"] for c in selected],
         "duplicate/absent/empty/unexpected selected case coverage",
     )
+    require(
+        all(case["name"] in role_case_names(role) for case in selected),
+        "unexpected workload case for collection role",
+    )
     result = {}
     for row, case in zip(plan["cases"], selected):
         try:
@@ -1095,6 +1417,51 @@ def validate_run(run, payload):
     )
 
 
+def performance_completion(payload, root, run):
+    """A running audit snapshot cannot establish the original terminal outcome."""
+    completion = (
+        read(relative(root, payload["completion_run"]))
+        if "completion_run" in payload
+        else run
+    )
+    if "completion_run" in payload:
+        validate_run(completion, payload)
+        require(
+            all(
+                completion[key] == run[key]
+                for key in (
+                    "id",
+                    "run_attempt",
+                    "head_sha",
+                    "head_branch",
+                    "path",
+                    "event",
+                )
+            )
+            and all(
+                key not in run or completion.get(key) == run[key]
+                for key in ("created_at", "run_number", "workflow_id", "run_started_at")
+            ),
+            "completion receipt belongs to another original performance attempt",
+        )
+        require(
+            completion["status"] == "completed"
+            and completion["conclusion"] == "success",
+            "performance completion receipt is not terminal success",
+        )
+    return {
+        "status": "pass" if completion["status"] == "completed" else "incomplete",
+        "evidence": "completion-receipt"
+        if "completion_run" in payload
+        else "original-snapshot",
+        "run_id": run["id"],
+        "run_attempt": run["run_attempt"],
+        "reason": None
+        if completion["status"] == "completed"
+        else "original running snapshot has no retained terminal completion receipt",
+    }
+
+
 def admit_artifact(entry, artifacts, run, jobs):
     lane = entry["tuple"]
     require(
@@ -1109,24 +1476,27 @@ def admit_artifact(entry, artifacts, run, jobs):
         if lane["host"] == "python"
         else f"performance-r-{lane['os']}-source"
     )
+    if "variant" in entry:
+        name += "-" + entry["variant"]
     require(
         artifact["name"] == name == entry["artifact_name"]
         and artifact["expired"] is False
         and type(artifact["id"]) is int
         and artifact["id"] > 0
+        and type(artifact["size_in_bytes"]) is int
         and artifact["size_in_bytes"] > 0
         and artifact["workflow_run"]["id"] == run["id"]
         and artifact["workflow_run"]["head_sha"] == run["head_sha"],
         "wrong/empty/expired original artifact",
     )
-    require(
-        len([a for a in artifacts if a["name"] == name]) == 1,
-        "ambiguous artifact names from different attempts",
-    )
     job_name = (
-        f"performance-python ({lane['os']}, {lane['python']}, {lane['form']})"
-        if lane["host"] == "python"
-        else f"performance-r ({lane['os']}, source)"
+        (
+            f"performance-python ({lane['os']}, {lane['python']}, {lane['form']}"
+            if lane["host"] == "python"
+            else f"performance-r ({lane['os']}, source"
+        )
+        + (", " + entry["variant"] if "variant" in entry else "")
+        + ")"
     )
     matches = [job for job in jobs if job["name"].endswith(job_name)]
     require(len(matches) == 1, "missing/duplicate original producing job")
@@ -1139,7 +1509,18 @@ def admit_artifact(entry, artifacts, run, jobs):
         and job["conclusion"] == "success",
         "producing job source/attempt failed or incomplete",
     )
-    parse_time = datetime.datetime.fromisoformat
+    parse_time = native_admission.timestamp
+    require(
+        sum(
+            a["name"] == name
+            and parse_time(job["started_at"])
+            <= parse_time(a["created_at"])
+            <= parse_time(job["completed_at"])
+            for a in artifacts
+        )
+        == 1,
+        "ambiguous artifact names in selected producing attempt",
+    )
     require(
         parse_time(job["started_at"])
         <= parse_time(artifact["created_at"])
@@ -1161,12 +1542,33 @@ def native_inputs(payload, root, performance_run):
         jobs = jobs["jobs"] if isinstance(jobs, dict) else jobs
         artifacts = artifacts["artifacts"] if isinstance(artifacts, dict) else artifacts
         nonempty(performance_run["head_branch"], "original source branch")
+        # Keep full immutable API snapshots. Eligibility is a separate explicit
+        # selection inside each named producing job's exact selected attempt.
+        selected = []
+        for name in native_admission.required_artifacts():
+            matches = [
+                job
+                for job in jobs
+                if job["name"] == native_admission.artifact_job(name)
+            ]
+            require(
+                len(matches) == 1, "missing/duplicate original native producing job"
+            )
+            job = matches[0]
+            selected.extend(
+                item
+                for item in artifacts
+                if item["name"] == name
+                and native_admission.timestamp(job["started_at"])
+                <= native_admission.timestamp(item["created_at"])
+                <= native_admission.timestamp(job["completed_at"])
+            )
         # Reuse #2137's full native admission, including exact producing-job
         # attempts and original artifact creation intervals.
         native_admission.validate(
             run,
             jobs,
-            artifacts,
+            selected,
             payload["repository"],
             payload["source_revision"],
             performance_run["head_branch"],
@@ -1177,7 +1579,22 @@ def native_inputs(payload, root, performance_run):
             and len(ids) == len(set(ids)),
             "duplicate/invalid original native artifact ID",
         )
-        return {"status": "pass", "run": run, "jobs": jobs, "artifacts": artifacts}
+        require(
+            all(
+                item["expired"] is False
+                and type(item["size_in_bytes"]) is int
+                and item["size_in_bytes"] > 0
+                for item in selected
+            ),
+            "invalid original native artifact availability/size",
+        )
+        return {
+            "status": "pass",
+            "run": run,
+            "jobs": jobs,
+            "artifacts": artifacts,
+            "selected_artifacts": selected,
+        }
     except EVIDENCE_ERRORS as error:
         return {"status": "fail", "reason": str(error)}
 
@@ -1208,7 +1625,9 @@ def native_collection(directory, lane, native):
         if lane["host"] == "python"
         else f"native-r-{lane['os']}"
     )
-    (artifact,) = [item for item in native["artifacts"] if item["name"] == name]
+    (artifact,) = [
+        item for item in native["selected_artifacts"] if item["name"] == name
+    ]
     record = read(relative(directory, "collection.json"))["provenance"]
     filename = original_path(record["artifact_path"], record["system"]).name
     reference = f"github-actions:{original['id']}/attempt-{original['run_attempt']}/{name}/{filename}"
@@ -1229,7 +1648,7 @@ def native_collection(directory, lane, native):
 
 
 @contextlib.contextmanager
-def entry_root(root, entry, scratch, entry_provider):
+def entry_root(root, entry, scratch, entry_provider, expected_size=None):
     """Only one original ZIP is expanded at a time; original bytes stay intact."""
     with contextlib.ExitStack() as stack:
         archive_root = (
@@ -1243,18 +1662,29 @@ def entry_root(root, entry, scratch, entry_provider):
             yield root
             return
         archive_path = relative(Path(archive_root), entry["archive"])
+        if expected_size is not None:
+            require(
+                type(expected_size) is int
+                and expected_size > 0
+                and archive_path.stat().st_size == expected_size,
+                "original Actions ZIP size differs from admitted artifact metadata",
+            )
         destination = scratch / "evidence" / entry["artifact_name"]
         destination.mkdir(parents=True)
         seen = set()
         with zipfile.ZipFile(archive_path) as archive:
             require(bool(archive.infolist()), "empty original Actions ZIP")
             for member in archive.infolist():
-                name = PurePosixPath(member.filename)
+                # ZipInfo.filename loses NUL suffixes and normalizes backslashes
+                # on Windows. Admit the original spelling before joining paths.
+                original_name = member.orig_filename
+                name = PurePosixPath(original_name)
                 require(
                     not name.is_absolute()
-                    and not PureWindowsPath(member.filename).is_absolute()
                     and ".." not in name.parts
-                    and "\\" not in member.filename,
+                    and "\\" not in original_name
+                    and "\x00" not in original_name
+                    and not any(PureWindowsPath(part).drive for part in name.parts),
                     "unsafe original archive member",
                 )
                 require(
@@ -1277,9 +1707,9 @@ def entry_root(root, entry, scratch, entry_provider):
         yield scratch / "evidence"
 
 
-def audit(input_path, repository, budgets_path=None, entry_provider=None):
+def input_context(input_path):
+    """Re-admit original immutable metadata before any replay or fragment use."""
     root = input_path.resolve().parent
-    errors, accepted = [], {}
     payload = read(input_path)
     require(payload["protocol"] == PROTOCOL, "unsupported audit input protocol")
     exact(
@@ -1293,6 +1723,7 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
                 "native_run",
                 "native_jobs",
                 "native_artifacts",
+                "completion_run",
             )
             if key in payload
         ),
@@ -1312,9 +1743,18 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
     artifacts = read(relative(root, payload["artifacts"]))
     artifacts = artifacts["artifacts"] if isinstance(artifacts, dict) else artifacts
     validate_run(run, payload)
+    completion = performance_completion(payload, root, run)
     jobs = read(relative(root, payload["jobs"])) if "jobs" in payload else []
     jobs = jobs["jobs"] if isinstance(jobs, dict) else jobs
     native = native_inputs(payload, root, run)
+    return root, payload, run, artifacts, jobs, native, completion
+
+
+def audit(
+    input_path, repository, budgets_path=None, entry_provider=None, unit_selector=None
+):
+    root, payload, run, artifacts, jobs, native, completion = input_context(input_path)
+    errors, accepted = [], {}
     budget_error = None
     try:
         budgets = (
@@ -1340,34 +1780,43 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
                 capture_output=True,
             )
         seen = set()
+        expanded = []
         for number, entry in enumerate(payload["entries"]):
             try:
-                exact(
-                    entry,
-                    (
-                        "tuple",
-                        "artifact_id",
-                        "artifact_name",
-                        "run_attempt",
-                        "campaign",
-                        "collections",
-                    )
-                    + (("archive",) if "archive" in entry else ()),
-                    "entry",
-                )
                 lane = entry["tuple"]
                 require(lane in tuples(), "unexpected performance tuple")
                 key = json.dumps(lane, sort_keys=True)
                 require(key not in seen, "duplicate performance tuple")
                 seen.add(key)
+                expanded.extend((number, part) for part in logical_entries(entry))
+            except EVIDENCE_ERRORS as error:
+                errors.append({"entry": number, "reason": str(error)})
+        if unit_selector is not None:
+            expanded = [
+                (number, entry)
+                for number, entry in expanded
+                if selector_for(entry) == unit_selector
+            ]
+            require(
+                len(expanded) == 1 and not errors,
+                "unit selector is not unique in original manifest",
+            )
+        for number, entry in expanded:
+            try:
+                lane = entry["tuple"]
+                key = json.dumps(lane, sort_keys=True)
                 artifact, job = admit_artifact(entry, artifacts, run, jobs)
-                parse_time = datetime.datetime.fromisoformat
+                parse_time = native_admission.timestamp
                 with tempfile.TemporaryDirectory(
                     dir=scratch, prefix=f"entry-{number}-"
                 ) as entry_temporary:
                     entry_scratch = Path(entry_temporary)
                     with entry_root(
-                        root, entry, entry_scratch, entry_provider
+                        root,
+                        entry,
+                        entry_scratch,
+                        entry_provider,
+                        expected_size=artifact["size_in_bytes"],
                     ) as evidence_root:
                         campaign = read(relative(evidence_root, entry["campaign"]))
                         require(
@@ -1391,6 +1840,16 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
                             and "candidate" in roles,
                             "duplicate/unexpected/absent collection role",
                         )
+                        if "variant" in entry:
+                            require(
+                                set(roles)
+                                == {
+                                    role
+                                    for role in ROLES
+                                    if set(entry["cases"]) & set(role_case_names(role))
+                                },
+                                "segment applicable collection roles differ",
+                            )
                         for collection in entry["collections"]:
                             exact(collection, ("role", "path"), "collection entry")
                             directory = relative(evidence_root, collection["path"])
@@ -1414,9 +1873,33 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
                                 repository,
                                 local,
                             )
+                            require(
+                                set(values).issubset(
+                                    role_case_names(collection["role"])
+                                ),
+                                "unexpected admitted workload case for collection role",
+                            )
+                            if "variant" in entry:
+                                require(
+                                    set(values)
+                                    == set(entry["cases"])
+                                    & set(role_case_names(collection["role"])),
+                                    "segment collection case coverage differs from declared complete cases",
+                                )
                             for case, result in values.items():
                                 if association is not None:
                                     result["native_package_association"] = association
+                                result["performance_collection_association"] = {
+                                    "artifact_id": artifact["id"],
+                                    "artifact_name": artifact["name"],
+                                    "run_id": run["id"],
+                                    "run_attempt": run["run_attempt"],
+                                    "producing_job": job["name"],
+                                    "producing_job_id": job.get("id"),
+                                    "runner_name": job["runner_name"],
+                                    "campaign_id": campaign["campaign_id"],
+                                    "variant": entry.get("variant"),
+                                }
                                 identity = (key, case, collection["role"])
                                 require(
                                     identity not in accepted,
@@ -1424,7 +1907,22 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
                                 )
                                 accepted[identity] = result
             except EVIDENCE_ERRORS as error:
-                errors.append({"entry": number, "reason": str(error)})
+                errors.append(
+                    {
+                        "entry": number,
+                        "variant": entry.get("variant"),
+                        "reason": str(error),
+                    }
+                )
+    return report_from_values(
+        payload, run, completion, native, accepted, errors, budgets, budget_error
+    )
+
+
+def report_from_values(
+    payload, run, completion, native, accepted, errors, budgets=None, budget_error=None
+):
+    """Shared final gates; neither missing cases nor comparators are deduplicated."""
     cells = []
     for lane in tuples():
         key = json.dumps(lane, sort_keys=True)
@@ -1437,6 +1935,22 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
             cells.append(cell)
     passed = sum(cell["candidate"]["status"] == "pass" for cell in cells)
     failed = sum(cell["candidate"]["status"] == "fail" for cell in cells)
+    comparator_roles = {}
+    for role in ROLES[1:]:
+        statuses = [
+            cell[role.replace("-", "_")]["status"]
+            for cell in cells
+            if cell["case"] in role_case_names(role)
+        ]
+        comparator_roles[role] = {
+            "required": len(statuses),
+            "passed": statuses.count("pass"),
+            "failed": statuses.count("fail"),
+            "missing": statuses.count("missing"),
+        }
+    comparator_passed = sum(role["passed"] for role in comparator_roles.values())
+    comparator_failed = sum(role["failed"] for role in comparator_roles.values())
+    comparator_required = sum(role["required"] for role in comparator_roles.values())
     correctness = (
         "fail"
         if errors or any(value["status"] == "fail" for value in accepted.values())
@@ -1450,6 +1964,7 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
         "source_revision": payload["source_revision"],
         "run_id": run["id"],
         "run_attempt": run["run_attempt"],
+        "run_completion": completion,
         "harness_correctness": {"status": correctness, "errors": errors},
         "native_source_admission": (
             {"status": native["status"], "reason": native.get("reason")}
@@ -1467,6 +1982,18 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
             "failed": failed,
             "missing": 567 - passed - failed,
         },
+        "comparator_coverage": {
+            "status": "fail"
+            if comparator_failed
+            else "pass"
+            if comparator_passed == comparator_required
+            else "incomplete",
+            "required": comparator_required,
+            "passed": comparator_passed,
+            "failed": comparator_failed,
+            "missing": comparator_required - comparator_passed - comparator_failed,
+            "roles": comparator_roles,
+        },
         "budgets": (
             {"status": "fail", "reason": budget_error, "results": []}
             if budget_error
@@ -1476,22 +2003,288 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
         "baseline_gaps": "Callbacks have no retained compatible baseline. R runners retain Python baseline observations, whose cross-host ratios remain incomparable. Producer root-Build is a separate scope; full-graph Build, Save and child RSS have no comparable baseline.",
         "warm_rss_scope": child_peak_rss.SCOPE
         + "; one actual warm-child peak, never 30 invented per-repetition peaks",
+        "measurement_scopes": measurement_scopes(),
+    }
+    collection_statuses = {
+        report[key]["status"]
+        for key in (
+            "harness_correctness",
+            "coverage",
+            "comparator_coverage",
+            "native_source_admission",
+        )
+    }
+    report["collection_gate"] = {
+        "scope": "collection-only",
+        "status": "fail"
+        if "fail" in collection_statuses
+        else "pass"
+        if collection_statuses == {"pass"}
+        else "incomplete",
     }
     report["accepted"] = all(
         report[key]["status"] == "pass"
-        for key in ("harness_correctness", "coverage", "budgets")
+        for key in ("collection_gate", "run_completion", "budgets")
     )
     return report
 
 
 def markdown(report):
+    scopes = report["measurement_scopes"]
+    boundary_table = (
+        "| Boundary | Actual retained timing scope |\n| --- | --- |\n"
+        + "".join(
+            f"| `{boundary}` | {description} |\n"
+            for boundary, description in scopes["boundaries"].items()
+        )
+    )
     return (
         f"# public performance replay\n\nSource: `{report['source_revision']}`; original run {report['run_id']}, attempt {report['run_attempt']}.\n\n"
         f"| Gate | Verdict |\n| --- | --- |\n| Harness correctness | {report['harness_correctness']['status']} |\n"
         f"| Coverage | {report['coverage']['status']} ({report['coverage']['passed']}/567) |\n"
+        f"| Required comparator coverage | {report['comparator_coverage']['status']} ({report['comparator_coverage']['passed']}/504) |\n"
+        f"| Native source admission | {report['native_source_admission']['status']} |\n"
+        f"| Collection-only gate | {report['collection_gate']['status']} |\n"
+        f"| Original run completion | {report['run_completion']['status']} |\n"
         f"| Numeric budgets | {report['budgets']['status']} |\n\n{report['baseline_gaps']}\n\n"
         f"Warm RSS: {report['warm_rss_scope']}.\n\nAcceptance: {'pass' if report['accepted'] else 'incomplete or failed'}.\n"
+        f"\n{boundary_table}\n{scopes['phase_durations']}\n\n{scopes['owner_held_save_intervals']}\n\n"
+        f"{scopes['child_peak_rss']}\n\n{scopes['outside_outer_timers']}\n\n{scopes['baseline_ratios']}\n"
     )
+
+
+READER_WORKFLOW = ".github/workflows/performance-replay.yml"
+RAW_VALIDATION_SCOPE = (
+    "All original truth, observer, cold, warmup and measured warm typed views, "
+    "binary64/i64/date cells, inputs, specifications, reports, Save bytes, "
+    "source/installation, clocks, process/RSS and phase/function records "
+    "re-admitted with the whole offline auditor's independent validators."
+)
+
+
+def selector_for(entry):
+    return {
+        "protocol": "public-performance-replay-unit/1",
+        "tuple": entry["tuple"],
+        "variant": entry.get("variant"),
+    }
+
+
+def unit_key(selector):
+    exact(selector, ("protocol", "tuple", "variant"), "unit selector")
+    lane, variant = selector["tuple"], selector["variant"]
+    require(
+        selector["protocol"] == "public-performance-replay-unit/1" and lane in tuples(),
+        "invalid unit selector",
+    )
+    require(
+        variant is None or (isinstance(variant, str) and variant in variants()),
+        "unapproved unit variant",
+    )
+    key = (
+        f"{lane['host']}-{lane['os']}-"
+        + (lane["python"] + "-" if lane["host"] == "python" else "")
+        + lane["form"]
+    )
+    return key + ("-" + variant if variant is not None else "")
+
+
+def replay_catalog(input_path):
+    """Metadata-only inventory; not a substitute for complete independent reading."""
+    _, payload, run, artifacts, jobs, native, completion = input_context(input_path)
+    require(
+        completion["status"] == "pass",
+        "post-completion reader requires original terminal success",
+    )
+    require(
+        native["status"] == "pass",
+        native.get("reason", "original native admission absent"),
+    )
+    seen, units = set(), []
+    require(
+        isinstance(payload["entries"], list), "logical tuple inventory must be a list"
+    )
+    for logical in payload["entries"]:
+        lane = logical["tuple"]
+        require(lane in tuples(), "unexpected original logical tuple")
+        identity = json.dumps(lane, sort_keys=True)
+        require(identity not in seen, "duplicate original logical tuple")
+        seen.add(identity)
+        for entry in logical_entries(logical):
+            artifact, job = admit_artifact(entry, artifacts, run, jobs)
+            cases = entry.get("cases", case_names())
+            by_role = {
+                role: [case for case in cases if case in role_case_names(role)]
+                for role in ROLES
+                if set(cases) & set(role_case_names(role))
+            }
+            roles = []
+            for collection in entry["collections"]:
+                exact(collection, ("role", "path"), "unit collection")
+                path = PurePosixPath(collection["path"])
+                require(
+                    not path.is_absolute()
+                    and ".." not in path.parts
+                    and "\\" not in collection["path"]
+                    and path.parent.name == entry["artifact_name"],
+                    "unit collection artifact path differs",
+                )
+                roles.append(collection["role"])
+            require(
+                len(roles) == len(set(roles)) and set(roles) == set(by_role),
+                "unit required comparator roles differ",
+            )
+            selector = selector_for(entry)
+            units.append(
+                {
+                    "selector": selector,
+                    "key": unit_key(selector),
+                    "entry": entry,
+                    "cases_by_role": by_role,
+                    "artifact": {
+                        key: artifact[key]
+                        for key in (
+                            "id",
+                            "name",
+                            "size_in_bytes",
+                            "created_at",
+                            "workflow_run",
+                        )
+                    },
+                    "job": {
+                        key: job.get(key)
+                        for key in (
+                            "id",
+                            "name",
+                            "run_id",
+                            "run_attempt",
+                            "head_sha",
+                            "runner_name",
+                            "started_at",
+                            "completed_at",
+                            "status",
+                            "conclusion",
+                        )
+                    },
+                }
+            )
+    require(
+        seen == {json.dumps(lane, sort_keys=True) for lane in tuples()},
+        "missing original logical tuple",
+    )
+    return {
+        "protocol": "public-performance-replay-catalog/1",
+        "original": {
+            "repository": payload["repository"],
+            "source_revision": payload["source_revision"],
+            "run_id": run["id"],
+            "run_attempt": run["run_attempt"],
+            "native_run_id": native["run"]["id"],
+            "native_run_attempt": native["run"]["run_attempt"],
+        },
+        "logical_tuples": 21,
+        "candidate_cells": 567,
+        "comparator_cells": 504,
+        "units": units,
+        "accepted": False,
+        "scope": "original metadata and scheduling inventory only; typed raw correctness and budgets not evaluated",
+    }
+
+
+def reader_identity():
+    """Record actual reviewed checkout separately from original measured source."""
+    repository = Path(__file__).resolve().parents[2]
+    revision = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+    ).strip()
+    require(
+        re.fullmatch(r"[0-9a-f]{40}", revision),
+        "invalid actual reader checkout revision",
+    )
+    subprocess.run(
+        ["git", "diff", "--exit-code", "HEAD", "--", "rust/tools"],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+    )
+    require(
+        os.environ.get("GITHUB_SHA", revision) == revision,
+        "reader checkout differs from Actions source",
+    )
+    run_id, attempt = (
+        os.environ.get("GITHUB_RUN_ID"),
+        os.environ.get("GITHUB_RUN_ATTEMPT"),
+    )
+    require((run_id is None) == (attempt is None), "partial reader run identity")
+    if run_id is not None:
+        run_id, attempt = int(run_id), int(attempt)
+        require(run_id > 0 and attempt > 0, "invalid actual reader run identity")
+    return {
+        "revision": revision,
+        "repository": os.environ.get("GITHUB_REPOSITORY"),
+        "run_id": run_id,
+        "run_attempt": attempt,
+    }
+
+
+def read_unit(input_path, repository, selection, entry_provider=None):
+    catalog = replay_catalog(input_path)
+    key = unit_key(selection)
+    matches = [unit for unit in catalog["units"] if unit["selector"] == selection]
+    require(
+        len(matches) == 1, "selector does not name one original complete reader unit"
+    )
+    unit = matches[0]
+    identity = reader_identity()
+    require(
+        identity["repository"] in (None, catalog["original"]["repository"]),
+        "reader repository differs",
+    )
+    report = audit(
+        input_path, repository, entry_provider=entry_provider, unit_selector=selection
+    )
+    cells = [
+        cell
+        for cell in report["cells"]
+        if cell["tuple"] == selection["tuple"]
+        and cell["case"] in unit["cases_by_role"]["candidate"]
+    ]
+    required = sum(len(cases) for cases in unit["cases_by_role"].values())
+    passed = sum(
+        cell[role.replace("-", "_")]["status"] == "pass"
+        for cell in cells
+        for role, cases in unit["cases_by_role"].items()
+        if cell["case"] in cases
+    )
+    gate = (
+        "pass"
+        if passed == required
+        and report["harness_correctness"]["status"] == "pass"
+        and report["native_source_admission"]["status"] == "pass"
+        and report["run_completion"]["status"] == "pass"
+        else "fail"
+    )
+    return {
+        "protocol": "public-performance-audit-fragment/1",
+        "original": catalog["original"],
+        "unit": unit,
+        "reader": identity,
+        "sampling": SAMPLING,
+        "raw_validation_scope": RAW_VALIDATION_SCOPE,
+        "harness_correctness": report["harness_correctness"],
+        "native_source_admission": report["native_source_admission"],
+        "run_completion": report["run_completion"],
+        "unit_coverage": {
+            "required": required,
+            "passed": passed,
+            "missing_or_failed": required - passed,
+        },
+        "unit_gate": {"status": gate, "key": key},
+        "cells": cells,
+        "measurement_scopes": report["measurement_scopes"],
+        "budgets": {"status": "not_evaluated"},
+        "accepted": False,
+    }
 
 
 def main(argv=None, entry_provider=None):
@@ -1502,9 +2295,75 @@ def main(argv=None, entry_provider=None):
     )
     parser.add_argument("--budgets", type=Path)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--check", action="store_true")
+    parser.add_argument(
+        "--unit",
+        type=Path,
+        help="immutable selector from the original complete manifest",
+    )
+    parser.add_argument(
+        "--catalog",
+        action="store_true",
+        help="derive post-completion metadata-only reader inventory",
+    )
+    checks = parser.add_mutually_exclusive_group()
+    checks.add_argument("--check", action="store_true")
+    checks.add_argument("--check-unit", action="store_true")
+    checks.add_argument(
+        "--check-collection",
+        action="store_true",
+        help="require correctness, native source admission, 567 candidate and 504 comparator cells; no numeric acceptance",
+    )
     args = parser.parse_args(argv)
+    if args.catalog and (
+        args.unit
+        or args.check
+        or args.check_collection
+        or args.check_unit
+        or args.budgets
+    ):
+        parser.error("--catalog is metadata-only and forbids unit/check/budget flags")
+    if args.unit and (args.check or args.check_collection or args.budgets):
+        parser.error("unit fragments forbid whole/final checks and budgets")
+    if args.check_unit and not args.unit:
+        parser.error("--check-unit requires --unit")
+    if args.check_collection and args.budgets:
+        parser.error(
+            "--check-collection forbids --budgets; replay final --check separately"
+        )
     args.output.mkdir(parents=True, exist_ok=False)
+    if args.catalog or args.unit:
+        filename = (
+            "performance-replay-catalog" if args.catalog else "performance-unit-audit"
+        )
+        try:
+            report = (
+                replay_catalog(args.input)
+                if args.catalog
+                else read_unit(
+                    args.input, args.repository, read(args.unit), entry_provider
+                )
+            )
+        except EVIDENCE_ERRORS as error:
+            report = {
+                "protocol": "public-performance-replay-catalog/1"
+                if args.catalog
+                else "public-performance-audit-fragment/1",
+                "accepted": False,
+                "unit_gate": {"status": "fail"},
+                "errors": [str(error)],
+                "budgets": {"status": "not_evaluated"},
+            }
+        lifecycle.write_json(args.output / (filename + ".json"), report)
+        (args.output / (filename + ".md")).write_text(
+            f"# public performance reader\n\n{report.get('scope', RAW_VALIDATION_SCOPE)}\n\nUnit gate: {report.get('unit_gate', {}).get('status', 'not evaluated')}.\n\nAcceptance: pending; budgets not evaluated.\n",
+            encoding="utf-8",
+        )
+        return (
+            1
+            if "errors" in report
+            or (args.check_unit and report["unit_gate"]["status"] != "pass")
+            else 0
+        )
     try:
         report = audit(args.input, args.repository, args.budgets, entry_provider)
     except EVIDENCE_ERRORS as error:
@@ -1513,7 +2372,15 @@ def main(argv=None, entry_provider=None):
             "accepted": False,
             "harness_correctness": {"status": "fail", "errors": [str(error)]},
             "coverage": {"status": "incomplete", "required": 567, "passed": 0},
+            "comparator_coverage": {
+                "status": "incomplete",
+                "required": 504,
+                "passed": 0,
+            },
             "budgets": {"status": "not_evaluated"},
+            "collection_gate": {"scope": "collection-only", "status": "fail"},
+            "run_completion": {"status": "incomplete"},
+            "measurement_scopes": measurement_scopes(),
         }
     lifecycle.write_json(args.output / "performance-audit.json", report)
     text = (
@@ -1522,6 +2389,8 @@ def main(argv=None, entry_provider=None):
         else f"# public performance replay\n\nRefused: {report['harness_correctness']['errors']}\n"
     )
     (args.output / "performance-audit.md").write_text(text, encoding="utf-8")
+    if args.check_collection:
+        return 1 if report["collection_gate"]["status"] != "pass" else 0
     return 1 if args.check and not report["accepted"] else 0
 
 

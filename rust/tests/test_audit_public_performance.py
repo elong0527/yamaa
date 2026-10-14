@@ -4,6 +4,7 @@ import contextlib
 import copy
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -604,6 +605,10 @@ class Inventory(unittest.TestCase):
             ),
             567,
         )
+        self.assertEqual(len(auditor.role_case_names("baseline")), 18)
+        self.assertEqual(
+            len(auditor.role_case_names("producer-root-build-baseline")), 6
+        )
 
     def test_duplicate_json_members_refuse(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -708,7 +713,10 @@ class ActionsAdmission(unittest.TestCase):
         for artifact in (
             dict(self.artifact, expired=True),
             dict(self.artifact, size_in_bytes=0),
+            dict(self.artifact, size_in_bytes=True),
+            dict(self.artifact, size_in_bytes=1.0),
             dict(self.artifact, created_at="2026-10-13T01:10:00Z"),
+            dict(self.artifact, created_at="2026-10-14T01:10:00"),
         ):
             with self.assertRaises(ValueError):
                 auditor.admit_artifact(self.entry, [artifact], self.run, [self.job])
@@ -728,6 +736,23 @@ class ActionsAdmission(unittest.TestCase):
         ):
             with self.assertRaises(ValueError):
                 auditor.validate_run(run, self.payload)
+
+    def test_original_full_artifact_snapshot_preserves_old_attempts_without_substitution(
+        self,
+    ):
+        older = dict(self.artifact, id=789, created_at="2026-10-13T01:10:00Z")
+        snapshot = [self.artifact, older]
+        original = copy.deepcopy(snapshot)
+        artifact, _ = auditor.admit_artifact(self.entry, snapshot, self.run, [self.job])
+        self.assertEqual(artifact["id"], self.entry["artifact_id"])
+        self.assertEqual(snapshot, original)
+        with self.assertRaisesRegex(ValueError, "outside producing"):
+            auditor.admit_artifact(
+                dict(self.entry, artifact_id=789), snapshot, self.run, [self.job]
+            )
+        older["created_at"] = self.artifact["created_at"]
+        with self.assertRaisesRegex(ValueError, "ambiguous artifact"):
+            auditor.admit_artifact(self.entry, snapshot, self.run, [self.job])
 
     def test_always_retains_all_567_gaps_and_budget_errors_stay_separate(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -749,6 +774,42 @@ class ActionsAdmission(unittest.TestCase):
             self.assertEqual(result["harness_correctness"]["status"], "incomplete")
             self.assertEqual(result["budgets"]["status"], "fail")
             self.assertFalse(result["accepted"])
+
+    def test_original_archive_size_binds_to_actions_metadata_before_replay(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            entry = dict(
+                self.entry,
+                archive="original.zip",
+                campaign=self.entry["artifact_name"] + "/machine-campaign.json",
+                collections=[],
+            )
+            with zipfile.ZipFile(root / entry["archive"], "w") as archive:
+                archive.writestr("machine-campaign.json", b"original raw bytes")
+            original = (root / entry["archive"]).read_bytes()
+            payload = dict(
+                self.payload,
+                protocol=auditor.PROTOCOL,
+                run="run.json",
+                artifacts="artifacts.json",
+                jobs="jobs.json",
+                entries=[entry],
+            )
+            write(root / "input.json", payload)
+            write(root / "run.json", self.run)
+            write(
+                root / "artifacts.json",
+                [dict(self.artifact, size_in_bytes=len(original) + 1)],
+            )
+            write(root / "jobs.json", [self.job])
+            result = auditor.audit(root / "input.json", root)
+            self.assertEqual(result["harness_correctness"]["status"], "fail")
+            self.assertIn(
+                "ZIP size differs from admitted artifact metadata",
+                result["harness_correctness"]["errors"][0]["reason"],
+            )
+            self.assertEqual(result["coverage"]["missing"], 567)
+            self.assertEqual((root / entry["archive"]).read_bytes(), original)
 
     def test_malformed_campaign_still_writes_both_reports_and_all_matrix_gaps(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -813,7 +874,7 @@ class ActionsAdmission(unittest.TestCase):
                         str(root / "input.json"),
                         "--output",
                         str(root / "report"),
-                        "--check",
+                        "--check-collection",
                     ]
                 ),
                 1,
@@ -826,6 +887,637 @@ class ActionsAdmission(unittest.TestCase):
                 "replace", report["harness_correctness"]["errors"][0]["reason"]
             )
             self.assertTrue((root / "report/performance-audit.md").is_file())
+
+
+class CollectionGates(unittest.TestCase):
+    """Gate composition with authored API metadata; raw validation has own fixtures."""
+
+    def setUp(self):
+        ActionsAdmission.setUp(self)
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.payload.update(
+            protocol=auditor.PROTOCOL,
+            run="run.json",
+            artifacts="artifacts.json",
+            jobs="jobs.json",
+            entries=[],
+        )
+        native_run, _, _ = native_fixture(self.root, self.payload)
+        artifacts, jobs = [], []
+        for number, lane in enumerate(auditor.tuples()):
+            python = lane["host"] == "python"
+            name = (
+                f"performance-python-{lane['os']}-{lane['python']}-{lane['form']}"
+                if python
+                else f"performance-r-{lane['os']}-source"
+            )
+            collection = self.root / name / "candidate-evidence"
+            collection.mkdir(parents=True)
+            collections = []
+            for role, relative_path in (
+                ("candidate", "candidate-evidence"),
+                ("baseline", "baseline-evidence"),
+                ("producer-root-build-baseline", "producer-root-build-baseline"),
+            ):
+                (self.root / name / relative_path).mkdir(exist_ok=True)
+                collections.append({"role": role, "path": name + "/" + relative_path})
+            entry = dict(
+                self.entry,
+                tuple=lane,
+                artifact_id=456 + number,
+                artifact_name=name,
+                campaign=name + "/machine-campaign.json",
+                collections=collections,
+            )
+            self.payload["entries"].append(entry)
+            artifacts.append(dict(self.artifact, id=entry["artifact_id"], name=name))
+            jobs.append(
+                dict(
+                    self.job,
+                    name=(
+                        f"performance-python ({lane['os']}, {lane['python']}, {lane['form']})"
+                        if python
+                        else f"performance-r ({lane['os']}, source)"
+                    ),
+                    runner_name="fixture-runner",
+                )
+            )
+            native_name = (
+                f"native-python-{lane['os']}-3.14"
+                if python
+                else f"native-r-{lane['os']}"
+            )
+            write(collection.parent / "native-run.json", native_run)
+            write(
+                collection / "collection.json",
+                {
+                    "provenance": {
+                        "artifact_path": "/vanished/yamaa.whl",
+                        "system": "Linux",
+                        "source_revision": "a" * 40,
+                        "artifact_reference": f"github-actions:321/attempt-2/{native_name}/yamaa.whl",
+                    }
+                },
+            )
+            write(
+                collection.parent / "machine-campaign.json",
+                {
+                    "campaign_id": f"00000000-0000-4000-8000-{number:012d}",
+                    "created_at": "2026-10-14T01:05:00Z",
+                    "measurement_machine": {"runner_name": "fixture-runner"},
+                },
+            )
+        self.original_run = json.dumps(self.run).encode()
+        (self.root / "run.json").write_bytes(self.original_run)
+        write(self.root / "artifacts.json", artifacts)
+        write(self.root / "jobs.json", jobs)
+        self.values = {
+            case: {
+                "status": "pass",
+                "metrics": {"cold.public_build.median_ns": {"median": 10}},
+                "unavailable": [],
+            }
+            for case in auditor.case_names()
+        }
+
+    def admitted_values(self, *arguments):
+        return {
+            case: copy.deepcopy(value)
+            for case, value in self.values.items()
+            if case in auditor.role_case_names(arguments[2])
+        }
+
+    def invoke(self, flag, name, budgets=False):
+        write(self.root / "input.json", self.payload)
+        arguments = [
+            "--input",
+            str(self.root / "input.json"),
+            "--output",
+            str(self.root / name),
+            flag,
+        ]
+        if budgets:
+            arguments.extend(["--budgets", str(self.root / "budgets.json")])
+        status = auditor.main(arguments)
+        return status, auditor.read(self.root / name / "performance-audit.json")
+
+    def test_collection_only_passes_567_without_claiming_final_acceptance(self):
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=self.admitted_values
+        ):
+            status, report = self.invoke("--check-collection", "collection-report")
+        self.assertEqual(status, 0)
+        self.assertEqual(report["coverage"]["passed"], 567)
+        self.assertEqual(report["comparator_coverage"]["passed"], 504)
+        self.assertEqual(report["collection_gate"]["status"], "pass")
+        self.assertEqual(report["collection_gate"]["scope"], "collection-only")
+        self.assertEqual(report["run_completion"]["status"], "incomplete")
+        self.assertEqual(report["budgets"]["status"], "not_evaluated")
+        self.assertFalse(report["accepted"])
+
+    def test_final_budgets_need_original_terminal_success_and_leave_snapshot_unchanged(
+        self,
+    ):
+        budget_fixture = Budgets()
+        budget_fixture.setUp()
+        write(self.root / "budgets.json", budget_fixture.value)
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=self.admitted_values
+        ):
+            status, report = self.invoke("--check", "before-completion", budgets=True)
+            self.assertEqual(report["budgets"]["status"], "pass")
+            self.assertEqual(status, 1)
+            self.assertFalse(report["accepted"])
+            self.payload["completion_run"] = "completion-run.json"
+            write(
+                self.root / "completion-run.json",
+                dict(self.run, status="completed", conclusion="success"),
+            )
+            status, report = self.invoke("--check", "after-completion", budgets=True)
+        self.assertEqual(status, 0)
+        self.assertTrue(report["accepted"])
+        self.assertEqual(report["run_completion"]["evidence"], "completion-receipt")
+        self.assertEqual((self.root / "run.json").read_bytes(), self.original_run)
+
+    def test_completion_receipt_wrong_identity_failed_or_still_running_refuses(self):
+        self.payload["completion_run"] = "completion-run.json"
+        success = dict(self.run, status="completed", conclusion="success")
+        for number, change in enumerate(
+            (
+                {"id": 124},
+                {"run_attempt": 3},
+                {"head_sha": "b" * 40},
+                {"head_branch": "other"},
+                {"event": "push"},
+                {"repository": {"full_name": "other/repository"}},
+                {"conclusion": "failure"},
+                {"conclusion": "cancelled"},
+                {"status": "in_progress", "conclusion": None},
+            )
+        ):
+            with self.subTest(change=change):
+                write(self.root / "completion-run.json", dict(success, **change))
+                status, report = self.invoke("--check-collection", f"bad-{number}")
+                self.assertEqual(status, 1)
+                self.assertEqual(report["collection_gate"]["status"], "fail")
+                self.assertFalse(report["accepted"])
+
+    def test_collection_only_refuses_actual_failed_raw_child_and_missing_case(self):
+        raw = Replay()
+        raw.setUp()
+        self.addCleanup(raw.doCleanups)
+        raw.change(raw.cold, "process.json", lambda value: value.update(exit_code=1))
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=lambda *args: raw.replay()
+        ):
+            status, report = self.invoke("--check-collection", "failed-child")
+        self.assertEqual(status, 1)
+        self.assertEqual(report["collection_gate"]["status"], "fail")
+        self.assertIn("failed child/PID", str(report["harness_correctness"]["errors"]))
+        self.values.pop(auditor.case_names()[0])
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=self.admitted_values
+        ):
+            status, report = self.invoke("--check-collection", "missing-case")
+        self.assertEqual(status, 1)
+        self.assertEqual(report["collection_gate"]["status"], "incomplete")
+        self.assertEqual(report["coverage"]["missing"], 21)
+
+    def test_collection_only_never_admits_failed_source_run_or_native_attempt(self):
+        write(
+            self.root / "run.json",
+            dict(self.run, status="completed", conclusion="failure"),
+        )
+        status, report = self.invoke("--check-collection", "failed-source")
+        self.assertEqual(status, 1)
+        self.assertFalse(report["accepted"])
+        (self.root / "run.json").write_bytes(self.original_run)
+        native = auditor.read(self.root / "native-run.json")
+        write(self.root / "native-run.json", dict(native, conclusion="failure"))
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=self.admitted_values
+        ):
+            status, report = self.invoke("--check-collection", "failed-native")
+        self.assertEqual(status, 1)
+        self.assertFalse(report["accepted"])
+
+    def test_required_baseline_role_or_selected_case_cannot_be_disposed_away(self):
+        entry = self.payload["entries"][0]
+        entry["collections"] = [
+            collection
+            for collection in entry["collections"]
+            if collection["role"] != "baseline"
+        ]
+        budget_fixture = Budgets()
+        budget_fixture.setUp()
+        write(self.root / "budgets.json", budget_fixture.value)
+        write(
+            self.root / "run.json",
+            dict(self.run, status="completed", conclusion="success"),
+        )
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=self.admitted_values
+        ):
+            status, report = self.invoke(
+                "--check", "omitted-baseline-role", budgets=True
+            )
+        self.assertEqual(report["coverage"]["passed"], 567)
+        self.assertEqual(report["budgets"]["status"], "pass")
+        self.assertEqual(report["comparator_coverage"]["missing"], 18)
+        self.assertEqual(report["collection_gate"]["status"], "incomplete")
+        self.assertEqual(status, 1)
+        self.assertFalse(report["accepted"])
+        entry["collections"].append(
+            {"role": "baseline", "path": entry["artifact_name"] + "/baseline-evidence"}
+        )
+
+        def omit_case(*arguments):
+            values = self.admitted_values(*arguments)
+            if arguments[2] == "producer-root-build-baseline":
+                values.pop(auditor.role_case_names(arguments[2])[0])
+            return values
+
+        with mock.patch.object(auditor, "admit_collection", side_effect=omit_case):
+            status, report = self.invoke("--check-collection", "omitted-root-case")
+        self.assertEqual(report["coverage"]["passed"], 567)
+        self.assertEqual(report["comparator_coverage"]["missing"], 21)
+        self.assertEqual(status, 1)
+
+    def test_failed_baseline_case_and_unexpected_role_cases_refuse(self):
+        def fail_baseline(*arguments):
+            values = self.admitted_values(*arguments)
+            if arguments[2] == "baseline":
+                values[auditor.role_case_names("baseline")[0]] = {
+                    "status": "fail",
+                    "reason": "retained baseline raw child failed",
+                }
+            return values
+
+        with mock.patch.object(auditor, "admit_collection", side_effect=fail_baseline):
+            status, report = self.invoke("--check-collection", "failed-baseline")
+        self.assertEqual(status, 1)
+        self.assertEqual(report["comparator_coverage"]["failed"], 21)
+        self.assertEqual(report["collection_gate"]["status"], "fail")
+        self.assertEqual(report["coverage"]["passed"], 567)
+
+        def unexpected_baseline(*arguments):
+            values = self.admitted_values(*arguments)
+            if arguments[2] == "baseline":
+                values["callback-1000-1"] = self.values["callback-1000-1"]
+            return values
+
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=unexpected_baseline
+        ):
+            status, report = self.invoke(
+                "--check-collection", "unexpected-baseline-case"
+            )
+        self.assertEqual(status, 1)
+        self.assertIn(
+            "unexpected admitted workload case",
+            str(report["harness_correctness"]["errors"]),
+        )
+        entry = self.payload["entries"][0]
+        entry["collections"].append(copy.deepcopy(entry["collections"][1]))
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=self.admitted_values
+        ):
+            status, report = self.invoke(
+                "--check-collection", "duplicate-baseline-role"
+            )
+        self.assertEqual(status, 1)
+        self.assertIn(
+            "duplicate/unexpected/absent collection role",
+            str(report["harness_correctness"]["errors"]),
+        )
+
+    def test_collection_cli_refuses_budgets_and_conflicting_check_flags(self):
+        for arguments in (
+            ["--check-collection", "--budgets", "budgets.json"],
+            ["--check-collection", "--check"],
+        ):
+            with (
+                self.subTest(arguments=arguments),
+                self.assertRaises(SystemExit) as failure,
+                mock.patch.object(sys, "stderr"),
+            ):
+                auditor.main(
+                    ["--input", "input.json", "--output", "output", *arguments]
+                )
+            self.assertEqual(failure.exception.code, 2)
+
+
+class Segments(unittest.TestCase):
+    invoke = CollectionGates.invoke
+
+    def setUp(self, include_python=False):
+        CollectionGates.setUp(self)
+        artifacts = [
+            item
+            for item in auditor.read(self.root / "artifacts.json")
+            if not include_python and "python" in item["name"]
+        ]
+        jobs = [
+            item
+            for item in auditor.read(self.root / "jobs.json")
+            if not include_python and "python" in item["name"]
+        ]
+        for entry in self.payload["entries"]:
+            if not include_python and entry["tuple"]["host"] != "r":
+                continue
+            lane = entry["tuple"]
+            segments = []
+            for variant, cases in auditor.variants().items():
+                python = lane["host"] == "python"
+                name = (
+                    (
+                        f"performance-python-{lane['os']}-{lane['python']}-{lane['form']}"
+                        if python
+                        else f"performance-r-{lane['os']}-source"
+                    )
+                    + "-"
+                    + variant
+                )
+                artifact_id = 2000 + len(artifacts)
+                runner = f"original-runner-{artifact_id}"
+                roles = [
+                    role
+                    for role in auditor.ROLES
+                    if set(cases) & set(auditor.role_case_names(role))
+                ]
+                collections = []
+                for role in roles:
+                    directory = self.root / name / role
+                    directory.mkdir(parents=True)
+                    collections.append({"role": role, "path": name + "/" + role})
+                segment = {
+                    "variant": variant,
+                    "cases": cases,
+                    "artifact_id": artifact_id,
+                    "artifact_name": name,
+                    "run_attempt": 2,
+                    "campaign": name + "/machine-campaign.json",
+                    "collections": collections,
+                }
+                segments.append(segment)
+                artifacts.append(dict(self.artifact, id=artifact_id, name=name))
+                jobs.append(
+                    dict(
+                        self.job,
+                        id=10000 + artifact_id,
+                        name=(
+                            f"performance-python ({lane['os']}, {lane['python']}, {lane['form']}, {variant})"
+                            if python
+                            else f"performance-r ({lane['os']}, source, {variant})"
+                        ),
+                        runner_name=runner,
+                    )
+                )
+                write(
+                    self.root / name / "machine-campaign.json",
+                    {
+                        "campaign_id": f"00000000-0000-4000-8000-{artifact_id:012d}",
+                        "created_at": "2026-10-14T01:05:00Z",
+                        "measurement_machine": {"runner_name": runner},
+                    },
+                )
+                shutil.copyfile(
+                    self.root / "native-run.json", self.root / name / "native-run.json"
+                )
+                write(
+                    self.root / name / "candidate/collection.json",
+                    {
+                        "provenance": {
+                            "artifact_path": "/vanished/yamaa.whl"
+                            if python
+                            else "/vanished/yamaa.tar.gz",
+                            "system": "Linux",
+                            "source_revision": "a" * 40,
+                            "artifact_reference": (
+                                f"github-actions:321/attempt-2/native-python-{lane['os']}-3.14/yamaa.whl"
+                                if python
+                                else f"github-actions:321/attempt-2/native-r-{lane['os']}/yamaa.tar.gz"
+                            ),
+                        }
+                    },
+                )
+            entry.clear()
+            entry.update(tuple=lane, segments=segments)
+        write(self.root / "artifacts.json", artifacts)
+        write(self.root / "jobs.json", jobs)
+        self.segment = self.payload["entries"][-3]["segments"][0]
+        for number, values in enumerate(self.values.values()):
+            values["metrics"]["cold.child_peak_rss.median_bytes"] = {
+                "count": 10,
+                "raw": [number + 1000] * 10,
+                "median": number + 1000,
+            }
+            values["metrics"]["warm.child_peak_rss.median_bytes"] = {
+                "count": 1,
+                "raw": [number + 2000],
+                "median": number + 2000,
+            }
+
+    def admitted_values(self, *arguments):
+        values = CollectionGates.admitted_values(self, *arguments)
+        name = arguments[0].parent.name
+        selected = [
+            cases
+            for variant, cases in auditor.variants().items()
+            if name.endswith("-" + variant)
+        ]
+        if selected:
+            cases = selected[0]
+            values = {case: value for case, value in values.items() if case in cases}
+        return values
+
+    def test_nine_complete_r_groups_preserve_21_tuples_and_unpooled_observations(self):
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=self.admitted_values
+        ):
+            status, report = self.invoke("--check-collection", "grouped")
+        self.assertEqual(status, 0)
+        self.assertEqual(report["coverage"]["passed"], 567)
+        self.assertEqual(report["comparator_coverage"]["passed"], 504)
+        self.assertEqual(len(self.payload["entries"]), 21)
+        for cell in report["cells"]:
+            candidate = cell["candidate"]
+            self.assertEqual(candidate["metrics"], self.values[cell["case"]]["metrics"])
+            if cell["tuple"]["host"] == "r":
+                association = candidate["performance_collection_association"]
+                self.assertIn(cell["case"], auditor.variants()[association["variant"]])
+                self.assertEqual(
+                    association["runner_name"],
+                    f"original-runner-{association['artifact_id']}",
+                )
+                self.assertEqual(association["run_attempt"], 2)
+        self.assertFalse(report["accepted"])
+
+    def test_missing_duplicate_unapproved_or_overlapping_groups_refuse(self):
+        entry = self.payload["entries"][-3]
+        original = copy.deepcopy(entry)
+        variants = [
+            dict(original, segments=original["segments"][:-1]),
+            dict(original, segments=original["segments"] + [original["segments"][0]]),
+        ]
+        changed = copy.deepcopy(original)
+        changed["segments"][-1] = copy.deepcopy(changed["segments"][0])
+        variants.append(changed)
+        for field, value in (
+            ("variant", "lookup-2"),
+            ("cases", self.segment["cases"][:-1]),
+            ("cases", auditor.variants()["lookup-4"]),
+            ("cases", [self.segment["cases"][0]] * 3),
+        ):
+            changed = copy.deepcopy(original)
+            changed["segments"][0][field] = value
+            variants.append(changed)
+        variants.append(dict(original, tuple=auditor.tuples()[0]))
+        for number, changed in enumerate(variants):
+            with self.subTest(changed=changed):
+                self.payload["entries"][-3] = changed
+                with mock.patch.object(
+                    auditor, "admit_collection", side_effect=self.admitted_values
+                ):
+                    status, report = self.invoke(
+                        "--check-collection", f"bad-group-{number}"
+                    )
+                self.assertEqual(status, 1)
+                self.assertEqual(report["harness_correctness"]["status"], "fail")
+
+    def test_segment_cases_cannot_split_or_move_between_actual_runner_collections(self):
+        def wrong_cases(*arguments):
+            values = self.admitted_values(*arguments)
+            if arguments[0].parent.name == self.segment["artifact_name"]:
+                values.pop(self.segment["cases"][0])
+                values["lookup-1000-4"] = self.values["lookup-1000-4"]
+            return values
+
+        with mock.patch.object(auditor, "admit_collection", side_effect=wrong_cases):
+            status, report = self.invoke("--check-collection", "moved-case")
+        self.assertEqual(status, 1)
+        self.assertIn(
+            "segment collection case coverage differs",
+            str(report["harness_correctness"]["errors"]),
+        )
+        self.segment["collections"] = self.segment["collections"][:1]
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=self.admitted_values
+        ):
+            status, report = self.invoke("--check-collection", "missing-group-baseline")
+        self.assertEqual(status, 1)
+        self.assertIn(
+            "segment applicable collection roles differ",
+            str(report["harness_correctness"]["errors"]),
+        )
+
+    def test_group_archives_use_same_provider_and_keep_original_zip_bytes(self):
+        artifacts = auditor.read(self.root / "artifacts.json")
+        archives = {}
+        for logical in self.payload["entries"]:
+            entries = logical.get("segments", [logical])
+            for entry in entries:
+                entry["archive"] = entry["artifact_name"] + ".zip"
+                path = self.root / entry["archive"]
+                source = self.root / entry["artifact_name"]
+                with zipfile.ZipFile(path, "w") as archive:
+                    for member in sorted(source.rglob("*")):
+                        archive.write(member, member.relative_to(source).as_posix())
+                archives[entry["archive"]] = path.read_bytes()
+                next(item for item in artifacts if item["id"] == entry["artifact_id"])[
+                    "size_in_bytes"
+                ] = path.stat().st_size
+        write(self.root / "artifacts.json", artifacts)
+        write(self.root / "input.json", self.payload)
+        opened, closed = [], []
+
+        @contextlib.contextmanager
+        def provider(entry, manifest_root):
+            self.assertEqual(manifest_root, self.root.resolve())
+            self.assertEqual(
+                entry["tuple"]["host"], "r" if "variant" in entry else "python"
+            )
+            opened.append(entry["artifact_id"])
+            try:
+                yield self.root
+            finally:
+                closed.append(entry["artifact_id"])
+
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=self.admitted_values
+        ):
+            report = auditor.audit(
+                self.root / "input.json", self.root, entry_provider=provider
+            )
+        self.assertEqual(report["collection_gate"]["status"], "pass")
+        self.assertEqual(len(opened), 45)
+        self.assertEqual(opened, closed)
+        for name, original in archives.items():
+            self.assertEqual((self.root / name).read_bytes(), original)
+
+    def test_original_artifact_job_attempt_campaign_and_native_bind_each_group(self):
+        input_files = [
+            self.root / "artifacts.json",
+            self.root / "jobs.json",
+            self.root / self.segment["campaign"],
+            self.root / self.segment["artifact_name"] / "native-run.json",
+        ]
+        originals = [path.read_bytes() for path in input_files]
+        for number, (path, mutate) in enumerate(
+            (
+                (
+                    input_files[0],
+                    lambda value: next(
+                        item
+                        for item in value
+                        if item["id"] == self.segment["artifact_id"]
+                    )["workflow_run"].update(head_sha="b" * 40),
+                ),
+                (
+                    input_files[1],
+                    lambda value: next(
+                        item
+                        for item in value
+                        if item.get("id") == 10000 + self.segment["artifact_id"]
+                    ).update(run_attempt=1),
+                ),
+                (
+                    input_files[1],
+                    lambda value: next(
+                        item
+                        for item in value
+                        if item.get("id") == 10000 + self.segment["artifact_id"]
+                    ).update(conclusion="failure"),
+                ),
+                (
+                    input_files[2],
+                    lambda value: value["measurement_machine"].update(
+                        runner_name="other-runner"
+                    ),
+                ),
+                (
+                    input_files[2],
+                    lambda value: value.update(created_at="2026-10-13T01:05:00Z"),
+                ),
+                (input_files[3], lambda value: value.update(run_attempt=1)),
+            )
+        ):
+            with self.subTest(path=path, number=number):
+                value = auditor.read(path)
+                mutate(value)
+                write(path, value)
+                with mock.patch.object(
+                    auditor, "admit_collection", side_effect=self.admitted_values
+                ):
+                    status, report = self.invoke(
+                        "--check-collection", f"bad-binding-{number}"
+                    )
+                self.assertEqual(status, 1)
+                self.assertEqual(report["harness_correctness"]["status"], "fail")
+                for original_path, original_bytes in zip(input_files, originals):
+                    original_path.write_bytes(original_bytes)
 
 
 class NativeSourceBinding(unittest.TestCase):
@@ -874,6 +1566,25 @@ class NativeSourceBinding(unittest.TestCase):
         write(self.root / "native-jobs.json", self.jobs)
         self.assertEqual(self.inputs()["status"], "fail")
 
+    def test_full_native_snapshot_explicitly_selects_current_attempt_and_preserves_old(
+        self,
+    ):
+        older = dict(
+            self.artifacts[0], id=2000, expired=True, created_at="2026-10-12T01:10:00Z"
+        )
+        self.artifacts.append(older)
+        write(self.root / "native-artifacts.json", self.artifacts)
+        original = (self.root / "native-artifacts.json").read_bytes()
+        native = self.inputs()
+        self.assertEqual(native["status"], "pass")
+        self.assertIn(older, native["artifacts"])
+        self.assertNotIn(older, native["selected_artifacts"])
+        self.assertEqual((self.root / "native-artifacts.json").read_bytes(), original)
+        auditor.native_collection(self.directory, auditor.tuples()[0], native)
+        older["created_at"] = self.artifacts[0]["created_at"]
+        write(self.root / "native-artifacts.json", self.artifacts)
+        self.assertEqual(self.inputs()["status"], "fail")
+
     def test_outer_native_attempt_and_unattempted_or_wrong_candidate_references_refuse(
         self,
     ):
@@ -897,6 +1608,18 @@ class NativeSourceBinding(unittest.TestCase):
         self.artifacts[0]["id"] = self.artifacts[1]["id"]
         write(self.root / "native-artifacts.json", self.artifacts)
         self.assertEqual(self.inputs()["status"], "fail")
+
+    def test_native_availability_and_size_must_be_original_typed_observations(self):
+        original = copy.deepcopy(self.artifacts)
+        for changed in (
+            {"expired": None},
+            {"size_in_bytes": True},
+            {"size_in_bytes": 1.0},
+        ):
+            self.artifacts = copy.deepcopy(original)
+            self.artifacts[0].update(changed)
+            write(self.root / "native-artifacts.json", self.artifacts)
+            self.assertEqual(self.inputs()["status"], "fail")
 
 
 class Archives(unittest.TestCase):
@@ -925,7 +1648,7 @@ class Archives(unittest.TestCase):
                     calls.append("closed")
 
             with auditor.entry_root(
-                root, entry, root / "scratch", provider
+                root, entry, root / "scratch", provider, expected_size=len(original)
             ) as evidence:
                 self.assertEqual(
                     auditor.read(
@@ -937,6 +1660,109 @@ class Archives(unittest.TestCase):
                 )
             self.assertEqual(calls, ["opened", "closed"])
             self.assertEqual((root / "original.zip").read_bytes(), original)
+
+    def test_archive_size_mismatch_closes_provider_before_extraction(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with zipfile.ZipFile(root / "original.zip", "w") as archive:
+                archive.writestr("nested/receipt.json", b"original bytes")
+            original = (root / "original.zip").read_bytes()
+            calls = []
+
+            @contextlib.contextmanager
+            def provider(entry, manifest_root):
+                try:
+                    yield root
+                finally:
+                    calls.append("closed")
+
+            with (
+                self.assertRaisesRegex(ValueError, "ZIP size differs"),
+                auditor.entry_root(
+                    root,
+                    {"archive": "original.zip", "artifact_name": "artifact"},
+                    root / "scratch",
+                    provider,
+                    expected_size=len(original) + 1,
+                ),
+            ):
+                pass
+            self.assertEqual(calls, ["closed"])
+            self.assertFalse((root / "scratch").exists())
+            self.assertEqual((root / "original.zip").read_bytes(), original)
+            # Unpacked local retained samples have no original Actions ZIP to size.
+            with auditor.entry_root(
+                root, {}, root / "scratch", None, expected_size=100
+            ) as evidence:
+                self.assertEqual(evidence, root)
+
+    def test_original_unsafe_names_refuse_before_host_zipinfo_normalization(self):
+        for separator in ("/", "\\"):
+            for name in (
+                "nested\\receipt.json",
+                "\\\\server\\share\\receipt.json",
+                "safe\x00hidden",
+                "C:escape",
+                "nested/C:escape",
+                "nested/C:/escape",
+            ):
+                with (
+                    self.subTest(separator=separator, name=name),
+                    tempfile.TemporaryDirectory() as temporary,
+                    mock.patch.object(zipfile.os, "sep", separator),
+                ):
+                    root = Path(temporary)
+                    with zipfile.ZipFile(root / "bad.zip", "w") as archive:
+                        member = zipfile.ZipInfo(name)
+                        # Author the original ZIP spelling, including names that
+                        # ZipInfo would normalize before an ordinary writer call.
+                        member.filename = name
+                        archive.writestr(member, b"original bytes")
+                    original = (root / "bad.zip").read_bytes()
+                    self.assertIn(name.encode(), original)
+                    with zipfile.ZipFile(root / "bad.zip") as archive:
+                        member = archive.infolist()[0]
+                        self.assertEqual(member.orig_filename, name)
+                        if separator == "\\" and name == "nested\\receipt.json":
+                            self.assertEqual(member.filename, "nested/receipt.json")
+                    with (
+                        self.assertRaisesRegex(ValueError, "unsafe original archive"),
+                        auditor.entry_root(
+                            root,
+                            {"archive": "bad.zip", "artifact_name": "artifact"},
+                            root / "scratch",
+                            None,
+                            expected_size=len(original),
+                        ),
+                    ):
+                        pass
+                    self.assertEqual((root / "bad.zip").read_bytes(), original)
+
+    def test_safe_original_names_preserve_exact_payload_on_both_hosts(self):
+        payload = b"original\x00retained\xffbytes\n"
+        for separator in ("/", "\\"):
+            with (
+                self.subTest(separator=separator),
+                tempfile.TemporaryDirectory() as temporary,
+                mock.patch.object(zipfile.os, "sep", separator),
+            ):
+                root = Path(temporary)
+                with zipfile.ZipFile(root / "original.zip", "w") as archive:
+                    archive.writestr("nested/", b"")
+                    archive.writestr("nested/receipt.json", payload)
+                original = (root / "original.zip").read_bytes()
+                with auditor.entry_root(
+                    root,
+                    {"archive": "original.zip", "artifact_name": "artifact"},
+                    root / "scratch",
+                    None,
+                    expected_size=len(original),
+                ) as evidence:
+                    self.assertEqual(
+                        (evidence / "artifact/nested/receipt.json").read_bytes(),
+                        payload,
+                    )
+                self.assertEqual((root / "original.zip").read_bytes(), original)
 
     def test_traversal_absolute_duplicate_and_symlink_archive_members_refuse(self):
         for names in (
@@ -1161,6 +1987,390 @@ class InstallationAdmission(unittest.TestCase):
             (self.root / "independent/callback-10-1/python/uv.lock").read_bytes(),
             b"original lock fixture\n",
         )
+
+
+class RWorkerProvenance(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.child = Path(temporary.name)
+        self.source = b"\n# authored independent probe fixture\n"
+        self.helper = b"R_ORIGIN_PROBE = " + repr(self.source.decode()).encode()
+        self.original_child = r"D:\evidence\candidate-evidence\lookup-1000-1-truth-0"
+        self.command = [
+            r"C:\R\bin\Rscript.exe",
+            "--vanilla",
+            r"D:\evidence\candidate-evidence\harness\public_lifecycle_r_worker.R",
+            self.original_child + r"\request.json",
+        ]
+        self.identity = {
+            "system": "Windows",
+            "runtime_version": "4.6.1",
+            "jsonlite_version": "2.0.0",
+            "private_libraries": [r"C:\private\candidate", r"C:\private\collectors"],
+            "jsonlite_origin": r"C:\private\collectors\jsonlite",
+        }
+        self.record = {
+            "host": "r",
+            "system": "Windows",
+            "runtime_version": "4.6.1",
+            "installed_origins": {"package": r"C:\private\candidate\yamaa"},
+            "collectors": {
+                "jsonlite": {
+                    "version": "2.0.0",
+                    "origin": self.identity["jsonlite_origin"],
+                },
+                "microbenchmark": {
+                    "version": "1.5.0",
+                    "origin": r"C:\private\collectors\microbenchmark",
+                },
+            },
+        }
+        self.plan = {
+            "harness_checkout_head": "a" * 40,
+            "measurement_campaign": {
+                "collection": r"D:\evidence\candidate-evidence\collection.json"
+            },
+        }
+        origin = {
+            "pid": 200,
+            "runtime_version": "4.6.1",
+            "home": "C:/R",
+            "bin": "C:/R/bin/x64",
+            "architecture": "x86_64",
+            "r_arch": "x64",
+            "jsonlite_version": "2.0.0",
+            "private_libraries": ["C:/private/candidate", "C:/private/collectors"],
+            "codec_origin": "C:/private/collectors/jsonlite",
+            "direct_executable": "C:/R/bin/x64/Rscript.exe",
+        }
+        self.resolution = {
+            "protocol": "r-worker-resolution/1",
+            "system": "Windows",
+            "requested_executable": self.command[0],
+            "requested_command": self.command,
+            "observed_executable": origin["direct_executable"],
+            "observed_command": [origin["direct_executable"], *self.command[1:]],
+            "private_library_environment": ";".join(self.identity["private_libraries"]),
+            "resolution": "installed R architecture executable",
+        }
+        for label, key, executable, launcher_pid in (
+            ("requested", "requested_origin", self.command[0], 100),
+            ("direct", "observed_origin", origin["direct_executable"], 200),
+        ):
+            self.resolution[key] = {
+                "command": [
+                    executable,
+                    "--vanilla",
+                    self.original_child + r"\r-worker-origin-probe.R",
+                    self.original_child + "\\r-worker-" + label + "-origin.json",
+                ],
+                "source": "r-worker-origin-probe.R",
+                "stdout": "r-worker-" + label + "-stdout.txt",
+                "stderr": "r-worker-" + label + "-stderr.txt",
+                "response": "r-worker-" + label + "-origin.json",
+                "launcher_pid": launcher_pid,
+                "exit_code": 0,
+                "origin": copy.deepcopy(origin),
+            }
+        self.process = {"pid": 300, "exit_code": 0, "r_worker": self.resolution}
+        self.retain()
+
+    def retain(self):
+        write(self.child / "r-worker-resolution.json", self.resolution)
+        (self.child / "r-worker-origin-probe.R").write_bytes(self.source)
+        for label, key in (
+            ("requested", "requested_origin"),
+            ("direct", "observed_origin"),
+        ):
+            probe = self.resolution[key]
+            write(self.child / ("r-worker-" + label + "-probe.json"), probe)
+            write(self.child / probe["response"], probe["origin"])
+            for name in ("stdout", "stderr"):
+                (self.child / probe[name]).write_bytes(b"")
+
+    def admit(self):
+        auditor.admit_r_resolution(
+            self.child, self.process, self.command, self.identity, self.helper
+        )
+
+    def test_wrapper_and_direct_probe_pids_are_separate_from_measured_worker(self):
+        self.admit()
+        self.assertNotEqual(
+            self.resolution["requested_origin"]["launcher_pid"],
+            self.resolution["requested_origin"]["origin"]["pid"],
+        )
+        self.assertNotEqual(
+            self.process["pid"], self.resolution["observed_origin"]["origin"]["pid"]
+        )
+        with mock.patch.object(
+            auditor.lifecycle, "git_bytes", return_value=self.helper
+        ):
+            auditor.admit_r_worker(
+                self.child,
+                self.process,
+                {"command": self.command},
+                {"output": self.original_child},
+                self.plan,
+                self.record,
+                self.child,
+            )
+
+    def test_original_probe_bytes_come_from_pinned_helper_not_current_reader(self):
+        (self.child / "r-worker-origin-probe.R").write_bytes(b"different script\n")
+        with self.assertRaisesRegex(ValueError, "Git-pinned helper"):
+            self.admit()
+        (self.child / "r-worker-origin-probe.R").write_bytes(self.source)
+        with self.assertRaisesRegex(ValueError, "Git-pinned helper"):
+            auditor.admit_r_resolution(
+                self.child,
+                self.process,
+                self.command,
+                self.identity,
+                b"R_ORIGIN_PROBE = 'different original source'",
+            )
+
+    def test_missing_or_changed_original_raw_receipt_is_refused(self):
+        for filename in (
+            "r-worker-resolution.json",
+            "r-worker-direct-probe.json",
+            "r-worker-requested-origin.json",
+            "r-worker-direct-stdout.txt",
+            "r-worker-requested-stderr.txt",
+            "r-worker-origin-probe.R",
+        ):
+            with self.subTest(filename=filename):
+                path = self.child / filename
+                original = path.read_bytes()
+                path.unlink()
+                with self.assertRaises(auditor.EVIDENCE_ERRORS):
+                    self.admit()
+                path.write_bytes(original)
+        changed = copy.deepcopy(self.resolution["requested_origin"]["origin"])
+        changed["pid"] += 1
+        write(self.child / "r-worker-requested-origin.json", changed)
+        with self.assertRaisesRegex(ValueError, "probe/PID association"):
+            self.admit()
+
+    def test_self_consistent_origin_tampering_cannot_override_declared_identity(self):
+        original = copy.deepcopy(self.resolution)
+        for field, value in (
+            ("runtime_version", "4.6.2"),
+            ("jsonlite_version", "9.0.0"),
+            ("private_libraries", ["C:/private/collectors", "C:/private/candidate"]),
+            ("codec_origin", "C:/elsewhere/jsonlite"),
+            ("architecture", "i386"),
+            ("direct_executable", "C:/elsewhere/Rscript.exe"),
+            ("home", "C:/another-R"),
+        ):
+            with self.subTest(field=field):
+                self.resolution.clear()
+                self.resolution.update(copy.deepcopy(original))
+                for key in ("requested_origin", "observed_origin"):
+                    self.resolution[key]["origin"][field] = value
+                self.retain()
+                with self.assertRaises(ValueError):
+                    self.admit()
+        self.resolution.clear()
+        self.resolution.update(copy.deepcopy(original))
+        self.resolution["private_library_environment"] = ";".join(
+            reversed(self.identity["private_libraries"])
+        )
+        self.retain()
+        with self.assertRaisesRegex(ValueError, "library environment"):
+            self.admit()
+
+    def test_direct_pid_and_probe_success_must_be_original_integer_observations(self):
+        original = copy.deepcopy(self.resolution)
+        for key, field, value in (
+            ("observed_origin", "launcher_pid", 999),
+            ("observed_origin", "launcher_pid", True),
+            ("requested_origin", "launcher_pid", 0),
+            ("requested_origin", "exit_code", False),
+            ("observed_origin", "exit_code", 7),
+        ):
+            with self.subTest(field=field, value=value):
+                self.resolution.clear()
+                self.resolution.update(copy.deepcopy(original))
+                self.resolution[key][field] = value
+                self.retain()
+                with self.assertRaises(ValueError):
+                    self.admit()
+
+    def test_consistent_replacement_home_cannot_override_original_installed_command(
+        self,
+    ):
+        direct = "C:/another-R/bin/x64/Rscript.exe"
+        for key in ("requested_origin", "observed_origin"):
+            self.resolution[key]["origin"].update(
+                home="C:/another-R",
+                bin="C:/another-R/bin/x64",
+                direct_executable=direct,
+            )
+        self.resolution["observed_executable"] = direct
+        self.resolution["observed_command"][0] = direct
+        self.resolution["observed_origin"]["command"][0] = direct
+        self.retain()
+        with self.assertRaisesRegex(ValueError, "installed architecture executable"):
+            self.admit()
+
+    def test_probe_paths_and_worker_command_cannot_move_to_another_child(self):
+        original = copy.deepcopy(self.resolution)
+        for index in (2, 3):
+            self.resolution.clear()
+            self.resolution.update(copy.deepcopy(original))
+            self.resolution["observed_origin"]["command"][index] = self.resolution[
+                "observed_origin"
+            ]["command"][index].replace("D:", "E:")
+            self.retain()
+            with self.assertRaisesRegex(ValueError, "probe argv/path"):
+                self.admit()
+        self.resolution.clear()
+        self.resolution.update(copy.deepcopy(original))
+        self.retain()
+        with mock.patch.object(
+            auditor.lifecycle, "git_bytes", return_value=self.helper
+        ):
+            for observation in (
+                {},
+                {"command": [*self.command[:3], self.command[3].replace("D:", "E:")]},
+            ):
+                with (
+                    self.subTest(observation=observation),
+                    self.assertRaises(ValueError),
+                ):
+                    auditor.admit_r_worker(
+                        self.child,
+                        self.process,
+                        observation,
+                        {"output": self.original_child},
+                        self.plan,
+                        self.record,
+                        self.child,
+                    )
+        self.resolution["observed_command"][-1] = r"D:\another-child\request.json"
+        self.retain()
+        with self.assertRaisesRegex(ValueError, "worker argv"):
+            self.admit()
+
+    def test_legacy_and_plain_unix_records_preserve_their_original_scopes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            child = Path(temporary)
+            auditor.admit_r_resolution(
+                child, {"pid": 123}, None, {"system": "Linux"}, b"# legacy helper\n"
+            )
+            with self.assertRaisesRegex(ValueError, "missing original R resolution"):
+                auditor.admit_r_resolution(
+                    child, {"pid": 123}, None, {"system": "Linux"}, self.helper
+                )
+            for system in ("Linux", "Darwin"):
+                command = [
+                    "/r/bin/Rscript",
+                    "--vanilla",
+                    "/evidence/harness/worker.R",
+                    "/evidence/child/request.json",
+                ]
+                resolution = {
+                    "protocol": "r-worker-resolution/1",
+                    "system": system,
+                    "requested_executable": command[0],
+                    "requested_command": command,
+                    "observed_executable": command[0],
+                    "observed_command": command,
+                    "private_library_environment": "/private/candidate:/private/collectors",
+                    "resolution": "plain Unix Rscript",
+                }
+                write(child / "r-worker-resolution.json", resolution)
+                auditor.admit_r_resolution(
+                    child,
+                    {"r_worker": resolution},
+                    command,
+                    {
+                        "system": system,
+                        "private_libraries": [
+                            "/private/candidate",
+                            "/private/collectors",
+                        ],
+                    },
+                    self.helper,
+                )
+                resolution["observed_executable"] = "/another-R/bin/Rscript"
+                resolution["observed_command"] = [
+                    resolution["observed_executable"],
+                    *command[1:],
+                ]
+                write(child / "r-worker-resolution.json", resolution)
+                with self.assertRaisesRegex(ValueError, "Unix R worker"):
+                    auditor.admit_r_resolution(
+                        child,
+                        {"r_worker": resolution},
+                        command,
+                        {
+                            "system": system,
+                            "private_libraries": [
+                                "/private/candidate",
+                                "/private/collectors",
+                            ],
+                        },
+                        self.helper,
+                    )
+
+    def test_new_resolution_cannot_hide_as_legacy_or_attach_to_python(self):
+        with self.assertRaisesRegex(ValueError, "original pinned helper"):
+            auditor.admit_r_resolution(
+                self.child,
+                self.process,
+                self.command,
+                self.identity,
+                b"# legacy helper\n",
+            )
+        with self.assertRaisesRegex(ValueError, "another host"):
+            auditor.admit_r_worker(
+                self.child, self.process, {}, {}, {}, {"host": "python"}, self.child
+            )
+        with (
+            mock.patch.object(
+                auditor.lifecycle, "git_bytes", return_value=b"# legacy helper\n"
+            ),
+            self.assertRaisesRegex(ValueError, "unassociated"),
+        ):
+            auditor.admit_r_worker(
+                self.child, {"pid": 1}, {}, {}, self.plan, self.record, self.child
+            )
+        with (
+            mock.patch.object(auditor.lifecycle, "git_bytes", return_value=self.helper),
+            self.assertRaisesRegex(ValueError, "missing original R resolution"),
+        ):
+            auditor.admit_r_worker(
+                self.child,
+                {"pid": 1},
+                {"command": self.command},
+                {"output": self.original_child},
+                self.plan,
+                self.record,
+                self.child,
+            )
+
+
+class SingleObservationStatistics(unittest.TestCase):
+    def test_one_warm_child_keeps_one_observation_and_degenerate_quartiles(self):
+        for value, unit in ((137494528, "bytes"), (123.5, "nanoseconds")):
+            with self.subTest(unit=unit):
+                result = auditor.stats([value], unit)
+                self.assertEqual(result["count"], 1)
+                self.assertEqual(result["raw"], [value])
+                self.assertEqual(result["median"], value)
+                self.assertEqual(result["min"], value)
+                self.assertEqual(result["max"], value)
+                self.assertEqual(result["quartiles"], [value, value, value])
+                self.assertEqual(result["unit"], unit)
+
+    def test_multiple_original_observations_keep_inclusive_quartiles(self):
+        result = auditor.stats([1, 2, 3, 4], "nanoseconds")
+        self.assertEqual(result["count"], 4)
+        self.assertEqual(result["raw"], [1, 2, 3, 4])
+        self.assertEqual(result["quartiles"], [1.75, 2.5, 3.25])
+        self.assertEqual(result["median"], 2.5)
 
 
 class CollectionRefusals(unittest.TestCase):
