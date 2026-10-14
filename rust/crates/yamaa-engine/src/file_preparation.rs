@@ -302,6 +302,7 @@ pub fn prepare<P: NativePort, D: DocumentPort<P::Error>>(
                 if let Some(diagnostic) = aliases
                     .port
                     .resource_failure(&error)
+                    .filter(|failure| *failure == ResourceFailure::ContentChanged)
                     .and_then(|failure| document.resource_diagnostic(declaring, written, failure))
                 {
                     return Err(Error::ResourceFinding {
