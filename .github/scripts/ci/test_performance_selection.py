@@ -36,6 +36,8 @@ class PerformanceSelection(unittest.TestCase):
         self.assertIn('packageVersion("jsonlite")) == "2.0.0"', r_job)
         self.assertIn("jsonlite/tar.gz/refs/tags/2.0.0", r_job)
         self.assertIn("r-retention-controls.json", r_job)
+        self.assertIn("rust/tools/check_r_child_peak_rss.py", r_job)
+        self.assertIn("r-child-rss-controls", r_job)
         self.assertEqual(r_job.count('--cases "${case_args[@]}"'), 3)
         self.assertIn(
             "name: performance-r-${{ matrix.os }}-source-${{ matrix.variant }}", r_job

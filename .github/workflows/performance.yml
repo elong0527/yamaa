@@ -391,6 +391,8 @@ jobs:
           uv pip install --python "${baseline_python}" --no-deps -r "${RUNNER_TEMP}/requirements.txt" "${RUNNER_TEMP}"/baseline-distribution/*.whl
           artifact=$(python -c 'from pathlib import Path; import os; print(next((Path(os.environ["RUNNER_TEMP"])/"baseline-distribution").glob("*.whl")))')
           python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "$(cat "${RUNNER_TEMP}/baseline-revision.txt")" --host python --executable "${baseline_python}" --artifact "${artifact}" --artifact-reference "source-built:${BASELINE_REF}/$(basename "${artifact}")" --form wheel --build-association "clean source-built previous release archive on the R measurement runner; baseline-build.log retained" --output "${RUNNER_TEMP}/baseline-installation"
+      - name: Prove plain R worker PID, touched child RSS and original nonzero exit
+        run: python rust/tools/check_r_child_peak_rss.py --rscript "$(command -v Rscript)" --output "${RUNNER_TEMP}/r-child-rss-controls"
       - name: Create same-runner campaign before original measurements
         run: python rust/tools/performance_campaign.py create --campaign "${RUNNER_TEMP}/machine-campaign.json"
       - name: Select the complete approved dimension variant without splitting samples
@@ -460,6 +462,7 @@ jobs:
             ${{ runner.temp }}/candidate-installation
             ${{ runner.temp }}/r-retention-controls.json
             ${{ runner.temp }}/r-retention-controls.log
+            ${{ runner.temp }}/r-child-rss-controls
             ${{ runner.temp }}/candidate-evidence
             ${{ runner.temp }}/previous-release.tar.gz
             ${{ runner.temp }}/baseline-revision.txt

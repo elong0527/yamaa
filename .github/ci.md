@@ -176,6 +176,10 @@ or missing segments/cases; the required counts remain 567 candidate cells and
 504 prior lifecycle/root-Build comparator cells.
 Before collection, every R job uses pinned jsonlite 2.0.0 in its actual private
 library to require the focused checkpoint byte/failure controls with zero skips.
+It also proves that the plain R4.6.1 worker PID equals the RSS broker child,
+touches 64MiB of pages, preserves its authored nonzero exit and observes at least
+that child allocation. Original process/control receipts stay in the segment
+artifact; this preflight is an authored control rather than a memory budget.
 Its test count, verdict and original log remain separate from timing samples.
 
 Every attempt preserves its raw failures and partial collections. The independent
