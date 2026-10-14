@@ -3,6 +3,9 @@ contact_links:
   - name: "Questions & discussion"
     url: https://github.com/elong0527/yamaa/discussions
     about: "General chat about yamaa. If you need a decision on the rules or docs, use the Question template instead."
+  - name: "Reviewer feedback"
+    url: https://github.com/elong0527/yamaa/blob/main/automation/reviewer_feedback.md
+    about: "Reviewing yamaa against confidential studies? Prepare your issue with the reviewer feedback recipe first: public references and invented data only."
   - name: "Benchmark work item"
     url: https://github.com/elong0527/yamaa/blob/main/automation/benchmark_factory/README.md
     about: "Proposing a new benchmark or a change to one? Open a work-item issue following the benchmark factory README."
