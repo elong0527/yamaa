@@ -1164,6 +1164,7 @@ dependencies = [
  "base64",
  "brotli",
  "bytes",
+ "cc",
  "flatbuffers",
  "flate2",
  "lz4_flex",

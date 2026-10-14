@@ -90,10 +90,17 @@ pub(super) fn declared_source_type(
         return Ok(None);
     };
     let path = text(d, field(d, input, "path")?)?;
-    if SourceProfile::from_path(path) != Some(SourceProfile::Csv) {
+    let profile = SourceProfile::from_path(path);
+    if !matches!(
+        profile,
+        Some(SourceProfile::Csv | SourceProfile::Xport | SourceProfile::Sas7bdat)
+    ) {
         return Ok(None);
     }
     let declared = d.field(input, "types").and_then(|id| d.field(id, name));
+    if declared.is_none() && profile != Some(SourceProfile::Csv) {
+        return Ok(None);
+    }
     Ok(Some(
         match declared.map(|id| text(d, id)).transpose()?.unwrap_or("str") {
             "str" => ColumnType::Str,

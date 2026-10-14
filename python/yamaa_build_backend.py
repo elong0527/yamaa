@@ -114,6 +114,22 @@ def member_sources(member_root: Path):
             raise ValueError("restored workspace sources must not be symlinks")
         if path.is_file() and path.suffix == ".rs":
             yield path
+    # ReadStat is compiled from this exact licensed vendored source tree. A
+    # source archive must restore and byte-verify its C/header/license inputs,
+    # just as it restores Rust sources and the unchanged canonical Cargo.lock.
+    vendor = member_root / "vendor" / "readstat"
+    if (member_root / "vendor").is_symlink():
+        raise ValueError("native vendor sources must not be symlinks")
+    if vendor.exists():
+        if member_root.name != "yamaa-adapters" or vendor.is_symlink():
+            raise ValueError("unreviewed native vendor source tree")
+        for path in sorted(vendor.rglob("*")):
+            if path.is_symlink():
+                raise ValueError("native vendor sources must not be symlinks")
+            if path.is_file():
+                if path.suffix not in {".c", ".h", ".md"} and path.name != "LICENSE":
+                    raise ValueError("unreviewed native vendor source input")
+                yield path
 
 
 def preserve_workspace(archive: Path, workspace: Path, fixture_sources=()) -> None:

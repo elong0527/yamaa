@@ -48,6 +48,7 @@ fn wide_producer_contract_decodes_1024_and_refuses_1025_actual_fields() {
             .map(|name| (name.clone(), ColumnType::Str))
             .collect(),
         profile: SourceProfile::Csv,
+        encoding: None,
         empty_string_present: false,
         ordinal: None,
     };
@@ -97,6 +98,7 @@ fn bounded_producer_csv_admits_original_header_before_typing_and_owns_portable_m
             ("VALUE".into(), ColumnType::Int),
         ],
         profile: SourceProfile::Csv,
+        encoding: None,
         empty_string_present: false,
         ordinal: None,
     };
@@ -210,6 +212,7 @@ fn decoded_profiles_keep_exact_cells_bounds_and_ingestion_failure_categories() {
             ("T".into(), ColumnType::DateTime),
         ],
         profile: SourceProfile::Csv,
+        encoding: None,
         empty_string_present: true,
         ordinal: None,
     };
@@ -272,6 +275,7 @@ fn decoded_profiles_keep_exact_cells_bounds_and_ingestion_failure_categories() {
             path: "text.parquet".into(),
             types: vec![("I".into(), ColumnType::Int), ("S".into(), ColumnType::Str)],
             profile: SourceProfile::Parquet,
+            encoding: None,
             empty_string_present: present,
             ordinal: None,
         };

@@ -27,7 +27,9 @@ def _temporal_result(kind: object, fields: object, precision: object) -> object:
 class _Specification:
     def input_metadata(
         self,
-    ) -> list[tuple[str, str, str, str, Literal["csv", "parquet"]]]: ...
+    ) -> list[
+        tuple[str, str, str, str, Literal["csv", "parquet", "xpt", "sas7bdat"]]
+    ]: ...
     def check_source_metadata(
         self,
         sources: list[
@@ -129,7 +131,9 @@ class _ProjectSpecification:
     def diagnostic_origins(self) -> list[tuple[str, str]]: ...
     def input_metadata(
         self,
-    ) -> list[tuple[str, str, str, str, Literal["csv", "parquet"]]]: ...
+    ) -> list[
+        tuple[str, str, str, str, Literal["csv", "parquet", "xpt", "sas7bdat"]]
+    ]: ...
     def capture_input_metadata(
         self, index: int, maximum: int
     ) -> tuple[bytes | None, list[tuple[str, str, str | None, list[str], str]]]: ...

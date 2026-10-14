@@ -23,6 +23,15 @@ study uses project functions or terminology. Paths resolve relative to their
 original declaring YAML layer under the [local path policy](../rules/storage/resources.md).
 There is no upward project-root discovery or public backend selector in this API.
 
+Inputs can use CSV, Parquet, SAS datasets (`.sas7bdat`), or SAS Transport v5/v8
+(`.xpt`). SAS inputs explicitly declare `encoding`, for example
+`{path: input/dm.xpt, encoding: windows-1252, types: {SEQ: int, VISITDT: date}}`.
+Character fields default to `str`, numeric fields to `float`; numeric `types`
+narrowing requires exact integral values. See the
+[SAS source contract](../rules/storage/sas.md) for missing values, character
+padding, supported encodings and 1960 date/datetime epochs. Outputs remain CSV
+or Parquet.
+
 Build reads inputs and invokes the declared project functions through the shared
 engine. Check performs preparation/static validation without reading study data
 or invoking project code. Each result owns its native state; copied Polars output,
@@ -54,7 +63,7 @@ writes remain if a later target fails. There is no whole-run file rollback.
 ## Implementation limits
 
 The shared engine admits up to 1,024 declared columns, output columns and fields
-in each input's `types`. CSV, Parquet, Arrow imports and producer contracts use
+in each input's `types`. CSV, Parquet, SAS, Arrow imports and producer contracts use
 the same width ceiling. An `ordinal` adds one field and counts toward this bound.
 Specifications still admit at most 64 keys and 16 inputs.
 

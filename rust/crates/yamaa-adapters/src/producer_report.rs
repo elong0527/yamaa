@@ -715,6 +715,30 @@ fn decoded_finding(
                 _ => return Ok(false),
             }
         }
+        crate::specification_run::Error::SasSource(error) => {
+            use crate::sas_source::Error;
+            match error {
+                Error::Invalid(cause) => {
+                    for _ in 0..4 {
+                        budget.text(cause)?;
+                    }
+                }
+                Error::Typing(yamaa_core::typed_csv::Error::UnknownField { field }) => {
+                    for _ in 0..4 {
+                        budget.text(field)?;
+                    }
+                }
+                Error::Typing(yamaa_core::typed_csv::Error::FieldParse {
+                    field, value, ..
+                }) => {
+                    for _ in 0..4 {
+                        budget.text(field)?;
+                        budget.text(value)?;
+                    }
+                }
+                _ => return Ok(false),
+            }
+        }
         _ => return Ok(false),
     }
     let Some(values) = crate::specification_diagnostics::findings(error, Some(source)) else {
@@ -1248,6 +1272,7 @@ mod tests {
                 ("VALUE".into(), ColumnType::Int),
             ],
             profile: SourceProfile::Csv,
+            encoding: None,
             empty_string_present: false,
             ordinal: None,
         };

@@ -186,3 +186,19 @@ PR feedback does not establish complete installed or release qualification. [Rel
 separates merged implementation, qualified revisions, pending decisions and
 publication. Keep current guidance here and there; retain historical plans in
 Git and put new evidence in the relevant PR/issue and qualification records.
+
+## SAS reader packaging
+
+SAS and Transport source decoding belongs to the shared Rust adapter. It uses
+a vendored read-only subset of MIT-licensed ReadStat 1.1.9 compiled statically
+by pinned `cc`, with a C bridge for ReadStat unions/bitfields and memory IO over
+the captured source snapshot. Both Python and R source builds include the same
+vendor sources and license under `yamaa-adapters/vendor/readstat`. No host
+reader fallback or dynamic ReadStat installation is used. The
+[vendor inventory](../rust/crates/yamaa-adapters/vendor/readstat/README.md) owns
+the upstream commit, local admission patches, portable ABI and encoding choice.
+[SAS source profiles](articles/rules.md#storage) fixes the declared encoding,
+physical type defaults, narrowing, missing, padding, and epoch contracts.
+Native release qualification must exercise this static bridge on Linux, macOS
+and Windows and compare both installed hosts against the independently authored
+binary fixtures and exact saved bytes.

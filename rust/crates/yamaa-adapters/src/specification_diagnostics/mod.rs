@@ -123,6 +123,15 @@ pub fn findings(error: &Error, source: Option<&SourceDeclaration>) -> Option<Vec
                 error.diagnostic(&source.name, &source.path)?,
             )?])
         }
+        Error::SasSource(error) => {
+            let source = source?;
+            Some(vec![portable_diagnostic(
+                error
+                    .finding(&source.name, &source.path)?
+                    .diagnostic()
+                    .ok()?,
+            )?])
+        }
         Error::TypedSource(crate::typed_csv::Error::Typing(error)) => {
             Some(vec![portable_diagnostic(error.diagnostic(&source?.name)?)?])
         }
@@ -145,6 +154,7 @@ pub fn findings_with_limit(
     match error {
         Error::Sources(_)
         | Error::ParquetSource(_)
+        | Error::SasSource(_)
         | Error::TypedSource(_)
         | Error::Source(_)
         | Error::Ordinal(_)
@@ -222,6 +232,8 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
                 ("ingest", "parquet_codec_unavailable")
             }
             Error::ParquetSource(_) => ("ingest", "parquet_boundary"),
+            Error::SasSource(crate::sas_source::Error::Limit { .. }) => ("ingest", "sas_limit"),
+            Error::SasSource(_) => ("ingest", "sas_boundary"),
             Error::Ordinal(_) => ("ingest", "source_ordinal_boundary"),
             Error::Bind(BindError::Catalog(_)) => ("bind", "reference_catalog"),
             Error::Bind(BindError::DependencyPolicy(_)) => ("bind", "dependency_policy"),

@@ -34,6 +34,15 @@ decoder `phase` alongside the resource bound in context. `yamaa_check` reads no 
 Resource paths resolve from their original declaring YAML layer under the
 [local-path policy](../../rules/storage/resources.md).
 
+Inputs can use CSV, Parquet, SAS datasets (`.sas7bdat`), or SAS Transport v5/v8
+(`.xpt`). SAS inputs explicitly declare `encoding`, for example
+`{path: input/dm.xpt, encoding: windows-1252, types: {SEQ: int, VISITDT: date}}`.
+Character fields default to `str`, numeric fields to `float`; numeric `types`
+narrowing requires exact integral values. See the
+[SAS source contract](../../rules/storage/sas.md) for missing values, character
+padding, supported encodings and 1960 date/datetime epochs. Outputs remain CSV
+or Parquet.
+
 Integer output uses `yamaa_int64_vector`, preserving the complete signed 64-bit
 range and missingness separately. Ordinary text uses character vectors; columns
 containing NUL use lossless `yamaa_utf8_vector`. Subsetting preserves the exact
@@ -49,7 +58,7 @@ A failed Define Save raises `yamaa_define_error`. See the
 ## Implementation limits
 
 The shared engine admits up to 1,024 declared columns, output columns and fields
-in each input's `types`. CSV, Parquet, Arrow imports and producer contracts use
+in each input's `types`. CSV, Parquet, SAS, Arrow imports and producer contracts use
 the same width ceiling. An `ordinal` adds one field and counts toward this bound.
 Specifications still admit at most 64 keys and 16 inputs.
 
