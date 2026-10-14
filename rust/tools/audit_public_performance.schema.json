@@ -1,13 +1,25 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "yamaa independent public performance input and item-10 budgets",
-  "description": "Auditor reads original public-performance/1 and public-performance-campaign/1 evidence only. Paths are relative to the manifest, including a self-contained source Git bundle for offline replay. Original absolute runner paths remain immutable identity strings. --check-collection requires harness correctness, native source admission, all 567 candidate tuple/case combinations and 504 required comparator role/case combinations, forbids budgets, and preserves budgets:not_evaluated and accepted:false. Each tuple requires 18 prior Python lookup/aggregate/window cases and six producer-root-Build cases on the same observed runner. Unexpected/duplicate role cases refuse; missing required comparators cannot become policy unavailable dispositions. R retains Python comparator observations while cross-host ratios remain incomparable. Final --check additionally requires original terminal successful completion and approved numeric budgets. No release thresholds are provided by this schema.",
+  "description": "Auditor reads original public-performance/1 and public-performance-campaign/1 evidence only. Paths are relative to the manifest, including a self-contained source Git bundle for offline replay. Original absolute runner paths remain immutable identity strings. --check-collection requires harness correctness, native source admission, all 567 candidate tuple/case combinations and 504 required comparator role/case combinations, forbids budgets, and preserves budgets:not_evaluated and accepted:false. Each tuple requires 18 prior Python lookup/aggregate/window cases and six producer-root-Build cases on the same observed runner. Unexpected/duplicate role cases refuse; missing required comparators cannot become policy unavailable dispositions. R retains Python comparator observations while cross-host ratios remain incomparable. Final --check additionally requires original terminal successful completion and approved numeric budgets. No release thresholds are provided by this schema. Post-completion --catalog derives whole/segmented reader units from all 21 original tuples. --unit selector.json --check-unit replays complete unchanged raw evidence and retains accepted:false/no-budgets fragments. aggregate_public_performance.py requires genuine independently fetched reviewed reader job/run/attempt/artifact proof, exact nondeduplicated 567+504 cells and recomputed original raw-vector statistics. --check-collection still never supplies numeric acceptance. Final budget acceptance additionally requires exact original reader completion; canceled/failed original or reader attempts refuse. The measured one-case scheduling pilot does not establish whole-matrix runtime.",
   "oneOf": [
     {
       "$ref": "#/$defs/input"
     },
     {
       "$ref": "#/$defs/budgets"
+    },
+    {
+      "$ref": "#/$defs/unit_selector"
+    },
+    {
+      "$ref": "#/$defs/catalog"
+    },
+    {
+      "$ref": "#/$defs/fragment"
+    },
+    {
+      "$ref": "#/$defs/aggregate_input"
     }
   ],
   "$defs": {
@@ -871,6 +883,1313 @@
         "outside_outer_timers": "Original report/measurement transport, JSON/gzip checkpoint serialization, saved-byte copying and controller acceptance remain outside outer call/canonical-conversion timers. No overhead subtraction or timing repair is applied.",
         "baseline_ratios": "Compatible ratios require Python candidate and prior Python 0.3.0 observations on the same actual runner with the same lookup/aggregate/window scope. R-to-Python ratios remain incomparable. Producer root-Build is a separate comparator scope from full-graph Build, Save and child RSS."
       }
+    },
+    "case_name": {
+      "enum": [
+        "lookup-1000-1",
+        "lookup-1000-4",
+        "lookup-10000-1",
+        "lookup-10000-4",
+        "lookup-100000-1",
+        "lookup-100000-4",
+        "aggregate-1000-10",
+        "aggregate-1000-100",
+        "aggregate-10000-10",
+        "aggregate-10000-100",
+        "aggregate-100000-10",
+        "aggregate-100000-100",
+        "window-1000-10",
+        "window-1000-100",
+        "window-10000-10",
+        "window-10000-100",
+        "window-100000-10",
+        "window-100000-100",
+        "callback-1000-1",
+        "callback-10000-1",
+        "callback-100000-1",
+        "producer-1000-1",
+        "producer-1000-3",
+        "producer-10000-1",
+        "producer-10000-3",
+        "producer-100000-1",
+        "producer-100000-3"
+      ]
+    },
+    "unit_selector": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "protocol": {
+          "const": "public-performance-replay-unit/1"
+        },
+        "tuple": {
+          "$ref": "#/$defs/tuple"
+        },
+        "variant": {
+          "enum": [
+            null,
+            "lookup-1",
+            "lookup-4",
+            "aggregate-10",
+            "aggregate-100",
+            "window-10",
+            "window-100",
+            "callback-1",
+            "producer-1",
+            "producer-3"
+          ]
+        }
+      },
+      "required": [
+        "protocol",
+        "tuple",
+        "variant"
+      ],
+      "description": "One original whole tuple or approved complete R dimension variant. Source, artifact, paths, case lists and roles cannot be overridden. The auditor derives every selection from the complete original manifest."
+    },
+    "flat_segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "description": "null retains a visible missing matrix tuple; it cannot pass."
+        },
+        "artifact_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "run_attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "campaign": {
+          "$ref": "#/$defs/path"
+        },
+        "collections": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/collection"
+          }
+        },
+        "archive": {
+          "$ref": "#/$defs/path"
+        },
+        "variant": {
+          "enum": [
+            "lookup-1",
+            "lookup-4",
+            "aggregate-10",
+            "aggregate-100",
+            "window-10",
+            "window-100",
+            "callback-1",
+            "producer-1",
+            "producer-3"
+          ]
+        },
+        "cases": {
+          "enum": [
+            [
+              "lookup-1000-1",
+              "lookup-10000-1",
+              "lookup-100000-1"
+            ],
+            [
+              "lookup-1000-4",
+              "lookup-10000-4",
+              "lookup-100000-4"
+            ],
+            [
+              "aggregate-1000-10",
+              "aggregate-10000-10",
+              "aggregate-100000-10"
+            ],
+            [
+              "aggregate-1000-100",
+              "aggregate-10000-100",
+              "aggregate-100000-100"
+            ],
+            [
+              "window-1000-10",
+              "window-10000-10",
+              "window-100000-10"
+            ],
+            [
+              "window-1000-100",
+              "window-10000-100",
+              "window-100000-100"
+            ],
+            [
+              "callback-1000-1",
+              "callback-10000-1",
+              "callback-100000-1"
+            ],
+            [
+              "producer-1000-1",
+              "producer-10000-1",
+              "producer-100000-1"
+            ],
+            [
+              "producer-1000-3",
+              "producer-10000-3",
+              "producer-100000-3"
+            ]
+          ]
+        },
+        "tuple": {
+          "$ref": "#/$defs/tuple"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_name",
+        "run_attempt",
+        "campaign",
+        "collections",
+        "variant",
+        "cases",
+        "tuple"
+      ],
+      "description": "One approved R dimension variant, with all three row sizes and complete 10 cold/3 warmup/30 warm sampling per case on its original actual runner. Original artifact performance-r-{os}-source-{variant} and producing job performance-r ({os}, source, {variant}) bind this segment independently. Applicable role collections contain exactly these candidate cases, plus prior lookup/aggregate/window baseline cases or producer-root-Build cases. No case distribution or RSS child observation is split or pooled across runners.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "variant": {
+                "const": "lookup-1"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "const": [
+                  "lookup-1000-1",
+                  "lookup-10000-1",
+                  "lookup-100000-1"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "variant": {
+                "const": "lookup-4"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "const": [
+                  "lookup-1000-4",
+                  "lookup-10000-4",
+                  "lookup-100000-4"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "variant": {
+                "const": "aggregate-10"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "const": [
+                  "aggregate-1000-10",
+                  "aggregate-10000-10",
+                  "aggregate-100000-10"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "variant": {
+                "const": "aggregate-100"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "const": [
+                  "aggregate-1000-100",
+                  "aggregate-10000-100",
+                  "aggregate-100000-100"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "variant": {
+                "const": "window-10"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "const": [
+                  "window-1000-10",
+                  "window-10000-10",
+                  "window-100000-10"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "variant": {
+                "const": "window-100"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "const": [
+                  "window-1000-100",
+                  "window-10000-100",
+                  "window-100000-100"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "variant": {
+                "const": "callback-1"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "const": [
+                  "callback-1000-1",
+                  "callback-10000-1",
+                  "callback-100000-1"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "variant": {
+                "const": "producer-1"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "const": [
+                  "producer-1000-1",
+                  "producer-10000-1",
+                  "producer-100000-1"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "variant": {
+                "const": "producer-3"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "const": [
+                  "producer-1000-3",
+                  "producer-10000-3",
+                  "producer-100000-3"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "unit_key": {
+      "enum": [
+        "python-ubuntu-24.04-3.12-wheel",
+        "python-ubuntu-24.04-3.12-source",
+        "python-ubuntu-24.04-3.13-wheel",
+        "python-ubuntu-24.04-3.13-source",
+        "python-ubuntu-24.04-3.14-wheel",
+        "python-ubuntu-24.04-3.14-source",
+        "python-macos-15-3.12-wheel",
+        "python-macos-15-3.12-source",
+        "python-macos-15-3.13-wheel",
+        "python-macos-15-3.13-source",
+        "python-macos-15-3.14-wheel",
+        "python-macos-15-3.14-source",
+        "python-windows-latest-3.12-wheel",
+        "python-windows-latest-3.12-source",
+        "python-windows-latest-3.13-wheel",
+        "python-windows-latest-3.13-source",
+        "python-windows-latest-3.14-wheel",
+        "python-windows-latest-3.14-source",
+        "r-ubuntu-24.04-source",
+        "r-macos-15-source",
+        "r-windows-latest-source",
+        "r-ubuntu-24.04-source-lookup-1",
+        "r-ubuntu-24.04-source-lookup-4",
+        "r-ubuntu-24.04-source-aggregate-10",
+        "r-ubuntu-24.04-source-aggregate-100",
+        "r-ubuntu-24.04-source-window-10",
+        "r-ubuntu-24.04-source-window-100",
+        "r-ubuntu-24.04-source-callback-1",
+        "r-ubuntu-24.04-source-producer-1",
+        "r-ubuntu-24.04-source-producer-3",
+        "r-macos-15-source-lookup-1",
+        "r-macos-15-source-lookup-4",
+        "r-macos-15-source-aggregate-10",
+        "r-macos-15-source-aggregate-100",
+        "r-macos-15-source-window-10",
+        "r-macos-15-source-window-100",
+        "r-macos-15-source-callback-1",
+        "r-macos-15-source-producer-1",
+        "r-macos-15-source-producer-3",
+        "r-windows-latest-source-lookup-1",
+        "r-windows-latest-source-lookup-4",
+        "r-windows-latest-source-aggregate-10",
+        "r-windows-latest-source-aggregate-100",
+        "r-windows-latest-source-window-10",
+        "r-windows-latest-source-window-100",
+        "r-windows-latest-source-callback-1",
+        "r-windows-latest-source-producer-1",
+        "r-windows-latest-source-producer-3"
+      ]
+    },
+    "original_reader_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "run_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "run_attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "native_run_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "native_run_attempt": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "repository",
+        "source_revision",
+        "run_id",
+        "run_attempt",
+        "native_run_id",
+        "native_run_attempt"
+      ]
+    },
+    "catalog_unit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "selector": {
+          "$ref": "#/$defs/unit_selector"
+        },
+        "key": {
+          "$ref": "#/$defs/unit_key"
+        },
+        "entry": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/plain_entry"
+            },
+            {
+              "$ref": "#/$defs/flat_segment"
+            }
+          ]
+        },
+        "cases_by_role": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "candidate": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/case_name"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "baseline": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/case_name"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "producer-root-build-baseline": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/case_name"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "candidate"
+          ]
+        },
+        "artifact": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "size_in_bytes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "created_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "workflow_run": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "size_in_bytes",
+            "created_at",
+            "workflow_run"
+          ]
+        },
+        "job": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "run_id": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "run_attempt": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "head_sha": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "runner_name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "started_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "completed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "status": {
+              "const": "completed"
+            },
+            "conclusion": {
+              "const": "success"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "run_id",
+            "run_attempt",
+            "head_sha",
+            "runner_name",
+            "started_at",
+            "completed_at",
+            "status",
+            "conclusion"
+          ]
+        }
+      },
+      "required": [
+        "selector",
+        "key",
+        "entry",
+        "cases_by_role",
+        "artifact",
+        "job"
+      ]
+    },
+    "catalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "protocol": {
+          "const": "public-performance-replay-catalog/1"
+        },
+        "original": {
+          "$ref": "#/$defs/original_reader_source"
+        },
+        "logical_tuples": {
+          "const": 21
+        },
+        "candidate_cells": {
+          "const": 567
+        },
+        "comparator_cells": {
+          "const": 504
+        },
+        "units": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/catalog_unit"
+          },
+          "minItems": 21,
+          "maxItems": 45,
+          "uniqueItems": true
+        },
+        "accepted": {
+          "const": false
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "protocol",
+        "original",
+        "logical_tuples",
+        "candidate_cells",
+        "comparator_cells",
+        "units",
+        "accepted",
+        "scope"
+      ]
+    },
+    "distribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "enum": [
+            1,
+            10,
+            30
+          ]
+        },
+        "raw": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "minItems": 1,
+          "maxItems": 30
+        },
+        "unit": {
+          "enum": [
+            "bytes",
+            "nanoseconds"
+          ]
+        },
+        "median": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "min": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "max": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "quartiles": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "minItems": 3,
+              "maxItems": 3
+            }
+          ]
+        }
+      },
+      "required": [
+        "count",
+        "raw",
+        "unit",
+        "median",
+        "min",
+        "max",
+        "quartiles"
+      ]
+    },
+    "function_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "child": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "enum": [
+            "cold",
+            "warm"
+          ]
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32
+        },
+        "warmup": {
+          "type": "boolean"
+        },
+        "calls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "node": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 63
+              },
+              "stage": {
+                "enum": [
+                  "activation",
+                  "execution_admission",
+                  "execution_derivation",
+                  "output_keys",
+                  "verification",
+                  "execution_finished"
+                ]
+              },
+              "entered": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "succeeded": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "failed": {
+                "const": 0
+              }
+            },
+            "required": [
+              "node",
+              "stage",
+              "entered",
+              "succeeded",
+              "failed"
+            ]
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "child",
+        "mode",
+        "index",
+        "warmup",
+        "calls"
+      ]
+    },
+    "collection_association": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "artifact_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "run_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "run_attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "producing_job": {
+          "type": "string",
+          "minLength": 1
+        },
+        "producing_job_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "runner_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "campaign_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "variant": {
+          "enum": [
+            null,
+            "lookup-1",
+            "lookup-4",
+            "aggregate-10",
+            "aggregate-100",
+            "window-10",
+            "window-100",
+            "callback-1",
+            "producer-1",
+            "producer-3"
+          ]
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_name",
+        "run_id",
+        "run_attempt",
+        "producing_job",
+        "producing_job_id",
+        "runner_name",
+        "campaign_id",
+        "variant"
+      ]
+    },
+    "native_association": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "run_attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "artifact_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "artifact_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifact_reference": {
+          "type": "string",
+          "minLength": 1
+        },
+        "association": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "run_id",
+        "run_attempt",
+        "source_revision",
+        "artifact_id",
+        "artifact_name",
+        "artifact_reference",
+        "association"
+      ]
+    },
+    "fragment_case_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "const": "pass"
+        },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/distribution"
+          },
+          "minProperties": 1
+        },
+        "unavailable": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "actual_callback_counts": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "maxItems": 1
+        },
+        "actual_function_calls": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/function_record"
+          },
+          "maxItems": 43
+        },
+        "measurement_host": {
+          "enum": [
+            "python",
+            "r"
+          ]
+        },
+        "source_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "performance_collection_association": {
+          "$ref": "#/$defs/collection_association"
+        },
+        "native_package_association": {
+          "$ref": "#/$defs/native_association"
+        }
+      },
+      "required": [
+        "status",
+        "metrics",
+        "unavailable",
+        "actual_callback_counts",
+        "actual_function_calls",
+        "measurement_host",
+        "source_revision",
+        "performance_collection_association"
+      ]
+    },
+    "fragment_cell": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tuple": {
+          "$ref": "#/$defs/tuple"
+        },
+        "case": {
+          "$ref": "#/$defs/case_name"
+        },
+        "candidate": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/fragment_case_result"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "status": {
+                  "const": "missing"
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "status": {
+                  "const": "fail"
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "status",
+                "reason"
+              ]
+            }
+          ]
+        },
+        "baseline": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/fragment_case_result"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "status": {
+                  "const": "missing"
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "status": {
+                  "const": "fail"
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "status",
+                "reason"
+              ]
+            }
+          ]
+        },
+        "producer_root_build_baseline": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/fragment_case_result"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "status": {
+                  "const": "missing"
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "status": {
+                  "const": "fail"
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "status",
+                "reason"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "tuple",
+        "case",
+        "candidate",
+        "baseline",
+        "producer_root_build_baseline"
+      ]
+    },
+    "fragment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "protocol": {
+          "const": "public-performance-audit-fragment/1"
+        },
+        "original": {
+          "$ref": "#/$defs/original_reader_source"
+        },
+        "unit": {
+          "$ref": "#/$defs/catalog_unit"
+        },
+        "reader": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "revision": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "repository": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "run_id": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
+            },
+            "run_attempt": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
+            }
+          },
+          "required": [
+            "revision",
+            "repository",
+            "run_id",
+            "run_attempt"
+          ]
+        },
+        "sampling": {
+          "const": {
+            "cold": 10,
+            "warm": 30,
+            "warmups": 3
+          }
+        },
+        "raw_validation_scope": {
+          "type": "string",
+          "minLength": 1
+        },
+        "harness_correctness": {
+          "type": "object"
+        },
+        "native_source_admission": {
+          "type": "object"
+        },
+        "run_completion": {
+          "type": "object"
+        },
+        "unit_coverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "required": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "passed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "missing_or_failed": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "required",
+            "passed",
+            "missing_or_failed"
+          ]
+        },
+        "unit_gate": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "pass",
+                "fail"
+              ]
+            },
+            "key": {
+              "$ref": "#/$defs/unit_key"
+            }
+          },
+          "required": [
+            "status",
+            "key"
+          ]
+        },
+        "cells": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fragment_cell"
+          },
+          "minItems": 3,
+          "maxItems": 27
+        },
+        "measurement_scopes": {
+          "$ref": "#/$defs/measurement_scopes"
+        },
+        "budgets": {
+          "const": {
+            "status": "not_evaluated"
+          }
+        },
+        "accepted": {
+          "const": false
+        }
+      },
+      "required": [
+        "protocol",
+        "original",
+        "unit",
+        "reader",
+        "sampling",
+        "raw_validation_scope",
+        "harness_correctness",
+        "native_source_admission",
+        "run_completion",
+        "unit_coverage",
+        "unit_gate",
+        "cells",
+        "measurement_scopes",
+        "budgets",
+        "accepted"
+      ],
+      "description": "A complete reader unit preserves original measured/native/harness identities and all declared case/role raw metric vectors and actual function/callback ledgers after independent typed raw validation. Local fragments have no authenticated Actions identity and cannot qualify the aggregate. No fragment supplies numeric acceptance."
+    },
+    "aggregate_fragment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "selector": {
+          "$ref": "#/$defs/unit_selector"
+        },
+        "artifact_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "artifact_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "archive": {
+          "$ref": "#/$defs/path"
+        }
+      },
+      "required": [
+        "selector",
+        "artifact_id",
+        "artifact_name"
+      ]
+    },
+    "aggregate_input": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "protocol": {
+          "const": "public-performance-audit-aggregate-input/1"
+        },
+        "original_manifest": {
+          "$ref": "#/$defs/path"
+        },
+        "reader_run": {
+          "$ref": "#/$defs/path"
+        },
+        "reader_jobs": {
+          "$ref": "#/$defs/path"
+        },
+        "reader_artifacts": {
+          "$ref": "#/$defs/path"
+        },
+        "reader_completion_run": {
+          "$ref": "#/$defs/path"
+        },
+        "fragments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/aggregate_fragment"
+          },
+          "minItems": 21,
+          "maxItems": 45,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "protocol",
+        "original_manifest",
+        "reader_run",
+        "reader_jobs",
+        "reader_artifacts",
+        "fragments"
+      ],
+      "description": "Original complete successful performance manifest and separately fetched actual reader run/job/artifact API snapshots. Fragment ZIP root members are performance-unit-audit.json/.md; each exact artifact ID/name/size/creation interval binds to successful performance-replay-unit (<selector-key>) in .github/workflows/performance-replay.yml at trusted --reviewed-auditor-revision. Duplicate/missing units or original tuple-case-role cells refuse. Raw-vector statistics/counts/scopes are recomputed without pooling. Original and reader snapshots stay immutable; numeric acceptance requires separate exact terminal-success receipts for both. A later reviewed aggregate checkout may differ from the original qualified reader revision. Trusted reader events/branches are workflow_run at main or push at evidence/issue-1998-replay. Numeric evidence qualification is distinct from migration closure: the current aggregate/finalizer cannot self-attest eventual success; actual terminal-success run/job/artifact and durable-retention proof must be fetched independently after completion."
     }
   },
   "examples": [

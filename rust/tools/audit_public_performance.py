@@ -14,6 +14,7 @@ import email.parser
 import fnmatch
 import json
 import math
+import os
 import re
 import statistics
 import subprocess
@@ -1414,9 +1415,9 @@ def entry_root(root, entry, scratch, entry_provider, expected_size=None):
         yield scratch / "evidence"
 
 
-def audit(input_path, repository, budgets_path=None, entry_provider=None):
+def input_context(input_path):
+    """Re-admit original immutable metadata before any replay or fragment use."""
     root = input_path.resolve().parent
-    errors, accepted = [], {}
     payload = read(input_path)
     require(payload["protocol"] == PROTOCOL, "unsupported audit input protocol")
     exact(
@@ -1454,6 +1455,14 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
     jobs = read(relative(root, payload["jobs"])) if "jobs" in payload else []
     jobs = jobs["jobs"] if isinstance(jobs, dict) else jobs
     native = native_inputs(payload, root, run)
+    return root, payload, run, artifacts, jobs, native, completion
+
+
+def audit(
+    input_path, repository, budgets_path=None, entry_provider=None, unit_selector=None
+):
+    root, payload, run, artifacts, jobs, native, completion = input_context(input_path)
+    errors, accepted = [], {}
     budget_error = None
     try:
         budgets = (
@@ -1490,6 +1499,16 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
                 expanded.extend((number, part) for part in logical_entries(entry))
             except EVIDENCE_ERRORS as error:
                 errors.append({"entry": number, "reason": str(error)})
+        if unit_selector is not None:
+            expanded = [
+                (number, entry)
+                for number, entry in expanded
+                if selector_for(entry) == unit_selector
+            ]
+            require(
+                len(expanded) == 1 and not errors,
+                "unit selector is not unique in original manifest",
+            )
         for number, entry in expanded:
             try:
                 lane = entry["tuple"]
@@ -1603,6 +1622,15 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
                         "reason": str(error),
                     }
                 )
+    return report_from_values(
+        payload, run, completion, native, accepted, errors, budgets, budget_error
+    )
+
+
+def report_from_values(
+    payload, run, completion, native, accepted, errors, budgets=None, budget_error=None
+):
+    """Shared final gates; neither missing cases nor comparators are deduplicated."""
     cells = []
     for lane in tuples():
         key = json.dumps(lane, sort_keys=True)
@@ -1733,6 +1761,241 @@ def markdown(report):
     )
 
 
+READER_WORKFLOW = ".github/workflows/performance-replay.yml"
+RAW_VALIDATION_SCOPE = (
+    "All original truth, observer, cold, warmup and measured warm typed views, "
+    "binary64/i64/date cells, inputs, specifications, reports, Save bytes, "
+    "source/installation, clocks, process/RSS and phase/function records "
+    "re-admitted with the whole offline auditor's independent validators."
+)
+
+
+def selector_for(entry):
+    return {
+        "protocol": "public-performance-replay-unit/1",
+        "tuple": entry["tuple"],
+        "variant": entry.get("variant"),
+    }
+
+
+def unit_key(selector):
+    exact(selector, ("protocol", "tuple", "variant"), "unit selector")
+    lane, variant = selector["tuple"], selector["variant"]
+    require(
+        selector["protocol"] == "public-performance-replay-unit/1" and lane in tuples(),
+        "invalid unit selector",
+    )
+    require(
+        variant is None
+        or (lane["host"] == "r" and isinstance(variant, str) and variant in variants()),
+        "unapproved unit variant",
+    )
+    key = (
+        f"{lane['host']}-{lane['os']}-"
+        + (lane["python"] + "-" if lane["host"] == "python" else "")
+        + lane["form"]
+    )
+    return key + ("-" + variant if variant is not None else "")
+
+
+def replay_catalog(input_path):
+    """Metadata-only inventory; not a substitute for complete independent reading."""
+    _, payload, run, artifacts, jobs, native, completion = input_context(input_path)
+    require(
+        completion["status"] == "pass",
+        "post-completion reader requires original terminal success",
+    )
+    require(
+        native["status"] == "pass",
+        native.get("reason", "original native admission absent"),
+    )
+    seen, units = set(), []
+    require(
+        isinstance(payload["entries"], list), "logical tuple inventory must be a list"
+    )
+    for logical in payload["entries"]:
+        lane = logical["tuple"]
+        require(lane in tuples(), "unexpected original logical tuple")
+        identity = json.dumps(lane, sort_keys=True)
+        require(identity not in seen, "duplicate original logical tuple")
+        seen.add(identity)
+        for entry in logical_entries(logical):
+            artifact, job = admit_artifact(entry, artifacts, run, jobs)
+            cases = entry.get("cases", case_names())
+            by_role = {
+                role: [case for case in cases if case in role_case_names(role)]
+                for role in ROLES
+                if set(cases) & set(role_case_names(role))
+            }
+            roles = []
+            for collection in entry["collections"]:
+                exact(collection, ("role", "path"), "unit collection")
+                path = PurePosixPath(collection["path"])
+                require(
+                    not path.is_absolute()
+                    and ".." not in path.parts
+                    and "\\" not in collection["path"]
+                    and path.parent.name == entry["artifact_name"],
+                    "unit collection artifact path differs",
+                )
+                roles.append(collection["role"])
+            require(
+                len(roles) == len(set(roles)) and set(roles) == set(by_role),
+                "unit required comparator roles differ",
+            )
+            selector = selector_for(entry)
+            units.append(
+                {
+                    "selector": selector,
+                    "key": unit_key(selector),
+                    "entry": entry,
+                    "cases_by_role": by_role,
+                    "artifact": {
+                        key: artifact[key]
+                        for key in (
+                            "id",
+                            "name",
+                            "size_in_bytes",
+                            "created_at",
+                            "workflow_run",
+                        )
+                    },
+                    "job": {
+                        key: job.get(key)
+                        for key in (
+                            "id",
+                            "name",
+                            "run_id",
+                            "run_attempt",
+                            "head_sha",
+                            "runner_name",
+                            "started_at",
+                            "completed_at",
+                            "status",
+                            "conclusion",
+                        )
+                    },
+                }
+            )
+    require(
+        seen == {json.dumps(lane, sort_keys=True) for lane in tuples()},
+        "missing original logical tuple",
+    )
+    return {
+        "protocol": "public-performance-replay-catalog/1",
+        "original": {
+            "repository": payload["repository"],
+            "source_revision": payload["source_revision"],
+            "run_id": run["id"],
+            "run_attempt": run["run_attempt"],
+            "native_run_id": native["run"]["id"],
+            "native_run_attempt": native["run"]["run_attempt"],
+        },
+        "logical_tuples": 21,
+        "candidate_cells": 567,
+        "comparator_cells": 504,
+        "units": units,
+        "accepted": False,
+        "scope": "original metadata and scheduling inventory only; typed raw correctness and budgets not evaluated",
+    }
+
+
+def reader_identity():
+    """Record actual reviewed checkout separately from original measured source."""
+    repository = Path(__file__).resolve().parents[2]
+    revision = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+    ).strip()
+    require(
+        re.fullmatch(r"[0-9a-f]{40}", revision),
+        "invalid actual reader checkout revision",
+    )
+    subprocess.run(
+        ["git", "diff", "--exit-code", "HEAD", "--", "rust/tools"],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+    )
+    require(
+        os.environ.get("GITHUB_SHA", revision) == revision,
+        "reader checkout differs from Actions source",
+    )
+    run_id, attempt = (
+        os.environ.get("GITHUB_RUN_ID"),
+        os.environ.get("GITHUB_RUN_ATTEMPT"),
+    )
+    require((run_id is None) == (attempt is None), "partial reader run identity")
+    if run_id is not None:
+        run_id, attempt = int(run_id), int(attempt)
+        require(run_id > 0 and attempt > 0, "invalid actual reader run identity")
+    return {
+        "revision": revision,
+        "repository": os.environ.get("GITHUB_REPOSITORY"),
+        "run_id": run_id,
+        "run_attempt": attempt,
+    }
+
+
+def read_unit(input_path, repository, selection, entry_provider=None):
+    catalog = replay_catalog(input_path)
+    key = unit_key(selection)
+    matches = [unit for unit in catalog["units"] if unit["selector"] == selection]
+    require(
+        len(matches) == 1, "selector does not name one original complete reader unit"
+    )
+    unit = matches[0]
+    identity = reader_identity()
+    require(
+        identity["repository"] in (None, catalog["original"]["repository"]),
+        "reader repository differs",
+    )
+    report = audit(
+        input_path, repository, entry_provider=entry_provider, unit_selector=selection
+    )
+    cells = [
+        cell
+        for cell in report["cells"]
+        if cell["tuple"] == selection["tuple"]
+        and cell["case"] in unit["cases_by_role"]["candidate"]
+    ]
+    required = sum(len(cases) for cases in unit["cases_by_role"].values())
+    passed = sum(
+        cell[role.replace("-", "_")]["status"] == "pass"
+        for cell in cells
+        for role, cases in unit["cases_by_role"].items()
+        if cell["case"] in cases
+    )
+    gate = (
+        "pass"
+        if passed == required
+        and report["harness_correctness"]["status"] == "pass"
+        and report["native_source_admission"]["status"] == "pass"
+        and report["run_completion"]["status"] == "pass"
+        else "fail"
+    )
+    return {
+        "protocol": "public-performance-audit-fragment/1",
+        "original": catalog["original"],
+        "unit": unit,
+        "reader": identity,
+        "sampling": SAMPLING,
+        "raw_validation_scope": RAW_VALIDATION_SCOPE,
+        "harness_correctness": report["harness_correctness"],
+        "native_source_admission": report["native_source_admission"],
+        "run_completion": report["run_completion"],
+        "unit_coverage": {
+            "required": required,
+            "passed": passed,
+            "missing_or_failed": required - passed,
+        },
+        "unit_gate": {"status": gate, "key": key},
+        "cells": cells,
+        "measurement_scopes": report["measurement_scopes"],
+        "budgets": {"status": "not_evaluated"},
+        "accepted": False,
+    }
+
+
 def main(argv=None, entry_provider=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, required=True)
@@ -1741,19 +2004,75 @@ def main(argv=None, entry_provider=None):
     )
     parser.add_argument("--budgets", type=Path)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--unit",
+        type=Path,
+        help="immutable selector from the original complete manifest",
+    )
+    parser.add_argument(
+        "--catalog",
+        action="store_true",
+        help="derive post-completion metadata-only reader inventory",
+    )
     checks = parser.add_mutually_exclusive_group()
     checks.add_argument("--check", action="store_true")
+    checks.add_argument("--check-unit", action="store_true")
     checks.add_argument(
         "--check-collection",
         action="store_true",
         help="require correctness, native source admission, 567 candidate and 504 comparator cells; no numeric acceptance",
     )
     args = parser.parse_args(argv)
+    if args.catalog and (
+        args.unit
+        or args.check
+        or args.check_collection
+        or args.check_unit
+        or args.budgets
+    ):
+        parser.error("--catalog is metadata-only and forbids unit/check/budget flags")
+    if args.unit and (args.check or args.check_collection or args.budgets):
+        parser.error("unit fragments forbid whole/final checks and budgets")
+    if args.check_unit and not args.unit:
+        parser.error("--check-unit requires --unit")
     if args.check_collection and args.budgets:
         parser.error(
             "--check-collection forbids --budgets; replay final --check separately"
         )
     args.output.mkdir(parents=True, exist_ok=False)
+    if args.catalog or args.unit:
+        filename = (
+            "performance-replay-catalog" if args.catalog else "performance-unit-audit"
+        )
+        try:
+            report = (
+                replay_catalog(args.input)
+                if args.catalog
+                else read_unit(
+                    args.input, args.repository, read(args.unit), entry_provider
+                )
+            )
+        except EVIDENCE_ERRORS as error:
+            report = {
+                "protocol": "public-performance-replay-catalog/1"
+                if args.catalog
+                else "public-performance-audit-fragment/1",
+                "accepted": False,
+                "unit_gate": {"status": "fail"},
+                "errors": [str(error)],
+                "budgets": {"status": "not_evaluated"},
+            }
+        lifecycle.write_json(args.output / (filename + ".json"), report)
+        (args.output / (filename + ".md")).write_text(
+            f"# public performance reader\n\n{report.get('scope', RAW_VALIDATION_SCOPE)}\n\nUnit gate: {report.get('unit_gate', {}).get('status', 'not evaluated')}.\n\nAcceptance: pending; budgets not evaluated.\n",
+            encoding="utf-8",
+        )
+        return (
+            1
+            if "errors" in report
+            or (args.check_unit and report["unit_gate"]["status"] != "pass")
+            else 0
+        )
     try:
         report = audit(args.input, args.repository, args.budgets, entry_provider)
     except EVIDENCE_ERRORS as error:
