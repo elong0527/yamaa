@@ -44,12 +44,16 @@ at the point defined by [Execution lifecycle](../execution/lifecycle.md).
 
 <a id="req-0005"></a>
 
-**REQ-0005.** `int` and `float` are mutually comparable using numeric
-promotion under [Numeric values](numbers.md). Every other runtime type is comparable only with
+**REQ-0005.** `int` and `float` are mutually comparable. Extremes, lookup key
+pairs, grouping keys, ordering terms, aggregate `MIN` and `MAX`, `cut` breaks,
+and range bounds compare their mathematical values exactly, without rounding
+an integer to binary64. Predicate comparisons instead widen a mixed
+`int`/`float` pair under [REQ-0167](../operations/predicates.md#req-0167), as
+does `NULLIF` under [REQ-0424](numbers.md#req-0424).
+Every other runtime type is comparable only with
 itself. Collected temporal precision does not change the runtime type or
-comparability. This compatibility rule applies to extremes, lookup key
-pairs, ordering terms, and aggregate `MIN` and `MAX`; the type's owner
-defines its order. Incompatible inputs fail under [REQ-0323](types.md#req-0323).
+comparability. The type's owner defines its order. Incompatible inputs fail
+under [REQ-0323](types.md#req-0323).
 
 ### Normalize values at their boundaries
 
