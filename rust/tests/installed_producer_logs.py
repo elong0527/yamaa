@@ -3,7 +3,6 @@
 import builtins
 import copy
 import gc
-import runpy
 import json
 import os
 import shutil
@@ -16,21 +15,25 @@ from unittest.mock import patch
 import polars as pl
 import yamaa
 
-TRUTH = runpy.run_path(str(Path(__file__).with_name("host-fixtures") / "reader.py"))["load"](
-    __file__, "producer-logs"
-)
-
 ROOT = Path(__file__).with_name("project-original")
 SPECIFICATION = Path(__file__).with_name("specification-original")
-IDS = [int(value) for value in TRUTH["ids_decimal"]]
-CSV = TRUTH["input_csv"].encode("utf-8")
-KEYS = TRUTH["offending_keys_json"]
+IDS = [1, 2, 3, 4, 5, 6, 7, 9223372036854775807]
+CSV = ("ID\n" + "\n".join(map(str, IDS)) + "\n").encode("ascii")
+KEYS = "[" + ",".join('{"ID":' + str(value) + "}" for value in IDS) + "]"
+VHEADER = "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n"
+WHEADER = "LOG_VERSION,ARTIFACT,SEVERITY,CONDITION,REQUIREMENT,SPEC_PATH,VERIFICATION_ID,FAILURE_COUNT,OFFENDING_KEYS,DETAILS\n"
 
 
 def golden(name, warning=False, severity="warning"):
-    """Read complete independent CSV truth without a second rendering algorithm."""
-    records = TRUTH["golden_csv"][name]
-    return (records["warning"] if warning else records["verification"][severity]).encode("utf-8")
+    """Independently authored range records, derived from the normative schema."""
+    identifier = "\u00e9\U0001d11e" if name == "root" else name + "-range"
+    details = '"{""column"":""ID""}"'
+    if warning:
+        keys = '"' + KEYS.replace('"', '""') + '"'
+        row = f"1.0,generated/{name}.csv,warning,range_failed,REQ-0377,columns.ID.verifications[0].range,{identifier},8,{keys},{details}\n"
+        return (WHEADER + row).encode("utf-8")
+    row = f"1.0,generated/{name}.csv,columns.ID.verifications[0].range,{identifier},range,ID,REQ-0377,{severity},violated,range_failed,8,8,{details}\n"
+    return (VHEADER + row).encode("utf-8")
 
 
 class ProducerLogs(unittest.TestCase):
@@ -84,28 +87,28 @@ class ProducerLogs(unittest.TestCase):
     def fixture(self, fatal=None, diamond=False, blocked=False):
         self.write("input.csv", CSV)
         self.names = (
-            TRUTH["diamond_names"] if diamond else ["producer", "root"]
+            ["producer", "left", "right", "root"] if diamond else ["producer", "root"]
         )
         for name in self.names:
             if name == "producer":
-                source, base = TRUTH["raw_source_reference"], "SRC"
+                source, base = "{SRC: {path: input.csv, types: {ID: int}}}", "SRC"
             elif name in {"left", "right"}:
                 source, base = (
-                    TRUTH["producer_reference"],
+                    "{P: {path: generated/producer.csv, schema: producer.yaml}}",
                     "P",
                 )
             elif diamond:
                 source, base = (
-                    TRUTH["diamond_reference"],
+                    "{A: {path: generated/left.csv, schema: left.yaml}, B: {path: generated/right.csv, schema: right.yaml}}",
                     "A",
                 )
             else:
                 source, base = (
-                    TRUTH["aliased_producer_reference"],
+                    "{A: {path: generated/producer.csv, schema: producer.yaml}, B: {path: generated/producer.csv, schema: ./producer.yaml}}",
                     "A",
                 )
             intermediate = (
-                TRUTH["root_intermediate_yaml"]
+                "intermediates: [{id: SHARED, dataset: B, key: [ID], no_match: null}]\n"
                 if name == "root"
                 else ""
             )
@@ -211,7 +214,7 @@ class ProducerLogs(unittest.TestCase):
                     self.assertEqual(self.execution(report), self.execution(before))
                     entries = report["publication"]["entered"]
                     order = (
-                        TRUTH["diamond_names"]
+                        ["producer", "left", "right", "root"]
                         if diamond
                         else ["producer", "root"]
                     )
@@ -314,12 +317,19 @@ class ProducerLogs(unittest.TestCase):
             .replace("adsl", "root")
             .replace(
                 "  DM: input/dm.csv",
-                TRUTH["verification_producer_aliases"],
+                "  A: {path: adsl.csv, schema: producer.yaml}\n  B: {path: adsl.csv, schema: ./producer.yaml}",
             )
             .replace("DM.", "A.")
         )
         self.write("root.yaml", consumer)
-        self.paths = TRUTH["verification_producer_artifacts"]
+        self.paths = [
+            "adsl-checks.csv",
+            "adsl-warnings.csv",
+            "adsl.csv",
+            "root-checks.csv",
+            "root-warnings.csv",
+            "root.csv",
+        ]
         result = self.build()
         self.assertTrue(result.issues.is_empty(), result.issues)
         truth = json.loads(

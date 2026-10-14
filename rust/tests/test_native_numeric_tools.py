@@ -97,7 +97,7 @@ class NativeToolConsumers(unittest.TestCase):
             patch.object(regex, "check", return_value=None),
         ):
             report = regex.assess()
-        self.assertEqual(len(report["cases"]), 58)
+        self.assertEqual(len(report["cases"]), 55)
         self.assertEqual(report["mismatches"], 0)
         self.assertEqual(report["qualification"], "not-qualified")
         with patch.object(
@@ -106,7 +106,6 @@ class NativeToolConsumers(unittest.TestCase):
             side_effect=lambda rows: [{"accepted": False} for _ in rows],
         ):
             poisoned = regex.assess()
-        self.assertEqual(len(poisoned["cases"]), 58)
         self.assertGreater(poisoned["mismatches"], 0)
         self.assertTrue(
             all(row["candidate"] == {"accepted": False} for row in poisoned["cases"])

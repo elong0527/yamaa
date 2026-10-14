@@ -4,7 +4,6 @@ Complete repository specifications use the held native engine owner. These
 controls isolate ODM declaration/header facts and retain later binding refusals
 separately; they grant no execution or publication authority.
 """
-import _native_json
 
 import copy
 import json
@@ -17,7 +16,7 @@ import _typed_fixtures
 
 @lru_cache(maxsize=1)
 def fields():
-    return tuple(_typed_fixtures.observe("odm", _native_json.dumps(["{}", []]))["fields"])
+    return tuple(_typed_fixtures.observe("odm", json.dumps(["{}", []]))["fields"])
 
 
 def observe(specification, spec_path=None, sources=None):
@@ -47,7 +46,7 @@ def observe(specification, spec_path=None, sources=None):
             except (OSError, UnicodeError, _native_csv.CsvProfileFailure):
                 pass
         headers.append(header)
-    return _typed_fixtures.observe("odm", _native_json.dumps([_native_json.dumps(document), headers]))
+    return _typed_fixtures.observe("odm", json.dumps([json.dumps(document), headers]))
 
 
 def inputs(observation):

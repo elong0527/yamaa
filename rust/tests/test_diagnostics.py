@@ -35,7 +35,7 @@ class DiagnosticGuardTests(unittest.TestCase):
             "  engine_rejected: {phases: [engine]}\n",
         )
         self.write(
-            "rust/crates/yamaa-core/src/diagnostic/mod.rs",
+            "rust/crates/yamaa-core/src/diagnostic.rs",
             'conditions! {\n    Invalid => ("validation", "invalid_value", Some("REQ-0001")),\n'
             '    Rejected => ("engine", "engine_rejected", None),\n}\n',
         )
@@ -272,7 +272,7 @@ class DiagnosticGuardTests(unittest.TestCase):
 
     def test_disposition_cannot_hide_a_new_core_cause_or_removed_name(self):
         self.register_non_core("old_condition")
-        path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
+        path = self.root / "rust/crates/yamaa-core/src/diagnostic.rs"
         path.write_text(
             path.read_text().replace(
                 "}\n",
@@ -358,7 +358,7 @@ class DiagnosticGuardTests(unittest.TestCase):
             'def require_binding():\n    raise RuntimeError("unsupported_regex_engine_bogus")\n',
             'def require_binding():\n    raise RuntimeError("bogus_unsupported_regex_engine")\n',
             'def require_binding():\n    raise RuntimeError("unsupported_regex_engine2")\n',
-            'def require_binding():\n    raise RuntimeError("\u00e9unsupported_regex_engine")\n',
+            'def require_binding():\n    raise RuntimeError("éunsupported_regex_engine")\n',
         ]:
             self.write(owner, source)
             self.assertEqual(
@@ -420,7 +420,7 @@ class DiagnosticGuardTests(unittest.TestCase):
         self.assertEqual(guard.rule_condition_references(source), [])
 
     def test_new_null_language_cause_is_rejected(self):
-        path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
+        path = self.root / "rust/crates/yamaa-core/src/diagnostic.rs"
         path.write_text(path.read_text().replace('Some("REQ-0001")', "None"))
         self.assertTrue(
             any(
@@ -430,7 +430,7 @@ class DiagnosticGuardTests(unittest.TestCase):
         )
 
     def test_implementation_condition_must_retain_null(self):
-        path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
+        path = self.root / "rust/crates/yamaa-core/src/diagnostic.rs"
         path.write_text(path.read_text().replace("None", 'Some("REQ-0001")'))
         self.assertTrue(
             any("must retain a null requirement" in e for e in self.errors())
@@ -630,7 +630,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
 
     def test_generated_schema_is_exempt_from_ownership_but_not_normative_ids(self):
         path = self.write(
-            "rust/crates/yamaa-adapters/src/shipped_schema/data.rs",
+            "rust/crates/yamaa-adapters/src/shipped_schema_data.rs",
             'const DATA: &str = "invalid_value";\nconst REQ: &str = "REQ-0001";\n',
         )
         self.assertEqual(self.errors(), [])
@@ -675,7 +675,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         self.assertTrue(any("duplicate registration" in e for e in self.errors()))
 
     def test_unparseable_or_missing_registry_and_vocabulary_fail_closed(self):
-        path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
+        path = self.root / "rust/crates/yamaa-core/src/diagnostic.rs"
         path.write_text("conditions! {\n    malformed => (),\n}\n")
         self.assertTrue(any("unrecognized cause" in e for e in self.errors()))
         path.unlink()
@@ -836,52 +836,11 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
             any("undefined requirement REQ-0002" in e for e in self.errors())
         )
 
-    def publication_unit_module(self):
-        self.write(
-            "rust/crates/yamaa-adapters/src/file_define/mod.rs",
-            "#[cfg(test)]\nmod publication_failure_tests;\n",
-        )
-        self.write(
-            str(guard.PRIVATE_TEST_MODULE),
-            '#[test]\nfn independent_expectation() { assert_eq!("invalid_value", "invalid_value"); }\n',
-        )
-
-    def test_private_cfg_unit_assertions_do_not_gain_production_literal_credit(self):
-        self.publication_unit_module()
-        self.assertEqual(self.errors(), [])
-        self.assertEqual(self.active, {})
-
-    def test_unit_source_loaded_without_test_cfg_remains_production(self):
-        self.publication_unit_module()
-        self.write(
-            "rust/crates/yamaa-adapters/src/file_define/mod.rs",
-            "mod publication_failure_tests;\n",
-        )
-        self.assertTrue(any("new diagnostic literal site" in e for e in self.errors()))
-
-    def test_unit_source_reused_by_production_alias_remains_production(self):
-        self.publication_unit_module()
-        self.write(
-            "rust/crates/yamaa-adapters/src/lib.rs",
-            '#[path = "file_define/publication_failure_tests.rs"]\nmod exposed;\n',
-        )
-        self.assertTrue(any("new diagnostic literal site" in e for e in self.errors()))
-
-    def test_private_unit_assertions_still_require_defined_requirements(self):
-        self.publication_unit_module()
-        self.write(
-            str(guard.PRIVATE_TEST_MODULE),
-            '#[test]\nfn independent_expectation() { assert_eq!("REQ-999999", "REQ-999999"); }\n',
-        )
-        self.assertTrue(
-            any("undefined requirement REQ-999999" in e for e in self.errors())
-        )
-
     def test_missing_rules_and_sources_do_not_pass(self):
         (self.root / "rules/values.md").unlink()
         self.assertEqual(self.errors(), ["no normative requirement definitions found"])
         self.write("rules/values.md", "**REQ-0001.** Required.\n")
-        (self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs").unlink()
+        (self.root / "rust/crates/yamaa-core/src/diagnostic.rs").unlink()
         self.assertEqual(self.errors(), ["no Rust crate sources found"])
 
 

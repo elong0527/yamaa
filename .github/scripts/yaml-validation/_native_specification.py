@@ -4,7 +4,6 @@ Static admission and header/type binding accept no project activation, cell
 execution or Save authority. Source bytes enter only by an explicitly requested
 native descriptor slot; profile fixtures contain no project functions.
 """
-import _native_json
 
 import csv
 import io
@@ -16,7 +15,6 @@ import _native_parquet
 import _r_check_transport
 import yaml12
 from yamaa._native import _prepare_file_project
-import _native_schema
 
 import yaml
 
@@ -25,7 +23,14 @@ MAX_CAPTURE = 8_388_608
 
 
 def schema_closure(directory, entry):
-    return _native_schema.capture_modules(directory, entry)
+    pending, captured = [entry], {}
+    while pending:
+        name = pending.pop(0)
+        if name not in captured:
+            source = (directory / name).read_bytes()
+            captured[name] = source
+            pending.extend(yaml.safe_load(source).get("includes", []))
+    return list(captured.items())
 
 
 def prepare(spec_path, *, project_root=None, environment=None, schema_root=ROOT):
@@ -51,11 +56,8 @@ def prepare(spec_path, *, project_root=None, environment=None, schema_root=ROOT)
 
 
 def issue_rows(
-    spec_path, *, project_root=None, environment=None, schema_root=ROOT, origins=None,
-    metadata=None, document_only=False,
+    spec_path, *, project_root=None, environment=None, schema_root=ROOT, origins=None
 ):
-    if metadata is not None:
-        metadata.clear()
     owner = prepare(
         spec_path,
         project_root=project_root,
@@ -65,10 +67,6 @@ def issue_rows(
     static = owner.check_issues()
     if origins is not None:
         origins.update(owner.diagnostic_origins())
-    if metadata is not None and owner.preparation_status() == "ready":
-        metadata['document'] = _native_schema.decode_document(owner.resolved_document())
-    if document_only:
-        return static
     if static or owner.preparation_status() != "ready":
         return static
     sources = []
@@ -83,7 +81,7 @@ def issue_rows(
             if refused:
                 observations = []
                 for row in refused:
-                    context = _native_json.loads(row["context"])
+                    context = json.loads(row["context"])
                     if "dataset" in context:
                         context["dataset"] = dataset
                     if "path" in context:
@@ -94,7 +92,7 @@ def issue_rows(
                             row["condition"],
                             row["requirement"],
                             [f"input.{dataset}.path"],
-                            _native_json.dumps(context),
+                            json.dumps(context),
                         )
                     )
                 return observations
@@ -115,7 +113,7 @@ def issue_rows(
                         failure.condition,
                         failure.requirement,
                         [f"input.{dataset}.path"],
-                        _native_json.dumps(context),
+                        json.dumps(context),
                     )
                 ]
         sources.append((identity, dataset, list(fields)))
@@ -146,14 +144,8 @@ def validate(
     environments=(),
     schema_root=ROOT,
     origins=None,
-    metadata=None,
-    document_only=False,
 ):
     """Native declaration/profile/header facts; R coverage is explicitly scoped."""
-    if metadata is not None:
-        metadata.clear()
-    if origins is not None:
-        origins.clear()
     import shutil
     from contextlib import ExitStack
     from tempfile import TemporaryDirectory
@@ -201,7 +193,7 @@ def validate(
             staged = relocated / relative
             staged.parent.mkdir(parents=True, exist_ok=True)
             if existing != specification:
-                staged.write_text(_native_json.dumps(specification), encoding="ascii")
+                staged.write_text(json.dumps(specification), encoding="ascii")
             if python_environment is not None:
                 python_environment = relocated / python_environment.relative_to(
                     project_root
@@ -219,7 +211,7 @@ def validate(
         else:
             original_root = project_root
         rows = []
-        if python_environment is not None or not r_environments or document_only:
+        if python_environment is not None or not r_environments:
             rows.extend(
                 issue_rows(
                     spec_path,
@@ -227,13 +219,9 @@ def validate(
                     environment=python_environment,
                     schema_root=schema_root,
                     origins=origins,
-                    metadata=metadata,
-                    document_only=document_only,
                 )
             )
         for environment in r_environments:
-            if document_only:
-                continue
             observed = r_static_rows(spec_path, environment)
             if observed is not None:
                 rows.extend(observed)
@@ -248,10 +236,10 @@ def validate(
                 )
             def remap_context(text):
                 text = text.replace(str(relocated), str(original_root))
-                escaped = _native_json.dumps(str(relocated))[1:-1]
+                escaped = json.dumps(str(relocated))[1:-1]
                 if escaped != str(relocated):
                     text = text.replace(
-                        escaped, _native_json.dumps(str(original_root))[1:-1]
+                        escaped, json.dumps(str(original_root))[1:-1]
                     )
                 return text
 

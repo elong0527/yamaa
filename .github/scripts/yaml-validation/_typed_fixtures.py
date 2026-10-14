@@ -3,7 +3,6 @@
 These examples serve independently authored grammar and partial-AST assertions.
 A parsed fixture grants no source binding or execution capability.
 """
-import _native_json
 
 import json
 import os
@@ -19,18 +18,10 @@ EXAMPLES = {
 EXAMPLES["windows"] = "window_fixture"
 EXAMPLES["odm"] = "odm_declaration_fixture"
 EXAMPLES["schema"] = "schema_declaration_fixture"
-EXAMPLES["semantic"] = "semantic_fixture"
-EXAMPLES["resource-capture"] = "resource_capture_fixture"
-EXAMPLES["source-catalog"] = "source_catalog_fixture"
 
 
 @lru_cache(maxsize=1)
 def _binaries():
-    directory = os.environ.get('YAMAA_TYPED_FIXTURE_DIRECTORY')
-    if directory is not None:
-        suffix = '.exe' if os.name == 'nt' else ''
-        return {name: Path(directory) / (example + suffix)
-            for name, example in EXAMPLES.items()}
     command = ["cargo", "build", "--locked", "--quiet", "-p", "yamaa-adapters"]
     for example in EXAMPLES.values():
         command.extend(["--example", example])
@@ -53,7 +44,7 @@ def _observation(contract, text, strict=True):
             *(["--spans"] if contract in {"numeric", "aggregate"} else []),
             *(["--non-strict"] if contract == "windows" and not strict else []),
         ],
-        input=(text if contract in {"odm", "schema", "semantic", "resource-capture", "source-catalog"} else _native_json.dumps(text)) + "\n",
+        input=(text if contract in {"odm", "schema"} else json.dumps(text)) + "\n",
         text=True,
         capture_output=True,
         check=True,
@@ -61,13 +52,13 @@ def _observation(contract, text, strict=True):
     rows = result.stdout.splitlines()
     if len(rows) != 1:
         raise RuntimeError("incomplete typed grammar fixture observation")
-    value = _native_json.loads(rows[0])
-    return value if contract in {"windows", "odm", "schema", "semantic", "resource-capture", "source-catalog"} else value["outcome"]
+    value = json.loads(rows[0])
+    return value if contract in {"windows", "odm", "schema"} else value["outcome"]
 
 
 def observe(contract, text, *, strict=True):
     # Consumers attach spans and diagnostic prose; protect the cached typed fact.
-    return _native_json.loads(_native_json.dumps(_observation(contract, text, strict)))
+    return json.loads(json.dumps(_observation(contract, text, strict)))
 
 
 def spans(value):

@@ -1,7 +1,6 @@
 """Installed public Define with independent XML/JSON oracles and no reference imports."""
 import builtins
 import json
-import runpy
 import shutil
 import tempfile
 import unittest
@@ -14,10 +13,6 @@ from lxml import etree
 from yamaa import DefineError, define
 
 import yaml
-
-TRUTH = runpy.run_path(str(Path(__file__).with_name("host-fixtures") / "reader.py"))["load"](
-    __file__, "public-define"
-)
 
 ROOT = Path(__file__).with_name("define-fixtures")
 SCHEMAS = ROOT / "schemas"
@@ -38,7 +33,7 @@ class PublicDefine(unittest.TestCase):
         self.assertFalse((directory / "input").exists())
         return directory
 
-    def call(self, directory, created=TRUTH["created"]):
+    def call(self, directory, created="2026-09-11T00:00:00"):
         original = builtins.__import__
         def guarded(name, *args, **kwargs):
             if name == "jsonschema" or name.startswith(("jsonschema.", "yamaa.specification", "yamaa.submission", "yamaa.expressions", "yamaa._reference_domain")):
@@ -46,7 +41,7 @@ class PublicDefine(unittest.TestCase):
             return original(name, *args, **kwargs)
         with patch("builtins.__import__", guarded):
             result = define(directory / "environment.yaml", "sdtm", created=created)
-        self.assertEqual(result.issues.columns, TRUTH["issue_columns"])
+        self.assertEqual(result.issues.columns, ["phase", "condition", "requirement", "spec_paths", "context"])
         return result
 
     def validate_xml(self, content):
@@ -64,7 +59,7 @@ class PublicDefine(unittest.TestCase):
         self.assertEqual([(name, state) for name, _, state in artifacts], [("lb.json", "Ready"), ("define.xml", "Ready")])
         xml = self.validate_xml(artifacts[1][1])
         ns = {"o": "http://www.cdisc.org/ns/odm/v1.3", "d": "http://www.cdisc.org/ns/def/v2.1"}
-        self.assertEqual(xml.get("CreationDateTime"), TRUTH["created"])
+        self.assertEqual(xml.get("CreationDateTime"), "2026-09-11T00:00:00")
         self.assertEqual(xml.get("SourceSystemVersion"), "1.0")
         self.assertEqual(xml.xpath("//d:ValueListDef/@OID", namespaces=ns), ["VL.LB.LBORRESU"])
         self.assertEqual(xml.xpath("//o:ItemDef[d:ValueListRef]/@OID", namespaces=ns), ["IT.LB.LBORRESU"])
@@ -86,14 +81,14 @@ class PublicDefine(unittest.TestCase):
             self.assertEqual(check.xpath("o:CheckValue/text()", namespaces=ns), [code])
         data = json.loads(artifacts[0][1])
         Draft202012Validator(json.loads((SCHEMAS / "dataset.schema.json").read_bytes())).validate(data)
-        self.assertEqual([column["name"] for column in data["columns"]], TRUTH["lb_columns"])
+        self.assertEqual([column["name"] for column in data["columns"]], ["DOMAIN", "STUDYID", "USUBJID", "LBSEQ", "LBTESTCD", "LBTEST", "LBORRES", "LBORRESU", "LBSTRESN", "LBSTRESU", "LBDTC"])
         self.assertEqual(data["rows"], [
             ["LB", "STUDY01", "001", 2, "GLUC", "Glucose", "95", "mg/dL", 95.0, "mg/dL", "2025-01-01"],
             ["LB", "STUDY01", "002", 1, "GLUC", "Glucose", "101", "mg/dL", 101.0, "mg/dL", "2025-01-02"],
             ["LB", "STUDY01", "001", 1, "CREAT", "Creatinine", "0.9", "mg/dL", 0.9, "mg/dL", "2025-01-01"],
         ])
         reads = result._native.capture_reads()
-        for name in TRUTH["retained_source_files"]:
+        for name in ["spec.yaml", "submission-spec.yaml", "environment.yaml"]:
             (directory / name).unlink()
             self.assertFalse((directory / name).exists())
         (directory / "lb.csv").write_text("changed after preparation\n")
@@ -226,8 +221,8 @@ class PublicDefine(unittest.TestCase):
     def test_ae_vs_independent_fixed_time_schema_and_structure(self):
         ns = {"o": "http://www.cdisc.org/ns/odm/v1.3", "d": "http://www.cdisc.org/ns/def/v2.1"}
         expected = {
-            "sdtm-ae-coding": ("AE", TRUTH["ae_columns"], "Submission", "MEDDRA", True),
-            "sdtm-vs-epoch-from-subject-elements": ("VS", TRUTH["vs_columns"], "Other", "EPOCH", False),
+            "sdtm-ae-coding": ("AE", ["DOMAIN", "STUDYID", "USUBJID", "AESEQ", "AETERM", "AEDECOD", "AEBODSYS"], "Submission", "MEDDRA", True),
+            "sdtm-vs-epoch-from-subject-elements": ("VS", ["DOMAIN", "STUDYID", "USUBJID", "VSSEQ", "VSTESTCD", "VSORRES", "VSDTC", "EPOCH"], "Other", "EPOCH", False),
         }
         for name, (id_, columns, context, codelist, acrf) in expected.items():
             with self.subTest(name=name):
@@ -427,9 +422,9 @@ class PublicDefine(unittest.TestCase):
     def test_numeric_terminology_uses_numeric_equality(self):
         directory = self.fixture("sdtm-dm-metadata", published=True)
         spec = directory / "spec.yaml"
-        spec.write_text(spec.read_text().replace("name: AGE\n    type: int", "name: AGE\n    type: float").replace(TRUTH["numeric_original_metadata"], TRUTH["numeric_completion_metadata"]))
+        spec.write_text(spec.read_text().replace("name: AGE\n    type: int", "name: AGE\n    type: float").replace("core: Exp\n      role: Record Qualifier\n      length: 3", "core: Exp\n      role: Record Qualifier\n      length: 3\n      significant_digits: 3\n      codelist: AGE_VALUES"))
         environment = directory / "environment.yaml"
-        environment.write_text(environment.read_text().replace("sdtm:\n", TRUTH["numeric_codelist_yaml"]))
+        environment.write_text(environment.read_text().replace("sdtm:\n", "- codelists:\n  - id: AGE_VALUES\n    name: Ages\n    data_type: float\n    items: [{value: 34}, {value: 67}, {value: 52}]\nsdtm:\n"))
         result = self.call(directory)
         self.assertEqual(result.issues.height, 0, result.issues)
         self.validate_xml(result._native.artifacts()[1][1])

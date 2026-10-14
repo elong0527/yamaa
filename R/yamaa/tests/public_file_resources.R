@@ -1,9 +1,5 @@
 # Real public filesystem controls; private cache/limits/Changed stay in typed Rust.
 library(yamaa)
-host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
-  system.file("host-fixtures",package="yamaa",mustWork=TRUE)
-source(file.path(host_fixture_root,"reader.R"),local=TRUE)
-host_truth <- read_host_fixture(host_fixture_root,"file-resources")
 root <- system.file("specification-original", package="yamaa", mustWork=TRUE)
 source(file.path(root,"public-output-truth.R"),local=TRUE)
 observations <- get(".domain_observations",envir=asNamespace("yamaa"))
@@ -45,7 +41,7 @@ new_case <- function() {
   case <- file.path(directory,"schema-lookup")
   list(directory=directory,case=case,entry=normalizePath(file.path(case,"spec.yaml"),winslash="/"))
 }
-paths <- unlist(host_truth[["lookup_paths"]],use.names=TRUE)
+paths <- c(DM="input/dm.csv",AE="input/ae.csv",MEDDRA="input/meddict.csv")
 inspection <- read.delim(file.path(root,"source-inspection.tsv"),sep="\t",quote="",
   comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
 capture <- read.delim(file.path(root,"source-capture.tsv"),sep="\t",quote="",
@@ -64,7 +60,7 @@ fail_files <- function(case,failures) {
 }
 failed <- function(actual,expected,case) {
   stopifnot(identical(rawToChar(observations(actual)),expected),is.null(actual$output),
-    identical(names(actual$issues),fixture_strings(host_truth[["issue_columns"]])),
+    identical(names(actual$issues),c("phase","condition","requirement","spec_paths","context")),
     is.character(actual$issues$context))
   invisible(gc())
   for(attempt in seq_len(2L)) {
@@ -181,7 +177,7 @@ if(linked) {
     identical(actual$issues$condition,"resource_path_symlink"),
     identical(actual$issues$requirement,"REQ-0783"),
     identical(actual$issues$spec_paths,list("input.SRC.path")),
-    identical(actual$issues$context,host_truth[["alias_context_json"]]),
+    identical(actual$issues$context,'{"dataset":"SRC","path":"alias.csv"}'),
     inherits(tryCatch(actual$save(),error=identity),"yamaa_domain_error"),
     !file.exists(file.path(directory,"result.csv")))
   cat("physical public symlink refusal retains complete native condition passed\n")

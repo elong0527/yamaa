@@ -82,15 +82,7 @@ pub struct CompiledNumeric {
     identifiers: Vec<String>,
 }
 
-/// Closed declared result kind for numeric computations, before any values exist.
-pub const NUMERIC_RESULT_TYPE: crate::value::ColumnType = crate::value::ColumnType::Float;
-
 impl CompiledNumeric {
-    /// The declared numeric result kind does not execute or resolve this plan.
-    pub fn result_type(&self) -> crate::value::ColumnType {
-        NUMERIC_RESULT_TYPE
-    }
-
     /// Numerical policy explicitly chosen before any identifier resolution.
     pub fn math_policy(&self) -> MathPolicy {
         self.math_policy

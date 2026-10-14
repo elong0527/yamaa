@@ -14,11 +14,7 @@ LINT_PATHS = [
     ".github/scripts/commands",
 ]
 CHECKS = {
-    "validator-tests": [
-        "test_validate_repository.py",
-        "test_native_schema.py",
-        "test_native_json.py",
-    ],
+    "validator-tests": ["test_validate_repository.py"],
     "validator": ["validate_repository.py"],
     "manifest": ["check_execution_manifest.py"],
     "vocabulary": ["check_vocabulary_coverage.py"],

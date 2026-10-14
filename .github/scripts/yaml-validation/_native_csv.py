@@ -3,7 +3,6 @@
 The shared engine admits CSV syntax and formats typed scalar values. Python's CSV
 module only retains already admitted fixture cells and checks repository layout.
 """
-import _native_json
 
 import csv
 import io
@@ -68,7 +67,7 @@ def profile_issues(raw):
         (root / "source.csv").write_bytes(raw)
         specification = root / "spec.yaml"
         specification.write_text(
-            _native_json.dumps(_specification([], profile=True)), encoding="ascii"
+            json.dumps(_specification([], profile=True)), encoding="ascii"
         )
         result = domain(specification)
         rows = result.issues.to_dicts()
@@ -87,7 +86,7 @@ def source_issue(raw):
         and rows[0]["condition"] in SYNTAX_CONDITIONS | STRUCTURE_CONDITIONS
     ):
         row = rows[0]
-        return row["condition"], _native_json.loads(row["context"])
+        return row["condition"], json.loads(row["context"])
     raise RuntimeError(f"native fixture source refused: {rows!r}")
 
 
@@ -133,7 +132,7 @@ def scalar_text(value, kind, decimals=None):
         )
         specification = root / "spec.yaml"
         specification.write_text(
-            _native_json.dumps(_specification([kind], decimals=decimals)), encoding="ascii"
+            json.dumps(_specification([kind], decimals=decimals)), encoding="ascii"
         )
         result = domain(specification)
         rows = result.issues.to_dicts()

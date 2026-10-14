@@ -10,7 +10,7 @@ from check_regex import cases, check, replay
 
 
 def assess():
-    """Retain all 46 shared cases and 12 exact authored edge observations."""
+    """Retain all 43 shared cases and 12 exact authored edge observations."""
     observations = [
         row
         for row in cases()

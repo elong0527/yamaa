@@ -15,7 +15,6 @@ mod function_callback;
 mod project_activation;
 #[cfg(any(unix, windows))]
 mod project_result;
-mod schema_metadata;
 mod source_metadata;
 mod specification_inheritance;
 mod specification_result;
@@ -25,15 +24,6 @@ mod temporal_result;
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add("_CORE_VERSION", yamaa_engine::host_values::VERSION)?;
-    module.add_class::<schema_metadata::Schema>()?;
-    module.add_function(wrap_pyfunction!(
-        schema_metadata::_capture_schema_metadata,
-        module
-    )?)?;
-    module.add_function(wrap_pyfunction!(
-        schema_metadata::_schema_include_names,
-        module
-    )?)?;
     module.add_class::<define_entry::Define>()?;
     module.add(
         "DefineError",

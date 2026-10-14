@@ -37,15 +37,6 @@ pub struct CompiledAggregate {
     work: usize,
 }
 impl CompiledAggregate {
-    /// Surrounding numeric arithmetic has a closed declared kind. A bare reducer
-    /// retains its donor kind and cannot acquire a type without that schema.
-    pub fn numeric_result_type(&self) -> Option<crate::value::ColumnType> {
-        match &self.result {
-            AggregateResult::Numeric(plan) => Some(plan.result_type()),
-            AggregateResult::Reduction(_) => None,
-        }
-    }
-
     pub fn expression(&self) -> &str {
         &self.expression
     }

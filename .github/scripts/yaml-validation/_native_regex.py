@@ -3,7 +3,6 @@
 The public check admits patterns and declares capture bounds. Owned builds read
 only a generated one-row source and expose extraction results without saving.
 """
-import _native_json
 
 import json
 from functools import lru_cache
@@ -78,7 +77,7 @@ def capture_group_count(pattern):
         issues = check(path).issues.to_dicts()
     if len(issues) == 1:
         issue = issues[0]
-        context = _native_json.loads(issue["context"])
+        context = json.loads(issue["context"])
         if issue["condition"] == "invalid_regex":
             raise RegexError(context["reason"])
         if issue["condition"] == "regex_group_out_of_range":

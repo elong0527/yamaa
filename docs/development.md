@@ -24,11 +24,6 @@ Core and engine remain `no_std` and exclude host/storage frameworks. Diagnostics
 belong to the shared registry. Host callbacks carry typed values; diagnostic
 JSON text does not introduce a callback request/reply protocol. Build computes
 and retains results; explicit Save publishes held bytes in the contract's order.
-Production module names follow their directory and file names. Core groups
-dataset, specification, diagnostic and predicate responsibilities; engine groups
-dataset execution and intermediates; adapters group schema capture and file
-Define. The Windows publication module retains one explicit path because it
-implements the platform boundary in the existing private module namespace.
 The [Python guide](https://github.com/elong0527/yamaa/blob/main/python/README.md)
 and [R guide](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md)
 describe public usage and installation. The
@@ -92,15 +87,6 @@ The engine feature check in `test-rust` includes integration binaries omitted
 by a default test invocation. Portable math has shared authored golden values in
 `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv`; run
 `cargo test --locked -p yamaa-core --test portable_math_golden` from `rust/`.
-Crate manifests explicitly register integration harnesses by responsibility;
-their directory modules register individual controls. Add each new test module
-to its harness so it participates in discovery. Feature-gated engine support
-and Arrow ownership remain explicit targets. Test factories belong to each
-crate's `tests/support`; tests do not import another crate's source files.
-Paired installed Python/R inputs and expected values have one shared owner in
-`rust/tests/host-fixtures/cases.json`, with codec-only readers and the existing
-host assertions. Their [ownership guide](https://github.com/elong0527/yamaa/blob/main/rust/tests/host-fixtures/README.md)
-maps all paired families and their public conformance coverage.
 Installed supplemental suites require yamaa and `yamaa-benchmarks` installed
 with locked test dependencies in a separate Python interpreter, or yamaa and
 `yamaabenchmarks` in the R library selected by `R_LIBS`. `sync-python` prepares
@@ -149,27 +135,6 @@ Run from the repository root:
 uv run --project python --no-sync python .github/scripts/commands/repository.py rule-references
 uv run --project python --no-sync python .github/scripts/commands/repository.py rules
 ```
-
-Repository validation has focused owners under `.github/scripts/yaml-validation/`.
-`validate_repository.py` orchestrates them and presents their findings. Installed
-shared Rust owns schema admission, inheritance, defaults, normalization, language
-expressions, dependency graphs and source binding. Missing native installation or
-transport fails explicitly. Repository code captures bounded source bytes and
-formats native findings; it does not supply a second language evaluator.
-
-| Check family | Current owner and independent controls |
-| --- | --- |
-| Schema, descriptors, inheritance and defaults | `repository_schema.py` and `_native_schema.py` transport installed shared facts; `TestTypeValidation`, `TestSpecificationInheritance` and the date/window schema classes retain authored controls. `test_native_schema.py` checks lossless scalars, confined captures, limits and failed-owner reuse. |
-| Expressions, dependencies and row phases | `_native_specification.py` uses installed preparation; test-only typed fixtures expose shared compilation facts. Predicate, numeric, aggregate, template, static-contract and row-phase classes in `test_validate_repository.py` retain their independent operands and diagnostic assertions. |
-| Sources, producer contracts and resources | Installed preparation and source metadata own admission; producing-specification, resource-boundary, source-profile, ordinal and ODM classes retain independent paths, expected fields and refusal assertions. |
-| Repository layout and editorial rules | `repository_structure.py` and `editorial.py` own directory/file membership, labels and source text; the dataset-path, CLI, text-boundary and key-order classes check them. |
-| Expected artifacts and diagnostic manifests | `repository_artifacts.py`, `repository_manifests.py` and `validation_diagnostics.py` compare authored expected bytes, shapes and registered findings. CSV-profile, declared-error, manifest and condition-registry controls keep their expected truth. |
-| Closed grammar and regex observations | `grammar_checks.py` and `regex_checks.py` transport shared syntax/regex observations; closed-grammar and regex classes retain every authored positive, negative and poisoned observation. |
-
-The immutable retired assertion map linked in [release guidance](release.md)
-remains the original inventory. PR evidence records each assertion's current
-replacement and any explicit disposition; test-only witnesses do not become
-runtime APIs or derive expected truth from the implementation under test.
 
 ## Documentation and CI
 
