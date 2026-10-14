@@ -114,6 +114,30 @@ fn rename_only_precedes_key_types_and_every_study_read() {
     assert!(!fixture.0.join("src.csv").exists());
 }
 #[test]
+fn unused_rename_only_handler_survives_explicit_composition_and_empty_child() {
+    let fixture = Fixture::new();
+    let body = BODY
+        .replace("    order_by: [DONOR.SEQ]\n    keep: first\n", "")
+        .replace("derivation: P.A", "derivation: {literal: a}")
+        .replace("derivation: P.B", "derivation: {literal: b}");
+    fs::write(fixture.0.join("parent.yaml"), &body).unwrap();
+    let explicit = body.replace("domain: TEST", "parents: []\ndomain: TEST");
+    for authored in [
+        body,
+        explicit,
+        "schema_version: '1.0'\nparents: parent.yaml\n".into(),
+    ] {
+        assert_eq!(
+            issues(fixture.run(&authored)),
+            vec![
+                serde_json::json!({"phase":"validation", "condition":"rename_only_intermediate", "requirement":"REQ-1248", "spec_paths":["intermediates[0]"], "context":{"intermediate":"P","dataset":"DONOR"}})
+            ]
+        );
+        assert!(!fixture.0.join("src.csv").exists());
+        assert!(!fixture.0.join("donor.csv").exists());
+    }
+}
+#[test]
 fn either_unpaired_selection_is_a_complete_declaration_finding() {
     let fixture = Fixture::new();
     for (line, declared, missing) in [
