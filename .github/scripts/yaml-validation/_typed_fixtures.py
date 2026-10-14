@@ -20,6 +20,7 @@ EXAMPLES["odm"] = "odm_declaration_fixture"
 EXAMPLES["schema"] = "schema_declaration_fixture"
 EXAMPLES["semantic"] = "semantic_fixture"
 EXAMPLES["resource-capture"] = "resource_capture_fixture"
+EXAMPLES["source-catalog"] = "source_catalog_fixture"
 
 
 @lru_cache(maxsize=1)
@@ -51,7 +52,7 @@ def _observation(contract, text, strict=True):
             *(["--spans"] if contract in {"numeric", "aggregate"} else []),
             *(["--non-strict"] if contract == "windows" and not strict else []),
         ],
-        input=(text if contract in {"odm", "schema", "semantic", "resource-capture"} else json.dumps(text)) + "\n",
+        input=(text if contract in {"odm", "schema", "semantic", "resource-capture", "source-catalog"} else json.dumps(text)) + "\n",
         text=True,
         capture_output=True,
         check=True,
@@ -60,7 +61,7 @@ def _observation(contract, text, strict=True):
     if len(rows) != 1:
         raise RuntimeError("incomplete typed grammar fixture observation")
     value = json.loads(rows[0])
-    return value if contract in {"windows", "odm", "schema", "semantic", "resource-capture"} else value["outcome"]
+    return value if contract in {"windows", "odm", "schema", "semantic", "resource-capture", "source-catalog"} else value["outcome"]
 
 
 def observe(contract, text, *, strict=True):
