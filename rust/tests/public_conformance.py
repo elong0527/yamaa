@@ -196,15 +196,23 @@ def main(argv=None):
                             shutil.copyfile(source, target)
                 for entry in example["entries"]["python"]:
                     record["builds"].append(build(case, entry, entry["specification"]))
-                for variant in example.get("variants", {}).get("python", []):
-                    entry = example["entries"]["python"][variant["entry"]]
-                    record["variants"].append(
-                        {
-                            "kind": variant["kind"],
-                            "entry": variant["entry"],
-                            **build(case, entry, variant["specification"]),
-                        }
-                    )
+                variants = example.get("variants", {}).get("python", [])
+                if variants:
+                    # Variants declare the same output paths as their entry, so
+                    # build them in a copy of the staged case: a variant's
+                    # save() must not overwrite the entry's saved files, whose
+                    # bytes the comparator checks against independent truth.
+                    variant_case = output / "work" / (name + "__variants")
+                    shutil.copytree(case, variant_case, symlinks=True)
+                    for variant in variants:
+                        entry = example["entries"]["python"][variant["entry"]]
+                        record["variants"].append(
+                            {
+                                "kind": variant["kind"],
+                                "entry": variant["entry"],
+                                **build(variant_case, entry, variant["specification"]),
+                            }
+                        )
         except Exception as error:  # noqa: BLE001 -- retain one record for every benchmark
             record["error"] = f"{type(error).__name__}: {error}"
         write_json(output / "records" / (name + ".json"), record)

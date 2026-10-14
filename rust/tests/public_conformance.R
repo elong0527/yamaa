@@ -110,10 +110,22 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
           environment <- if(nzchar(entry$environment[[1L]])) entry$environment[[1L]] else NULL
           record$builds[[length(record$builds)+1L]] <- build_one(case, entry$specification[[1L]], environment)
         }
+        variant_case <- case
+        if (nrow(variant_rows)) {
+          # Variants declare the same output paths as their entry, so build
+          # them in a copy of the staged case: a variant's save() must not
+          # overwrite the entry's saved files, whose bytes the comparator
+          # checks against independent truth.
+          variant_case <- file.path(output, "work", paste0(name, "__variants"))
+          dir.create(variant_case, recursive=TRUE, showWarnings=FALSE)
+          copied <- file.copy(list.files(case, full.names=TRUE, all.files=TRUE, no..=TRUE),
+            variant_case, recursive=TRUE)
+          if (!all(copied)) stop("could not copy staged case for variant builds: ", name)
+        }
         for (index in seq_len(nrow(variant_rows))) {
           vrow <- variant_rows[index, , drop=FALSE]
           environment <- if(nzchar(vrow$environment[[1L]])) vrow$environment[[1L]] else NULL
-          variant <- build_one(case, vrow$specification[[1L]], environment)
+          variant <- build_one(variant_case, vrow$specification[[1L]], environment)
           variant$kind <- vrow$variant[[1L]]
           variant$entry <- as.character(vrow$entry[[1L]])
           record$variants[[length(record$variants)+1L]] <- variant
