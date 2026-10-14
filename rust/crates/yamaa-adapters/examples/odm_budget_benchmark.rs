@@ -162,7 +162,7 @@ fn source_ipc(
             let item = row % settings.items;
             let value = match item {
                 0 => ages[subject].as_str(),
-                1 if subject % 2 == 0 => "F",
+                1 if subject.is_multiple_of(2) => "F",
                 1 => "M",
                 _ => "0",
             };
@@ -298,7 +298,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .dataset
                     .cell(subject, 3)
                     .expect("checked output cell"),
-                ValueRef::Str(if subject % 2 == 0 { "F" } else { "M" })
+                ValueRef::Str(if subject.is_multiple_of(2) { "F" } else { "M" })
             );
         }
         eprintln!(
@@ -311,7 +311,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             "output_rows":execution.dataset.row_count(), "output_ipc_bytes":output.0}));
     }
     totals.sort_by(f64::total_cmp);
-    let median = if totals.len() % 2 == 0 {
+    let median = if totals.len().is_multiple_of(2) {
         (totals[totals.len() / 2 - 1] + totals[totals.len() / 2]) / 2.0
     } else {
         totals[totals.len() / 2]
