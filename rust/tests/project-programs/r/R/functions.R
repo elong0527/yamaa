@@ -10,8 +10,10 @@ project_ratio <- function(numerator, denominator, decimals = 2L,
   decimals <- as.integer(decimals)
   # printf rounds the stored binary value, matching Python's round() for
   # decimal places; R's round() can treat a nearby binary value as a tie.
-  value <- if (decimals > 323L) {
-    # More decimal places cannot change a binary64 value.
+  value <- if (is.na(decimals)) {
+    round(value, decimals)
+  } else if (!is.finite(value) || decimals > 323L) {
+    # Non-finite values and finer precision need no decimal conversion.
     value
   } else if (decimals >= 0L) {
     as.numeric(sprintf("%.*f", decimals, value))
