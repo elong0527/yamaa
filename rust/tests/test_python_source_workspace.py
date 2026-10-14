@@ -46,8 +46,8 @@ class PythonSourceWorkspaceTests(unittest.TestCase):
             "Cargo.toml": b'[package]\nname = "witness"\nversion = "0.1.0"\n',
             "src/lib.rs": b"pub fn witness() {}\n",
             "LICENSE": b"two upstream authors\n",
-            ".licenses/first-MIT": b"first notice\n",
-            ".licenses/second-MIT": b"second notice\n",
+            "LICENSES/first-MIT": b"first notice\n",
+            "LICENSES/second-MIT": b"second notice\n",
             "README.md": b"released readme\n",
             "PROVENANCE.md": b"release plus narrow source patch\n",
             "compact-flow-pairs.patch": b"independent source patch\n",
@@ -109,10 +109,10 @@ class PythonSourceWorkspaceTests(unittest.TestCase):
     def test_local_patch_symlinks_and_escaping_declarations_refuse_before_staging(self):
         with tempfile.TemporaryDirectory() as directory:
             workspace, package, _ = self.patch_fixture(Path(directory))
-            notice = package / ".licenses/second-MIT"
+            notice = package / "LICENSES/second-MIT"
             notice.unlink()
             try:
-                notice.symlink_to(package / ".licenses/first-MIT")
+                notice.symlink_to(package / "LICENSES/first-MIT")
             except OSError as error:
                 self.skipTest(f"local patch symlink control is unavailable: {error}")
             with self.assertRaisesRegex(ValueError, "must not be symlinks"):

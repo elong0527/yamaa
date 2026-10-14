@@ -54,7 +54,7 @@ Since this repository was originally maintained by
 A license of each set must be included in redistributions. See the
 [LICENSE](LICENSE) file for more details.
 
-You can find licences in the [`.licenses`](.licenses) subfolder.
+You can find licences in the [`LICENSES`](LICENSES) subfolder.
 
 ## Contribution
 

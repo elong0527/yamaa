@@ -17,10 +17,13 @@ and string/iterator parity controls. Run them with
 `cargo test --locked -p saphyr-parser --test compact_flow_pairs` from
 `rust/` (the dependency is excluded from the five owned workspace members).
 
-`README.md`, `LICENSE` and all four `.licenses` files retain the release's
-original bytes. Redistributions must include licenses from both Chen Yuheng
-and Ethiraric. The Python wheel and installed R package include both MIT
-notices in `LICENSE-YAML.txt`; source packages retain both licensing options.
+All four files in `LICENSES` retain the release's original license bytes.
+The license directory uses a visible name so R source-package checks admit
+the complete notices; only license links in `README.md` and `LICENSE` were
+updated for this relocation. Redistributions must include licenses from both
+Chen Yuheng and Ethiraric. The Python wheel and installed R package include
+both MIT notices in `LICENSE-YAML.txt`; source packages retain both licensing
+options.
 
 The crates.io patch uses local release sources so locked native rebuilds do
 not depend on a personal Git fork. Remove this patch after a released upstream
