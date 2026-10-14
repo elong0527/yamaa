@@ -1,6 +1,7 @@
 //! Execution contracts in the yamaa-adapters integration suite.
 
 mod aggregate_record_operations;
+mod check_output_validation;
 mod compiled_model;
 mod completed_intermediate_scopes;
 mod completed_lookup_assertions;
