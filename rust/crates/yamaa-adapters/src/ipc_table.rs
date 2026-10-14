@@ -38,6 +38,11 @@ fn source_limits(budget: ExecutionBudget) -> TableLimits {
 pub enum TableError {
     InputLimit,
     OutputLimit,
+    Limit {
+        resource: &'static str,
+        limit: usize,
+        required: Option<usize>,
+    },
     ShapeLimit,
     InvalidStream,
     InvalidTable,
@@ -50,6 +55,7 @@ impl fmt::Display for TableError {
         f.write_str(match self {
             Self::InputLimit => "table IPC input exceeds byte limit",
             Self::OutputLimit => "table output exceeds byte limit",
+            Self::Limit { .. } => "table resource budget exceeded",
             Self::ShapeLimit => "table IPC exceeds shape limit",
             Self::InvalidStream => "invalid or unsupported table IPC stream",
             Self::InvalidTable => "invalid table schema or value",
@@ -404,6 +410,8 @@ fn write_table_projection<T: TableAccess<Error = std::convert::Infallible>>(
     let mut output = CappedWriter {
         output,
         remaining: budget.max_output_bytes,
+        initial: budget.max_output_bytes,
+        required: None,
         exceeded: false,
     };
     let result = (|| {
@@ -415,7 +423,11 @@ fn write_table_projection<T: TableAccess<Error = std::convert::Infallible>>(
         writer.finish().map_err(|_| Error::OutputIo)
     })();
     if output.exceeded {
-        Err(Error::OutputLimit)
+        Err(Error::Limit {
+            resource: "output_ipc_bytes",
+            limit: budget.max_output_bytes,
+            required: output.required,
+        })
     } else {
         result
     }
@@ -424,6 +436,8 @@ fn write_table_projection<T: TableAccess<Error = std::convert::Infallible>>(
 struct CappedWriter<'a, W> {
     output: &'a mut W,
     remaining: usize,
+    initial: usize,
+    required: Option<usize>,
     exceeded: bool,
 }
 
@@ -431,6 +445,7 @@ impl<W: Write> Write for CappedWriter<'_, W> {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
         if bytes.len() > self.remaining {
             self.exceeded = true;
+            self.required = (self.initial - self.remaining).checked_add(bytes.len());
             return Err(io::Error::other("output limit"));
         }
         let written = self.output.write(bytes)?;

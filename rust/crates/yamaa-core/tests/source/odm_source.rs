@@ -115,7 +115,30 @@ fn whole_metadata_admission_precedes_owned_findings() {
     }];
     assert_eq!(
         odm_source::bind_fields(&fields),
-        Err(odm_source::AdmissionError::MetadataLimit)
+        Err(odm_source::AdmissionError::MetadataLimit {
+            resource: "odm_metadata_bytes",
+            limit: 1_048_576,
+            actual: Some(1_048_577)
+        })
+    );
+}
+
+#[test]
+fn odm_field_count_refusal_keeps_its_field_quota_instead_of_claiming_a_byte_limit() {
+    let fields = vec![
+        StoredField {
+            name: "vendor",
+            kind: None
+        };
+        4097
+    ];
+    assert_eq!(
+        odm_source::bind_fields(&fields),
+        Err(odm_source::AdmissionError::MetadataLimit {
+            resource: "odm_fields",
+            limit: 4096,
+            actual: Some(4097)
+        })
     );
 }
 

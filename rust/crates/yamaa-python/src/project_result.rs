@@ -18,6 +18,7 @@ pub struct Result {
     carrier: Attempt,
     formatted: Option<specification_result::BuildResult>,
     refusal: &'static str,
+    refusal_details: Option<yamaa_adapters::resource_diagnostics::Refusal>,
 }
 fn details(error: &CallbackError) -> Option<HostDetails<'_>> {
     match error {
@@ -51,6 +52,7 @@ pub(super) fn prepare(
     let mut budget = yamaa_adapters::specification_check::MAX_ISSUE_BYTES;
     let mut ordinary = Vec::new();
     let mut refusal = "";
+    let mut refusal_details = None;
     for error in &failures {
         let projection = match error {
             HostError::Host(error) if error.is_instance_of::<PyException>(py) => {
@@ -75,6 +77,18 @@ pub(super) fn prepare(
                     .and_then(|charge| budget.checked_sub(charge));
                 let Some(remaining) = remaining else {
                     refusal = "report_limit";
+                    refusal_details = Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+                        "diagnostic_bytes",
+                        yamaa_adapters::specification_check::MAX_ISSUE_BYTES,
+                        text.len()
+                            .checked_mul(12)
+                            .and_then(|n| n.checked_add(128))
+                            .and_then(|charge| {
+                                (yamaa_adapters::specification_check::MAX_ISSUE_BYTES - budget)
+                                    .checked_add(charge)
+                            }),
+                        Vec::new(),
+                    ));
                     break;
                 };
                 budget = remaining;
@@ -115,6 +129,12 @@ pub(super) fn prepare(
         ) {
             Ok(inner) => Some(specification_result::BuildResult { inner }),
             Err(error) => {
+                if let project_report::Error::Report(
+                    yamaa_adapters::specification_report::Error::ResourceLimit(details),
+                ) = &error
+                {
+                    refusal_details = Some(details.clone());
+                }
                 refusal = match error {
                     project_report::Error::Opaque(_) => "opaque_host",
                     project_report::Error::Boundary(_) => "activation_boundary",
@@ -122,6 +142,9 @@ pub(super) fn prepare(
                     project_report::Error::Execution(_) => "execution_boundary",
                     project_report::Error::Report(
                         yamaa_adapters::specification_report::Error::OutputLimit,
+                    ) => "report_limit",
+                    project_report::Error::Report(
+                        yamaa_adapters::specification_report::Error::ResourceLimit(_),
                     ) => "report_limit",
                     project_report::Error::Report(_) => "report_refusal",
                 };
@@ -138,6 +161,7 @@ pub(super) fn prepare(
         },
         formatted,
         refusal,
+        refusal_details,
     })
 }
 impl Result {
@@ -155,9 +179,9 @@ impl Result {
             Some(formatted) => {
                 yamaa_adapters::file_application::Domain::from_project(formatted.inner, project)
             }
-            None => Err(yamaa_adapters::file_application::rejected(
-                "build",
-                self.refusal,
+            None => Err(self.refusal_details.map_or_else(
+                || yamaa_adapters::file_application::rejected("build", self.refusal),
+                |details| details.issues("build", self.refusal),
             )),
         };
         (self.carrier, result)

@@ -254,7 +254,7 @@ mod tests {
                     ..limits
                 }
             ),
-            Err(DecodeError::Codec(Error::Ordinal(_)))
+            Err(DecodeError::Codec(Error::ResourceLimit(refusal))) if refusal.resource == "cells" && refusal.limit == 299_999 && refusal.actual == Some(300_000) && refusal.spec_paths == ["input.P"]
         ));
     }
 }

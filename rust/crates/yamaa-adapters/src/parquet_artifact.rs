@@ -32,7 +32,11 @@ pub struct Limits {
 #[derive(Debug)]
 pub enum Error<E> {
     Projection,
-    Limit,
+    Limit {
+        resource: &'static str,
+        limit: usize,
+        actual: Option<usize>,
+    },
     Cell(CellError<E>),
     ValueType,
     Codec(ParquetError),
@@ -42,6 +46,7 @@ struct Sink {
     bytes: Vec<u8>,
     maximum: usize,
     exceeded: bool,
+    actual: Option<usize>,
 }
 impl Write for Sink {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
@@ -52,6 +57,7 @@ impl Write for Sink {
             .is_none_or(|n| n > self.maximum)
         {
             self.exceeded = true;
+            self.actual = self.bytes.len().checked_add(bytes.len());
             return Err(std::io::Error::other("Parquet output byte limit"));
         }
         self.bytes.extend_from_slice(bytes);
@@ -62,11 +68,18 @@ impl Write for Sink {
     }
 }
 
-fn charge<E>(used: &mut usize, amount: usize, maximum: usize) -> Result<(), Error<E>> {
-    *used = used
-        .checked_add(amount)
-        .filter(|n| *n <= maximum)
-        .ok_or(Error::Limit)?;
+fn charge<E>(
+    used: &mut usize,
+    amount: Option<usize>,
+    maximum: usize,
+    resource: &'static str,
+) -> Result<(), Error<E>> {
+    let actual = amount.and_then(|amount| used.checked_add(amount));
+    *used = actual.filter(|n| *n <= maximum).ok_or(Error::Limit {
+        resource,
+        limit: maximum,
+        actual,
+    })?;
     Ok(())
 }
 
@@ -100,8 +113,9 @@ fn column<T: TableAccess, D: DataType>(
     let mut charged = 0;
     charge(
         &mut charged,
-        rows.len().checked_mul(2).ok_or(Error::Limit)?,
+        rows.len().checked_mul(2),
         maximum,
+        "staged_bytes",
     )?;
     let mut levels = Vec::with_capacity(rows.len());
     let mut values = Vec::new();
@@ -118,8 +132,9 @@ fn column<T: TableAccess, D: DataType>(
             };
             charge(
                 &mut charged,
-                payload.checked_add(64).ok_or(Error::Limit)?,
+                payload.checked_add(64),
                 maximum,
+                "staged_bytes",
             )?;
             values.push(convert(value).ok_or(Error::ValueType)?);
             levels.push(1);
@@ -138,13 +153,21 @@ fn encode<T: TableAccess>(
     limits: Limits,
     sink: &mut Sink,
 ) -> Result<(), Error<T::Error>> {
-    if projection.len() > limits.columns
-        || table
-            .row_count()
-            .checked_mul(projection.len())
-            .is_none_or(|n| n > limits.cells)
-    {
-        return Err(Error::Limit);
+    for (resource, actual, limit) in [
+        ("output_columns", Some(projection.len()), limits.columns),
+        (
+            "output_cells",
+            table.row_count().checked_mul(projection.len()),
+            limits.cells,
+        ),
+    ] {
+        if actual.is_none_or(|actual| actual > limit) {
+            return Err(Error::Limit {
+                resource,
+                limit,
+                actual,
+            });
+        }
     }
     if projection.is_empty()
         || projection
@@ -160,8 +183,9 @@ fn encode<T: TableAccess>(
         let selected = &table.schema().columns()[index];
         charge(
             &mut schema_bytes,
-            selected.name.len().checked_add(256).ok_or(Error::Limit)?,
+            selected.name.len().checked_add(256),
             limits.staged_bytes,
+            "staged_bytes",
         )?;
         fields.push(field(&selected.name, selected.kind)?);
     }
@@ -267,10 +291,15 @@ pub fn render<T: TableAccess>(
         bytes: Vec::new(),
         maximum: limits.output_bytes,
         exceeded: false,
+        actual: None,
     };
     let result = encode(table, projection, limits, &mut sink);
     if sink.exceeded {
-        return Err(Error::Limit);
+        return Err(Error::Limit {
+            resource: "output_bytes",
+            limit: limits.output_bytes,
+            actual: sink.actual,
+        });
     }
     result?;
     Ok(sink.bytes)
@@ -283,7 +312,12 @@ struct RecordText {
 }
 impl RecordText {
     fn append<E>(&mut self, text: &str) -> Result<(), Error<E>> {
-        charge(&mut self.used, text.len(), self.maximum)?;
+        charge(
+            &mut self.used,
+            Some(text.len()),
+            self.maximum,
+            "report_record_bytes",
+        )?;
         self.current.push_str(text);
         Ok(())
     }

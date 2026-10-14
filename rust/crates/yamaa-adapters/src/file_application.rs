@@ -41,6 +41,12 @@ pub(crate) fn resource_rejected(
         .expect("application resource issue"),
     ]
 }
+fn report_failure(stage: &str, code: &str, error: &specification_report::Error) -> Failure {
+    match error {
+        specification_report::Error::ResourceLimit(refusal) => refusal.issues(stage, code),
+        _ => rejected(stage, code),
+    }
+}
 pub(crate) fn classified_resource(diagnostic: &yamaa_core::diagnostic::Diagnostic) -> Failure {
     vec![Issue::from_core(diagnostic.clone()).expect("classified resource finding")]
 }
@@ -262,7 +268,7 @@ impl Domain {
                 }
                 result
                     .reject_host_output()
-                    .map_err(|_| rejected("build", "result_projection"))?;
+                    .map_err(|error| report_failure("build", "result_projection", &error))?;
                 None
             }
         };
@@ -378,8 +384,9 @@ impl Domain {
         })();
         let (report, mut artifacts) = match report {
             Ok(report) => report,
-            Err(_) => {
-                self.publication_issues = rejected("output", "publication_report_limit");
+            Err(error) => {
+                self.publication_issues =
+                    report_failure("output", "publication_report_limit", &error);
                 return if failed { Err(FailedBuild) } else { Ok(false) };
             }
         };
@@ -621,7 +628,7 @@ impl RuntimePort for Native<'_> {
                     base_directory: self.identity.base_directory,
                 },
             )
-            .map_err(|_| rejected("build", "result_projection"))?;
+            .map_err(|error| report_failure("build", "result_projection", &error))?;
             Domain::from_build(result, |field| {
                 if field == "path" {
                     prepared.publication_target()
@@ -1066,6 +1073,12 @@ mod tests {
             .save_with(1, |_, _, _| panic!("refused report entered publisher"))
             .unwrap());
         assert_eq!(result.publication_attempt.entered, 0);
+        let issues = result.issues();
+        let issue = issues.last().unwrap();
+        let context: Value = serde_json::from_str(&issue.context).unwrap();
+        assert_eq!(context["code"], "publication_report_limit");
+        assert_eq!(context["resource"], "report_retained_bytes");
+        assert_eq!(context["limit"], 6);
         for name in ["adsl-checks.csv", "adsl-warnings.csv", "adsl.csv"] {
             assert!(!study.0.join(name).exists());
         }

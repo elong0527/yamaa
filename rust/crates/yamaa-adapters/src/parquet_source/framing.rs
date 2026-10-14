@@ -1,6 +1,34 @@
 //! Admission of held Parquet framing before the general codec sees metadata.
 //! No decompression or semantic type decisions occur here.
-use super::compact::{self, Error, Value};
+use super::compact::{self, Value};
+
+#[derive(Debug)]
+pub(super) enum Error {
+    Malformed,
+    Limit,
+    ResourceLimit {
+        resource: &'static str,
+        limit: usize,
+        actual: Option<usize>,
+    },
+}
+impl From<compact::Error> for Error {
+    fn from(error: compact::Error) -> Self {
+        match error {
+            compact::Error::Malformed => Self::Malformed,
+            compact::Error::Limit => Self::Limit,
+            compact::Error::ResourceLimit {
+                resource,
+                limit,
+                actual,
+            } => Self::ResourceLimit {
+                resource,
+                limit,
+                actual,
+            },
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
@@ -76,16 +104,27 @@ fn sequence<'a, 'b>(value: Option<&'b Value<'a>>) -> Result<&'b [Value<'a>], Err
         Err(Error::Malformed)
     }
 }
-fn charge(used: &mut usize, amount: usize, limit: usize) -> Result<(), Error> {
-    *used = used
-        .checked_add(amount)
-        .filter(|n| *n <= limit)
-        .ok_or(Error::Limit)?;
+fn charge(
+    used: &mut usize,
+    amount: usize,
+    limit: usize,
+    resource: &'static str,
+) -> Result<(), Error> {
+    let actual = used.checked_add(amount);
+    *used = actual.filter(|n| *n <= limit).ok_or(Error::ResourceLimit {
+        resource,
+        limit,
+        actual,
+    })?;
     Ok(())
 }
-fn bound(value: usize, limit: usize) -> Result<(), Error> {
+fn bound(value: usize, limit: usize, resource: &'static str) -> Result<(), Error> {
     if value > limit {
-        Err(Error::Limit)
+        Err(Error::ResourceLimit {
+            resource,
+            limit,
+            actual: Some(value),
+        })
     } else {
         Ok(())
     }
@@ -95,7 +134,7 @@ fn bound(value: usize, limit: usize) -> Result<(), Error> {
 // later from integer fields within each SchemaElement. The general reader
 // reserves num_children slots before discovering a truncated schema tree.
 fn admit_schema(schema: &[Value<'_>], limits: Limits) -> Result<(), Error> {
-    bound(schema.len().saturating_sub(1), limits.columns)?;
+    bound(schema.len().saturating_sub(1), limits.columns, "columns")?;
     let mut remaining_children = Vec::new();
     for (index, element) in schema.iter().enumerate() {
         while remaining_children.last() == Some(&0) {
@@ -106,7 +145,7 @@ fn admit_schema(schema: &[Value<'_>], limits: Limits) -> Result<(), Error> {
         }
         // Flat Thrift metadata can describe a deeply recursive schema tree.
         // Admit its depth independently of the compact parser's own depth.
-        bound(remaining_children.len() + 1, 64)?;
+        bound(remaining_children.len() + 1, 64, "schema_depth")?;
         if let Some(value) = element.field(5) {
             let children = count(Some(value))?;
             if children > schema.len() - index - 1 {
@@ -122,6 +161,7 @@ fn admit_schema(schema: &[Value<'_>], limits: Limits) -> Result<(), Error> {
                 bound(
                     usize::try_from(length).map_err(|_| Error::Limit)?,
                     limits.page_bytes,
+                    "page_bytes",
                 )?;
             }
         }
@@ -133,13 +173,13 @@ fn admit_schema(schema: &[Value<'_>], limits: Limits) -> Result<(), Error> {
 /// row-group/column/page order. Unknown metadata is still included in node/work
 /// admission. The downstream codec remains responsible for format semantics.
 pub(super) fn admit(bytes: &[u8], limits: Limits) -> Result<Framing<'_>, Error> {
-    bound(bytes.len(), limits.source_bytes)?;
+    bound(bytes.len(), limits.source_bytes, "bytes")?;
     if bytes.len() < 12 || &bytes[..4] != b"PAR1" || &bytes[bytes.len() - 4..] != b"PAR1" {
         return Err(Error::Malformed);
     }
     let footer = bytes.len() - 8;
     let length = u32::from_le_bytes(bytes[footer..footer + 4].try_into().unwrap()) as usize;
-    bound(length, limits.metadata_bytes)?;
+    bound(length, limits.metadata_bytes, "metadata_bytes")?;
     let start = footer
         .checked_sub(length)
         .filter(|n| *n >= 4)
@@ -153,9 +193,9 @@ pub(super) fn admit(bytes: &[u8], limits: Limits) -> Result<Framing<'_>, Error> 
             bytes: limits.metadata_bytes,
         },
     )?;
-    bound(count(root.field(3))?, limits.rows)?;
+    bound(count(root.field(3))?, limits.rows, "rows")?;
     let groups = sequence(root.field(4))?;
-    bound(groups.len(), limits.row_groups)?;
+    bound(groups.len(), limits.row_groups, "row_groups")?;
     // Include the root schema element in metadata-node accounting. Leaf/field
     // matching and the closed type contract are checked by the actual decoder.
     let schema = sequence(root.field(2))?;
@@ -172,18 +212,19 @@ pub(super) fn admit(bytes: &[u8], limits: Limits) -> Result<Framing<'_>, Error> 
     let mut dictionary_values = 0;
     for (row_group, group) in groups.iter().enumerate() {
         let count_rows = count(group.field(3))?;
-        charge(&mut rows, count_rows, limits.rows)?;
+        charge(&mut rows, count_rows, limits.rows, "rows")?;
         let columns = sequence(group.field(1))?;
-        bound(columns.len(), limits.columns)?;
+        bound(columns.len(), limits.columns, "columns")?;
         charge(
             &mut cells,
             count_rows.checked_mul(columns.len()).ok_or(Error::Limit)?,
             limits.cells,
+            "cells",
         )?;
         for (column, chunk) in columns.iter().enumerate() {
             let meta = chunk.field(3).ok_or(Error::Malformed)?;
             let codec = integer(meta.field(4))?;
-            bound(count(meta.field(5))?, limits.cells)?;
+            bound(count(meta.field(5))?, limits.cells, "cells")?;
             let data = count(meta.field(9))?;
             let mut offset = match meta.field(11) {
                 // Match the reader's exact chunk start. Empty columns may have
@@ -203,6 +244,7 @@ pub(super) fn admit(bytes: &[u8], limits: Limits) -> Result<Framing<'_>, Error> 
                 bound(
                     result.pages.len().checked_add(1).ok_or(Error::Limit)?,
                     limits.pages,
+                    "pages",
                 )?;
                 let (header, used, nodes) = compact::parse(
                     &bytes[offset..end],
@@ -212,17 +254,27 @@ pub(super) fn admit(bytes: &[u8], limits: Limits) -> Result<Framing<'_>, Error> 
                         bytes: limits.header_bytes,
                     },
                 )?;
-                charge(&mut header_nodes, nodes, limits.header_nodes)?;
+                charge(
+                    &mut header_nodes,
+                    nodes,
+                    limits.header_nodes,
+                    "header_nodes",
+                )?;
                 let uncompressed = count(header.field(2))?;
                 let compressed = count(header.field(3))?;
-                bound(uncompressed, limits.page_bytes)?;
-                bound(compressed, limits.page_bytes)?;
-                charge(&mut decoded, uncompressed, limits.decoded_bytes)?;
+                bound(uncompressed, limits.page_bytes, "page_bytes")?;
+                bound(compressed, limits.page_bytes, "page_bytes")?;
+                charge(
+                    &mut decoded,
+                    uncompressed,
+                    limits.decoded_bytes,
+                    "decoded_bytes",
+                )?;
                 // Value counts control downstream dictionary/column staging,
                 // including headers inconsistent with their page-type tag.
                 for field in [5, 7, 8] {
                     if let Some(detail) = header.field(field) {
-                        bound(count(detail.field(1))?, limits.cells)?;
+                        bound(count(detail.field(1))?, limits.cells, "cells")?;
                     }
                 }
                 let payload = match integer(header.field(1))? {
@@ -245,8 +297,8 @@ pub(super) fn admit(bytes: &[u8], limits: Limits) -> Result<Framing<'_>, Error> 
                     }
                     3 => {
                         let detail = header.field(8).ok_or(Error::Malformed)?;
-                        bound(count(detail.field(2))?, limits.cells)?;
-                        bound(count(detail.field(3))?, limits.rows)?;
+                        bound(count(detail.field(2))?, limits.cells, "cells")?;
+                        bound(count(detail.field(3))?, limits.rows, "rows")?;
                         Payload::DataV2 {
                             encoding: integer(detail.field(4))?,
                             values: count(detail.field(1))?,
@@ -259,10 +311,10 @@ pub(super) fn admit(bytes: &[u8], limits: Limits) -> Result<Framing<'_>, Error> 
                 };
                 match payload {
                     Payload::DataV1 { values, .. } | Payload::DataV2 { values, .. } => {
-                        charge(&mut data_values, values, limits.cells)?
+                        charge(&mut data_values, values, limits.cells, "cells")?
                     }
                     Payload::Dictionary { values, .. } => {
-                        charge(&mut dictionary_values, values, limits.cells)?
+                        charge(&mut dictionary_values, values, limits.cells, "cells")?
                     }
                     Payload::Index => {}
                 }
@@ -388,7 +440,7 @@ mod tests {
         admit_schema(&[element(1), fixed(64)], limits()).unwrap();
         assert!(matches!(
             admit_schema(&[element(1), fixed(65)], limits()),
-            Err(Error::Limit)
+            Err(Error::ResourceLimit { .. })
         ));
         let mut nested: Vec<_> = (0..63).map(|_| element(1)).collect();
         nested.push(element(0));
@@ -398,7 +450,10 @@ mod tests {
         };
         admit_schema(&nested, generous).unwrap();
         nested.insert(0, element(1));
-        assert!(matches!(admit_schema(&nested, generous), Err(Error::Limit)));
+        assert!(matches!(
+            admit_schema(&nested, generous),
+            Err(Error::ResourceLimit { .. })
+        ));
         // Siblings exhaust their parent rather than incrementing tree depth.
         let mut flat = vec![element(100)];
         flat.extend((0..100).map(|_| element(0)));
@@ -468,7 +523,7 @@ mod tests {
             },
         ] {
             assert!(
-                matches!(admit(&bytes, restricted), Err(Error::Limit)),
+                matches!(admit(&bytes, restricted), Err(Error::ResourceLimit { .. })),
                 "{restricted:?}"
             );
         }
@@ -481,7 +536,10 @@ mod tests {
         let mut bytes = container(&page());
         let footer = bytes.len() - 8;
         bytes[footer..footer + 4].copy_from_slice(&u32::MAX.to_le_bytes());
-        assert!(matches!(admit(&bytes, limits()), Err(Error::Limit)));
+        assert!(matches!(
+            admit(&bytes, limits()),
+            Err(Error::ResourceLimit { .. })
+        ));
         let mut bad = page();
         bad[5] = 10; // claims five body bytes; only four exist
         assert!(matches!(
@@ -498,7 +556,7 @@ mod tests {
                     ..limits()
                 }
             ),
-            Err(Error::Limit)
+            Err(Error::ResourceLimit { .. })
         ));
         // V2: one value, zero nulls, one row, PLAIN, 3 definition bytes,
         // 2 repetition bytes, no compression; sizes claim only four bytes.
@@ -531,7 +589,7 @@ mod tests {
                     ..limits()
                 }
             ),
-            Err(Error::Limit)
+            Err(Error::ResourceLimit { .. })
         ));
     }
 }

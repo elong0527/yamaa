@@ -246,10 +246,10 @@ fn accepted_output_streams_in_order_and_byte_limits_include_all_frames() {
         ..budget
     };
     let mut partial = Vec::new();
-    assert_eq!(
+    assert!(matches!(
         write_dataset_with_budget(&result.dataset, &mut partial, insufficient),
-        Err(TableError::OutputLimit)
-    );
+        Err(TableError::Limit {resource: "output_ipc_bytes", limit, .. }) if limit == insufficient.max_output_bytes
+    ));
     assert!(partial.len() <= insufficient.max_output_bytes);
     assert!(matches!(
         dataset_batches(

@@ -10,7 +10,7 @@ use serde::Serialize;
 use std::fmt;
 use yamaa_core::reduction::ReductionError;
 use yamaa_engine::{
-    dataset::{self, CheckRecord, ExecutionError, Resource, RowIdentity},
+    dataset::{self, CheckRecord, ExecutionError, RowIdentity},
     table_grouping::GroupingError,
     table_reduction::TableReductionError,
 };
@@ -113,6 +113,8 @@ enum Outcome {
         resource: &'static str,
         limit: Option<String>,
         required: Option<String>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        spec_paths: Vec<String>,
     },
 }
 #[derive(Serialize)]
@@ -316,38 +318,40 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
             limit,
             required,
         } => Outcome::Limit {
-            resource: match resource {
-                Resource::WorkCells => "work_cells",
-                Resource::PredicateWork => "predicate_work",
-                Resource::PredicateResolutions => "predicate_resolutions",
-                Resource::PredicateTextBytes => "predicate_text_bytes",
-                Resource::PredicateLikeWork => "predicate_like_work",
-                Resource::PredicateRegexSubjectBytes => "predicate_regex_subject_bytes",
-                Resource::PredicateRegexWork => "predicate_regex_work",
-                Resource::PredicateRegexStateCells => "predicate_regex_state_cells",
-                Resource::ScalarTextBytes => "scalar_text_bytes",
-                Resource::OutputTextBytes => "output_text_bytes",
-                Resource::IdentityCells => "identity_cells",
-                Resource::IdentityTextBytes => "identity_text_bytes",
-            },
+            resource: crate::resource_diagnostics::resource_name(*resource),
             limit: Some(limit.to_string()),
             required: required.map(|value| value.to_string()),
+            spec_paths: Vec::new(),
+        },
+        ExecutionError::ScopedLimit {
+            resource,
+            limit,
+            required,
+            spec_paths,
+        } => Outcome::Limit {
+            resource: crate::resource_diagnostics::resource_name(*resource),
+            limit: Some(limit.to_string()),
+            required: required.map(|value| value.to_string()),
+            spec_paths: spec_paths.clone(),
         },
         ExecutionError::Capacity => Outcome::Limit {
             resource: "shape",
             limit: None,
             required: None,
+            spec_paths: Vec::new(),
         },
         ExecutionError::Grouping(GroupingError::RowLimit { limit, required }) => Outcome::Limit {
             resource: "source_rows",
             limit: Some(limit.to_string()),
             required: Some(required.to_string()),
+            spec_paths: Vec::new(),
         },
         ExecutionError::Grouping(GroupingError::KeyCellLimit { limit })
         | ExecutionError::OutputGrouping(GroupingError::KeyCellLimit { limit }) => Outcome::Limit {
             resource: "key_cells",
             limit: Some(limit.to_string()),
             required: None,
+            spec_paths: Vec::new(),
         },
         ExecutionError::KeyFailures(found) => Outcome::Failure {
             phase: "output",

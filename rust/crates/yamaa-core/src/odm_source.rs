@@ -75,7 +75,11 @@ impl SchemaError {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AdmissionError {
-    MetadataLimit,
+    MetadataLimit {
+        resource: &'static str,
+        limit: usize,
+        actual: Option<usize>,
+    },
 }
 
 /// Coordinates are admitted from metadata alone, before any record is read.
@@ -162,13 +166,22 @@ impl FieldBinding {
 pub fn bind_fields(
     fields: &[StoredField<'_>],
 ) -> Result<Result<FieldBinding, Vec<SchemaError>>, AdmissionError> {
-    if fields.len() > 4096
-        || fields
-            .iter()
-            .try_fold(0usize, |bytes, field| bytes.checked_add(field.name.len()))
-            .is_none_or(|bytes| bytes > 1_048_576)
-    {
-        return Err(AdmissionError::MetadataLimit);
+    if fields.len() > 4096 {
+        return Err(AdmissionError::MetadataLimit {
+            resource: "odm_fields",
+            limit: 4096,
+            actual: Some(fields.len()),
+        });
+    }
+    let bytes = fields
+        .iter()
+        .try_fold(0usize, |bytes, field| bytes.checked_add(field.name.len()));
+    if bytes.is_none_or(|bytes| bytes > 1_048_576) {
+        return Err(AdmissionError::MetadataLimit {
+            resource: "odm_metadata_bytes",
+            limit: 1_048_576,
+            actual: bytes,
+        });
     }
     let mut first = [None; 11];
     let mut counts = [0usize; 11];
