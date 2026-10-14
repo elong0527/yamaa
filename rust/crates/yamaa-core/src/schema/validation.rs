@@ -149,6 +149,18 @@ impl ValidationBudget {
     pub fn work_used(&self) -> usize {
         self.constraints.used().work
     }
+    pub(super) fn application_limits(
+        &mut self,
+        work: usize,
+        diagnostics: usize,
+        text: usize,
+        regex: MatchLimits,
+    ) {
+        self.limits.work = work;
+        self.limits.diagnostics = diagnostics;
+        self.limits.diagnostic_text_bytes = text;
+        self.constraints.application_limits(work, regex);
+    }
     /// Every attempted diagnostic consumes its allocation quota, even if a later union wins.
     pub fn diagnostics_used(&self) -> usize {
         self.diagnostics
