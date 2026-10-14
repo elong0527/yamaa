@@ -29,8 +29,8 @@ do not establish installed qualification.
 - `repository-validation (ubuntu-latest)` tests the canonical site page hook,
   Python formatting and lint, CI selection tests, documentation,
   rule metadata and generated references, and shared release versions. It
-  installs only PyYAML, Ruff and MkDocs. README and rule pages retain one source;
-  no copied landing pages are required.
+  installs PyYAML, Ruff, MkDocs and Material. README and rule pages retain one
+  source; no copied landing pages are required.
 - `pr-rust-smoke` checks Rust formatting and dependency direction, shared library
   unit tests, parser and numerical tests, feature-enabled project preparation,
   and selected public execution boundaries. It uses the development profile.
