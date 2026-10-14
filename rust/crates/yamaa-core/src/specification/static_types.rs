@@ -167,6 +167,7 @@ pub(super) fn kind(
 
 pub(super) fn numeric(
     plan: &CompiledNumeric,
+    bindings: &[Binding],
     named: &intermediates::Declarations,
     catalog: &Catalog,
     secondary: &[SecondarySource],
@@ -175,6 +176,7 @@ pub(super) fn numeric(
 ) -> Result<(), BindError> {
     let kinds = plan
         .identifiers()
+        .filter(|name| bindings.iter().any(|binding| binding.name == *name))
         .map(|name| kind(name, named, catalog, secondary, intermediates).map(|kind| (name, kind)))
         .collect::<Result<BTreeMap<_, _>, _>>()?;
     findings.extend(

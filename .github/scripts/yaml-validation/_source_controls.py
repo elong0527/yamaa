@@ -76,7 +76,7 @@ def held(specification, path, *, scaffold=True):
         yield _native_specification.prepare(Path(fixture.name))
 
 
-def source_fields(owner):
+def source_fields(owner, snapshots=None):
     sources = []
     errors = []
     for index, (identity, dataset, _declaring, _written, profile) in enumerate(
@@ -85,6 +85,8 @@ def source_fields(owner):
         raw, issues = owner.capture_input_metadata(
             index, _native_specification.MAX_CAPTURE
         )
+        if snapshots is not None:
+            snapshots.reads = owner.capture_reads()
         if issues:
             errors.extend(issues)
             continue
@@ -126,11 +128,11 @@ def source_fields(owner):
     return sources, errors
 
 
-def document(specification, label, path, _environment=None, *_args, **_kwargs):
+def document(specification, label, path, _environment=None, *_args, snapshots=None, **_kwargs):
     with held(specification, path) as owner:
         rows = owner.check_issues()
         if not rows and owner.preparation_status() == "ready":
-            sources, rows = source_fields(owner)
+            sources, rows = source_fields(owner, snapshots)
             if not rows:
                 rows = owner.check_source_metadata(sources)
         return findings(rows, label)
@@ -145,6 +147,7 @@ def physical(specification, path):
 
 
 def catalog(specification, path, _environment=None):
+    sources = []
     normalized, _ = _semantic_controls.complete(specification)
     normalized = _native_schema.decode_document(
         _semantic_controls._schema().normalize(
@@ -193,7 +196,11 @@ def catalog(specification, path, _environment=None):
                     }
                 ),
             )
-    return observation.get("catalog") or {}
+    # A failed ordinal declaration must not erase the physical header that
+    # caused its collision or claim a generated field was available.
+    return observation.get("catalog") or {
+        name: dict(fields) for _identity, name, fields in sources
+    }
 
 
 class ResourceOwner:
@@ -316,7 +323,7 @@ class Captures:
         ), None
 
 
-def odm(specification, label, path):
+def odm(specification, label, path, _environment=None):
     observation = _native_odm.observe(specification, path)
     return findings(
         [
@@ -331,6 +338,16 @@ def odm(specification, label, path):
         ],
         label,
     )
+
+
+def retired_odm(specification, label, path, _environment=None):
+    """Keep the original operands in the typed ODM retirement control."""
+    observation = _native_odm.observe(specification, path)
+    return findings([
+        (row['phase'], row['condition'], row['requirement'], row['spec_paths'],
+         _native_json.dumps(row['context']))
+        for row in observation.get('binding', {}).get('issues', [])
+    ], label)
 
 
 def producing(specification, label, path, _environment=None, *_args):

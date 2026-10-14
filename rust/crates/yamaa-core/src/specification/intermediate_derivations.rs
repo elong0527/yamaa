@@ -347,7 +347,15 @@ pub(super) fn bind(
                     .map(|column| column.kind)
             }
         };
-        let kind = declaration.kind.infer(&lookup).unwrap_or(ColumnType::Str);
+        let kind = declaration.kind.infer(&lookup).unwrap_or_else(|| {
+            // An unresolved numeric operand must not turn a later read of this
+            // computed field into a spurious text-input diagnostic.
+            if matches!(declaration.kind, Kind::Numeric(_)) {
+                ColumnType::Float
+            } else {
+                ColumnType::Str
+            }
+        });
         driver_kinds.push(declaration.driver_kind.infer(&|name| {
             let (owner, field) = name.split_once('.').unwrap_or((dataset, name));
             if owner == dataset {

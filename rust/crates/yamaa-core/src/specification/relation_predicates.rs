@@ -92,6 +92,9 @@ pub(super) fn bind(
             )));
         }
     }
+    // A type refusal still retains the donor's bound fields for later checks.
+    // Only unresolved references prevent constructing this partial plan.
+    let references_resolved = findings.len() == before;
     findings.extend(
         static_types::predicate_kinds(plan, |name| {
             let binding = bindings.iter().find(|binding| binding.name == name)?;
@@ -120,7 +123,7 @@ pub(super) fn bind(
         .into_iter()
         .map(BindFinding::Predicate),
     );
-    if findings.len() != before {
+    if !references_resolved {
         return Ok(None);
     }
     Ok(Some(

@@ -1744,7 +1744,7 @@ fn row_group_declarations_and_shared_scope_keep_authored_diagnostics() {
 }
 
 #[test]
-fn original_sum_reports_nonnumeric_values_but_publishes_all_missing_groups() {
+fn sum_rejects_declared_text_even_when_all_values_are_missing() {
     use serde_json::{json, Value as Json};
     use yamaa_adapters::{
         specification_report::{self, ArtifactPort, Identity},
@@ -1818,39 +1818,15 @@ fn original_sum_reports_nonnumeric_values_but_publishes_all_missing_groups() {
         let run = PreparedRun::prepare(prepare(&schema, raw.as_bytes())).unwrap();
         let attempt = run.execute_with_port(&mut host);
         let actual = specification_report::complete(&run, &attempt, id(), &mut host).unwrap();
-        if all_missing {
-            for row in expected["tables"][1]["rows"].as_array_mut().unwrap() {
-                row[5] = json!({"type":"missing","value":null});
-            }
-            let original = std::fs::read_to_string(case.join("expected/adlb.csv")).unwrap();
-            let records = original
-                .lines()
-                .enumerate()
-                .map(|(i, line)| {
-                    if i == 0 {
-                        line.to_owned()
-                    } else {
-                        let mut cells = line.split(',').collect::<Vec<_>>();
-                        cells[5] = "";
-                        cells.join(",")
-                    }
-                })
-                .collect::<Vec<_>>();
-            let content = format!("{}\n", records.join("\n"));
-            expected["artifacts"][0]["records"] = json!(records);
-            expected["artifacts"][0]["content"] = json!(content);
-            expected["artifacts"][0]["byte_length"] = json!(content.len());
-            assert_eq!(host.published, vec![content.into_bytes()]);
-        } else {
-            expected["outcome"] = json!("failure");
-            expected["artifacts"] = json!([]);
-            expected["verifications"] = json!([]);
-            expected["tables"].as_array_mut().unwrap().pop();
-            expected["diagnostics"] = json!([{"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0510","spec_paths":["rows[1].derivations.AVAL.aggregate"],"context":{"expr":"SUM(LB.LBSTRESN)","reducer":"SUM","source":"LB.LBSTRESN","expected":"numeric","actual":"str"}}]);
-            expected["nodes"][0]["outcome"] = json!("failure");
-            expected["nodes"][0]["diagnostics"] = expected["diagnostics"].clone();
-            assert!(host.published.is_empty());
-        }
+        // REQ-0510 admits the declared operand type before inspecting cells.
+        expected["outcome"] = json!("failure");
+        expected["artifacts"] = json!([]);
+        expected["verifications"] = json!([]);
+        expected["tables"].as_array_mut().unwrap().pop();
+        expected["diagnostics"] = json!([{"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0510","spec_paths":["rows[1].derivations.AVAL.aggregate"],"context":{"expr":"SUM(LB.LBSTRESN)","reducer":"SUM","source":"LB.LBSTRESN","expected":"numeric","actual":"str"}}]);
+        expected["nodes"][0]["outcome"] = json!("failure");
+        expected["nodes"][0]["diagnostics"] = expected["diagnostics"].clone();
+        assert!(host.published.is_empty());
         assert_eq!(host.reads, 1);
         assert_eq!(actual, expected);
     }

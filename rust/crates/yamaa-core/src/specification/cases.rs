@@ -485,6 +485,7 @@ pub(super) fn bind(
                 }
                 static_types::numeric(
                     compiled,
+                    &bindings,
                     &spec.intermediates,
                     catalog,
                     secondary,

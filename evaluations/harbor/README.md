@@ -99,9 +99,9 @@ How to write a prompt is in
   standardized results and baseline height and weight. Numeric standardized
   text follows the matching numeric value actually stored. Ages stay unchanged
   when an input stores an age group whose rule is unknown. A benchmark may
-  declare further measurement columns in `measurements.json` — ADaM `AVAL`,
+  declare further measurement columns in `measurements.json` - ADaM `AVAL`,
   dose columns such as `EXDOSE`, and ODM `Value` where a form's numeric items
-  are measurements — and the challenge scales those columns only for that
+  are measurements - and the challenge scales those columns only for that
   benchmark; columns holding categories, counts or codes are never declared.
   The grade records the shared seed and changed columns. The shared day shift
   preserves chronology

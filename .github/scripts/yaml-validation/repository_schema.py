@@ -17,10 +17,23 @@ def native_diagnostics(rows, label):
     errors = []
     for phase, condition, requirement, paths, encoded in rows:
         context = _native_json.loads(encoded)
+        message = condition + ": " + encoded
+        if condition == 'missing_required_field':
+            message = f"missing required field {context['field']!r}"
+        elif condition == 'unknown_field' and 'class' in context:
+            message = f"unknown field {context['field']!r} for class {context['class']}"
+        elif condition == 'invalid_field_type' and {'expected', 'actual'} <= context.keys():
+            message = f"expected {context['expected']}, got {context['actual']}"
+        elif condition == 'value_not_permitted' and {'value', 'permitted'} <= context.keys():
+            message = f"value {context['value']!r} is outside allowed values {context['permitted']!r}"
+        elif condition == 'invalid_size':
+            message = f"expected size {context['size']}"
+        elif condition == 'invalid_operation_count':
+            message = 'expected exactly one operation: ' + encoded
         for path in paths or [""]:
             location = label + ("." + path if path else "")
             finding = validation_diagnostic(
-                location, condition, condition + ": " + encoded, context=context
+                location, condition, message, context=context
             )
             finding.phase, finding.requirement = phase, requirement
             errors.append(finding)
@@ -73,6 +86,11 @@ def check_descriptor(desc, is_class_field, path):
             [("schema.yaml", _native_schema.bytes_for(authored))], 0, "root_class"
         )
     except ValueError as error:
+        if isinstance(desc.get('pattern'), str):
+            from regex_checks import regex_pattern_errors
+            pattern_errors = regex_pattern_errors(desc['pattern'], path)
+            if pattern_errors:
+                return pattern_errors
         return _native_schema.schema_errors(error, path)
     return []
 
