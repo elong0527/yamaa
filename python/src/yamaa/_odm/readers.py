@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import lzma
 import tarfile
+import zlib
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
@@ -18,6 +20,18 @@ from yamaa._odm.schema import ClinicalItemRow, rows_to_frame
 ODM_13_NAMESPACE = "http://www.cdisc.org/ns/odm/v1.3"
 ODM_20_NAMESPACE = "http://www.cdisc.org/ns/odm/v2.0"
 SUPPORTED_NAMESPACES = frozenset({ODM_13_NAMESPACE, ODM_20_NAMESPACE})
+
+# A compressed archive can fail inside its decompressor instead of as a
+# tarfile error: a truncated gzip stream raises EOFError, a corrupt deflate
+# stream zlib.error, a corrupt xz stream lzma.LZMAError, and a bad gzip
+# header OSError (BadGzipFile). Each one means the archive cannot be read.
+_ARCHIVE_READ_ERRORS = (
+    tarfile.TarError,
+    EOFError,
+    OSError,
+    zlib.error,
+    lzma.LZMAError,
+)
 
 DefinitionKind = Literal["event", "form", "group", "item"]
 MetadataKey = tuple[str, str, str]
@@ -89,7 +103,10 @@ def resolve_archive_member(
     max_archive_members: int = 10_000,
 ) -> str | None:
     """Select one safe XML archive member, or return None for plain XML."""
-    is_archive = tarfile.is_tarfile(path)
+    try:
+        is_archive = tarfile.is_tarfile(path)
+    except _ARCHIVE_READ_ERRORS as error:
+        raise ODMError(f"cannot read ODM archive {path}") from error
     archive_suffix = path.name.casefold().endswith((".tar", ".tar.gz", ".tgz"))
     if archive_suffix and not is_archive:
         raise ODMError(f"cannot read ODM archive {path}")
@@ -138,7 +155,7 @@ def resolve_archive_member(
             if member.size > max_expanded_bytes:
                 raise ODMError(f"TAR member exceeds {max_expanded_bytes} bytes")
             return member.name
-    except tarfile.TarError as error:
+    except _ARCHIVE_READ_ERRORS as error:
         raise ODMError(f"cannot read ODM archive {path}") from error
 
 
@@ -167,7 +184,7 @@ def _open_xml_stream(
                 raise ODMError(f"cannot open TAR member {member_name!r}")
             with stream:
                 yield stream
-    except tarfile.TarError as error:
+    except _ARCHIVE_READ_ERRORS as error:
         raise ODMError(f"cannot read ODM archive {path}") from error
 
 

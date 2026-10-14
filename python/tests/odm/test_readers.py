@@ -371,6 +371,26 @@ def test_archive_rejects_non_regular_xml_member(tmp_path: Path) -> None:
         list(iter_odm_records(archive_path))
 
 
+@pytest.mark.parametrize("cut", [30, 250])
+def test_truncated_compressed_archive_has_helper_error(
+    tmp_path: Path, cut: int
+) -> None:
+    # A truncated gzip stream fails inside the decompressor (EOFError),
+    # not as a tarfile error; it is still an unreadable ODM archive.
+    # The cuts land in the header and in the compressed member data.
+    archive_path = tmp_path / "truncated.tar.gz"
+    payload = ODM_20.encode()
+    with tarfile.open(archive_path, "w:gz") as archive:
+        info = tarfile.TarInfo("study/odm.xml")
+        info.size = len(payload)
+        archive.addfile(info, io.BytesIO(payload))
+    compressed = archive_path.read_bytes()
+    archive_path.write_bytes(compressed[:cut])
+
+    with pytest.raises(ODMError, match="cannot read ODM archive"):
+        list(iter_odm_records(archive_path))
+
+
 def test_malformed_xml_has_helper_error(tmp_path: Path) -> None:
     source = tmp_path / "malformed.xml"
     source.write_text(
