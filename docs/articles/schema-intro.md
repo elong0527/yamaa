@@ -28,6 +28,9 @@ the entry point to find the module that owns a field.
 
 The full file index is at [Schema reference](schema.md).
 
+For published and sponsor-defined codelist sources, version selection, and
+column bindings, see [Codelists and controlled terminology](terminology.md).
+
 ## How to read a schema file
 
 Schema files use four words. You need them to read the files; you never
