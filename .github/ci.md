@@ -17,9 +17,10 @@ Run `make help` at the repository root for supported targets and prerequisites;
 the [development guide](../docs/development.md#local-checks) explains their
 contexts. `make check-fast` provides formatting/lint and selection controls;
 `make check-repository` runs repository/rule guards. Full repository and native
-CI call the shared command scripts directly, including on Windows where GNU
-make is not a job prerequisite. Automatic PR feedback uses the scoped smoke
-route below; these feedback checks do not establish installed qualification.
+CI call the shared command scripts directly instead of the root Makefile.
+Windows native R jobs require GNU make for their build and check environment.
+Automatic PR feedback uses the scoped smoke route below; these feedback checks
+do not establish installed qualification.
 
 ## PR feedback
 
