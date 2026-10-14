@@ -27,11 +27,15 @@ impl Prepared {
                 .unwrap_or(0);
             let amount = StringTemplate::declaration_bytes(template, path, handler)
                 .and_then(|n| n.checked_mul(multiplicity))
-                .ok_or(PrepareError::Limit("str_template_metadata"))?;
+                .ok_or_else(|| {
+                    PrepareError::limit("str_template_metadata", MAX_DECLARATION_BYTES, None, None)
+                })?;
             bytes = bytes
                 .checked_add(amount)
                 .filter(|n| *n <= MAX_DECLARATION_BYTES)
-                .ok_or(PrepareError::Limit("str_template_metadata"))?;
+                .ok_or_else(|| {
+                    PrepareError::limit("str_template_metadata", MAX_DECLARATION_BYTES, None, None)
+                })?;
             Ok(())
         })?;
         walk(d, &mut |payload, _path, _rows, multiplicity| {
@@ -40,10 +44,22 @@ impl Prepared {
                 .len()
                 .checked_mul(4096)
                 .and_then(|n| n.checked_mul(multiplicity))
-                .ok_or(PrepareError::Limit("str_template_work"))?;
-            budget
-                .charge(query)
-                .map_err(|_| PrepareError::Limit("str_template_work"))?;
+                .ok_or_else(|| {
+                    PrepareError::limit(
+                        "str_template_work",
+                        crate::text_template::MAX_COMPILE_WORK,
+                        None,
+                        None,
+                    )
+                })?;
+            budget.charge(query).map_err(|_| {
+                PrepareError::limit(
+                    "str_template_work",
+                    crate::text_template::MAX_COMPILE_WORK,
+                    None,
+                    None,
+                )
+            })?;
             Ok(())
         })?;
         let mut operations = BTreeMap::new();
@@ -58,7 +74,9 @@ impl Prepared {
             )
             .map_err(|error| match error {
                 AdmissionError::Shape => PrepareError::Internal,
-                AdmissionError::Limit => PrepareError::Limit("str_template_compile"),
+                AdmissionError::Limit => {
+                    PrepareError::limit("str_template_compile", MAX_DECLARATION_BYTES, None, None)
+                }
             })?;
             if let Some(error) = operation.declaration_diagnostic() {
                 findings.push(PreflightFinding::TextTemplate(error.clone()));
@@ -111,8 +129,21 @@ fn walk(
         depth: usize,
         visit: &mut impl FnMut(usize, &str, bool, usize) -> Result<(), PrepareError>,
     ) -> Result<(), PrepareError> {
-        if depth > 64 || path.len() > 65_536 {
-            return Err(PrepareError::Limit("str_template_depth"));
+        if depth > 64 {
+            return Err(PrepareError::limit(
+                "str_template_depth",
+                64,
+                Some(depth),
+                Some(path),
+            ));
+        }
+        if path.len() > 65_536 {
+            return Err(PrepareError::limit(
+                "path_bytes",
+                65_536,
+                Some(path.len()),
+                Some(path),
+            ));
         }
         if let Some(payload) = d.field(id, "str_template") {
             visit(payload, &format!("{path}.str_template"), rows, multiplicity)?;

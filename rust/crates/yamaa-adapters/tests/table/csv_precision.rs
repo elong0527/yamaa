@@ -178,7 +178,12 @@ fn compiler_charges_arbitrary_width_precision_before_cloning_its_declaration() {
                 ..Default::default()
             }
         ),
-        Err(PrepareError::Limit("model_text_bytes"))
+        Err(PrepareError::Limit(
+            yamaa_core::specification::CompilerLimit {
+                resource: "model_text_bytes",
+                ..
+            }
+        ))
     ));
     let compiled = PreparedSpecification::prepare(document.model()).unwrap();
     assert_eq!(compiled.output_decimals(), Some(precision.as_str()));

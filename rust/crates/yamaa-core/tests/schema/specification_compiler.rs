@@ -410,7 +410,12 @@ fn compiler_retains_admission_binding_and_resource_boundaries() {
                 ..Default::default()
             }
         ),
-        Err(PrepareError::Limit("columns"))
+        Err(PrepareError::Limit(
+            yamaa_core::specification::CompilerLimit {
+                resource: "columns",
+                ..
+            }
+        ))
     ));
 }
 
@@ -465,7 +470,12 @@ fn parquet_type_field_limit_precedes_allocating_semantic_findings() {
                 ..Default::default()
             }
         ),
-        Err(PrepareError::Limit("source_fields"))
+        Err(PrepareError::Limit(
+            yamaa_core::specification::CompilerLimit {
+                resource: "source_fields",
+                ..
+            }
+        ))
     ));
     let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare_with_limits(
         &model,
@@ -576,7 +586,12 @@ fn window_compiler_binds_output_dependencies_without_engine_or_records() {
     };
     assert!(matches!(
         PreparedSpecification::prepare_with_limits(&window_document("ID > 0"), policy),
-        Err(PrepareError::Limit("window_order"))
+        Err(PrepareError::Limit(
+            yamaa_core::specification::CompilerLimit {
+                resource: "window_order",
+                ..
+            }
+        ))
     ));
     let qualified = PreparedSpecification::prepare(&window_document("SRC.ID > 0"))
         .unwrap()
@@ -931,7 +946,12 @@ fn row_filters_charge_the_whole_document_before_predicate_parsing() {
                 ..Default::default()
             }
         ),
-        Err(PrepareError::Limit("numeric_bytes"))
+        Err(PrepareError::Limit(
+            yamaa_core::specification::CompilerLimit {
+                resource: "numeric_bytes",
+                ..
+            }
+        ))
     ));
     // Grammar findings remain retained for post-ingestion binding when aggregate text fits.
     assert!(PreparedSpecification::prepare_with_limits(
@@ -1000,7 +1020,12 @@ fn source_filters_charge_compilation_before_admission_and_retain_carrier_finding
                 ..Default::default()
             }
         ),
-        Err(PrepareError::Limit("numeric_bytes"))
+        Err(PrepareError::Limit(
+            yamaa_core::specification::CompilerLimit {
+                resource: "numeric_bytes",
+                ..
+            }
+        ))
     ));
     let document = operation_document(
         "source",
@@ -1068,7 +1093,7 @@ fn selection_metadata_and_filters_are_bounded_before_owned_compilation() {
         ),
     ] {
         assert!(
-            matches!(PreparedSpecification::prepare_with_limits(&document,limits),Err(PrepareError::Limit(resource)) if resource==name)
+            matches!(PreparedSpecification::prepare_with_limits(&document,limits),Err(PrepareError::Limit(resource)) if resource.resource ==name)
         );
     }
 }
@@ -1274,7 +1299,12 @@ fn assertion_text_budget_precedes_deferred_grammar_and_charges_both_predicates()
                 ..Default::default()
             }
         ),
-        Err(PrepareError::Limit("numeric_bytes"))
+        Err(PrepareError::Limit(
+            yamaa_core::specification::CompilerLimit {
+                resource: "numeric_bytes",
+                ..
+            }
+        ))
     ));
     let plan = PreparedSpecification::prepare_with_limits(
         &document,
@@ -1518,7 +1548,10 @@ fn column_ceilings_admit_1024_and_refuse_1025() {
     else {
         panic!("1,025 declared columns must hit a compiler limit");
     };
-    assert_eq!(resource, "columns");
+    assert_eq!(resource.resource, "columns");
+    assert_eq!(resource.limit, 1024);
+    assert_eq!(resource.actual, Some(1025));
+    assert_eq!(resource.spec_paths, ["columns"]);
 
     let Err(PrepareError::Limit(resource)) = PreparedSpecification::prepare_with_limits(
         &wide_document(1_025, 0),
@@ -1529,7 +1562,10 @@ fn column_ceilings_admit_1024_and_refuse_1025() {
     ) else {
         panic!("1,025 projected columns must hit their own compiler limit");
     };
-    assert_eq!(resource, "projected_columns");
+    assert_eq!(resource.resource, "projected_columns");
+    assert_eq!(resource.limit, 1024);
+    assert_eq!(resource.actual, Some(1025));
+    assert_eq!(resource.spec_paths, ["output.columns"]);
 
     // Typed fields carry their own ceiling, independent of the column count.
     PreparedSpecification::prepare(&wide_document(2, 1_024)).unwrap();
@@ -1538,5 +1574,8 @@ fn column_ceilings_admit_1024_and_refuse_1025() {
     else {
         panic!("1,025 typed fields must hit a compiler limit");
     };
-    assert_eq!(resource, "source_fields");
+    assert_eq!(resource.resource, "source_fields");
+    assert_eq!(resource.limit, 1024);
+    assert_eq!(resource.actual, Some(1025));
+    assert_eq!(resource.spec_paths, ["input.SRC.types"]);
 }

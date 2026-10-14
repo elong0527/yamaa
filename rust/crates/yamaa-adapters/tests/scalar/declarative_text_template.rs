@@ -353,7 +353,7 @@ fn zero_row_whole_metadata_and_effective_row_default_copies_precede_parser_findi
             })
             .unwrap();
         assert!(
-            matches!(yamaa_adapters::specification_run::PreparedRun::prepare(document),Err(yamaa_adapters::specification_run::Error::Prepare(yamaa_core::specification::PrepareError::Limit(resource))) if resource==expected)
+            matches!(yamaa_adapters::specification_run::PreparedRun::prepare(document),Err(yamaa_adapters::specification_run::Error::Prepare(yamaa_core::specification::PrepareError::Limit(resource))) if resource.resource ==expected)
         );
         let fixture = bespoke(&spec.to_string(), b"ID,A,B,N\n");
         let Err(issues) = attempt(&fixture) else {
@@ -364,7 +364,7 @@ fn zero_row_whole_metadata_and_effective_row_default_copies_precede_parser_findi
         assert_eq!(issues[0].condition, "engine_rejected");
         assert_eq!(
             serde_json::from_str::<serde_json::Value>(&issues[0].context).unwrap(),
-            serde_json::json!({"code":"compiler_limit","stage":"prepare"})
+            serde_json::json!({"code":"compiler_limit","stage":"prepare","resource":expected,"limit":if expected=="str_template_work" {100_000_000} else {16_777_216}})
         );
         assert!(!fixture.0.join("output.csv").exists());
     }
@@ -410,7 +410,12 @@ fn cumulative_template_query_work_is_admitted_before_all_parser_arenas() {
     assert!(matches!(
         yamaa_adapters::specification_run::PreparedRun::prepare(document),
         Err(yamaa_adapters::specification_run::Error::Prepare(
-            yamaa_core::specification::PrepareError::Limit("str_template_work")
+            yamaa_core::specification::PrepareError::Limit(
+                yamaa_core::specification::CompilerLimit {
+                    resource: "str_template_work",
+                    ..
+                }
+            )
         ))
     ));
 }

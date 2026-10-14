@@ -25,12 +25,16 @@ impl Prepared {
                     N::Text(text) | N::Integer(text) => text.len(),
                     _ => 0,
                 });
-            let amount = StringExtract::declaration_bytes(source, path, pattern, group, handlers)
-                .ok_or(PrepareError::Limit("str_extract_metadata"))?;
+            let amount =
+                StringExtract::declaration_bytes(source, path, pattern, group, handlers).ok_or(
+                    PrepareError::limit("str_extract_metadata", MAX_DECLARATION_BYTES, None, None),
+                )?;
             bytes = bytes
                 .checked_add(amount)
                 .filter(|n| *n <= MAX_DECLARATION_BYTES)
-                .ok_or(PrepareError::Limit("str_extract_metadata"))?;
+                .ok_or_else(|| {
+                    PrepareError::limit("str_extract_metadata", MAX_DECLARATION_BYTES, None, None)
+                })?;
             Ok(())
         })?;
         let mut operations = BTreeMap::new();
@@ -52,10 +56,22 @@ impl Prepared {
             )
             .map_err(|error| match error {
                 AdmissionError::Shape => PrepareError::Internal,
-                AdmissionError::Limit
-                | AdmissionError::Regex(crate::regex::CompileError::Limit { .. }) => {
-                    PrepareError::Limit("str_extract_compile")
-                }
+                AdmissionError::Limit => PrepareError::limit(
+                    "str_extract_compile",
+                    MAX_DECLARATION_BYTES,
+                    None,
+                    Some(path),
+                ),
+                AdmissionError::Regex(crate::regex::CompileError::Limit {
+                    resource,
+                    limit,
+                    ..
+                }) => PrepareError::limit(
+                    compiler_limits::regex_resource(resource),
+                    limit,
+                    None,
+                    Some(&format!("{path}.pattern")),
+                ),
                 AdmissionError::Regex(_) => PrepareError::Unsupported(vec![UnsupportedFeature {
                     operation: "str_extract_pattern".into(),
                     path: format!("{path}.pattern"),
@@ -109,8 +125,21 @@ fn walk(
         depth: usize,
         visit: &mut impl FnMut(usize, &str, bool) -> Result<(), PrepareError>,
     ) -> Result<(), PrepareError> {
-        if depth > 64 || path.len() > 65_536 {
-            return Err(PrepareError::Limit("str_extract_depth"));
+        if depth > 64 {
+            return Err(PrepareError::limit(
+                "str_extract_depth",
+                64,
+                Some(depth),
+                Some(path),
+            ));
+        }
+        if path.len() > 65_536 {
+            return Err(PrepareError::limit(
+                "path_bytes",
+                65_536,
+                Some(path.len()),
+                Some(path),
+            ));
         }
         for name in ["str_extract", "str_contains"] {
             if let Some(payload) = d.field(id, name) {

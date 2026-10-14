@@ -149,7 +149,12 @@ impl Declaration {
             {
                 let items = sequence(d, group)?;
                 if items.len() > limits.keys {
-                    return Err(PrepareError::Limit("window_groups"));
+                    return Err(PrepareError::limit(
+                        "window_groups",
+                        limits.keys,
+                        Some(items.len()),
+                        None,
+                    ));
                 }
                 groups = items
                     .iter()
@@ -162,7 +167,12 @@ impl Declaration {
             {
                 let items = sequence(d, terms)?;
                 if items.len() > limits.source_fields {
-                    return Err(PrepareError::Limit("window_order"));
+                    return Err(PrepareError::limit(
+                        "window_order",
+                        limits.source_fields,
+                        Some(items.len()),
+                        None,
+                    ));
                 }
                 for &term in items {
                     let (variable, descending, nulls_first) =
@@ -203,7 +213,9 @@ impl Declaration {
                         crate::predicate_parser::ParseError::UnsupportedRegex { .. },
                     )) => reject(extra, "predicate_regex", filter_path),
                     Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
-                    Err(_) => return Err(PrepareError::Limit("predicate_compilation")),
+                    Err(error) => {
+                        return Err(PrepareError::predicate(error.clone(), Some(&filter_path)))
+                    }
                 }
                 filter = Some((expression.into(), compiled));
             }

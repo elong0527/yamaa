@@ -23,7 +23,12 @@ pub(super) fn prepare(
         _ => None,
     });
     if !StringCase::metadata_fits(source, path, missing_text) {
-        return Err(PrepareError::Limit("str_case_metadata"));
+        return Err(PrepareError::limit(
+            "str_case_metadata",
+            MAX_DECLARATION_BYTES,
+            None,
+            None,
+        ));
     }
     let mode = match text(d, field(d, payload, "to")?)? {
         "upper" => Case::Upper,
@@ -61,22 +66,44 @@ pub(super) fn declaration_findings(
         rows: bool,
         bytes: &mut usize,
     ) -> Result<(), PrepareError> {
-        if depth > 64 || path.len() > 65_536 {
-            return Err(PrepareError::Limit("case_depth"));
+        if depth > 64 {
+            return Err(PrepareError::limit(
+                "case_depth",
+                64,
+                Some(depth),
+                Some(path),
+            ));
+        }
+        if path.len() > 65_536 {
+            return Err(PrepareError::limit(
+                "path_bytes",
+                65_536,
+                Some(path.len()),
+                Some(path),
+            ));
         }
         if let Some(payload) = d.field(value, "str_case") {
             *bytes = bytes
                 .checked_add(path.len())
                 .and_then(|n| n.checked_add(512))
                 .filter(|n| *n <= MAX_DECLARATION_BYTES)
-                .ok_or(PrepareError::Limit("str_case_metadata"))?;
+                .ok_or_else(|| {
+                    PrepareError::limit("str_case_metadata", MAX_DECLARATION_BYTES, None, None)
+                })?;
             for &(key, value) in mapping(d, payload)? {
                 for id in [key, value] {
                     if let N::Text(text) | N::Integer(text) = &d.nodes()[id] {
                         *bytes = bytes
                             .checked_add(text.len())
                             .filter(|n| *n <= MAX_DECLARATION_BYTES)
-                            .ok_or(PrepareError::Limit("str_case_metadata"))?;
+                            .ok_or_else(|| {
+                                PrepareError::limit(
+                                    "str_case_metadata",
+                                    MAX_DECLARATION_BYTES,
+                                    None,
+                                    None,
+                                )
+                            })?;
                     }
                 }
             }

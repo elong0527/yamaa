@@ -140,7 +140,12 @@ pub(super) fn admit(d: &Document, templates: usize) -> Result<(), PrepareError> 
         .and_then(|bytes| bytes.checked_mul(templates.checked_add(1)?))
         .and_then(|bytes| bytes.checked_mul(8));
     if expanded.is_none_or(|bytes| bytes > METADATA_BYTES) {
-        return Err(PrepareError::Limit("row_intermediate_metadata"));
+        return Err(PrepareError::limit(
+            "row_intermediate_metadata",
+            METADATA_BYTES,
+            None,
+            None,
+        ));
     }
     let work = d
         .nodes()
@@ -148,7 +153,12 @@ pub(super) fn admit(d: &Document, templates: usize) -> Result<(), PrepareError> 
         .checked_mul(d.nodes().len())
         .and_then(|work| work.checked_mul(templates.checked_add(1)?));
     if work.is_none_or(|work| work > BINDING_WORK) {
-        return Err(PrepareError::Limit("row_intermediate_work"));
+        return Err(PrepareError::limit(
+            "row_intermediate_work",
+            BINDING_WORK,
+            None,
+            None,
+        ));
     }
     Ok(())
 }

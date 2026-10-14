@@ -26,6 +26,21 @@ pub fn rejected(stage: &str, code: &str) -> Failure {
             .expect("application issue"),
     ]
 }
+pub(crate) fn resource_rejected(
+    stage: &str,
+    code: &str,
+    resource: &str,
+    limit: usize,
+    actual: Option<usize>,
+    paths: Vec<String>,
+) -> Failure {
+    vec![
+        Issue::from_core(yamaa_core::application_issue::resource_rejected(
+            stage, code, resource, limit, actual, paths,
+        ))
+        .expect("application resource issue"),
+    ]
+}
 pub(crate) fn classified_resource(diagnostic: &yamaa_core::diagnostic::Diagnostic) -> Failure {
     vec![Issue::from_core(diagnostic.clone()).expect("classified resource finding")]
 }
@@ -122,10 +137,41 @@ pub(crate) fn preparation_failure(message: String) -> Failure {
             }
             issues
         }
-        Some("rejected") => rejected(
-            outcome["stage"].as_str().unwrap_or("prepare"),
-            outcome["code"].as_str().unwrap_or("preparation_boundary"),
-        ),
+        Some("rejected") => {
+            let stage = outcome["stage"].as_str().unwrap_or("prepare");
+            let code = outcome["code"].as_str().unwrap_or("preparation_boundary");
+            let (Some(resource), Some(limit)) =
+                (outcome["resource"].as_str(), outcome["limit"].as_u64())
+            else {
+                return rejected(stage, code);
+            };
+            let Ok(limit) = usize::try_from(limit) else {
+                return rejected("prepare", "issue_projection");
+            };
+            let actual = outcome["actual"]
+                .as_u64()
+                .and_then(|v| usize::try_from(v).ok());
+            let paths = outcome["spec_paths"]
+                .as_array()
+                .map(|paths| {
+                    paths
+                        .iter()
+                        .map(|path| path.as_str().map(String::from))
+                        .collect::<Option<Vec<_>>>()
+                })
+                .unwrap_or_else(|| Some(Vec::new()));
+            let Some(paths) = paths else {
+                return rejected("prepare", "issue_projection");
+            };
+            let issues = resource_rejected(stage, code, resource, limit, actual, paths);
+            if !crate::issue_rows::within_limit(
+                &issues,
+                crate::specification_check::MAX_ISSUE_BYTES,
+            ) {
+                return rejected("prepare", "issue_limit");
+            }
+            issues
+        }
         _ => rejected("prepare", "preparation_boundary"),
     }
 }

@@ -68,7 +68,12 @@ fn prepare_kind(
     project: Option<&functions::Prepared>,
 ) -> Result<Kind, PrepareError> {
     if depth > 64 {
-        return Err(PrepareError::Limit("intermediate_type_depth"));
+        return Err(PrepareError::limit(
+            "intermediate_type_depth",
+            64,
+            Some(depth),
+            None,
+        ));
     }
     let &[(op, payload)] = mapping(d, value)? else {
         return Err(PrepareError::Internal);
@@ -158,7 +163,12 @@ fn prepare_driver_kind(
     project: Option<&functions::Prepared>,
 ) -> Result<Kind, PrepareError> {
     if depth > 64 {
-        return Err(PrepareError::Limit("intermediate_type_depth"));
+        return Err(PrepareError::limit(
+            "intermediate_type_depth",
+            64,
+            Some(depth),
+            None,
+        ));
     }
     let &[(operation, payload)] = mapping(d, value)? else {
         return Err(PrepareError::Internal);
@@ -280,7 +290,12 @@ pub(super) fn prepare(
     };
     let items = mapping(d, items)?;
     if items.len() > limits.columns {
-        return Err(PrepareError::Limit("intermediate_derivations"));
+        return Err(PrepareError::limit(
+            "intermediate_derivations",
+            limits.columns,
+            Some(items.len()),
+            None,
+        ));
     }
     let mut result = Vec::new();
     let mut bytes = 0;

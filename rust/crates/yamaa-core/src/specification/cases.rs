@@ -63,12 +63,30 @@ pub(super) fn prepare(
     extraction: &str_extract::Prepared,
     templates: &str_template::Prepared,
 ) -> Result<Vec<Branch>, PrepareError> {
-    if depth > 64 || path.len() > 65_536 {
-        return Err(PrepareError::Limit("case_depth"));
+    if depth > 64 {
+        return Err(PrepareError::limit(
+            "case_depth",
+            64,
+            Some(depth),
+            Some(path),
+        ));
+    }
+    if path.len() > 65_536 {
+        return Err(PrepareError::limit(
+            "path_bytes",
+            65_536,
+            Some(path.len()),
+            Some(path),
+        ));
     }
     let items = sequence(d, node)?;
     if items.len() > 1024 {
-        return Err(PrepareError::Limit("case_branches"));
+        return Err(PrepareError::limit(
+            "case_branches",
+            1024,
+            Some(items.len()),
+            None,
+        ));
     }
     // The schema owns REQ-0339 shape failures. These branches defend the
     // normalized-document contract rather than declare a language subset.
@@ -104,7 +122,7 @@ pub(super) fn prepare(
                     crate::predicate_parser::ParseError::UnsupportedRegex { .. },
                 )) => return Err(unsupported(&format!("{prefix}.when"), "predicate_regex")),
                 Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
-                Err(_) => return Err(PrepareError::Limit("predicate_compilation")),
+                Err(error) => return Err(PrepareError::predicate(error.clone(), None)),
             };
             (
                 Some(compiled),
@@ -539,7 +557,7 @@ pub(super) fn charge(
     depth: usize,
 ) -> Result<(), PrepareError> {
     if depth > 64 {
-        return Err(PrepareError::Limit("case_depth"));
+        return Err(PrepareError::limit("case_depth", 64, Some(depth), None));
     }
     if let Some(flag) = d.field(value, "flag") {
         let condition = if matches!(d.nodes()[flag], N::Text(_)) {
@@ -547,18 +565,18 @@ pub(super) fn charge(
         } else {
             field(d, flag, "condition")?
         };
-        *total = total
-            .checked_add(text(d, condition)?.len())
-            .filter(|&n| n <= limit)
-            .ok_or(PrepareError::Limit("numeric_bytes"))?;
+        compiler_limits::charge(
+            "numeric_bytes",
+            total,
+            text(d, condition)?.len(),
+            limit,
+            None,
+        )?;
     }
     if let Some(payload) = d.field(value, "str_concat") {
         for &child in sequence(d, field(d, payload, "sources")?)? {
             if let Some(expr) = d.field(child, "compute").and_then(|id| d.field(id, "expr")) {
-                *total = total
-                    .checked_add(text(d, expr)?.len())
-                    .filter(|&n| n <= limit)
-                    .ok_or(PrepareError::Limit("numeric_bytes"))?;
+                compiler_limits::charge("numeric_bytes", total, text(d, expr)?.len(), limit, None)?;
             }
             charge(d, child, total, limit, depth + 1)?;
         }
@@ -579,10 +597,7 @@ pub(super) fn charge(
             .and_then(|id| d.field(id, "filter"))
             .filter(|&id| !matches!(d.nodes()[id], N::Null));
         for id in when.into_iter().chain(compute).chain(filter) {
-            *total = total
-                .checked_add(text(d, id)?.len())
-                .filter(|&count| count <= limit)
-                .ok_or(PrepareError::Limit("numeric_bytes"))?;
+            compiler_limits::charge("numeric_bytes", total, text(d, id)?.len(), limit, None)?;
         }
         if let Some(child) = child {
             charge(d, child, total, limit, depth + 1)?;

@@ -91,7 +91,12 @@ pub(super) fn prepare(
             }]))
         }
         Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
-        Err(_) => return Err(PrepareError::Limit("predicate_compilation")),
+        Err(error) => {
+            return Err(PrepareError::predicate(
+                error.clone(),
+                Some(&format!("{path}.condition")),
+            ))
+        }
     };
     let branch = |name: &str| {
         d.field(payload, name)
@@ -121,15 +126,35 @@ pub(super) fn declaration_admission(
         copies: usize,
         total: &mut usize,
     ) -> Result<(), PrepareError> {
-        if depth > 64 || path.len() > 65_536 {
-            return Err(PrepareError::Limit("case_depth"));
+        if depth > 64 {
+            return Err(PrepareError::limit(
+                "case_depth",
+                64,
+                Some(depth),
+                Some(path),
+            ));
+        }
+        if path.len() > 65_536 {
+            return Err(PrepareError::limit(
+                "path_bytes",
+                65_536,
+                Some(path.len()),
+                Some(path),
+            ));
         }
         if let Some(flag) = d.field(value, "flag") {
             let mut size = condition(d, flag)?
                 .len()
                 .checked_add(path.len())
                 .and_then(|n| n.checked_add(256))
-                .ok_or(PrepareError::Limit("flag_metadata"))?;
+                .ok_or_else(|| {
+                    PrepareError::limit(
+                        "flag_metadata",
+                        crate::dataset::MAX_FLAG_METADATA_BYTES,
+                        None,
+                        None,
+                    )
+                })?;
             for name in ["true_value", "false_value", "missing"] {
                 if let Some(id) = d.field(flag, name) {
                     size = size
@@ -137,17 +162,38 @@ pub(super) fn declaration_admission(
                             N::Text(s) | N::Integer(s) => s.len(),
                             _ => 32,
                         })
-                        .ok_or(PrepareError::Limit("flag_metadata"))?;
+                        .ok_or_else(|| {
+                            PrepareError::limit(
+                                "flag_metadata",
+                                crate::dataset::MAX_FLAG_METADATA_BYTES,
+                                None,
+                                None,
+                            )
+                        })?;
                 }
             }
             *total = total
                 .checked_add(
                     size.checked_mul(16)
                         .and_then(|n| n.checked_mul(copies))
-                        .ok_or(PrepareError::Limit("flag_metadata"))?,
+                        .ok_or_else(|| {
+                            PrepareError::limit(
+                                "flag_metadata",
+                                crate::dataset::MAX_FLAG_METADATA_BYTES,
+                                None,
+                                None,
+                            )
+                        })?,
                 )
                 .filter(|&n| n <= crate::dataset::MAX_FLAG_METADATA_BYTES)
-                .ok_or(PrepareError::Limit("flag_metadata"))?;
+                .ok_or_else(|| {
+                    PrepareError::limit(
+                        "flag_metadata",
+                        crate::dataset::MAX_FLAG_METADATA_BYTES,
+                        None,
+                        None,
+                    )
+                })?;
         }
         if let Some(case) = d.field(value, "case") {
             for (index, &branch) in sequence(d, case)?.iter().enumerate() {

@@ -16,6 +16,8 @@ use crate::{
 };
 use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
 
+mod compiler_limits;
+pub use compiler_limits::CompilerLimit;
 mod binding_diagnostics;
 mod intermediate_admission;
 mod intermediate_derivations;
@@ -71,7 +73,7 @@ pub struct UnsupportedFeature {
 }
 #[derive(Debug)]
 pub enum PrepareError {
-    Limit(&'static str),
+    Limit(CompilerLimit),
     Unsupported(Vec<UnsupportedFeature>),
     Numeric { path: String, error: CompileError },
     Invalid(Vec<PreflightFinding>),
@@ -804,24 +806,45 @@ impl PreparedSpecification {
         let d = spec.document();
         let root = d.root();
         for (field_name, limit) in [("columns", limits.columns), ("keys", limits.keys)] {
-            if sequence(d, field(d, root, field_name)?)?.len() > limit {
-                return Err(PrepareError::Limit(field_name));
+            let actual = sequence(d, field(d, root, field_name)?)?.len();
+            if actual > limit {
+                return Err(PrepareError::limit(
+                    field_name,
+                    limit,
+                    Some(actual),
+                    Some(field_name),
+                ));
             }
         }
-        if mapping(d, field(d, root, "input")?)?.len() > limits.inputs {
-            return Err(PrepareError::Limit("inputs"));
+        let actual = mapping(d, field(d, root, "input")?)?.len();
+        if actual > limits.inputs {
+            return Err(PrepareError::limit(
+                "inputs",
+                limits.inputs,
+                Some(actual),
+                Some("input"),
+            ));
         }
         let output = field(d, root, "output")?;
-        if sequence(d, field(d, output, "columns")?)?.len() > limits.projected_columns {
-            return Err(PrepareError::Limit("projected_columns"));
+        let actual = sequence(d, field(d, output, "columns")?)?.len();
+        if actual > limits.projected_columns {
+            return Err(PrepareError::limit(
+                "projected_columns",
+                limits.projected_columns,
+                Some(actual),
+                Some("output.columns"),
+            ));
         }
         let mut model_text_bytes = 0usize;
         for node in d.nodes() {
             if let N::Text(value) | N::Integer(value) = node {
-                model_text_bytes = model_text_bytes
-                    .checked_add(value.len())
-                    .filter(|&n| n <= limits.model_text_bytes)
-                    .ok_or(PrepareError::Limit("model_text_bytes"))?;
+                compiler_limits::charge(
+                    "model_text_bytes",
+                    &mut model_text_bytes,
+                    value.len(),
+                    limits.model_text_bytes,
+                    None,
+                )?;
             }
         }
         // Per-expression parser limits remain in force. Charge the entire sum
@@ -833,7 +856,12 @@ impl PreparedSpecification {
         {
             numeric_bytes = text(d, filter)?.len();
             if numeric_bytes > limits.numeric_bytes {
-                return Err(PrepareError::Limit("numeric_bytes"));
+                return Err(PrepareError::limit(
+                    "numeric_bytes",
+                    limits.numeric_bytes,
+                    Some(numeric_bytes),
+                    Some("filter"),
+                ));
             }
         }
         for &column in sequence(d, field(d, root, "columns")?)? {
@@ -855,7 +883,12 @@ impl PreparedSpecification {
                 .transpose()?
                 .unwrap_or(&[]);
             if operands.len() > limits.source_operands {
-                return Err(PrepareError::Limit("source_operands"));
+                return Err(PrepareError::limit(
+                    "source_operands",
+                    limits.source_operands,
+                    Some(operands.len()),
+                    None,
+                ));
             }
             let filter = d
                 .field(column, "derivation")
@@ -868,10 +901,13 @@ impl PreparedSpecification {
                 .filter_map(|&id| d.field(id, "filter"))
                 .filter(|&id| !matches!(d.nodes()[id], N::Null));
             for id in expr.into_iter().chain(filter).chain(selection_filters) {
-                numeric_bytes = numeric_bytes
-                    .checked_add(text(d, id)?.len())
-                    .filter(|&n| n <= limits.numeric_bytes)
-                    .ok_or(PrepareError::Limit("numeric_bytes"))?;
+                compiler_limits::charge(
+                    "numeric_bytes",
+                    &mut numeric_bytes,
+                    text(d, id)?.len(),
+                    limits.numeric_bytes,
+                    Some("columns"),
+                )?;
             }
         }
         // Row expressions are charged across the entire document before any
@@ -882,29 +918,42 @@ impl PreparedSpecification {
         {
             let rows = sequence(d, rows)?;
             if rows.len() > 16 {
-                return Err(PrepareError::Limit("row_templates"));
+                return Err(PrepareError::limit(
+                    "row_templates",
+                    16,
+                    Some(rows.len()),
+                    None,
+                ));
             }
             for &row in rows {
                 if let Some(filter) = d
                     .field(row, "filter")
                     .filter(|&id| !matches!(d.nodes()[id], N::Null))
                 {
-                    numeric_bytes = numeric_bytes
-                        .checked_add(text(d, filter)?.len())
-                        .filter(|&n| n <= limits.numeric_bytes)
-                        .ok_or(PrepareError::Limit("numeric_bytes"))?;
+                    compiler_limits::charge(
+                        "numeric_bytes",
+                        &mut numeric_bytes,
+                        text(d, filter)?.len(),
+                        limits.numeric_bytes,
+                        Some("columns"),
+                    )?;
                 }
                 if let Some(group) = d
                     .field(row, "group_by")
                     .filter(|&id| !matches!(d.nodes()[id], N::Null))
                 {
                     if sequence(d, group)?.len() > limits.keys {
-                        return Err(PrepareError::Limit("group_keys"));
+                        return Err(PrepareError::limit("group_keys", limits.keys, None, None));
                     }
                 }
                 let declarations = mapping(d, field(d, row, "derivations")?)?;
                 if declarations.len() > limits.columns {
-                    return Err(PrepareError::Limit("row_columns"));
+                    return Err(PrepareError::limit(
+                        "row_columns",
+                        limits.columns,
+                        Some(declarations.len()),
+                        None,
+                    ));
                 }
                 for &(_, declaration) in declarations {
                     let value = field(d, declaration, "value")?;
@@ -913,10 +962,13 @@ impl PreparedSpecification {
                         if let Some(expr) =
                             d.field(value, operation).and_then(|id| d.field(id, "expr"))
                         {
-                            numeric_bytes = numeric_bytes
-                                .checked_add(text(d, expr)?.len())
-                                .filter(|&n| n <= limits.numeric_bytes)
-                                .ok_or(PrepareError::Limit("numeric_bytes"))?;
+                            compiler_limits::charge(
+                                "numeric_bytes",
+                                &mut numeric_bytes,
+                                text(d, expr)?.len(),
+                                limits.numeric_bytes,
+                                Some("columns"),
+                            )?;
                         }
                     }
                 }
@@ -932,10 +984,13 @@ impl PreparedSpecification {
                         if let Some(N::Text(expression)) =
                             d.field(assertion, name).map(|id| &d.nodes()[id])
                         {
-                            numeric_bytes = numeric_bytes
-                                .checked_add(expression.len())
-                                .filter(|&n| n <= limits.numeric_bytes)
-                                .ok_or(PrepareError::Limit("numeric_bytes"))?;
+                            compiler_limits::charge(
+                                "numeric_bytes",
+                                &mut numeric_bytes,
+                                expression.len(),
+                                limits.numeric_bytes,
+                                Some("columns"),
+                            )?;
                         }
                     }
                 }
@@ -1087,7 +1142,9 @@ impl PreparedSpecification {
                             declared,
                         }
                         .diagnostic()
-                        .map_err(|_| PrepareError::Limit("odm_diagnostic"))?,
+                        .map_err(|_| {
+                            PrepareError::limit("odm_diagnostic", 16_777_216, None, None)
+                        })?,
                     ));
                 }
                 continue;
@@ -1102,7 +1159,12 @@ impl PreparedSpecification {
                 {
                     let fields = mapping(d, types)?;
                     if fields.len() > limits.source_fields {
-                        return Err(PrepareError::Limit("source_fields"));
+                        return Err(PrepareError::limit(
+                            "source_fields",
+                            limits.source_fields,
+                            Some(fields.len()),
+                            Some(&format!("input.{}.types", text(d, name)?)),
+                        ));
                     }
                     for &(field_name, kind) in fields {
                         let kind = match text(d, kind)? {
@@ -1145,7 +1207,12 @@ impl PreparedSpecification {
             {
                 let fields = mapping(d, id)?;
                 if fields.len() > limits.source_fields {
-                    return Err(PrepareError::Limit("source_fields"));
+                    return Err(PrepareError::limit(
+                        "source_fields",
+                        limits.source_fields,
+                        Some(fields.len()),
+                        Some(&format!("input.{}.types", text(d, name)?)),
+                    ));
                 }
                 for &(name, kind) in fields {
                     let kind = match text(d, kind)? {

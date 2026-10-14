@@ -66,7 +66,12 @@ pub(super) fn prepare(
         handler_text("missing"),
         handler_text("invalid"),
     ) {
-        return Err(PrepareError::Limit("imputation_metadata"));
+        return Err(PrepareError::limit(
+            "imputation_metadata",
+            16_777_216,
+            None,
+            None,
+        ));
     }
     let kind = match op {
         "date_impute" => {
@@ -94,7 +99,9 @@ pub(super) fn prepare(
                     DatePolicyError::Diagnostic(diagnostic) => {
                         PrepareError::Invalid(vec![PreflightFinding::Imputation(diagnostic)])
                     }
-                    DatePolicyError::Limit => PrepareError::Limit("imputation_metadata"),
+                    DatePolicyError::Limit => {
+                        PrepareError::limit("imputation_metadata", 16_777_216, None, None)
+                    }
                     DatePolicyError::Shape => PrepareError::Internal,
                 })?
                 .map_err(|findings| {
@@ -151,8 +158,21 @@ pub(super) fn declaration_findings(
         rows: bool,
         bytes: &mut usize,
     ) -> Result<(), PrepareError> {
-        if depth > 64 || path.len() > 65_536 {
-            return Err(PrepareError::Limit("case_depth"));
+        if depth > 64 {
+            return Err(PrepareError::limit(
+                "case_depth",
+                64,
+                Some(depth),
+                Some(path),
+            ));
+        }
+        if path.len() > 65_536 {
+            return Err(PrepareError::limit(
+                "path_bytes",
+                65_536,
+                Some(path.len()),
+                Some(path),
+            ));
         }
         for &op in OPERATIONS {
             if let Some(payload) = d.field(value, op) {
@@ -163,14 +183,23 @@ pub(super) fn declaration_findings(
                     .checked_add(path.len())
                     .and_then(|n| n.checked_add(512))
                     .filter(|n| *n <= 16_777_216)
-                    .ok_or(PrepareError::Limit("imputation_metadata"))?;
+                    .ok_or_else(|| {
+                        PrepareError::limit("imputation_metadata", 16_777_216, None, None)
+                    })?;
                 for &(key, value) in mapping(d, payload)? {
                     for id in [key, value] {
                         if let N::Text(text) | N::Integer(text) = &d.nodes()[id] {
                             *bytes = bytes
                                 .checked_add(text.len())
                                 .filter(|n| *n <= 16_777_216)
-                                .ok_or(PrepareError::Limit("imputation_metadata"))?;
+                                .ok_or_else(|| {
+                                    PrepareError::limit(
+                                        "imputation_metadata",
+                                        16_777_216,
+                                        None,
+                                        None,
+                                    )
+                                })?;
                         }
                     }
                 }
