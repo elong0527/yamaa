@@ -123,8 +123,11 @@ Representation allowances derive from the admitted geometry. Let `C` be
 640,000,000 cells, `R` be 10,000,000 rows, `S` be 1 GiB source/scalar text,
 `T` be 512 MiB output text, and `H` be 64 MiB metadata slack:
 
-- Source storage/decode allowance: `32*C + 2*S + H`, covering physical/canonical
-  slots, text payload and encoded/header storage.
+- Source storage/decode allowance: `32*C + 24*R + 3*S + H`, covering
+  physical/canonical slots, row owners and text conversion/ownership.
+  SAS, CSV and Parquet use this central allowance and enforce smaller selected
+  quotas. Compressed SAS/Parquet text can exceed encoded input size; its actual
+  modeled decoded storage/work must still fit this finite allowance.
 - Internal public Arrow/Option/IPC transport: `64*C + T + H`. Authored artifacts
   retain their separate 1 GiB encoded-output limit.
 - Descriptor capture/reread allowance: `4*S`; copied original-source evidence:
