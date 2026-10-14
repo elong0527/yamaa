@@ -41,6 +41,11 @@ source-level review provenance; path existence does not establish assertion
 equivalence or installed qualification. Final admission still checks the mapped
 public/typed-native behavior through the retained supplemental inventory, source
 guards, package hygiene, complete independent conformance and native tests.
+The historical
+[validator disposition](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/validator-assertion-disposition.json)
+names 420 original controls. All 420 names remain in the current 426-control
+validator test inventory after #2171; renewed native routing and assertion
+behavior remain required.
 
 ### Source differences and evidence renewal
 
