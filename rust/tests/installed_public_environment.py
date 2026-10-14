@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import copy
 import json
-import runpy
 import os
+import runpy
 import shutil
 import tempfile
 import unittest
@@ -391,29 +391,58 @@ class PublicEnvironment(unittest.TestCase):
         # Metadata and every calculation/check observation retain the same truth.
         self.assertEqual(self.report(ordinary), before)
 
-    def test_csv_precision_has_no_machine_width_limit_and_output_budget_refuses_save(self):
-        self.precision_study("5000")
+    def test_csv_precision_maximum_and_invalid_bounds_preserve_save_gates(self):
+        self.precision_study(TRUTH["csv_precision_maximum"])
         (self.directory / "input.csv").write_text("ID,VALUE,INT\n1,0.125,7\n")
         result = yamaa.domain("spec.yaml", environment="environment.yaml")
         self.assertTrue(result.issues.is_empty(), result.issues)
-        expected = b'ID,VALUE,DOUBLE,EMPTY,INT\n1,0.125' + b"0" * 4997 + b",0.25" + b"0" * 4998 + b',"",7\n'
+        expected = TRUTH["maximum_precision_csv"].encode("utf-8")
         self.assertTrue(result.save())
         self.assertEqual((self.directory / "rounded.csv").read_bytes(), expected)
         (self.directory / "rounded.csv").unlink()
-        self.precision_study("999999999999999999999999999999")
-        self.assertTrue(yamaa.check("spec.yaml", environment="environment.yaml").issues.is_empty())
-        failed = yamaa.domain("spec.yaml", environment="environment.yaml")
-        self.assertIsNone(failed.output)
-        self.assertFalse(failed.issues.is_empty())
-        self.assertEqual(failed.issues["condition"].to_list(), ["engine_rejected"])
-        with self.assertRaises(yamaa.DomainError):
-            failed.save()
-        self.assertFalse((self.directory / "rounded.csv").exists())
+        for precision in TRUTH["invalid_csv_precision"]:
+            self.precision_study(precision)
+            checked = yamaa.check("spec.yaml", environment="environment.yaml")
+            failed = yamaa.domain("spec.yaml", environment="environment.yaml")
+            self.assertIsNone(failed.output)
+            self.assertEqual(checked.issues.to_dicts(), failed.issues.to_dicts())
+            self.assertEqual(failed.issues["phase"].to_list(), ["validation"])
+            self.assertEqual(
+                failed.issues["condition"].to_list(), ["invalid_field_type"]
+            )
+            self.assertEqual(failed.issues["requirement"].to_list(), ["REQ-0744"])
+            self.assertEqual(
+                failed.issues["spec_paths"].to_list(), [["output.decimals"]]
+            )
+            self.assertEqual(
+                json.loads(failed.issues["context"][0]),
+                {"expected": TRUTH["csv_precision_expected"], "actual": int(precision)},
+            )
+            with self.assertRaises(yamaa.DomainError):
+                failed.save()
+            self.assertFalse((self.directory / "rounded.csv").exists())
 
-    def test_csv_precision_validation_and_prior_failure_preserve_public_save_gates(self):
+    def test_csv_precision_validation_and_prior_failure_preserve_public_save_gates(
+        self,
+    ):
         for precision, output, condition, requirement, context in (
-            ("-9223372036854775809", "rounded.csv", "invalid_field_type", "REQ-0744", {"expected": "a non-negative integer", "actual": -9223372036854775809}),
-            ("2", "rounded.parquet", "decimals_not_applicable", "REQ-0762", {"path": "rounded.parquet", "profile": "parquet"}),
+            (
+                "-9223372036854775809",
+                "rounded.csv",
+                "invalid_field_type",
+                "REQ-0744",
+                {
+                    "expected": TRUTH["csv_precision_expected"],
+                    "actual": -9223372036854775809,
+                },
+            ),
+            (
+                "2",
+                "rounded.parquet",
+                "decimals_not_applicable",
+                "REQ-0762",
+                {"path": "rounded.parquet", "profile": "parquet"},
+            ),
         ):
             self.precision_study(precision, output)
             result = yamaa.domain("spec.yaml", environment="environment.yaml")

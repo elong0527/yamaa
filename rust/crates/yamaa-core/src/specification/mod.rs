@@ -82,6 +82,9 @@ pub enum PrepareError {
 /// Aggregate cell, text and work budgets are enforced independently.
 pub const DEFAULT_MAX_COLUMNS: usize = 1_024;
 
+/// Maximum declared CSV display precision under REQ-0744.
+pub const MAX_OUTPUT_DECIMALS: u8 = 18;
+
 /// Trusted compiler policy, not language limits. Aggregate admission precedes
 /// owned names, findings, compiled expressions and reference catalog construction.
 #[derive(Clone, Copy, Debug)]
@@ -1211,8 +1214,9 @@ impl PreparedSpecification {
             .transpose()?
             .unwrap_or_default();
         let output_path = String::from(text(d, field(d, output_id, "path")?)?);
-        // Keep arbitrary-width schema integers. Output declaration validation
-        // retains its existing post-verification phase; width is a codec quota.
+        // Retain the complete integer for output-declaration diagnostics, even
+        // when it exceeds REQ-0744's range. Build validation retains its existing
+        // post-verification phase; the artifact byte budget stays independent.
         let output_decimals = d
             .field(output_id, "decimals")
             .filter(|&id| !matches!(d.nodes()[id], N::Null))
@@ -1562,7 +1566,10 @@ impl PreparedSpecification {
             });
         }
         if let Some(value) = &self.output_decimals {
-            if value.starts_with('-') {
+            if !value
+                .parse::<u8>()
+                .is_ok_and(|digits| digits <= MAX_OUTPUT_DECIMALS)
+            {
                 findings.push(OutputFinding::InvalidDecimals {
                     value: value.clone(),
                 });

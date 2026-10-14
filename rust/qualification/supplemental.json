@@ -35,6 +35,14 @@
       ]
     },
     {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/csv_precision_limit.json",
+      "family": "diagnostics",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/execution/check_output_validation.rs"
+      ]
+    },
+    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/odm_reads.tsv",
       "family": "odm",
       "level": "component",

@@ -148,7 +148,7 @@ pub(super) fn output_reached() -> BTreeSet<ConditionCode> {
             "invalid_field_type",
             "REQ-0744",
             vec![
-                ("expected", text("a non-negative integer")),
+                ("expected", text("an integer from 0 through 18")),
                 ("actual", V::Integer("-9223372036854775809".into())),
             ],
         ),

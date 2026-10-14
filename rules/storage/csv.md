@@ -108,9 +108,11 @@ conversion has no exponent.
 
 <a id="req-0744"></a>
 
-**REQ-0744.** `output.decimals` is an optional non-negative integer. An
-invalid value fails validation. It applies to `csv` alone, and to every
-`float` column of the artifact.
+**REQ-0744.** `output.decimals` is an optional integer from 0 through 18,
+inclusive. An invalid value fails validation with `invalid_field_type` at
+`output.decimals`. Validate the declaration even when the artifact has no rows
+or no `float` columns. It applies to `csv` alone, and to every `float` column
+of the artifact.
 
 <a id="req-0745"></a>
 
