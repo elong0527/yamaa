@@ -21,20 +21,6 @@ on:
       - '.github/workflows/native.yml'
       - '.github/scripts/ci/native_matrix.py'
       - '.github/scripts/ci/test_performance_selection.py'
-  workflow_call:
-    inputs:
-      native_run_id:
-        required: true
-        type: string
-      purpose:
-        default: capacity-frontier
-        type: string
-      phase_measurements:
-        default: false
-        type: boolean
-      baseline_ref:
-        default: yamaa-py-0.3.0
-        type: string
   workflow_dispatch:
     inputs:
       native_run_id:
