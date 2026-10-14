@@ -195,7 +195,7 @@ by pinned `cc`, with a C bridge for ReadStat unions/bitfields and memory IO over
 the captured source snapshot. Both Python and R source builds include the same
 vendor sources and license under `yamaa-adapters/vendor/readstat`. No host
 reader fallback or dynamic ReadStat installation is used. The
-[vendor inventory](../rust/crates/yamaa-adapters/vendor/readstat/README.md) owns
+[vendor inventory](https://github.com/elong0527/yamaa/blob/main/rust/crates/yamaa-adapters/vendor/readstat/README.md) owns
 the upstream commit, local admission patches, portable ABI and encoding choice.
 [SAS source profiles](articles/rules.md#storage) fixes the declared encoding,
 physical type defaults, narrowing, missing, padding, and epoch contracts.
