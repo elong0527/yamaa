@@ -71,6 +71,16 @@ def case_names():
     ]
 
 
+def role_case_names(role):
+    require(role in ROLES, "unexpected collection role")
+    families = {
+        "candidate": workloads.FAMILIES,
+        "baseline": ("lookup", "aggregate", "window"),
+        "producer-root-build-baseline": ("producer",),
+    }[role]
+    return [case for case in case_names() if case.split("-")[0] in families]
+
+
 def require(condition, message):
     if not condition:
         raise ValueError(message)
@@ -879,6 +889,10 @@ def admit_collection(
         and [r["case"] for r in plan["cases"]] == [c["name"] for c in selected],
         "duplicate/absent/empty/unexpected selected case coverage",
     )
+    require(
+        all(case["name"] in role_case_names(role) for case in selected),
+        "unexpected workload case for collection role",
+    )
     result = {}
     for row, case in zip(plan["cases"], selected):
         try:
@@ -1486,6 +1500,12 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
                                 repository,
                                 local,
                             )
+                            require(
+                                set(values).issubset(
+                                    role_case_names(collection["role"])
+                                ),
+                                "unexpected admitted workload case for collection role",
+                            )
                             for case, result in values.items():
                                 if association is not None:
                                     result["native_package_association"] = association
@@ -1509,6 +1529,22 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
             cells.append(cell)
     passed = sum(cell["candidate"]["status"] == "pass" for cell in cells)
     failed = sum(cell["candidate"]["status"] == "fail" for cell in cells)
+    comparator_roles = {}
+    for role in ROLES[1:]:
+        statuses = [
+            cell[role.replace("-", "_")]["status"]
+            for cell in cells
+            if cell["case"] in role_case_names(role)
+        ]
+        comparator_roles[role] = {
+            "required": len(statuses),
+            "passed": statuses.count("pass"),
+            "failed": statuses.count("fail"),
+            "missing": statuses.count("missing"),
+        }
+    comparator_passed = sum(role["passed"] for role in comparator_roles.values())
+    comparator_failed = sum(role["failed"] for role in comparator_roles.values())
+    comparator_required = sum(role["required"] for role in comparator_roles.values())
     correctness = (
         "fail"
         if errors or any(value["status"] == "fail" for value in accepted.values())
@@ -1540,6 +1576,18 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
             "failed": failed,
             "missing": 567 - passed - failed,
         },
+        "comparator_coverage": {
+            "status": "fail"
+            if comparator_failed
+            else "pass"
+            if comparator_passed == comparator_required
+            else "incomplete",
+            "required": comparator_required,
+            "passed": comparator_passed,
+            "failed": comparator_failed,
+            "missing": comparator_required - comparator_passed - comparator_failed,
+            "roles": comparator_roles,
+        },
         "budgets": (
             {"status": "fail", "reason": budget_error, "results": []}
             if budget_error
@@ -1552,7 +1600,12 @@ def audit(input_path, repository, budgets_path=None, entry_provider=None):
     }
     collection_statuses = {
         report[key]["status"]
-        for key in ("harness_correctness", "coverage", "native_source_admission")
+        for key in (
+            "harness_correctness",
+            "coverage",
+            "comparator_coverage",
+            "native_source_admission",
+        )
     }
     report["collection_gate"] = {
         "scope": "collection-only",
@@ -1574,6 +1627,7 @@ def markdown(report):
         f"# public performance replay\n\nSource: `{report['source_revision']}`; original run {report['run_id']}, attempt {report['run_attempt']}.\n\n"
         f"| Gate | Verdict |\n| --- | --- |\n| Harness correctness | {report['harness_correctness']['status']} |\n"
         f"| Coverage | {report['coverage']['status']} ({report['coverage']['passed']}/567) |\n"
+        f"| Required comparator coverage | {report['comparator_coverage']['status']} ({report['comparator_coverage']['passed']}/504) |\n"
         f"| Native source admission | {report['native_source_admission']['status']} |\n"
         f"| Collection-only gate | {report['collection_gate']['status']} |\n"
         f"| Original run completion | {report['run_completion']['status']} |\n"
@@ -1595,7 +1649,7 @@ def main(argv=None, entry_provider=None):
     checks.add_argument(
         "--check-collection",
         action="store_true",
-        help="require correctness, native source admission and all 567 cells; no numeric acceptance",
+        help="require correctness, native source admission, 567 candidate and 504 comparator cells; no numeric acceptance",
     )
     args = parser.parse_args(argv)
     if args.check_collection and args.budgets:
@@ -1611,6 +1665,11 @@ def main(argv=None, entry_provider=None):
             "accepted": False,
             "harness_correctness": {"status": "fail", "errors": [str(error)]},
             "coverage": {"status": "incomplete", "required": 567, "passed": 0},
+            "comparator_coverage": {
+                "status": "incomplete",
+                "required": 504,
+                "passed": 0,
+            },
             "budgets": {"status": "not_evaluated"},
             "collection_gate": {"scope": "collection-only", "status": "fail"},
             "run_completion": {"status": "incomplete"},

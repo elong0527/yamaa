@@ -602,6 +602,10 @@ class Inventory(unittest.TestCase):
             ),
             567,
         )
+        self.assertEqual(len(auditor.role_case_names("baseline")), 18)
+        self.assertEqual(
+            len(auditor.role_case_names("producer-root-build-baseline")), 6
+        )
 
     def test_duplicate_json_members_refuse(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -891,15 +895,21 @@ class CollectionGates(unittest.TestCase):
             )
             collection = self.root / name / "candidate-evidence"
             collection.mkdir(parents=True)
+            collections = []
+            for role, relative_path in (
+                ("candidate", "candidate-evidence"),
+                ("baseline", "baseline-evidence"),
+                ("producer-root-build-baseline", "producer-root-build-baseline"),
+            ):
+                (self.root / name / relative_path).mkdir(exist_ok=True)
+                collections.append({"role": role, "path": name + "/" + relative_path})
             entry = dict(
                 self.entry,
                 tuple=lane,
                 artifact_id=456 + number,
                 artifact_name=name,
                 campaign=name + "/machine-campaign.json",
-                collections=[
-                    {"role": "candidate", "path": name + "/candidate-evidence"}
-                ],
+                collections=collections,
             )
             self.payload["entries"].append(entry)
             artifacts.append(dict(self.artifact, id=entry["artifact_id"], name=name))
@@ -951,6 +961,13 @@ class CollectionGates(unittest.TestCase):
             for case in auditor.case_names()
         }
 
+    def admitted_values(self, *arguments):
+        return {
+            case: copy.deepcopy(value)
+            for case, value in self.values.items()
+            if case in auditor.role_case_names(arguments[2])
+        }
+
     def invoke(self, flag, name, budgets=False):
         write(self.root / "input.json", self.payload)
         arguments = [
@@ -966,10 +983,13 @@ class CollectionGates(unittest.TestCase):
         return status, auditor.read(self.root / name / "performance-audit.json")
 
     def test_collection_only_passes_567_without_claiming_final_acceptance(self):
-        with mock.patch.object(auditor, "admit_collection", return_value=self.values):
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=self.admitted_values
+        ):
             status, report = self.invoke("--check-collection", "collection-report")
         self.assertEqual(status, 0)
         self.assertEqual(report["coverage"]["passed"], 567)
+        self.assertEqual(report["comparator_coverage"]["passed"], 504)
         self.assertEqual(report["collection_gate"]["status"], "pass")
         self.assertEqual(report["collection_gate"]["scope"], "collection-only")
         self.assertEqual(report["run_completion"]["status"], "incomplete")
@@ -982,7 +1002,9 @@ class CollectionGates(unittest.TestCase):
         budget_fixture = Budgets()
         budget_fixture.setUp()
         write(self.root / "budgets.json", budget_fixture.value)
-        with mock.patch.object(auditor, "admit_collection", return_value=self.values):
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=self.admitted_values
+        ):
             status, report = self.invoke("--check", "before-completion", budgets=True)
             self.assertEqual(report["budgets"]["status"], "pass")
             self.assertEqual(status, 1)
@@ -1034,7 +1056,9 @@ class CollectionGates(unittest.TestCase):
         self.assertEqual(report["collection_gate"]["status"], "fail")
         self.assertIn("failed child/PID", str(report["harness_correctness"]["errors"]))
         self.values.pop(auditor.case_names()[0])
-        with mock.patch.object(auditor, "admit_collection", return_value=self.values):
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=self.admitted_values
+        ):
             status, report = self.invoke("--check-collection", "missing-case")
         self.assertEqual(status, 1)
         self.assertEqual(report["collection_gate"]["status"], "incomplete")
@@ -1051,10 +1075,102 @@ class CollectionGates(unittest.TestCase):
         (self.root / "run.json").write_bytes(self.original_run)
         native = auditor.read(self.root / "native-run.json")
         write(self.root / "native-run.json", dict(native, conclusion="failure"))
-        with mock.patch.object(auditor, "admit_collection", return_value=self.values):
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=self.admitted_values
+        ):
             status, report = self.invoke("--check-collection", "failed-native")
         self.assertEqual(status, 1)
         self.assertFalse(report["accepted"])
+
+    def test_required_baseline_role_or_selected_case_cannot_be_disposed_away(self):
+        entry = self.payload["entries"][0]
+        entry["collections"] = [
+            collection
+            for collection in entry["collections"]
+            if collection["role"] != "baseline"
+        ]
+        budget_fixture = Budgets()
+        budget_fixture.setUp()
+        write(self.root / "budgets.json", budget_fixture.value)
+        write(
+            self.root / "run.json",
+            dict(self.run, status="completed", conclusion="success"),
+        )
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=self.admitted_values
+        ):
+            status, report = self.invoke(
+                "--check", "omitted-baseline-role", budgets=True
+            )
+        self.assertEqual(report["coverage"]["passed"], 567)
+        self.assertEqual(report["budgets"]["status"], "pass")
+        self.assertEqual(report["comparator_coverage"]["missing"], 18)
+        self.assertEqual(report["collection_gate"]["status"], "incomplete")
+        self.assertEqual(status, 1)
+        self.assertFalse(report["accepted"])
+        entry["collections"].append(
+            {"role": "baseline", "path": entry["artifact_name"] + "/baseline-evidence"}
+        )
+
+        def omit_case(*arguments):
+            values = self.admitted_values(*arguments)
+            if arguments[2] == "producer-root-build-baseline":
+                values.pop(auditor.role_case_names(arguments[2])[0])
+            return values
+
+        with mock.patch.object(auditor, "admit_collection", side_effect=omit_case):
+            status, report = self.invoke("--check-collection", "omitted-root-case")
+        self.assertEqual(report["coverage"]["passed"], 567)
+        self.assertEqual(report["comparator_coverage"]["missing"], 21)
+        self.assertEqual(status, 1)
+
+    def test_failed_baseline_case_and_unexpected_role_cases_refuse(self):
+        def fail_baseline(*arguments):
+            values = self.admitted_values(*arguments)
+            if arguments[2] == "baseline":
+                values[auditor.role_case_names("baseline")[0]] = {
+                    "status": "fail",
+                    "reason": "retained baseline raw child failed",
+                }
+            return values
+
+        with mock.patch.object(auditor, "admit_collection", side_effect=fail_baseline):
+            status, report = self.invoke("--check-collection", "failed-baseline")
+        self.assertEqual(status, 1)
+        self.assertEqual(report["comparator_coverage"]["failed"], 21)
+        self.assertEqual(report["collection_gate"]["status"], "fail")
+        self.assertEqual(report["coverage"]["passed"], 567)
+
+        def unexpected_baseline(*arguments):
+            values = self.admitted_values(*arguments)
+            if arguments[2] == "baseline":
+                values["callback-1000-1"] = self.values["callback-1000-1"]
+            return values
+
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=unexpected_baseline
+        ):
+            status, report = self.invoke(
+                "--check-collection", "unexpected-baseline-case"
+            )
+        self.assertEqual(status, 1)
+        self.assertIn(
+            "unexpected admitted workload case",
+            str(report["harness_correctness"]["errors"]),
+        )
+        entry = self.payload["entries"][0]
+        entry["collections"].append(copy.deepcopy(entry["collections"][1]))
+        with mock.patch.object(
+            auditor, "admit_collection", side_effect=self.admitted_values
+        ):
+            status, report = self.invoke(
+                "--check-collection", "duplicate-baseline-role"
+            )
+        self.assertEqual(status, 1)
+        self.assertIn(
+            "duplicate/unexpected/absent collection role",
+            str(report["harness_correctness"]["errors"]),
+        )
 
     def test_collection_cli_refuses_budgets_and_conflicting_check_flags(self):
         for arguments in (
