@@ -911,8 +911,10 @@ def _rename_subjects(source: Path, target: Path, offset: int, suffix: str) -> bo
 def _perturb_values(input_dir: Path, randomizer: random.Random) -> list[dict]:
     """Change supported measurements and complete dates in existing inputs.
 
-    One date shift is shared by every table, preserving chronology and joins.
-    Identifiers, missing values, partial dates and categorical codes stay intact.
+    One date shift is shared by every table, preserving chronology and joins
+    among complete dates. Partial dates, separate year/month/day items and
+    interval strings stay intact, so their alignment with complete dates can
+    change. Identifiers, missing values and categorical codes stay intact.
     The reference computes the answers; changes are recorded for replay.
     """
     date_shift = randomizer.randint(1, 7)
