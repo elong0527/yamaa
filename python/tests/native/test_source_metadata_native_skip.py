@@ -61,3 +61,4 @@ def test_source_metadata_tests_skip_when_native_extension_is_absent() -> None:
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "SKIPPED" in result.stdout
+    assert "the compiled native extension is not installed" in result.stdout
