@@ -6,9 +6,18 @@ owner is [#1969](https://github.com/elong0527/yamaa/issues/1969). This snapshot
 records merged behavior and remaining gates; it is not release approval.
 Earlier narrative remains in [the archive](archive/migration-status-before-work-packages.md).
 
+The [#1996 release-evidence refresh](1996-qualification.md) separately assesses
+main `da02b59b386cfd22a20a7ae062e602c92f6f8983`. Main run 38481589341 at
+8f7a5e78 reports success for all installed Python/R routes and the cohort job,
+but its shared Rust tests fail and its audit crashes; it is not complete release
+evidence. Main da02b59b run 38486214032 is cancelled without jobs. #2129 repairs
+the missing benchmark distribution and audit-reader setup and adds required
+complete branch qualification with explicit reviewed-branch scope. Final
+versioned combined-main evidence remains pending.
+
 ## Verified public coverage
 
-The last completed full main audit inspected here is
+The last successfully replayed full main audit retained in this snapshot is
 [run 38420713250](https://github.com/elong0527/yamaa/actions/runs/38420713250),
 source `c42788b2ffc6025c76d699e3794ab4ee70d9fe6e`. Its retained audit and
 independent replay pass all 97 evidence checks. All 21 saved main inventories
@@ -93,7 +102,7 @@ the deferred Rust and numerical evidence. See [CI instructions](../../.github/ci
 | Callback/probe cleanup | #2089 includes the earlier endpoint and JSON-protocol retirement. #1988/#1990 still need #2093's final public filesystem and unique assertion controls in the complete installed matrix. Exact 90029d34 passes all three R source hosts, all twelve R supplemental suites, the 316-case ratchet and strict checks; eighteen Python lanes remain in qualification. Diagnostic context remains JSON text. |
 | Public surface and R package | #1991: complete qualified Python legacy-surface removal and final installed contract evidence. #1993 is closed externally with #2089's R/yamaa guidance, grammar replay and cdiscbuilder deletion. Full-range integers, public lifetime/interrupt and filesystem suites pass all three R hosts at 90029d34; final versioned package acceptance remains. |
 | Repository tooling | Native CSV and regex validator routes and the retained style CLI are merged (#2095/#2097/#2087). #2111 at f00cffdc retains all 420 original validator controls, 1,919 passing shared Rust tests, 491 engine feature tests and 77 active native fixture proofs plus two historical exclusions. Its exact full matrix 38458966887 includes mandatory real-R issue transport; that acceptance is pending. #2109's changed numerical tools pass on all three hosts and await the complete installed composition. |
-| Release evidence | #1996: final combined-main evidence, complete public corpus, Windows R resource behavior and locked package membership after the remaining changes. |
+| Release evidence | #1996/#2129: repair shared Rust math fixture dependency and independent audit readers; require all 18 Python + three R lanes, shared Rust/math and complete branch audit. The downloaded 8f7a5e78 Windows R supplemental/strict records pass for their old package; renew final 0.4.0 source, complete corpus, resource behavior and locked membership in one postmerge main run. |
 | Measurements | #1998 and #1973 item 10: complete the approved workload/size/form matrix, comparable baselines and passing budgets. #2094 merges the retained collector; #2117's unapproved capacity/phase prototype passes seven ordinary 100k cases and callback observation, while two producer forms refuse at a separately unwired CSV limit. Actual report framing/copy scope and largest-size producer acceptance remain under review. No capacity or numerical budget is approved. |
 | Transition and removal | #1999 and #1973 item 11: approve the [transition plan](transition.md) only after all entry criteria pass. Two unpublished rollback releases retain eleven byte-verified assets. The canonical R archive passes all three hosts; exact prior Python wheel/source replay on eighteen tuples is running separately. #2110 prepares Python removal and #2113 prepares coherent 0.4 versions/notes; both remain gated candidates. |
 

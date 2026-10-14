@@ -1,54 +1,35 @@
-# Native benchmark qualification gates
+# Native public qualification gates
 
-The benchmark gate files below cover the complete Python-assisted native route for
-[#1738](https://github.com/elong0527/yamaa/issues/1738). They do not change the
-reference execution manifest, expected artifacts, compiler ownership or general
-native readiness.
+The current gates qualify the installed public `domain`/`check`/`define` routes
+through the shared Rust engine. `public-conformance.json` requires 316 unchanged
+benchmark cases in Python and R. Its retained lane inventory names all eighteen
+Python platform/interpreter/package-form combinations and all three R source
+hosts, including Windows R. `audit_native_run.py` independently requires every
+route, complete public and producer comparisons, strict R checks, archive bytes
+and toolchain evidence. A missing Windows R tuple cannot satisfy these gates.
 
-- `required.json` names 76 fixture/host/backend/level tuples that must pass both
-  independent expected truth and the existing portable reference comparator.
-- `known-gaps.json` names five unqualified validation/read-timing differences
-  in the historical `reference_assisted_run` route.
-  Their exact findings must remain visible. A gap never counts as a pass, cannot
-  satisfy a required tuple and cannot exempt reference or infrastructure errors.
-  Any changed or disappearing difference requires explicit disposition.
-- `missing-routes.json` preserves the broad inventory's missing R route under
-  #1739. The separately qualified public cohort does not fill unexercised rows.
+The historical Python-assisted `required.json`, `known-gaps.json` and
+`missing-routes.json` were retired with their reference-assisted consumers in
+commit `384cb9111c2367aaf12298f29afbec3fc05831e2`, merged through #2110/#2113.
+The missing R-entrypoint row described that retired route. Its removal records
+route retirement; it does not relabel an unexecuted assisted tuple as a public
+pass. The exact earlier files and findings remain in Git history. Current R and
+Windows R obligations belong to the installed public gates above.
 
 `supplemental.json` separately reconciles component/compile contract files and
 installed Python/R probe suites. Its runner retains actual suite logs and results;
 these do not enter the complete-run benchmark count. See the
 [supplemental evidence contract](../SUPPLEMENTAL.md).
 
-The initial set was selected by executing every fixture through the original
-YAML, unchanged inputs and independent expected artifacts, then comparing all
-portable observations with reference Python. It includes 16 positive and 60
-negative cases; frontend validation failures still belong to the assisted route.
-The installed wheel/source CI runs regenerate the evidence without generating
-or editing these gates or any expected file. Reports identify the actual tested
-revision, package versions, artifact names and workflow run. CI artifacts, not
-this static list alone, prove a pass on a particular platform/revision.
-
-To qualify another case, implement its missing behavior, obtain a complete
-installed report matching independent truth and reference observations, and add
-its exact route here. A shared-compiler route requires its own `shared_run` tuple;
-an assisted pass cannot satisfy it. Retire a known gap only when its new evidence
-has been reviewed. Keep the inventory's denominator synchronized with the
-execution manifest rather than fixing it to today's 315 cases.
-
-
-The separate public M1 gate in `tools/qualify_public_cohort.py` requires eleven
-cases from actual installed Python/R public domain runs. It includes the original
-six-case cohort and all five historical timing fixtures. Both installed suites
+The public M1 gate in `tools/qualify_public_cohort.py` requires twelve
+cases from actual installed Python/R public domain runs. Both installed suites
 already compare their complete reports with independent truth, including source
 reads, source tables, ordered diagnostics and refusal to save a failed build.
 The public comparator now requires those reports rather than leaving them outside
 its selected cohort. Missing or mismatched reports fail the gate. Windows R
-remains required and unqualified until its actual installed evidence passes.
-
-This adds required `shared_run` comparisons for a different executed route. The
-historical assisted gaps, manifest, expected artifacts and broad inventory are
-retained unchanged; an assisted mismatch is never relabeled as a shared pass.
+remains required; passes apply only to the recorded source revision and package.
+The [release-evidence ledger](../planning/1996-qualification.md) records the
+current combined-main limitation and the branch qualification procedure.
 
 
 ## Complete public report comparisons
@@ -113,18 +94,15 @@ suites remain separate. These dispositions do not suppress table differences.
 
 Each sampled PR lane and every main or full-dispatch lane uploads its inventory,
 individual records and staged saved artifacts. The committed
-`public-conformance.json` gates both installed hosts. Its 294 Python cases and
-293 R cases are the independently replayed intersection of all eighteen Python
-lanes and three R hosts in full-dispatch run 38379046837 at
-`9b52b1f0ed841b499c578f63916eda8f1e7f6b02`. The seventeen row, window and
-filtered-driver benchmarks advance the prior 277 Python and 276 R cases without
-removing a pass. Every lane retains 21 unsupported cases and two historical
-exclusions. Python and Linux/macOS R retain one mismatch; Windows R retains two,
-including the symlink negative that passes elsewhere.
-No lane reports an execution error. The host-specific intersection keeps that
-Windows R mismatch visible rather than adding it to R's gate. This corpus
-evidence does not complete other migration or
-release gates. Run locally against an installed package outside the checkout:
+`public-conformance.json` gates both installed hosts. Its 316 Python and 316 R
+cases are the independently replayed intersection of all eighteen Python lanes
+and three R hosts in full-dispatch run 38416920074 at
+`2ba10418607933f92597f7c00ac363a3113a49db`. Every active case passes on that
+immutable candidate: zero mismatches, unsupported operations or execution
+errors, and the two approved historical path exclusions remain visible. The
+Windows R symlink negative is included in R's required passing set. This corpus
+evidence does not complete other migration or release gates or qualify later
+main revisions. Run locally against an installed package outside the checkout:
 
 ```sh
 python -I rust/tools/public_conformance.py plan --fixtures benchmarks --output /tmp/public-plan

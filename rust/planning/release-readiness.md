@@ -1,7 +1,10 @@
 # yamaa Rust migration release readiness
 
-Assessed 2026-10-13 against main
-`9f88cdb6b3855fdef2df8e8b208d2f948396edbc`. This is the finite blocker register
+Implementation snapshot assessed 2026-10-13 against main
+`9f88cdb6b3855fdef2df8e8b208d2f948396edbc`. B01, B04, B13 and B15 have a
+release-evidence refresh against main
+`da02b59b386cfd22a20a7ae062e602c92f6f8983` in
+[the #1996 ledger](1996-qualification.md). This is the finite blocker register
 for [#1969](https://github.com/elong0527/yamaa/issues/1969). Earlier release and
 prototype observations are preserved verbatim in
 [the archive](archive/release-readiness-before-work-packages.md); their counts
@@ -23,10 +26,10 @@ an explicit approved disposition, not with a component-test count.
 
 | ID | Current status and remaining evidence | Primary owner |
 | --- | --- | --- |
-| B01 | #2104 merges the complete 316-case ratchet and final two public runners. Candidate run 38416920074 passes every active case in all 21 installed lanes; its reports independently replay unchanged truth. Two approved historical exclusions remain. Final combined-main acceptance is open. | [#1974](https://github.com/elong0527/yamaa/issues/1974) |
+| B01 | The required data explicitly names 316 Python and 316 R cases and all 21 installed lanes, including Windows R. Immutable candidate run 38416920074 qualifies every active case with two historical exclusions. Later main run 38481589341 passes installed jobs but fails shared Rust and loses its audit; final 0.4.0 combined-main acceptance remains open. | [#1996](https://github.com/elong0527/yamaa/issues/1996) |
 | B02 | Public domain/check facades run on the shared engine. Installed signatures, argument errors, complete issues/log/output/save behavior and consumer migration remain. | [#1991](https://github.com/elong0527/yamaa/issues/1991) |
 | B03 | Full-range R int64 and JSON-text context are approved. Lossless NUL-vector and retained-helper operations, deliberate removals and final installed surface qualification remain. | [#1991](https://github.com/elong0527/yamaa/issues/1991) |
-| B04 | Declaring-file alignment, directory diagnostic priority and real Windows R symlink staging are merged (#2012/#2090). All active resource cases pass the complete candidate dispatch; renew combined-main evidence. | [#1995](https://github.com/elong0527/yamaa/issues/1995) |
+| B04 | Declaring-file alignment, directory diagnostic priority and real Windows R symlink staging are merged. Main 8f7a5e78's downloaded Windows R public-file-resource suite passes and strict check is Status: OK, for package 0.3.0/core 0.1.0. Renew exact current-source 0.4.0 evidence; cancelled da02b59b run 38486214032 supplies none. | [#1996](https://github.com/elong0527/yamaa/issues/1996) |
 | B05 | #2089 externally merges earlier probe/JSON retirement and the native R package. #2093 retains the final public filesystem and environment assertions; complete its installed matrix and land the last legacy IO consumer replacement before Python removal. | [#1990](https://github.com/elong0527/yamaa/issues/1990) |
 | B06 | #2091 merges unified ordinary/environment/producer selection and its environment-priority controls; #1987 is closed externally. Renew full installed and combined-main evidence with the remaining composition. | [#1987](https://github.com/elong0527/yamaa/issues/1987) |
 | B07 | Producer orchestration and the keyed-lookup follow-up are merged through #2091/#2099. Preserve every port and failure/publication order in final installed acceptance. | [#1987](https://github.com/elong0527/yamaa/issues/1987) |
@@ -35,9 +38,9 @@ an explicit approved disposition, not with a component-test count.
 | B10 | File/codec/publication implementations are merged. Final unified port composition must retain exact CSV, logical Parquet, original failures and held-save behavior. | [#1987](https://github.com/elong0527/yamaa/issues/1987) |
 | B11 | #1984 is closed externally. #2084's exact-head full matrix passes; all 21 corpus verdict arrays replay type-exactly against unchanged truth, and all three strict R checks pass. Empty literal allowlists and normative null ownership are guarded; final combined-main renewal remains. | [#1984](https://github.com/elong0527/yamaa/issues/1984) |
 | B12 | #1740 closed the PortableLibmV1 numerical decision. Every affected supported language scope still needs exact public truth on the complete installed matrix. | [#1974](https://github.com/elong0527/yamaa/issues/1974) |
-| B13 | Canonical Cargo locking, unchanged packaged workspace membership including build.rs and locked builds pass the audited full main run. Renew transitive-feature/toolchain and archive evidence on the final release revision. | [#1996](https://github.com/elong0527/yamaa/issues/1996) |
+| B13 | Canonical Cargo locking and source membership, including build.rs, remain enforced. Main 8f7a5e78's distribution/installed jobs pass, but its audit does not complete and its packages precede 0.4.0. Renew source/archive byte equality, missing/stale/drift controls, transitive features and actual toolchains on the final versioned source. | [#1996](https://github.com/elong0527/yamaa/issues/1996) |
 | B14 | Policy resolved: only packaging-tool checksum fields in python/uv.lock, rust/Cargo.lock and unchanged staged copies are allowed. Runtime/contract/cache/resource identity digests remain prohibited. Build evidence belongs to B13. | [#1996](https://github.com/elong0527/yamaa/issues/1996) |
-| B15 | Full main run 38420713250 has 97 passing audit checks, independently replayed. Candidate dispatch 38416920074 passes all installed routes, strict R checks and all active public cases. Deferred shared Rust/math and final combined-main release qualification remain open. | [#1996](https://github.com/elong0527/yamaa/issues/1996) |
+| B15 | Earlier complete main audit 38420713250 and candidate dispatch 38416920074 remain immutable historical evidence. Main 38481589341 fails because the shared Rust public math fixtures lack the benchmark distribution and the audit lacks independent readers; main da02b59b run is cancelled. #2129 repairs both and requires full reviewed-branch evidence, kept explicitly separate from postmerge combined-main acceptance. | [#1996](https://github.com/elong0527/yamaa/issues/1996) |
 | B16 | Retained installed public suites cover ownership/interruption/reentrancy/repeated use, original failures and held Saves. Final full-matrix evidence and qualified Python legacy-surface removal remain. | [#1991](https://github.com/elong0527/yamaa/issues/1991) |
 | B17 | #2094 merges retained collection. Unapproved #2117 passes seven ordinary 100k cases; producer decode limits, measurement framing/copy scope, all-tuple distributions and comparable budgets remain incomplete. | [#1998](https://github.com/elong0527/yamaa/issues/1998) |
 | B18 | Select numeric budgets after actual B17 measurements. Capacity refusals and unavailable metrics are not accepted timing/memory samples. | [#1973](https://github.com/elong0527/yamaa/issues/1973) |
