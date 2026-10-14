@@ -841,9 +841,11 @@ fn failed_observations<'a, E>(
                         &[]
                     }
                     other => {
-                        if let Some(refusal) =
-                            crate::resource_diagnostics::execution(other, view.compiled().sources())
-                        {
+                        if let Some(refusal) = crate::resource_diagnostics::execution(
+                            other,
+                            view.compiled().sources(),
+                            view.compiled().driver_index(),
+                        ) {
                             push_diagnostic(
                                 budget,
                                 &mut diagnostics,

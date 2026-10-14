@@ -387,6 +387,13 @@ pub enum ExecutionError<E> {
         limit: usize,
         required: Option<usize>,
     },
+    /// Zero names the primary table; positive indices name the secondary ports.
+    SourceLimit {
+        resource: Resource,
+        limit: usize,
+        required: Option<usize>,
+        source_index: usize,
+    },
     /// Resource facts with an authored owner, such as a verification pattern.
     ScopedLimit {
         resource: Resource,
@@ -1464,6 +1471,12 @@ impl Executor<'_> {
                 limit,
                 required,
                 ..
+            }
+            | ExecutionError::SourceLimit {
+                resource,
+                limit,
+                required,
+                ..
             } = error.as_ref()
             {
                 observer(ExecutionEvent::Refusal {
@@ -1535,10 +1548,11 @@ impl Executor<'_> {
             }
             let primary_columns = table.schema().columns().len();
             if primary_columns > budget.max_columns {
-                return Err(Box::new(ExecutionError::Limit {
+                return Err(Box::new(ExecutionError::SourceLimit {
                     resource: Resource::SourceColumns,
                     limit: budget.max_columns,
                     required: Some(primary_columns),
+                    source_index: 0,
                 }));
             }
             let output_columns = self.plan.output().columns().len();
@@ -1550,14 +1564,16 @@ impl Executor<'_> {
                     spec_paths: vec!["output.columns".into()],
                 }));
             }
-            if let Some(source) = secondary
+            if let Some((index, source)) = secondary
                 .iter()
-                .find(|source| source.schema().columns().len() > budget.max_columns)
+                .enumerate()
+                .find(|(_, source)| source.schema().columns().len() > budget.max_columns)
             {
-                return Err(Box::new(ExecutionError::Limit {
+                return Err(Box::new(ExecutionError::SourceLimit {
                     resource: Resource::SourceColumns,
                     limit: budget.max_columns,
                     required: Some(source.schema().columns().len()),
+                    source_index: index + 1,
                 }));
             }
             if cells.is_none_or(|cells| cells > budget.max_decoded_cells) {

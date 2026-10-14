@@ -115,6 +115,8 @@ enum Outcome {
         required: Option<String>,
         #[serde(skip_serializing_if = "Vec::is_empty")]
         spec_paths: Vec<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source_index: Option<usize>,
     },
 }
 #[derive(Serialize)]
@@ -322,6 +324,19 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
             limit: Some(limit.to_string()),
             required: required.map(|value| value.to_string()),
             spec_paths: Vec::new(),
+            source_index: None,
+        },
+        ExecutionError::SourceLimit {
+            resource,
+            limit,
+            required,
+            source_index,
+        } => Outcome::Limit {
+            resource: crate::resource_diagnostics::resource_name(*resource),
+            limit: Some(limit.to_string()),
+            required: required.map(|value| value.to_string()),
+            spec_paths: Vec::new(),
+            source_index: Some(*source_index),
         },
         ExecutionError::ScopedLimit {
             resource,
@@ -333,18 +348,21 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
             limit: Some(limit.to_string()),
             required: required.map(|value| value.to_string()),
             spec_paths: spec_paths.clone(),
+            source_index: None,
         },
         ExecutionError::Capacity => Outcome::Limit {
             resource: "shape",
             limit: None,
             required: None,
             spec_paths: Vec::new(),
+            source_index: None,
         },
         ExecutionError::Grouping(GroupingError::RowLimit { limit, required }) => Outcome::Limit {
             resource: "source_rows",
             limit: Some(limit.to_string()),
             required: Some(required.to_string()),
             spec_paths: Vec::new(),
+            source_index: None,
         },
         ExecutionError::Grouping(GroupingError::KeyCellLimit { limit })
         | ExecutionError::OutputGrouping(GroupingError::KeyCellLimit { limit }) => Outcome::Limit {
@@ -352,6 +370,7 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
             limit: Some(limit.to_string()),
             required: None,
             spec_paths: Vec::new(),
+            source_index: None,
         },
         ExecutionError::KeyFailures(found) => Outcome::Failure {
             phase: "output",
