@@ -68,12 +68,17 @@ def test_string_layouts_keep_unicode_nul_null_and_empty_policy(kind):
         {
             "ID": ["a", "b", "c", "d"],
             "VALUE": pa.array(
-                ["β\0🦀", None, "", "long text stored in a buffer"], kind
+                ["\u03b2\0\U0001f980", None, "", "long text stored in a buffer"], kind
             ),
         }
     )
     result = output(prepared({"ID": "str", "VALUE": "str"}).execute_arrow(source))
-    assert result["VALUE"] == ["β\0🦀", None, None, "long text stored in a buffer"]
+    assert result["VALUE"] == [
+        "\u03b2\0\U0001f980",
+        None,
+        None,
+        "long text stored in a buffer",
+    ]
 
 
 def test_schema_only_empty_and_nonfinite_values():
