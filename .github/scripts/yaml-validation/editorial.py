@@ -522,3 +522,47 @@ def validate_examples_readme_presence(root: Path):
                 errors.append(f"ERROR: {rel}/README.md missing '## How to fix' section")
 
     return errors
+
+
+def validate_column_labels(spec, spec_label):
+    """Require every surviving declared column to carry a usable label."""
+    errors = []
+    columns = spec.get('columns')
+    if not isinstance(columns, list):
+        return errors
+    for index, column in enumerate(columns):
+        if not isinstance(column, dict):
+            continue
+        label = column.get('label')
+        if isinstance(label, str) and label.strip():
+            continue
+        errors.append(
+            f"ERROR: {spec_label}.columns[{index}].label: declared column "
+            "requires a non-empty label"
+        )
+    return errors
+
+
+def validate_producer_output_contract(producer, path):
+    """Require each stored producer column to carry a usable label."""
+    errors = []
+    output = producer.get('output')
+    output_columns = output.get('columns') if isinstance(output, dict) else None
+    selected = (
+        {name for name in output_columns if isinstance(name, str)}
+        if isinstance(output_columns, list)
+        else set()
+    )
+    columns = producer.get('columns')
+    if not isinstance(columns, list):
+        return errors
+    for index, column in enumerate(columns):
+        if not isinstance(column, dict) or column.get('name') not in selected:
+            continue
+        label = column.get('label')
+        if not isinstance(label, str) or not label.strip():
+            errors.append(
+                f"ERROR: {path}.columns[{index}].label: stored producer "
+                "column requires a non-empty label"
+            )
+    return errors
