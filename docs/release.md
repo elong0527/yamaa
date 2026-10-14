@@ -1,7 +1,7 @@
 # Shared Rust release
 
 Reviewed on 2026-10-13 (America/New_York) against main
-`d8cb226a613f0ee26cac400e2baeecbbf2ba11cd`. This page is the current decision and gate home
+`1b795ca4c1cbc742233ba459c1b987ee4b88fd73`. This page is the current decision and gate home
 for [#1969](https://github.com/elong0527/yamaa/issues/1969). A merged change, a
 qualified source revision, an accepted decision and a published asset are
 different states.
@@ -21,6 +21,12 @@ Current main also merges the
 and [#2166 exact downstream math controls](https://github.com/elong0527/yamaa/pull/2166).
 These repairs require current-source qualification; merging them does not
 establish a passing final campaign or combined-main audit.
+PR #2165 merged before its exact-head full installed matrix passed, missing the
+recorded #1973 item-8 premerge gate. Its
+[main run 38503400832](https://github.com/elong0527/yamaa/actions/runs/38503400832)
+was created after merge; the subsequent
+[qualification run 38503459253](https://github.com/elong0527/yamaa/actions/runs/38503459253)
+was canceled. These runs do not establish premerge or final combined-main acceptance.
 Removal and version changes landed **before** final item-10 budgets and item-11
 transition acceptance. Historical language work is complete; final evidence must
 qualify the actual combined source rather than relabel an earlier branch run.
