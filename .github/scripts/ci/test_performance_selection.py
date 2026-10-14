@@ -54,9 +54,8 @@ class PerformanceSelection(unittest.TestCase):
     def test_collection_completion_and_numeric_replay_are_separate_routes(self):
         root = Path(__file__).resolve().parents[3]
         campaign = (root / ".github/workflows/performance.yml").read_text()
-        audit = re.search(r"(?ms)^  audit:\n(.*?)(?=^  \S|\Z)", campaign).group(1)
-        self.assertIn("--check-collection", audit)
-        self.assertNotIn("--budgets", audit)
+        self.assertNotRegex(campaign, r"(?m)^  audit:")
+        self.assertIn("needs: [native, python, r, index]", campaign)
         replay = (root / ".github/workflows/performance-replay.yml").read_text()
         push = re.search(r"(?ms)^  push:\n(.*?)(?=^  \S|\Z)", replay).group(1)
         self.assertIn("branches: [evidence/issue-1998-replay]", push)
@@ -70,6 +69,13 @@ class PerformanceSelection(unittest.TestCase):
         )
         self.assertIn("ref: ${{ github.sha }}", replay)
         self.assertIn("persist-credentials: false", replay)
+        self.assertIn("name: performance-replay-unit (${{ matrix.key }})", replay)
+        self.assertIn("name: performance-unit-${{ matrix.key }}", replay)
+        self.assertIn("include: ${{ fromJSON(needs.prepare.outputs.units) }}", replay)
+        self.assertIn("artifact-ids: ${{ needs.prepare.outputs.input-artifact-id }}", replay)
+        self.assertIn("--mode aggregate", replay)
+        self.assertIn("--mode unit", replay)
+        self.assertIn("needs.prepare.outputs.mode == 'units'", replay)
 
     def test_runtime_protocol_truth_and_admission_changes_require_collection(self):
         root = Path(__file__).resolve().parents[3]

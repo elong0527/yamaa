@@ -182,43 +182,49 @@ that child allocation. Original process/control receipts stay in the segment
 artifact; this preflight is an authored control rather than a memory budget.
 Its test count, verdict and original log remain separate from timing samples.
 
-Every attempt preserves its raw failures and partial collections. The independent
-replay job retains all 21 tuple slots, source and baseline histories in a Git
-bundle, original run/attempt/job/artifact identities, and a compact report. A
-first characterization uses `--check-collection`: harness correctness, all 567
-candidate cells, all 504 prior lifecycle/root-Build comparator cells and original
-full native source admission must pass. Numeric
-budgets remain `not_evaluated` and full acceptance stays false. This allows the
-original collection run to succeed before a reviewed budget decision exists;
-genuine failed collections still fail. Frontier preserves its index and
-independent truth or refusals, and skips the timing auditor instead of claiming
-timing acceptance.
-Neither root-Build producer baselines nor cross-host Python comparators establish
-full-graph or R replacement ratios without an explicit scope disposition.
+Every source attempt preserves raw failures, partial collections, all 21 logical
+slots, and source/baseline/harness histories in a Git bundle. Its native,
+producer, index and verified storage jobs must all succeed. Successful original
+collection/storage is separate from independent collection qualification and
+numeric acceptance. Frontier retains independent truth or refusals and its index
+without claiming timing acceptance. Root-Build producer and cross-host Python
+comparators require their explicit scope dispositions.
 
-Trusted qualification pushes also copy unchanged original Actions ZIPs into a
-new unpublished run/attempt evidence draft, verify their authenticated downloaded
-bytes, and retain `performance-retention/retention.json`. This storage extends
-beyond the 90-day Actions expiration. It never publishes a release, creates a Git
-tag, replaces an asset, or approves a budget. The compact current campaign index
-can link the resulting draft asset IDs and original Actions identities once the
-required evidence and decision exist.
+Trusted qualification pushes retain unchanged original Actions ZIP bytes in a
+new unpublished run/attempt evidence draft and verify authenticated retrieval.
+This storage extends beyond 90-day Actions expiry. It never publishes a release,
+creates a Git tag, replaces an asset, or approves a budget.
 
-`performance-replay.yml` follows a completed trusted characterization push with
-a separately fetched original completion receipt. It preserves the immutable
-in-progress `run.json`, adds `completion-run.json` and a separate completed
-manifest, then independently replays one unchanged durable original ZIP at a
-time. Completion and replay records are appended to the same unpublished draft.
-The trusted auditor checkout revision is recorded separately from the measured
-candidate source. Failed or cancelled original attempts cannot pass.
+`performance-replay.yml` runs after the trusted characterization completes. It
+keeps the original in-progress `run.json` unchanged and adds a separately fetched
+`completion-run.json` and completed manifest. A metadata-only catalog derives
+complete reader units from the original manifest: currently 18 whole Python
+entries and 27 R segments, still 21 logical tuples. Each trusted reader job
+independently validates every original typed view/report/Save/source/clock/RSS
+record for all its cases and applicable roles. Its fragment remains
+`accepted:false` with budgets `not_evaluated`.
 
-After a source-specific item-10 budget decision is reviewed, push the reviewed
-evidence changes to `evidence/issue-1998-replay`. An actual
-`rust/qualification/performance-replay.json`, conforming to
-`rust/tools/finalize_public_performance.schema.json`, selects the repository,
-original candidate source, original run ID and attempt. This route requires the
-approved `rust/qualification/performance-budgets.json` and full auditor `--check`
-against those same raw observations; it neither recompiles nor recollects samples.
+The strict aggregate binds original reader run/attempt/reviewed checkout, exact
+successful jobs and immutable artifact IDs/creation intervals. It rejects
+missing, duplicate, unexpected or mismatched cases and independently recomputes
+raw distributions and ledgers. Collection qualification requires complete 567
+candidate and 504 comparator cells plus original native/source/terminal-success
+proof. Original fragment ZIPs, API snapshots and reports are verified and appended
+to the same unpublished source draft. Failed original or reader attempts cannot
+qualify. A fresh reviewed reader run may repair infrastructure while reusing the
+same successful immutable source samples.
+
+The measured source, original qualified reader and current aggregate revisions
+remain separate. Later `evidence/issue-1998-replay` pushes select the original
+source/run/attempt and original successful reader run/attempt/revision through
+versioned `rust/qualification/performance-replay.json`. Reviewed same-source
+`performance-budgets.json` is applied to those SAME qualified fragments, without
+recollecting or repeating typed capture. The original reader snapshot remains
+immutable; a separately fetched `reader-completion-run.json` must prove that
+attempt terminal-success. Numeric evidence acceptance still requires independent
+verification of the actual finalizer's completed successful run/job/report
+artifact before migration closure. The compact current campaign index records
+that genuine terminal receipt and durable original identities when available.
 
 ## Harbor Oracle coverage
 

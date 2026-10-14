@@ -520,83 +520,8 @@ jobs:
           path: ${{ runner.temp }}/performance-input
           if-no-files-found: error
 
-  audit:
-    needs: [index]
-    # Frontier collects independent truth/refusals without asserting timing acceptance.
-    if: always() && github.ref != 'refs/heads/qualification/issue-2142-frontier' && inputs.purpose != 'capacity-frontier'
-    name: Independent retained campaign replay
-    runs-on: ubuntu-24.04
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: '3.12'
-      - name: Retrieve the retained exact-source index
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: performance-index
-          path: ${{ runner.temp }}/performance-input
-      - name: Install locked independent evidence readers
-        run: |
-          python -m pip install uv==0.11.6
-          uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/audit-requirements.txt"
-          python -m pip install --no-deps -r "${RUNNER_TEMP}/audit-requirements.txt"
-      - name: Qualify all original collections without approving numeric budgets
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python rust/tools/replay_public_performance.py --input "${RUNNER_TEMP}/performance-input/manifest.json" \
-            --repository "${GITHUB_WORKSPACE}" --output "${RUNNER_TEMP}/performance-audit" \
-            --check-collection
-      - name: Show independent replay and all unresolved acceptance gates
-        if: always()
-        run: |
-          if test -f "${RUNNER_TEMP}/performance-audit/performance-audit.md"; then
-            cat "${RUNNER_TEMP}/performance-audit/performance-audit.md" >> "${GITHUB_STEP_SUMMARY}"
-          fi
-      - name: Preserve replay inputs and compact report without duplicating raw collections
-        if: always()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
-        with:
-          name: performance-audit
-          retention-days: 90
-          path: |
-            ${{ runner.temp }}/performance-input/manifest.json
-            ${{ runner.temp }}/performance-input/run.json
-            ${{ runner.temp }}/performance-input/jobs.json
-            ${{ runner.temp }}/performance-input/artifacts.json
-            ${{ runner.temp }}/performance-input/native-run.json
-            ${{ runner.temp }}/performance-input/native-jobs.json
-            ${{ runner.temp }}/performance-input/native-artifacts.json
-            ${{ runner.temp }}/performance-input/source.bundle
-            ${{ runner.temp }}/performance-audit/performance-audit.json
-            ${{ runner.temp }}/performance-audit/performance-audit.md
-          if-no-files-found: error
-
-      - name: Preserve separately downloadable numeric report and exact original identities
-        if: always()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
-        with:
-          name: performance-audit-record
-          retention-days: 90
-          path: |
-            ${{ runner.temp }}/performance-input/manifest.json
-            ${{ runner.temp }}/performance-input/run.json
-            ${{ runner.temp }}/performance-input/jobs.json
-            ${{ runner.temp }}/performance-input/artifacts.json
-            ${{ runner.temp }}/performance-input/native-run.json
-            ${{ runner.temp }}/performance-input/native-jobs.json
-            ${{ runner.temp }}/performance-input/native-artifacts.json
-            ${{ runner.temp }}/performance-audit/performance-audit.json
-            ${{ runner.temp }}/performance-audit/performance-audit.md
-          if-no-files-found: error
-
   retain:
-    needs: [native, python, r, index, audit]
+    needs: [native, python, r, index]
     if: always() && github.event_name == 'push' && (github.ref == 'refs/heads/qualification/issue-1998' || github.ref == 'refs/heads/qualification/issue-2142-frontier')
     name: Preserve original campaign bytes in an unpublished draft
     runs-on: ubuntu-24.04
