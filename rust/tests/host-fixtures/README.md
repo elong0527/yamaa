@@ -27,11 +27,10 @@ the different Python and R i64 vectors, including R's value beyond 2^53.
 | public-contract | Shared YAML, issue/argument/view names, empty/fatal log variants; distinct host i64 vectors | 70 | 30 |
 | public-grammar | Shared condition families; existing `grammar-original/cases.tsv` decisions | 2 | 4 |
 
-`assertions.json` maps every original Python assertion and R `stopifnot` call from
-base `140d936b37a40e0d4250983372f38079189b1b0a` to its retained location. Named
-Python methods and R control groups accompany the rows; the file declares each
-row's columns. All 186 Python test methods, 1,465 Python assertion sites and 728
-R assertion sites remain. The R grammar suite's conditional failure and legacy
+All 186 Python test methods, 1,465 Python assertion sites and 728 R assertion
+sites remain in the named paired suites above. Source controls and decoded
+independent literals were checked before and after consolidation.
+The R grammar suite's conditional failure and legacy
 CSV preservation controls also remain. Exact float bit witnesses, NUL/invalid
 UTF-8 refusals, native ownership, callback order/identity, interrupts, provenance,
 publication retries and argument/class assertions stay in each actual host.

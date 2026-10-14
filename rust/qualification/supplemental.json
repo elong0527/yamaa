@@ -1645,10 +1645,6 @@
       "role": "input"
     },
     {
-      "path": "rust/tests/host-fixtures/assertions.json",
-      "role": "documentation"
-    },
-    {
       "path": "rust/tests/host-fixtures/README.md",
       "role": "documentation"
     }
