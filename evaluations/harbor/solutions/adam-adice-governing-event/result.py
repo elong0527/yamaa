@@ -1,8 +1,8 @@
 import csv
 from collections import defaultdict
-from pathlib import Path
 
-records = list(csv.DictReader(open('/app/input/ice_raw.csv')))
+with open('/app/input/ice_raw.csv', newline='') as source:
+    records = list(csv.DictReader(source))
 priority = {'ICE04': 1, 'ICE05': 1, 'ICE01': 2, 'ICE02': 3, 'ICE03': 4}
 groups = defaultdict(list)
 for record in records:
