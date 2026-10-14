@@ -20,8 +20,8 @@
         "yaml/grammar/numeric.yaml",
         "rust/tools/stage_grammar_inputs.py",
         "rust/crates/yamaa-core/examples/grammar_contract.rs",
-        "rust/crates/yamaa-core/tests/numeric_parser.rs",
-        "rust/crates/yamaa-core/tests/numeric_compiler.rs",
+        "rust/crates/yamaa-core/tests/numeric/numeric_parser.rs",
+        "rust/crates/yamaa-core/tests/numeric/numeric_compiler.rs",
         "rust/crates/yamaa-adapters/examples/numeric_syntax_fixture.rs",
         "rust/tests/installed_public_grammar.py"
       ],
@@ -41,9 +41,9 @@
       ],
       "successors": [
         "rust/crates/yamaa-adapters/examples/numeric_syntax_fixture.rs",
-        "rust/crates/yamaa-core/tests/numeric_parser.rs",
-        "rust/crates/yamaa-core/tests/numeric_compiler.rs",
-        "rust/crates/yamaa-core/tests/diagnostic/grammar.rs",
+        "rust/crates/yamaa-core/tests/numeric/numeric_parser.rs",
+        "rust/crates/yamaa-core/tests/numeric/numeric_compiler.rs",
+        "rust/crates/yamaa-core/tests/diagnostics/diagnostic/grammar.rs",
         "rust/tests/installed_original_specifications.py"
       ],
       "addition": "Independent literal complete-AST/diagnostic assertions using the retained typed fixture serializers; no parser or evaluator is added."
@@ -64,10 +64,10 @@
       "successors": [
         "yaml/grammar/aggregate.yaml",
         "rust/crates/yamaa-core/examples/grammar_contract.rs",
-        "rust/crates/yamaa-core/tests/aggregate_parser.rs",
-        "rust/crates/yamaa-core/tests/aggregate_compiler.rs",
+        "rust/crates/yamaa-core/tests/numeric/aggregate_parser.rs",
+        "rust/crates/yamaa-core/tests/relations/aggregate_compiler.rs",
         "rust/crates/yamaa-adapters/examples/aggregate_syntax_fixture.rs",
-        "rust/crates/yamaa-adapters/tests/aggregate_record_operations.rs",
+        "rust/crates/yamaa-adapters/tests/execution/aggregate_record_operations.rs",
         "rust/tests/installed_public_grammar.py"
       ]
     },
@@ -87,11 +87,11 @@
       ],
       "successors": [
         "yaml/grammar/predicate.yaml",
-        "rust/crates/yamaa-core/tests/predicate_parser.rs",
-        "rust/crates/yamaa-core/tests/predicate_compiler.rs",
+        "rust/crates/yamaa-core/tests/numeric/predicate_parser.rs",
+        "rust/crates/yamaa-core/tests/numeric/predicate_compiler.rs",
         "rust/crates/yamaa-adapters/examples/predicate_syntax_fixture.rs",
         "rust/tests/test_predicate_syntax_encoding.py",
-        "rust/crates/yamaa-adapters/tests/predicate_diagnostics.rs",
+        "rust/crates/yamaa-adapters/tests/table/predicate_diagnostics.rs",
         "rust/tests/installed_public_grammar.py",
         "rust/tests/installed_original_specifications.py"
       ]
@@ -114,7 +114,7 @@
         "rust/crates/yamaa-adapters/tests/fixtures/regex_contract.tsv",
         "rust/tools/check_regex.py",
         "rust/crates/yamaa-adapters/examples/regex_probe.rs",
-        "rust/crates/yamaa-core/tests/regex.rs",
+        "rust/crates/yamaa-core/tests/numeric/regex.rs",
         "rust/tests/installed_regex.py",
         "rust/tests/installed_original_specifications.py"
       ],
@@ -141,10 +141,10 @@
         "rust/tools/assess_rounding.py rational_round/cases",
         "rust/tools/check_rounding.py",
         "rust/crates/yamaa-core/examples/rounding_probe.rs",
-        "rust/crates/yamaa-core/tests/rounding.rs",
+        "rust/crates/yamaa-core/tests/scalar/rounding.rs",
         "rust/tests/test_rounding_assessment.py",
         "rust/tests/test_rounding_check.py",
-        "rust/crates/yamaa-adapters/tests/declarative_rounding.rs",
+        "rust/crates/yamaa-adapters/tests/scalar/declarative_rounding.rs",
         "rust/tests/installed_original_specifications.py"
       ],
       "disposition": "Keep the existing independent rational oracle and corpus; active assessment observes compiled policy outputs rather than the retiring private scalar helper."

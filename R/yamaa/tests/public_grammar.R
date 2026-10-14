@@ -1,5 +1,9 @@
 # Authored shared grammar acceptance/diagnostics through the installed public API.
 library(yamaa)
+host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
+  system.file("host-fixtures",package="yamaa",mustWork=TRUE)
+source(file.path(host_fixture_root,"reader.R"),local=TRUE)
+host_truth <- read_host_fixture(host_fixture_root,"public-grammar")
 source <- system.file("grammar-original", package = "yamaa", mustWork = TRUE)
 root <- tempfile("yamaa-public-grammar-")
 dir.create(root)
@@ -7,11 +11,7 @@ stopifnot(file.copy(source, root, recursive = TRUE))
 root <- file.path(root, "grammar-original")
 vectors <- read.delim(file.path(root, "cases.tsv"), sep = "\t", quote = "", comment.char = "",
   stringsAsFactors = FALSE, check.names = FALSE, fileEncoding = "UTF-8", na.strings = character())
-grammar_conditions <- list(
-  numeric = c("invalid_numeric_expression", "prohibited_function", "prohibited_construct"),
-  aggregate = c("invalid_aggregate_expression", "nested_reduction", "prohibited_function", "prohibited_construct"),
-  predicate = c("invalid_predicate", "integer_overflow"),
-  `string-template` = "invalid_string_template")
+grammar_conditions <- lapply(host_truth[["grammar_conditions"]],fixture_strings)
 for (i in seq_len(nrow(vectors))) {
   issues <- yamaa_domain(file.path(root, vectors$specification[i]))$issues
   observed <- if (vectors$parse[i] == "reject") issues$condition else

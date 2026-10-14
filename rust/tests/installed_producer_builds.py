@@ -1,6 +1,7 @@
 """Private installed whole-graph builds against separately authored study truth."""
 
 import gc
+import runpy
 import json
 import shutil
 import tempfile
@@ -12,44 +13,17 @@ import yamaa_benchmarks as program
 from yamaa import _locked_functions as host
 from yamaa import _native as native
 
+TRUTH = runpy.run_path(str(Path(__file__).with_name("host-fixtures") / "reader.py"))["load"](
+    __file__, "producer-graph"
+)
+
 ROOT = Path(__file__).parent / "project-original"
-RAW = b"ID,VALUE\n1,1.234\n2,2.345\n"
-PRODUCED = b"ID,VALUE\n1,1.23\n2,2.35\n"
-CONSUMED = b"ID,VALUE\n1,2.46\n2,4.70\n"
-PRODUCER = """schema_version: '1.0'
-domain: TEST
-base: RAW
-keys: [ID]
-input: {RAW: {path: ../../raw/raw.csv, types: {ID: int, VALUE: float}}}
-columns:
-  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}
-  - {name: VALUE, type: float, label: Value, derivation: {function: {name: id_float, args: {x: RAW.VALUE}}}}
-output: {path: ../../generated/producer.csv, columns: [ID, VALUE], decimals: 2}
-"""
-CONSUMER = """schema_version: '1.0'
-domain: TEST
-base: FIRST
-keys: [ID]
-input:
-  FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}
-  SECOND: {path: ../generated/producer.csv, schema: ../producer/./p.yaml}
-intermediates: [{id: SECOND_REFERENCE, dataset: SECOND, key: [ID], no_match: null}]
-columns:
-  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}
-  - {name: FIRST_VALUE, type: float, label: First value, derivation: FIRST.VALUE}
-  - {name: SECOND_VALUE, type: float, label: Second value, derivation: SECOND_REFERENCE.VALUE}
-  - {name: VALUE, type: float, label: Value, derivation: {compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}}
-output: {path: ../generated/root.csv, columns: [ID, VALUE], decimals: 2}
-"""
-FUNCTION = """function: yamaa_benchmarks.project_value
-description: Installed numeric identity.
-params: [{name: x, type: float}]
-returns: float
-tests:
-  - {id: normal, covers: [normal, numeric-comparison], args: {x: 7.25}, result: 7.25}
-  - {id: boundary, covers: [boundary], args: {x: 0.0}, result: 0.0}
-  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}
-"""
+RAW = TRUTH["raw_csv"].encode("utf-8")
+PRODUCED = TRUTH["produced_csv"].encode("utf-8")
+CONSUMED = TRUTH["consumed_csv"].encode("utf-8")
+PRODUCER = TRUTH["producer_yaml"]
+CONSUMER = TRUTH["consumer_yaml"]
+FUNCTION = TRUTH["function_yaml"].replace("HOST_CALLABLE", "yamaa_benchmarks.project_value")
 METADATA = (
     "installed-python",
     "0.1.0",
@@ -77,7 +51,7 @@ class InstalledProducerBuilds(unittest.TestCase):
         self.write("producer/layers/base.yaml", PRODUCER)
         self.write(
             "producer/p.yaml",
-            "schema_version: '1.0'\nparents: [layers/base.yaml]\ndomain: PRODUCER\n",
+            TRUTH["producer_parent_yaml"],
         )
         self.write("consumer/root.yaml", CONSUMER)
         self.write("raw/raw.csv", RAW)
@@ -203,16 +177,16 @@ class InstalledProducerBuilds(unittest.TestCase):
             )
             self.assertEqual(
                 [row[1]["value"] for row in tables[1]["rows"]],
-                ["3ff3be76c8b43958", "4002c28f5c28f5c3"],
+                [TRUTH["raw_first_f64"], TRUTH["raw_second_f64"]],
             )
             for table in tables[2:4]:
                 self.assertEqual(
                     [row[1]["value"] for row in table["rows"]],
-                    ["3ff3ae147ae147ae", "4002cccccccccccd"],
+                    [TRUTH["produced_first_f64"], TRUTH["produced_second_f64"]],
                 )
             self.assertEqual(
                 [row[3]["value"] for row in tables[4]["rows"]],
-                ["4003ae147ae147ae", "4012cccccccccccd"],
+                [TRUTH["consumed_first_f64"], TRUTH["consumed_second_f64"]],
             )
             self.assertFalse(hasattr(result, "save"))
             self.assertFalse(hasattr(attempt, "save"))
@@ -330,7 +304,7 @@ class InstalledProducerBuilds(unittest.TestCase):
         )
         text = CONSUMER.replace(
             "  - {name: VALUE,",
-            "  - {name: SUM_VALUE, type: float, label: Sum, derivation: {compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}}\n  - {name: VALUE,",
+            TRUTH["summed_value_column"],
         )
         self.write(
             "consumer/root.yaml",
@@ -381,11 +355,11 @@ class InstalledProducerBuilds(unittest.TestCase):
         self.write(
             "consumer/root.yaml",
             CONSUMER.replace(
-                "../generated/producer.csv, schema: ../producer/p.yaml",
-                "../generated/left.csv, schema: ../left.yaml",
+                TRUTH["first_producer_reference"],
+                TRUTH["left_reference"],
             ).replace(
-                "../generated/producer.csv, schema: ../producer/./p.yaml",
-                "../generated/right.csv, schema: ../right.yaml",
+                TRUTH["second_producer_reference"],
+                TRUTH["right_reference"],
             ),
         )
         calls = []
@@ -497,7 +471,7 @@ class InstalledProducerBuilds(unittest.TestCase):
     ):
         self.write(
             "consumer/root.yaml",
-            CONSUMER + "verifications: [{assert: {require: 'VALUE < 0'}}]\n",
+            CONSUMER + TRUTH["fatal_verification_yaml"],
         )
         prepared = self.prepare()
         attempt = prepared.build(METADATA)
@@ -525,8 +499,8 @@ class InstalledProducerBuilds(unittest.TestCase):
         self.write(
             "consumer/root.yaml",
             CONSUMER.replace(
-                "../generated/producer.csv, schema: ../producer/p.yaml",
-                "../generated/wrong.csv, schema: ../producer/p.yaml",
+                TRUTH["first_producer_reference"],
+                TRUTH["wrong_producer_reference"],
             ),
         )
         with patch.object(

@@ -5,7 +5,7 @@ from pathlib import Path
 
 WORKSPACE = Path(__file__).resolve().parents[1]
 SOURCE = WORKSPACE.parent / "yaml"
-TARGET = WORKSPACE / "crates/yamaa-adapters/src/shipped_schema_data.rs"
+TARGET = WORKSPACE / "crates/yamaa-adapters/src/shipped_schema/data.rs"
 
 
 def render():

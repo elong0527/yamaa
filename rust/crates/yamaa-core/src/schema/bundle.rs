@@ -211,7 +211,7 @@ fn charge(
 }
 
 /// Includes admit only the contract's basename grammar, independent of host path rules.
-fn safe_include(name: &str) -> bool {
+pub fn safe_include(name: &str) -> bool {
     name.strip_prefix("schema_")
         .and_then(|s| s.strip_suffix(".yaml"))
         .is_some_and(|middle| {

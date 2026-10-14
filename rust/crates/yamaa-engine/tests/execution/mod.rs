@@ -1,0 +1,32 @@
+//! Execution contracts in the yamaa-engine integration suite.
+
+mod case_predicates;
+mod completed_lookup_assertions;
+mod correlated_relation_predicates;
+mod dataset;
+mod dataset_aggregate;
+mod dataset_diagnostic;
+mod dataset_odm;
+mod declarative_flags;
+mod declarative_intermediate_keys;
+mod declarative_rounding;
+mod declarative_temporal;
+mod declarative_temporal_imputation;
+mod declarative_text_case;
+mod declarative_text_extract;
+mod declarative_text_pad;
+mod declarative_text_template;
+mod execution_budget;
+mod intermediate_ranges;
+mod key_source_selection;
+mod numeric_lifecycle;
+mod ordinary_key_index;
+mod predicate_diagnostics;
+mod primary_intermediates;
+mod row_derivations;
+mod row_intermediate_context;
+mod scalar_language;
+mod self_relations;
+mod shared_execution_work;
+mod source_diagnostics;
+mod table_reduction;

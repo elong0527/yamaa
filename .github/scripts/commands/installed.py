@@ -33,7 +33,13 @@ def stage(runtime, destination):
         for suite in catalog["suites"]
         if suite["runtime"] == runtime
     ]
-    directories = []
+    copies += [
+        (ROOT / name, destination / staged_name)
+        for name, staged_name in runpy.run_path(str(RUNNER))["host_fixture_files"](
+            catalog
+        )
+    ]
+    directories = [destination / "host-fixtures"]
     if runtime == "python":
         copies += [
             (
@@ -45,7 +51,7 @@ def stage(runtime, destination):
                 destination / "private_schema_requirements.py",
             ),
         ]
-        directories = [
+        directories += [
             destination / name
             for name in (
                 "specification-original",

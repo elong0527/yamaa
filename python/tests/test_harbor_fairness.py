@@ -397,7 +397,7 @@ def test_subject_rewrites_preserve_padded_shape_and_line_endings(tmp_path, line_
         "STUDY-SITE-0002,0002,2024-12-28T09:15",
         "STUDY-SITE-003,003,2024-12-29T10:00",
         "STUDY-SITE-00004,00004,2024-12-30T10:00",
-        "STUDY-SITE-²,²,2024-12-30T10:00",
+        "STUDY-SITE-\u00b2,\u00b2,2024-12-30T10:00",
     ]
     (source / "dm.csv").write_bytes((line_ending.join(rows) + line_ending).encode())
     renamed = tmp_path / "renamed"
@@ -409,7 +409,7 @@ def test_subject_rewrites_preserve_padded_shape_and_line_endings(tmp_path, line_
         assert after["SUBJID"].startswith("0")
         assert after["USUBJID"] == "STUDY-SITE-" + after["SUBJID"]
     assert int(changed[1]["SUBJID"]) - int(changed[0]["SUBJID"]) == 1
-    assert changed[-1]["SUBJID"] == "²-evaluation"
+    assert changed[-1]["SUBJID"] == "\u00b2-evaluation"
     grade._perturb_values(renamed, random.Random(1))
     assert (
         (renamed / "dm.csv")

@@ -1,0 +1,462 @@
+{
+  "version": "1",
+  "families": {
+    "producer-graph": {
+      "producer_yaml": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys: [ID]\ninput: {RAW: {path: ../../raw/raw.csv, types: {ID: int, VALUE: float}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: float, label: Value, derivation: {function: {name: id_float, args: {x: RAW.VALUE}}}}\noutput: {path: ../../generated/producer.csv, columns: [ID, VALUE], decimals: 2}\n",
+      "consumer_yaml": "schema_version: '1.0'\ndomain: TEST\nbase: FIRST\nkeys: [ID]\ninput:\n  FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}\n  SECOND: {path: ../generated/producer.csv, schema: ../producer/./p.yaml}\nintermediates: [{id: SECOND_REFERENCE, dataset: SECOND, key: [ID], no_match: null}]\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}\n  - {name: FIRST_VALUE, type: float, label: First value, derivation: FIRST.VALUE}\n  - {name: SECOND_VALUE, type: float, label: Second value, derivation: SECOND_REFERENCE.VALUE}\n  - {name: VALUE, type: float, label: Value, derivation: {compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}}\noutput: {path: ../generated/root.csv, columns: [ID, VALUE], decimals: 2}\n",
+      "producer_parent_yaml": "schema_version: '1.0'\nparents: [layers/base.yaml]\ndomain: PRODUCER\n",
+      "summed_value_column": "  - {name: SUM_VALUE, type: float, label: Sum, derivation: {compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}}\n  - {name: VALUE,",
+      "second_producer_reference": "../generated/producer.csv, schema: ../producer/./p.yaml",
+      "right_reference": "../generated/right.csv, schema: ../right.yaml",
+      "fatal_verification_yaml": "verifications: [{assert: {require: 'VALUE < 0'}}]\n",
+      "first_producer_reference": "../generated/producer.csv, schema: ../producer/p.yaml",
+      "wrong_producer_reference": "../generated/wrong.csv, schema: ../producer/p.yaml",
+      "rounded_output_suffix": ".csv, columns: [ID, VALUE], decimals: 2}\n",
+      "left_reference": "../generated/left.csv, schema: ../left.yaml",
+      "raw_csv": "ID,VALUE\n1,1.234\n2,2.345\n",
+      "produced_csv": "ID,VALUE\n1,1.23\n2,2.35\n",
+      "consumed_csv": "ID,VALUE\n1,2.46\n2,4.70\n",
+      "retained_bridge_yaml": "schema_version: '1.0'\ndomain: TEST\nbase: FIRST\nkeys: [ID]\ninput: {FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}\n  - {name: VALUE, type: float, label: Value, derivation: FIRST.VALUE}\noutput: {path: ../generated/left.csv, columns: [ID, VALUE], decimals: 2}\n",
+      "owned_bridge_directories": [
+        "producer",
+        "consumer",
+        "raw",
+        "env",
+        "bridge"
+      ],
+      "owned_directories": [
+        "producer",
+        "consumer",
+        "raw",
+        "env"
+      ],
+      "retained_specification_files": [
+        "consumer/root.yaml",
+        "producer/p.yaml",
+        "producer/layers/base.yaml"
+      ],
+      "root_unrounded_column": "  - {name: ROOT_UNROUNDED, type: float, label: Root precision, derivation: {compute: {expr: 'VALUE + 0.004'}}}\noutput: {path:",
+      "root_unrounded_projection": "columns: [ROOT_UNROUNDED, ID, VALUE], decimals: 2",
+      "root_unrounded_columns": [
+        "ROOT_UNROUNDED",
+        "ID",
+        "VALUE"
+      ],
+      "root_unrounded_csv": "ROOT_UNROUNDED,ID,VALUE\n2.46,1,2.46\n4.70,2,4.70\n",
+      "root_parent_yaml": "schema_version: '1.0'\nparents: [layers/base.yaml]\ndomain: ROOT\n",
+      "large_payload_column": "  - {name: PAYLOAD, type: str, label: Payload, derivation: {literal: \"",
+      "identity_derivation": "{function: {name: id_float, args: {x: RAW.VALUE}}}",
+      "sum_derivation": "{compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}",
+      "bad_derivation": "{function: {name: bad, args: {z: FIRST_VALUE}}}",
+      "fatal_row_count_yaml": "verifications:\n  - row_count: {min: 99}\n",
+      "payload_projection": "columns: [ID, VALUE, PAYLOAD], decimals: 2",
+      "incompatible_reference": "schema: ../producer/p.yaml, types: {ID: str}",
+      "nested_right_reference": "../../generated/right.csv, schema: ../../bridge/right.yaml",
+      "extra_null_column_suffix": ", type: str, label: Extra value, derivation: {literal: null}}\n",
+      "nested_left_reference": "../../generated/left.csv, schema: ../../bridge/left.yaml",
+      "function_yaml": "function: HOST_CALLABLE\ndescription: Installed numeric identity.\nparams: [{name: x, type: float}]\nreturns: float\ntests:\n  - {id: normal, covers: [normal, numeric-comparison], args: {x: 7.25}, result: 7.25}\n  - {id: boundary, covers: [boundary], args: {x: 0.0}, result: 0.0}\n  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+      "raw_first_f64": "3ff3be76c8b43958",
+      "raw_second_f64": "4002c28f5c28f5c3",
+      "produced_first_f64": "3ff3ae147ae147ae",
+      "produced_second_f64": "4002cccccccccccd",
+      "consumed_first_f64": "4003ae147ae147ae",
+      "consumed_second_f64": "4012cccccccccccd"
+    },
+    "producer-cohort": {
+      "source_files": [
+        "seed.csv",
+        "producer.yaml",
+        "spec.yaml"
+      ],
+      "case_name": "shared-producer-parquet",
+      "project_yaml": "version: '1.0'\n",
+      "output_csv": "ID\n01\n"
+    },
+    "original-specifications": {
+      "original_case_names": [
+        "negative-zero-division",
+        "negative-integer-overflow",
+        "adam-adlb-ordered-sum",
+        "schema-window-functions",
+        "schema-inheritance",
+        "schema-lookup",
+        "negative-formula-flag",
+        "negative-row-aggregate",
+        "negative-row-no-prior",
+        "negative-source-missing-field",
+        "negative-source-trivial-filter",
+        "negative-paired-dates",
+        "negative-not-missing-age",
+        "negative-implausible-age",
+        "negative-invalid-sex",
+        "negative-sex-code",
+        "negative-matches-bad-pattern"
+      ],
+      "preflight_valid_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n",
+      "section_order_yaml": "schema_version: \"1.0\"\ndomain: TEST\ninput:\n  SRC: {path: src.csv}\n  OTHER: {path: other.csv}\nkeys: [ID, SECTION]\noutput: {path: result.csv, columns: [ID, SECTION, K, SEQ, V, FINAL, FIRST]}\nintermediates:\n  - id: P\n    dataset: SELF\n    key: {K: K}\n    order_by: [SELF.SEQ]\n    keep: last\n    no_match: 0\n  - id: F\n    dataset: SELF\n    key: [K]\n    filter: \"SECTION = 'first'\"\n    order_by: [SEQ]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: K, type: str, derivation: SRC.K}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: V, type: int, derivation: SRC.V}\n  - {name: FINAL, type: int, derivation: P.V}\n  - {name: FIRST, type: int, derivation: F.V}\nrows:\n  - id: collected\n    dataset: SRC\n    derivations:\n      SECTION: {literal: first}\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.K]\n    derivations:\n      ID: {literal: g}\n      SECTION: {literal: second}\n      SEQ: {literal: 4}\n      V: {compute: {expr: \"P.V + 10\"}}\n  - id: added\n    dataset: OTHER\n    derivations:\n      ID: OTHER.ID\n      SECTION: {literal: third}\n      K: OTHER.K\n      SEQ: {literal: 9}\n      V: {compute: {expr: \"P.V + 100\"}}\n",
+      "duplicate_lookup_yaml": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, PARAM]\ninput:\n  SRC: {path: src.csv, types: {ID: int}}\n  DONOR: {path: donor.csv, types: {ID: float, SEQ: int}}\noutput: {path: result.csv, columns: [ID, PARAM, A, B]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: PARAM, type: str, derivation: {literal: only}}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}\n",
+      "lookup_filter_yaml": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: SRC\n    key: [ID]\n    filter: \"SRC.ELIG = 'Y'\"\n    order_by: [SRC.SEQ]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}\n",
+      "lookup_fallback_yaml": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {ID: int}}\n  DONOR: {path: donor.csv, types: {ID: int, SEQ: int}}\noutput: {path: result.csv, columns: [ID, A, B]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SELECT, type: str, derivation: SRC.SELECT}\n  - name: A\n    type: str\n    derivation:\n      case:\n        - when: \"SELECT = 'Y'\"\n          then: P.A\n        - otherwise: {literal: skip}\n  - name: B\n    type: str\n    derivation:\n      case:\n        - when: \"SELECT = 'Y'\"\n          then: P.B\n        - otherwise: {literal: skip}\n",
+      "source_selection_case_names": [
+        "adam-adae-protocol-review",
+        "schema-expressions",
+        "schema-predicates",
+        "sdtm-ae-seriousness",
+        "sdtm-mh-ongoing-conditions",
+        "sdtm-tr-tumor-measurements",
+        "sdtm-tu-tumor-identification",
+        "sdtm-ds-reasons"
+      ],
+      "parent_resolution_order": [
+        "spec_organization.yaml",
+        "spec_compound.yaml",
+        "spec_organization.yaml"
+      ],
+      "lookup_source_order": [
+        "DM",
+        "AE",
+        "MEDDRA"
+      ],
+      "floating_input_override": "path: input/lb.csv, types: {LBSTRESN: float}",
+      "unicode_case_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, UP, LOW, SENT, TITLE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: UP, type: str, derivation: {str_case: {source: SRC.TEXT, to: upper, missing: MiXeD}}}\n  - {name: LOW, type: str, derivation: {str_case: {source: SRC.TEXT, to: lower, missing: null}}}\n  - {name: SENT, type: str, derivation: {str_case: {source: SRC.TEXT, to: sentence, missing: null}}}\n  - {name: TITLE, type: str, derivation: {str_case: {source: SRC.TEXT, to: title, missing: null}}}\n",
+      "section_case_files": [
+        "src.csv",
+        "other.csv",
+        "result.csv"
+      ],
+      "ordered_donor_csv": "ID,TIME,A,B\n1,1,one,x\n1,3,three,\n2,9,hidden,hidden\n",
+      "aliased_parents_yaml": "schema_version: '1.0'\nparents: [../parent/base.yaml, ../parent/./base.yaml]\n",
+      "input_aliases": [
+        "FIRST",
+        "SECOND",
+        "THIRD"
+      ],
+      "rounding_type_error_yaml": "phase: validation\ncondition: incompatible_input_type\nspec_paths:\n  - columns.RNDVAL.derivation.round_half_away_from_zero.source\nrequirement: REQ-0418\ncontext:\n  source: SEX\n  expected: numeric\n  actual: str\n",
+      "integer_boundary_csv": "ID\n-9223372036854775808\n9223372036854775807\n",
+      "section_order_csv": "ID,SECTION,K,SEQ,V,FINAL,FIRST\na,first,x,2,5,115,5\nb,first,x,1,9,115,5\ng,second,x,4,15,115,5\nc,third,x,9,115,115,5\nd,third,x,9,115,115,5\n",
+      "duplicate_donor_csv": "SEQ,ID,A,B\n1,1,first,\n1,1,tied,second\n0,2,two,both\n",
+      "duplicate_lookup_csv": "ID,PARAM,A,B\n2,only,two,both\n1,only,first,\n3,only,,\n",
+      "lookup_first_clause": "    order_by: [DONOR.SEQ]\n    keep: first\n",
+      "filtered_donor_csv": "ID,SEQ,ELIG,A,B\n1,1,Y,early,x\n1,2,Y,last,\n2,1,N,hidden,hidden\n",
+      "filtered_lookup_csv": "ID,SEQ,A,B\n1,1,last,\n1,2,last,\n2,1,,\n",
+      "lookup_cutoff_yaml": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: \"D.TIME < SRC.CUT\"\n    order_by: [D.TIME]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}\n",
+      "lookup_cutoff_csv": "ID,SEQ,A,B\n1,1,one,x\n1,2,three,\n3,1,,\n1,3,,\n",
+      "lookup_alternative_yaml": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int, CUT: int}}\n  ALT: {path: alt.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: \"D.TIME < ALT.CUT\"\n    order_by: [D.TIME]\n    keep: last\n    no_match: null\nrows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, SEQ: ALT.SEQ, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}\n",
+      "fallback_donor_csv": "ID,SEQ,A,B\n1,1,first,\n1,2,second,present\n2,1,hidden,hidden\n",
+      "source_selection_modes": [
+        "source-selection",
+        "source-filter-scope",
+        "source-filter-mixed"
+      ],
+      "partial_date_columns": [
+        "REFDT",
+        "DOB_FIRST",
+        "DOB_LAST",
+        "DTMDT"
+      ],
+      "filtered_multiline_csv": "ID,SORT,KEEP,NOTE\na,5,N,first\nb,2,Y,\"two\nlines\"\nc,1,Y,last\n",
+      "fallback_lookup_csv": "ID,A,B\n1,fallback,\n2,skip,skip\n3,fallback,\n",
+      "issue_columns": [
+        "phase",
+        "condition",
+        "requirement",
+        "spec_paths",
+        "context"
+      ],
+      "phase_replay_cases": [
+        "grouped_source_phase",
+        "grouped_unknown_phase",
+        "record_unknown_phase",
+        "group_and_filter_order"
+      ],
+      "unicode_case_csv": "ID,UP,LOW,SENT,TITLE\n1,FOLLOW-UP,follow-up,Follow-up,Follow-Up\n2,\u00df\u0130\u00e9\ud83d\ude42ABC,\u00df\u0130\u00e9\ud83d\ude42abc,\u00df\u0130\u00e9\ud83d\ude42abc,\u00df\u0130\u00e9\ud83d\ude42Abc\n3,MiXeD,,,\n",
+      "row_driver_cases": [
+        "unknown-row-driver",
+        "omitted-row-driver",
+        "different-row-drivers",
+        "adam-adlb-end-of-treatment"
+      ],
+      "successful_case_names": [
+        "adam-adlb-ordered-sum",
+        "schema-window-functions",
+        "schema-inheritance",
+        "schema-lookup"
+      ],
+      "demographic_case_names": [
+        "negative-paired-dates",
+        "negative-not-missing-age",
+        "negative-implausible-age",
+        "negative-invalid-sex",
+        "negative-sex-code",
+        "negative-matches-bad-pattern"
+      ]
+    },
+    "file-resources": {
+      "issue_columns": [
+        "phase",
+        "condition",
+        "requirement",
+        "spec_paths",
+        "context"
+      ],
+      "alias_context_json": "{\"dataset\":\"SRC\",\"path\":\"alias.csv\"}",
+      "lookup_paths": {
+        "AE": "input/ae.csv",
+        "DM": "input/dm.csv",
+        "MEDDRA": "input/meddict.csv"
+      }
+    },
+    "public-environment": {
+      "original_case_names": [
+        "schema-functions",
+        "schema-non-finite",
+        "adam-adsl-bmi",
+        "adam-advs-percentiles"
+      ],
+      "unread_graph_files": [
+        "never-read.csv",
+        "leaf.csv",
+        "left.csv",
+        "right.csv",
+        "consumer.csv",
+        "wrong.csv"
+      ],
+      "inherited_directories": [
+        "entry",
+        "shared",
+        "outputs"
+      ],
+      "inherited_source_files": [
+        "entry/spec.yaml",
+        "shared/base.yaml",
+        "shared/environment.yaml"
+      ],
+      "terminology_directories": [
+        "entry",
+        "environment",
+        "terminology",
+        "outputs"
+      ],
+      "rounded_callback_csv": "ID,VALUE,DOUBLE,EMPTY,INT\n1,0.13,0.25,\"\",7\n2,-0.13,-0.25,\"\",-7\n3,2.67,5.35,\"\",0\n4,0.00,-0.01,\"\",9\n5,1.23,2.47,\"\",1\n6,2.35,4.69,\"\",2\n7,,,\"\",3\n8,25.00,50.00,\"\",4\n",
+      "invalid_significant_digits": [
+        "true",
+        "2.0",
+        "'2'"
+      ],
+      "quota_modes": [
+        "column",
+        "row",
+        "case"
+      ],
+      "invalid_source_system_versions": [
+        "null",
+        "true",
+        "1",
+        "1.5",
+        "''"
+      ],
+      "aliased_leaf_reference": "{P: {path: leaf.csv, schema: './leaf.yaml'}}",
+      "leaf_reference": "{P: {path: leaf.csv, schema: leaf.yaml}}",
+      "diamond_reference": "{L: {path: left.csv, schema: left.yaml}, R: {path: right.csv, schema: right.yaml}, Q: {path: right.csv, schema: './right.yaml'}}",
+      "callback_projection": ", columns: [ID, VALUE, DOUBLE, EMPTY, INT]",
+      "wrong_leaf_reference": "{P: {path: wrong.csv, schema: leaf.yaml}}",
+      "incompatible_leaf_reference": "{P: {path: leaf.csv, schema: leaf.yaml, types: {ID: int}}}",
+      "verification_pattern_path": "columns.VALUE.verifications[0].matches.pattern"
+    },
+    "verification-logs": {
+      "artifact_names": [
+        "adsl-checks.csv",
+        "adsl-warnings.csv",
+        "adsl.csv"
+      ],
+      "case_name": "schema-verification-log",
+      "evaluated_counts": [
+        "3",
+        "3",
+        "3",
+        "1"
+      ],
+      "fatal_outcomes": [
+        "held",
+        "violated"
+      ]
+    },
+    "producer-logs": {
+      "verification_producer_artifacts": [
+        "adsl-checks.csv",
+        "adsl-warnings.csv",
+        "adsl.csv",
+        "root-checks.csv",
+        "root-warnings.csv",
+        "root.csv"
+      ],
+      "diamond_names": [
+        "producer",
+        "left",
+        "right",
+        "root"
+      ],
+      "root_intermediate_yaml": "intermediates: [{id: SHARED, dataset: B, key: [ID], no_match: null}]\n",
+      "raw_source_reference": "{SRC: {path: input.csv, types: {ID: int}}}",
+      "verification_producer_aliases": "  A: {path: adsl.csv, schema: producer.yaml}\n  B: {path: adsl.csv, schema: ./producer.yaml}",
+      "producer_reference": "{P: {path: generated/producer.csv, schema: producer.yaml}}",
+      "diamond_reference": "{A: {path: generated/left.csv, schema: left.yaml}, B: {path: generated/right.csv, schema: right.yaml}}",
+      "aliased_producer_reference": "{A: {path: generated/producer.csv, schema: producer.yaml}, B: {path: generated/producer.csv, schema: ./producer.yaml}}",
+      "ids_decimal": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "9223372036854775807"
+      ],
+      "input_csv": "ID\n1\n2\n3\n4\n5\n6\n7\n9223372036854775807\n",
+      "offending_keys_json": "[{\"ID\":1},{\"ID\":2},{\"ID\":3},{\"ID\":4},{\"ID\":5},{\"ID\":6},{\"ID\":7},{\"ID\":9223372036854775807}]",
+      "golden_csv": {
+        "producer": {
+          "warning": "LOG_VERSION,ARTIFACT,SEVERITY,CONDITION,REQUIREMENT,SPEC_PATH,VERIFICATION_ID,FAILURE_COUNT,OFFENDING_KEYS,DETAILS\n1.0,generated/producer.csv,warning,range_failed,REQ-0377,columns.ID.verifications[0].range,producer-range,8,\"[{\"\"ID\"\":1},{\"\"ID\"\":2},{\"\"ID\"\":3},{\"\"ID\"\":4},{\"\"ID\"\":5},{\"\"ID\"\":6},{\"\"ID\"\":7},{\"\"ID\"\":9223372036854775807}]\",\"{\"\"column\"\":\"\"ID\"\"}\"\n",
+          "verification": {
+            "warning": "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n1.0,generated/producer.csv,columns.ID.verifications[0].range,producer-range,range,ID,REQ-0377,warning,violated,range_failed,8,8,\"{\"\"column\"\":\"\"ID\"\"}\"\n",
+            "error": "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n1.0,generated/producer.csv,columns.ID.verifications[0].range,producer-range,range,ID,REQ-0377,error,violated,range_failed,8,8,\"{\"\"column\"\":\"\"ID\"\"}\"\n"
+          }
+        },
+        "left": {
+          "warning": "LOG_VERSION,ARTIFACT,SEVERITY,CONDITION,REQUIREMENT,SPEC_PATH,VERIFICATION_ID,FAILURE_COUNT,OFFENDING_KEYS,DETAILS\n1.0,generated/left.csv,warning,range_failed,REQ-0377,columns.ID.verifications[0].range,left-range,8,\"[{\"\"ID\"\":1},{\"\"ID\"\":2},{\"\"ID\"\":3},{\"\"ID\"\":4},{\"\"ID\"\":5},{\"\"ID\"\":6},{\"\"ID\"\":7},{\"\"ID\"\":9223372036854775807}]\",\"{\"\"column\"\":\"\"ID\"\"}\"\n",
+          "verification": {
+            "warning": "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n1.0,generated/left.csv,columns.ID.verifications[0].range,left-range,range,ID,REQ-0377,warning,violated,range_failed,8,8,\"{\"\"column\"\":\"\"ID\"\"}\"\n",
+            "error": "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n1.0,generated/left.csv,columns.ID.verifications[0].range,left-range,range,ID,REQ-0377,error,violated,range_failed,8,8,\"{\"\"column\"\":\"\"ID\"\"}\"\n"
+          }
+        },
+        "right": {
+          "warning": "LOG_VERSION,ARTIFACT,SEVERITY,CONDITION,REQUIREMENT,SPEC_PATH,VERIFICATION_ID,FAILURE_COUNT,OFFENDING_KEYS,DETAILS\n1.0,generated/right.csv,warning,range_failed,REQ-0377,columns.ID.verifications[0].range,right-range,8,\"[{\"\"ID\"\":1},{\"\"ID\"\":2},{\"\"ID\"\":3},{\"\"ID\"\":4},{\"\"ID\"\":5},{\"\"ID\"\":6},{\"\"ID\"\":7},{\"\"ID\"\":9223372036854775807}]\",\"{\"\"column\"\":\"\"ID\"\"}\"\n",
+          "verification": {
+            "warning": "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n1.0,generated/right.csv,columns.ID.verifications[0].range,right-range,range,ID,REQ-0377,warning,violated,range_failed,8,8,\"{\"\"column\"\":\"\"ID\"\"}\"\n",
+            "error": "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n1.0,generated/right.csv,columns.ID.verifications[0].range,right-range,range,ID,REQ-0377,error,violated,range_failed,8,8,\"{\"\"column\"\":\"\"ID\"\"}\"\n"
+          }
+        },
+        "root": {
+          "warning": "LOG_VERSION,ARTIFACT,SEVERITY,CONDITION,REQUIREMENT,SPEC_PATH,VERIFICATION_ID,FAILURE_COUNT,OFFENDING_KEYS,DETAILS\n1.0,generated/root.csv,warning,range_failed,REQ-0377,columns.ID.verifications[0].range,\u00e9\ud834\udd1e,8,\"[{\"\"ID\"\":1},{\"\"ID\"\":2},{\"\"ID\"\":3},{\"\"ID\"\":4},{\"\"ID\"\":5},{\"\"ID\"\":6},{\"\"ID\"\":7},{\"\"ID\"\":9223372036854775807}]\",\"{\"\"column\"\":\"\"ID\"\"}\"\n",
+          "verification": {
+            "warning": "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n1.0,generated/root.csv,columns.ID.verifications[0].range,\u00e9\ud834\udd1e,range,ID,REQ-0377,warning,violated,range_failed,8,8,\"{\"\"column\"\":\"\"ID\"\"}\"\n",
+            "error": "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n1.0,generated/root.csv,columns.ID.verifications[0].range,\u00e9\ud834\udd1e,range,ID,REQ-0377,error,violated,range_failed,8,8,\"{\"\"column\"\":\"\"ID\"\"}\"\n"
+          }
+        }
+      }
+    },
+    "public-define": {
+      "retained_source_files": [
+        "spec.yaml",
+        "submission-spec.yaml",
+        "environment.yaml"
+      ],
+      "issue_columns": [
+        "phase",
+        "condition",
+        "requirement",
+        "spec_paths",
+        "context"
+      ],
+      "lb_columns": [
+        "DOMAIN",
+        "STUDYID",
+        "USUBJID",
+        "LBSEQ",
+        "LBTESTCD",
+        "LBTEST",
+        "LBORRES",
+        "LBORRESU",
+        "LBSTRESN",
+        "LBSTRESU",
+        "LBDTC"
+      ],
+      "ae_columns": [
+        "DOMAIN",
+        "STUDYID",
+        "USUBJID",
+        "AESEQ",
+        "AETERM",
+        "AEDECOD",
+        "AEBODSYS"
+      ],
+      "vs_columns": [
+        "DOMAIN",
+        "STUDYID",
+        "USUBJID",
+        "VSSEQ",
+        "VSTESTCD",
+        "VSORRES",
+        "VSDTC",
+        "EPOCH"
+      ],
+      "numeric_original_metadata": "core: Exp\n      role: Record Qualifier\n      length: 3",
+      "numeric_completion_metadata": "core: Exp\n      role: Record Qualifier\n      length: 3\n      significant_digits: 3\n      codelist: AGE_VALUES",
+      "numeric_codelist_yaml": "- codelists:\n  - id: AGE_VALUES\n    name: Ages\n    data_type: float\n    items: [{value: 34}, {value: 67}, {value: 52}]\nsdtm:\n",
+      "created": "2026-09-11T00:00:00"
+    },
+    "public-contract": {
+      "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: SRC.VALUE}\noutput: {path: output.csv, columns: [ID, VALUE]}\n",
+      "issue_columns": [
+        "phase",
+        "condition",
+        "requirement",
+        "spec_paths",
+        "context"
+      ],
+      "owned_view_names": [
+        "output",
+        "issues",
+        "verification_log",
+        "warning_log"
+      ],
+      "interrupt_message": "public contract activation interrupt",
+      "define_argument_names": [
+        "environment",
+        "standard",
+        "created"
+      ],
+      "log_output_yaml": "columns: [ID, VALUE], verification_log: checks.csv, warning_log: warnings.csv}",
+      "empty_text_column": "  - {name: EMPTY, type: str, derivation: {literal: ''}}\noutput: {",
+      "unreached_row_count_yaml": "verifications:\n  - row_count: {min: 0, id: unreached}\noutput: {",
+      "integer_column_yaml": "  - {name: VALUE, type: int, derivation: SRC.VALUE}",
+      "fatal_integer_column_yaml": "  - name: VALUE\n    type: int\n    derivation: SRC.VALUE\n    verifications:\n      - range: {max: 0, severity: warning, id: warn}\n      - range: {max: 0, severity: error, id: fatal}",
+      "python_input_csv": "ID,VALUE\na,-9223372036854775808\nb,9223372036854775807\nc,\n",
+      "python_values_decimal": [
+        "-9223372036854775808",
+        "9223372036854775807",
+        null
+      ],
+      "r_input_csv": "ID,VALUE\na,-9223372036854775808\nb,9223372036854775807\nc,9007199254740993\nd,7\ne,\n",
+      "r_values_decimal": [
+        "-9223372036854775808",
+        "9223372036854775807",
+        "9007199254740993",
+        "7",
+        null
+      ]
+    },
+    "public-grammar": {
+      "grammar_conditions": {
+        "aggregate": [
+          "invalid_aggregate_expression",
+          "nested_reduction",
+          "prohibited_function",
+          "prohibited_construct"
+        ],
+        "numeric": [
+          "invalid_numeric_expression",
+          "prohibited_function",
+          "prohibited_construct"
+        ],
+        "predicate": [
+          "invalid_predicate",
+          "integer_overflow"
+        ],
+        "string-template": [
+          "invalid_string_template"
+        ]
+      }
+    }
+  }
+}

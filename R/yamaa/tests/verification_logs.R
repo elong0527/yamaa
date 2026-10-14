@@ -7,6 +7,10 @@ if(nzchar(rm_path)) invisible(file.symlink(rm_path,file.path(runtime_path,"rm"))
 Sys.setenv(PATH=runtime_path)
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 library(yamaa)
+host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
+  system.file("host-fixtures",package="yamaa",mustWork=TRUE)
+source(file.path(host_fixture_root,"reader.R"),local=TRUE)
+host_truth <- read_host_fixture(host_fixture_root,"verification-logs")
 root <- system.file("specification-original",package="yamaa",mustWork=TRUE)
 rawfile <- function(path) readBin(path,"raw",n=file.info(path)$size)
 observations <- get(".domain_observations",envir=asNamespace("yamaa"))
@@ -19,7 +23,7 @@ json_text <- function(value) {
   },character(1L),USE.NAMES=FALSE)
   paste0('"',paste0(escaped,collapse=""),'"')
 }
-case_name <- "schema-verification-log"
+case_name <- host_truth[["case_name"]]
 directory <- tempfile("public-native-logs-");dir.create(directory)
 stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
 case <- file.path(directory,case_name)
@@ -34,7 +38,7 @@ entry_field <- paste0('"specification":',json_text(entry))
 expected <- gsub('"specification":"spec.yaml"',entry_field,expected,fixed=TRUE)
 unsaved <- sub('^\\{"artifacts":.*,"backend":','{"artifacts":[],"backend":',expected)
 stopifnot(identical(rawToChar(observations(built)),unsaved),nrow(built$issues)==0L)
-names <- c("adsl-checks.csv","adsl-warnings.csv","adsl.csv")
+names <- fixture_strings(host_truth[["artifact_names"]])
 views <- list(built$verification_log,built$warning_log,built$output)
 for(index in seq_along(names)) {
   truth <- read.csv(file.path(case,"expected",names[[index]]),colClasses="character",na.strings="",check.names=FALSE)
@@ -65,7 +69,7 @@ if(nzchar(report_directory)) {
 }
 held <- built$verification_log
 rm(built);gc()
-stopifnot(nrow(held)==4L,identical(as.character(held$EVALUATED_COUNT),c("3","3","3","1")))
+stopifnot(nrow(held)==4L,identical(as.character(held$EVALUATED_COUNT),fixture_strings(host_truth[["evaluated_counts"]])))
 cat(case_name,"public domain complete Rust run report and successful save observations passed\n")
 
 # Fatal checks retain only the explicit diagnostic publication capability.
@@ -75,7 +79,7 @@ writeBin(charToRaw(sub("severity: warning","severity: error",source,fixed=TRUE))
 stopifnot(file.copy(file.path(root,"cases",case_name,"input","dm.csv"),file.path(case,"input","dm.csv")))
 failed <- yamaa_domain(entry)
 stopifnot(is.null(failed$output),is.null(failed$warning_log),nrow(failed$verification_log)==2L,
-  identical(failed$verification_log$OUTCOME,c("held","violated")),identical(failed$issues$condition,"range_failed"))
+  identical(failed$verification_log$OUTCOME,fixture_strings(host_truth[["fatal_outcomes"]])),identical(failed$issues$condition,"range_failed"))
 issues <- failed$issues
 for(name in names) writeBin(charToRaw("sentinel"),file.path(case,name))
 removed <- c(entry,file.path(case,"input","dm.csv"))

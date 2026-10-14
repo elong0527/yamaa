@@ -1,5 +1,9 @@
 # Independent installed R Define witnesses. The runtime has no Python executable.
 library(yamaa)
+host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
+  system.file("host-fixtures",package="yamaa",mustWork=TRUE)
+source(file.path(host_fixture_root,"reader.R"),local=TRUE)
+host_truth <- read_host_fixture(host_fixture_root,"public-define")
 fixtures <- system.file("define-fixtures", package = "yamaa", mustWork = TRUE)
 artifacts <- get(".define_artifacts", envir = asNamespace("yamaa"))
 rawfile <- function(path) readBin(path, "raw", n = file.info(path)$size)
@@ -15,7 +19,7 @@ fixture <- function(name, published = FALSE) {
 }
 check_issues <- function(result, empty = TRUE) {
   frame <- result$issues
-  stopifnot(is.data.frame(frame), identical(names(frame), c("phase", "condition", "requirement", "spec_paths", "context")),
+  stopifnot(is.data.frame(frame), identical(names(frame), fixture_strings(host_truth[["issue_columns"]])),
     all(vapply(frame[c("phase", "condition", "requirement", "context")], is.character, logical(1))), is.list(frame$spec_paths))
   if (empty) stopifnot(nrow(frame) == 0L)
 }
@@ -30,7 +34,7 @@ Sys.setenv(PATH = native_path)
 stopifnot(!nzchar(Sys.which("python")), !nzchar(Sys.which("python3")))
 
 root <- fixture("sdtm-dm-metadata", TRUE)
-result <- yamaa_define(file.path(root, "environment.yaml"), "sdtm", created = "2026-09-11T00:00:00")
+result <- yamaa_define(file.path(root, "environment.yaml"), "sdtm", created = host_truth[["created"]])
 check_issues(result)
 held <- artifacts(result)
 stopifnot(length(held) == 2L, identical(vapply(held, `[[`, character(1), "path"), c("dm.json", "define.xml")),
@@ -45,7 +49,7 @@ unlink(root, recursive = TRUE)
 # The original LB spec and expected CSV remain immutable. The separate metadata
 # completion explicitly supplies SDTM-valid sources and complete column facts.
 root <- fixture("sdtm-lb-metadata", TRUE)
-result <- yamaa_define(file.path(root, "environment.yaml"), "sdtm", created = "2026-09-11T00:00:00")
+result <- yamaa_define(file.path(root, "environment.yaml"), "sdtm", created = host_truth[["created"]])
 check_issues(result); held <- artifacts(result)
 stopifnot(length(held) == 2L, identical(vapply(held, `[[`, character(1), "path"), c("lb.json", "define.xml")))
 xml <- rawToChar(held[[2L]]$bytes)
@@ -75,7 +79,7 @@ stopifnot(grepl('"records": 3', json, fixed = TRUE))
 # with the immutable CSV, allowing equivalent JSON numeric spellings.
 json_lines <- strsplit(json, "\n", fixed = TRUE)[[1L]]
 column_lines <- grep('^[[:space:]]*\\{[[:space:]]*"itemOID"', json_lines, value = TRUE)
-column_names <- c("DOMAIN", "STUDYID", "USUBJID", "LBSEQ", "LBTESTCD", "LBTEST", "LBORRES", "LBORRESU", "LBSTRESN", "LBSTRESU", "LBDTC")
+column_names <- fixture_strings(host_truth[["lb_columns"]])
 column_types <- c(rep("string", 3L), "integer", rep("string", 4L), "float", "string", "date")
 field <- function(name, lines) {
   pattern <- paste0('.*"', name, '"[[:space:]]*:[[:space:]]*"([^"]*)".*')
@@ -94,7 +98,7 @@ expected <- read.csv(file.path(fixtures, "sdtm-lb-metadata/expected/lb.csv"),
   colClasses = types, check.names = FALSE)
 stopifnot(identical(names(expected), column_names),
   identical(unname(as.list(actual)), unname(as.list(expected))))
-inputs <- file.path(root, c("spec.yaml", "submission-spec.yaml", "environment.yaml"))
+inputs <- file.path(root, fixture_strings(host_truth[["retained_source_files"]]))
 stopifnot(unlink(inputs) == 0L, !any(file.exists(inputs)))
 writeLines("changed after preparation", file.path(root, "lb.csv"))
 stopifnot(isTRUE(result$save()), identical(result$save(), FALSE))
@@ -129,7 +133,7 @@ for (mode in c("original source", "value codelist", "metadata only", "arbitrary 
       }
     }
   }
-  result <- yamaa_define(file.path(root, "environment.yaml"), "sdtm", created = "2026-09-11T00:00:00")
+  result <- yamaa_define(file.path(root, "environment.yaml"), "sdtm", created = host_truth[["created"]])
   check_issues(result, metadata_only)
   if (mode == "original source") {
     stopifnot(any(result$issues$requirement == "REQ-0919" & result$issues$condition == "origin_source_not_admitted"), refused(result))
@@ -146,8 +150,8 @@ for (mode in c("original source", "value codelist", "metadata only", "arbitrary 
 cat("PASS: independent LB value metadata, original-source rejection and selected-value codelist\n")
 
 for (case in list(
-  list(name = "sdtm-ae-coding", id = "AE", columns = c("DOMAIN", "STUDYID", "USUBJID", "AESEQ", "AETERM", "AEDECOD", "AEBODSYS"), context = "Submission", codelist = "MEDDRA", acrf = TRUE),
-  list(name = "sdtm-vs-epoch-from-subject-elements", id = "VS", columns = c("DOMAIN", "STUDYID", "USUBJID", "VSSEQ", "VSTESTCD", "VSORRES", "VSDTC", "EPOCH"), context = "Other", codelist = "EPOCH", acrf = FALSE))) {
+  list(name = "sdtm-ae-coding", id = "AE", columns = fixture_strings(host_truth[["ae_columns"]]), context = "Submission", codelist = "MEDDRA", acrf = TRUE),
+  list(name = "sdtm-vs-epoch-from-subject-elements", id = "VS", columns = fixture_strings(host_truth[["vs_columns"]]), context = "Other", codelist = "EPOCH", acrf = FALSE))) {
   root <- fixture(case$name)
   result <- yamaa_define(file.path(root, "environment.yaml"), "sdtm", created = "2026-09-30T00:00:00")
   check_issues(result); held <- artifacts(result); stopifnot(length(held) == 1L)
@@ -169,19 +173,19 @@ for (case in list(
 }
 
 root <- fixture("sdtm-dm-metadata")
-result <- yamaa_define(file.path(root, "environment.yaml"), "sdtm", created = "2026-09-11T00:00:00")
+result <- yamaa_define(file.path(root, "environment.yaml"), "sdtm", created = host_truth[["created"]])
 check_issues(result, FALSE)
 stopifnot("producer_contract_mismatch" %in% result$issues$condition, "REQ-0535" %in% result$issues$requirement, refused(result), !file.exists(file.path(root, "dm.json")), !file.exists(file.path(root, "define.xml")))
 environment <- file.path(root, "environment.yaml")
 writeLines(gsub("dataset_json: true", "dataset_json: false", readLines(environment), fixed = TRUE), environment)
-result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00"); check_issues(result)
+result <- yamaa_define(environment, "sdtm", created = host_truth[["created"]]); check_issues(result)
 writeLines(gsub("name: SDTMIG", "name: ADaMIG", readLines(environment), fixed = TRUE), environment)
-result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00")
+result <- yamaa_define(environment, "sdtm", created = host_truth[["created"]])
 stopifnot("unknown_standard_family" %in% result$issues$condition, refused(result), !file.exists(file.path(root, "define.xml")))
 unlink(root, recursive = TRUE)
 
 root <- fixture("sdtm-dm-metadata", TRUE)
-result <- yamaa_define(file.path(root, "environment.yaml"), "sdtm", created = "2026-09-11T00:00:00"); check_issues(result)
+result <- yamaa_define(file.path(root, "environment.yaml"), "sdtm", created = host_truth[["created"]]); check_issues(result)
 dir.create(file.path(root, "define.xml"))
 stopifnot(refused(result), !file.exists(file.path(root, "dm.json")), identical(result$issues$phase, "engine"), identical(result$issues$condition, "engine_rejected"),
   all(is.na(result$issues$requirement)), grepl("publication_target_admission", result$issues$context, fixed = TRUE), grepl("cause", result$issues$context, fixed = TRUE),
@@ -191,11 +195,11 @@ unlink(root, recursive = TRUE)
 root <- fixture("sdtm-dm-metadata", TRUE)
 environment <- file.path(root, "environment.yaml")
 lines <- readLines(environment); writeLines(lines[!grepl("source_system_version:", lines, fixed = TRUE)], environment)
-result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00"); check_issues(result)
+result <- yamaa_define(environment, "sdtm", created = host_truth[["created"]]); check_issues(result)
 version <- yamaa:::.core_version()
 stopifnot(grepl(paste0('SourceSystemVersion="', version, '"'), rawToChar(artifacts(result)[[2L]]$bytes), fixed = TRUE))
 writeLines(gsub("name: CDISC/NCI", "name: InvalidStandard", readLines(environment), fixed = TRUE), environment)
-result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00")
+result <- yamaa_define(environment, "sdtm", created = host_truth[["created"]])
 stopifnot("REQ-1026" %in% result$issues$requirement, refused(result), !file.exists(file.path(root, "define.xml")))
 unlink(root, recursive = TRUE)
 
@@ -208,17 +212,17 @@ lines <- lines[-(metadata + 0:3)]
 lines <- lines[!grepl("^  file_oid:", lines)]
 writeLines(c(lines, "adam:", "  standard: {name: ADaMIG, version: '1.3', status: Final}",
   "  specs: [missing-other-section.yaml]", "  define: adam.xml"), environment)
-result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00"); check_issues(result)
+result <- yamaa_define(environment, "sdtm", created = host_truth[["created"]]); check_issues(result)
 xml <- rawToChar(artifacts(result)[[2L]]$bytes)
 stopifnot(grepl('FileOID="STUDY01.sdtm.Define-XML_2.1"', xml, fixed = TRUE),
   grepl('OID="MDV.STUDY01.sdtm" Name="STUDY01 sdtm metadata"', xml, fixed = TRUE), !file.exists(file.path(root, "adam.xml")))
 lines <- readLines(environment)
 acrf <- which(lines == "  - id: acrf"); stopifnot(length(acrf) == 1L)
 writeLines(lines[-(acrf + 0:3)], environment)
-result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00")
+result <- yamaa_define(environment, "sdtm", created = host_truth[["created"]])
 stopifnot("origin_document_missing" %in% result$issues$condition, refused(result), !file.exists(file.path(root, "dm.json")))
 writeLines(lines[lines != "    alias: C66734"], environment)
-result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00")
+result <- yamaa_define(environment, "sdtm", created = host_truth[["created"]])
 stopifnot("REQ-1004" %in% result$issues$requirement, refused(result), !file.exists(file.path(root, "define.xml")))
 unlink(root, recursive = TRUE)
 
@@ -231,12 +235,12 @@ writeLines(c("schema_version: '1.0'", "parents: ../parents/base.yaml"), file.pat
 environment <- file.path(root, "environment.yaml")
 writeLines(gsub("define: define.xml", "define: artifacts/define.xml", gsub("  - spec.yaml", "  - children/spec.yaml", readLines(environment), fixed = TRUE), fixed = TRUE), environment)
 stopifnot(file.copy(file.path(fixtures, "sdtm-dm-metadata/expected/dm.csv"), file.path(root, "artifacts/dm.csv")))
-result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00"); check_issues(result)
+result <- yamaa_define(environment, "sdtm", created = host_truth[["created"]]); check_issues(result)
 stopifnot(grepl('xlink:href="dm.json"', rawToChar(artifacts(result)[[2L]]$bytes), fixed = TRUE),
   isTRUE(result$save()), file.exists(file.path(root, "artifacts/dm.json")), !file.exists(file.path(root, "dm.json")))
 previous <- rawfile(file.path(root, "artifacts/define.xml"))
 writeLines(gsub("values: [F, M, U]", "values: [F, M]", spec, fixed = TRUE), file.path(root, "parents/base.yaml"))
-result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00")
+result <- yamaa_define(environment, "sdtm", created = host_truth[["created"]])
 stopifnot("codelist_values_conflict" %in% result$issues$condition, "REQ-0955" %in% result$issues$requirement,
   refused(result), identical(rawfile(file.path(root, "artifacts/define.xml")), previous))
 unlink(root, recursive = TRUE)
@@ -245,18 +249,18 @@ dir.create(file.path(root, "artifacts"))
 spec_path <- file.path(root, "spec.yaml"); spec <- readLines(spec_path)
 writeLines(gsub("path: dm.csv", "path: artifacts/dm.csv", spec, fixed = TRUE), spec_path)
 environment <- file.path(root, "environment.yaml")
-result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00")
+result <- yamaa_define(environment, "sdtm", created = host_truth[["created"]])
 stopifnot("REQ-1229" %in% result$issues$requirement, refused(result), !file.exists(file.path(root, "define.xml")))
 writeLines(spec, spec_path)
 csv <- readLines(file.path(fixtures, "sdtm-dm-metadata/expected/dm.csv"))
 writeLines(gsub("STUDYID,USUBJID", "USUBJID,STUDYID", csv, fixed = TRUE), file.path(root, "dm.csv"))
-result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00")
+result <- yamaa_define(environment, "sdtm", created = host_truth[["created"]])
 stopifnot("REQ-0535" %in% result$issues$requirement, refused(result))
 writeLines(gsub("STUDYID", "WRONG", csv, fixed = TRUE), file.path(root, "dm.csv"))
-result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00")
+result <- yamaa_define(environment, "sdtm", created = host_truth[["created"]])
 stopifnot("REQ-0535" %in% result$issues$requirement, refused(result), !file.exists(file.path(root, "define.xml")))
 writeLines(gsub(",F,USA", ",Z,USA", csv, fixed = TRUE), file.path(root, "dm.csv"))
-result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00")
+result <- yamaa_define(environment, "sdtm", created = host_truth[["created"]])
 rows <- result$issues[result$issues$requirement == "REQ-0957", , drop = FALSE]
 stopifnot(nrow(rows) == 1L, rows$phase == "verification", grepl('"value":"Z"', rows$context, fixed = TRUE),
   grepl("CATH-UCSD-0001", rows$context, fixed = TRUE), refused(result), !file.exists(file.path(root, "dm.json")))
@@ -266,13 +270,13 @@ root <- fixture("sdtm-dm-metadata", TRUE)
 spec_path <- file.path(root, "spec.yaml")
 spec <- paste(readLines(spec_path), collapse = "\n")
 spec <- gsub("name: AGE\n    type: int", "name: AGE\n    type: float", spec, fixed = TRUE)
-spec <- gsub("core: Exp\n      role: Record Qualifier\n      length: 3", "core: Exp\n      role: Record Qualifier\n      length: 3\n      significant_digits: 3\n      codelist: AGE_VALUES", spec, fixed = TRUE)
+spec <- gsub(host_truth[["numeric_original_metadata"]], host_truth[["numeric_completion_metadata"]], spec, fixed = TRUE)
 writeLines(spec, spec_path)
 environment <- file.path(root, "environment.yaml")
 source <- paste(readLines(environment), collapse = "\n")
-source <- gsub("sdtm:\n", "- codelists:\n  - id: AGE_VALUES\n    name: Ages\n    data_type: float\n    items: [{value: 34}, {value: 67}, {value: 52}]\nsdtm:\n", source, fixed = TRUE)
+source <- gsub("sdtm:\n", host_truth[["numeric_codelist_yaml"]], source, fixed = TRUE)
 writeLines(source, environment)
-result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00"); check_issues(result)
+result <- yamaa_define(environment, "sdtm", created = host_truth[["created"]]); check_issues(result)
 stopifnot(grepl('"name": "AGE", "label": "Age", "dataType": "float"', rawToChar(artifacts(result)[[1L]]$bytes), fixed = TRUE))
 unlink(root, recursive = TRUE)
 root <- fixture("sdtm-dm-metadata", TRUE)
@@ -286,7 +290,7 @@ if (file.exists(file.path(root, "DM.JSON"))) {
   define_sentinel <- file.path(root, "define.xml")
   writeBin(charToRaw("original Define sentinel"), define_sentinel)
   previous_names <- sort(list.files(root, all.files = TRUE, no.. = TRUE))
-  result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00")
+  result <- yamaa_define(environment, "sdtm", created = host_truth[["created"]])
   stopifnot(identical(result$issues$phase, "validation"), identical(result$issues$condition, "dataset_json_path_collision"), identical(result$issues$requirement, "REQ-1226"),
     grepl("dm.json", result$issues$context, fixed = TRUE), grepl("DM.json", result$issues$context, fixed = TRUE), refused(result),
     identical(rawfile(sentinel), charToRaw("original publication sentinel")),

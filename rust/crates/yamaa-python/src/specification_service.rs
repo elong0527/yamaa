@@ -157,6 +157,23 @@ pub(super) fn captured_modules(
     entry: usize,
     root: &str,
 ) -> PyResult<std::sync::Arc<CapturedSchema>> {
+    captured_modules_mode(modules, entry, root, false)
+}
+
+pub(super) fn captured_metadata_modules(
+    modules: &Bound<'_, PyList>,
+    entry: usize,
+    root: &str,
+) -> PyResult<std::sync::Arc<CapturedSchema>> {
+    captured_modules_mode(modules, entry, root, true)
+}
+
+fn captured_modules_mode(
+    modules: &Bound<'_, PyList>,
+    entry: usize,
+    root: &str,
+    metadata: bool,
+) -> PyResult<std::sync::Arc<CapturedSchema>> {
     let limits = Limits::default();
     let invalid = || {
         pyo3::exceptions::PyValueError::new_err(
@@ -203,8 +220,16 @@ pub(super) fn captured_modules(
             })
         })
         .collect::<PyResult<Vec<_>>>()?;
-    CapturedSchema::admit_root(sources, entry, root, limits)
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(capture_failure(&e)))
+    // Complete carrier admission above precedes these metadata-only diagnostic
+    // snapshots. They expose source identities/one offending scalar, not documents.
+    let retained = metadata.then(|| sources.clone());
+    CapturedSchema::admit_root(sources, entry, root, limits).map_err(|e| {
+        pyo3::exceptions::PyValueError::new_err(if metadata {
+            yamaa_adapters::schema_metadata::capture_failure(&e, retained.as_deref().unwrap_or(&[]))
+        } else {
+            capture_failure(&e)
+        })
+    })
 }
 
 pub(super) fn from_document(

@@ -8,10 +8,14 @@ if(nzchar(rm_path)) invisible(file.symlink(rm_path,file.path(runtime_path,"rm"))
 Sys.setenv(PATH=runtime_path)
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 library(yamaa)
+host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
+  system.file("host-fixtures",package="yamaa",mustWork=TRUE)
+source(file.path(host_fixture_root,"reader.R"),local=TRUE)
+host_truth <- read_host_fixture(host_fixture_root,"original-specifications")
 root <- system.file("specification-original", package="yamaa", mustWork=TRUE)
 source(file.path(root,"issue-frame-truth.R"),local=TRUE)
 check_issue_frame <- function(actual,expected) {
-  stopifnot(is.data.frame(actual),identical(names(actual),c("phase","condition","requirement","spec_paths","context")))
+  stopifnot(is.data.frame(actual),identical(names(actual),fixture_strings(host_truth[["issue_columns"]])))
   stopifnot(nrow(actual)==length(expected$phase),identical(lapply(actual,identity),expected))
   stopifnot(all(vapply(actual[c("phase","condition","requirement","context")],is.character,logical(1))),is.list(actual$spec_paths))
 }
@@ -48,7 +52,7 @@ for(i in seq_len(nrow(decode_truth))) {
   failure <- tryCatch(prepare_entry("source.yaml",bytes,no_port,no_port,no_port),error=identity)
   stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),decode_truth$expected[[i]]))
 }
-for(case_name in c("negative-zero-division","negative-integer-overflow","adam-adlb-ordered-sum","schema-window-functions","schema-inheritance","schema-lookup","negative-formula-flag","negative-row-aggregate","negative-row-no-prior","negative-source-missing-field","negative-source-trivial-filter","negative-paired-dates","negative-not-missing-age","negative-implausible-age","negative-invalid-sex","negative-sex-code","negative-matches-bad-pattern")) {
+for(case_name in fixture_strings(host_truth[["original_case_names"]])) {
   case <- file.path(root,"cases",case_name)
   specification <- if(case_name=="schema-inheritance") "spec_study.yaml" else "spec.yaml"
   if(case_name=="schema-inheritance") {
@@ -71,14 +75,14 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
       written
     }
     handle <- inherited_prepare(normalizePath(file.path(case,specification),winslash="/"),rawfile(file.path(case,specification)),canonicalize,parent_capture,rebase)
-    stopifnot(identical(parent_reads,c("spec_organization.yaml","spec_compound.yaml")),identical(parent_resolutions,c("spec_organization.yaml","spec_compound.yaml","spec_organization.yaml")))
+    stopifnot(identical(parent_reads,c("spec_organization.yaml","spec_compound.yaml")),identical(parent_resolutions,fixture_strings(host_truth[["parent_resolution_order"]])))
   } else {
     no_parent <- function(...) stop("standalone preparation invoked a parent port")
     handle <- get(".prepare_document",envir=asNamespace("yamaa"))(
       specification,rawfile(file.path(case,specification)),no_parent,no_parent,no_parent)
   }
   gc()
-  inputs <- if(case_name=="schema-lookup") c(DM="input/dm.csv",AE="input/ae.csv",MEDDRA="input/meddict.csv") else if(case_name %in% c("schema-window-functions","negative-row-no-prior")) c(VS="input/vs.csv") else if(case_name %in% c("negative-source-missing-field","negative-source-trivial-filter")) c(ODM="input/odm.csv") else if(case_name %in% c("negative-paired-dates","negative-not-missing-age","negative-implausible-age","negative-invalid-sex","negative-sex-code","negative-matches-bad-pattern")) c(DM="input/dm.csv") else c(LB="input/lb.csv")
+  inputs <- if(case_name=="schema-lookup") c(DM="input/dm.csv",AE="input/ae.csv",MEDDRA="input/meddict.csv") else if(case_name %in% c("schema-window-functions","negative-row-no-prior")) c(VS="input/vs.csv") else if(case_name %in% c("negative-source-missing-field","negative-source-trivial-filter")) c(ODM="input/odm.csv") else if(case_name %in% fixture_strings(host_truth[["demographic_case_names"]])) c(DM="input/dm.csv") else c(LB="input/lb.csv")
   stopifnot(identical(yamaa:::specification_source(handle),list(name=names(inputs)[[1L]],path=unname(inputs[[1L]]))))
   state <- new.env(parent=emptyenv()); state$reads <- 0L; state$requests <- character(); state$content <- list()
   capture <- function(name,path,maximum) {
@@ -99,7 +103,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   published <- 0L
   directory <- tempfile("original-published-"); dir.create(directory)
   publish <- function(path,content) {
-    stopifnot(case_name %in% c("adam-adlb-ordered-sum","schema-window-functions","schema-inheritance","schema-lookup"),path==if(case_name=="schema-lookup") "adsl.csv" else if(case_name=="schema-window-functions") "advs.csv" else "adlb.csv")
+    stopifnot(case_name %in% fixture_strings(host_truth[["successful_case_names"]]),path==if(case_name=="schema-lookup") "adsl.csv" else if(case_name=="schema-window-functions") "advs.csv" else "adlb.csv")
     stopifnot(identical(content,rawfile(file.path(case,"expected",path))))
     pending <- file.path(directory,"candidate.csv")
     writeBin(content,pending)
@@ -114,7 +118,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
     stopifnot(identical(report,expected))
   }
   stopifnot(state$reads==length(inputs),identical(state$requests,rep(names(inputs),2L)))
-  stopifnot(published==if(case_name %in% c("adam-adlb-ordered-sum","schema-window-functions","schema-inheritance","schema-lookup")) 2L else 0L)
+  stopifnot(published==if(case_name %in% fixture_strings(host_truth[["successful_case_names"]])) 2L else 0L)
   # Result construction does not publish; later saves retain bytes and never read.
   build <- get(".specification_build",envir=asNamespace("yamaa"))
   build_output <- get(".build_output",envir=asNamespace("yamaa"))
@@ -373,14 +377,14 @@ for(i in seq_len(nrow(inspection_truth))) {
   for(j in seq_len(2L)) {
     requests <- character()
     result <- build(handle,capture,"schema-lookup",inspect=inspect)
-    stopifnot(identical(requests,c("DM","AE","MEDDRA")),identical(build_observations(result),expected),is.null(build_output(result)))
+    stopifnot(identical(requests,fixture_strings(host_truth[["lookup_source_order"]])),identical(build_observations(result),expected),is.null(build_output(result)))
     actual <- tryCatch(build_save(result,function(...) stop("inspection failure published")),error=identity)
     stopifnot(inherits(actual,"error"),identical(conditionMessage(actual),"cannot save a failed build"))
   }
   requests <- character()
-  stopifnot(identical(yamaa:::specification_failure_report(handle,capture,"schema-lookup",inspect=inspect),expected),identical(requests,c("DM","AE","MEDDRA")))
+  stopifnot(identical(yamaa:::specification_failure_report(handle,capture,"schema-lookup",inspect=inspect),expected),identical(requests,fixture_strings(host_truth[["lookup_source_order"]])))
   requests <- character()
-  stopifnot(identical(yamaa:::specification_report(handle,capture,function(...) stop("inspection failure published"),"schema-lookup",inspect=inspect),expected),identical(requests,c("DM","AE","MEDDRA")))
+  stopifnot(identical(yamaa:::specification_report(handle,capture,function(...) stop("inspection failure published"),"schema-lookup",inspect=inspect),expected),identical(requests,fixture_strings(host_truth[["lookup_source_order"]])))
   # Construct the same independently authored metadata causes using real files.
   directory <- tempfile("native-inspection-"); dir.create(directory)
   dir.create(file.path(directory,"input"))
@@ -550,7 +554,7 @@ cat("native file Parquet publication retained complete report and exact held byt
 # remain independent truth. The runtime PATH still contains no Python executable.
 case_name <- "adam-adlb-ordered-sum"
 case <- file.path(root,"cases",case_name)
-source <- sub("path: input/lb.csv, types: {LBSTRESN: float}","path: input/lb.parquet",
+source <- sub(host_truth[["floating_input_override"]],"path: input/lb.parquet",
               rawToChar(rawfile(file.path(case,"spec.yaml"))),fixed=TRUE)
 handle <- prepare_entry("spec.yaml",charToRaw(source),no_port,no_port,no_port)
 expected <- rawToChar(rawfile(file.path(root,"expected",paste0(case_name,".json"))))
@@ -701,10 +705,10 @@ result <- build(handle,capture,"collection")
 findings <- paste0(
   '{"condition":"source_field_value_invalid","context":{"dataset":"FIRST","field":"OTHER","path":"FIRST.parquet","row":1,"value":1},"phase":"ingest","requirement":"REQ-1041","spec_paths":["input.FIRST.path"]},',
   '{"condition":"source_field_name_duplicate","context":{"dataset":"SECOND","field":"I","path":"SECOND.parquet"},"phase":"ingest","requirement":"REQ-1039","spec_paths":["input.SECOND.path"]}')
-reads <- paste0('{"base_directory":".","condition":null,"outcome":"captured","path":"',c("FIRST","SECOND","THIRD"),'.parquet","snapshots_created":1}',collapse=",")
+reads <- paste0('{"base_directory":".","condition":null,"outcome":"captured","path":"',fixture_strings(host_truth[["input_aliases"]]),'.parquet","snapshots_created":1}',collapse=",")
 expected <- paste0('{"artifacts":[],"backend":"rust","callbacks":[],"diagnostics":[',findings,'],"engine_version":"',yamaa:::.core_version(),'","error":null,"example":"collection","handler_counts":[],"nodes":[{"diagnostics":[',findings,'],"handler_counts":[],"outcome":"failure","specification":"spec.yaml","unsupported":[]}],"outcome":"failure","report_version":"0.3.0-draft","runtime":"r","runtime_version":"',as.character(getRversion()),'","source_reads":[',reads,'],"tables":[],"unsupported":[],"verifications":[]}')
 stopifnot(identical(build_observations(result),expected),is.null(build_output(result)),
-          identical(requests,c("FIRST","SECOND","THIRD")))
+          identical(requests,fixture_strings(host_truth[["input_aliases"]])))
 failure <- tryCatch(build_save(result,no_port),error=identity)
 stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),"cannot save a failed build"))
 cat("native Parquet source failure collection and complete report passed\n")
@@ -818,7 +822,7 @@ for(i in seq_len(nrow(filter_truth))) {
   artifact <- hex_raw(row$artifact_hex[[1L]])
   # Require captured citations without changing any finding.
   captured <- row$expected[[1L]]
-  if(prefix=="row-filter" && row$case[[1L]] %in% c("grouped_source_phase","grouped_unknown_phase","record_unknown_phase","group_and_filter_order")) {
+  if(prefix=="row-filter" && row$case[[1L]] %in% fixture_strings(host_truth[["phase_replay_cases"]])) {
     stopifnot(sum(gregexpr('"requirement":"REQ-0068"',captured,fixed=TRUE)[[1L]]>0L)==2L)
   }
   expected <- sub('"runtime":"python"','"runtime":"r"',captured,fixed=TRUE)
@@ -1041,7 +1045,7 @@ directory <- tempfile("native-file-preparation-");dir.create(directory)
 directory <- normalizePath(directory,winslash="/",mustWork=TRUE)
 dir.create(file.path(directory,"entry"));dir.create(file.path(directory,"parent"))
 entry_path <- file.path(directory,"entry","spec.yaml")
-valid <- "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n"
+valid <- host_truth[["preflight_valid_yaml"]]
 prepare_file <- get(".prepare_file_specification",envir=asNamespace("yamaa"))
 file_check <- get(".file_specification_check",envir=asNamespace("yamaa"))
 file_reads <- get(".file_specification_reads",envir=asNamespace("yamaa"))
@@ -1055,7 +1059,7 @@ actual <- tryCatch(prepare_file(directory,file.path(directory,"entry"),"spec.yam
 expected <- paste0('{"outcome":{"diagnostics":[{"condition":"parent_not_found","context":{"path":"absent.yaml","source":"',entry_path,'"},"phase":"validation","requirement":"REQ-0654","spec_paths":["parents"]}],"status":"invalid"},"protocol":"specification/prototype"}')
 stopifnot(inherits(actual,"error"),identical(conditionMessage(actual),expected))
 writeBin(charToRaw(valid),file.path(directory,"parent","base.yaml"))
-writeBin(charToRaw("schema_version: '1.0'\nparents: [../parent/base.yaml, ../parent/./base.yaml]\n"),entry_path)
+writeBin(fixture_bytes(host_truth[["aliased_parents_yaml"]]),entry_path)
 handle <- prepare_file(directory,file.path(directory,"entry"),"spec.yaml")
 stopifnot(file_reads(handle)==2L,identical(file_check(handle),"[]"),file_reads(handle)==2L)
 stopifnot(identical(get(".file_specification_source",envir=asNamespace("yamaa"))(handle),list(name="SRC",path="../parent/input.csv")))
@@ -1232,13 +1236,13 @@ writeLines(c("schema_version: '1.0'","domain: TEST","keys: [ID]","input: {SRC: i
 stopifnot(nrow(yamaa_check(entry)$issues)==0L)
 failed <- yamaa_domain(entry)
 stopifnot(is.null(failed$output),identical(failed$issues$condition,"resource_path_missing"),inherits(tryCatch(failed$save(),error=identity),"yamaa_domain_error"))
-writeBin(charToRaw("ID\n-9223372036854775808\n9223372036854775807\n"),file.path(directory,"input.csv"))
+writeBin(fixture_bytes(host_truth[["integer_boundary_csv"]]),file.path(directory,"input.csv"))
 built <- yamaa_domain(entry)
 stopifnot(identical(as.character(built$output$ID),c("-9223372036854775808","9223372036854775807")),identical(is.na(built$output$ID),c(FALSE,FALSE)))
 writeLines("[changed",entry); writeLines("changed",file.path(directory,"input.csv"))
 stopifnot(identical(built$save(),FALSE),identical(built$issues$condition,"engine_rejected"))
 dir.create(file.path(directory,"absent"))
-stopifnot(identical(built$save(),TRUE),nrow(built$issues)==0L,identical(rawfile(file.path(directory,"absent/output.csv")),charToRaw("ID\n-9223372036854775808\n9223372036854775807\n")))
+stopifnot(identical(built$save(),TRUE),nrow(built$issues)==0L,identical(rawfile(file.path(directory,"absent/output.csv")),fixture_bytes(host_truth[["integer_boundary_csv"]])))
 refused <- yamaa_domain("absent.yaml",environment="absent-environment.yaml")
 stopifnot(is.null(domain_observations(refused)))
 stopifnot(is.null(refused$output),identical(refused$issues$phase,"validation"),
@@ -1463,9 +1467,7 @@ local({
   case <- file.path(directory,case_name)
   input_directory <- file.path(case,"input")
   stopifnot(unlink(input_directory,recursive=TRUE)==0L,!file.exists(input_directory))
-  expected_error <- paste0("phase: validation\ncondition: incompatible_input_type\nspec_paths:\n",
-    "  - columns.RNDVAL.derivation.round_half_away_from_zero.source\n",
-    "requirement: REQ-0418\ncontext:\n  source: SEX\n  expected: numeric\n  actual: str\n")
+  expected_error <- host_truth[["rounding_type_error_yaml"]]
   stopifnot(identical(rawToChar(rawfile(file.path(case,"expected","error.yaml"))),expected_error))
   checked <- yamaa_check(file.path(case,"spec.yaml"))$issues
   rejected <- yamaa_domain(file.path(case,"spec.yaml"))
@@ -1534,7 +1536,7 @@ local({
     result <- yamaa_domain(entry)
     output <- if(case_name=="schema-birth-date") "adsl.csv" else "dm.csv"
     expected <- read.csv(file.path(case,"expected",output),colClasses="character",na.strings="",check.names=FALSE)
-    dates <- if(case_name=="schema-birth-date") c("REFDT","DOB_FIRST","DOB_LAST","DTMDT") else "RFICDTC"
+    dates <- if(case_name=="schema-birth-date") fixture_strings(host_truth[["partial_date_columns"]]) else "RFICDTC"
     for(column in dates) expected[[column]] <- as.Date(expected[[column]])
     if(case_name=="schema-birth-date") expected$DTM <- as.POSIXct(expected$DTM,format="%Y-%m-%dT%H:%M:%S",tz="UTC")
     column <- if(case_name=="schema-birth-date") "DOBDY" else "AGE"
@@ -1566,19 +1568,12 @@ local({
 local({
   directory <- tempfile("public-string-case-");dir.create(directory)
   on.exit(unlink(directory,recursive=TRUE))
-  source <- paste0("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\n",
-    "output: {path: output.csv, columns: [ID, UP, LOW, SENT, TITLE]}\ncolumns:\n",
-    "  - {name: ID, type: str, derivation: SRC.ID}\n",
-    "  - {name: UP, type: str, derivation: {str_case: {source: SRC.TEXT, to: upper, missing: MiXeD}}}\n",
-    "  - {name: LOW, type: str, derivation: {str_case: {source: SRC.TEXT, to: lower, missing: null}}}\n",
-    "  - {name: SENT, type: str, derivation: {str_case: {source: SRC.TEXT, to: sentence, missing: null}}}\n",
-    "  - {name: TITLE, type: str, derivation: {str_case: {source: SRC.TEXT, to: title, missing: null}}}\n")
+  source <- host_truth[["unicode_case_yaml"]]
   entry <- file.path(directory,"spec.yaml");writeBin(charToRaw(source),entry)
   stopifnot(nrow(yamaa_check(entry)$issues)==0L)
   writeBin(charToRaw("ID,TEXT\n1,FOLLOW-UP\n2,\u00df\u0130\u00e9\U0001f642AbC\n3,\n"),file.path(directory,"input.csv"))
   result <- yamaa_domain(entry)
-  expected_bytes <- charToRaw(paste0("ID,UP,LOW,SENT,TITLE\n1,FOLLOW-UP,follow-up,Follow-up,Follow-Up\n",
-    "2,\u00df\u0130\u00e9\U0001f642ABC,\u00df\u0130\u00e9\U0001f642abc,\u00df\u0130\u00e9\U0001f642abc,\u00df\u0130\u00e9\U0001f642Abc\n3,MiXeD,,,\n"))
+  expected_bytes <- fixture_bytes(host_truth[["unicode_case_csv"]])
   expected <- data.frame(ID=c("1","2","3"),UP=c("FOLLOW-UP","\u00df\u0130\u00e9\U0001f642ABC","MiXeD"),
     LOW=c("follow-up","\u00df\u0130\u00e9\U0001f642abc",NA_character_),
     SENT=c("Follow-up","\u00df\u0130\u00e9\U0001f642abc",NA_character_),
@@ -1628,7 +1623,7 @@ local({
     "  - {name: ID, type: str, derivation: SRC.ID}",
     "  - {name: POSITION, type: int, derivation: SRC.REC}",
     "  - {name: SORT, type: int, derivation: SRC.SORT}"),entry,useBytes=TRUE)
-  inputs <- c('ID,SORT,KEEP,NOTE\na,5,N,first\nb,2,Y,"two\nlines"\nc,1,Y,last\n',"ID,SORT,KEEP,NOTE\n")
+  inputs <- c(host_truth[["filtered_multiline_csv"]],"ID,SORT,KEEP,NOTE\n")
   expected <- c("ID,POSITION\nc,3\nb,2\n","ID,POSITION\n")
   for(i in seq_along(inputs)) {
     writeBin(charToRaw(inputs[[i]]),data)
@@ -1761,7 +1756,7 @@ local({
     } else {
       stopifnot(is.null(result$output),inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(output))
     }
-    if(name %in% c("unknown-row-driver","omitted-row-driver","different-row-drivers","adam-adlb-end-of-treatment")) {
+    if(name %in% fixture_strings(host_truth[["row_driver_cases"]])) {
       check_issue_frame(yamaa_check(entry)$issues,truth$issues)
     }
   }
@@ -1964,7 +1959,7 @@ local({
 })
 
 local({
-  body <- "schema_version: \"1.0\"\ndomain: TEST\ninput:\n  SRC: {path: src.csv}\n  OTHER: {path: other.csv}\nkeys: [ID, SECTION]\noutput: {path: result.csv, columns: [ID, SECTION, K, SEQ, V, FINAL, FIRST]}\nintermediates:\n  - id: P\n    dataset: SELF\n    key: {K: K}\n    order_by: [SELF.SEQ]\n    keep: last\n    no_match: 0\n  - id: F\n    dataset: SELF\n    key: [K]\n    filter: \"SECTION = 'first'\"\n    order_by: [SEQ]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: K, type: str, derivation: SRC.K}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: V, type: int, derivation: SRC.V}\n  - {name: FINAL, type: int, derivation: P.V}\n  - {name: FIRST, type: int, derivation: F.V}\nrows:\n  - id: collected\n    dataset: SRC\n    derivations:\n      SECTION: {literal: first}\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.K]\n    derivations:\n      ID: {literal: g}\n      SECTION: {literal: second}\n      SEQ: {literal: 4}\n      V: {compute: {expr: \"P.V + 10\"}}\n  - id: added\n    dataset: OTHER\n    derivations:\n      ID: OTHER.ID\n      SECTION: {literal: third}\n      K: OTHER.K\n      SEQ: {literal: 9}\n      V: {compute: {expr: \"P.V + 100\"}}\n"
+  body <- host_truth[["section_order_yaml"]]
   directory <- tempfile("yamaa-self-donors-");dir.create(directory)
   on.exit(unlink(directory,recursive=TRUE),add=TRUE)
   entry <- file.path(directory,"spec.yaml")
@@ -1972,11 +1967,11 @@ local({
   writeBin(charToRaw("ID,K,SEQ,V\na,x,2,5\nb,x,1,9\n"),file.path(directory,"src.csv"))
   writeBin(charToRaw("ID,K\nc,x\nd,x\n"),file.path(directory,"other.csv"))
   result <- yamaa_domain(entry)
-  stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),identical(rawfile(file.path(directory,"result.csv")),charToRaw("ID,SECTION,K,SEQ,V,FINAL,FIRST\na,first,x,2,5,115,5\nb,first,x,1,9,115,5\ng,second,x,4,15,115,5\nc,third,x,9,115,115,5\nd,third,x,9,115,115,5\n")))
+  stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),identical(rawfile(file.path(directory,"result.csv")),fixture_bytes(host_truth[["section_order_csv"]])))
   observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
   check_handler_ledger(observed,"[{\"spec_path\":\"rows[1].derivations.V.compute.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"rows[2].derivations.V.compute.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":2},{\"spec_path\":\"columns.FINAL.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":5},{\"spec_path\":\"columns.FIRST.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":5}]")
 
-  unlink(file.path(directory,c("src.csv","other.csv","result.csv")))
+  unlink(file.path(directory,fixture_strings(host_truth[["section_case_files"]])))
   writeBin(charToRaw(sub("SECTION: {literal: first}","SECTION: {source: {variable: P.K}}",body,fixed=TRUE)),entry)
   expected <- list(phase="validation",condition="phase_boundary",requirement="REQ-0120",spec_paths=list("rows[0].derivations.SECTION.source"),context="{\"available_phase\":\"completed_prior_row_template\",\"identifier\":\"P.K\",\"required_phase\":\"row_construction\"}")
   check_issue_frame(yamaa_check(entry)$issues,expected)
@@ -1986,21 +1981,21 @@ local({
 })
 
 local({
-  body <- "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, PARAM]\ninput:\n  SRC: {path: src.csv, types: {ID: int}}\n  DONOR: {path: donor.csv, types: {ID: float, SEQ: int}}\noutput: {path: result.csv, columns: [ID, PARAM, A, B]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: PARAM, type: str, derivation: {literal: only}}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}\n"
+  body <- host_truth[["duplicate_lookup_yaml"]]
   directory <- tempfile("yamaa-intermediate-admission-");dir.create(directory)
   on.exit(unlink(directory,recursive=TRUE),add=TRUE)
   entry <- file.path(directory,"spec.yaml")
   writeBin(charToRaw(body),entry)
   writeBin(charToRaw("ID\n2\n1\n3\n"),file.path(directory,"src.csv"))
-  writeBin(charToRaw("SEQ,ID,A,B\n1,1,first,\n1,1,tied,second\n0,2,two,both\n"),file.path(directory,"donor.csv"))
+  writeBin(fixture_bytes(host_truth[["duplicate_donor_csv"]]),file.path(directory,"donor.csv"))
   result <- yamaa_domain(entry)
   stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),
-    identical(rawfile(file.path(directory,"result.csv")),charToRaw("ID,PARAM,A,B\n2,only,two,both\n1,only,first,\n3,only,,\n")))
+    identical(rawfile(file.path(directory,"result.csv")),fixture_bytes(host_truth[["duplicate_lookup_csv"]])))
   observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
   check_handler_ledger(observed,'[{"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":1},{"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},{"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":1},{"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}]')
   unlink(c(file.path(directory,"src.csv"),file.path(directory,"donor.csv"),file.path(directory,"result.csv")))
   cases <- list(
-    list(remove="    order_by: [DONOR.SEQ]\n    keep: first\n",condition="rename_only_intermediate",requirement="REQ-1248",context='{"dataset":"DONOR","intermediate":"P"}'),
+    list(remove=host_truth[["lookup_first_clause"]],condition="rename_only_intermediate",requirement="REQ-1248",context='{"dataset":"DONOR","intermediate":"P"}'),
     list(remove="    keep: first\n",condition="unpaired_fields",requirement="REQ-0119",context='{"declared":["order_by"],"intermediate":"P","missing":["keep"]}'),
     list(remove="    order_by: [DONOR.SEQ]\n",condition="unpaired_fields",requirement="REQ-0119",context='{"declared":["keep"],"intermediate":"P","missing":["order_by"]}'))
   for(case in cases) {
@@ -2016,16 +2011,16 @@ local({
 })
 
 local({
-  body <- "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: SRC\n    key: [ID]\n    filter: \"SRC.ELIG = 'Y'\"\n    order_by: [SRC.SEQ]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}\n"
+  body <- host_truth[["lookup_filter_yaml"]]
   directory <- tempfile("yamaa-primary-donors-");dir.create(directory)
   on.exit(unlink(directory,recursive=TRUE),add=TRUE)
   entry <- file.path(directory,"spec.yaml")
   writeBin(charToRaw(body),entry)
-  writeBin(charToRaw("ID,SEQ,ELIG,A,B\n1,1,Y,early,x\n1,2,Y,last,\n2,1,N,hidden,hidden\n"),file.path(directory,"src.csv"))
+  writeBin(fixture_bytes(host_truth[["filtered_donor_csv"]]),file.path(directory,"src.csv"))
   stopifnot(nrow(yamaa_check(entry)$issues)==0L)
   result <- yamaa_domain(entry)
   stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),
-    identical(rawfile(file.path(directory,"result.csv")),charToRaw("ID,SEQ,A,B\n1,1,last,\n1,2,last,\n2,1,,\n")))
+    identical(rawfile(file.path(directory,"result.csv")),fixture_bytes(host_truth[["filtered_lookup_csv"]])))
   observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
   check_handler_ledger(observed,'[{"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":2},{"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},{"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":2},{"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}]')
   cat("same-input donor grain, shared missing field and complete handler accounting passed without Python\n")
@@ -2036,15 +2031,15 @@ local({
   on.exit(unlink(directory,recursive=TRUE),add=TRUE)
   entry <- file.path(directory,"spec.yaml")
   writeBin(charToRaw("ID,SEQ,CUT\n1,1,2\n1,2,4\n3,1,2\n1,3,\n"),file.path(directory,"src.csv"))
-  writeBin(charToRaw("ID,TIME,A,B\n1,1,one,x\n1,3,three,\n2,9,hidden,hidden\n"),file.path(directory,"donor.csv"))
+  writeBin(fixture_bytes(host_truth[["ordered_donor_csv"]]),file.path(directory,"donor.csv"))
   writeBin(charToRaw("ID,SEQ,CUT\n1,1,4\n3,1,2\n"),file.path(directory,"alt.csv"))
-  writeBin(charToRaw("schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: \"D.TIME < SRC.CUT\"\n    order_by: [D.TIME]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}\n"),entry)
+  writeBin(fixture_bytes(host_truth[["lookup_cutoff_yaml"]]),entry)
   result <- yamaa_domain(entry)
-  stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),identical(rawfile(file.path(directory,"result.csv")),charToRaw("ID,SEQ,A,B\n1,1,one,x\n1,2,three,\n3,1,,\n1,3,,\n")))
+  stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),identical(rawfile(file.path(directory,"result.csv")),fixture_bytes(host_truth[["lookup_cutoff_csv"]])))
   observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
   check_handler_ledger(observed,"[{\"spec_path\":\"columns.A.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.A.derivation.source.no_match\",\"handler\":\"no_match\",\"count\":2},{\"spec_path\":\"columns.B.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.B.derivation.source.no_match\",\"handler\":\"no_match\",\"count\":2}]")
   unlink(file.path(directory,"result.csv"))
-  writeBin(charToRaw("schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int, CUT: int}}\n  ALT: {path: alt.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: \"D.TIME < ALT.CUT\"\n    order_by: [D.TIME]\n    keep: last\n    no_match: null\nrows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, SEQ: ALT.SEQ, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}\n"),entry)
+  writeBin(fixture_bytes(host_truth[["lookup_alternative_yaml"]]),entry)
   result <- yamaa_domain(entry)
   stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),identical(rawfile(file.path(directory,"result.csv")),charToRaw("ID,SEQ,A,B\n1,1,three,\n3,1,,\n")))
   observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
@@ -2058,13 +2053,13 @@ local({
 })
 
 local({
-  body <- "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {ID: int}}\n  DONOR: {path: donor.csv, types: {ID: int, SEQ: int}}\noutput: {path: result.csv, columns: [ID, A, B]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SELECT, type: str, derivation: SRC.SELECT}\n  - name: A\n    type: str\n    derivation:\n      case:\n        - when: \"SELECT = 'Y'\"\n          then: P.A\n        - otherwise: {literal: skip}\n  - name: B\n    type: str\n    derivation:\n      case:\n        - when: \"SELECT = 'Y'\"\n          then: P.B\n        - otherwise: {literal: skip}\n"
+  body <- host_truth[["lookup_fallback_yaml"]]
   directory <- tempfile("yamaa-case-intermediates-");dir.create(directory)
   on.exit(unlink(directory,recursive=TRUE),add=TRUE)
   entry <- file.path(directory,"spec.yaml")
   writeBin(charToRaw(body),entry)
   writeBin(charToRaw("ID,SELECT\n1,Y\n2,N\n3,Y\n"),file.path(directory,"src.csv"))
-  writeBin(charToRaw("ID,SEQ,A,B\n1,1,first,\n1,2,second,present\n2,1,hidden,hidden\n"),file.path(directory,"donor.csv"))
+  writeBin(fixture_bytes(host_truth[["fallback_donor_csv"]]),file.path(directory,"donor.csv"))
   result <- yamaa_domain(entry)
   stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),
     identical(rawfile(file.path(directory,"result.csv")),charToRaw("ID,A,B\n1,first,\n2,skip,skip\n3,,\n")))
@@ -2073,7 +2068,7 @@ local({
   for (variable in c("P.A", "P.ABSENT")) {
     writeBin(charToRaw(sub("then: P.A",paste0("then: {source: {variable: ",variable,", absent: fallback}}"),body,fixed=TRUE)),entry)
     admitted <- yamaa_domain(entry)
-    expected <- if (variable == "P.A") "ID,A,B\n1,first,\n2,skip,skip\n3,,\n" else "ID,A,B\n1,fallback,\n2,skip,skip\n3,fallback,\n"
+    expected <- if (variable == "P.A") "ID,A,B\n1,first,\n2,skip,skip\n3,,\n" else host_truth[["fallback_lookup_csv"]]
     count <- if (variable == "P.A") "0" else "2"
     stopifnot(nrow(admitted$issues)==0L, admitted$save(),
       identical(rawfile(file.path(directory,"result.csv")), charToRaw(expected)))
@@ -2103,7 +2098,7 @@ local({
     }
     unlink(directory,recursive=TRUE)
   }
-  for (name in c("adam-adae-protocol-review","schema-expressions","schema-predicates","sdtm-ae-seriousness","sdtm-mh-ongoing-conditions","sdtm-tr-tumor-measurements","sdtm-tu-tumor-identification","sdtm-ds-reasons")) {
+  for (name in fixture_strings(host_truth[["source_selection_case_names"]])) {
     case <- file.path(root,"cases",name)
     directory <- tempfile("yamaa-original-case-");dir.create(directory)
     file.copy(list.files(case,full.names=TRUE),directory,recursive=TRUE)
@@ -2125,7 +2120,7 @@ local({
       identical(rawfile(file.path(root,"case-predicate-history",name,"expected.csv")),
         charToRaw(disposition$historical_csv)))
   }
-  for (label in c("source-selection","source-filter-scope","source-filter-mixed")) {
+  for (label in fixture_strings(host_truth[["source_selection_modes"]])) {
   source(file.path(root,paste0(label,"-truth.R")),local=TRUE)
   for (name in names(source_selection_truth)) for (attempt in seq_len(2L)) {
     truth <- source_selection_truth[[name]]
