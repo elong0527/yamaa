@@ -217,3 +217,20 @@ def test_exporter_must_return_a_named_capsule():
 
     with pytest.raises(TypeError, match="capsule"):
         prepared().execute_arrow(Invalid())
+
+
+def test_column_width_boundary_refuses_before_batches_and_can_retry():
+    run = prepared({"ID": "str"})
+    source = pa.table({"ID": ["a"], **{f"C{i}": ["x"] for i in range(1, 1024)}})
+    assert output(run.execute_arrow(source)) == {"ID": ["a"]}
+
+    def forbid():
+        raise AssertionError("over-wide schema entered batch producer")
+        yield
+
+    reader = pa.RecordBatchReader.from_batches(
+        source.schema.append(pa.field("EXCESS", pa.string())), forbid()
+    )
+    with pytest.raises(ValueError, match="resource limit"):
+        run.execute_arrow(reader)
+    assert output(run.execute_arrow(source)) == {"ID": ["a"]}

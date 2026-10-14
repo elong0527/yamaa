@@ -120,13 +120,20 @@ fn bounded_producer_csv_admits_original_header_before_typing_and_owns_portable_m
             Err(DecodeError::Codec(_))
         ));
     }
-    let header = (0..65)
+    let header = (0..1_025)
         .map(|i| format!("F{i}"))
         .collect::<Vec<_>>()
         .join(",")
         + "\n";
+    // The contract now admits 1,024 fields (#2185); this leg's byte budgets
+    // are sized to the wider header so the field count is what refuses.
+    let wide_limits = DecodeLimits {
+        storage_bytes: 1_000_000,
+        work_bytes: 1_000_000,
+        ..limits
+    };
     assert!(matches!(
-        decoder.decode_bounded(&source, header.as_bytes(), Some(&contract), limits),
+        decoder.decode_bounded(&source, header.as_bytes(), Some(&contract), wide_limits),
         Err(DecodeError::Limit("producer_source_fields"))
     ));
 }

@@ -1422,3 +1422,108 @@ fn malformed_assert_carriers_and_numeric_bounds_are_typed_declaration_findings()
         );
     }
 }
+
+fn wide_document(columns: usize, typed_fields: usize) -> SpecificationDocument {
+    use Tree::*;
+    let column_names: Vec<_> = (1..columns).map(|i| format!("C{i:04}")).collect();
+    let field_names: Vec<_> = (1..=typed_fields).map(|i| format!("F{i:04}")).collect();
+    let mut names = vec!["ID"];
+    let mut column_trees = vec![Map(vec![
+        ("name", Text("ID")),
+        ("type", Text("str")),
+        (
+            "derivation",
+            Map(vec![(
+                "value",
+                Map(vec![("source", Map(vec![("variable", Text("SRC.ID"))]))]),
+            )]),
+        ),
+    ])];
+    for name in &column_names {
+        names.push(name.as_str());
+        column_trees.push(Map(vec![
+            ("name", Text(name)),
+            ("type", Text("str")),
+            (
+                "derivation",
+                Map(vec![(
+                    "value",
+                    Map(vec![("literal", Scalar(N::Text("x".into())))]),
+                )]),
+            ),
+        ]));
+    }
+    let mut input = vec![("path", Text("input.csv"))];
+    if typed_fields > 0 {
+        let types = field_names
+            .iter()
+            .map(|name| (name.as_str(), Text("str")))
+            .collect::<Vec<_>>();
+        input.push(("types", Map(types)));
+    }
+    let fields = vec![
+        ("schema_version", Text("1.0")),
+        ("domain", Text("TEST")),
+        ("input", Map(vec![("SRC", Map(input))])),
+        ("keys", List(vec![Text("ID")])),
+        ("columns", List(column_trees)),
+        (
+            "output",
+            Map(vec![
+                ("path", Text("result.csv")),
+                (
+                    "columns",
+                    List(names.iter().map(|name| Text(name)).collect()),
+                ),
+            ]),
+        ),
+    ];
+    let tree = Map(fields);
+    let mut nodes = Vec::new();
+    let root = tree.append(&mut nodes);
+    let document = Document::new(nodes, root, DocumentLimits::default()).unwrap();
+    SpecificationDocument::admit(document, &mut ValidationBudget::new(Default::default()))
+        .unwrap()
+        .unwrap()
+}
+
+#[test]
+fn column_ceilings_admit_1024_and_refuse_1025() {
+    // #2185 / #2288: the default compiler ceilings for declared columns,
+    // output columns and typed source fields are 1,024; the key and input
+    // counts are separate limits and stay where they were.
+    let limits = CompilationLimits::default();
+    assert_eq!(limits.columns, 1_024);
+    assert_eq!(limits.projected_columns, 1_024);
+    assert_eq!(limits.source_fields, 1_024);
+    assert_eq!(limits.keys, 64);
+    assert_eq!(limits.inputs, 16);
+
+    PreparedSpecification::prepare(&wide_document(1_024, 0)).unwrap();
+    let Err(PrepareError::Limit(resource)) =
+        PreparedSpecification::prepare(&wide_document(1_025, 0))
+    else {
+        panic!("1,025 declared columns must hit a compiler limit");
+    };
+    assert_eq!(resource, "columns");
+
+    let Err(PrepareError::Limit(resource)) = PreparedSpecification::prepare_with_limits(
+        &wide_document(1_025, 0),
+        CompilationLimits {
+            columns: 1_025,
+            ..limits
+        },
+    ) else {
+        panic!("1,025 projected columns must hit their own compiler limit");
+    };
+    assert_eq!(resource, "projected_columns");
+
+    // Typed fields carry their own ceiling, independent of the column count.
+    PreparedSpecification::prepare(&wide_document(2, 1_024)).unwrap();
+    let Err(PrepareError::Limit(resource)) =
+        PreparedSpecification::prepare(&wide_document(2, 1_025))
+    else {
+        panic!("1,025 typed fields must hit a compiler limit");
+    };
+    assert_eq!(resource, "source_fields");
+}

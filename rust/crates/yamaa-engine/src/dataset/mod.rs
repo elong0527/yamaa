@@ -133,7 +133,7 @@ impl ExecutionBudget {
             max_sources: 8,
             max_ipc_bytes: 8 * 1024 * 1024,
             max_decoded_cells: crate::capacity::SOURCE_CELLS,
-            max_columns: 64,
+            max_columns: yamaa_core::specification::DEFAULT_MAX_COLUMNS,
             max_batches: 256,
             max_output_bytes: 8 * 1024 * 1024,
             batch_rows: None,

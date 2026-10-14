@@ -21,7 +21,7 @@ use yamaa_core::{
 
 pub const LIMITS: TableLimits = TableLimits {
     max_rows: yamaa_engine::capacity::SOURCE_ROWS,
-    max_columns: 64,
+    max_columns: yamaa_core::specification::DEFAULT_MAX_COLUMNS,
     max_batches: 256,
     max_cells: yamaa_engine::capacity::SOURCE_CELLS,
 };

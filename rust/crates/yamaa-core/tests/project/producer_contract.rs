@@ -86,6 +86,31 @@ const FIELDS: &[(&str, &str, Option<&str>)] = &[
 ];
 
 #[test]
+fn producer_width_admits_1024_and_refuses_each_1025_boundary() {
+    let names: Vec<_> = (0..1_025).map(|i| format!("C{i:04}")).collect();
+    let selected: Vec<_> = names.iter().map(String::as_str).collect();
+    let columns: Vec<_> = selected
+        .iter()
+        .map(|&name| (name, "str", Some(name)))
+        .collect();
+    let contract = prepare(
+        &document(&columns[..1_024], &selected[..1_024]),
+        Limits::default(),
+    )
+    .unwrap();
+    assert_eq!(contract.fields().len(), 1_024);
+    assert!(contract.matches_header(&selected[..1_024]));
+    assert_eq!(
+        prepare(&document(&columns, &selected[..1_024]), Limits::default()),
+        Err(Error::Limit("producer_declarations"))
+    );
+    assert_eq!(
+        prepare(&document(&columns[..1_024], &selected), Limits::default()),
+        Err(Error::Limit("producer_fields"))
+    );
+}
+
+#[test]
 fn producer_projection_is_the_stored_order_and_internal_columns_are_excluded() {
     let contract = prepare(&document(FIELDS, &["ID", "VALUE"]), Limits::default()).unwrap();
     assert_eq!(contract.path(), "produced.csv");

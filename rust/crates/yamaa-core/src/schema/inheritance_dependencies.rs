@@ -390,7 +390,15 @@ impl<'a> Run<'a, '_> {
         }
         Ok(())
     }
-    fn column_dependencies(&mut self, column: Named<'a>) -> Result<Vec<String>, Error> {
+    /// Dependency names for ordering, plus the subset dependency resolution
+    /// itself may diagnose as unknown. Predicate identifiers and the names a
+    /// read intermediate contributes (its key, between, filter and order_by)
+    /// are validated at their own authored paths by final validation, so they
+    /// order and keep columns live but are never reported here (REQ-0627).
+    fn column_dependencies(
+        &mut self,
+        column: Named<'a>,
+    ) -> Result<(Vec<String>, Vec<String>), Error> {
         let mut refs = Vec::new();
         if let Some(node) = self.field(column.node, "derivation")? {
             refs = self.refs_derivation(node)?;
@@ -403,8 +411,9 @@ impl<'a> Run<'a, '_> {
             }
         }
         let mut names = Vec::new();
+        let mut diagnosable = Vec::new();
         for reference in refs {
-            if reference.kind != Kind::Variable {
+            if reference.kind == Kind::Dataset {
                 continue;
             }
             if let Some((qualifier, _)) = reference.name.split_once('.') {
@@ -416,7 +425,7 @@ impl<'a> Run<'a, '_> {
                         for r in
                             self.refs_field(intermediate.node, "intermediate_class", field, true)?
                         {
-                            if r.kind == Kind::Variable && !r.name.contains('.') {
+                            if r.kind != Kind::Dataset && !r.name.contains('.') {
                                 add(&mut names, &r.name, self.budget)?;
                             }
                         }
@@ -424,6 +433,9 @@ impl<'a> Run<'a, '_> {
                 }
             } else {
                 add(&mut names, &reference.name, self.budget)?;
+                if reference.kind == Kind::Variable {
+                    add(&mut diagnosable, &reference.name, self.budget)?;
+                }
             }
         }
         // Reserve comparisons before the sort; diagnostics use lexical dependency order.
@@ -433,7 +445,8 @@ impl<'a> Run<'a, '_> {
         self.budget
             .work(chars.saturating_mul(names.len().saturating_add(1)))?;
         names.sort();
-        Ok(names)
+        diagnosable.sort();
+        Ok((names, diagnosable))
     }
     fn order(&mut self) -> Result<(), Error> {
         let mut selected = Vec::new();
@@ -446,7 +459,7 @@ impl<'a> Run<'a, '_> {
         let mut dependencies: Vec<Vec<usize>> = Vec::new();
         let mut issues = Vec::new();
         for &column in &selected {
-            let names = self.column_dependencies(column)?;
+            let (names, diagnosable) = self.column_dependencies(column)?;
             self.budget.reserve(0, names.len())?;
             let mut indices = Vec::new();
             for dependency in names {
@@ -457,7 +470,7 @@ impl<'a> Run<'a, '_> {
                 )?;
                 if let Some(index) = selected.iter().position(|c| c.name == dependency) {
                     indices.push(index);
-                } else {
+                } else if diagnosable.iter().any(|name| name == &dependency) {
                     self.budget
                         .reserve(column.name.len().saturating_add(dependency.len()), 2)?;
                     // Account for the rendered path and both owned context values.

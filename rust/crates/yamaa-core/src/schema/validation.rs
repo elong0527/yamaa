@@ -106,7 +106,10 @@ impl Default for ValidationLimits {
     /// Cap recursive alias/type traversal even when the decoded value itself is shallow.
     fn default() -> Self {
         Self {
-            work: 4_194_304,
+            // Normalization revalidates shorthand and expanded columns in the
+            // same request scope. Scale with the 16-fold width increase so a
+            // 1,024-column specification can reach compiler admission.
+            work: 64 * 1024 * 1024,
             diagnostics: 65_536,
             diagnostic_text_bytes: 8_388_608,
             depth: 128,
