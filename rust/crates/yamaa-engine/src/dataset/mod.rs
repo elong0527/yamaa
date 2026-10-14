@@ -58,7 +58,7 @@ use crate::{
     table_grouping::{partition, GroupingError},
     table_reduction::{count_selected, reduce_column, TableReductionError},
 };
-use alloc::{boxed::Box, collections::BTreeMap, string::String, vec, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeMap, format, string::String, vec, vec::Vec};
 use core::convert::Infallible;
 use yamaa_core::{
     bound_expression::BoundPredicate,
@@ -181,6 +181,13 @@ impl Default for ExecutionBudget {
 /// Cumulative resource failures are distinct from normative language conditions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Resource {
+    SourceRows,
+    SourceCells,
+    SourceColumns,
+    SourceCount,
+    OutputRows,
+    OutputCells,
+    OutputColumns,
     WorkCells,
     ScalarTextBytes,
     OutputTextBytes,
@@ -379,6 +386,13 @@ pub enum ExecutionError<E> {
         resource: Resource,
         limit: usize,
         required: Option<usize>,
+    },
+    /// Resource facts with an authored owner, such as a verification pattern.
+    ScopedLimit {
+        resource: Resource,
+        limit: usize,
+        required: Option<usize>,
+        spec_paths: Vec<String>,
     },
     SchemaMismatch,
     Capacity,
@@ -1444,6 +1458,12 @@ impl Executor<'_> {
                 resource,
                 limit,
                 required,
+            }
+            | ExecutionError::ScopedLimit {
+                resource,
+                limit,
+                required,
+                ..
             } = error.as_ref()
             {
                 observer(ExecutionEvent::Refusal {
@@ -1505,18 +1525,47 @@ impl Executor<'_> {
                         )
                     })
                 });
-            if secondary
-                .len()
-                .checked_add(1)
-                .is_none_or(|count| count > budget.max_sources)
-                || table.schema().columns().len() > budget.max_columns
-                || self.plan.output().columns().len() > budget.max_columns
-                || secondary
-                    .iter()
-                    .any(|source| source.schema().columns().len() > budget.max_columns)
-                || cells.is_none_or(|cells| cells > budget.max_decoded_cells)
+            let sources = secondary.len().checked_add(1);
+            if sources.is_none_or(|count| count > budget.max_sources) {
+                return Err(Box::new(ExecutionError::Limit {
+                    resource: Resource::SourceCount,
+                    limit: budget.max_sources,
+                    required: sources,
+                }));
+            }
+            let primary_columns = table.schema().columns().len();
+            if primary_columns > budget.max_columns {
+                return Err(Box::new(ExecutionError::Limit {
+                    resource: Resource::SourceColumns,
+                    limit: budget.max_columns,
+                    required: Some(primary_columns),
+                }));
+            }
+            let output_columns = self.plan.output().columns().len();
+            if output_columns > budget.max_columns {
+                return Err(Box::new(ExecutionError::ScopedLimit {
+                    resource: Resource::OutputColumns,
+                    limit: budget.max_columns,
+                    required: Some(output_columns),
+                    spec_paths: vec!["output.columns".into()],
+                }));
+            }
+            if let Some(source) = secondary
+                .iter()
+                .find(|source| source.schema().columns().len() > budget.max_columns)
             {
-                return Err(Box::new(ExecutionError::Capacity));
+                return Err(Box::new(ExecutionError::Limit {
+                    resource: Resource::SourceColumns,
+                    limit: budget.max_columns,
+                    required: Some(source.schema().columns().len()),
+                }));
+            }
+            if cells.is_none_or(|cells| cells > budget.max_decoded_cells) {
+                return Err(Box::new(ExecutionError::Limit {
+                    resource: Resource::SourceCells,
+                    limit: budget.max_decoded_cells,
+                    required: cells,
+                }));
             }
         }
         let rows = secondary
@@ -1525,7 +1574,11 @@ impl Executor<'_> {
                 total.checked_add(source.row_count())
             });
         if rows.is_none_or(|rows| rows > limits.source_rows) {
-            return Err(Box::new(ExecutionError::Capacity));
+            return Err(Box::new(ExecutionError::Limit {
+                resource: Resource::SourceRows,
+                limit: limits.source_rows,
+                required: rows,
+            }));
         }
         observer(ExecutionEvent::Exit {
             phase: ExecutionPhase::Admission,
@@ -2398,7 +2451,25 @@ impl Executor<'_> {
                                         Default::default(),
                                         budget.predicate(),
                                     )
-                                    .map_err(|error| Box::new(predicate_limit(error)))?
+                                    .map_err(|error| {
+                                        let ExecutionError::Limit {
+                                            resource,
+                                            limit,
+                                            required,
+                                        } = predicate_limit::<E>(error)
+                                        else {
+                                            unreachable!("predicate resource limit")
+                                        };
+                                        Box::new(ExecutionError::ScopedLimit {
+                                            resource,
+                                            limit,
+                                            required,
+                                            spec_paths: vec![format!(
+                                                "{}.pattern",
+                                                verification.path
+                                            )],
+                                        })
+                                    })?
                                 } else {
                                     yamaa_core::dataset_checks::column_offenders(
                                         &verification.check,
@@ -2503,15 +2574,22 @@ impl Executor<'_> {
         additional: usize,
         limits: Limits,
     ) -> Result<(), Box<ExecutionError<E>>> {
-        let required = current
-            .checked_add(additional)
-            .ok_or_else(|| Box::new(ExecutionError::Capacity))?;
-        if required > limits.output_rows
-            || required
-                .checked_mul(self.plan.output().columns().len())
-                .is_none_or(|cells| cells > limits.output_cells)
-        {
-            return Err(Box::new(ExecutionError::Capacity));
+        let rows = current.checked_add(additional);
+        for (resource, required, limit) in [
+            (Resource::OutputRows, rows, limits.output_rows),
+            (
+                Resource::OutputCells,
+                rows.and_then(|rows| rows.checked_mul(self.plan.output().columns().len())),
+                limits.output_cells,
+            ),
+        ] {
+            if required.is_none_or(|required| required > limit) {
+                return Err(Box::new(ExecutionError::Limit {
+                    resource,
+                    limit,
+                    required,
+                }));
+            }
         }
         Ok(())
     }

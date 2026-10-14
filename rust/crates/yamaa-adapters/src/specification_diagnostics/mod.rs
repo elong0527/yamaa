@@ -185,6 +185,21 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
         json!({"status":"rejected","stage":"ingest","code":code})
     } else if let Ok(Some(diagnostics)) = projected {
         json!({"status":"invalid","diagnostics":diagnostics})
+    } else if let Some(refusal) = match error {
+        Error::ResourceLimit(refusal) => Some(refusal.clone()),
+        _ => source.and_then(|source| crate::resource_diagnostics::source(error, source)),
+    } {
+        let code = match error {
+            Error::Source(TextTableError::Csv(_)) => "csv_limit",
+            Error::Source(TextTableError::Table(_)) => "table_limit",
+            Error::ParquetSource(_) => "parquet_limit",
+            _ => "source_limit",
+        };
+        let mut outcome = json!({"status":"rejected","stage":"ingest","code":code,"resource":refusal.resource,"limit":refusal.limit,"spec_paths":refusal.spec_paths});
+        if let Some(actual) = refusal.actual {
+            outcome["actual"] = json!(actual);
+        }
+        outcome
     } else if let Error::Prepare(PrepareError::Unsupported(features)) = error {
         json!({"status":"unsupported","features":features.iter().map(|f| json!({"operation":f.operation,"spec_path":f.path})).collect::<Vec<_>>()})
     } else if let Error::Prepare(error) = error {
@@ -217,6 +232,7 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
             Error::Bind(_) => ("bind", "internal"),
             Error::Execution(error) if error.is_internal() => ("execute", "internal"),
             Error::Execution(_) => ("execute", "execution_boundary"),
+            Error::ResourceLimit(_) => ("ingest", "source_limit"),
             Error::Sources(_) => ("ingest", "source_collection_boundary"),
             Error::OdmFields(_) | Error::OdmValues(_) => ("ingest", "odm_projection_boundary"),
         };

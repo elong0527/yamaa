@@ -470,3 +470,26 @@ qualify_intermediate_callback <- function() {
   cat("public R intermediate callbacks preserve prior values and selected donor field types\n")
 }
 qualify_intermediate_callback()
+
+qualify_matching_budget <- function() {
+  previous <- getwd(); on.exit(setwd(previous))
+  work <- tempfile("regex-budget-"); dir.create(work); setwd(work)
+  truth <- host_truth[["regex_budget"]]
+  writeChar(truth$specification, "spec.yaml", eos = NULL, useBytes = TRUE)
+  writeChar(truth$source, "input.csv", eos = NULL, useBytes = TRUE)
+  writeLines(c("schema_version: '1.0'", "language: r"), "environment.yaml")
+  for (environment in list(NULL, "environment.yaml")) {
+    failed <- yamaa_domain("spec.yaml", environment = environment)
+    stopifnot(is.null(failed$output), nrow(failed$issues) == 1L,
+      identical(failed$issues$condition, truth$condition),
+      identical(failed$issues$spec_paths[[1]], unlist(truth$paths, use.names = FALSE)))
+    context <- jsonlite::fromJSON(failed$issues$context[[1]], simplifyVector = FALSE)
+    stopifnot(identical(context$code, truth$context$code),
+      identical(context$stage, truth$context$stage),
+      identical(context$resource, truth$context$resource),
+      identical(context$limit, truth$context$limit),
+      inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"),
+      !file.exists("output.csv"))
+  }
+}
+qualify_matching_budget()

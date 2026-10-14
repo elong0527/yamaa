@@ -7,11 +7,15 @@ use super::{
 };
 use parquet::{basic::Type, schema::types::ColumnDescriptor};
 
-fn charge(used: &mut usize, amount: usize, maximum: usize) -> Result<(), Error> {
-    *used = used
-        .checked_add(amount)
+fn charge(used: &mut usize, amount: Option<usize>, maximum: usize) -> Result<(), Error> {
+    let actual = amount.and_then(|amount| used.checked_add(amount));
+    *used = actual
         .filter(|v| *v <= maximum)
-        .ok_or(Error::Limit)?;
+        .ok_or(Error::ResourceLimit {
+            resource: "expanded_bytes",
+            limit: maximum,
+            actual,
+        })?;
     Ok(())
 }
 fn fixed_bytes(column: &ColumnDescriptor) -> Result<usize, Error> {
@@ -106,23 +110,32 @@ impl Admission {
                 let (&width, indices) = body.split_first().ok_or(Error::Malformed)?;
                 rle::hybrid(indices, u32::from(width), values, |index, count| {
                     let length = *dictionary.get(index as usize).ok_or(Error::Malformed)?;
-                    charge(
-                        used,
-                        length.max(32).checked_mul(count).ok_or(Error::Limit)?,
-                        maximum,
-                    )
+                    charge(used, length.max(32).checked_mul(count), maximum)
                 })?;
             }
             0 => {
                 for length in plain_lengths(body, values, column)? {
-                    charge(used, length.max(32), maximum)?;
+                    charge(used, Some(length.max(32)), maximum)?;
                 }
             }
             5..=7 => {
                 let reconstruction =
-                    payload::admit(page, decoded, column, maximum.saturating_sub(*used))?;
-                charge(used, reconstruction, maximum)?;
-                charge(used, values.checked_mul(32).ok_or(Error::Limit)?, maximum)?;
+                    payload::admit(page, decoded, column, maximum.saturating_sub(*used)).map_err(
+                        |error| match error {
+                            Error::ResourceLimit {
+                                resource: "expanded_bytes",
+                                actual,
+                                ..
+                            } => Error::ResourceLimit {
+                                resource: "expanded_bytes",
+                                limit: maximum,
+                                actual: actual.and_then(|amount| used.checked_add(amount)),
+                            },
+                            other => other,
+                        },
+                    )?;
+                charge(used, Some(reconstruction), maximum)?;
+                charge(used, values.checked_mul(32), maximum)?;
             }
             _ => {
                 // Fixed-width encodings have no variable string reconstruction.
@@ -132,11 +145,7 @@ impl Admission {
                 } else {
                     fixed_bytes(column)?.max(32)
                 };
-                charge(
-                    used,
-                    values.checked_mul(length).ok_or(Error::Limit)?,
-                    maximum,
-                )?;
+                charge(used, values.checked_mul(length), maximum)?;
             }
         }
         Ok(())
@@ -220,7 +229,14 @@ mod tests {
                 &column,
             )
             .unwrap();
-        assert_eq!(state.admit(&data(10), &[0, 20], &column), Err(Error::Limit));
+        assert_eq!(
+            state.admit(&data(10), &[0, 20], &column),
+            Err(Error::ResourceLimit {
+                resource: "expanded_bytes",
+                limit: 999,
+                actual: Some(1000),
+            })
+        );
         let mut state = Admission::new(1000);
         state
             .admit(
@@ -233,7 +249,14 @@ mod tests {
             )
             .unwrap();
         state.admit(&data(10), &[0, 20], &column).unwrap();
-        assert_eq!(state.admit(&data(1), &[0, 2], &column), Err(Error::Limit));
+        assert_eq!(
+            state.admit(&data(1), &[0, 2], &column),
+            Err(Error::ResourceLimit {
+                resource: "expanded_bytes",
+                limit: 1000,
+                actual: Some(1100),
+            })
+        );
     }
     #[test]
     fn missing_dictionary_bad_indices_and_truncated_plain_strings_fail_safely() {

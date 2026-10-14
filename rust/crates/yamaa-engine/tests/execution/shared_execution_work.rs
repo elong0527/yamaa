@@ -153,7 +153,11 @@ fn static_shape_rejections_preserve_the_completed_work_prefix_and_do_not_enter_d
             .execute_with_work_budget(&table, &[], &mut NoFunctions::new(), limits(), &work)
             .result
             .unwrap_err(),
-        ExecutionError::Capacity
+        ExecutionError::Limit {
+            resource: Resource::SourceRows,
+            limit: 10,
+            required: Some(11)
+        }
     ));
     assert_eq!(work.used(), 3);
     assert_eq!(table.cells.get(), 0);

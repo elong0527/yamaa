@@ -653,3 +653,27 @@ fn inherited_and_decoder_refusals_keep_resource_phase_on_both_public_routes() {
         }
     }
 }
+
+#[test]
+fn matching_budget_refusal_retains_pattern_path_and_applied_bound() {
+    let study = Study::new();
+    fs::write(study.0.join("spec.yaml"), "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TERM]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n  - name: TERM\n    type: str\n    derivation: {source: SRC.TERM}\n    verifications: {matches: {pattern: '(a+)+b'}}\n").unwrap();
+    fs::write(
+        study.0.join("input.csv"),
+        format!("ID,TERM\n1,{}\n", "a".repeat(32)),
+    )
+    .unwrap();
+    let result = study.build();
+    assert!(result.output().is_none());
+    let findings = result.issues();
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].condition, "engine_rejected");
+    assert_eq!(
+        findings[0].spec_paths,
+        ["columns.TERM.verifications[0].matches.pattern"]
+    );
+    let context: serde_json::Value = serde_json::from_str(&findings[0].context).unwrap();
+    assert_eq!(context["resource"], "predicate_regex_state_cells");
+    assert_eq!(context["limit"], 1_000_000);
+    assert!(!study.0.join("output.csv").exists());
+}

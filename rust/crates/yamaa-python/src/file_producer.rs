@@ -211,13 +211,31 @@ impl Attempt {
         yamaa_adapters::producer_attempt::visit_host_failures(&state, |_, _| {
             count = count.saturating_add(1)
         });
-        let mut remaining = maximum.min(yamaa_adapters::host_limits::REPLY_BYTES);
+        let projection_maximum = maximum.min(yamaa_adapters::host_limits::REPLY_BYTES);
+        let mut remaining = projection_maximum;
         let admitted = count <= yamaa_adapters::host_limits::RECORDS
             && count
                 .checked_mul(128)
                 .and_then(|size| remaining.checked_sub(size))
                 .is_some();
         let mut refusal = if admitted { "" } else { "report_limit" };
+        let mut refusal_details = if admitted {
+            None
+        } else if count > yamaa_adapters::host_limits::RECORDS {
+            Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+                "report_entries",
+                yamaa_adapters::host_limits::RECORDS,
+                Some(count),
+                Vec::new(),
+            ))
+        } else {
+            Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+                "report_bytes",
+                projection_maximum,
+                count.checked_mul(128),
+                Vec::new(),
+            ))
+        };
         let mut failures = Vec::new();
         let mut ordinary = Vec::new();
         if admitted {
@@ -228,14 +246,21 @@ impl Attempt {
                 failures.push(error)
             });
             for error in &failures {
-                let mut limited = false;
+                let mut limited = None;
                 let projection = match error {
                     HostError::Host(error) if error.is_instance_of::<PyException>(py) => {
-                        ordinary_exception(py, error, &mut remaining, &mut limited)
+                        ordinary_exception(
+                            py,
+                            error,
+                            &mut remaining,
+                            &mut limited,
+                            projection_maximum,
+                        )
                     }
                     _ => None,
                 };
-                if limited {
+                if let Some(details) = limited {
+                    refusal_details = Some(details);
                     refusal = "report_limit";
                     break;
                 }
@@ -260,6 +285,15 @@ impl Attempt {
                                 remaining = left;
                             } else {
                                 refusal = "report_limit";
+                                refusal_details =
+                                    Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+                                        "report_bytes",
+                                        projection_maximum,
+                                        charge.and_then(|charge| {
+                                            (projection_maximum - remaining).checked_add(charge)
+                                        }),
+                                        Vec::new(),
+                                    ));
                             }
                         }
                     }
@@ -313,6 +347,20 @@ impl Attempt {
                         ..
                     }) => {
                         observations = Some(value.to_string());
+                        if let yamaa_adapters::ipc_table::TableError::Limit {
+                            resource,
+                            limit,
+                            required,
+                        } = error
+                        {
+                            refusal_details =
+                                Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+                                    resource,
+                                    limit,
+                                    required,
+                                    vec!["output.path".into()],
+                                ));
+                        }
                         output_error = Some(error);
                         refusal = "output_projection";
                         Ok(None)
@@ -340,6 +388,12 @@ impl Attempt {
                 Err(ProjectionError::Report(
                     yamaa_adapters::specification_report::Error::OutputLimit,
                 )) => refusal = "report_limit",
+                Err(ProjectionError::Report(
+                    yamaa_adapters::specification_report::Error::ResourceLimit(details),
+                )) => {
+                    refusal = "report_limit";
+                    refusal_details = Some(details);
+                }
                 Err(_) => refusal = "report_refusal",
             }
         }
@@ -347,6 +401,7 @@ impl Attempt {
             carrier: self.retained(),
             observations,
             refusal,
+            refusal_details,
             domain,
             output_error,
         })
@@ -439,6 +494,7 @@ pub struct Report {
     carrier: Attempt,
     observations: Option<String>,
     refusal: &'static str,
+    refusal_details: Option<yamaa_adapters::resource_diagnostics::Refusal>,
     domain: Option<Mutex<yamaa_adapters::producer_result::RootResult>>,
     output_error: Option<yamaa_adapters::ipc_table::TableError>,
 }
@@ -495,9 +551,9 @@ impl Report {
                     .to_vec())
             })
             .unwrap_or_else(|| {
-                Ok(yamaa_adapters::file_application::rejected(
-                    "build",
-                    self.refusal,
+                Ok(self.refusal_details.as_ref().map_or_else(
+                    || yamaa_adapters::file_application::rejected("build", self.refusal),
+                    |details| details.issues("build", self.refusal),
                 ))
             })
     }
@@ -585,17 +641,23 @@ fn ordinary_exception(
     py: Python<'_>,
     error: &PyErr,
     remaining: &mut usize,
-    limited: &mut bool,
+    limited: &mut Option<yamaa_adapters::resource_diagnostics::Refusal>,
+    projection_maximum: usize,
 ) -> Option<CallbackError> {
     let class = error.get_type(py).name().ok()?;
     let class = class.to_str().ok()?;
     let message = error.value(py).str().ok()?;
     let message = message.to_str().ok()?;
-    if [class, message]
-        .iter()
-        .any(|text| text.len() > yamaa_adapters::callback::MAX_ERROR_BYTES)
+    if let Some(text) = [class, message]
+        .into_iter()
+        .find(|text| text.len() > yamaa_adapters::callback::MAX_ERROR_BYTES)
     {
-        *limited = true;
+        *limited = Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+            "host_error_bytes",
+            yamaa_adapters::callback::MAX_ERROR_BYTES,
+            Some(text.len()),
+            Vec::new(),
+        ));
         return None;
     }
     // Admit both borrowed host texts before constructing native owned copies.
@@ -606,7 +668,15 @@ fn ordinary_exception(
             .and_then(|size| size.checked_add(128))
             .and_then(|size| remaining.checked_sub(size));
         let Some(next) = next else {
-            *limited = true;
+            *limited = Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+                "report_bytes",
+                projection_maximum,
+                text.len()
+                    .checked_mul(12)
+                    .and_then(|size| size.checked_add(128))
+                    .and_then(|charge| (projection_maximum - *remaining).checked_add(charge)),
+                Vec::new(),
+            ));
             return None;
         };
         *remaining = next;

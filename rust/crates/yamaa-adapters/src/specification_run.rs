@@ -14,6 +14,7 @@ use yamaa_engine::specification::{
 use yamaa_engine::specification_run as application;
 #[derive(Debug)]
 pub enum Error {
+    ResourceLimit(crate::resource_diagnostics::Refusal),
     Prepare(PrepareError),
     Source(TextTableError),
     TypedSource(crate::typed_csv::Error),
@@ -198,15 +199,11 @@ fn run_error(error: application::RunError<Error>, prepared: &PreparedSpecificati
                 .collect(),
         ),
         application::RunError::Bind(error) => Error::Bind(error),
-        application::RunError::SourceBytes { limit } => {
-            Error::Source(TextTableError::Csv(csv_source::Error::Limit {
-                resource: "bytes",
-                limit,
-            }))
-        }
-        application::RunError::SourceCells => Error::Execution(DatasetError::Table(
-            crate::ipc_table::TableError::ShapeLimit,
-        )),
+        error @ (application::RunError::SourceBytes { .. }
+        | application::RunError::SourceCells { .. }) => Error::ResourceLimit(
+            crate::resource_diagnostics::run_limit(&error, prepared.sources())
+                .expect("source budget owner"),
+        ),
     }
 }
 
@@ -296,11 +293,18 @@ pub(crate) fn decode_interpreted(
                 })
                 .collect::<Vec<_>>();
             let binding = yamaa_core::odm_source::bind_fields(&fields)
-                .map_err(|_| {
-                    Error::Source(TextTableError::Csv(csv_source::Error::Limit {
-                        resource: "odm_metadata",
-                        limit: 1_048_576,
-                    }))
+                .map_err(|error| {
+                    let yamaa_core::odm_source::AdmissionError::MetadataLimit {
+                        resource,
+                        limit,
+                        actual,
+                    } = error;
+                    Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                        resource,
+                        limit,
+                        actual,
+                        vec![format!("input.{}", source.name)],
+                    ))
                 })?
                 .map_err(Error::OdmFields)?;
             let projected = crate::csv_source::CsvSource {
@@ -508,7 +512,13 @@ mod width_tests {
             } else {
                 assert!(matches!(
                     result,
-                    Err(Error::ParquetSource(crate::parquet_source::Error::Limit))
+                    Err(Error::ParquetSource(crate::parquet_source::Error::Table(
+                        TableError::Limit {
+                            resource: "columns",
+                            limit: 1024,
+                            required: Some(1025)
+                        }
+                    )))
                 ));
             }
         }
