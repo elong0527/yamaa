@@ -12,4 +12,4 @@ The private R bridge registers handles without dereferencing user pointers. Owne
 
 Study-source approved roots retain their separate existing rules. The public facade, Windows publication, general publication diagnostic projection and complete migration acceptance remain open. The private staging directory and its writer protocol are qualified on the checked hosts; wider filesystem/security support is not a release-matrix promise.
 
-The Windows candidate is documented in [WINDOWS_FILES.md](../../../../WINDOWS_FILES.md). Its installed Python tests remove all five original-file skips and require complete public cohort reports. Its handle-based implementation, safety scope and explicit R-on-Windows exclusion need final Windows execution and artifact qualification before this transport is promoted.
+The Windows implementations use retained handles in [windows_file.rs](../../src/windows_file.rs) and [file_publication_windows.rs](../../src/file_publication_windows.rs). The installed Python and R suites cover original-file access and publication on Windows.

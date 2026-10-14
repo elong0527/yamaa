@@ -2,7 +2,7 @@
 
 The Rust probe and this Python specification implement the documented corpus
 separately. CI binds case identities and input bits to this specification before
-comparing observed outputs. See MATH_POLICY.md for the versioned algorithm.
+comparing observed outputs. The pinned operations live in crates/yamaa-core/src/numeric.rs.
 """
 
 from assess_math import decode, normalized_bits

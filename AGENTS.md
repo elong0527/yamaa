@@ -55,3 +55,11 @@ do not create `docs/index.md` or `docs/articles/rules.md`. Their site URLs and
 Edit buttons are set by the hook. Relative Markdown links resolve from the
 canonical source file. Build and test commands live in
 `.github/scripts/docs/README.md`.
+
+## Rust and host APIs
+
+`rust/README.md` describes the crate boundaries and local verification commands.
+Language contracts live in `rules/`, and host usage lives in `python/README.md`
+and `R/yamaa/README.md`. The declared API inventory is
+`rust/qualification/release-api.json`; check it from the repository root with
+`uv run --project python --no-sync python rust/tools/check_release_api.py`.

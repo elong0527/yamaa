@@ -10,4 +10,4 @@ The private R bridge supplies raw UTF-8 paths, raw bytes and capture counters th
 
 This qualifies a Unix study-source adapter. Entry/layer/environment/codelist capture, public file APIs, production atomic publication, Windows native file transport and callback retirement remain separate work. Existing truth and reference-assisted inventory levels do not change.
 
-The Windows candidate is documented in [WINDOWS_FILES.md](../../../../WINDOWS_FILES.md). Its installed Python tests remove all five original-file skips and require complete public cohort reports. Its handle-based implementation, safety scope and explicit R-on-Windows exclusion need final Windows execution and artifact qualification before this transport is promoted.
+The Windows implementations use retained handles in [windows_file.rs](../../src/windows_file.rs) and [file_publication_windows.rs](../../src/file_publication_windows.rs). The installed Python and R suites cover original-file access and publication on Windows.

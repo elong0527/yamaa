@@ -37,15 +37,13 @@ datetimes use POSIXct with UTC.
 Dataset-JSON requests read already published artifacts. Save publishes retained
 JSON in specification order and XML last, stopping after an operational failure.
 A failed Define Save raises `yamaa_define_error`. See the
-[shared Define contract](../../rust/DEFINE_GENERATION.md).
+[submission contracts](../../rules/README.md#submission).
 
 ## Source installation
 
-The approved first release channel is the standalone `yamaa_0.4.0.tar.gz` source
-asset on a [qualified GitHub release](https://github.com/elong0527/yamaa/releases).
-CRAN, r-universe and R binary distributions are later work. This checkout is still
-a migration candidate; the release asset and evaluator removal require the
-[transition gates](../../rust/planning/transition.md).
+The standalone source archive includes the R package and shared Rust workspace.
+Source assets are distributed through
+[GitHub releases](https://github.com/elong0527/yamaa/releases).
 
 After downloading the tarball from the selected release:
 
@@ -55,14 +53,14 @@ install.packages("yamaa_0.4.0.tar.gz", repos = NULL, type = "source")
 
 Supported source-build targets are R 4.6.1 on Linux x86_64, macOS arm64 and Windows
 x64. Install Rust 1.90.0/Cargo and the platform's C compiler and GNU make first.
-Windows builds require Rtools45 and the `x86_64-pc-windows-gnu` Rust target; see
-[Windows R qualification](../../rust/R_WINDOWS.md). The archive contains the
+Windows builds require Rtools45 and the `x86_64-pc-windows-gnu` Rust target.
+The archive contains the
 complete Rust workspace and the unchanged canonical Cargo lock. Compilation uses
 `cargo build --locked`; no checkout, Python runtime or new dependency resolution
 is needed during R installation. Cargo downloads the already locked dependencies
 when they are absent from its cache.
 
-For a development build of the prepared 0.4.0 candidate, stage this repository
+For a development build, stage this repository
 template before `R CMD build`.
 Direct `devtools::install_github(..., subdir = "R/yamaa")` installation omits the
 shared Rust sources and is unsupported. From the repository root:
@@ -80,10 +78,5 @@ Staging refuses to overwrite an existing destination. The source archive include
 unchanged authored grammar documents and independent installed test inputs.
 The native workflow rebuilds, installs and runs the public suites outside the
 checkout, then requires `Status: OK` from `R CMD check` on all three supported R
-platforms. See [Cargo locking](../../rust/CARGO_LOCKING.md).
-
-The public API replaces the retired `cdiscbuilder` evaluator. Legacy SQL/semantic,
-custom-schema/provenance and ODM authoring APIs, including `parse_odm_to_long_df`,
-are outside the first release surface. Roll back a whole run by pinning the prior
-qualified source release in `renv.lock` before execution. Existing published
-outputs are retained; rollback does not undo earlier Save effects.
+platforms. The [Rust workspace guide](../../rust/README.md) describes the
+crate boundaries and development checks.
