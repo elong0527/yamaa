@@ -49,7 +49,7 @@ fn retired_verification_names_keep_findings_and_project_boolean_replacement_hint
         vec![
             json!({"phase": "validation", "condition": "missing_required_field", "requirement": "REQ-0285",
             "spec_paths": ["verifications[0].assert.require"],
-            "context": {"class": "assert", "field": "require", "retired": true, "suggestion": "replace expr with require (REQ-0384)"}}),
+            "context": {"class": "assert", "field": "require", "suggestion": "replace expr with require (REQ-0384)"}}),
             json!({"phase": "validation", "condition": "unknown_field", "requirement": "REQ-0285",
             "spec_paths": ["verifications[0].assert.expr"],
             "context": {"class": "assert", "field": "expr", "retired": true, "suggestion": "replace expr with require (REQ-0384)"}})
@@ -128,7 +128,11 @@ fn legacy_environment_findings_share_one_migration_explanation_and_keep_order() 
             }
         );
         assert_eq!(finding["requirement"], "REQ-0285");
-        assert_eq!(finding["context"]["retired"], true);
+        if index < 5 {
+            assert!(finding["context"].get("retired").is_none());
+        } else {
+            assert_eq!(finding["context"]["retired"], true);
+        }
         assert_eq!(finding["context"]["suggestion"], ENVIRONMENT_HINT);
     }
     let typo = diagnostics(&schema, "schema_version: '1.0'\nruntme: {}\n");

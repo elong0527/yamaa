@@ -80,10 +80,19 @@ fn migration_context(
     suggestion: Option<&str>,
 ) -> Vec<(&'static str, SchemaContext)> {
     if let Some(suggestion) = suggestion {
-        context.push(("retired", SchemaContext::Boolean(true)));
         context.push(("suggestion", SchemaContext::Text(suggestion.into())));
     }
     context
+}
+
+fn retired_context(
+    mut context: Vec<(&'static str, SchemaContext)>,
+    suggestion: Option<&str>,
+) -> Vec<(&'static str, SchemaContext)> {
+    if suggestion.is_some() {
+        context.push(("retired", SchemaContext::Boolean(true)));
+    }
+    migration_context(context, suggestion)
 }
 
 /// Each default is interpreted against its descriptor after all references resolve.
@@ -527,7 +536,7 @@ impl Run<'_, '_> {
                 diagnostics.push(self.diagnostic(
                     site.child(site.value, &path),
                     ConditionCode::SchemaUnknownField,
-                    migration_context(
+                    retired_context(
                         vec![("field", Self::text(&key)), ("class", Self::text(name))],
                         retired_field_hint(name, &key),
                     ),
@@ -677,7 +686,7 @@ impl Run<'_, '_> {
                         return Ok(vec![self.diagnostic(
                             site.child(site.value, &path),
                             ConditionCode::SchemaUnknownOperation,
-                            migration_context(
+                            retired_context(
                                 vec![
                                     ("registry", Self::text(&registry.name)),
                                     ("operation", Self::text(&operation)),
