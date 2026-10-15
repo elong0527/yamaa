@@ -8,8 +8,11 @@ pub enum Outcome<E> {
     Original(Error<E>),
 }
 
-pub fn traversal_outcome<E>(error: Error<E>) -> Result<Outcome<E>, ProjectionError> {
-    match error.diagnostic()? {
+pub fn traversal_outcome<E>(
+    error: Error<E>,
+    maximum: usize,
+) -> Result<Outcome<E>, ProjectionError> {
+    match error.diagnostic_with_limit(maximum)? {
         Some(finding) => Ok(Outcome::Diagnostic(finding)),
         None => Ok(Outcome::Original(error)),
     }

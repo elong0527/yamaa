@@ -1,7 +1,7 @@
 //! Admission of a complete captured schema closure over an explicit physical codec.
 //! Include resolution, descriptors and default authority remain in the shared core.
 use crate::project_preparation::Source;
-use crate::schema::{BundleError, Document, SchemaModule, SchemaStructure};
+use crate::schema::{BundleError, BundleLimits, Document, SchemaModule, SchemaStructure};
 
 /// Discovery grants read authority only to names accepted by the existing core
 /// include grammar. Unsafe authored names remain for final bundle diagnostics.
@@ -24,7 +24,7 @@ pub fn include_names(input: &Document) -> Vec<&str> {
         .collect()
 }
 
-/// Read-only queries borrow an already admitted closure.
+/// Read-only queries over an already admitted closure share core request budgets.
 /// Physical codecs, host query carriers and result serialization stay in adapters.
 pub fn validate_query(
     schema: &SchemaStructure,
@@ -32,8 +32,9 @@ pub fn validate_query(
     types: &[String],
     fragment: bool,
 ) -> Result<Vec<crate::schema::SchemaDiagnostic>, crate::schema::ValidationError> {
-    let selected = schema.parse_query_types(types)?;
-    schema.validate_types(&selected, input, input.root(), "", fragment)
+    let mut budget = crate::schema::ValidationBudget::new(Default::default());
+    let selected = schema.parse_query_types(types, &mut budget)?;
+    schema.validate_types(&selected, input, input.root(), "", fragment, &mut budget)
 }
 
 pub fn normalize_query(
@@ -42,14 +43,15 @@ pub fn normalize_query(
     types: &[String],
     fragment: bool,
 ) -> Result<crate::schema::NormalizedDocument, crate::schema::NormalizationError> {
-    let selected = schema.parse_query_types(types)?;
-    schema.normalize_types(&selected, input, input.root(), fragment)
+    let mut budget = crate::schema::NormalizationBudget::new(Default::default());
+    let selected = schema.parse_query_types(types, budget.validation_scope())?;
+    schema.normalize_types(&selected, input, input.root(), fragment, &mut budget)
 }
 
 pub fn default_findings(
     schema: &SchemaStructure,
 ) -> Result<Vec<crate::schema::DefaultDiagnostics>, crate::schema::ValidationError> {
-    schema.validate_defaults()
+    schema.validate_defaults(&mut crate::schema::ValidationBudget::new(Default::default()))
 }
 
 /// A codec keeps its own physical parsing limits and occurrence locations.
@@ -68,14 +70,39 @@ pub struct DecodedModule<L> {
     pub document: Document,
     pub locations: L,
 }
-/// Select the structural root without changing its admitted schema authority.
+/// The default route has no separate root-name text charge, as in the existing
+/// public adapter. Named roots check that text before every other admission.
 #[derive(Clone, Copy, Debug)]
 pub enum RootSelection<'a> {
     Default,
     Named(&'a str),
 }
+#[derive(Clone, Copy, Debug)]
+pub struct Limits {
+    pub captured_bytes: usize,
+    pub identity_bytes: usize,
+    pub bundle: BundleLimits,
+}
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            captured_bytes: 16_777_216,
+            identity_bytes: 65_536,
+            bundle: Default::default(),
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Resource {
+    RootClass,
+    SchemaModules,
+    CapturedBytes,
+    IdentityBytes,
+}
 #[derive(Debug, thiserror::Error)]
 pub enum Error<E> {
+    #[error("schema capture limit: {0:?}")]
+    Limit(Resource),
     #[error("schema capture decode: identity={identity:?}, error={error:?}")]
     Decode { identity: String, error: E },
     #[error("schema capture bundle: {0:?}")]
@@ -103,19 +130,40 @@ impl<L> CapturedClosure<L> {
     }
 }
 
-/// Physical decoding of each file completes in
+/// Admit the whole captured closure before the first physical decode. Each
+/// source charges bytes before identity text. Physical decoding completes in
 /// supplied order before bundle semantic admission, including entry/name errors.
 /// Core defaults are not validated early or promoted to execution qualification.
 pub fn admit<P: DecodePort>(
     sources: Vec<Source>,
     entry: usize,
     root: RootSelection<'_>,
+    limits: Limits,
     decoder: &mut P,
 ) -> Result<CapturedClosure<P::Locations>, Error<P::Error>> {
     let root_class = match root {
         RootSelection::Default => "root_class",
-        RootSelection::Named(name) => name,
+        RootSelection::Named(name) => {
+            if name.len() > limits.identity_bytes {
+                return Err(Error::Limit(Resource::RootClass));
+            }
+            name
+        }
     };
+    if sources.len() > limits.bundle.modules {
+        return Err(Error::Limit(Resource::SchemaModules));
+    }
+    let (mut bytes, mut identities) = (0usize, 0usize);
+    for source in &sources {
+        bytes = bytes
+            .checked_add(source.bytes.len())
+            .filter(|&n| n <= limits.captured_bytes)
+            .ok_or(Error::Limit(Resource::CapturedBytes))?;
+        identities = identities
+            .checked_add(source.identity.len())
+            .filter(|&n| n <= limits.identity_bytes)
+            .ok_or(Error::Limit(Resource::IdentityBytes))?;
+    }
     let mut locations = Vec::with_capacity(sources.len());
     let mut modules = Vec::with_capacity(sources.len());
     for source in &sources {
@@ -131,7 +179,8 @@ pub fn admit<P: DecodePort>(
             document: decoded.document,
         });
     }
-    let structure = SchemaStructure::admit(modules, entry, root_class).map_err(Error::Bundle)?;
+    let structure =
+        SchemaStructure::admit(modules, entry, root_class, limits.bundle).map_err(Error::Bundle)?;
     Ok(CapturedClosure {
         sources,
         locations,

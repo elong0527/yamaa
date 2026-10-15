@@ -3,7 +3,7 @@
 //! multiplying copies of large permitted lists for every invalid document value.
 
 use super::{Descriptor, DocumentNode};
-use crate::regex::MatchError;
+use crate::regex::{MatchBudget, MatchError, MatchLimits, MatchUsage};
 
 /// Constraint order is values, pattern, minimum length, then exact size.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,11 +14,60 @@ pub enum ConstraintViolation {
     InvalidSize,
 }
 
-/// A fixed per-match regex refusal remains distinct from a constraint mismatch.
+/// Logical validation work and regex matching retain independent request ceilings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ConstraintError {
+    #[error("schema constraints work: limit={limit:?}")]
+    Work { limit: usize },
     #[error("schema constraints regex: {0:?}")]
     Regex(MatchError),
+}
+
+/// Successful charge prefixes survive failed checks; no check refunds them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ConstraintUsage {
+    pub work: usize,
+    pub regex: MatchUsage,
+}
+
+/// Reuse one scope for every constraint visited during a document validation attempt.
+pub struct ConstraintBudget {
+    work_limit: usize,
+    work: usize,
+    regex: MatchBudget,
+}
+impl ConstraintBudget {
+    /// Construct a fresh scope with explicit scalar-comparison and matching ceilings.
+    pub fn new(work_limit: usize, regex: MatchLimits) -> Self {
+        Self {
+            work_limit,
+            work: 0,
+            regex: MatchBudget::new(regex),
+        }
+    }
+    /// Report cumulative work independently from the regex engine's logical counters.
+    pub fn used(&self) -> ConstraintUsage {
+        ConstraintUsage {
+            work: self.work,
+            regex: self.regex.used(),
+        }
+    }
+    /// Adjust a request's admitted input allowance without refunding charged work.
+    pub(super) fn application_limits(&mut self, limit: usize, regex: MatchLimits) {
+        self.work_limit = limit;
+        self.regex.application_limits(regex);
+    }
+    /// Reserve work before scanning a string or comparing a permitted choice.
+    pub(super) fn charge(&mut self, amount: usize) -> Result<(), ConstraintError> {
+        self.work = self
+            .work
+            .checked_add(amount)
+            .filter(|n| *n <= self.work_limit)
+            .ok_or(ConstraintError::Work {
+                limit: self.work_limit,
+            })?;
+        Ok(())
+    }
 }
 
 impl Descriptor {
@@ -27,12 +76,20 @@ impl Descriptor {
     pub fn check_constraints(
         &self,
         value: &DocumentNode,
+        regex_limits: MatchLimits,
+        budget: &mut ConstraintBudget,
     ) -> Result<Vec<ConstraintViolation>, ConstraintError> {
+        budget.charge(1)?;
         let mut findings = Vec::new();
         if let Some(permitted) = self.permitted() {
             let mut found = false;
             for choice in permitted {
+                budget.charge(1)?;
                 if let DocumentNode::Text(text) = value {
+                    // Conservative byte-comparison accounting; never rely on a
+                    // mismatch occurring early to make the operation affordable.
+                    budget.charge(choice.len())?;
+                    budget.charge(text.len())?;
                     if text == choice {
                         found = true;
                         break;
@@ -45,7 +102,7 @@ impl Descriptor {
         }
         if let (Some((_, pattern)), DocumentNode::Text(text)) = (self.pattern(), value) {
             if pattern
-                .full_match(text)
+                .full_match_with_budget(text, regex_limits, &mut budget.regex)
                 .map_err(ConstraintError::Regex)?
                 .is_none()
             {
@@ -53,6 +110,9 @@ impl Descriptor {
             }
         }
         if self.minimum().is_some() || self.size().is_some() {
+            if let DocumentNode::Text(text) = value {
+                budget.charge(text.len())?;
+            }
             let length = value.length();
             if self.minimum().is_some() && !length.is_some_and(|n| self.length_meets_minimum(n)) {
                 findings.push(ConstraintViolation::MinimumLength);

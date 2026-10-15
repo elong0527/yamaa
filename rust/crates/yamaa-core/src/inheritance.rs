@@ -1,5 +1,7 @@
 //! Demand-driven inheritance traversal; filesystem identity and bytes remain host ports.
-use crate::schema::{Document, DocumentNode as N, NormalizationError, SchemaStructure};
+use crate::schema::{
+    Document, DocumentNode as N, NormalizationBudget, NormalizationError, SchemaStructure,
+};
 use std::vec;
 
 /// The canonical identity is compared directly. Display spelling retains read-error context.
@@ -38,11 +40,116 @@ pub struct Layer {
     pub document: Document,
 }
 
+/// Logical request policies; host allocation/IO containment is a separate deployment concern.
+#[derive(Clone, Copy, Debug)]
+pub struct Limits {
+    pub layers: usize,
+    pub parent_visits: usize,
+    pub depth: usize,
+    pub path_bytes: usize,
+    pub input_nodes: usize,
+    pub input_text_bytes: usize,
+    pub work: usize,
+}
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            layers: 256,
+            parent_visits: 8192,
+            depth: 64,
+            path_bytes: 1_048_576,
+            input_nodes: 131_072,
+            input_text_bytes: 8_388_608,
+            work: 8_388_608,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Resource {
+    Layers,
+    ParentVisits,
+    Depth,
+    PathBytes,
+    InputNodes,
+    InputTextBytes,
+    Work,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Exhausted {
+    pub resource: Resource,
+    pub limit: usize,
+}
+
+/// Reuse this budget with the normalization budget across attempts; failure retains charges.
+pub struct Budget {
+    limits: Limits,
+    used: [usize; 7],
+}
+impl Budget {
+    pub fn new(limits: Limits) -> Self {
+        Self {
+            limits,
+            used: [0; 7],
+        }
+    }
+    pub fn used(&self, resource: Resource) -> usize {
+        self.used[resource as usize]
+    }
+    fn charge(&mut self, resource: Resource, count: usize) -> Result<(), Exhausted> {
+        let limit = match resource {
+            Resource::Layers => self.limits.layers,
+            Resource::ParentVisits => self.limits.parent_visits,
+            Resource::Depth => self.limits.depth,
+            Resource::PathBytes => self.limits.path_bytes,
+            Resource::InputNodes => self.limits.input_nodes,
+            Resource::InputTextBytes => self.limits.input_text_bytes,
+            Resource::Work => self.limits.work,
+        };
+        let value = &mut self.used[resource as usize];
+        let Some(total) = value.checked_add(count) else {
+            *value = usize::MAX;
+            return Err(Exhausted { resource, limit });
+        };
+        *value = total;
+        if *value > limit {
+            Err(Exhausted { resource, limit })
+        } else {
+            Ok(())
+        }
+    }
+    fn text(&mut self, value: &str) -> Result<(), Exhausted> {
+        self.charge(Resource::PathBytes, value.len())
+    }
+    fn input(&mut self, input: &Document) -> Result<(), Exhausted> {
+        self.charge(Resource::InputNodes, input.nodes().len())?;
+        for node in input.nodes() {
+            self.charge(Resource::Work, 1)?;
+            if let N::Text(s) | N::Integer(s) = node {
+                self.charge(Resource::InputTextBytes, s.len())?;
+            }
+        }
+        Ok(())
+    }
+    fn depth(&mut self, depth: usize) -> Result<(), Exhausted> {
+        self.used[Resource::Depth as usize] = self.used[Resource::Depth as usize].max(depth);
+        if depth > self.limits.depth.min(128) {
+            Err(Exhausted {
+                resource: Resource::Depth,
+                limit: self.limits.depth.min(128),
+            })
+        } else {
+            Ok(())
+        }
+    }
+}
+
 /// No partial contribution list escapes a traversal failure.
 #[derive(Debug, PartialEq)]
 pub enum Error<E> {
     Host(E),
-    Resource(crate::limits::LimitExceeded),
+    Resource(Exhausted),
     Unavailable {
         declaring: String,
         path: String,
@@ -75,8 +182,8 @@ pub enum Error<E> {
     },
     InvalidIdentity,
 }
-impl<E> From<crate::limits::LimitExceeded> for Error<E> {
-    fn from(error: crate::limits::LimitExceeded) -> Self {
+impl<E> From<Exhausted> for Error<E> {
+    fn from(error: Exhausted) -> Self {
         Self::Resource(error)
     }
 }
@@ -84,8 +191,15 @@ impl<E> From<crate::limits::LimitExceeded> for Error<E> {
 impl<E> Error<E> {
     /// Project only classified traversal causes. The original error remains
     /// borrowed, including non-Clone host payloads and retained schema inputs.
-    pub fn diagnostic(
+    pub fn diagnostic(&self) -> Option<crate::diagnostic::Diagnostic> {
+        self.diagnostic_with_limit(crate::diagnostic::MAX_PROJECTION_BYTES)
+            .ok()
+            .flatten()
+    }
+
+    pub fn diagnostic_with_limit(
         &self,
+        maximum: usize,
     ) -> Result<Option<crate::diagnostic::Diagnostic>, crate::diagnostic::ProjectionError> {
         use crate::diagnostic::InheritanceFinding as F;
         match self {
@@ -113,7 +227,7 @@ impl<E> Error<E> {
             },
             _ => return Ok(None),
         }
-        .diagnostic()
+        .diagnostic_with_limit(maximum)
         .map(Some)
     }
 }
@@ -161,10 +275,15 @@ fn admit<E>(
     entry: &str,
     source: Source,
     input: Document,
+    normalization: &mut NormalizationBudget,
+    budget: &mut Budget,
 ) -> Result<Frame, Error<E>> {
-    let normalized = match schema.normalize_layer(&input) {
+    budget.input(&input)?;
+    normalization.admit_input(&input);
+    let normalized = match schema.normalize_layer(&input, normalization) {
         Ok(value) => value.document,
         Err(error) => {
+            budget.text(entry)?;
             return Err(Error::Layer {
                 source: source.identity,
                 entry: entry.into(),
@@ -173,6 +292,7 @@ fn admit<E>(
             });
         }
     };
+    budget.charge(Resource::Work, normalized.nodes().len())?;
     let Some(version) = text_field(&normalized, "schema_version") else {
         return Err(Error::UnsupportedControlField {
             source: source.identity,
@@ -180,6 +300,9 @@ fn admit<E>(
         });
     };
     if version != schema.version() {
+        budget.text(entry)?;
+        budget.text(schema.version())?;
+        budget.text(version)?;
         let is_entry = source.identity == entry;
         return Err(Error::Version {
             source: source.identity,
@@ -204,6 +327,8 @@ fn admit<E>(
                     field: "parents",
                 });
             };
+            budget.text(parent)?;
+            budget.charge(Resource::Work, 1)?;
             parents.push(parent.clone());
         }
     }
@@ -224,23 +349,38 @@ pub fn traverse<P: SourcePort>(
     entry: Source,
     entry_document: Document,
     port: &mut P,
+    normalization: &mut NormalizationBudget,
+    budget: &mut Budget,
 ) -> Result<Vec<Layer>, Error<P::Error>> {
     if entry.identity.is_empty() || entry.display_path.is_empty() {
         return Err(Error::InvalidIdentity);
     }
+    budget.text(&entry.identity)?;
+    budget.text(&entry.display_path)?;
+    budget.text(&entry.identity)?;
     let entry_identity = entry.identity.clone();
-    let mut active = vec![admit(schema, &entry_identity, entry, entry_document)?];
+    budget.depth(1)?;
+    budget.charge(Resource::Layers, 1)?;
+    let mut active = vec![admit(
+        schema,
+        &entry_identity,
+        entry,
+        entry_document,
+        normalization,
+        budget,
+    )?];
     let mut completed: Vec<Layer> = Vec::new();
-    let mut parent_occurrences = 0;
     while let Some(frame) = active.last_mut() {
+        budget.charge(Resource::Work, 1)?;
         if frame.next == frame.parents.len() {
             completed.push(active.pop().expect("active frame").layer);
             continue;
         }
-        parent_occurrences += 1;
-        crate::limits::Limits::parent_occurrences(parent_occurrences)?;
-        // Each written occurrence is visited, including already captured parents.
+        budget.charge(Resource::ParentVisits, 1)?;
+        // Reserve copies before a callback may fail. Each written occurrence is visited.
         let written = &frame.parents[frame.next];
+        budget.text(written)?;
+        budget.text(&frame.layer.source.identity)?;
         let written = written.clone();
         let declaring = frame.layer.source.identity.clone();
         frame.next += 1;
@@ -263,12 +403,22 @@ pub fn traverse<P: SourcePort>(
         if source.identity.is_empty() || source.display_path.is_empty() {
             return Err(Error::InvalidIdentity);
         }
+        budget.text(&source.identity)?;
+        budget.text(&source.display_path)?;
+        budget.charge(
+            Resource::Work,
+            active
+                .len()
+                .saturating_add(completed.len())
+                .saturating_mul(source.identity.len().saturating_add(1)),
+        )?;
         if let Some(first) = active
             .iter()
             .position(|f| f.layer.source.identity == source.identity)
         {
             let mut path = Vec::new();
             for frame in &active[first..] {
+                budget.text(&frame.layer.source.identity)?;
                 path.push(frame.layer.source.identity.clone());
             }
             let returns_to_entry = source.identity == entry_identity;
@@ -284,6 +434,8 @@ pub fn traverse<P: SourcePort>(
         {
             continue;
         }
+        budget.depth(active.len().saturating_add(1))?;
+        budget.charge(Resource::Layers, 1)?;
         let input = match port.read(&source) {
             Ok(input) => input,
             Err(SourceError::Unavailable) => {
@@ -294,7 +446,14 @@ pub fn traverse<P: SourcePort>(
             }
             Err(SourceError::Raised(error)) => return Err(Error::Host(error)),
         };
-        active.push(admit(schema, &entry_identity, source, input)?);
+        active.push(admit(
+            schema,
+            &entry_identity,
+            source,
+            input,
+            normalization,
+            budget,
+        )?);
     }
     Ok(completed)
 }
@@ -305,3 +464,24 @@ impl<E: std::fmt::Debug> std::fmt::Display for Error<E> {
     }
 }
 impl<E: std::fmt::Debug> std::error::Error for Error<E> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn exhausted_counter_never_wraps_or_saturates_into_success() {
+        let mut budget = Budget::new(Limits {
+            work: usize::MAX,
+            ..Limits::default()
+        });
+        budget.charge(Resource::Work, usize::MAX).unwrap();
+        assert_eq!(
+            budget.charge(Resource::Work, 1),
+            Err(Exhausted {
+                resource: Resource::Work,
+                limit: usize::MAX
+            })
+        );
+        assert!(budget.charge(Resource::Work, 1).is_err());
+    }
+}

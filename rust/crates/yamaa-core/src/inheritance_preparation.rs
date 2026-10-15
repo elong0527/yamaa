@@ -1,9 +1,10 @@
 //! Inheritance application lifecycle over captured documents and explicit path authority.
 use crate::inheritance::{self, Layer, Source, SourcePort};
 use crate::schema::{
-    Document, DocumentError, DocumentNode as N, InheritanceDependencyError, LayerCompositionError,
-    LayerProvenance, NormalizationError, SchemaDiagnostic, SchemaOrigin, SchemaStructure,
-    SpecificationDocument, ValidationError, WindowReference,
+    Document, DocumentError, DocumentLimits, DocumentNode as N, InheritanceDependencyError,
+    LayerCompositionError, LayerProvenance, NormalizationBudget, NormalizationError,
+    SchemaDiagnostic, SchemaOrigin, SchemaStructure, SpecificationDocument, ValidationError,
+    WindowReference,
 };
 
 /// The host respells paths using captured canonical file identities, without reopening them.
@@ -13,7 +14,24 @@ pub trait PathPort: SourcePort {
         layer: &Source,
         entry: &Source,
         written: &str,
+        maximum_bytes: usize,
     ) -> Result<String, Self::Error>;
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Limits {
+    pub traversal: inheritance::Limits,
+    pub rebased_bytes: usize,
+    pub storage: DocumentLimits,
+}
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            traversal: Default::default(),
+            rebased_bytes: 1_048_576,
+            storage: Default::default(),
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -24,6 +42,8 @@ pub enum Error<E> {
     Traversal(inheritance::Error<E>),
     #[error("inheritance preparation path: {0:?}")]
     Path(E),
+    #[error("inheritance preparation path bytes")]
+    PathBytes,
     #[error("inheritance preparation document: {0:?}")]
     Document(DocumentError),
     #[error("inheritance preparation composition: {0:?}")]
@@ -126,6 +146,8 @@ fn rebase<P: PathPort>(
     layer: &mut Layer,
     entry: &Source,
     port: &mut P,
+    remaining: &mut usize,
+    storage: DocumentLimits,
 ) -> Result<(), Error<P::Error>> {
     let document = &layer.document;
     let mut paths = Vec::new();
@@ -151,12 +173,13 @@ fn rebase<P: PathPort>(
     for id in paths {
         if let N::Text(written) = &document.nodes()[id] {
             let path = port
-                .rebase(&layer.source, entry, written)
+                .rebase(&layer.source, entry, written, *remaining)
                 .map_err(Error::Path)?;
+            *remaining = remaining.checked_sub(path.len()).ok_or(Error::PathBytes)?;
             nodes[id] = N::Text(path);
         }
     }
-    layer.document = Document::new(nodes, document.root()).map_err(Error::Document)?;
+    layer.document = Document::new(nodes, document.root(), storage).map_err(Error::Document)?;
     Ok(())
 }
 
@@ -167,6 +190,8 @@ pub fn prepare<P: PathPort>(
     entry: Source,
     entry_document: Document,
     port: &mut P,
+    normalization: &mut NormalizationBudget,
+    limits: Limits,
 ) -> Result<PreparedInheritance, Error<P::Error>> {
     if entry_document
         .field(entry_document.root(), "parents")
@@ -174,20 +199,29 @@ pub fn prepare<P: PathPort>(
     {
         return Err(Error::ParentsRequired);
     }
-    let mut layers = inheritance::traverse(schema, entry.clone(), entry_document, port)
-        .map_err(Error::Traversal)?;
+    normalization.begin_inheritance();
+    let mut layers = inheritance::traverse(
+        schema,
+        entry.clone(),
+        entry_document,
+        port,
+        normalization,
+        &mut inheritance::Budget::new(limits.traversal),
+    )
+    .map_err(Error::Traversal)?;
+    let mut remaining = limits.rebased_bytes;
     for layer in &mut layers {
-        rebase(layer, &entry, port)?;
+        rebase(layer, &entry, port, &mut remaining, limits.storage)?;
     }
     let contributions = layers
         .iter()
         .map(|layer| layer.document.clone())
         .collect::<Vec<_>>();
     let composed = schema
-        .compose_layers(&contributions)
+        .compose_layers(&contributions, normalization)
         .map_err(Error::Composition)?;
     let expanded = schema
-        .expand_named_windows(&composed.document, false)
+        .expand_named_windows(&composed.document, false, normalization)
         .map_err(|error| {
             Error::Normalize(normalization_context(
                 error,
@@ -197,7 +231,7 @@ pub fn prepare<P: PathPort>(
             ))
         })?;
     let pruned = schema
-        .resolve_inheritance_dependencies(&expanded.document)
+        .resolve_inheritance_dependencies(&expanded.document, normalization)
         .map_err(|error| {
             Error::Dependencies(dependency_context(
                 error,
@@ -207,7 +241,7 @@ pub fn prepare<P: PathPort>(
             ))
         })?;
     let normalized = schema
-        .normalize_resolved_document(&pruned.document)
+        .normalize_resolved_document(&pruned.document, normalization)
         .map_err(|error| {
             Error::Normalize(normalization_context(
                 error,
@@ -217,7 +251,7 @@ pub fn prepare<P: PathPort>(
             ))
         })?;
     let expanded = schema
-        .expand_named_windows(&normalized.document, true)
+        .expand_named_windows(&normalized.document, true, normalization)
         .map_err(|error| {
             Error::Normalize(normalization_context(
                 error,
@@ -231,7 +265,7 @@ pub fn prepare<P: PathPort>(
         .iter()
         .map(|&id| normalized.origins[id])
         .collect();
-    let model = SpecificationDocument::admit(expanded.document)
+    let model = SpecificationDocument::admit(expanded.document, normalization.validation_scope())
         .map_err(Error::Validation)?
         .map_err(Error::Model)?;
     Ok(PreparedInheritance {

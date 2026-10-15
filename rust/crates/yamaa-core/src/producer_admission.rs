@@ -5,7 +5,7 @@ use crate::{
     producer_contract::{self, diagnostics::text, Contract},
     project_environment::ExecutionEnvironment,
     schema::{Document, DocumentNode as N, SpecificationDocument},
-    specification::{PrepareError, PreparedSpecification, SourceDeclaration},
+    specification::{CompilationLimits, PrepareError, PreparedSpecification, SourceDeclaration},
     table::TableSchema,
 };
 use std::vec;
@@ -44,10 +44,29 @@ pub struct Candidate<'a> {
     pub output_identity: &'a str,
     pub document: &'a SpecificationDocument,
 }
+#[derive(Clone, Copy, Debug)]
+pub struct Limits {
+    pub candidates: usize,
+    pub document_nodes: usize,
+    pub text_bytes: usize,
+    pub contract: producer_contract::Limits,
+    pub compilation: CompilationLimits,
+}
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            candidates: 16,
+            document_nodes: 200_000,
+            text_bytes: 1_048_576,
+            contract: Default::default(),
+            compilation: Default::default(),
+        }
+    }
+}
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("producer admission limit: {0:?}")]
-    Limit(crate::limits::LimitExceeded),
+    Limit(&'static str),
     #[error("producer admission invalid: {0:?}")]
     Invalid(Vec<Diagnostic>),
     #[error("producer admission compilation: {0:?}")]
@@ -167,6 +186,18 @@ pub fn contradictory_snapshot(dataset: &str) -> Diagnostic {
 pub fn undeclared_metadata(dataset: &str) -> Diagnostic {
     invalid(dataset, "undeclared_metadata")
 }
+fn charge(
+    total: &mut usize,
+    count: usize,
+    ceiling: usize,
+    name: &'static str,
+) -> Result<(), Error> {
+    *total = total
+        .checked_add(count)
+        .filter(|&n| n <= ceiling)
+        .ok_or(Error::Limit(name))?;
+    Ok(())
+}
 /// Compile consumer declarations against bounded producer output metadata only.
 /// Unsupported consumer vocabulary, conflicting authorities and incomplete
 /// metadata fail here, without a source, activation or runtime callback port.
@@ -175,11 +206,16 @@ pub fn prepare(
     consumer: &SpecificationDocument,
     candidates: &[Candidate<'_>],
     environment: Option<&ExecutionEnvironment>,
+    limits: Limits,
 ) -> Result<Prepared, Error> {
-    let producers = prepare_declarations(consumer_identity, consumer, candidates, false)?;
-    let compiled =
-        PreparedSpecification::prepare_producer_metadata(consumer, environment, &producers)
-            .map_err(Error::Compilation)?;
+    let producers = prepare_declarations(consumer_identity, consumer, candidates, limits, false)?;
+    let compiled = PreparedSpecification::prepare_producer_metadata(
+        consumer,
+        limits.compilation,
+        environment,
+        &producers,
+    )
+    .map_err(Error::Compilation)?;
     Ok(Prepared {
         compiled,
         producers,
@@ -193,14 +229,68 @@ pub(crate) fn prepare_declarations(
     consumer_identity: &str,
     consumer: &SpecificationDocument,
     candidates: &[Candidate<'_>],
+    limits: Limits,
     recursive_graph: bool,
 ) -> Result<Vec<Declaration>, Error> {
-    crate::limits::Limits::inputs(candidates.len()).map_err(Error::Limit)?;
+    if candidates.len() > limits.candidates {
+        return Err(Error::Limit("producer_candidates"));
+    }
     let d = consumer.document();
     let Some(N::Mapping(inputs)) = d.field(d.root(), "input").map(|id| &d.nodes()[id]) else {
         return Err(Error::Boundary);
     };
-    crate::limits::Limits::inputs(inputs.len()).map_err(Error::Limit)?;
+    if inputs.len() > limits.compilation.inputs {
+        return Err(Error::Limit("inputs"));
+    }
+    let mut nodes = 0usize;
+    let mut bytes = 0usize;
+    charge(
+        &mut bytes,
+        consumer_identity.len(),
+        limits.text_bytes,
+        "producer_metadata_text_bytes",
+    )?;
+    for document in std::iter::once(consumer).chain(candidates.iter().map(|c| c.document)) {
+        charge(
+            &mut nodes,
+            document.document().nodes().len(),
+            limits.document_nodes,
+            "producer_document_nodes",
+        )?;
+        for node in document.document().nodes() {
+            if let N::Text(s) | N::Integer(s) = node {
+                charge(
+                    &mut bytes,
+                    s.len(),
+                    limits.text_bytes,
+                    "producer_metadata_text_bytes",
+                )?;
+            }
+        }
+    }
+    for c in candidates {
+        for s in [
+            c.dataset,
+            c.schema_path,
+            c.schema_origin.declaring_source,
+            c.schema_origin.written,
+            c.input_origin.declaring_source,
+            c.input_origin.written,
+            c.output_origin.declaring_source,
+            c.output_origin.written,
+            c.schema_identity,
+            c.producer_identity,
+            c.source_identity,
+            c.output_identity,
+        ] {
+            charge(
+                &mut bytes,
+                s.len(),
+                limits.text_bytes,
+                "producer_metadata_text_bytes",
+            )?;
+        }
+    }
     // Preflight all declared type authorities before validating any producer.
     let mut findings = Vec::new();
     for &(name, id) in inputs {
@@ -214,7 +304,9 @@ pub(crate) fn prepare_declarations(
                 N::Null => &[],
                 _ => return Err(Error::Boundary),
             };
-            crate::limits::Limits::columns(declared.len()).map_err(Error::Limit)?;
+            if declared.len() > limits.compilation.source_fields {
+                return Err(Error::Limit("source_fields"));
+            }
             let mut push = |field: &str, value: &str| {
                 findings.push(Diagnostic {
                     code: C::ProducerRedundantSourceType,
@@ -297,7 +389,7 @@ pub(crate) fn prepare_declarations(
             ));
             continue;
         }
-        let contract = match producer_contract::prepare(c.document) {
+        let contract = match producer_contract::prepare(c.document, limits.contract) {
             Ok(contract) => contract,
             Err(producer_contract::Error::Invalid(causes)) => {
                 findings.extend(causes.iter().map(|cause| cause.diagnostic(dataset)));
@@ -306,7 +398,9 @@ pub(crate) fn prepare_declarations(
             Err(producer_contract::Error::Limit(name)) => return Err(Error::Limit(name)),
             Err(producer_contract::Error::Boundary) => return Err(Error::Boundary),
         };
-        crate::limits::Limits::columns(contract.fields().len()).map_err(Error::Limit)?;
+        if contract.fields().len() > limits.compilation.source_fields {
+            return Err(Error::Limit("source_fields"));
+        }
         if c.source_identity != c.output_identity {
             findings.push(Diagnostic {
                 code: C::ProducerOutputPathMismatch,

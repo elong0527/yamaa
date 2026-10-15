@@ -1,7 +1,6 @@
 //! Deterministic UTF-8 Define-XML for the shared admitted column metadata profile.
 use crate::{
     diagnostic::ConditionCode,
-    limits::Limits,
     project_terminology as ct, specification_submission_document as s,
     submission_composition::{self as model, Finding, Study},
     submission_document as e,
@@ -9,6 +8,7 @@ use crate::{
 };
 use std::collections::BTreeSet;
 
+const MAX_BYTES: usize = 67_108_864;
 struct Element {
     name: &'static str,
     attributes: Vec<(&'static str, String)>,
@@ -92,7 +92,7 @@ impl Element {
             if out
                 .len()
                 .checked_add(text.len())
-                .is_none_or(|n| Limits::output_bytes(n).is_err())
+                .is_none_or(|n| n > MAX_BYTES)
             {
                 return Err(Finding::cause(
                     crate::diagnostic::ConditionCode::ApplicationRejected,
