@@ -93,8 +93,8 @@ Host behavior and source installation commands live in the
 
 ## Resource refusals
 
-A fixed resource boundary produces `engine_rejected` with a null requirement and
-its authored specification paths. The context retains the lifecycle stage, the
+In the shared engine, a fixed resource boundary produces `engine_rejected` with
+a null requirement and its authored specification paths. The context retains the lifecycle stage, the
 boundary's code, its resource name and integer limit, and the observed `actual`
 size when available. Compiler boundaries use `compiler_limit`; physical capture,
 preparation and execution boundaries retain their corresponding resource code
@@ -106,10 +106,15 @@ its metadata-only authority. Reduce the refused size and rerun the operation.
 
 ## Resource limits
 
-Rust, Python and R use one fixed policy in `yamaa_core::limits::Limits`.
+The shared Rust engine behind Python and R `domain`, `check` and `define` calls
+uses one fixed policy in `yamaa_core::limits::Limits`.
 Admission checks the physical file, table geometry, declaration shape or actual
 regex match at its owning boundary. There are no caller-selected profiles or
 cumulative byte, copy, traversal or work pools.
+
+The standalone Python `read_odm` and `write_odm_parquet` helpers retain their
+own archive-member, expanded-byte and XML-depth options and report parser
+refusals through `ODMError`.
 
 | Boundary | Fixed maximum |
 | --- | ---: |

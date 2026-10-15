@@ -56,9 +56,10 @@ writes remain if a later target fails. There is no whole-run file rollback.
 
 ## Implementation limits
 
-The shared hosts use the same [resource policies](../docs/release.md#resource-limits).
-That page owns all capacity limits and refusal details. These are implementation
-policies, not language constraints or process-memory guarantees.
+The shared `domain`, `check` and `define` engine calls use the same
+[resource policies](../docs/release.md#resource-limits) in Python and R.
+That page owns the engine's capacity limits and refusal details. These are
+implementation policies, not language constraints or process-memory guarantees.
 
 ## Define documents
 
@@ -91,6 +92,8 @@ print(written.output_path, written.row_count)
 These helpers read ODM 1.3/2.0 XML or TAR inputs into the fixed
 clinical-item schema. They preserve source order and absent/null/empty values,
 and the Parquet writer uses bounded batches and atomic publication. Their
+`max_archive_members`, `max_expanded_bytes` and `max_xml_depth` options govern
+parsing; parser refusals raise `ODMError`. Their
 [private implementation](src/yamaa/_odm/README.md) imports only file/schema
 libraries. Internal row
 models, iterators, binding plans and contexts are not public authoring APIs.
