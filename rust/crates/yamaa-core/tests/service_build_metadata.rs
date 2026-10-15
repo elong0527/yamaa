@@ -1148,11 +1148,13 @@ mod service {
                 assert_eq!(finding.spec_paths, ["sdtm.specs[0]"]);
                 assert_eq!(
                     finding.context,
-                    yamaa_core::json::from_value(yamaa_core::json::json!({
+                    yamaa_core::json::json!({
                         "path": "declared.yaml", "stage": "define", "code": "resource_limit",
                         "resource": resource, "limit": limit, "actual": limit + 1,
-                    }))
+                    })
+                    .as_object()
                     .unwrap()
+                    .clone()
                 );
             }
         }
