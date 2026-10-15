@@ -120,6 +120,79 @@ class RatchetSeed(unittest.TestCase):
             self.fixtures, self.artifacts, self.run_file, self.output, previous
         )
 
+    def qualification_run(self, **fields):
+        return {
+            **self.run,
+            "event": "push",
+            "head_branch": "qualification/issue-2297-pkqt",
+            "repository": {"full_name": "example/yamaa"},
+            "head_repository": {"full_name": "example/yamaa"},
+            **fields,
+        }
+
+    def test_qualification_push_can_seed_complete_passing_observations(self):
+        judge.write_json(self.run_file, self.qualification_run())
+        value = self.seed()
+        self.assertEqual(value["python"], ["new", "stable"])
+        self.assertEqual(value["r"], ["new", "stable"])
+        self.assertEqual(len(value["inventories"]), 21)
+        self.assertEqual(value["source_revision"], self.run["head_sha"])
+
+    def test_qualification_push_requires_same_repository_and_qualified_branch(self):
+        for fields in (
+            {"head_branch": "other"},
+            {"head_branch": "qualification/issue-"},
+            {"head_branch": "qualification/not-issue-2297"},
+            {"repository": None},
+            {"repository": {"full_name": "other/yamaa"}},
+            {"head_repository": None},
+            {"head_repository": {"full_name": "fork/yamaa"}},
+            {"event": "pull_request"},
+            {"event": "schedule"},
+            {"status": "in_progress"},
+            {"conclusion": "failure"},
+            {"path": ".github/workflows/python.yml"},
+        ):
+            judge.write_json(self.run_file, self.qualification_run(**fields))
+            with (
+                self.subTest(fields=fields),
+                self.assertRaisesRegex(ValueError, "full native"),
+            ):
+                self.seed()
+            self.assertFalse(self.output.exists())
+
+    def test_qualification_push_rejects_nonpassing_authored_case(self):
+        judge.write_json(self.run_file, self.qualification_run())
+        root = self.artifacts / "public-conformance-r-windows-latest"
+        (root / "observed/work/new/output.csv").write_bytes(b"ID\n8\n")
+        self.compare(root)
+        with self.assertRaisesRegex(ValueError, "every active benchmark"):
+            self.seed()
+        self.assertFalse(self.output.exists())
+
+    def test_qualification_push_rejects_missing_lane_and_mixed_revision(self):
+        judge.write_json(self.run_file, self.qualification_run())
+        root = self.artifacts / "public-conformance-r-windows-latest"
+        path = root / "inventory.json"
+        original = judge.read_json(path)
+        judge.write_json(path, {**original, "source_revision": "a" * 40})
+        with self.assertRaisesRegex(ValueError, "provenance"):
+            self.seed()
+        root.rename(self.artifacts / "public-conformance-r-unapproved")
+        with self.assertRaisesRegex(ValueError, "lane set"):
+            self.seed()
+        self.assertFalse(self.output.exists())
+
+    def test_qualification_push_requires_exact_source_revision(self):
+        for revision in (None, "a" * 39, "A" * 40):
+            judge.write_json(self.run_file, self.qualification_run(head_sha=revision))
+            with (
+                self.subTest(revision=revision),
+                self.assertRaisesRegex(ValueError, "source revision"),
+            ):
+                self.seed()
+            self.assertFalse(self.output.exists())
+
     def test_intersection_needs_every_lane_of_each_host(self):
         root = self.artifacts / "public-conformance-r-windows-latest"
         (root / "observed/work/new/output.csv").write_bytes(b"ID\n8\n")
