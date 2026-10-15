@@ -58,18 +58,7 @@ pub(crate) fn resource_name(resource: Resource) -> &'static str {
         Resource::OutputRows => "output_rows",
         Resource::OutputCells => "output_cells",
         Resource::OutputColumns => "output_columns",
-        Resource::WorkCells => "work_cells",
-        Resource::ScalarTextBytes => "scalar_text_bytes",
-        Resource::OutputTextBytes => "output_text_bytes",
-        Resource::IdentityCells => "identity_cells",
-        Resource::IdentityTextBytes => "identity_text_bytes",
-        Resource::PredicateWork => "predicate_work",
-        Resource::PredicateResolutions => "predicate_resolutions",
-        Resource::PredicateTextBytes => "predicate_text_bytes",
-        Resource::PredicateLikeWork => "predicate_like_work",
-        Resource::PredicateRegexSubjectBytes => "predicate_regex_subject_bytes",
-        Resource::PredicateRegexWork => "predicate_regex_work",
-        Resource::PredicateRegexStateCells => "predicate_regex_state_cells",
+        Resource::RegexWork => "regex_steps",
     }
 }
 fn input_paths(sources: &[SourceDeclaration]) -> Vec<String> {
@@ -128,16 +117,12 @@ pub(crate) fn execution<E>(
             *required,
             spec_paths.clone(),
         ),
-        ExecutionError::Grouping(yamaa_core::table_grouping::GroupingError::RowLimit {
-            limit,
-            required,
-        }) => ("rows", *limit, Some(*required), Vec::new()),
-        ExecutionError::Grouping(yamaa_core::table_grouping::GroupingError::KeyCellLimit {
-            limit,
-        })
-        | ExecutionError::OutputGrouping(
-            yamaa_core::table_grouping::GroupingError::KeyCellLimit { limit },
-        ) => ("key_cells", *limit, None, Vec::new()),
+        ExecutionError::Grouping(yamaa_core::table_grouping::GroupingError::Limit(error))
+        | ExecutionError::OutputGrouping(yamaa_core::table_grouping::GroupingError::Limit(error))
+        | ExecutionError::Reduction {
+            error: yamaa_core::table_reduction::TableReductionError::Limit(error),
+            ..
+        } => (error.resource, error.limit, error.actual, Vec::new()),
         _ => return None,
     };
     if spec_paths.is_empty() && matches!(resource, "rows" | "cells" | "columns" | "sources") {
@@ -237,25 +222,15 @@ pub(crate) fn run_limit<E>(
     error: &yamaa_core::specification_run::RunError<E>,
     sources: &[SourceDeclaration],
 ) -> Option<Refusal> {
-    use yamaa_core::specification_run::RunError;
-    let (resource, limit, actual, source) = match error {
-        RunError::SourceBytes {
-            limit,
-            actual,
-            source,
-        } => ("bytes", *limit, *actual, Some(*source)),
-        RunError::SourceCells {
-            limit,
-            actual,
-            source,
-        } => ("cells", *limit, *actual, *source),
-        _ => return None,
+    let yamaa_core::specification_run::RunError::Boundary { source, error } = error else {
+        return None;
     };
-    let spec_paths = match source {
-        Some(index) => vec![format!("input.{}", sources.get(index)?.name)],
-        None => input_paths(sources),
-    };
-    Some(Refusal::new(resource, limit, actual, spec_paths))
+    Some(Refusal::new(
+        error.resource,
+        error.limit,
+        error.actual,
+        vec![format!("input.{}", sources.get(*source)?.name)],
+    ))
 }
 
 pub(crate) fn outcome(

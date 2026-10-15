@@ -160,8 +160,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
                 differ: &differ,
                 records: selected.len(),
             }
-            .diagnostic()
-            .map_err(|_| Box::new(ExecutionError::Capacity))?;
+            .diagnostic();
             let identity = if read.phase == AggregatePhase::Derivation {
                 failure_identity(candidate, plan.keys(), row)?
             } else {

@@ -139,8 +139,7 @@ impl DatasetPlan {
                                 source: name,
                                 actual: actual.into(),
                             }
-                            .diagnostic()
-                            .ok_or(ProjectionError::InvalidContext)?,
+                            .diagnostic()?,
                         );
                     }
                 }
@@ -199,8 +198,7 @@ impl DatasetPlan {
                             source: name,
                             actual: source.kind.into(),
                         }
-                        .diagnostic()
-                        .ok_or(ProjectionError::InvalidContext)?,
+                        .diagnostic()?,
                     );
                 }
             }
