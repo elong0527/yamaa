@@ -8,6 +8,46 @@ root <- system.file("specification-original", package="yamaa", mustWork=TRUE)
 source(file.path(root,"public-output-truth.R"),local=TRUE)
 observations <- get(".domain_observations",envir=asNamespace("yamaa"))
 rawfile <- function(path) readBin(path,"raw",n=file.info(path)$size)
+
+qualify_entry_relative_programs <- function(producer) {
+  work <- tempfile("study-paths-"); dir.create(work)
+  on.exit(unlink(work,recursive=TRUE),add=TRUE)
+  truth <- host_truth[["entry_relative"]]
+  shared <- file.path(work,"shared"); dir.create(shared)
+  for(name in names(truth$shared)) {
+    writeBin(charToRaw(truth$shared[[name]]),file.path(shared,name))
+  }
+  results <- list()
+  for(name in names(truth$studies)) {
+    study <- file.path(work,name)
+    dir.create(file.path(study,"input"),recursive=TRUE)
+    dir.create(file.path(study,"output"))
+    writeBin(charToRaw(truth$studies[[name]]),file.path(study,"input/data.csv"))
+    entry <- file.path(study,"spec.yaml")
+    program <- if(producer) "consumer" else "ordinary"
+    writeLines(c("schema_version: '1.0'",paste0("parents: ../shared/",program,".yaml")),entry)
+    writeBin(charToRaw(truth$producer_entry),file.path(study,"producer.yaml"))
+    stopifnot(nrow(yamaa_check(entry)$issues)==0L)
+    result <- yamaa_domain(entry)
+    stopifnot(nrow(result$issues)==0L,!file.exists(file.path(study,"output/result.csv")))
+    results[[name]] <- result
+  }
+  unlink(shared,recursive=TRUE)
+  for(name in names(results)) {
+    study <- file.path(work,name); unlink(file.path(study,"input"),recursive=TRUE)
+    expected <- charToRaw(truth$studies[[name]])
+    for(attempt in 1:2) {
+      stopifnot(isTRUE(results[[name]]$save()),
+        identical(rawfile(file.path(study,"output/result.csv")),expected),
+        file.exists(file.path(study,"output/warnings.csv")),
+        file.exists(file.path(study,"output/verifications.csv")))
+      if(producer) stopifnot(identical(rawfile(file.path(study,"output/produced.csv")),expected))
+    }
+  }
+}
+qualify_entry_relative_programs(FALSE)
+qualify_entry_relative_programs(TRUE)
+
 original_path <- Sys.getenv("PATH")
 runtime_path <- tempfile("public-files-native-only-")
 dir.create(runtime_path)

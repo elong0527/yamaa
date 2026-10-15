@@ -71,16 +71,9 @@ fn ordered<E>(
     window: &Window,
     left: &Candidate,
     right: &Candidate,
-    budget: &mut Budget,
 ) -> Result<Ordering, Box<ExecutionError<E>>> {
     for term in &window.order_by {
-        budget.work(1, 2)?;
         let (left, right) = (&left.values[term.column], &right.values[term.column]);
-        for value in [left, right] {
-            if let Value::Str(text) = value {
-                budget.scalar_text(text.len())?;
-            }
-        }
         let order = compare(ValueRef::from(left), ValueRef::from(right), term);
         if order != Ordering::Equal {
             return Ok(order);
@@ -125,26 +118,19 @@ impl Run {
         window: &Window,
         candidates: &[Candidate],
         schema: &TableSchema,
-        limits: Limits,
-        budget: &mut Budget,
     ) -> Result<Self, Box<ExecutionError<E>>> {
         let rows = candidates.len();
         if i64::try_from(rows).is_err() {
             return Err(Box::new(ExecutionError::Capacity));
         }
-        budget.work(rows, window.group_by.len().max(1))?;
+
         let groups = if window.group_by.is_empty() {
             vec![(0..rows).collect()]
         } else {
-            partition(
-                &Rows { candidates, schema },
-                &window.group_by,
-                limits.output_rows,
-                limits.key_cells,
-            )
-            .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?
+            partition(&Rows { candidates, schema }, &window.group_by)
+                .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?
         };
-        budget.work(rows, 2)?;
+
         let mut group_for_row = Vec::new();
         group_for_row
             .try_reserve_exact(rows)
@@ -174,16 +160,15 @@ impl Run {
         window: &Window,
         candidates: &[Candidate],
         table: &T,
-        budget: &mut Budget,
         context: &Context<'_>,
     ) -> Result<Value, Box<ExecutionError<T::Error>>> {
         if let Some(mut members) = self.groups[self.group_for_row[row]].take() {
             if !window.order_by.is_empty() {
-                sort(&mut members, window, candidates, budget)?;
+                sort(&mut members, window, candidates)?;
             }
             if let Some(filter) = &window.filter {
                 // Evaluate every predicate in sorted partition order before numbering any row.
-                budget.work(members.len(), 1)?;
+
                 let mut eligible = Vec::new();
                 eligible
                     .try_reserve_exact(members.len())
@@ -195,12 +180,9 @@ impl Run {
                         table,
                         source_row,
                         &candidates[member].values,
-                        budget.predicate(),
                     )
                     .map_err(|error| match error.kind {
-                        crate::predicate::ErrorKind::Limit(limit) => {
-                            Box::new(predicate_limit(limit))
-                        }
+                        crate::predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
                         _ => Box::new(ExecutionError::Predicate { source_row, error }),
                     })?;
                     if truth == crate::predicate::Truth::True {
@@ -209,13 +191,12 @@ impl Run {
                 }
                 members = eligible;
             }
-            budget.work(members.len(), 1)?;
+
             match window.kind {
                 WindowKind::BaselineFlag {
                     date,
                     reference_date,
                 } => {
-                    budget.work(members.len(), 3)?;
                     let mut latest: Option<usize> = None;
                     let mut count = 0;
                     for &member in &members {
@@ -284,7 +265,6 @@ impl Run {
                                 window,
                                 &candidates[members[position - 1]],
                                 &candidates[member],
-                                budget,
                             )? != Ordering::Equal;
                         if new_rank {
                             rank = if window.kind == WindowKind::Dense {
@@ -300,21 +280,12 @@ impl Run {
         }
         Ok(match self.answers[row] {
             Answer::Missing => Value::Missing,
-            Answer::Flag => {
-                budget.scalar_text(1)?;
-                Value::Str("Y".into())
-            }
+            Answer::Flag => Value::Str("Y".into()),
             Answer::AmbiguousBaseline {
                 row: donor,
                 date,
                 count,
             } => {
-                budget.identity(
-                    window
-                        .group_by
-                        .iter()
-                        .map(|&column| &candidates[row].values[column]),
-                )?;
                 return Err(Box::new(ExecutionError::BaselineAmbiguity {
                     path: context.assignment.path.clone(),
                     column: context
@@ -356,11 +327,7 @@ impl Run {
 
             Answer::Number(value) => Value::Int(value),
             Answer::Cell { row, column } => {
-                budget.work(1, 1)?;
                 let value = &candidates[row].values[column];
-                if let Value::Str(text) = value {
-                    budget.scalar_text(text.len())?;
-                }
                 value.clone()
             }
         })
@@ -372,10 +339,9 @@ fn sort<E>(
     members: &mut [usize],
     window: &Window,
     candidates: &[Candidate],
-    budget: &mut Budget,
 ) -> Result<(), Box<ExecutionError<E>>> {
-    ordering::sort(members, budget, |left, right, budget| {
-        ordered(window, &candidates[left], &candidates[right], budget)
+    ordering::sort(members, |left, right| {
+        ordered(window, &candidates[left], &candidates[right])
             .map(|order| order.then_with(|| left.cmp(&right)))
     })
 }
@@ -412,23 +378,17 @@ impl Cache {
         plan: &DatasetPlan,
         table: &T,
         row: usize,
-        limits: Limits,
-        budget: &mut Budget,
         handlers: &mut HandlerCounter,
     ) -> Result<Value, Box<ExecutionError<T::Error>>> {
         if !self.evaluations.contains_key(&assignment.path) {
-            budget.work(1, 1)?;
-            budget.scalar_text(assignment.path.len())?;
-            let evaluation = Evaluation::new(
-                assignment, candidates, plan, table, limits, budget, handlers,
-            )?
-            .expect("only admitted window expressions use the partition cache");
+            let evaluation = Evaluation::new(assignment, candidates, plan, table, handlers)?
+                .expect("only admitted window expressions use the partition cache");
             self.evaluations.insert(assignment.path.clone(), evaluation);
         }
         self.evaluations
             .get_mut(&assignment.path)
             .expect("the reached window has a run-local cache entry")
-            .value(row, candidates, table, budget, assignment, plan)
+            .value(row, candidates, table, assignment, plan)
     }
 }
 impl Evaluation {
@@ -438,8 +398,6 @@ impl Evaluation {
         candidates: &[Candidate],
         plan: &DatasetPlan,
         table: &T,
-        limits: Limits,
-        budget: &mut Budget,
         handlers: &mut HandlerCounter,
     ) -> Result<Option<Self>, Box<ExecutionError<T::Error>>> {
         let Some(window) = assignment.expression.window() else {
@@ -449,26 +407,14 @@ impl Evaluation {
             let schema = context
                 .schema(plan.output(), table.schema())
                 .map_err(|_| Box::new(ExecutionError::Capacity))?;
-            if candidates
-                .len()
-                .checked_mul(schema.columns().len())
-                .is_none_or(|n| n > limits.output_cells)
-            {
-                return Err(Box::new(ExecutionError::Capacity));
-            }
-            budget.work(candidates.len(), schema.columns().len())?;
+            Limits::table(candidates.len(), schema.columns().len())
+                .map_err(|error| scoped_table_boundary(error, &assignment.path))?;
             let mut rows = Vec::new();
             rows.try_reserve_exact(candidates.len())
                 .map_err(|_| Box::new(ExecutionError::Allocation))?;
             for (row, candidate) in candidates.iter().enumerate() {
-                for value in &candidate.values {
-                    if let Value::Str(text) = value {
-                        budget.scalar_text(text.len())?;
-                    }
-                }
                 let mut values = candidate.values.clone();
                 for (name, column) in &context.sources {
-                    budget.work(candidate.members.len(), 1)?;
                     let value = key_grain::collect_bound(
                         table,
                         key_grain::Collection {
@@ -483,12 +429,11 @@ impl Evaluation {
                             plan,
                             row,
                         },
-                        budget,
                         handlers,
                     )?;
                     values.push(value);
                 }
-                budget.work(candidate.members.len(), 1)?;
+
                 rows.push(Candidate {
                     template: candidate.template,
                     selection_identity: candidate.selection_identity,
@@ -505,8 +450,6 @@ impl Evaluation {
             window,
             rows.as_deref().unwrap_or(candidates),
             schema.as_ref().unwrap_or_else(|| plan.output()),
-            limits,
-            budget,
         )?;
         Ok(Some(Self {
             run,
@@ -520,7 +463,6 @@ impl Evaluation {
         row: usize,
         candidates: &[Candidate],
         table: &T,
-        budget: &mut Budget,
         assignment: &Assignment,
         plan: &DatasetPlan,
     ) -> Result<Value, Box<ExecutionError<T::Error>>> {
@@ -529,7 +471,6 @@ impl Evaluation {
             &self.window,
             self.rows.as_deref().unwrap_or(candidates),
             table,
-            budget,
             &Context {
                 assignment,
                 plan,

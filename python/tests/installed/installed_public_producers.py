@@ -216,6 +216,98 @@ output: {{path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}}
                     (self.root / "generated/root.csv").read_bytes(), CONSUMED
                 )
 
+    def test_untyped_date_selector_and_original_producer_filter_cause(self):
+        from yamaa import check
+
+        producer = """schema_version: '1.0'
+domain: ADSL
+keys: [USUBJID]
+input: {EX: {path: ../raw/ex.csv}}
+base: EX
+intermediates:
+  - id: EXP
+    dataset: EX
+    derivations:
+      EXSTDT: {to_date: {source: EXSTDTC}}
+      EXENDT0: {to_date: {source: EXENDTC}}
+      EXENDT: {first_available: {sources: [EXENDT0, EXSTDT]}}
+    filter: EX.EXENDT >= EX.EXSTDT
+    no_match: null
+columns:
+  - {name: USUBJID, type: str, label: Subject, derivation: EX.USUBJID}
+  - {name: TRTSDT, type: date, label: First Dose Date, derivation: EXP.EXSTDT}
+  - {name: TRTEDT, type: date, label: Last Dose Date, derivation: EXP.EXENDT}
+output: {path: ../generated/producer.csv, columns: [USUBJID, TRTSDT, TRTEDT]}
+"""
+        self.write("producer/p.yaml", producer)
+        self.write(
+            "consumer/root.yaml",
+            """schema_version: '1.0'
+domain: ADEX
+keys: [USUBJID]
+input: {ADSL: {path: ../generated/producer.csv, schema: ../producer/p.yaml}}
+base: ADSL
+columns:
+  - {name: USUBJID, type: str, label: Subject, derivation: ADSL.USUBJID}
+  - {name: TRTEDT, type: date, label: Last Dose Date, derivation: ADSL.TRTEDT}
+output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
+""",
+        )
+        self.write(
+            "raw/ex.csv",
+            "USUBJID,EXSTDTC,EXENDTC\nS01,2024-01-01,2024-01-10\nS02,2024-01-05,\n",
+        )
+        produced = b"USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,2024-01-10\nS02,2024-01-05,2024-01-05\n"
+        consumed = b"USUBJID,TRTEDT\nS01,2024-01-10\nS02,2024-01-05\n"
+        (self.root / "generated").mkdir()
+        for name, expected in [
+            ("producer/p.yaml", produced),
+            ("consumer/root.yaml", consumed),
+        ]:
+            path = self.root / name
+            self.assertTrue(check(path).issues.is_empty())
+            result = domain(path)
+            self.assertTrue(result.issues.is_empty(), result.issues)
+            self.assertIsNotNone(result.output)
+            self.assertEqual(result.output.height, 2)
+            self.assertTrue(result.save())
+            target = "producer.csv" if name.startswith("producer/") else "root.csv"
+            self.assertEqual((self.root / "generated" / target).read_bytes(), expected)
+        self.assertEqual((self.root / "generated/producer.csv").read_bytes(), produced)
+
+        # This comparison remains invalid even when selector inference is fixed.
+        self.write(
+            "producer/p.yaml",
+            producer.replace("EX.EXENDT >= EX.EXSTDT", "EX.EXSTDT >= 'not-a-date'"),
+        )
+        prior = {
+            "generated/producer.csv": b"previous producer bytes",
+            "generated/root.csv": b"previous consumer bytes",
+        }
+        for name, content in prior.items():
+            self.write(name, content)
+        failed = domain(self.root / "consumer/root.yaml")
+        self.assertIsNone(failed.output)
+        issues = failed.issues.to_dicts()
+        self.assertEqual(len(issues), 1)
+        actual = {**issues[0], "context": json.loads(issues[0]["context"])}
+        self.assertEqual(
+            actual,
+            {
+                "phase": "validation",
+                "condition": "incompatible_input_type",
+                "requirement": "REQ-0190",
+                "spec_paths": ["intermediates[0].filter"],
+                "context": {"left_type": "date", "right_type": "str"},
+            },
+        )
+        for _ in range(2):
+            with self.assertRaisesRegex(DomainError, "cannot save a failed build"):
+                failed.save()
+            self.assertEqual(failed.issues.to_dicts(), issues)
+            for name, content in prior.items():
+                self.assertEqual((self.root / name).read_bytes(), content)
+
     def test_original_aliases_fresh_union_before_data_and_retained_public_views(self):
         self.write("raw/raw.csv", b"ID,VALUE\n1,99.99\n")
         events = []
@@ -658,10 +750,11 @@ output: {{path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}}
         self.assertIs(retained.exception, original)
         self.assertIsNone(held.output())
 
-    def test_opaque_oversized_exception_rendering_preserves_original_and_refuses_public_output(
+    def test_long_exception_message_preserves_exact_facts_and_original_failure(
         self,
     ):
-        original = RuntimeError("x" * 65537)
+        message = "\u00e9\x00" * 30_000 + "complete producer failure"
+        original = RuntimeError(message)
         real = program.project_value
 
         def value(x):
@@ -674,9 +767,11 @@ output: {{path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}}
         self.assertIsNone(result.output)
         self.assertIs(result._native.project_failures()[0][1], original)
         self.assertEqual(self.entered(result).entered_nodes(), [1])
-        self.assertEqual(
-            json.loads(result.issues["context"][0])["code"], "report_limit"
-        )
+        self.assertEqual(result.issues["condition"].to_list(), ["function_call_failed"])
+        context = json.loads(result.issues["context"][0])
+        self.assertEqual(context["host_error"], "RuntimeError")
+        self.assertEqual(context["host_message"], message)
+        self.assertNotIn("host_details_truncated", context)
 
     def test_failed_consumer_verification_has_no_output_from_accepted_producer(self):
         self.write("consumer/root.yaml", CONSUMER + TRUTH["fatal_row_count_yaml"])
@@ -706,9 +801,7 @@ output: {{path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}}
         self.assertGreater(result.issues.height, 0)
 
     def assert_large_projection_admitted(self, result, ids, columns, expected_csv):
-        # The original smaller copy-policy refusals remain explicit-budget
-        # native controls in producer_result.rs. Public defaults now admit this
-        # geometry under the approved longitudinal profile.
+        # The fixed table geometry admits these cells and their held bytes.
         self.assertTrue(self.entered(result).accepted())
         self.assertEqual(self.entered(result).entered_nodes(), [1, 0])
         self.assertEqual(result.issues.height, 0)

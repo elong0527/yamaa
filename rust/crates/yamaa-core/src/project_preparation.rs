@@ -1,11 +1,11 @@
 //! Capture, structurally decode and admit project dependencies through native ports.
 //! Code activation, study data and publication authority are absent from this service.
 use crate::{
+    limits::{LimitExceeded, Limits},
     project_environment::{Draft, Environment, Finding, LockKind, LockReference},
     project_environment_document::{self, Declaration},
     project_function::Language,
     project_function_document,
-    project_limits::{AdmissionError, Limits as SemanticLimits},
     project_terminology::Source as TerminologySource,
     project_terminology_document,
     schema::Document,
@@ -30,32 +30,11 @@ pub enum Origin {
     Function(String),
     Codelist(usize),
 }
-#[derive(Clone, Copy, Debug)]
-pub struct Limits {
-    pub sources: usize,
-    pub bytes: usize,
-    pub identity_bytes: usize,
-    pub nodes: usize,
-    pub semantic: SemanticLimits,
-}
-impl Default for Limits {
-    fn default() -> Self {
-        Self {
-            sources: 128,
-            bytes: 16_777_216,
-            identity_bytes: 65_536,
-            nodes: 262_144,
-            semantic: SemanticLimits::default(),
-        }
-    }
-}
-/// Remaining total quotas are supplied before the host opens a dependency.
+/// One metadata dependency request; each captured file uses the shared size cap.
 pub struct Request<'a> {
     pub kind: Kind,
     pub declaring_source: &'a str,
     pub written: &'a str,
-    pub remaining_bytes: usize,
-    pub remaining_identity_bytes: usize,
 }
 #[derive(Debug)]
 pub enum Reply {
@@ -109,7 +88,7 @@ pub enum CaptureFailure<E, D, X> {
     #[error("project preparation protocol")]
     Protocol,
     #[error("project preparation limit: {0:?}")]
-    Limit(&'static str),
+    Limit(LimitExceeded),
     #[error("project preparation structural: {0:?}")]
     Structural(X),
     #[error("project preparation scalar: document={document:?}, findings={findings:?}")]
@@ -158,7 +137,7 @@ pub struct RejectedEnvironment<E, D, X> {
     pub captures: Vec<DocumentCapture<D>>,
     pub lock: Option<LockCapture>,
     pub sources: Vec<SourceFailure<E, D, X>>,
-    pub admission: Option<AdmissionError<Finding>>,
+    pub admission: Option<Vec<Finding>>,
 }
 #[derive(Debug, thiserror::Error)]
 pub enum Failure<E, D, X> {
@@ -173,7 +152,7 @@ pub enum Failure<E, D, X> {
     #[error("project preparation root: {0:?}")]
     Root(X),
     #[error("project preparation root limit: {0:?}")]
-    RootLimit(&'static str),
+    RootLimit(LimitExceeded),
     #[error("project preparation root scalar: root={root:?}, findings={findings:?}")]
     RootScalar {
         root: Box<D>,
@@ -186,81 +165,31 @@ pub enum Failure<E, D, X> {
 /// Preparation moves both admitted metadata and original boundary evidence.
 pub type PreparationResult<E, D, X> = Result<PreparedEnvironment<D>, Failure<E, D, X>>;
 
-struct Budget {
-    limits: Limits,
-    sources: usize,
-    bytes: usize,
-    identities: usize,
-    nodes: usize,
-}
-fn add(
-    current: &mut usize,
-    amount: usize,
-    maximum: usize,
-    code: &'static str,
-) -> Result<(), &'static str> {
-    *current = current
-        .checked_add(amount)
-        .filter(|&n| n <= maximum)
-        .ok_or(code)?;
-    Ok(())
-}
-impl Budget {
-    fn source(&mut self, source: &Source) -> Result<(), &'static str> {
-        add(&mut self.sources, 1, self.limits.sources, "sources")?;
-        add(
-            &mut self.bytes,
-            source.bytes.len(),
-            self.limits.bytes,
-            "bytes",
-        )?;
-        add(
-            &mut self.identities,
-            source.identity.len(),
-            self.limits.identity_bytes,
-            "identity_bytes",
-        )
-    }
-    fn document<D: DecodePort>(&mut self, document: &D::Document) -> Result<(), &'static str> {
-        add(
-            &mut self.nodes,
-            D::document(document).nodes().len(),
-            self.limits.nodes,
-            "nodes",
-        )
-    }
-    fn capture<P: CapturePort, D, X>(
-        &mut self,
-        port: &mut P,
-        kind: Kind,
-        declaring: &str,
-        written: &str,
-    ) -> Result<Reply, CaptureFailure<P::Error, D, X>> {
-        if self.sources >= self.limits.sources {
-            return Err(CaptureFailure::Limit("sources"));
-        }
-        let reply = port
-            .capture(Request {
-                kind,
-                declaring_source: declaring,
-                written,
-                remaining_bytes: self.limits.bytes - self.bytes,
-                remaining_identity_bytes: self.limits.identity_bytes - self.identities,
-            })
-            .map_err(|error| {
-                if port.is_interrupt(&error) {
-                    CaptureFailure::Interrupted(error)
-                } else {
-                    CaptureFailure::Port(error)
-                }
-            })?;
-        let source = match &reply {
-            Reply::Document(source) => source,
-            Reply::Lock { source, .. } => source,
-        };
-        self.source(source).map_err(CaptureFailure::Limit)?;
-        Ok(reply)
-    }
+fn capture<P: CapturePort, D, X>(
+    port: &mut P,
+    kind: Kind,
+    declaring: &str,
+    written: &str,
+) -> Result<Reply, CaptureFailure<P::Error, D, X>> {
+    let reply = port
+        .capture(Request {
+            kind,
+            declaring_source: declaring,
+            written,
+        })
+        .map_err(|error| {
+            if port.is_interrupt(&error) {
+                CaptureFailure::Interrupted(error)
+            } else {
+                CaptureFailure::Port(error)
+            }
+        })?;
+    let source = match &reply {
+        Reply::Document(source) => source,
+        Reply::Lock { source, .. } => source,
+    };
+    Limits::spec_bytes(source.bytes.len()).map_err(CaptureFailure::Limit)?;
+    Ok(reply)
 }
 
 pub fn prepare<P: CapturePort, D: DecodePort>(
@@ -268,78 +197,30 @@ pub fn prepare<P: CapturePort, D: DecodePort>(
     source: Source,
     host: Language,
     port: &mut P,
-    limits: Limits,
 ) -> PreparationResult<P::Error, D::Document, D::Error> {
-    let mut budget = Budget {
-        limits,
-        sources: 0,
-        bytes: 0,
-        identities: 0,
-        nodes: 0,
-    };
-    budget.source(&source).map_err(Failure::RootLimit)?;
+    Limits::spec_bytes(source.bytes.len()).map_err(Failure::RootLimit)?;
     let root = decoder
         .decode(source, DecodeTarget::Environment)
         .map_err(Failure::Root)?;
-    budget.document::<D>(&root).map_err(Failure::RootLimit)?;
     let document = D::document(&root);
-    let declarations = match project_environment_document::decode_with_limits(
-        document,
-        document.root(),
-        project_environment_document::DiagnosticLimits {
-            findings: limits.semantic.findings,
-            text_bytes: limits.semantic.text_bytes,
-        },
-    ) {
+    let declarations = match project_environment_document::decode(document, document.root()) {
         Ok(declarations) => declarations,
-        Err(project_environment_document::Error::Findings(findings)) => {
+        Err(findings) => {
             return Err(Failure::RootScalar {
                 root: Box::new(root),
                 findings,
             })
         }
-        Err(project_environment_document::Error::Limit(resource)) => {
-            let code = match resource {
-                project_environment_document::DiagnosticResource::Findings => {
-                    "environment_diagnostic_count"
-                }
-                project_environment_document::DiagnosticResource::TextBytes => {
-                    "environment_diagnostic_text"
-                }
-            };
-            return Err(Failure::RootLimit(code));
-        }
     };
-    // Bound declared capture attempts, including failed host replies, before any
-    // dependency port. A quota failure is not a truncated semantic result.
-    let paths = declarations
-        .functions
-        .iter()
-        .flatten()
-        .filter(|entry| matches!(entry.declaration, Declaration::Path(_)))
-        .count()
-        + declarations
-            .codelists
-            .iter()
-            .filter(|entry| matches!(entry.declaration, Declaration::Path(_)))
-            .count();
-    if paths
-        .checked_add(1 + usize::from(declarations.lock.is_some()))
-        .is_none_or(|count| count > limits.sources)
-    {
-        return Err(Failure::RootLimit("sources"));
-    }
     let mut failures = Vec::new();
     let mut origins = SourceOrigins::default();
-    let lock_was_written = declarations.lock.is_some();
     let mut captures = Vec::new();
     let mut lock = None;
     if let Some(written) = &declarations.lock {
-        let result =
-            (|| match budget.capture(port, Kind::Lock, &D::source(&root).identity, written)? {
-                Reply::Lock { source, kind } => Ok(LockCapture { source, kind }),
-                _ => Err(CaptureFailure::Protocol),
-            })();
+        let result = (|| match capture(port, Kind::Lock, &D::source(&root).identity, written)? {
+            Reply::Lock { source, kind } => Ok(LockCapture { source, kind }),
+            _ => Err(CaptureFailure::Protocol),
+        })();
         match result {
             Ok(captured) => lock = Some(captured),
             Err(CaptureFailure::Interrupted(error)) => {
@@ -365,21 +246,14 @@ pub fn prepare<P: CapturePort, D: DecodePort>(
             }
             Declaration::Path(written) => {
                 let result = (|| {
-                    let Reply::Document(source) = budget.capture(
-                        port,
-                        Kind::Function,
-                        &D::source(&root).identity,
-                        &written,
-                    )?
+                    let Reply::Document(source) =
+                        capture(port, Kind::Function, &D::source(&root).identity, &written)?
                     else {
                         return Err(CaptureFailure::Protocol);
                     };
                     let captured = decoder
                         .decode(source, DecodeTarget::Function)
                         .map_err(CaptureFailure::Structural)?;
-                    budget
-                        .document::<D>(&captured)
-                        .map_err(CaptureFailure::Limit)?;
                     let document = D::document(&captured);
                     let definition = match project_function_document::decode(
                         document,
@@ -433,21 +307,14 @@ pub fn prepare<P: CapturePort, D: DecodePort>(
             }
             Declaration::Path(written) => {
                 let result = (|| {
-                    let Reply::Document(source) = budget.capture(
-                        port,
-                        Kind::Codelist,
-                        &D::source(&root).identity,
-                        &written,
-                    )?
+                    let Reply::Document(source) =
+                        capture(port, Kind::Codelist, &D::source(&root).identity, &written)?
                     else {
                         return Err(CaptureFailure::Protocol);
                     };
                     let captured = decoder
                         .decode(source, DecodeTarget::Codelist)
                         .map_err(CaptureFailure::Structural)?;
-                    budget
-                        .document::<D>(&captured)
-                        .map_err(CaptureFailure::Limit)?;
                     let document = D::document(&captured);
                     let source =
                         match project_terminology_document::decode(document, document.root()) {
@@ -504,7 +371,7 @@ pub fn prepare<P: CapturePort, D: DecodePort>(
             .map(|(kind, _)| kind)
             .collect(),
     };
-    let admission = Environment::admit_retained_with_limits(host, draft, limits.semantic);
+    let admission = Environment::admit_retained(host, draft);
     match admission {
         Ok(environment) if failures.is_empty() => Ok(PreparedEnvironment {
             origins,
@@ -517,20 +384,6 @@ pub fn prepare<P: CapturePort, D: DecodePort>(
             let (draft, admission) = match result {
                 Ok(environment) => (Box::new(environment.into_draft()), None),
                 Err(rejected) => (rejected.draft, Some(rejected.error)),
-            };
-            let admission = match admission {
-                Some(AdmissionError::Findings(mut findings)) => {
-                    // A failed capture does not make an authored reference absent.
-                    if lock_was_written {
-                        findings.retain(|finding| !matches!(finding, Finding::MissingLock));
-                    }
-                    if findings.is_empty() {
-                        None
-                    } else {
-                        Some(AdmissionError::Findings(findings))
-                    }
-                }
-                error => error,
             };
             Err(Failure::Rejected(Box::new(RejectedEnvironment {
                 host,

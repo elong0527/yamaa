@@ -235,7 +235,15 @@ impl BoundAggregate {
                             .schema
                     }
                 };
-                match_values::validate(keys, primary, secondary, donor, output, available)?;
+                match_values::validate(
+                    keys,
+                    primary,
+                    secondary,
+                    donor,
+                    &|column| donor.columns().get(column).map(|column| column.kind),
+                    output,
+                    available,
+                )?;
                 if group_by
                     .iter()
                     .any(|&column| column >= donor.columns().len())
@@ -292,7 +300,12 @@ impl BoundAggregate {
                 return Err(PlanError::InvalidSource);
             }
             range
-                .validate_source(schema)
+                .validate_source(schema, &|column| {
+                    schema
+                        .columns()
+                        .get(column)
+                        .map(|column| column.kind.into())
+                })
                 .map_err(|_| PlanError::InvalidSource)?;
             if let CurrentRead::Output(column) = range.current().read {
                 if !available.get(column).copied().unwrap_or(false) {
@@ -300,24 +313,27 @@ impl BoundAggregate {
                 }
             }
             let current_kind = match range.current().read {
-                CurrentRead::Output(column) => output.columns().get(column).map(|field| field.kind),
+                CurrentRead::Output(column) => {
+                    output.columns().get(column).map(|field| Some(field.kind))
+                }
                 CurrentRead::Record { source: 0, column } => {
-                    primary.columns().get(column).map(|field| field.kind)
+                    primary.columns().get(column).map(|field| Some(field.kind))
                 }
                 CurrentRead::Record { source, column } => secondary
                     .get(source - 1)
                     .and_then(|source| source.schema.columns().get(column))
-                    .map(|field| field.kind),
-                CurrentRead::Intermediate { index, column } => intermediates
-                    .get(index)
-                    .and_then(|item| item.source_schema(secondary))
-                    .and_then(|schema| schema.columns().get(column))
-                    .map(|field| field.kind),
+                    .map(|field| Some(field.kind)),
+                CurrentRead::Intermediate { index, column } => {
+                    intermediates.get(index).and_then(|item| {
+                        item.source_schema(secondary)?.columns().get(column)?;
+                        Some(item.source_kind(secondary, column))
+                    })
+                }
             }
             .ok_or(PlanError::InvalidSource)?;
             if range
                 .value_kind()
-                .is_some_and(|kind| kind != current_kind.into())
+                .is_some_and(|kind| current_kind.is_some_and(|current| kind != current.into()))
             {
                 return Err(PlanError::InvalidSource);
             }

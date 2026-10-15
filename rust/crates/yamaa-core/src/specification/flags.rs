@@ -1,12 +1,12 @@
 //! Original flag declaration and post-capture binding; no predicate text is invented.
 use super::*;
+use crate::json::Value as V;
 use crate::{
     dataset::{Flag, FlagBinding, FlagRead},
     diagnostic::{ConditionCode as C, Diagnostic},
     predicate::Plan,
     predicate_compiler,
 };
-use serde_json::Value as V;
 
 #[derive(Clone, Debug)]
 pub(super) struct Declaration {
@@ -58,11 +58,7 @@ pub(super) fn prepare(
     path: &str,
 ) -> Result<Declaration, PrepareError> {
     let expression = condition(d, payload)?;
-    let compiled = match predicate_compiler::compile(
-        expression,
-        &format!("{path}.condition"),
-        Default::default(),
-    ) {
+    let compiled = match predicate_compiler::compile(expression, &format!("{path}.condition")) {
         Ok(plan) => Ok(plan),
         Err(predicate_compiler::Error::Parse(crate::predicate_parser::ParseError::Grammar {
             position,
@@ -112,152 +108,6 @@ pub(super) fn prepare(
         missing: branch("missing")?,
     })
 }
-/// Admit the full authored occurrence tree before any flag is prepared or any
-/// expanded flag finding/name/branch context is copied, including row defaults.
-pub(super) fn declaration_admission(
-    d: &Document,
-    columns: &[usize],
-    output: &TableSchema,
-) -> Result<(), PrepareError> {
-    fn visit(
-        d: &Document,
-        value: usize,
-        path: &str,
-        depth: usize,
-        copies: usize,
-        total: &mut usize,
-    ) -> Result<(), PrepareError> {
-        if depth > 64 {
-            return Err(PrepareError::limit(
-                "case_depth",
-                64,
-                Some(depth),
-                Some(path),
-            ));
-        }
-        if path.len() > 65_536 {
-            return Err(PrepareError::limit(
-                "path_bytes",
-                65_536,
-                Some(path.len()),
-                Some(path),
-            ));
-        }
-        if let Some(flag) = d.field(value, "flag") {
-            let mut size = condition(d, flag)?
-                .len()
-                .checked_add(path.len())
-                .and_then(|n| n.checked_add(256))
-                .ok_or_else(|| {
-                    PrepareError::limit(
-                        "flag_metadata",
-                        crate::dataset::MAX_FLAG_METADATA_BYTES,
-                        None,
-                        Some(path),
-                    )
-                })?;
-            for name in ["true_value", "false_value", "missing"] {
-                if let Some(id) = d.field(flag, name) {
-                    size = size
-                        .checked_add(match &d.nodes()[id] {
-                            N::Text(s) | N::Integer(s) => s.len(),
-                            _ => 32,
-                        })
-                        .ok_or_else(|| {
-                            PrepareError::limit(
-                                "flag_metadata",
-                                crate::dataset::MAX_FLAG_METADATA_BYTES,
-                                None,
-                                Some(path),
-                            )
-                        })?;
-                }
-            }
-            *total = total
-                .checked_add(
-                    size.checked_mul(16)
-                        .and_then(|n| n.checked_mul(copies))
-                        .ok_or_else(|| {
-                            PrepareError::limit(
-                                "flag_metadata",
-                                crate::dataset::MAX_FLAG_METADATA_BYTES,
-                                None,
-                                Some(path),
-                            )
-                        })?,
-                )
-                .filter(|&n| n <= crate::dataset::MAX_FLAG_METADATA_BYTES)
-                .ok_or_else(|| {
-                    PrepareError::limit(
-                        "flag_metadata",
-                        crate::dataset::MAX_FLAG_METADATA_BYTES,
-                        None,
-                        Some(path),
-                    )
-                })?;
-        }
-        if let Some(case) = d.field(value, "case") {
-            for (index, &branch) in sequence(d, case)?.iter().enumerate() {
-                let (name, child) = d
-                    .field(branch, "then")
-                    .map(|id| ("then", id))
-                    .or_else(|| d.field(branch, "otherwise").map(|id| ("otherwise", id)))
-                    .ok_or(PrepareError::Internal)?;
-                visit(
-                    d,
-                    child,
-                    &format!("{path}.case[{index}].{name}"),
-                    depth + 1,
-                    copies,
-                    total,
-                )?;
-            }
-        }
-        Ok(())
-    }
-    let mut total = 0;
-    // Shared defaults may be prepared once for each declared template. Admit
-    // that complete worst-case ownership before selecting row-local defaults.
-    let copies = d
-        .field(d.root(), "rows")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        .map(|id| sequence(d, id).map(|rows| rows.len().max(1)))
-        .transpose()?
-        .unwrap_or(1);
-    for (index, &column) in columns.iter().enumerate() {
-        if let Some(value) = d
-            .field(column, "derivation")
-            .and_then(|id| d.field(id, "value"))
-        {
-            visit(
-                d,
-                value,
-                &format!("columns.{}.derivation", output.columns()[index].name),
-                0,
-                copies,
-                &mut total,
-            )?;
-        }
-    }
-    if let Some(rows) = d
-        .field(d.root(), "rows")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-    {
-        for (index, &row) in sequence(d, rows)?.iter().enumerate() {
-            for &(name, derivation) in mapping(d, field(d, row, "derivations")?)? {
-                visit(
-                    d,
-                    field(d, derivation, "value")?,
-                    &format!("rows[{index}].derivations.{}", text(d, name)?),
-                    0,
-                    1,
-                    &mut total,
-                )?;
-            }
-        }
-    }
-    Ok(())
-}
 fn unknown(path: &str, name: &str) -> BindFinding {
     BindFinding::Predicate(finding(
         C::PredicateUnknownField,
@@ -302,9 +152,7 @@ fn output_binding(
         let _ = row;
         return Ok(None);
     }
-    let Some(reference_binding::Binding::Output { column, .. }) =
-        catalog.bind(name).map_err(BindError::Catalog)?
-    else {
+    let Some(reference_binding::Binding::Output { column, .. }) = catalog.bind(name) else {
         return Err(BindError::Internal);
     };
     edges.push(column);
@@ -405,7 +253,7 @@ pub(super) fn bind(
                 _ => None,
             })
         } else {
-            match catalog.bind(name).map_err(BindError::Catalog)? {
+            match catalog.bind(name) {
                 Some(reference_binding::Binding::Dataset { field, .. }) => {
                     Some(if keys.contains(&column) {
                         FlagRead::Read(Read::Source(field))
@@ -520,7 +368,6 @@ pub(super) fn bind_row(
                     joined: false,
                     phase,
                 },
-                Default::default(),
             )
             .map_err(BindError::Catalog)?;
             if !causes.is_empty() {
@@ -538,7 +385,7 @@ pub(super) fn bind_row(
                 }
                 None
             } else {
-                match catalog.bind(name).map_err(BindError::Catalog)? {
+                match catalog.bind(name) {
                     Some(reference_binding::Binding::Dataset { field, .. }) => {
                         Some(FlagRead::Read(Read::Source(field)))
                     }

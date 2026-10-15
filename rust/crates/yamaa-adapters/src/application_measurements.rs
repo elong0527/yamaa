@@ -1,16 +1,11 @@
-//! Bounded measurements captured during the original application. Reading them
+//! Measurements captured during the original application. Reading them
 //! later never runs a source, function, serializer or publisher again.
 use serde::Serialize;
-use std::{sync::Mutex, time::Instant};
+use std::{collections::BTreeMap, sync::Mutex, time::Instant};
 use yamaa_core::{
     application_observer::{CallStage, Event, Observer, Outcome, Phase},
     dataset::ExecutionPhase,
 };
-
-const NODES: usize = 64;
-const RECORDS: usize = 1024;
-const IDENTITY_BYTES: usize = 1_048_576;
-const SAVES: usize = 16;
 
 fn phase_name(phase: Phase) -> &'static str {
     match phase {
@@ -78,9 +73,8 @@ fn resource_name(resource: yamaa_core::dataset::Resource) -> &'static str {
 
 struct State {
     nodes: Vec<Node>,
-    identity_bytes: usize,
     records: Vec<Record>,
-    calls: [[Calls; 6]; NODES + 1],
+    calls: BTreeMap<Option<usize>, [Calls; 6]>,
     refused: Option<&'static str>,
     finished: bool,
     accepted: Option<bool>,
@@ -102,16 +96,15 @@ impl Measurements {
         Self {
             origin: Instant::now(),
             state: Mutex::new(State {
-                nodes: Vec::with_capacity(NODES),
-                identity_bytes: 0,
-                records: Vec::with_capacity(RECORDS),
-                calls: [[Calls::default(); 6]; NODES + 1],
+                nodes: Vec::new(),
+                records: Vec::new(),
+                calls: BTreeMap::new(),
                 refused: None,
                 finished: false,
                 accepted: None,
-                saves: Vec::with_capacity(SAVES),
+                saves: Vec::new(),
                 save_attempts: 0,
-                refusals: Vec::with_capacity(NODES),
+                refusals: Vec::new(),
             }),
         }
     }
@@ -142,7 +135,7 @@ impl Measurements {
         }
         if state
             .calls
-            .iter()
+            .values()
             .flatten()
             .any(|calls| calls.entered != calls.succeeded.saturating_add(calls.failed))
         {
@@ -158,10 +151,6 @@ impl Measurements {
             return;
         };
         state.save_attempts = attempt;
-        if state.saves.len() == SAVES {
-            state.refused = Some("save_event_capacity");
-            return;
-        }
         if let Some(now) = self.now(&mut state) {
             state.saves.push(Save {
                 attempt,
@@ -186,15 +175,15 @@ impl Measurements {
             }
         }
     }
-    pub fn evidence(&self) -> serde_json::Value {
+    pub fn evidence(&self) -> yamaa_core::json::Value {
         let state = self.state();
-        let callback_counts=state.calls.iter().enumerate().flat_map(|(index,stages)|stages.iter().enumerate().filter(|(_,calls)|calls.observed).map(move |(stage,calls)|serde_json::json!({
-            "node":if index==NODES {None} else {Some(index)},"stage":(["activation","execution_admission","execution_derivation","output_keys","verification","execution_finished"][stage]),
+        let callback_counts=state.calls.iter().filter(|(node, _)| node.is_some()).chain(state.calls.iter().filter(|(node, _)| node.is_none())).flat_map(|(node,stages)|stages.iter().enumerate().filter(|(_,calls)|calls.observed).map(move |(stage,calls)|yamaa_core::json::json!({
+            "node":node,"stage":(["activation","execution_admission","execution_derivation","output_keys","verification","execution_finished"][stage]),
             "entered":calls.entered,"succeeded":calls.succeeded,"failed":calls.failed
         }))).collect::<Vec<_>>();
-        serde_json::json!({"protocol":"application-measurements/1", "clock":{"provider":"std::time::Instant","unit":"nanoseconds","origin":"owner-local monotonic origin immediately before original application entry"},
+        yamaa_core::json::json!({"protocol":"application-measurements/1", "clock":{"provider":"std::time::Instant","unit":"nanoseconds","origin":"owner-local monotonic origin immediately before original application entry"},
             "types":{"offsets":"uint64 nanoseconds since owner origin","function_counts":"uint64 actual calls","resource_counts":"usize; required null preserves original overflow/absence"},
-            "classified_refusals":state.refusals,"retention_limits":{"nodes":NODES,"identity_bytes":IDENTITY_BYTES,"stage_records":RECORDS,"save_records":SAVES},
+            "classified_refusals":state.refusals,
             "admitted":state.refused.is_none() && state.finished && state.accepted.is_some() && state.saves.iter().all(|save|save.completed_ns.is_some()),"refusal":state.refused,"original_execution_finished":state.finished,"build_accepted":state.accepted,
             "nodes":state.nodes,"stages":state.records,"function_calls":callback_counts,"save_attempts":state.save_attempts,"saves":state.saves})
     }
@@ -203,7 +192,7 @@ impl Measurements {
         struct Envelope {
             protocol: &'static str,
             report: Option<Box<serde_json::value::RawValue>>,
-            measurements: serde_json::Value,
+            measurements: yamaa_core::json::Value,
         }
         let report = report.map(|value| {
             serde_json::value::RawValue::from_string(value).expect("admitted report JSON")
@@ -213,7 +202,7 @@ impl Measurements {
             report,
             measurements: self.evidence(),
         })
-        .expect("bounded measurement evidence")
+        .expect("measurement evidence is serializable")
     }
 }
 impl Observer for Measurements {
@@ -230,32 +219,19 @@ impl Observer for Measurements {
             | Event::Refusal { node, .. } => node,
         };
         if let Some(node) = node {
-            if node.index >= NODES {
-                state.refused = Some("node_capacity");
-                return;
-            }
             if let Some(held) = state.nodes.iter().find(|held| held.index == node.index) {
                 if held.identity != node.identity {
                     state.refused = Some("node_identity_changed");
                     return;
                 }
             } else {
-                let Some(total) = state
-                    .identity_bytes
-                    .checked_add(node.identity.len())
-                    .filter(|n| *n <= IDENTITY_BYTES)
-                else {
-                    state.refused = Some("identity_capacity");
-                    return;
-                };
-                state.identity_bytes = total;
                 state.nodes.push(Node {
                     index: node.index,
                     identity: node.identity.to_owned(),
                 });
             }
         }
-        let index = node.map_or(NODES, |node| node.index);
+        let index = node.map(|node| node.index);
         match event {
             Event::Phase { phase, .. } => {
                 let Some(now) = self.now(&mut state) else {
@@ -270,10 +246,6 @@ impl Observer for Measurements {
                 if phase == Phase::Dataset(ExecutionPhase::Finished) {
                     return;
                 }
-                if state.records.len() == RECORDS {
-                    state.refused = Some("stage_event_capacity");
-                    return;
-                }
                 state.records.push(Record {
                     node: node.map(|node| node.index),
                     phase: phase_name(phase),
@@ -282,15 +254,17 @@ impl Observer for Measurements {
                     outcome: None,
                 });
                 match phase {
-                    Phase::Activation => state.calls[index][0].observed = true,
+                    Phase::Activation => state.calls.entry(index).or_default()[0].observed = true,
                     Phase::Dataset(phase) => {
-                        state.calls[index][stage_index(CallStage::Dataset(phase))].observed = true
+                        state.calls.entry(index).or_default()
+                            [stage_index(CallStage::Dataset(phase))]
+                        .observed = true
                     }
                     _ => {}
                 }
             }
             Event::FunctionCall { stage, .. } => {
-                let calls = &mut state.calls[index][stage_index(stage)];
+                let calls = &mut state.calls.entry(index).or_default()[stage_index(stage)];
                 calls.observed = true;
                 if let Some(count) = calls.entered.checked_add(1) {
                     calls.entered = count;
@@ -317,7 +291,7 @@ impl Observer for Measurements {
                 }
             }
             Event::FunctionReturn { stage, outcome, .. } => {
-                let calls = &mut state.calls[index][stage_index(stage)];
+                let calls = &mut state.calls.entry(index).or_default()[stage_index(stage)];
                 let counter = match outcome {
                     Outcome::Succeeded => &mut calls.succeeded,
                     Outcome::Failed => &mut calls.failed,
@@ -329,10 +303,6 @@ impl Observer for Measurements {
                 }
             }
             Event::Refusal { phase, refusal, .. } => {
-                if state.refusals.len() == NODES {
-                    state.refused = Some("refusal_event_capacity");
-                    return;
-                }
                 state.refusals.push(Refusal {
                     node: node.map(|node| node.index),
                     phase: phase_name(phase),
@@ -350,7 +320,7 @@ mod tests {
     use super::*;
     use yamaa_core::application_observer::{Noop, Scope};
     #[test]
-    fn actual_entries_returns_and_failed_stage_have_bounded_retention_and_typed_offsets() {
+    fn actual_entries_returns_and_failed_stage_retain_complete_typed_offsets() {
         let measurements = Measurements::new();
         let scope = Scope::new(&measurements);
         scope.phase(Phase::Preparation);
@@ -388,7 +358,7 @@ mod tests {
         assert_eq!(evidence["stages"][2]["outcome"], "failed");
     }
     #[test]
-    fn incomplete_callbacks_and_observer_capacity_refuse_only_measurement_admission() {
+    fn incomplete_callbacks_refuse_measurement_admission_without_losing_the_original_report() {
         let measurements = Measurements::new();
         let scope = Scope::new(&measurements);
         scope.phase(Phase::Dataset(ExecutionPhase::Derivation));
@@ -403,22 +373,49 @@ mod tests {
         assert_eq!(measurements.evidence()["function_calls"][0]["entered"], 1);
         assert_eq!(measurements.evidence()["function_calls"][0]["failed"], 0);
         let report = r#"{"tables":[],"artifacts":[],"error":{"stage":"original"}}"#;
-        let wrapped: serde_json::Value =
+        let wrapped: yamaa_core::json::Value =
             serde_json::from_str(&measurements.envelope(Some(report.into()))).unwrap();
         assert_eq!(
             wrapped["report"],
-            serde_json::from_str::<serde_json::Value>(report).unwrap()
+            serde_json::from_str::<yamaa_core::json::Value>(report).unwrap()
         );
-        let bounded = Measurements::new();
-        let scope = Scope::new(&bounded);
-        for _ in 0..=RECORDS {
+        let _ = Scope::new(&Noop);
+    }
+    #[test]
+    fn complete_observations_keep_all_nodes_stages_identities_and_save_attempts() {
+        let measurements = Measurements::new();
+        let scope = Scope::new(&measurements);
+        let long_identity = "é".repeat(524_289);
+        for index in 0..65 {
+            let identity = if index == 64 {
+                &long_identity
+            } else {
+                "ordinary-node"
+            };
+            let scope = scope.for_node(index, identity);
+            scope.phase(Phase::Activation);
+            scope.exit(Phase::Activation, Outcome::Succeeded);
+        }
+        for _ in 0..1025 {
             scope.phase(Phase::Output);
             scope.exit(Phase::Output, Outcome::Succeeded);
         }
-        assert_eq!(bounded.state().records.len(), RECORDS);
-        assert_eq!(bounded.evidence()["admitted"], false);
-        assert_eq!(bounded.evidence()["refusal"], "stage_event_capacity");
-        let _ = Scope::new(&Noop);
+        scope.phase(Phase::Finished);
+        measurements.complete(true);
+        for _ in 0..17 {
+            measurements.save_entered();
+            measurements.save_completed("succeeded");
+        }
+        let evidence = measurements.evidence();
+        assert_eq!(evidence["admitted"], true);
+        assert_eq!(evidence["nodes"].as_array().unwrap().len(), 65);
+        assert_eq!(evidence["nodes"][64]["identity"], long_identity);
+        assert_eq!(evidence["function_calls"].as_array().unwrap().len(), 65);
+        assert_eq!(evidence["function_calls"][64]["node"], 64);
+        assert_eq!(evidence["stages"].as_array().unwrap().len(), 1090);
+        assert_eq!(evidence["save_attempts"], 17);
+        assert_eq!(evidence["saves"].as_array().unwrap().len(), 17);
+        assert!(evidence["retention_limits"].is_null());
     }
     #[test]
     fn later_observation_cannot_create_events_and_save_retries_keep_actual_attempts() {

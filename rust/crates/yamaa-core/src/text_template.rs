@@ -1,14 +1,12 @@
-//! Closed string-template parsing and whole-output admission, without data effects.
+//! Closed string-template parsing and materialization without data effects.
+use crate::json::Value as V;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     numeric_parser::SourceSpan,
     table::ValueRef,
     value::Value,
 };
-use serde_json::Value as V;
 use std::vec;
-pub const MAX_DECLARATION_BYTES: usize = 16_777_216;
-pub const MAX_COMPILE_WORK: usize = 100_000_000;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Part {
     Text { start: usize, end: usize },
@@ -29,80 +27,27 @@ pub struct StringTemplate {
 pub enum AdmissionError {
     #[error("text template shape")]
     Shape,
-    #[error("text template limit")]
-    Limit,
-    #[error("text template work: limit={limit:?}, actual={actual:?}")]
-    Work { limit: usize, actual: Option<usize> },
 }
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum MaterializeError {
     #[error("text template shape")]
     Shape,
-    #[error("text template limit")]
-    Limit,
-}
-/// One counter shared by every declaration in a compilation request.
-pub(crate) struct CompileBudget(usize);
-impl CompileBudget {
-    pub(crate) fn new() -> Self {
-        Self(0)
-    }
-    pub(crate) fn charge(&mut self, amount: usize) -> Result<(), AdmissionError> {
-        let actual = self.0.checked_add(amount);
-        self.0 = actual
-            .filter(|n| *n <= MAX_COMPILE_WORK)
-            .ok_or(AdmissionError::Work {
-                limit: MAX_COMPILE_WORK,
-                actual,
-            })?;
-        Ok(())
-    }
+    #[error("text template output exceeds addressable size")]
+    Size,
+    #[error("text template output allocation failed")]
+    Allocation,
 }
 impl StringTemplate {
-    /// Includes parser spans, identifiers, operands, diagnostics and retained plan copies.
-    pub fn declaration_bytes(template: &str, path: &str, handler_bytes: usize) -> Option<usize> {
-        template
-            .len()
-            .checked_mul(128)?
-            .checked_add(
-                path.len()
-                    .checked_mul(template.len().checked_add(16)?)?
-                    .checked_mul(8)?,
-            )?
-            .checked_add(handler_bytes.checked_mul(8)?)?
-            .checked_add(2048)
-    }
     pub fn new(
         template: String,
         path: String,
         missing: Option<Value>,
     ) -> Result<Self, AdmissionError> {
-        Self::with_budget(template, path, missing, &mut CompileBudget::new())
-    }
-    pub(crate) fn with_budget(
-        template: String,
-        path: String,
-        missing: Option<Value>,
-        budget: &mut CompileBudget,
-    ) -> Result<Self, AdmissionError> {
         if path.is_empty() {
             return Err(AdmissionError::Shape);
         }
-        let handler = match &missing {
-            Some(Value::Str(v)) => v.len(),
-            _ => 0,
-        };
-        if Self::declaration_bytes(&template, &path, handler)
-            .is_none_or(|n| n > MAX_DECLARATION_BYTES)
-        {
-            return Err(AdmissionError::Limit);
-        }
-        budget.charge(template.len())?;
         let bytes = template.as_bytes();
         let mut spans = Vec::new();
-        spans
-            .try_reserve(bytes.len())
-            .map_err(|_| AdmissionError::Limit)?;
         let mut at = 0;
         let mut invalid = None;
         // Complete syntax precedes every identifier comparison and owned name copy.
@@ -175,35 +120,18 @@ impl StringTemplate {
         }
         let mut identifiers: Vec<String> = Vec::new();
         let mut parts = Vec::new();
-        parts
-            .try_reserve(spans.len())
-            .map_err(|_| AdmissionError::Limit)?;
-        identifiers
-            .try_reserve(spans.len())
-            .map_err(|_| AdmissionError::Limit)?;
+        let mut name_indices = std::collections::BTreeMap::new();
         for (start, end, kind) in spans {
-            budget.charge(1)?;
             parts.push(match kind {
                 0 => Part::Text { start, end },
                 1 => Part::Brace(char::from(bytes[start])),
                 _ => {
                     let name = &template[start..end];
-                    let mut selected = None;
-                    for (index, existing) in identifiers.iter().enumerate() {
-                        budget.charge(
-                            name.len()
-                                .checked_add(existing.len())
-                                .ok_or(AdmissionError::Limit)?,
-                        )?;
-                        if existing == name {
-                            selected = Some(index);
-                            break;
-                        }
-                    }
-                    let index = selected.unwrap_or(identifiers.len());
-                    if selected.is_none() {
+                    let index = *name_indices.entry(name).or_insert_with(|| {
+                        let index = identifiers.len();
                         identifiers.push(name.into());
-                    }
+                        index
+                    });
                     Part::Placeholder(index)
                 }
             });
@@ -298,7 +226,7 @@ impl StringTemplate {
             };
             total = total
                 .checked_add(text.len())
-                .ok_or(MaterializeError::Limit)?;
+                .ok_or(MaterializeError::Size)?;
         }
         if occurrence != values.len() {
             return Err(MaterializeError::Shape);
@@ -306,19 +234,12 @@ impl StringTemplate {
         Ok(total)
     }
     /// Complete UTF-8 byte admission precedes the sole output allocation and copy.
-    pub fn materialize(
-        &self,
-        values: &[Value],
-        maximum: usize,
-    ) -> Result<String, MaterializeError> {
+    pub fn materialize(&self, values: &[Value]) -> Result<String, MaterializeError> {
         let total = self.output_bytes(values)?;
-        if total > maximum {
-            return Err(MaterializeError::Limit);
-        }
         let mut result = String::new();
         result
             .try_reserve_exact(total)
-            .map_err(|_| MaterializeError::Limit)?;
+            .map_err(|_| MaterializeError::Allocation)?;
         let mut occurrence = 0;
         for part in &self.parts {
             if matches!(part, Part::Placeholder(_)) {

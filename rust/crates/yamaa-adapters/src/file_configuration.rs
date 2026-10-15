@@ -8,15 +8,13 @@ pub enum Error {
 }
 
 fn text(path: &Path) -> Result<&str, Error> {
-    path.to_str()
-        .filter(|value| value.len() <= 65536)
-        .ok_or(Error::Path(ResourceError::InvalidPath))
+    path.to_str().ok_or(Error::Path(ResourceError::InvalidPath))
 }
 
 /// Caller paths use ordinary host argument resolution. Each later declaration
 /// resolves once at its own file; no yamaa-project.yaml is discovered or read.
 pub fn resources(written: &str) -> Result<(Resources, String), Error> {
-    if written.is_empty() || written.len() > 65536 || written.contains('\0') {
+    if written.is_empty() || written.contains('\0') {
         return Err(Error::Path(ResourceError::InvalidPath));
     }
     let absolute =
@@ -30,7 +28,7 @@ pub fn resources(written: &str) -> Result<(Resources, String), Error> {
     let entry = absolute
         .file_name()
         .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty() && name.len() <= 65536)
+        .filter(|name| !name.is_empty())
         .ok_or(Error::Path(ResourceError::InvalidPath))?;
     Ok((resources, entry.into()))
 }

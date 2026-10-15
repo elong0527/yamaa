@@ -1,21 +1,20 @@
 //! Private typed parser observations for independent differential fixtures.
 use super::syntax_spans as spans;
-use serde_json::{json, Value};
+use yamaa_core::json::{json, Value};
 use yamaa_core::{
     numeric::{BinaryOperator, UnaryOperator},
     numeric_parser::{
-        parse_numeric, GrammarFailure, ParseError, ParseLimits, ParseResource, ParsedKind,
-        ParsedNumeric,
+        parse_numeric, GrammarFailure, ParseError, ParseResource, ParsedKind, ParsedNumeric,
     },
 };
 pub fn observe_with_spans(expression: &str) -> Value {
     let mut outcome = observe(expression);
-    if let Ok(parsed) = parse_numeric(expression, ParseLimits::default()) {
+    if let Ok(parsed) = parse_numeric(expression) {
         annotate(&parsed, parsed.root(), &mut outcome["outcome"]["ast"]);
     } else if let Err(ParseError::Grammar {
         failure: GrammarFailure::ProhibitedFunction { name, .. },
         ..
-    }) = parse_numeric(expression, ParseLimits::default())
+    }) = parse_numeric(expression)
     {
         outcome["outcome"]["span"] = spans::span(expression, name);
     }
@@ -58,7 +57,7 @@ fn annotate(parsed: &ParsedNumeric, id: usize, value: &mut Value) {
     value["span"] = spans::span(expression, node.span);
 }
 pub fn observe(expression: &str) -> Value {
-    let outcome = match parse_numeric(expression, ParseLimits::default()) {
+    let outcome = match parse_numeric(expression) {
         Ok(parsed) => json!({"status":"parsed", "ast": ast(&parsed, parsed.root()),
                 "identifiers":parsed.identifiers().collect::<Vec<_>>() }),
         Err(ParseError::Grammar { position, failure }) => {
@@ -85,9 +84,6 @@ pub fn observe(expression: &str) -> Value {
             limit,
         }) => {
             let resource = match resource {
-                ParseResource::Bytes => "bytes",
-                ParseResource::Tokens => "tokens",
-                ParseResource::Nodes => "nodes",
                 ParseResource::Depth => "depth",
             };
             json!({"status":"resource_limit","resource":resource,"limit":limit,
@@ -98,7 +94,7 @@ pub fn observe(expression: &str) -> Value {
 }
 
 /// Serialize each tree occurrence once, eliding groups without changing association.
-/// The validated arena caps recursion at 64 and retains numbers as exact strings.
+/// The validated arena caps recursion at 128 and retains numbers as exact strings.
 fn ast(parsed: &ParsedNumeric, id: usize) -> Value {
     let node = &parsed.nodes()[id];
     let written = &parsed.expression()[node.span.start..node.span.end];

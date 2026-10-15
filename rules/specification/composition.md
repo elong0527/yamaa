@@ -151,10 +151,11 @@ value.
 with
 it. For example, later root `metadata`, `keys`, `output`, and `verifications`
 replace their complete inherited values. An entry that inherits `output`
-therefore publishes where the layer that wrote it names. Its
-`path`, `warning_log`, and `verification_log` keep that layer's provenance
-under [REQ-0635](composition.md#req-0635); an entry that publishes elsewhere
-declares its complete `output`.
+therefore publishes at the location its inherited `relative_to` setting selects.
+Its `path`, `warning_log`, and `verification_log` keep the declaring layer's
+provenance under [REQ-0635](composition.md#req-0635). An entry can inherit
+`relative_to: entry` to publish in its own directory, or replace its complete
+`output`.
 
 <a id="req-0630"></a>
 
@@ -200,8 +201,9 @@ replaces the whole derivation.
 
 **REQ-0631.** Dataset shorthand is expanded before datasets are matched. A bare
 path becomes the long `dataset_class` form, after which matching dataset
-declarations merge the immediate `path`, `types`, and `schema` fields by the
-same rule.
+declarations merge their immediate member fields by the same rule. A later
+`relative_to` setting therefore governs an inherited `path` and `schema`
+without requiring either path to be written again.
 
 ### Named-window composition
 
@@ -258,16 +260,18 @@ keyed declarations are pruned after composition.
 <a id="req-0635"></a>
 
 **REQ-0635.** Every contributed value whose schema type is `path` is first
-interpreted relative to the layer that writes that value, as its owning rule
-requires. Composition must not silently reinterpret an inherited relative path
-from the entry file's directory.
+interpreted at the base its owning rule selects.
+[Resource resolution](../storage/resources.md#req-0780) uses the original layer
+by default and the entry file only when `relative_to: entry` selects it.
+Composition preserves the authored spelling and declaring provenance in both
+cases.
 
 <a id="req-0636"></a>
 
 **REQ-0636.** When the resolved specification is materialized, an inherited
-relative path is rebased relative to the entry file without changing the
-denoted local file. If the local platform cannot express that file relative
-to the entry file, the canonical absolute local path is used. An absolute
+relative path is materialized relative to the entry file while preserving the
+location its effective `relative_to` setting selects. If the local platform
+cannot express that file relative to the entry file, the canonical absolute local path is used. An absolute
 contributed path is materialized exactly as it was written. [Resource resolution](../storage/resources.md)
 reads its declared local location subject to the same file-kind, link and snapshot checks.
 `parents` paths are not materialized.

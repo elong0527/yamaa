@@ -7,12 +7,6 @@ use crate::{
     value::Value,
 };
 
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Limits {
-    pub parse: predicate_parser::ParseLimits,
-    pub plan: predicate::Limits,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     #[error("predicate compiler parse: {0:?}")]
@@ -26,23 +20,11 @@ pub enum Error {
 
 /// Parse every branch before lowering; the executable plan owns all provenance.
 /// The parser's hard depth ceiling bounds recursion through original syntax.
-pub fn compile(text: &str, path: &str, limits: Limits) -> Result<Plan, Error> {
-    let parsed = predicate_parser::parse_predicate(text, limits.parse).map_err(Error::Parse)?;
-    if path
-        .len()
-        .checked_add(text.len())
-        .is_none_or(|n| n > limits.plan.text_bytes)
-    {
-        return Err(Error::Plan(predicate::PlanError::Limit(
-            predicate::LimitError {
-                resource: predicate::Resource::TextBytes,
-                limit: limits.plan.text_bytes,
-            },
-        )));
-    }
+pub fn compile(text: &str, path: &str) -> Result<Plan, Error> {
+    let parsed = predicate_parser::parse_predicate(text).map_err(Error::Parse)?;
     let mut nodes = Vec::new();
     let root = lower(&parsed, parsed.root(), &mut nodes)?;
-    Plan::new(nodes, root, path.into(), text.into(), limits.plan).map_err(Error::Plan)
+    Plan::new(nodes, root, path.into(), text.into()).map_err(Error::Plan)
 }
 
 fn scalar(parsed: &ParsedPredicate, index: usize) -> Result<Scalar, Error> {

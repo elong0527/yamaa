@@ -21,19 +21,8 @@ pub(super) fn apply(
     columns: &[usize],
     output: &TableSchema,
     catalogue: &Catalogue,
-    limits: crate::project_limits::Limits,
     groups: &mut [verifications::Verifications],
 ) -> Result<(), PrepareError> {
-    // Reserve scope text before any code/path copy. Bound-codelist values and
-    // findings keep their existing cumulative binder admission below.
-    let mut budget = crate::project_limits::Budget::new(limits);
-    for node in d.nodes() {
-        if let N::Text(value) = node {
-            budget
-                .text(value)
-                .map_err(|error| PrepareError::project_limit(error, limits, None))?;
-        }
-    }
     let mut declarations = Vec::new();
     for (column, &node) in columns.iter().enumerate() {
         if let Some(identifier) =
@@ -84,11 +73,6 @@ pub(super) fn apply(
                 let Some(identifier) = present(d, metadata, "codelist") else {
                     continue;
                 };
-                for value in [text(d, field(d, row, "id")?)?, name, code] {
-                    budget
-                        .text(value)
-                        .map_err(|error| PrepareError::project_limit(error, limits, None))?;
-                }
                 declarations.push(Declaration {
                     column,
                     identifier: text(d, identifier)?,
@@ -128,14 +112,13 @@ pub(super) fn apply(
             allowed_values: &allowed[declaration.column],
         })
         .collect::<Vec<_>>();
-    let checks = ct::bind(catalogue, &bindings, limits).map_err(|error| match error {
-        ct::Error::Limit(error) => PrepareError::project_limit(error, limits, None),
-        ct::Error::Findings(findings) => PrepareError::Invalid(
+    let checks = ct::bind(catalogue, &bindings).map_err(|findings| {
+        PrepareError::Invalid(
             findings
                 .into_iter()
-                .map(|finding| PreflightFinding::ProjectCodelist(std::boxed::Box::new(finding)))
+                .map(|finding| PreflightFinding::ProjectCodelist(Box::new(finding)))
                 .collect(),
-        ),
+        )
     })?;
     for (column, group) in groups.iter_mut().enumerate() {
         let overrides = declarations

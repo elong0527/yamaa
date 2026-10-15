@@ -1,102 +1,80 @@
+pub use crate::support::document::Tree;
 use yamaa_core::{
     producer_admission::{Candidate, WrittenPath},
-    schema::{
-        Document, DocumentLimits, DocumentNode as N, SpecificationDocument, ValidationBudget,
-    },
+    schema::{Document, SpecificationDocument},
 };
-pub enum Tree<'a> {
-    Text(&'a str),
-    Null,
-    Map(Vec<(&'a str, Tree<'a>)>),
-    List(Vec<Tree<'a>>),
-}
-impl Tree<'_> {
-    fn append(self, nodes: &mut Vec<N>) -> usize {
-        let node = match self {
-            Self::Text(s) => N::Text(s.into()),
-            Self::Null => N::Null,
-            Self::Map(fields) => N::Mapping(
-                fields
-                    .into_iter()
-                    .map(|(k, v)| (Self::Text(k).append(nodes), v.append(nodes)))
-                    .collect(),
-            ),
-            Self::List(values) => {
-                N::Sequence(values.into_iter().map(|v| v.append(nodes)).collect())
-            }
-        };
-        let id = nodes.len();
-        nodes.push(node);
-        id
-    }
-}
+
 pub fn document(
-    input: Tree<'_>,
+    input: Tree,
     columns: &[(&str, &str, Option<&str>)],
     output: &[&str],
     unsupported_parent: bool,
 ) -> SpecificationDocument {
-    use Tree::*;
     let first = match &input {
-        Map(fields) => fields[0].0,
+        Tree::Map(fields) => fields[0].0.as_str(),
         _ => panic!("input mapping"),
     };
     let variable = format!("{first}.ID");
     let mut fields = vec![
-        ("schema_version", Text("1.0")),
-        ("domain", Text("TEST")),
-        ("base", Text(first)),
+        ("schema_version", Tree::text("1.0")),
+        ("domain", Tree::text("TEST")),
+        ("base", Tree::text(first)),
         ("input", input),
-        ("keys", List(vec![Text("ID")])),
+        ("keys", Tree::List(vec![Tree::text("ID")])),
         (
             "columns",
-            List(
+            Tree::List(
                 columns
                     .iter()
                     .map(|(name, kind, label)| {
                         let mut fields = vec![
-                            ("name", Text(name)),
-                            ("type", Text(kind)),
+                            ("name", Tree::text(name)),
+                            ("type", Tree::text(kind)),
                             (
                                 "derivation",
-                                Map(vec![(
+                                Tree::map(vec![(
                                     "value",
-                                    Map(vec![("source", Map(vec![("variable", Text(&variable))]))]),
+                                    Tree::map(vec![(
+                                        "source",
+                                        Tree::map(vec![("variable", Tree::text(&variable))]),
+                                    )]),
                                 )]),
                             ),
                         ];
                         if let Some(label) = label {
-                            fields.push(("label", Text(label)));
+                            fields.push(("label", Tree::text(label)));
                         }
-                        Map(fields)
+                        Tree::map(fields)
                     })
                     .collect(),
             ),
         ),
         (
             "output",
-            Map(vec![
-                ("path", Text("produced.csv")),
-                ("columns", List(output.iter().copied().map(Text).collect())),
+            Tree::map(vec![
+                ("path", Tree::text("produced.csv")),
+                (
+                    "columns",
+                    Tree::List(output.iter().copied().map(Tree::text).collect()),
+                ),
             ]),
         ),
     ];
     if unsupported_parent {
-        fields.push(("parents", List(vec![Text("parent.yaml")])));
+        fields.push(("parents", Tree::List(vec![Tree::text("parent.yaml")])));
     }
     let mut nodes = Vec::new();
-    let root = Map(fields).append(&mut nodes);
-    SpecificationDocument::admit(
-        Document::new(nodes, root, DocumentLimits::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap()
+    let root = Tree::map(fields).append(&mut nodes);
+    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap()
 }
 pub fn producer() -> SpecificationDocument {
-    use Tree::*;
     document(
-        Map(vec![("RAW", Map(vec![("path", Text("raw.csv"))]))]),
+        Tree::map(vec![(
+            "RAW",
+            Tree::map(vec![("path", Tree::text("raw.csv"))]),
+        )]),
         &[
             ("VALUE", "float", Some("Reported value")),
             ("ID", "int", Some("Identifier")),
@@ -106,17 +84,16 @@ pub fn producer() -> SpecificationDocument {
         false,
     )
 }
-pub fn consumer(types: Option<Tree<'_>>) -> SpecificationDocument {
-    use Tree::*;
+pub fn consumer(types: Option<Tree>) -> SpecificationDocument {
     let mut fields = vec![
-        ("path", Text("produced.csv")),
-        ("schema", Text("nested/producer.yaml")),
+        ("path", Tree::text("produced.csv")),
+        ("schema", Tree::text("nested/producer.yaml")),
     ];
     if let Some(types) = types {
         fields.push(("types", types));
     }
     document(
-        Map(vec![("SRC", Map(fields))]),
+        Tree::map(vec![("SRC", Tree::map(fields))]),
         &[("ID", "int", Some("ID"))],
         &["ID"],
         false,
@@ -128,14 +105,17 @@ pub fn candidate(document: &SpecificationDocument) -> Candidate<'_> {
         schema_path: "nested/producer.yaml",
         schema_origin: WrittenPath {
             declaring_source: "/parent.yaml",
+            base_source: "/parent.yaml",
             written: "../nested/producer.yaml",
         },
         input_origin: WrittenPath {
             declaring_source: "/consumer.yaml",
+            base_source: "/consumer.yaml",
             written: "./produced.csv",
         },
         output_origin: WrittenPath {
             declaring_source: "/producer.yaml",
+            base_source: "/producer.yaml",
             written: "produced.csv",
         },
         schema_identity: "/producer.yaml",

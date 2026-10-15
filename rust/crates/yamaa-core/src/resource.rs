@@ -1,12 +1,14 @@
 //! Classified resource failures; filesystem authority remains with the resource port.
 
 use crate::diagnostic::{ConditionCode, Diagnostic};
-use serde_json::Value as JsonValue;
+use crate::json::Value as JsonValue;
 
 /// A resource adapter reports an observed cause explicitly. An arbitrary host
 /// exception, panic or resource limit is never inferred to be one of these causes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ResourceFailure {
+    #[error("resource boundary: {0}")]
+    Boundary(crate::limits::LimitExceeded),
     #[error("resource missing")]
     Missing,
     #[error("resource not regular file")]
@@ -25,6 +27,7 @@ pub enum ResourceFailure {
 impl ResourceFailure {
     pub fn code(self) -> ConditionCode {
         match self {
+            Self::Boundary(_) => ConditionCode::ApplicationRejected,
             Self::Missing => ConditionCode::ResourceMissing,
             Self::NotRegularFile => ConditionCode::ResourceNotRegularFile,
             Self::UriScheme => ConditionCode::ResourceUriScheme,
@@ -38,6 +41,20 @@ impl ResourceFailure {
     /// A planning resource belongs to an admitted declaring field, without a
     /// fabricated dataset identity or a resolved host path in semantic context.
     pub fn field_diagnostic(self, field: &str, written_path: &str) -> Diagnostic {
+        if let Self::Boundary(error) = self {
+            let mut diagnostic = crate::application_issue::resource_rejected(
+                "capture",
+                "resource_limit",
+                error.resource,
+                error.limit,
+                error.actual,
+                vec![field.into()],
+            );
+            diagnostic
+                .context
+                .insert("path".into(), JsonValue::String(written_path.into()));
+            return diagnostic;
+        }
         Diagnostic {
             code: self.code(),
             spec_paths: vec![field.into()],
@@ -50,6 +67,14 @@ impl ResourceFailure {
     /// Only authored dataset/path identities enter semantic context. Canonical
     /// filesystem names and host exception messages are deliberately unavailable.
     pub fn diagnostic(self, dataset: &str, written_path: &str) -> Diagnostic {
+        if matches!(self, Self::Boundary(_)) {
+            let mut diagnostic =
+                self.field_diagnostic(&format!("input.{dataset}.path"), written_path);
+            diagnostic
+                .context
+                .insert("dataset".into(), JsonValue::String(dataset.into()));
+            return diagnostic;
+        }
         Diagnostic {
             code: self.code(),
             spec_paths: vec![format!("input.{dataset}.path")],

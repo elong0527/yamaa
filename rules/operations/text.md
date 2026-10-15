@@ -562,18 +562,19 @@ validation with `ambiguous_dictionary`.
 
 ### Regular expressions: Errors
 
-Matching also has explicit implementation budgets. The default portable matcher
-admits at most 1,048,576 subject bytes, 1,000,000 work units, and 1,000,000
-cumulative logical state cells per call. Dataset execution additionally charges
-matching against the attempt's cumulative predicate budgets. Trusted callers may
-select different bounds; these quotas do not restrict the regex grammar.
+The portable matcher follows the shared
+[fixed resource policy](../../docs/release.md#resource-limits). Each complete
+match call starts a fresh step counter covering search starts, backtracking,
+and nested assertions.
 
-A matching budget refusal is reported as `engine_rejected`, with `resource`
-(`predicate_regex_subject_bytes`, `predicate_regex_work`, or
-`predicate_regex_state_cells`), the applied `limit`, and `actual` when known.
+A match-step refusal is reported as `engine_rejected`, with `resource`
+`regex_steps`, the applied `limit`, and `actual` when known.
 For a column `matches` check, `spec_paths` names its declaring pattern, such as
 `columns.TERM.verifications[0].matches.pattern`. A refused match cannot be treated
 as an unmatched string or a skipped verification.
+
+Pattern or context nesting beyond `semantic_depth` retains its typed
+compilation/resource refusal and declaring path.
 
 <a id="req-0827"></a>
 

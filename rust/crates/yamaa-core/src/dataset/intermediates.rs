@@ -31,7 +31,7 @@ impl IntermediateUnique {
         duplicate_count: usize,
     ) -> crate::diagnostic::Diagnostic {
         use crate::diagnostic::{ConditionCode, Diagnostic};
-        use serde_json::Value as JsonValue;
+        use crate::json::Value as JsonValue;
         let mut context = std::collections::BTreeMap::from([
             (
                 "intermediate".into(),
@@ -74,6 +74,11 @@ pub struct IntermediateDerivations {
     pub driver_kinds: Vec<Option<ColumnType>>,
     /// Explicitly typed results convert before completing their donor slot.
     pub typed_columns: Vec<usize>,
+}
+impl IntermediateDerivations {
+    pub fn column_kind(&self, column: usize) -> Option<ColumnType> {
+        self.plan.output_kind(column)
+    }
 }
 
 /// A named secondary record selector with literal absence handling.
@@ -165,18 +170,12 @@ pub fn visit_output_dependencies<'a>(
         lookup: &impl Fn(usize) -> Option<&'a Intermediate>,
         visitor: &mut impl FnMut(usize),
         depth: usize,
-        work: &mut usize,
     ) -> Result<(), PlanError> {
-        if depth > 64 || *work == 0 {
+        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PlanError::InvalidIntermediate);
         }
-        *work -= 1;
         let item = lookup(index).ok_or(PlanError::InvalidIntermediate)?;
         for column in item.output_dependencies() {
-            if *work == 0 {
-                return Err(PlanError::InvalidIntermediate);
-            }
-            *work -= 1;
             visitor(column);
         }
         for field in item.current_fields() {
@@ -184,20 +183,23 @@ pub fn visit_output_dependencies<'a>(
                 if child >= index {
                     return Err(PlanError::InvalidIntermediate);
                 }
-                visit(child, lookup, visitor, depth + 1, work)?;
+                visit(child, lookup, visitor, depth + 1)?;
             }
         }
         Ok(())
     }
-    visit(index, &lookup, &mut visitor, 0, &mut 16_777_216)
+    visit(index, &lookup, &mut visitor, 0)
 }
 
 /// Bind declarations globally; completed-value availability is checked at each read.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn validate(
     items: &[Intermediate],
     sources: &[SecondarySource],
     primary: &TableSchema,
+    primary_kind: &impl Fn(usize) -> Option<ColumnType>,
     output: &TableSchema,
+    output_kind: &impl Fn(usize) -> Option<ColumnType>,
     templates: &[RowTemplate],
 ) -> Result<(), PlanError> {
     for (index, item) in items.iter().enumerate() {
@@ -213,6 +215,11 @@ pub(super) fn validate(
         let donor = item
             .source_schema(sources)
             .ok_or(PlanError::InvalidIntermediate)?;
+        if let Some(derived) = &item.derivations {
+            if derived.stored_columns > donor.columns().len() {
+                return Err(PlanError::InvalidIntermediate);
+            }
+        }
         if matches!(&item.source,IntermediateSource::SelfRows {columns,..} if columns.is_empty()) {
             return Err(PlanError::InvalidIntermediate);
         }
@@ -225,8 +232,14 @@ pub(super) fn validate(
                 primary,
                 sources,
                 donor,
+                &|column| item.source_kind(sources, column),
                 output,
                 &vec![true; output.columns().len()],
+                &|read, physical| match read {
+                    MatchRead::Output { column, .. } => output_kind(*column),
+                    MatchRead::Record { column, .. } => primary_kind(*column),
+                    MatchRead::SecondaryRecord { .. } => Some(physical),
+                },
             )?;
         }
         let width = item
@@ -248,26 +261,27 @@ pub(super) fn validate(
                 .validate_source(
                     item.source_schema(sources)
                         .ok_or(PlanError::InvalidIntermediate)?,
+                    &|column| item.source_kind(sources, column).map(Into::into),
                 )
                 .map_err(|_| PlanError::InvalidIntermediate)?;
             range
                 .current()
                 .validate(primary, sources, output, items, index)?;
             let current_kind = match range.current().read {
-                CurrentRead::Record { source: 0, column } => primary.columns()[column].kind,
+                CurrentRead::Record { source: 0, column } => primary_kind(column),
                 CurrentRead::Record { source, column } => {
-                    sources[source - 1].schema.columns()[column].kind
+                    Some(sources[source - 1].schema.columns()[column].kind)
                 }
-                CurrentRead::Output(column) => output.columns()[column].kind,
+                CurrentRead::Output(column) => output_kind(column),
                 CurrentRead::Intermediate { index, column } => {
-                    items[index]
-                        .source_schema(sources)
-                        .ok_or(PlanError::InvalidIntermediate)?
-                        .columns()[column]
-                        .kind
+                    items[index].source_kind(sources, column)
                 }
             };
-            if range.value_kind() != Some(current_kind.into()) {
+            if range
+                .value_kind()
+                .zip(current_kind)
+                .is_some_and(|(value, current)| value != current.into())
+            {
                 return Err(PlanError::InvalidIntermediate);
             }
             if [range.lower(), range.upper()]
@@ -344,7 +358,17 @@ pub(super) fn validate_read(
     if column >= source.columns().len() || !item.admits_column(column) {
         return Err(PlanError::InvalidIntermediate);
     }
-    match_values::validate(&item.keys, primary, sources, source, output, available)
+    match_values::validate(
+        &item.keys,
+        primary,
+        sources,
+        source,
+        // Key kinds were checked once with the owning plan's inferred metadata.
+        // A read checks scope and availability without promoting layout placeholders.
+        &|_| None,
+        output,
+        available,
+    )
 }
 
 /// Direct scalar selections use only admitted complete records or completed keys.

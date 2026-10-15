@@ -26,17 +26,14 @@ pub mod parquet_source;
 #[allow(unsafe_code)] // The reviewed static ReadStat callback and memory transport ABI.
 pub mod sas_source;
 
-pub mod schema_metadata;
 pub mod shipped_schema;
 pub mod specification_source;
 
-pub mod source_metadata;
 mod source_profile_inspection;
 pub mod specification_run;
 pub mod specification_run_view;
 
 pub mod resource_diagnostics;
-mod source_decode_usage;
 pub mod source_diagnostics;
 mod source_ordinal;
 pub mod specification_diagnostics;
@@ -77,7 +74,6 @@ pub mod project_source_decoder;
 pub mod project_attempt;
 pub mod project_report;
 pub mod project_run;
-mod report_projection;
 
 pub mod project_function_diagnostics;
 
@@ -103,11 +99,8 @@ mod project_diagnostic_projection;
 
 mod file_inventory;
 
-pub mod host_limits;
-
 pub mod callback;
 pub mod dataset_result;
-pub use yamaa_core::dataset::ExecutionBudget;
 mod dataset_snapshot;
 mod execution_diagnostics;
 pub mod ipc_table;

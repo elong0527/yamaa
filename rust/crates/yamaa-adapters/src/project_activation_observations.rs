@@ -1,11 +1,11 @@
-//! Bounded activation evidence from one owned build. This reads held metadata
+//! Complete activation evidence from one owned build. This reads held metadata
 //! and actual engine observations; it never queries a host or invokes a case.
 use crate::{
     project_run::PreparedRun,
     project_source::{CapturedEnvironment, Origin},
     report_scalar::ScalarValue,
 };
-use serde_json::{json, Value as Json};
+use yamaa_core::json::{json, Value as Json};
 use yamaa_core::project_activation::{BindingOutcome, LockObservation, Observations, TestOutcome};
 use yamaa_core::{
     project_environment::ExecutionEnvironment, project_function::Function, value::Value,
@@ -62,37 +62,10 @@ impl ActivationView for crate::file_producer_build::Provenance {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     InvalidObservation,
-    Limit {
-        resource: &'static str,
-        limit: usize,
-        actual: Option<usize>,
-    },
     Projection,
 }
-struct Budget {
-    limit: usize,
-    remaining: usize,
-}
-impl Budget {
-    fn text(&mut self, text: &str) -> Result<(), Error> {
-        let charge = text.len().checked_mul(12).and_then(|n| n.checked_add(128));
-        let next = charge.and_then(|charge| self.remaining.checked_sub(charge));
-        self.remaining = next.ok_or(Error::Limit {
-            resource: "report_activation_bytes",
-            limit: self.limit,
-            actual: charge.and_then(|charge| (self.limit - self.remaining).checked_add(charge)),
-        })?;
-        Ok(())
-    }
-    fn value(&mut self, value: &Value) -> Result<(), Error> {
-        self.text(match value {
-            Value::Str(text) => text,
-            _ => "01234567890123456789012345678901",
-        })
-    }
-}
 fn scalar(value: &Value) -> Result<Json, Error> {
-    serde_json::to_value(ScalarValue::from_core(value.clone())).map_err(|_| Error::Projection)
+    yamaa_core::json::to_value(ScalarValue::from_core(value.clone())).map_err(|_| Error::Projection)
 }
 fn function(run: &dyn ActivationView, selected: usize) -> Result<(&Function, &str), Error> {
     let index = *run
@@ -124,27 +97,6 @@ fn function(run: &dyn ActivationView, selected: usize) -> Result<(&Function, &st
 }
 
 pub fn activation(run: &dyn ActivationView, observed: &Observations) -> Result<Json, Error> {
-    activation_with_limit(run, observed, 16_777_216)
-}
-pub fn activation_with_limit(
-    run: &dyn ActivationView,
-    observed: &Observations,
-    maximum: usize,
-) -> Result<Json, Error> {
-    if observed.bindings.len() > 1024 {
-        return Err(Error::Limit {
-            resource: "report_activation_bindings",
-            limit: 1024,
-            actual: Some(observed.bindings.len()),
-        });
-    }
-    if observed.tests.len() > 65_536 {
-        return Err(Error::Limit {
-            resource: "report_activation_tests",
-            limit: 65_536,
-            actual: Some(observed.tests.len()),
-        });
-    }
     let selected = run.called_functions().len();
     if selected == 0
         && (observed.lock != LockObservation::NotRequested
@@ -153,13 +105,17 @@ pub fn activation_with_limit(
     {
         return Err(Error::InvalidObservation);
     }
-    if !observed.bindings.is_empty() && observed.lock != LockObservation::Verified {
+    let lock_ready = if run.environment().lock().is_some() {
+        observed.lock == LockObservation::Verified
+    } else {
+        if observed.lock != LockObservation::NotRequested {
+            return Err(Error::InvalidObservation);
+        }
+        true
+    };
+    if !observed.bindings.is_empty() && !lock_ready {
         return Err(Error::InvalidObservation);
     }
-    let mut budget = Budget {
-        limit: maximum,
-        remaining: maximum,
-    };
     for (index, binding) in observed.bindings.iter().enumerate() {
         if binding.function != index
             || (index + 1 < observed.bindings.len()
@@ -170,14 +126,7 @@ pub fn activation_with_limit(
         {
             return Err(Error::InvalidObservation);
         }
-        let (function, source) = function(run, binding.function)?;
-        for text in [
-            &function.definition().name,
-            &function.definition().function,
-            source,
-        ] {
-            budget.text(text)?;
-        }
+        function(run, binding.function)?;
     }
     if !observed.tests.is_empty()
         && (observed.bindings.len() != selected
@@ -200,30 +149,19 @@ pub fn activation_with_limit(
         {
             return Err(Error::InvalidObservation);
         }
-        let (function, source) = function(run, observed.function)?;
+        let (function, _) = function(run, observed.function)?;
         let definition = function.definition();
-        let case = definition
+        definition
             .tests
             .get(observed.case)
             .ok_or(Error::InvalidObservation)?;
-        for text in [&definition.name, &definition.function, &case.id, source] {
-            budget.text(text)?;
-        }
-        for (name, value) in &case.args {
-            budget.text(name)?;
-            budget.value(value)?;
-        }
-        budget.value(&case.result)?;
-        if let Some(actual) = &observed.actual {
-            budget.value(actual)?;
-        }
+
         next = if observed.case + 1 == definition.tests.len() {
             (observed.function + 1, 0)
         } else {
             (observed.function, observed.case + 1)
         };
     }
-    // Finish the complete escaping budget before copying any recorded metadata.
     let bindings = observed.bindings.iter().map(|binding| {
         let (function, source) = function(run, binding.function)?;
         Ok(json!({"function":function.definition().name, "call":function.definition().function, "source":source, "outcome":match binding.outcome {
@@ -234,7 +172,7 @@ pub fn activation_with_limit(
         let (function, source) = function(run, observed.function)?;
         let definition = function.definition();
         let case = &definition.tests[observed.case];
-        let args = case.args.iter().map(|(name, value)| Ok((name.clone(), scalar(value)?))).collect::<Result<serde_json::Map<_, _>, Error>>()?;
+        let args = case.args.iter().map(|(name, value)| Ok((name.clone(), scalar(value)?))).collect::<Result<yamaa_core::json::Map<_, _>, Error>>()?;
         Ok(json!({"function":definition.name, "call":definition.function, "source":source, "case":case.id, "args":args,
             "expected":scalar(&case.result)?, "comparison_decimals":definition.comparison_decimals,
             "outcome":match observed.outcome { TestOutcome::Attempted => "attempted", TestOutcome::Passed => "passed", TestOutcome::ResultMismatch => "result_mismatch", TestOutcome::InvocationFailed => "invocation_failed", TestOutcome::Interrupted => "interrupted" },
@@ -243,36 +181,5 @@ pub fn activation_with_limit(
     let result = json!({"lock":match observed.lock {
         LockObservation::NotRequested => "not_requested", LockObservation::Attempted => "attempted", LockObservation::Verified => "verified", LockObservation::Rejected => "rejected", LockObservation::Interrupted => "interrupted",
     }, "bindings":bindings, "tests":tests});
-    let bytes = result.to_string().len();
-    if bytes > maximum {
-        return Err(Error::Limit {
-            resource: "report_activation_bytes",
-            limit: maximum,
-            actual: Some(bytes),
-        });
-    }
     Ok(result)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn report_text_refusal_keeps_the_complete_charge_and_original_quota() {
-        let mut budget = Budget {
-            limit: 256,
-            remaining: 256,
-        };
-        budget.text("a").unwrap();
-        assert_eq!(
-            budget.text("abcdefghijk"),
-            Err(Error::Limit {
-                resource: "report_activation_bytes",
-                limit: 256,
-                actual: Some(400),
-            })
-        );
-        assert_eq!(budget.remaining, 116);
-    }
 }
