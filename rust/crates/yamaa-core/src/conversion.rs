@@ -16,6 +16,7 @@ pub enum ConversionReason {
 pub struct ConversionError {
     pub target: ColumnType,
     pub value: serde_json::Value,
+    /// Semantic kind remains available when temporal values serialize as text.
     pub source_type: Option<ValueType>,
     pub reason: ConversionReason,
 }
@@ -44,7 +45,7 @@ impl ConversionError {
             .expect("numeric and conversion causes have a normative requirement")
     }
 
-    /// Preserve the parsed numeric source type used by the Python reference.
+    /// Preserve the parsed source kind independently of its JSON representation.
     pub fn source_type(&self) -> Option<ValueType> {
         self.source_type
     }

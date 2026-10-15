@@ -168,7 +168,9 @@ fn malformed_records_and_exhausted_ownership_budgets_refuse_before_rows_are_retu
                 .as_mut()
                 .unwrap()
                 .details
-                .insert("bad".into(), Json::Number("-0".parse().unwrap()));
+                // Number owns JSON grammar; a numeric log context still requires
+                // a finite binary64 value for fractional/exponent spellings.
+                .insert("bad".into(), Json::Number("1e999".parse().unwrap()));
             record
         },
     ] {

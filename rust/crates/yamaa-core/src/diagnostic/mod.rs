@@ -1,4 +1,5 @@
-//! Portable semantic diagnostics. Serialization and host exceptions stay outside core.
+//! Typed semantic diagnostics and canonical owned JSON context.
+//! Public issue envelopes and host exceptions belong to adapters.
 //!
 //! Registry keys identify causes, not public condition strings: the language uses
 //! `conversion_failed` for several requirements. Migrated causes cover numeric
