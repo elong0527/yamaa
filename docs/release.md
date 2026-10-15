@@ -102,7 +102,7 @@ passed in the local installed Python run and hosted Linux R 4.6.1 native job at 
 with the [installed evidence scope](release-handoff.md#candidate-implementation-and-scoped-installed-controls)
 recorded in the handoff.
 Final combined-main renewal remains required. Preparation work for inherited
-documents is tracked separately by #2300.
+documents follows the #2300 policy below.
 
 These are target decisions, not qualification results. Host behavior and source
 installation commands have one home in the
@@ -144,9 +144,44 @@ source fields and producer contract fields; 1,025 is refused at its correspondin
 boundary. Producer declarations also allow 1,024, because each selected contract
 field requires one declaration. Keys remain limited to 64, input datasets to 16
 and source operands to 64. An `ordinal` field counts toward the source width.
-Validation and normalization allow 67,108,864 logical work units; the separate
-schema-bundle work ceiling remains 4,194,304. Layered equivalence and its work
-policy remain under [#2300](https://github.com/elong0527/yamaa/issues/2300).
+Validation and normalization start with 67,108,864 logical work units; the
+separate schema-bundle work ceiling remains 4,194,304. Specification preparation
+adds one unit per original decoded node and text byte to that flat allowance.
+The [#2300](https://github.com/elong0527/yamaa/issues/2300) inheritance policy uses
+four times the flat allowance for the same total input size: one share each for
+layer admission, composition/dependencies, final normalization and model
+admission. Thus `W_flat(N, B) = 67,108,864 + N + B` and
+`W_layered(N, B) = 4 * W_flat(N, B)`, with `N` and `B` summed over unique captured
+layers, including the entry. Input nodes and text bytes retain their separate
+131,072 and 8,388,608 limits, so layered work stops at at most 302,514,176 units.
+All stages and failed attempts share cumulative charges; branches and repeated
+parents cannot reset them. Custom Rust work allowances keep a finite size credit
+of at most their original work allowance.
+
+Flat preparation permits `65,536 + 2 * N` attempted diagnostics and
+`8,388,608 + 128 * N + B` bytes of diagnostic text. These counters include failed
+union alternatives that are discarded after another alternative succeeds;
+emitted findings and their ordering remain unchanged. Layered preparation uses
+four times those same allowances, capped at 1,310,720 attempts and 134,217,728
+text bytes. Cumulative normalized arena construction has eight shares for
+descriptor output/import, composition and the subsequent planning arenas:
+1,048,576 nodes, 67,108,864 text bytes and 2,097,152 edges. Each individual decoded,
+normalized and composed document keeps its original 131,072-node,
+8,388,608-text-byte and 262,144-edge bounds. Traversal still refuses more than
+8,192 parent occurrences, including repeated occurrences of the same parent.
+Its copied path bytes also retain their 1,048,576-byte cumulative ceiling.
+Schema regex matching retains the existing individual-match limits while its
+cumulative subject-byte, work and state-cell allowances receive the same four
+shares plus four more for dependency reachability/ordering, and a size credit
+capped at each original allowance. Their maximums are
+16,777,216 subject bytes, 16,000,000 work units and 16,000,000 state cells; runtime
+expression matching keeps its separate existing policies.
+These size allowances belong to top-level host preparation; explicit Rust
+component budgets created with `NormalizationBudget::new` retain their exact
+caller-selected ceilings and cumulative accounting.
+Installed Python/R controls cover
+flat, explicit empty-parent, empty-child and two-layer case specifications at
+40, 64 and 1,024 columns, including independent expected output and saved bytes.
 The earlier source/output cell ceilings of 2,097,152 and 1,048,576 are
 superseded by the approved longitudinal defaults above. This width policy does
 not qualify the broader capacity or installed
