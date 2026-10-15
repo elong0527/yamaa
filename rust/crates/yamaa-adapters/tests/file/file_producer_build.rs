@@ -9,7 +9,7 @@ use std::{
 };
 use yamaa_adapters::{
     file_graph::FileGraph,
-    file_producer_build::{Attempt, BoundaryFailure, CodecError, FileBuild, Limits},
+    file_producer_build::{Attempt, BoundaryFailure, FileBuild},
     file_resources::{Error as ResourceError, Resources},
     project_source::{self, CapturePort, Kind, OwnedEnvironment, Reply, Request},
     shipped_schema,
@@ -32,6 +32,10 @@ use yamaa_core::{
     table::{TableAccess, ValueRef},
     value::Value,
 };
+
+fn scope() -> yamaa_core::application_observer::Scope<'static> {
+    yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop)
+}
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 struct Study(PathBuf);
@@ -65,7 +69,6 @@ impl Study {
             "consumer/root.yaml",
             environment(language),
             shipped_schema::capture().unwrap(),
-            Default::default(),
         )
         .unwrap_or_else(|error| panic!("graph fixture: {:?}", error.error()))
         .into_build()
@@ -91,7 +94,7 @@ const PRODUCER: &str = "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys: [I
 const CONSUMER: &str = "schema_version: '1.0'\ndomain: TEST\nbase: FIRST\nkeys: [ID]\ninput:\n  FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}\n  SECOND: {path: ../generated/producer.csv, schema: ../producer/./p.yaml}\nintermediates: [{id: SECOND_REFERENCE, dataset: SECOND, key: [ID], no_match: null}]\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}\n  - {name: FIRST_VALUE, type: float, label: First value, derivation: FIRST.VALUE}\n  - {name: SECOND_VALUE, type: float, label: Second value, derivation: SECOND_REFERENCE.VALUE}\n  - {name: VALUE, type: float, label: Reported value, derivation: {compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}}\noutput: {path: ../generated/root.csv, columns: [ID, VALUE], decimals: 2}\n";
 
 #[test]
-fn native_uneven_csv_and_parquet_graphs_fit_ten_and_exact_eight_source_rows() {
+fn native_uneven_csv_and_parquet_graphs_keep_each_tables_actual_rows() {
     for format in ["csv", "parquet"] {
         let study = Study::new();
         study.write(
@@ -102,54 +105,36 @@ fn native_uneven_csv_and_parquet_graphs_fit_ten_and_exact_eight_source_rows() {
         study.write("consumer/root.yaml", format!("schema_version: '1.0'\ndomain: ROOT\nkeys: [ID]\ninput: {{FIRST: {{path: ../generated/producer.{format}, schema: ../producer/p.yaml}}}}\nrows:\n  - id: counted\n    dataset: FIRST\n    group_by: [FIRST.ID, FIRST.VALUE]\n    derivations: {{ID: FIRST.ID, SOURCE_COUNT: FIRST.VALUE, VALUE: {{aggregate: 'COUNT(FIRST.*)'}}}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier}}\n  - {{name: SOURCE_COUNT, type: int, label: Original source count}}\n  - {{name: VALUE, type: int, label: Count}}\noutput: {{path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}}\n"));
         let mut build = study.build(Language::Python);
         let mut activation = Activation::new(&study, Mode::Lock);
-        for rows in [10, 8, 7] {
-            let mut limits = Limits::default();
-            limits.engine.execution.source_rows = rows;
-            limits.engine.source_cells = 16;
-            limits.engine.source_storage_bytes = 4_096;
-            limits.engine.decode_work_bytes = 4_096;
-            limits.engine.execution.output_rows = 2;
-            limits.engine.execution.output_cells = 5;
-            let attempt = build.build(&mut activation, &mut Report::default(), limits);
-            assert_eq!(
-                attempt.accepted(),
-                rows >= 8,
-                "{format} rows={rows}: {:?}",
-                attempt.graph.outcome
-            );
-            assert!(activation.trace.is_empty());
-            if rows >= 8 {
-                assert_eq!(artifact(&attempt, 1), b"ID,SOURCE_COUNT,VALUE\n1,7,1\n");
-                let producer = attempt.graph.nodes[0]
-                    .dataset
-                    .result
-                    .as_ref()
-                    .unwrap()
-                    .result
-                    .as_ref()
-                    .unwrap();
-                assert_eq!(producer.dataset.row_count(), 1);
-                assert_eq!(producer.dataset.cell(0, 1).unwrap(), ValueRef::Int(7));
-                assert_eq!(
-                    attempt.graph.nodes[0].dataset.sources[0]
-                        .table
-                        .as_ref()
-                        .unwrap()
-                        .row_count(),
-                    7
-                );
-                assert_eq!(
-                    attempt.graph.nodes[1].dataset.sources[0]
-                        .table
-                        .as_ref()
-                        .unwrap()
-                        .row_count(),
-                    1
-                );
-            } else {
-                assert!(attempt.graph.nodes[1].dataset.sources[0].table.is_none());
-            }
-        }
+        let attempt = build.build(&mut activation, &mut Report::default(), scope());
+        assert!(attempt.accepted(), "{format}: {:?}", attempt.graph.outcome);
+        assert!(activation.trace.is_empty());
+        assert_eq!(artifact(&attempt, 1), b"ID,SOURCE_COUNT,VALUE\n1,7,1\n");
+        let producer = attempt.graph.nodes[0]
+            .dataset
+            .result
+            .as_ref()
+            .unwrap()
+            .result
+            .as_ref()
+            .unwrap();
+        assert_eq!(producer.dataset.row_count(), 1);
+        assert_eq!(producer.dataset.cell(0, 1).unwrap(), ValueRef::Int(7));
+        assert_eq!(
+            attempt.graph.nodes[0].dataset.sources[0]
+                .table
+                .as_ref()
+                .unwrap()
+                .row_count(),
+            7
+        );
+        assert_eq!(
+            attempt.graph.nodes[1].dataset.sources[0]
+                .table
+                .as_ref()
+                .unwrap()
+                .row_count(),
+            1
+        );
     }
 }
 
@@ -212,8 +197,8 @@ columns:
         );
         let mut build = study.build(language);
         let mut activation = Activation::new(&study, Mode::Pass);
-        let owned = build.build_owned_reported(&mut activation, report_id(), Default::default());
-        let mut result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
+        let owned = build.build_owned_reported(&mut activation, report_id(), scope());
+        let mut result = prepare_owned_classified(&owned, report_id(), &[]).unwrap();
         assert!(result.issues().is_empty(), "{:?}", result.issues());
         assert!(result.output().is_some());
         assert!(!study.0.join("generated/daily.csv").exists());
@@ -240,8 +225,8 @@ fn linked_producer_ordinal_is_local_to_consumers_and_keeps_the_stored_contract()
     study.write("consumer/root.yaml", CONSUMER.replace("schema: ../producer/p.yaml}", "schema: ../producer/p.yaml, ordinal: REC}").replace("output: {path:", "  - {name: POSITION, type: int, label: Position, derivation: FIRST.REC}\noutput: {path:").replace("columns: [ID, VALUE], decimals", "columns: [ID, VALUE, POSITION], decimals"));
     let mut build = study.build(Language::Python);
     let mut activation = Activation::new(&study, Mode::Pass);
-    let owned = build.build_owned_reported(&mut activation, report_id(), Default::default());
-    let mut result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
+    let owned = build.build_owned_reported(&mut activation, report_id(), scope());
+    let mut result = prepare_owned_classified(&owned, report_id(), &[]).unwrap();
     assert!(result.issues().is_empty(), "{:?}", result.issues());
     fs::create_dir(study.0.join("generated")).unwrap();
     assert!(result.save().unwrap());
@@ -261,8 +246,8 @@ fn linked_producer_ordinal_is_local_to_consumers_and_keeps_the_stored_contract()
         );
         let mut build = study.build(Language::Python);
         let mut activation = Activation::new(&study, Mode::Pass);
-        let owned = build.build_owned_reported(&mut activation, report_id(), Default::default());
-        let result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
+        let owned = build.build_owned_reported(&mut activation, report_id(), scope());
+        let result = prepare_owned_classified(&owned, report_id(), &[]).unwrap();
         assert!(result.output().is_none());
         assert_eq!(result.issues().len(), 1);
         let issue = &result.issues()[0];
@@ -291,8 +276,8 @@ fn sealed_native_save_keeps_original_held_bytes_after_sources_change_and_other_o
         fs::create_dir(study.0.join("generated")).unwrap();
         let mut build = study.build(language);
         let mut activation = Activation::new(&study, Mode::Pass);
-        let owned = build.build_owned_reported(&mut activation, report_id(), Limits::default());
-        let mut result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
+        let owned = build.build_owned_reported(&mut activation, report_id(), scope());
+        let mut result = prepare_owned_classified(&owned, report_id(), &[]).unwrap();
         let before = result.observations().clone();
         let output = result.output().unwrap().to_vec();
         let events = activation.trace.clone();
@@ -338,7 +323,7 @@ fn authored_public_success_evidence_and_failed_owned_graph_never_obtain_save_aut
     fs::create_dir(study.0.join("generated")).unwrap();
     let mut build = study.build(Language::Python);
     let mut activation = Activation::new(&study, Mode::Pass);
-    let actual = build.build_reported(&mut activation, report_id(), Default::default());
+    let actual = build.build_reported(&mut activation, report_id(), scope());
     // Every field is deliberately public evidence: a caller can author this
     // success, but that construction cannot create the private OwnedAttempt.
     let authored = NativeAttempt {
@@ -347,17 +332,14 @@ fn authored_public_success_evidence_and_failed_owned_graph_never_obtain_save_aut
         graph: actual.graph,
         resources: actual.resources,
     };
-    let mut result = prepare_classified(&authored, report_id(), 16_777_216, &[]).unwrap();
+    let mut result = prepare_classified(&authored, report_id(), &[]).unwrap();
     assert!(result.output().is_some());
     assert!(result.save().is_err());
-    let limits = Limits {
-        evidence_aliases: 0,
-        ..Default::default()
-    };
-    let failed = build.build_owned_reported(&mut activation, report_id(), limits);
+    activation.mode = Mode::Lock;
+    let failed = build.build_owned_reported(&mut activation, report_id(), scope());
     assert!(!failed.accepted());
     assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
-    assert!(prepare_owned_classified(&failed, report_id(), 16_777_216, &[]).is_err());
+    assert!(prepare_owned_classified(&failed, report_id(), &[]).is_err());
 }
 #[test]
 fn whole_set_invalid_target_and_duplicate_normalized_alias_refuse_every_write() {
@@ -376,9 +358,9 @@ fn whole_set_invalid_target_and_duplicate_normalized_alias_refuse_every_write() 
         }
         let mut build = study.build(Language::Python);
         let mut activation = Activation::new(&study, Mode::Pass);
-        let owned = build.build_owned_reported(&mut activation, report_id(), Default::default());
+        let owned = build.build_owned_reported(&mut activation, report_id(), scope());
         assert!(owned.accepted());
-        let mut result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
+        let mut result = prepare_owned_classified(&owned, report_id(), &[]).unwrap();
         assert!(!result.save().unwrap());
         assert!(!study.0.join("generated/producer.csv").exists());
         assert!(result
@@ -395,84 +377,7 @@ fn whole_set_invalid_target_and_duplicate_normalized_alias_refuse_every_write() 
         );
     }
 }
-#[test]
-fn native_save_admits_cumulative_limits_and_whole_report_before_first_write() {
-    use yamaa_adapters::producer_result::prepare_owned_classified;
-    use yamaa_core::producer_publication::{Failure as SaveFailure, Limits as SaveLimits};
-    let study = Study::new();
-    study.rounded();
-    fs::create_dir(study.0.join("generated")).unwrap();
-    let mut build = study.build(Language::Python);
-    let mut activation = Activation::new(&study, Mode::Pass);
-    let owned = build.build_owned_reported(&mut activation, report_id(), Default::default());
-    let mut result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
-    let first = owned.graph.nodes[0]
-        .output
-        .as_ref()
-        .unwrap()
-        .as_ref()
-        .unwrap()
-        .artifact()
-        .unwrap();
-    for limits in [
-        SaveLimits {
-            nodes: 1,
-            ..Default::default()
-        },
-        SaveLimits {
-            artifact_bytes: first.bytes().len(),
-            ..Default::default()
-        },
-        SaveLimits {
-            path_bytes: first.path().len(),
-            ..Default::default()
-        },
-        SaveLimits {
-            work: 2,
-            ..Default::default()
-        },
-    ] {
-        assert!(!result.save_with_limits(limits, 16_777_216).unwrap());
-        let saved = result.publication_attempt().unwrap();
-        assert!(saved.entered.entered.is_empty());
-        assert!(matches!(saved.entered.outcome, Err(SaveFailure::Limit(_))));
-        assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
-    }
-    assert!(!result.save_with_limits(Default::default(), 1).unwrap());
-    assert!(result.publication_attempt().is_none());
-    assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
-    assert!(result.save().unwrap());
-    assert!(result.issues().is_empty());
-}
-#[test]
-fn canonical_target_path_quota_refuses_before_target_ownership_and_every_write() {
-    use yamaa_adapters::producer_result::prepare_owned_classified;
-    let study = Study::new();
-    study.rounded();
-    fs::create_dir(study.0.join("generated")).unwrap();
-    let mut build = study.build(Language::Python);
-    let mut activation = Activation::new(&study, Mode::Pass);
-    let mut limits = Limits::default();
-    // Enough for the engine's two held authored paths, insufficient for the
-    // adapter's complete authored+canonical target ownership admission.
-    limits.engine.publication.path_bytes = 128;
-    let owned = build.build_owned_reported(&mut activation, report_id(), limits);
-    assert!(owned.accepted());
-    let mut result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
-    assert!(!result.save().unwrap());
-    assert_eq!(result.observations()["outcome"], "success");
-    assert_eq!(
-        result.observations()["publication"]["error"]["code"],
-        "producer_publication_paths"
-    );
-    assert!(result
-        .publication_attempt()
-        .unwrap()
-        .entered
-        .entered
-        .is_empty());
-    assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
-}
+
 #[cfg(windows)]
 #[test]
 fn absent_windows_case_alias_targets_refuse_before_every_write() {
@@ -486,9 +391,9 @@ fn absent_windows_case_alias_targets_refuse_before_every_write() {
     fs::create_dir(study.0.join("generated")).unwrap();
     let mut build = study.build(Language::Python);
     let mut activation = Activation::new(&study, Mode::Pass);
-    let owned = build.build_owned_reported(&mut activation, report_id(), Default::default());
+    let owned = build.build_owned_reported(&mut activation, report_id(), scope());
     assert!(owned.accepted());
-    let mut result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
+    let mut result = prepare_owned_classified(&owned, report_id(), &[]).unwrap();
     assert!(!result.save().unwrap());
     assert_eq!(
         result.observations()["publication"]["error"]["code"],
@@ -520,9 +425,9 @@ fn macos_absent_case_alias_and_unproven_unicode_targets_preflight_before_every_w
         );
         let mut build = study.build(Language::Python);
         let mut activation = Activation::new(&study, Mode::Pass);
-        let owned = build.build_owned_reported(&mut activation, report_id(), Default::default());
+        let owned = build.build_owned_reported(&mut activation, report_id(), scope());
         assert!(owned.accepted());
-        let mut result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
+        let mut result = prepare_owned_classified(&owned, report_id(), &[]).unwrap();
         if name == "PRODUCER.csv" && sensitive {
             assert!(result.save().unwrap());
             fs::remove_file(study.0.join("generated/producer.csv")).unwrap();
@@ -560,9 +465,9 @@ fn actual_late_consumer_publication_failure_keeps_producer_bytes_original_io_and
     study.write("published/root.csv", b"previous consumer bytes");
     let mut build = study.build(Language::Python);
     let mut activation = Activation::new(&study, Mode::Pass);
-    let owned = build.build_owned_reported(&mut activation, report_id(), Default::default());
+    let owned = build.build_owned_reported(&mut activation, report_id(), scope());
     let events = activation.trace.clone();
-    let mut result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
+    let mut result = prepare_owned_classified(&owned, report_id(), &[]).unwrap();
     let before = result.observations().clone();
     let lock = unix::open(
         study.0.join("published"),
@@ -677,7 +582,6 @@ fn environment(language: Language) -> OwnedEnvironment {
         },
         language,
         &mut LockCapture { language },
-        Default::default(),
     )
     .unwrap_or_else(|error| match error {
         project_source::Failure::Rejected(error) => {
@@ -812,7 +716,6 @@ impl ActivationPort for Activation {
 #[derive(Default)]
 struct Report {
     entered: Vec<String>,
-    maximum: usize,
     fail: bool,
     final_failure: bool,
 }
@@ -821,10 +724,8 @@ impl ReportPort for Report {
         &mut self,
         node: &Node,
         _attempt: &yamaa_core::specification_run::CapturedAttempt<C, D, T>,
-        maximum: usize,
     ) -> Result<(), Self::Error> {
         self.entered.push(node.identity().into());
-        self.maximum = maximum;
         if self.fail {
             Err("original report refusal")
         } else {
@@ -847,8 +748,6 @@ impl OutputReport for Report {
     fn success(&mut self, _: &Execution, _: &[usize], _: &[u8]) -> Result<String, Self::Error> {
         if self.final_failure {
             Err("original report rendering refusal")
-        } else if self.maximum < 8 {
-            Err("original bounded report refusal")
         } else {
             Ok("accepted".into())
         }
@@ -888,7 +787,7 @@ fn native_parquet_round_trip_uses_held_artifact_and_a_functionless_graph_grants_
     let mut build = study.build(Language::Python);
     let mut activation = Activation::new(&study, Mode::Lock);
     let mut report = Report::default();
-    let attempt = build.build(&mut activation, &mut report, Limits::default());
+    let attempt = build.build(&mut activation, &mut report, scope());
     assert!(attempt.accepted());
     assert!(activation.trace.is_empty());
     assert_eq!(attempt.graph.activation, Default::default());
@@ -906,10 +805,9 @@ fn native_parquet_round_trip_uses_held_artifact_and_a_functionless_graph_grants_
         assert_eq!(table.cell(1, 1).unwrap(), ValueRef::Int(17));
     }
     assert!(!study.0.join("generated").exists());
-    let complete = build.build_reported(&mut activation, report_id(), Limits::default());
+    let complete = build.build_reported(&mut activation, report_id(), scope());
     assert!(complete.accepted());
-    let value = yamaa_adapters::producer_report::attempt_report(&complete, report_id(), 16_777_216)
-        .unwrap();
+    let value = yamaa_adapters::producer_report::attempt_report(&complete, report_id()).unwrap();
     assert_eq!(value["outcome"], "success");
     assert_eq!(
         value["activation"],
@@ -921,11 +819,6 @@ fn native_parquet_round_trip_uses_held_artifact_and_a_functionless_graph_grants_
         serde_json::json!(["[\"ID\", \"VALUE\"]", "[1, 13]", "[2, 17]"])
     );
     assert_eq!(value["artifacts"][1]["content"], "ID,VALUE\n1,13\n2,17\n");
-    let mut limits = Limits::default();
-    limits.engine.source_storage_bytes = 1;
-    let refused = build.build(&mut activation, &mut report, limits);
-    assert!(!refused.accepted());
-    assert!(refused.graph.nodes[0].dataset.sources[0].table.is_none());
 }
 
 #[test]
@@ -960,7 +853,7 @@ fn native_diamond_executes_each_canonical_node_once_and_keeps_shared_leaf_bytes(
     let mut build = study.build(Language::Python);
     let mut activation = Activation::new(&study, Mode::Pass);
     let mut report = Report::default();
-    let attempt = build.build(&mut activation, &mut report, Limits::default());
+    let attempt = build.build(&mut activation, &mut report, scope());
     assert!(attempt.accepted());
     assert_eq!(
         attempt
@@ -1016,7 +909,7 @@ fn native_rounded_bytes_are_reingested_twice_after_producer_only_activation_with
         // A capture before the final activation case would observe the wrong data.
         study.write("raw/raw.csv", b"ID,VALUE\n1,99.99\n");
         let mut report = Report::default();
-        let attempt = build.build(&mut activation, &mut report, Limits::default());
+        let attempt = build.build(&mut activation, &mut report, scope());
         assert!(attempt.accepted(), "{:?}", attempt.graph.outcome);
         assert_eq!(
             activation.trace,
@@ -1098,8 +991,6 @@ fn native_rounded_bytes_are_reingested_twice_after_producer_only_activation_with
         );
         assert!(attempt
             .resources
-            .as_ref()
-            .unwrap()
             .iter()
             .any(|(p, b)| p.ends_with("/raw/raw.csv") && &**b == b"ID,VALUE\n1,1.234\n2,2.345\n"));
     }
@@ -1113,8 +1004,8 @@ fn fresh_builds_repeat_activation_and_detect_changed_study_after_activation_with
     let mut build = study.build(Language::Python);
     let mut activation = Activation::new(&study, Mode::Pass);
     let mut report = Report::default();
-    let first = build.build(&mut activation, &mut report, Limits::default());
-    let second = build.build(&mut activation, &mut report, Limits::default());
+    let first = build.build(&mut activation, &mut report, scope());
+    let second = build.build(&mut activation, &mut report, scope());
     assert!(first.accepted() && second.accepted());
     assert_eq!(
         first.graph.nodes[0].dataset.sources[0]
@@ -1131,7 +1022,7 @@ fn fresh_builds_repeat_activation_and_detect_changed_study_after_activation_with
     assert_eq!(activation.trace.len(), 12);
     study.write("raw/raw.csv", b"ID,VALUE\n1,9.99\n");
     activation.trace.clear();
-    let changed = build.build(&mut activation, &mut report, Limits::default());
+    let changed = build.build(&mut activation, &mut report, scope());
     assert!(!changed.accepted());
     assert!(changed.boundary.is_ok());
     assert_eq!(activation.trace, ["lock", "bind", "invoke:7", "invoke:0"]);
@@ -1144,48 +1035,29 @@ fn fresh_builds_repeat_activation_and_detect_changed_study_after_activation_with
     ));
     assert!(changed
         .resources
-        .as_ref()
-        .unwrap()
         .iter()
         .any(|(p, b)| p.ends_with("/raw/raw.csv") && &**b == b"ID,VALUE\n1,1.234\n2,2.345\n"));
     assert_eq!(artifact(&first, 1), b"ID,VALUE\n1,2.46\n2,4.70\n");
 }
 
 #[test]
-fn native_changed_metadata_and_metadata_quota_refuse_before_host_or_study_authority() {
+fn native_changed_metadata_refuses_before_host_or_study_authority() {
     let study = Study::new();
     study.rounded();
     let mut build = study.build(Language::Python);
     let mut activation = Activation::new(&study, Mode::Pass);
     let mut report = Report::default();
-    let limits = Limits {
-        resource_bytes: 0,
-        ..Default::default()
-    };
-    let bounded = build.build(&mut activation, &mut report, limits);
-    assert!(matches!(
-        bounded.boundary,
-        Err(BoundaryFailure::Resource { identity: None, .. })
-    ));
-    assert!(activation.trace.is_empty() && bounded.graph.nodes.is_empty());
     study.write("producer/layers/base.yaml", b"changed metadata");
-    let changed = build.build(&mut activation, &mut report, Limits::default());
+    let changed = build.build(&mut activation, &mut report, scope());
     assert!(
         matches!(&changed.boundary, Err(BoundaryFailure::Resource { identity: Some(p), error: ResourceError::Changed }) if p == &study.path("producer/layers/base.yaml"))
     );
     assert!(activation.trace.is_empty() && changed.graph.nodes.is_empty());
     assert!(changed
         .resources
-        .as_ref()
-        .unwrap()
         .iter()
         .any(|(p, b)| p.ends_with("/producer/layers/base.yaml") && &**b == PRODUCER.as_bytes()));
-    assert!(!changed
-        .resources
-        .as_ref()
-        .unwrap()
-        .iter()
-        .any(|(p, _)| p.ends_with(".csv")));
+    assert!(!changed.resources.iter().any(|(p, _)| p.ends_with(".csv")));
 }
 
 #[test]
@@ -1203,7 +1075,7 @@ fn native_activation_failures_interrupts_and_unwind_retain_owned_original_prefix
         let mut build = study.build(Language::Python);
         let mut activation = Activation::new(&study, mode);
         let mut report = Report::default();
-        let attempt = build.build(&mut activation, &mut report, Limits::default());
+        let attempt = build.build(&mut activation, &mut report, scope());
         assert!(!attempt.accepted());
         assert!(report.entered.is_empty());
         match mode {
@@ -1268,7 +1140,7 @@ fn original_graph_host_failure_visits_keep_stage_identity_after_other_owners_dro
         let mut build = study.build(Language::Python);
         let mut activation = Activation::new(&study, mode);
         let original = Rc::clone(&activation.original);
-        let attempt = build.build(&mut activation, &mut Report::default(), Limits::default());
+        let attempt = build.build(&mut activation, &mut Report::default(), scope());
         let entered = attempt.graph.nodes.len();
         drop(activation);
         drop(build);
@@ -1298,7 +1170,7 @@ fn graph_failure_visits_leave_native_unwind_and_success_as_original_boundaries()
         let mut build = study.build(Language::Python);
         let mut activation = Activation::new(&study, mode);
         let unwind = Arc::clone(&activation.unwind);
-        let attempt = build.build(&mut activation, &mut Report::default(), Limits::default());
+        let attempt = build.build(&mut activation, &mut Report::default(), scope());
         let mut count = 0;
         yamaa_adapters::producer_attempt::visit_host_failures(&attempt, |_, _| count += 1);
         assert_eq!(count, 0);
@@ -1319,8 +1191,8 @@ fn graph_failure_visits_leave_native_unwind_and_success_as_original_boundaries()
 }
 
 #[test]
-fn native_ingestion_verification_codec_report_and_retention_gates_keep_distinct_prefixes() {
-    for mode in 0..6 {
+fn native_ingestion_verification_report_and_host_failures_keep_distinct_prefixes() {
+    for mode in [0, 1, 3, 4] {
         let study = Study::new();
         study.rounded();
         match mode {
@@ -1337,18 +1209,10 @@ fn native_ingestion_verification_codec_report_and_retention_gates_keep_distinct_
             fail: mode == 3,
             ..Default::default()
         };
-        let mut limits = Limits::default();
-        if mode == 2 {
-            limits.engine.output_bytes = 5;
-        }
         if mode == 4 {
-            limits.evidence_aliases = 1;
             activation.mode = Mode::LiveFailure;
         }
-        if mode == 5 {
-            limits.engine.source_cells = 7;
-        }
-        let attempt = build.build(&mut activation, &mut report, limits);
+        let attempt = build.build(&mut activation, &mut report, scope());
         assert!(!attempt.accepted());
         assert!(!study.0.join("generated").exists());
         if mode == 5 {
@@ -1370,17 +1234,16 @@ fn native_ingestion_verification_codec_report_and_retention_gates_keep_distinct_
                     .map_or(true, |e| e.result.is_err()));
                 assert!(report.entered.is_empty());
             }
-            2 => assert!(matches!(
-                attempt.graph.nodes[0].output,
-                Err(CompleteError::Encode(CodecError::Csv(_)))
-            )),
             3 => assert!(matches!(
                 attempt.graph.nodes[0].output,
                 Err(CompleteError::Report("original report refusal"))
             )),
             4 => {
-                let failure = attempt.resources.as_ref().unwrap_err();
-                assert_eq!(failure.retained.len(), 1);
+                assert!(attempt
+                    .resources
+                    .iter()
+                    .any(|(path, bytes)| path.ends_with("/raw/raw.csv")
+                        && &**bytes == b"ID,VALUE\n1,1.234\n2,2.345\n"));
                 assert!(attempt.graph.nodes[0]
                     .dataset
                     .result
@@ -1406,7 +1269,7 @@ fn native_build_preserves_canonical_unix_root_with_literal_backslashes() {
     let attempt = build.build(
         &mut Activation::new(&study, Mode::Pass),
         &mut Report::default(),
-        Limits::default(),
+        scope(),
     );
     assert!(attempt.accepted());
     assert!(attempt
@@ -1428,7 +1291,7 @@ fn final_report_rendering_refusal_prevents_retaining_or_consuming_producer_bytes
         final_failure: true,
         ..Default::default()
     };
-    let attempt = build.build(&mut activation, &mut report, Limits::default());
+    let attempt = build.build(&mut activation, &mut report, scope());
     assert!(!attempt.accepted());
     assert_eq!(attempt.graph.nodes.len(), 1);
     assert!(attempt.graph.nodes[0]
@@ -1470,8 +1333,8 @@ fn public_root_result_keeps_independent_unrounded_truth_after_all_other_owners_a
     ).replace("columns: [ID, VALUE], decimals: 2", "columns: [ROOT_UNROUNDED, ID, VALUE], decimals: 2"));
     let mut build = study.build(Language::Python);
     let mut host = Activation::new(&study, Mode::Pass);
-    let first = build.build_reported(&mut host, report_id(), Limits::default());
-    let second = build.build_reported(&mut host, report_id(), Limits::default());
+    let first = build.build_reported(&mut host, report_id(), scope());
+    let second = build.build_reported(&mut host, report_id(), scope());
     assert_eq!(host.trace.len(), 12);
     assert_eq!(artifact(&first, 0), b"ID,VALUE\n1,1.23\n2,2.35\n");
     assert_eq!(
@@ -1482,8 +1345,7 @@ fn public_root_result_keeps_independent_unrounded_truth_after_all_other_owners_a
     drop(host);
     fs::remove_dir_all(&study.0).unwrap();
     for attempt in [&first, &second] {
-        let result =
-            producer_result::prepare_classified(attempt, report_id(), 16777216, &[]).unwrap();
+        let result = producer_result::prepare_classified(attempt, report_id(), &[]).unwrap();
         assert!(result.issues().is_empty());
         assert_eq!(result.observations()["outcome"], "success");
         let columns = result.output_table().unwrap().columns();
@@ -1521,11 +1383,11 @@ fn public_failed_graph_retains_prior_artifacts_as_evidence_without_root_output()
     );
     let mut build = study.build(Language::Python);
     let mut host = Activation::new(&study, Mode::Pass);
-    let attempt = build.build_reported(&mut host, report_id(), Limits::default());
+    let attempt = build.build_reported(&mut host, report_id(), scope());
     assert!(!attempt.accepted());
     assert_eq!(artifact(&attempt, 0), b"ID,VALUE\n1,1.23\n2,2.35\n");
     let before = host.trace.clone();
-    let result = producer_result::prepare_classified(&attempt, report_id(), 16777216, &[]).unwrap();
+    let result = producer_result::prepare_classified(&attempt, report_id(), &[]).unwrap();
     assert!(result.output().is_none() && result.output_table().is_none());
     assert_eq!(result.issues().len(), 1);
     assert_eq!(result.observations()["outcome"], "failure");
@@ -1534,7 +1396,7 @@ fn public_failed_graph_retains_prior_artifacts_as_evidence_without_root_output()
     drop(host);
     fs::remove_dir_all(&study.0).unwrap();
     assert!(
-        producer_result::prepare_classified(&attempt, report_id(), 16777216, &[])
+        producer_result::prepare_classified(&attempt, report_id(), &[])
             .unwrap()
             .output()
             .is_none()
@@ -1552,7 +1414,7 @@ fn public_root_projection_requires_complete_classification_and_preserves_origina
     let mut build = study.build(Language::Python);
     let mut host = Activation::new(&study, Mode::LiveFailure);
     let original = Rc::clone(&host.original);
-    let attempt = build.build_reported(&mut host, report_id(), Limits::default());
+    let attempt = build.build_reported(&mut host, report_id(), scope());
     drop(build);
     drop(host);
     fs::remove_dir_all(&study.0).unwrap();
@@ -1562,7 +1424,7 @@ fn public_root_projection_requires_complete_classification_and_preserves_origina
     });
     assert_eq!(failures.len(), 1);
     assert!(Rc::ptr_eq(&original, &failures[0].original));
-    match producer_result::prepare_classified(&attempt, report_id(), 16777216, &[]) {
+    match producer_result::prepare_classified(&attempt, report_id(), &[]) {
         Err(producer_result::Error::Report(ProjectionError::Original {
             attempt: held,
             observations,
@@ -1577,11 +1439,9 @@ fn public_root_projection_requires_complete_classification_and_preserves_origina
         details: HostDetails::Exception {
             class: "OriginalError",
             message: "held failure",
-            truncated: false,
         },
     }];
-    let result =
-        producer_result::prepare_classified(&attempt, report_id(), 16777216, &facts).unwrap();
+    let result = producer_result::prepare_classified(&attempt, report_id(), &facts).unwrap();
     assert!(result.output().is_none());
     assert_eq!(result.issues().len(), 1);
     assert_eq!(result.issues()[0].condition, "function_call_failed");
@@ -1589,7 +1449,7 @@ fn public_root_projection_requires_complete_classification_and_preserves_origina
 }
 
 #[test]
-fn public_root_result_refuses_limited_or_contradictory_whole_attempts_before_output_copy() {
+fn public_root_result_refuses_contradictory_whole_attempts_before_output_copy() {
     use yamaa_adapters::{
         producer_report::ProjectionError, producer_result, specification_report::Error,
     };
@@ -1597,19 +1457,11 @@ fn public_root_result_refuses_limited_or_contradictory_whole_attempts_before_out
     study.rounded();
     let mut build = study.build(Language::Python);
     let mut host = Activation::new(&study, Mode::Pass);
-    let mut attempt = build.build_reported(&mut host, report_id(), Limits::default());
+    let mut attempt = build.build_reported(&mut host, report_id(), scope());
     let before = host.trace.clone();
-    assert!(matches!(
-        producer_result::prepare_classified(&attempt, report_id(), 1, &[]),
-        Err(producer_result::Error::Report(ProjectionError::Report(
-            Error::ResourceLimit(refusal)
-        ))) if refusal.resource == "report_retained_bytes"
-            && refusal.limit == 6
-            && refusal.actual.is_some_and(|actual| actual > refusal.limit)
-    ));
     attempt.graph.nodes.swap(0, 1);
     assert!(matches!(
-        producer_result::prepare_classified(&attempt, report_id(), 16777216, &[]),
+        producer_result::prepare_classified(&attempt, report_id(), &[]),
         Err(producer_result::Error::Report(ProjectionError::Report(
             Error::InvalidObservation
         )))
@@ -1619,7 +1471,7 @@ fn public_root_result_refuses_limited_or_contradictory_whole_attempts_before_out
 }
 
 #[test]
-fn public_root_copy_admits_the_prior_frontier_and_keeps_retained_truth_after_resources_drop() {
+fn public_root_keeps_complete_large_truth_after_resources_drop() {
     use yamaa_adapters::producer_result;
     let study = Study::new();
     study.rounded();
@@ -1656,18 +1508,11 @@ fn public_root_copy_admits_the_prior_frontier_and_keeps_retained_truth_after_res
     );
     let mut build = study.build(Language::Python);
     let mut host = Activation::new(&study, Mode::Pass);
-    let attempt = build.build_reported(&mut host, report_id(), Limits::default());
+    let attempt = build.build_reported(&mut host, report_id(), scope());
     assert!(attempt.accepted());
     let before = host.trace.clone();
-    // Three actual typed-copy passes visit 4,209,000 cells. The former
-    // 4,194,304-cell copying policy refused this already accepted graph.
-    let result = producer_result::prepare_classified(
-        &attempt,
-        report_id(),
-        yamaa_core::capacity::REPORT_ENCODED_BYTES,
-        &[],
-    )
-    .unwrap_or_else(|_| panic!("accepted graph remains within the longitudinal copying policy"));
+    let result = producer_result::prepare_classified(&attempt, report_id(), &[])
+        .unwrap_or_else(|_| panic!("accepted graph preserves its full output"));
     assert!(result.issues().is_empty());
     let output = result.output_table().unwrap();
     assert_eq!((output.rows(), output.columns().len()), (23_000, 61));
@@ -1681,13 +1526,8 @@ fn public_root_copy_admits_the_prior_frontier_and_keeps_retained_truth_after_res
     drop(host);
     fs::remove_dir_all(&study.0).unwrap();
     assert!(attempt.accepted());
-    let repeated = producer_result::prepare_classified(
-        &attempt,
-        report_id(),
-        yamaa_core::capacity::REPORT_ENCODED_BYTES,
-        &[],
-    )
-    .unwrap_or_else(|_| panic!("public projection owns its accepted truth"));
+    let repeated = producer_result::prepare_classified(&attempt, report_id(), &[])
+        .unwrap_or_else(|_| panic!("public projection owns its accepted truth"));
     assert_eq!(repeated.output(), result.output());
 }
 
@@ -1711,7 +1551,7 @@ fn classified_graph_reports_keep_actual_host_causes_and_authored_origins_without
         let mut build = study.build(Language::Python);
         let mut host = Activation::new(&study, mode);
         let original = Rc::clone(&host.original);
-        let attempt = build.build_reported(&mut host, report_id(), Limits::default());
+        let attempt = build.build_reported(&mut host, report_id(), scope());
         let trace = host.trace.clone();
         drop(host);
         drop(build);
@@ -1741,13 +1581,12 @@ fn classified_graph_reports_keep_actual_host_causes_and_authored_origins_without
                         details: HostDetails::Exception {
                             class: "ActualHostError",
                             message: "original quoted \"cause\"",
-                            truncated: false,
                         },
                     }
                 }
             })
             .collect::<Vec<_>>();
-        let report = attempt_report_classified(&attempt, report_id(), 16_777_216, &facts).unwrap();
+        let report = attempt_report_classified(&attempt, report_id(), &facts).unwrap();
         assert_eq!(report["outcome"], "failure");
         assert_eq!(report["diagnostics"].as_array().unwrap().len(), 1);
         assert_eq!(report["diagnostics"][0]["condition"], condition);
@@ -1775,7 +1614,7 @@ fn classified_graph_reports_keep_actual_host_causes_and_authored_origins_without
             );
         }
         assert_eq!(
-            attempt_report_classified(&attempt, report_id(), 16_777_216, &facts).unwrap(),
+            attempt_report_classified(&attempt, report_id(), &facts).unwrap(),
             report
         );
         assert_eq!(
@@ -1791,19 +1630,11 @@ fn classified_graph_reports_keep_actual_host_causes_and_authored_origins_without
                 2
             }
         );
-        assert!(matches!(
-            attempt_report_classified(&attempt, report_id(), 1, &facts),
-            Err(ProjectionError::Report(
-                yamaa_adapters::specification_report::Error::ResourceLimit(refusal)
-            )) if refusal.resource == "report_retained_bytes"
-                && refusal.limit == 6
-                && refusal.actual.is_some_and(|actual| actual > refusal.limit)
-        ));
     }
 }
 
 #[test]
-fn graph_classification_refuses_unrelated_duplicate_wrong_stage_and_oversized_facts() {
+fn graph_classification_refuses_unrelated_duplicate_wrong_stage_and_keeps_long_facts() {
     use yamaa_adapters::{
         producer_report::{attempt_report_classified, ProjectionError},
         project_function_diagnostics::HostDetails,
@@ -1814,7 +1645,7 @@ fn graph_classification_refuses_unrelated_duplicate_wrong_stage_and_oversized_fa
     study.rounded();
     let mut build = study.build(Language::Python);
     let mut host = Activation::new(&study, Mode::LiveFailure);
-    let attempt = build.build_reported(&mut host, report_id(), Limits::default());
+    let attempt = build.build_reported(&mut host, report_id(), scope());
     let mut held = vec![];
     yamaa_adapters::producer_attempt::visit_host_failures(&attempt, |_, error| held.push(error));
     let error = held[0];
@@ -1823,7 +1654,6 @@ fn graph_classification_refuses_unrelated_duplicate_wrong_stage_and_oversized_fa
         details: HostDetails::Exception {
             class: "ActualHostError",
             message: "original",
-            truncated: false,
         },
     };
     let unrelated = host.payload(false);
@@ -1836,7 +1666,7 @@ fn graph_classification_refuses_unrelated_duplicate_wrong_stage_and_oversized_fa
         }],
     ] {
         assert!(matches!(
-            attempt_report_classified(&attempt, report_id(), 16_777_216, &facts),
+            attempt_report_classified(&attempt, report_id(), &facts),
             Err(ProjectionError::Report(Error::InvalidObservation))
         ));
     }
@@ -1846,13 +1676,10 @@ fn graph_classification_refuses_unrelated_duplicate_wrong_stage_and_oversized_fa
         details: HostDetails::Exception {
             class: "ActualHostError",
             message: &message,
-            truncated: false,
         },
     }];
-    assert!(matches!(
-        attempt_report_classified(&attempt, report_id(), 16_777_216, &facts),
-        Err(ProjectionError::Report(Error::OutputLimit))
-    ));
+    let report = attempt_report_classified(&attempt, report_id(), &facts).unwrap();
+    assert_eq!(report["diagnostics"][0]["context"]["host_message"], message);
     assert_eq!(attempt.graph.nodes.len(), 1);
     assert!(Rc::ptr_eq(&host.original, &error.original));
 }
@@ -1889,7 +1716,7 @@ fn graph_host_classification_cannot_authorize_distinct_zero_sized_payloads_by_ad
     let study = Study::new();
     study.rounded();
     let mut build = study.build(Language::Python);
-    let attempt = build.build_reported(&mut Host, report_id(), Limits::default());
+    let attempt = build.build_reported(&mut Host, report_id(), scope());
     let mut held = vec![];
     yamaa_adapters::producer_attempt::visit_host_failures(&attempt, |_, error| held.push(error));
     assert_eq!(held.len(), 1);
@@ -1898,11 +1725,11 @@ fn graph_host_classification_cannot_authorize_distinct_zero_sized_payloads_by_ad
         findings: &[],
     }];
     assert!(matches!(
-        attempt_report_classified(&attempt, report_id(), 16777216, &facts),
+        attempt_report_classified(&attempt, report_id(), &facts),
         Err(ProjectionError::Report(Error::InvalidObservation))
     ));
     assert!(matches!(
-        attempt_report_classified(&attempt, report_id(), 16777216, &[]),
+        attempt_report_classified(&attempt, report_id(), &[]),
         Err(ProjectionError::Original { .. })
     ));
     assert!(attempt.graph.nodes.is_empty());
@@ -1930,8 +1757,8 @@ fn native_complete_reports_pin_independent_rounded_truth_and_union_after_all_own
     study.rounded();
     let mut build = study.build(Language::Python);
     let mut host = Activation::new(&study, Mode::Pass);
-    let first = build.build_reported(&mut host, report_id(), Limits::default());
-    let second = build.build_reported(&mut host, report_id(), Limits::default());
+    let first = build.build_reported(&mut host, report_id(), scope());
+    let second = build.build_reported(&mut host, report_id(), scope());
     assert!(first.accepted() && second.accepted());
     assert_eq!(host.trace.len(), 12);
     let producer = study.path("producer/p.yaml");
@@ -1981,7 +1808,7 @@ fn native_complete_reports_pin_independent_rounded_truth_and_union_after_all_own
     drop(host);
     fs::remove_dir_all(&study.0).unwrap();
     for (attempt, created) in [(&first, 1), (&second, 0)] {
-        let observed = attempt_report(attempt, report_id(), 16_777_216).unwrap();
+        let observed = attempt_report(attempt, report_id()).unwrap();
         let expected = json!({"report_version":"0.3.0-draft","runtime":"python","backend":"rust","runtime_version":"fixture-host","engine_version":"fixture-engine","example":"independent-rounded-producer","entry":"consumer/root.yaml","outcome":"success","activation":activation,"environment":{"source":"held/environment.yaml","lock_source":"held/lock"},
             "nodes":[{"specification":producer,"outcome":"success","diagnostics":[],"unsupported":[],"handler_counts":[]},{"specification":consumer,"outcome":"success","diagnostics":[],"unsupported":[],"handler_counts":[]}],
             "artifacts":[
@@ -1991,7 +1818,7 @@ fn native_complete_reports_pin_independent_rounded_truth_and_union_after_all_own
             "source_reads":[{"base_directory":study.path("producer"),"path":"../raw/raw.csv","outcome":"captured","condition":null,"snapshots_created":created,"specification":producer}]});
         assert_eq!(observed.observations_value(false), expected);
         assert_eq!(
-            attempt_report(attempt, report_id(), 16_777_216)
+            attempt_report(attempt, report_id())
                 .unwrap()
                 .observations_value(false),
             expected
@@ -2031,12 +1858,12 @@ fn complete_failed_reports_keep_entered_producer_and_consumer_check_and_source_p
         }
         let mut build = study.build(Language::Python);
         let mut activation = Activation::new(&study, Mode::Pass);
-        let attempt = build.build_reported(&mut activation, report_id(), Limits::default());
+        let attempt = build.build_reported(&mut activation, report_id(), scope());
         assert!(!attempt.accepted());
         let before = activation.trace.clone();
         drop(build);
         fs::remove_dir_all(&study.0).unwrap();
-        let value = attempt_report(&attempt, report_id(), 16_777_216).unwrap();
+        let value = attempt_report(&attempt, report_id()).unwrap();
         assert_eq!(activation.trace, before);
         assert_eq!(value["outcome"], "failure");
         assert_eq!(
@@ -2070,10 +1897,7 @@ fn complete_failed_reports_keep_entered_producer_and_consumer_check_and_source_p
             }
             _ => unreachable!(),
         }
-        assert_eq!(
-            attempt_report(&attempt, report_id(), 16_777_216).unwrap(),
-            value
-        );
+        assert_eq!(attempt_report(&attempt, report_id()).unwrap(), value);
     }
 }
 
@@ -2091,7 +1915,7 @@ fn complete_projection_refusal_keeps_original_opaque_interrupt_unwind_and_actual
         study.rounded();
         let mut build = study.build(Language::Python);
         let mut activation = Activation::new(&study, mode);
-        let attempt = build.build_reported(&mut activation, report_id(), Limits::default());
+        let attempt = build.build_reported(&mut activation, report_id(), scope());
         let original = Rc::clone(&activation.original);
         let unwind = Arc::clone(&activation.unwind);
         let before = activation.trace.clone();
@@ -2100,7 +1924,7 @@ fn complete_projection_refusal_keeps_original_opaque_interrupt_unwind_and_actual
         let Err(ProjectionError::Original {
             attempt: held,
             observations,
-        }) = attempt_report(&attempt, report_id(), 16_777_216)
+        }) = attempt_report(&attempt, report_id())
         else {
             panic!("original failure must accompany projection refusal");
         };
@@ -2152,80 +1976,6 @@ fn complete_projection_refusal_keeps_original_opaque_interrupt_unwind_and_actual
 }
 
 #[test]
-fn native_report_admission_stops_dependents_and_whole_report_limits_keep_earlier_artifacts() {
-    use yamaa_adapters::{
-        producer_report::{attempt_report, ProjectionError},
-        specification_report::Error,
-    };
-    let study = Study::new();
-    study.rounded();
-    study.write(
-        "consumer/root.yaml",
-        format!("{CONSUMER}verifications:\n  - row_count: {{min: 1}}\n"),
-    );
-    let mut build = study.build(Language::Python);
-    let mut activation = Activation::new(&study, Mode::Pass);
-    let mut limits = Limits::default();
-    limits.engine.report_bytes = 1;
-    let first = build.build_reported(&mut activation, report_id(), limits);
-    assert!(!first.accepted());
-    assert_eq!(first.graph.nodes.len(), 1);
-    assert!(matches!(
-        &first.graph.nodes[0].output,
-        Err(CompleteError::Report(Error::ResourceLimit(refusal)))
-            if refusal.resource == "report_retained_bytes" && refusal.limit == 6
-    ));
-    assert_eq!(activation.trace.len(), 6);
-    let report = attempt_report(&first, report_id(), 16_777_216).unwrap();
-    assert_eq!(report["error"]["stage"], "report");
-    assert_eq!(report["error"]["code"], "output_limit");
-    assert!(report["diagnostics"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|finding| {
-            finding["context"]["resource"] == "report_retained_bytes"
-                && finding["context"]["limit"] == 6
-        }));
-    limits.engine.report_bytes = 8192;
-    let later = build.build_reported(&mut activation, report_id(), limits);
-    assert!(!later.accepted());
-    assert_eq!(later.graph.nodes.len(), 2);
-    assert!(later.graph.nodes[0]
-        .output
-        .as_ref()
-        .unwrap()
-        .as_ref()
-        .unwrap()
-        .artifact()
-        .is_some());
-    assert!(matches!(
-        &later.graph.nodes[1].output,
-        Err(CompleteError::Report(Error::ResourceLimit(refusal)))
-            if refusal.resource == "report_retained_bytes" && refusal.limit == 49_152
-    ));
-    let value = attempt_report(&later, report_id(), 16_777_216).unwrap();
-    assert_eq!(value["outcome"], "failure");
-    assert_eq!(value["artifacts"].as_array().unwrap().len(), 1);
-    let original = later.graph.nodes[0]
-        .output
-        .as_ref()
-        .unwrap()
-        .as_ref()
-        .unwrap()
-        .artifact()
-        .unwrap();
-    assert_eq!(original.bytes(), b"ID,VALUE\n1,1.23\n2,2.35\n");
-    assert!(matches!(
-        attempt_report(&later, report_id(), 1),
-        Err(ProjectionError::Report(Error::ResourceLimit(refusal)))
-            if refusal.resource == "report_retained_bytes" && refusal.limit == 6
-    ));
-    assert_eq!(original.bytes(), b"ID,VALUE\n1,1.23\n2,2.35\n");
-    assert!(!study.0.join("generated").exists());
-}
-
-#[test]
 fn report_context_pointer_and_table_count_admission_precede_table_authority_and_clear_old_selection(
 ) {
     use yamaa_adapters::{producer_report::NativeReport, specification_report::Error};
@@ -2258,19 +2008,18 @@ fn report_context_pointer_and_table_count_admission_precede_table_authority_and_
     let mut attempt = build.build_reported(
         &mut Activation::new(&study, Mode::Pass),
         report_id(),
-        Limits::default(),
+        scope(),
     );
     assert!(attempt.accepted());
     let mut report = NativeReport::new(build.provenance(), report_id());
     let node = &build.provenance().metadata().nodes()[1];
     report
-        .select(node, &attempt.graph.nodes[0].dataset, 16_777_216)
+        .select(node, &attempt.graph.nodes[0].dataset)
         .unwrap();
     assert!(matches!(
         report.select(
             &unrelated.provenance().metadata().nodes()[1],
-            &attempt.graph.nodes[0].dataset,
-            16_777_216
+            &attempt.graph.nodes[0].dataset
         ),
         Err(Error::InvalidObservation)
     ));
@@ -2290,11 +2039,11 @@ fn report_context_pointer_and_table_count_admission_precede_table_authority_and_
         result: Ok(entered.dataset.result.map_err(|_| ()).unwrap()),
     };
     assert!(matches!(
-        report.select(node, &fake, 16_777_216),
+        report.select(node, &fake),
         Err(Error::ResourceLimit(refusal))
-            if refusal.resource == "report_cells"
-                && refusal.limit == yamaa_core::capacity::REPORT_CELLS
-                && refusal.actual.is_none()
+            if refusal.resource == "table_rows"
+                && refusal.limit == yamaa_core::limits::Limits::TABLE_ROWS
+                && refusal.actual == Some(usize::MAX)
     ));
     assert_eq!(reads.get(), 0);
     assert!(matches!(report.failure(), Err(Error::InvalidObservation)));
@@ -2310,24 +2059,24 @@ fn whole_report_rejects_contradictory_actual_activation_and_node_order_without_r
     study.rounded();
     let mut build = study.build(Language::Python);
     let mut host = Activation::new(&study, Mode::Pass);
-    let mut attempt = build.build_reported(&mut host, report_id(), Limits::default());
+    let mut attempt = build.build_reported(&mut host, report_id(), scope());
     let before = host.trace.clone();
     attempt.graph.activation.tests[0].actual = Some(Value::float(99.0));
     assert!(matches!(
-        attempt_report(&attempt, report_id(), 16_777_216),
+        attempt_report(&attempt, report_id()),
         Err(ProjectionError::Report(Error::InvalidObservation))
     ));
     attempt.graph.activation.tests[0].actual = Some(Value::float(7.0));
     attempt.graph.nodes.swap(0, 1);
     assert!(matches!(
-        attempt_report(&attempt, report_id(), 16_777_216),
+        attempt_report(&attempt, report_id()),
         Err(ProjectionError::Report(Error::InvalidObservation))
     ));
     assert_eq!(host.trace, before);
 }
 
 #[test]
-fn caller_report_quota_refuses_borrowed_identity_before_formatter_copy() {
+fn native_reports_keep_complete_long_borrowed_identity_without_replay() {
     let study = Study::new();
     study.write(
         "producer/p.yaml",
@@ -2349,23 +2098,17 @@ fn caller_report_quota_refuses_borrowed_identity_before_formatter_copy() {
     );
     let text = "small";
     study.write("raw/raw.csv", format!("ID,VALUE\n1,{text}\n"));
-    // Borrowed caller metadata exceeds this explicit retained admission by
-    // itself. No full-profile allocation is needed to exercise the refusal.
-    let report_bytes = 8192;
-    let oversized_runtime =
-        "x".repeat(report_bytes * yamaa_core::capacity::REPORT_RETAINED_FACTOR / 12 + 1);
+    let oversized_runtime = "x".repeat(65_537);
     let identity = yamaa_adapters::specification_report::Identity {
         runtime_version: &oversized_runtime,
         ..report_id()
     };
     let mut build = study.build(Language::Python);
     let mut host = Activation::new(&study, Mode::Lock);
-    let mut limits = Limits::default();
-    limits.engine.report_bytes = report_bytes;
-    let attempt = build.build_reported(&mut host, identity, limits);
-    assert!(!attempt.accepted());
+    let attempt = build.build_reported(&mut host, identity, scope());
+    assert!(attempt.accepted());
     assert!(host.trace.is_empty());
-    assert_eq!(attempt.graph.nodes.len(), 1);
+    assert_eq!(attempt.graph.nodes.len(), 2);
     assert!(attempt.graph.nodes[0]
         .dataset
         .result
@@ -2373,14 +2116,6 @@ fn caller_report_quota_refuses_borrowed_identity_before_formatter_copy() {
         .unwrap()
         .result
         .is_ok());
-    assert!(matches!(
-        attempt.graph.nodes[0].output,
-        Err(CompleteError::Report(
-            yamaa_adapters::specification_report::Error::ResourceLimit(ref refusal)
-        )) if refusal.resource == "report_retained_bytes"
-            && refusal.limit == report_bytes * yamaa_core::capacity::REPORT_RETAINED_FACTOR
-            && refusal.actual.is_some_and(|actual| actual > refusal.limit)
-    ));
     assert_eq!(
         attempt.graph.nodes[0].dataset.sources[0]
             .table
@@ -2390,16 +2125,21 @@ fn caller_report_quota_refuses_borrowed_identity_before_formatter_copy() {
             .unwrap(),
         ValueRef::Str(text)
     );
-    // The original attempt still owns its admitted source and execution.
-    // A separately bounded diagnostic view uses ordinary metadata and excludes
-    // the refused derived table/artifact; it does not replay original inputs.
-    let failed = yamaa_adapters::producer_report::attempt_report(&attempt, report_id(), usize::MAX)
-        .unwrap()
-        .observations_value(false);
-    assert_eq!(failed["error"]["code"], "output_limit");
-    assert_eq!(failed["artifacts"], serde_json::json!([]));
+    // Reprojection borrows the held attempt without entering any source or host.
+    let report = yamaa_adapters::producer_report::attempt_report(
+        &attempt,
+        yamaa_adapters::specification_report::Identity {
+            runtime_version: &oversized_runtime,
+            ..report_id()
+        },
+    )
+    .unwrap()
+    .observations_value(false);
+    assert_eq!(report["outcome"], "success");
+    assert_eq!(report["runtime_version"], oversized_runtime);
+    assert_eq!(report["artifacts"].as_array().unwrap().len(), 2);
     assert_eq!(
-        failed["tables"][0]["rows"][0][1],
+        report["tables"][0]["rows"][0][1],
         serde_json::json!({"type":"str","value":text})
     );
     assert!(!study.0.join("generated").exists());
@@ -2421,7 +2161,6 @@ fn original_native_selection_builds_the_retained_rounded_alias_workflow_without_
         Language::Python,
         shipped_schema::capture().unwrap(),
         shipped_schema::capture_environment().unwrap(),
-        Default::default(),
     )
     .unwrap() else {
         panic!("producer capability");
@@ -2437,7 +2176,7 @@ fn original_native_selection_builds_the_retained_rounded_alias_workflow_without_
     assert!(Arc::ptr_eq(&root, &build.provenance().documents()[0]));
     assert!(Arc::ptr_eq(&producer, &build.provenance().documents()[1]));
     let mut activation = Activation::new(&study, Mode::Pass);
-    let attempt = build.build_reported(&mut activation, report_id(), Limits::default());
+    let attempt = build.build_reported(&mut activation, report_id(), scope());
     let execution = attempt.graph.nodes[0]
         .dataset
         .result
@@ -2494,7 +2233,6 @@ fn key_failures_retain_the_verification_log_and_report_as_output_findings() {
             &mut LockCapture {
                 language: Language::Python,
             },
-            Default::default(),
         )
         .unwrap()
         .into_owned();
@@ -2503,16 +2241,15 @@ fn key_failures_retain_the_verification_log_and_report_as_output_findings() {
             "root.yaml",
             environment,
             shipped_schema::capture().unwrap(),
-            Default::default(),
         )
         .unwrap_or_else(|error| panic!("graph fixture: {:?}", error.error()))
         .into_build();
         let mut activation = Activation::new(&study, Mode::Pass);
-        let owned = build.build_owned_reported(&mut activation, report_id(), Default::default());
+        let owned = build.build_owned_reported(&mut activation, report_id(), scope());
         assert!(!owned.accepted(), "{condition}");
         assert_eq!(owned.graph.nodes.len(), 1, "{condition}");
         assert!(activation.trace.is_empty(), "{condition}");
-        let mut result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
+        let mut result = prepare_owned_classified(&owned, report_id(), &[]).unwrap();
         assert!(result.output().is_none(), "{condition}");
         assert!(result.verification_log().is_some(), "{condition}");
         let table = result.log_table(false).unwrap();

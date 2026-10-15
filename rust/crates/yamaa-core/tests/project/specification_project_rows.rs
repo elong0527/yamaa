@@ -322,7 +322,7 @@ fn inherited_cycles_are_reported_once_while_distinct_row_override_cycles_keep_th
 }
 
 #[test]
-fn grouped_nonlocal_default_context_is_bounded_before_owned_row_labels_are_copied() {
+fn grouped_nonlocal_defaults_keep_complete_long_conflict_context() {
     let names = (0..21).map(|n| format!("C{n}")).collect::<Vec<_>>();
     let mut columns = vec![(
         "A",
@@ -345,15 +345,25 @@ fn grouped_nonlocal_default_context_is_bounded_before_owned_row_labels_are_copie
         .collect();
     let id = "r".repeat(200_000);
     let spec = specification_with_rows(columns, vec![row(&id, overrides, None)]);
-    assert!(matches!(
-        PreparedSpecification::prepare_with_project(&spec, &[function("id")]),
-        Err(PrepareError::Limit(
-            yamaa_core::specification::CompilerLimit {
-                resource: "row_default_context",
-                ..
-            }
-        ))
-    ));
+    let Err(PrepareError::Invalid(findings)) =
+        PreparedSpecification::prepare_with_project(&spec, &[function("id")])
+    else {
+        panic!("complete semantic default conflicts");
+    };
+    assert_eq!(findings.len(), names.len());
+    for (finding, name) in findings.iter().zip(&names) {
+        let yamaa_core::specification::PreflightFinding::DuplicateRowDefault {
+            column,
+            rows,
+            not_row_local,
+        } = finding
+        else {
+            panic!("independently authored default conflict");
+        };
+        assert_eq!(column, name);
+        assert_eq!(not_row_local, "aggregate");
+        assert!(rows.len() == 1 && rows[0] == id);
+    }
 }
 
 #[test]
@@ -564,7 +574,7 @@ fn grouped_filters_promote_function_defaults_and_qualified_fields_do_not_promote
 }
 
 #[test]
-fn cumulative_row_context_is_bounded_before_binding_or_activation() {
+fn every_function_argument_keeps_the_complete_long_row_context() {
     use yamaa_core::project_function::{Case, Function, Language, Parameter};
     use yamaa_core::value::ValueType;
     let parameters = (0..8).map(|n| format!("p{n}")).collect::<Vec<_>>();
@@ -624,15 +634,8 @@ fn cumulative_row_context_is_bounded_before_binding_or_activation() {
         .collect();
     let id = "r".repeat(200_000);
     let spec = specification_with_rows(columns, vec![row(&id, derivations, Some(vec!["SRC.ID"]))]);
-    assert!(matches!(
-        PreparedSpecification::prepare_with_project(&spec, &[function]),
-        Err(PrepareError::Limit(
-            yamaa_core::specification::CompilerLimit {
-                resource: "function_row_context",
-                ..
-            }
-        ))
-    ));
+    let prepared = PreparedSpecification::prepare_with_project(&spec, &[function]).unwrap();
+    assert_eq!(prepared.project_calls().unwrap().calls().len(), 63);
 }
 
 #[test]
