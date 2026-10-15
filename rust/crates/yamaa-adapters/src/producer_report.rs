@@ -203,9 +203,13 @@ fn log_observations<C, D, T: TableAccess>(
             Ok(success) => &success.verifications,
             Err(error) => match error.as_ref() {
                 ExecutionError::VerificationFailures(records)
-                | ExecutionError::KeyFailures(records)
                 | ExecutionError::VerificationDiagnostic { records, .. }
                 | ExecutionError::VerificationDeclaration { records, .. } => records,
+                // Key failures are excluded: they are output findings, not
+                // verification checks (the main report projects them with
+                // phase "output"), and feeding them here with phase
+                // "verification" would fail projection and drop this node's
+                // verification log.
                 _ => &[],
             },
         };
