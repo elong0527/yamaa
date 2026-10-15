@@ -119,35 +119,45 @@ columns:
             str_template: "Placebo group at {ATPT}"
 
   # The placebo group of a record: every comparator record of the same
-  # parameter, period, day and nominal time, all cohorts pooled. Each mean
-  # skips the records without a value in its own column, and placebo records
-  # carry the group's means too. Baseline days have no comparator records.
+  # parameter and nominal time, all cohorts pooled, across every period
+  # and day on which that time point occurs. Each mean skips the records
+  # without a value in its own column, and placebo records carry the
+  # group's means too. Baseline records carry no comparator values.
   - name: COMP
     type: float
     label: Comparator Value
     derivation:
-      aggregate:
-        filter: "ACOMPFL = 'Y'"
-        group_by: [STUDYID, PARAMCD, APERIOD, APERDAY, ATPTN]
-        expr: "MEAN(AVAL)"
+      case:
+        - when: "ABLFL IS NULL"
+          then:
+            aggregate:
+              filter: "ACOMPFL = 'Y'"
+              group_by: [PARAMCD, ATPTN]
+              expr: "MEAN(AVAL)"
 
   - name: COMPBASE
     type: float
     label: Baseline Value of the Comparator
     derivation:
-      aggregate:
-        filter: "ACOMPFL = 'Y'"
-        group_by: [STUDYID, PARAMCD, APERIOD, APERDAY, ATPTN]
-        expr: "MEAN(BASE)"
+      case:
+        - when: "ABLFL IS NULL"
+          then:
+            aggregate:
+              filter: "ACOMPFL = 'Y'"
+              group_by: [PARAMCD, ATPTN]
+              expr: "MEAN(BASE)"
 
   - name: COMPCHG
     type: float
     label: Change from Baseline in the Comparator
     derivation:
-      aggregate:
-        filter: "ACOMPFL = 'Y'"
-        group_by: [STUDYID, PARAMCD, APERIOD, APERDAY, ATPTN]
-        expr: "MEAN(CHG)"
+      case:
+        - when: "ABLFL IS NULL"
+          then:
+            aggregate:
+              filter: "ACOMPFL = 'Y'"
+              group_by: [PARAMCD, ATPTN]
+              expr: "MEAN(CHG)"
 
   # The double delta, on drug records after baseline only.
   - name: CCOMPCHG

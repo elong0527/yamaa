@@ -748,3 +748,148 @@ def test_replicate_qtc_average_pairs_by_replicate_and_skips_absent_rr(
     for key, value in expected.items():
         assert actual[key] == pytest.approx(value, rel=1e-9), key
     assert {r["DTYPE"] for r in rows} == {"AVERAGE"}
+
+
+@pytest.fixture(params=["yamaa", "python", "r", "opensas"])
+def placebo_track(request):
+    return request.param
+
+
+def test_placebo_comparator_pools_by_parameter_and_time_point(tmp_path, placebo_track):
+    # The contract pools the comparator by PARAMCD + ATPTN only, across
+    # periods and days (#2422), but the frozen fixture never repeats a time
+    # point on two post-baseline days, so it cannot tell the groupings
+    # apart. This changed input repeats 1 h and 4 h in period 1 day 1,
+    # period 2 day 1 and period 2 day 8. The expected pooled means below
+    # were derived from the reference solutions (the Python reference was
+    # run on this input and returned exactly these values), not from the
+    # native spec: at 1 h the six comparator AVALs are 400, 410, 420, 430,
+    # 440, 450 (mean 425), their BASEs skip one missing value (mean 394)
+    # and their CHGs are 10, 10, 30, 50, 50 (mean 30); at 4 h the four
+    # comparator records give 407.5, 387.5 and 20. Grouping by period and
+    # day instead would give, for example, COMP 405 on the drug record in
+    # period 1 day 1 at 1 h.
+    name = "adam-adeg-placebo-corrected-change"
+    row = _input(name, "adeg_raw.csv")[0]
+
+    def record(subject, cohort, trta, period, day, atpt, aval, base, chg, ablfl=""):
+        return {
+            **row,
+            "USUBJID": subject,
+            "COHORT": cohort,
+            "TRTA": trta,
+            "APERIOD": str(period),
+            "APERDAY": str(day),
+            "ATPT": atpt,
+            "ATPTN": atpt.split()[0],
+            "AVAL": aval,
+            "ABLFL": ablfl,
+            "BASE": base,
+            "CHG": chg,
+            "BASETYPE": f"Period 1 Baseline Day {atpt}",
+        }
+
+    records = []
+    for subject, cohort, trta, base_1h, base_4h in [
+        ("SAD-01-P01", "Cohort 1", "Placebo", "390", "380"),
+        ("SAD-01-P02", "Cohort 2", "Placebo", "400", "395"),
+        ("SAD-01-D01", "Cohort 1", "Drug 10 mg", "385", "375"),
+    ]:
+        records.append(
+            record(subject, cohort, trta, 1, -1, "1 h", base_1h, base_1h, "", "Y")
+        )
+        records.append(
+            record(subject, cohort, trta, 1, -1, "4 h", base_4h, base_4h, "", "Y")
+        )
+    for period, day, atpt, p01, p02 in [
+        (1, 1, "1 h", ("400", "390", "10"), ("410", "400", "10")),
+        (1, 1, "4 h", ("390", "380", "10"), ("405", "395", "10")),
+        (2, 1, "1 h", ("420", "390", "30"), ("430", "", "")),
+        (2, 1, "4 h", ("410", "380", "30"), ("425", "395", "30")),
+        (2, 8, "1 h", ("440", "390", "50"), ("450", "400", "50")),
+    ]:
+        records.append(
+            record("SAD-01-P01", "Cohort 1", "Placebo", period, day, atpt, *p01)
+        )
+        records.append(
+            record("SAD-01-P02", "Cohort 2", "Placebo", period, day, atpt, *p02)
+        )
+    for period, day, atpt, aval, base, chg in [
+        (1, 1, "1 h", "415", "385", "30"),
+        (1, 1, "4 h", "400", "375", "25"),
+        (2, 1, "1 h", "425", "385", "40"),
+        (2, 1, "4 h", "410", "375", "35"),
+        (2, 8, "1 h", "435", "385", "50"),
+    ]:
+        records.append(
+            record(
+                "SAD-01-D01",
+                "Cohort 1",
+                "Drug 10 mg",
+                period,
+                day,
+                atpt,
+                aval,
+                base,
+                chg,
+            )
+        )
+    assert len(records) == 21
+
+    if placebo_track == "yamaa":
+        try:
+            import_module("yamaa._native")
+        except ModuleNotFoundError as error:
+            if error.name != "yamaa._native":
+                raise
+            pytest.skip("the compiled native extension is not installed")
+        from yamaa import domain
+
+        study = tmp_path / "study"
+        shutil.copytree(ROOT / "benchmarks" / name, study)
+        with (study / "input" / "adeg_raw.csv").open("w", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=list(row))
+            writer.writeheader()
+            writer.writerows(records)
+        domain(study / "spec.yaml").output.write_csv(study / "actual.csv")
+        rows = _read(study / "actual.csv")[1]
+    else:
+        rows = _run(tmp_path, name, placebo_track, {"adeg_raw.csv": records})[
+            "adeg.csv"
+        ]
+
+    pooled = {1.0: (425.0, 394.0, 30.0), 4.0: (407.5, 387.5, 20.0)}
+    double_delta = {
+        (1, 1, 1.0): 0.0,
+        (1, 1, 4.0): 5.0,
+        (2, 1, 1.0): 10.0,
+        (2, 1, 4.0): 15.0,
+        (2, 8, 1.0): 20.0,
+    }
+
+    def value(record_, column):
+        return float(record_[column]) if record_[column] else None
+
+    assert len(rows) == 21
+    for record_ in rows:
+        if record_["ABLFL"] == "Y":
+            assert record_["ACOMPFL"] == record_["COMPTYPE"] == ""
+            for column in ("COMP", "COMPBASE", "COMPCHG", "CCOMPCHG"):
+                assert value(record_, column) is None
+            continue
+        comp, compbase, compchg = pooled[float(record_["ATPTN"])]
+        assert value(record_, "COMP") == pytest.approx(comp)
+        assert value(record_, "COMPBASE") == pytest.approx(compbase)
+        assert value(record_, "COMPCHG") == pytest.approx(compchg)
+        assert record_["COMPTYPE"] == f"Placebo group at {record_['ATPT']}"
+        if record_["TRTA"] == "Placebo":
+            assert record_["ACOMPFL"] == "Y"
+            assert value(record_, "CCOMPCHG") is None
+        else:
+            assert record_["ACOMPFL"] == ""
+            key = (
+                int(record_["APERIOD"]),
+                int(record_["APERDAY"]),
+                float(record_["ATPTN"]),
+            )
+            assert value(record_, "CCOMPCHG") == pytest.approx(double_delta[key])
