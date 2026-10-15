@@ -14,8 +14,6 @@ pub mod projection;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
-    #[error("project environment diagnostics limit")]
-    Limit,
     #[error("project environment diagnostics invalid index")]
     InvalidIndex,
     #[error("project environment diagnostics unavailable shape")]
@@ -58,7 +56,7 @@ impl ReadFailure {
 fn root_findings(
     document: &crate::schema::Document,
     host: Language,
-) -> Result<[Option<Finding>; 4], Error> {
+) -> Result<[Option<Finding>; 3], Error> {
     use crate::schema::DocumentNode as N;
     let root = document.root();
     if !matches!(document.nodes().get(root), Some(N::Mapping(_))) {
@@ -81,14 +79,8 @@ fn root_findings(
         Some(N::Text(text)) if text == "r" => Some(Language::R),
         _ => return Err(Error::UnavailableShape),
     };
-    let lock = match document.field(root, "lock").map(|n| &document.nodes()[n]) {
-        None => false,
-        Some(N::Text(_)) => true,
-        _ => return Err(Error::UnavailableShape),
-    };
     Ok([
         (present && declared.is_none()).then_some(Finding::MissingLanguage),
-        (present && !lock).then_some(Finding::MissingLock),
         declared
             .filter(|declared| *declared != host)
             .map(|declared| Finding::LanguageMismatch { declared, host }),
@@ -107,18 +99,14 @@ pub fn scalar_diagnostics(
     document: &crate::schema::Document,
     findings: &[crate::project_function_document::Finding],
 ) -> Result<Vec<Diagnostic>, Error> {
-    if findings.len() > 65_536 {
-        return Err(Error::Limit);
-    }
-    let mut budget = Budget(16_777_216);
+    let mut project = Owned;
     findings
         .iter()
-        .map(|finding| scalar_diagnostic(document, finding, &mut budget))
+        .map(|finding| scalar_diagnostic(document, finding, &mut project))
         .collect()
 }
 
-// One selector feeds both the historical owned APIs and the admitted borrowed
-// report. The compatibility builder retains its original per-copy text policy.
+// One field selector feeds owned diagnostics and retained borrowed reports.
 trait Project<'a> {
     type Output;
     fn start(&mut self, code: C, path: &'a str) -> Result<Self::Output, Error>;
@@ -146,7 +134,7 @@ trait Project<'a> {
 fn scalar_diagnostic<'a, B: Project<'a>>(
     document: &'a crate::schema::Document,
     finding: &'a crate::project_function_document::Finding,
-    budget: &mut B,
+    project: &mut B,
 ) -> Result<B::Output, Error> {
     use crate::{project_function_document::Kind, schema::DocumentNode as N};
     let node = document
@@ -159,10 +147,10 @@ fn scalar_diagnostic<'a, B: Project<'a>>(
         Kind::InvalidDateTime => "invalid_datetime",
         Kind::NormalizedShape => return Err(Error::UnavailableShape),
     };
-    let mut d = budget.start(C::ProjectEnvironmentInvalid, &finding.path)?;
-    budget.context(&mut d, "reason", reason)?;
+    let mut d = project.start(C::ProjectEnvironmentInvalid, &finding.path)?;
+    project.context(&mut d, "reason", reason)?;
     match (finding.kind, node) {
-        (Kind::IntegerRange, N::Integer(text)) => budget.integer(&mut d, "value", text)?,
+        (Kind::IntegerRange, N::Integer(text)) => project.integer(&mut d, "value", text)?,
         (Kind::InvalidDate | Kind::InvalidDateTime, N::Mapping(_)) => {
             let field = if finding.kind == Kind::InvalidDate {
                 "date"
@@ -175,43 +163,30 @@ fn scalar_diagnostic<'a, B: Project<'a>>(
             let Some(N::Text(text)) = text else {
                 return Err(Error::UnavailableShape);
             };
-            budget.context(&mut d, "value", text)?;
+            project.context(&mut d, "value", text)?;
         }
         _ => return Err(Error::UnavailableShape),
     }
     Ok(d)
 }
-struct Budget(usize);
-impl Budget {
-    fn charge(&mut self, bytes: usize) -> Result<(), Error> {
-        self.0 = self.0.checked_sub(bytes).ok_or(Error::Limit)?;
-        Ok(())
-    }
-    fn text(&mut self, text: &str) -> Result<String, Error> {
-        self.charge(text.len())?;
-        Ok(text.into())
-    }
-}
-impl<'a> Project<'a> for Budget {
+struct Owned;
+impl<'a> Project<'a> for Owned {
     type Output = Diagnostic;
     fn start(&mut self, code: C, path: &'a str) -> Result<Diagnostic, Error> {
-        self.charge(128)?;
         Ok(Diagnostic {
             code,
-            spec_paths: vec![self.text(path)?],
+            spec_paths: vec![path.into()],
             context: Default::default(),
             source_span: None,
             operand_route: None,
         })
     }
     fn append(&mut self, d: &mut Diagnostic, text: &'a str) -> Result<(), Error> {
-        self.charge(text.len())?;
         d.spec_paths[0].push_str(text);
         Ok(())
     }
     fn index(&mut self, d: &mut Diagnostic, index: usize) -> Result<(), Error> {
         let text = format!("[{index}]");
-        self.charge(text.len())?;
         d.spec_paths[0].push_str(&text);
         Ok(())
     }
@@ -221,9 +196,7 @@ impl<'a> Project<'a> for Budget {
         key: &'static str,
         text: &'a str,
     ) -> Result<(), Error> {
-        let key = self.text(key)?;
-        let text = self.text(text)?;
-        d.context.insert(key, JsonValue::String(text));
+        d.context.insert(key.into(), JsonValue::String(text.into()));
         Ok(())
     }
     fn scalar(
@@ -232,12 +205,7 @@ impl<'a> Project<'a> for Budget {
         key: &'static str,
         value: &'a Value,
     ) -> Result<(), Error> {
-        let key = self.text(key)?;
-        self.charge(match value {
-            Value::Str(s) => s.len(),
-            _ => 32,
-        })?;
-        d.context.insert(key, JsonValue::from(value.clone()));
+        d.context.insert(key.into(), JsonValue::from(value.clone()));
         Ok(())
     }
     fn integer(
@@ -246,10 +214,8 @@ impl<'a> Project<'a> for Budget {
         key: &'static str,
         text: &'a str,
     ) -> Result<(), Error> {
-        let key = self.text(key)?;
-        let text = self.text(text)?;
         d.context.insert(
-            key,
+            key.into(),
             JsonValue::Number((text).parse().expect("canonical integer")),
         );
         Ok(())
@@ -277,18 +243,18 @@ fn function(draft: &Draft, index: usize) -> Result<&Definition, Error> {
 fn function_diagnostic<'a, B: Project<'a>>(
     definition: &'a Definition,
     finding: &'a F,
-    budget: &mut B,
+    project: &mut B,
 ) -> Result<B::Output, Error> {
-    let mut d = budget.start(C::ProjectEnvironmentInvalid, "functions.")?;
-    budget.append(&mut d, &definition.name)?;
-    budget.context(&mut d, "function", &definition.name)?;
+    let mut d = project.start(C::ProjectEnvironmentInvalid, "functions.")?;
+    project.append(&mut d, &definition.name)?;
+    project.context(&mut d, "function", &definition.name)?;
     let (reason, field) = match finding {
         F::InvalidName => ("invalid_function_name", ""),
         F::InvalidCallable => ("invalid_callable", ".function"),
         F::EmptyDescription => ("empty_description", ".description"),
         F::NegativeComparisonDecimals => ("negative_comparison_decimals", ".comparison_decimals"),
         F::MissingObligation(tag) => {
-            budget.context(&mut d, "obligation", tag)?;
+            project.context(&mut d, "obligation", tag)?;
             ("missing_coverage_obligation", ".tests")
         }
         F::InvalidParameterName { parameter }
@@ -300,9 +266,9 @@ fn function_diagnostic<'a, B: Project<'a>>(
                 .params
                 .get(*parameter)
                 .ok_or(Error::InvalidIndex)?;
-            budget.append(&mut d, ".params")?;
-            budget.index(&mut d, *parameter)?;
-            budget.context(&mut d, "parameter", &p.name)?;
+            project.append(&mut d, ".params")?;
+            project.index(&mut d, *parameter)?;
+            project.context(&mut d, "parameter", &p.name)?;
             match finding {
                 F::InvalidParameterName { .. } => ("invalid_parameter_name", ".name"),
                 F::DuplicateParameter { .. } => ("duplicate_parameter", ".name"),
@@ -328,9 +294,9 @@ fn function_diagnostic<'a, B: Project<'a>>(
                 _ => unreachable!(),
             };
             let c = definition.tests.get(case).ok_or(Error::InvalidIndex)?;
-            budget.append(&mut d, ".tests")?;
-            budget.index(&mut d, case)?;
-            budget.context(&mut d, "case", &c.id)?;
+            project.append(&mut d, ".tests")?;
+            project.index(&mut d, case)?;
+            project.context(&mut d, "case", &c.id)?;
             match case_finding {
                 F::InvalidCaseId { .. } => ("invalid_case_id", ".id"),
                 F::DuplicateCaseId { .. } => ("duplicate_case_id", ".id"),
@@ -339,9 +305,9 @@ fn function_diagnostic<'a, B: Project<'a>>(
                 | F::InvalidCoverage { tag, .. }
                 | F::UnsupportedEvidence { tag, .. } => {
                     let text = c.covers.get(*tag).ok_or(Error::InvalidIndex)?;
-                    budget.append(&mut d, ".covers")?;
-                    budget.index(&mut d, *tag)?;
-                    budget.context(&mut d, "tag", text)?;
+                    project.append(&mut d, ".covers")?;
+                    project.index(&mut d, *tag)?;
+                    project.context(&mut d, "tag", text)?;
                     let reason = match case_finding {
                         F::DuplicateCoverage { .. } => "duplicate_coverage",
                         F::InvalidCoverage { .. } => "invalid_coverage",
@@ -353,10 +319,10 @@ fn function_diagnostic<'a, B: Project<'a>>(
                 | F::UnknownArgument { argument, .. }
                 | F::ArgumentType { argument, .. } => {
                     let (name, value) = c.args.get(*argument).ok_or(Error::InvalidIndex)?;
-                    budget.append(&mut d, ".args.")?;
-                    budget.append(&mut d, name)?;
-                    budget.context(&mut d, "argument", name)?;
-                    budget.scalar(&mut d, "value", value)?;
+                    project.append(&mut d, ".args.")?;
+                    project.append(&mut d, name)?;
+                    project.context(&mut d, "argument", name)?;
+                    project.scalar(&mut d, "value", value)?;
                     let reason = match case_finding {
                         F::DuplicateArgument { .. } => "duplicate_case_argument",
                         F::UnknownArgument { .. } => "unknown_case_argument",
@@ -369,27 +335,27 @@ fn function_diagnostic<'a, B: Project<'a>>(
                         .params
                         .get(*parameter)
                         .ok_or(Error::InvalidIndex)?;
-                    budget.append(&mut d, ".args.")?;
-                    budget.append(&mut d, &p.name)?;
-                    budget.context(&mut d, "argument", &p.name)?;
+                    project.append(&mut d, ".args.")?;
+                    project.append(&mut d, &p.name)?;
+                    project.context(&mut d, "argument", &p.name)?;
                     ("missing_required_case_argument", "")
                 }
                 F::InvalidResult { .. } => {
-                    budget.scalar(&mut d, "value", &c.result)?;
+                    project.scalar(&mut d, "value", &c.result)?;
                     ("invalid_case_result", ".result")
                 }
                 _ => unreachable!(),
             }
         }
     };
-    budget.append(&mut d, field)?;
-    budget.context(&mut d, "reason", reason)?;
+    project.append(&mut d, field)?;
+    project.context(&mut d, "reason", reason)?;
     Ok(d)
 }
 fn terminology_diagnostic<'a, B: Project<'a>>(
     draft: &'a Draft,
     finding: &'a T,
-    budget: &mut B,
+    project: &mut B,
 ) -> Result<B::Output, Error> {
     let list = draft
         .codelists
@@ -404,24 +370,24 @@ fn terminology_diagnostic<'a, B: Project<'a>>(
         Fault::PartialDecode | Fault::PartialRank => C::CodelistPartialItemField,
         Fault::ExtensionNotAdmitted { .. } => C::CodelistExtensionNotAdmitted,
     };
-    let mut d = budget.start(code, "codelists")?;
-    budget.index(&mut d, finding.source)?;
-    budget.append(&mut d, ".codelists")?;
-    budget.index(&mut d, finding.codelist)?;
-    budget.context(&mut d, "codelist", &list.id)?;
+    let mut d = project.start(code, "codelists")?;
+    project.index(&mut d, finding.source)?;
+    project.append(&mut d, ".codelists")?;
+    project.index(&mut d, finding.codelist)?;
+    project.context(&mut d, "codelist", &list.id)?;
     match finding.fault {
         Fault::DuplicateId => {
-            budget.append(&mut d, ".id")?;
-            budget.context(&mut d, "field", "id")?;
+            project.append(&mut d, ".id")?;
+            project.context(&mut d, "field", "id")?;
         }
         Fault::DuplicateName => {
-            budget.append(&mut d, ".name")?;
-            budget.context(&mut d, "field", "name")?;
-            budget.context(&mut d, "name", &list.name)?;
+            project.append(&mut d, ".name")?;
+            project.context(&mut d, "field", "name")?;
+            project.context(&mut d, "name", &list.name)?;
         }
         Fault::InvalidShape => {}
-        Fault::PartialDecode => budget.context(&mut d, "field", "decode")?,
-        Fault::PartialRank => budget.context(&mut d, "field", "rank")?,
+        Fault::PartialDecode => project.context(&mut d, "field", "decode")?,
+        Fault::PartialRank => project.context(&mut d, "field", "rank")?,
         Fault::InvalidValue { item }
         | Fault::DuplicateValue { item }
         | Fault::ExtensionNotAdmitted { item } => {
@@ -431,78 +397,66 @@ fn terminology_diagnostic<'a, B: Project<'a>>(
                 .and_then(|i| i.get(item))
                 .ok_or(Error::InvalidIndex)?
                 .value;
-            budget.append(&mut d, ".items")?;
-            budget.index(&mut d, item)?;
+            project.append(&mut d, ".items")?;
+            project.index(&mut d, item)?;
             if matches!(finding.fault, Fault::ExtensionNotAdmitted { .. }) {
-                budget.append(&mut d, ".extended")?;
+                project.append(&mut d, ".extended")?;
             } else {
-                budget.append(&mut d, ".value")?;
-                budget.scalar(&mut d, "value", value)?;
+                project.append(&mut d, ".value")?;
+                project.scalar(&mut d, "value", value)?;
             }
         }
     }
     Ok(d)
 }
-/// Project all independent findings in admission order, with one cumulative
-/// bound checked before each owned text/value copy. No partial vector is returned.
+/// Project all independent findings in admission order.
 /// Source indices refer to the retained typed draft; adapters restore source origins.
 pub fn diagnostics(draft: &Draft, findings: &[Finding]) -> Result<Vec<Diagnostic>, Error> {
-    diagnostics_with_text_limit(draft, findings, 16_777_216)
-}
-pub fn diagnostics_with_text_limit(
-    draft: &Draft,
-    findings: &[Finding],
-    bytes: usize,
-) -> Result<Vec<Diagnostic>, Error> {
-    if findings.len() > 65_536 {
-        return Err(Error::Limit);
-    }
-    let mut budget = Budget(bytes);
+    let mut project = Owned;
     findings
         .iter()
-        .map(|finding| finding_diagnostic(draft, finding, &mut budget))
+        .map(|finding| finding_diagnostic(draft, finding, &mut project))
         .collect()
 }
 fn finding_diagnostic<'a, B: Project<'a>>(
     draft: &'a Draft,
     finding: &'a Finding,
-    budget: &mut B,
+    project: &mut B,
 ) -> Result<B::Output, Error> {
     let (reason, path) = match finding {
         Finding::MissingLanguage => ("missing_language", "language"),
-        Finding::MissingLock => ("missing_lock", "lock"),
         Finding::MissingStudy => ("missing_study", "study"),
         Finding::LanguageMismatch { declared, host } => {
-            let mut d = budget.start(C::RunnerLanguageMismatch, "language")?;
-            budget.context(&mut d, "declared", language(*declared))?;
-            budget.context(&mut d, "runner", language(*host))?;
+            let mut d = project.start(C::RunnerLanguageMismatch, "language")?;
+            project.context(&mut d, "declared", language(*declared))?;
+            project.context(&mut d, "runner", language(*host))?;
             return Ok(d);
         }
         Finding::LockKindMismatch {
             language: declared,
             actual,
         } => {
-            let mut d = budget.start(C::ProjectEnvironmentInvalid, "lock")?;
-            budget.context(&mut d, "reason", "lock_kind_mismatch")?;
-            budget.context(&mut d, "language", language(*declared))?;
-            budget.context(&mut d, "actual_lock_kind", lock(*actual))?;
+            let mut d = project.start(C::ProjectEnvironmentInvalid, "lock")?;
+            project.context(&mut d, "reason", "lock_kind_mismatch")?;
+            project.context(&mut d, "language", language(*declared))?;
+            project.context(&mut d, "actual_lock_kind", lock(*actual))?;
             return Ok(d);
         }
         Finding::DuplicateFunction { function: index } => {
             let definition = function(draft, *index)?;
-            let mut d = budget.start(C::ProjectEnvironmentInvalid, "functions.")?;
-            budget.append(&mut d, &definition.name)?;
-            budget.context(&mut d, "function", &definition.name)?;
-            budget.context(&mut d, "reason", "duplicate_function")?;
+            let mut d = project.start(C::ProjectEnvironmentInvalid, "functions.")?;
+            project.append(&mut d, &definition.name)?;
+            project.context(&mut d, "function", &definition.name)?;
+            project.context(&mut d, "reason", "duplicate_function")?;
             return Ok(d);
         }
         Finding::Function {
             function: index,
             finding,
-        } => return function_diagnostic(function(draft, *index)?, finding, budget),
-        Finding::Codelist(finding) => return terminology_diagnostic(draft, finding, budget),
+        } => return function_diagnostic(function(draft, *index)?, finding, project),
+        Finding::Codelist(finding) => return terminology_diagnostic(draft, finding, project),
     };
-    let mut d = budget.start(C::ProjectEnvironmentInvalid, path)?;
-    budget.context(&mut d, "reason", reason)?;
+    let mut d = project.start(C::ProjectEnvironmentInvalid, path)?;
+    project.context(&mut d, "reason", reason)?;
     Ok(d)
 }

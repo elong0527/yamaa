@@ -1,6 +1,6 @@
 //! Raw inheritance capture admission and retained catalogs over explicit native ports.
 //! YAML/schema representation and native path spelling remain decoder/host authority.
-use crate::schema::{Document, NormalizationBudget, NormalizationLimits, SchemaStructure};
+use crate::schema::{Document, SchemaStructure};
 use crate::{
     inheritance as graph, inheritance_preparation as lifecycle, project_preparation::Source,
 };
@@ -17,7 +17,6 @@ pub trait CapturePort {
     fn capture(
         &mut self,
         source: &graph::Source,
-        maximum_bytes: usize,
     ) -> Result<Vec<u8>, graph::SourceError<Self::Error>>;
     /// Planning resources retain their own path failures rather than parent-unavailability semantics.
     fn canonicalize_resource(
@@ -30,9 +29,8 @@ pub trait CapturePort {
     fn capture_resource(
         &mut self,
         source: &graph::Source,
-        maximum_bytes: usize,
     ) -> Result<Vec<u8>, graph::SourceError<Self::Error>> {
-        self.capture(source, maximum_bytes)
+        self.capture(source)
     }
     fn resource_failure(&self, _error: &Self::Error) -> Option<crate::resource::ResourceFailure> {
         None
@@ -42,39 +40,14 @@ pub trait CapturePort {
         layer: &graph::Source,
         entry: &graph::Source,
         written: &str,
-        maximum_bytes: usize,
     ) -> Result<String, Self::Error>;
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum CaptureResource {
-    CapturedBytes,
-    IdentityBytes,
-}
-/// Physical parsing preserves its own limits and original failure representation.
-/// `limit_error` only constructs that representation for a closed engine refusal.
+/// A physical decoder retains original source and occurrence authority.
 pub trait DecodePort {
     type Raw;
     type Error;
     fn decode(&mut self, identity: &str, bytes: &[u8]) -> Result<Self::Raw, Self::Error>;
     fn document(raw: &Self::Raw) -> &Document;
-    fn limit_error(resource: CaptureResource) -> Self::Error;
-}
-#[derive(Clone, Copy, Debug)]
-pub struct Limits {
-    pub captured_bytes: usize,
-    pub identity_bytes: usize,
-    pub normalization: NormalizationLimits,
-    pub preparation: lifecycle::Limits,
-}
-impl Default for Limits {
-    fn default() -> Self {
-        Self {
-            captured_bytes: 16_777_216,
-            identity_bytes: 65_536,
-            normalization: Default::default(),
-            preparation: Default::default(),
-        }
-    }
 }
 #[derive(Debug)]
 pub struct CapturedParent<R> {
@@ -98,8 +71,6 @@ pub enum SourceFailure<E, X> {
 }
 #[derive(Debug, thiserror::Error)]
 pub enum Error<E, X, R> {
-    #[error("inheritance capture entry: {0:?}")]
-    Entry(X),
     #[error(
         "inheritance capture preparation: error={error:?}, captured_parents={captured_parents:?}"
     )]
@@ -118,8 +89,6 @@ pub type PreparationResult<E, X, R> = Result<Prepared<R>, Error<E, X, R>>;
 struct Application<'a, P, D: DecodePort> {
     host: &'a mut P,
     decoder: &'a mut D,
-    remaining_bytes: usize,
-    remaining_identities: usize,
     parents: Vec<CapturedParent<D::Raw>>,
 }
 fn host_error<E, X>(error: graph::SourceError<E>) -> graph::SourceError<SourceFailure<E, X>> {
@@ -144,18 +113,7 @@ impl<P: CapturePort, D: DecodePort> graph::SourcePort for Application<'_, P, D> 
         source: &graph::Source,
     ) -> Result<Document, graph::SourceError<Self::Error>> {
         let admission = |error| graph::SourceError::Raised(SourceFailure::Admission(error));
-        self.remaining_identities = self
-            .remaining_identities
-            .checked_sub(source.identity.len())
-            .ok_or_else(|| admission(D::limit_error(CaptureResource::IdentityBytes)))?;
-        let bytes = self
-            .host
-            .capture(source, self.remaining_bytes)
-            .map_err(host_error)?;
-        self.remaining_bytes = self
-            .remaining_bytes
-            .checked_sub(bytes.len())
-            .ok_or_else(|| admission(D::limit_error(CaptureResource::CapturedBytes)))?;
+        let bytes = self.host.capture(source).map_err(host_error)?;
         let raw = self
             .decoder
             .decode(&source.identity, &bytes)
@@ -177,10 +135,9 @@ impl<P: CapturePort, D: DecodePort> lifecycle::PathPort for Application<'_, P, D
         layer: &graph::Source,
         entry: &graph::Source,
         written: &str,
-        maximum_bytes: usize,
     ) -> Result<String, Self::Error> {
         self.host
-            .rebase(layer, entry, written, maximum_bytes)
+            .rebase(layer, entry, written)
             .map_err(SourceFailure::Host)
     }
 }
@@ -194,21 +151,10 @@ pub fn prepare<P: CapturePort, D: DecodePort>(
     raw: &D::Raw,
     host: &mut P,
     decoder: &mut D,
-    limits: Limits,
 ) -> PreparationResult<P::Error, D::Error, D::Raw> {
-    let remaining_bytes = limits
-        .captured_bytes
-        .checked_sub(source.bytes.len())
-        .ok_or_else(|| Error::Entry(D::limit_error(CaptureResource::CapturedBytes)))?;
-    let remaining_identities = limits
-        .identity_bytes
-        .checked_sub(source.identity.len())
-        .ok_or_else(|| Error::Entry(D::limit_error(CaptureResource::IdentityBytes)))?;
     let mut application = Application {
         host,
         decoder,
-        remaining_bytes,
-        remaining_identities,
         parents: Vec::new(),
     };
     let prepared = lifecycle::prepare(
@@ -219,8 +165,6 @@ pub fn prepare<P: CapturePort, D: DecodePort>(
         },
         D::document(raw).clone(),
         &mut application,
-        &mut NormalizationBudget::for_application(limits.normalization),
-        limits.preparation,
     );
     match prepared {
         Ok(inheritance) => Ok(Prepared {
