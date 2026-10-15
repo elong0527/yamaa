@@ -359,6 +359,45 @@ def test_blank_lines_inside_a_block_scalar_are_value_text(tmp_path: Path) -> Non
     assert _names(_spec(tmp_path, text)) == []
 
 
+@pytest.mark.parametrize("ending", ["\r\n", "\r"])
+def test_a_block_scalar_ends_on_its_last_line_under_every_ending(
+    tmp_path: Path, ending: str
+) -> None:
+    # A block scalar's last line is counted in the reader's raw buffer,
+    # which keeps the file's written breaks: counting only "\n" ended a
+    # lone-CR scalar on its first line, so its remaining lines stopped
+    # being content and the field after it lost its spacing finding.
+    # The same text must be judged identically under every line ending.
+    text = (
+        'schema_version: "1.0"\n'
+        "name: demo\n"
+        "notes: |\n"
+        "  first\n"
+        "\n"
+        "  # not a comment\n"
+        "  last\n"
+        "after: 1\n"
+    )
+    expected = [
+        (item.name, item.line, item.spec_path)
+        for item in check_file(_spec(tmp_path, text, "lf.yaml"), orders=ORDERS)
+    ]
+    assert expected
+    path = tmp_path / "spec.yaml"
+    path.write_bytes(text.replace("\n", ending).encode("utf-8"))
+    findings = check_file(path, orders=ORDERS)
+    assert [(item.name, item.line, item.spec_path) for item in findings] == expected
+    changed, remaining = fix_file(path, orders=ORDERS)
+    assert changed is True
+    assert remaining == ()
+    lf_path = _spec(tmp_path, text, "fixed.yaml")
+    fix_file(lf_path, orders=ORDERS)
+    data = path.read_bytes()
+    assert data.decode("utf-8").replace(ending, "\n") == lf_path.read_text(
+        encoding="utf-8"
+    )
+
+
 def test_a_fix_that_would_change_a_value_is_refused(tmp_path: Path) -> None:
     # The blank line the fix would insert before USUBJID becomes part of the
     # `|+` scalar, which keeps its trailing line breaks, so the proof fails.

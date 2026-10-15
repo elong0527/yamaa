@@ -229,6 +229,8 @@ pub(crate) fn outcome(
         "output_rows" => "output_rows",
         "output_cells" => "output_cells",
         "output_columns" => "output_columns",
+        "table_rows" => "table_rows",
+        "table_cells" => "table_cells",
         "regex_steps" => "regex_steps",
         _ => return None,
     };
@@ -339,6 +341,39 @@ mod tests {
             let encoded = crate::dataset_result::semantic_condition(&error).unwrap();
             assert_eq!(encoded["source_index"], source_index);
             assert_eq!(outcome(&encoded, &sources, 1), Some(projected));
+        }
+    }
+    #[test]
+    fn intermediate_table_limits_survive_the_execution_outcome_wire_round_trip() {
+        use core::convert::Infallible;
+        use yamaa_core::{
+            limits::Limits, table_grouping::GroupingError, table_reduction::TableReductionError,
+        };
+
+        let sources = [input()];
+        for limit in [
+            Limits::table(Limits::TABLE_ROWS + 1, 1).unwrap_err(),
+            Limits::table(3_575_419, 179).unwrap_err(),
+        ] {
+            for error in [
+                ExecutionError::<Infallible>::Grouping(GroupingError::Limit(limit)),
+                ExecutionError::OutputGrouping(GroupingError::Limit(limit)),
+                ExecutionError::Reduction {
+                    path: "row_columns.TOTAL".into(),
+                    error: TableReductionError::Limit(limit),
+                    identity: None,
+                },
+            ] {
+                let encoded = crate::dataset_result::semantic_condition(&error).unwrap();
+                let wire = serde_json::to_string(&encoded).unwrap();
+                let decoded: Value = serde_json::from_str(&wire).unwrap();
+                let expected = Refusal::new(limit.resource, limit.limit, limit.actual, Vec::new());
+                assert_eq!(decoded["resource"], limit.resource);
+                assert_eq!(decoded["limit"], limit.limit.to_string());
+                assert_eq!(decoded["required"], limit.actual.unwrap().to_string());
+                assert_eq!(execution(&error, &sources, 0), Some(expected.clone()));
+                assert_eq!(outcome(&decoded, &sources, 0), Some(expected));
+            }
         }
     }
     #[test]

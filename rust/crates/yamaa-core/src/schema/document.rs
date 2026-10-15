@@ -2,7 +2,10 @@
 //! Parsing YAML, including duplicate keys and non-finite normalization, is an adapter concern.
 
 use num_bigint::BigInt;
-use std::{collections::BTreeSet, vec};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    vec,
+};
 
 /// One decoded occurrence. Children precede parents and have exactly one owner.
 #[derive(Clone, Debug, PartialEq)]
@@ -213,18 +216,27 @@ impl Document {
                     if a.len() != b.len() {
                         return false;
                     }
-                    for (key, value) in a {
-                        let mut found = None;
-                        for (candidate, item) in b {
-                            if self.nodes[*key] == other.nodes[*candidate] {
-                                found = Some(*item);
-                                break;
-                            }
-                        }
-                        let Some(item) = found else {
+                    let index: BTreeMap<_, _> = b
+                        .iter()
+                        .map(|&(key, value)| {
+                            (
+                                scalar_key(&other.nodes[key]).expect("admitted scalar mapping key"),
+                                (key, value),
+                            )
+                        })
+                        .collect();
+                    for &(key, value) in a {
+                        let identity =
+                            scalar_key(&self.nodes[key]).expect("admitted scalar mapping key");
+                        let Some(&(candidate, item)) = index.get(&identity) else {
                             return false;
                         };
-                        pending.push((*value, item));
+                        // Admission equates integral numeric keys across kinds;
+                        // a layout edit must preserve their decoded kinds too.
+                        if self.nodes[key] != other.nodes[candidate] {
+                            return false;
+                        }
+                        pending.push((value, item));
                     }
                 }
                 (a, b) if a == b => {}

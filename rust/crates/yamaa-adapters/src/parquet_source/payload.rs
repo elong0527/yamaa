@@ -33,44 +33,136 @@ fn levels(bytes: &[u8], maximum: i16, encoding: i64, values: usize) -> Result<&[
     bytes.get(length..).ok_or(Error::Malformed)
 }
 
-fn present(bytes: &[u8], maximum: i16, encoding: i64, values: usize) -> Result<usize, Error> {
-    if maximum == 0 {
-        return Ok(values);
-    }
+fn level_runs(
+    bytes: &[u8],
+    maximum: i16,
+    encoding: i64,
+    values: usize,
+    mut visit: impl FnMut(u32, usize) -> Result<(), Error>,
+) -> Result<(), Error> {
     if maximum < 0 {
         return Err(Error::Malformed);
     }
+    if maximum == 0 {
+        if values != 0 {
+            visit(0, values)?;
+        }
+        return Ok(());
+    }
     let width = 16 - (maximum as u16).leading_zeros();
-    let mut present = 0;
-    let mut visit = |value: u32, count: usize| {
+    let mut checked = |value: u32, count: usize| {
         if value > maximum as u32 {
             return Err(Error::Malformed);
         }
+        visit(value, count)
+    };
+    match encoding {
+        3 => rle::hybrid(bytes, width, values, &mut checked),
+        4 => rle::packed(bytes, width, values, &mut checked),
+        _ => Err(Error::Malformed),
+    }
+}
+
+fn present(bytes: &[u8], maximum: i16, encoding: i64, values: usize) -> Result<usize, Error> {
+    let mut present = 0;
+    level_runs(bytes, maximum, encoding, values, |value, count| {
         if value == maximum as u32 {
             present += count;
         }
         Ok(())
-    };
-    match encoding {
-        3 => rle::hybrid(bytes, width, values, &mut visit)?,
-        4 => rle::packed(bytes, width, values, &mut visit)?,
-        _ => return Err(Error::Malformed),
-    }
+    })?;
     Ok(present)
 }
+
+fn v1_level_bytes(
+    bytes: &[u8],
+    maximum: i16,
+    encoding: i64,
+    values: usize,
+) -> Result<(&[u8], &[u8]), Error> {
+    let tail = levels(bytes, maximum, encoding, values)?;
+    if maximum == 0 {
+        return Ok((tail, &[]));
+    }
+    let used = bytes.len() - tail.len();
+    let raw = &bytes[if encoding == 3 { 4 } else { 0 }..used];
+    Ok((tail, raw))
+}
+
 fn v1_levels(
     bytes: &[u8],
     maximum: i16,
     encoding: i64,
     values: usize,
 ) -> Result<(&[u8], usize), Error> {
-    let tail = levels(bytes, maximum, encoding, values)?;
-    if maximum == 0 {
-        return Ok((tail, values));
-    }
-    let used = bytes.len() - tail.len();
-    let raw = &bytes[if encoding == 3 { 4 } else { 0 }..used];
+    let (tail, raw) = v1_level_bytes(bytes, maximum, encoding, values)?;
     Ok((tail, present(raw, maximum, encoding, values)?))
+}
+
+/// Reconcile actual record starts with one held column chunk before any value
+/// decoder expands its counts. Repetition zero starts a row even for a null or
+/// empty-list marker; later pages may continue a row with a nonzero level.
+pub(super) struct Rows {
+    remaining: usize,
+    started: bool,
+}
+
+impl Rows {
+    pub(super) fn new(rows: usize) -> Self {
+        Self {
+            remaining: rows,
+            started: false,
+        }
+    }
+
+    pub(super) fn admit(
+        &mut self,
+        page: &Page<'_>,
+        decoded: &[u8],
+        column: &ColumnDescriptor,
+    ) -> Result<(), Error> {
+        let maximum = column.max_rep_level();
+        let (raw, encoding, values) = match page.payload {
+            Payload::Index | Payload::Dictionary { .. } => return Ok(()),
+            Payload::DataV1 {
+                values,
+                repetition_encoding,
+                ..
+            } => {
+                let (_, raw) = v1_level_bytes(decoded, maximum, repetition_encoding, values)?;
+                (raw, repetition_encoding, values)
+            }
+            Payload::DataV2 {
+                values,
+                repetition_bytes,
+                ..
+            } => (
+                decoded.get(..repetition_bytes).ok_or(Error::Malformed)?,
+                3,
+                values,
+            ),
+        };
+        level_runs(raw, maximum, encoding, values, |value, count| {
+            if !self.started {
+                if value != 0 {
+                    return Err(Error::Malformed);
+                }
+                self.started = true;
+            }
+            if value == 0 {
+                self.remaining = self.remaining.checked_sub(count).ok_or(Error::Malformed)?;
+            }
+            Ok(())
+        })
+    }
+
+    pub(super) fn finish(self) -> Result<(), Error> {
+        if self.remaining == 0 {
+            Ok(())
+        } else {
+            Err(Error::Malformed)
+        }
+    }
 }
 
 pub(super) struct Values<'a> {
@@ -271,9 +363,12 @@ mod tests {
     };
     use std::sync::Arc;
     fn column() -> SchemaDescriptor {
+        column_with_repetition(Repetition::REQUIRED)
+    }
+    fn column_with_repetition(repetition: Repetition) -> SchemaDescriptor {
         let field = Arc::new(
             SchemaType::primitive_type_builder("S", Type::BYTE_ARRAY)
-                .with_repetition(Repetition::REQUIRED)
+                .with_repetition(repetition)
                 .build()
                 .unwrap(),
         );
@@ -311,6 +406,79 @@ mod tests {
             definition_encoding: 3,
             repetition_encoding: 3,
         })
+    }
+    #[test]
+    fn row_starts_use_run_cardinality_without_capping_repeated_values() {
+        let schema = column_with_repetition(Repetition::REPEATED);
+        let column = schema.column(0);
+        let page = data(i32::MAX as usize);
+        // One RLE run claims i32::MAX distinct rows. Its cardinality is checked
+        // without emitting those levels or invoking an ordinary value decoder.
+        let mut rows = Rows::new(1);
+        assert_eq!(
+            rows.admit(&page, &[6, 0, 0, 0, 254, 255, 255, 255, 15, 0], &column),
+            Err(Error::Malformed)
+        );
+        // The same value count fits one row when all later levels continue it.
+        // This checks only row truth: the ordinary decoder still owns any
+        // storage needed for actually decoding that admitted repeated data.
+        let mut rows = Rows::new(1);
+        rows.admit(
+            &page,
+            &[8, 0, 0, 0, 2, 0, 252, 255, 255, 255, 15, 1],
+            &column,
+        )
+        .unwrap();
+        rows.finish().unwrap();
+    }
+
+    #[test]
+    fn row_starts_validate_chunk_boundaries_packed_levels_and_empty_chunks() {
+        let schema = column_with_repetition(Repetition::REPEATED);
+        let column = schema.column(0);
+        let mut packed = data(5);
+        packed.payload = Payload::DataV1 {
+            encoding: 7,
+            values: 5,
+            definition_encoding: 3,
+            repetition_encoding: 4,
+        };
+        let mut rows = Rows::new(2);
+        rows.admit(&packed, &[0b0001_0110], &column).unwrap(); // 0,1,1,0,1
+        rows.finish().unwrap();
+        let mut rows = Rows::new(1);
+        assert_eq!(
+            rows.admit(&data(1), &[2, 0, 0, 0, 2, 1], &column),
+            Err(Error::Malformed)
+        );
+        let mut rows = Rows::new(2);
+        rows.admit(
+            &page(Payload::DataV2 {
+                encoding: 7,
+                values: 2,
+                nulls: 2,
+                definition_bytes: 0,
+                repetition_bytes: 2,
+            }),
+            &[4, 0],
+            &column,
+        )
+        .unwrap();
+        rows.finish().unwrap();
+        assert_eq!(Rows::new(1).finish(), Err(Error::Malformed));
+        let mut empty = Rows::new(0);
+        empty
+            .admit(
+                &page(Payload::Dictionary {
+                    encoding: 0,
+                    values: usize::MAX,
+                }),
+                &[],
+                &column,
+            )
+            .unwrap();
+        empty.admit(&page(Payload::Index), &[], &column).unwrap();
+        empty.finish().unwrap();
     }
     #[test]
     fn missing_dictionary_bad_indices_and_truncated_plain_strings_fail_safely() {
