@@ -69,9 +69,33 @@ impl DocumentNode {
     }
 }
 
+/// Decoded storage admission is separate from schema validation and runtime values.
+#[derive(Clone, Copy, Debug)]
+pub struct DocumentLimits {
+    pub nodes: usize,
+    pub text_bytes: usize,
+    pub edges: usize,
+    pub depth: usize,
+}
+
+impl Default for DocumentLimits {
+    /// Bound storage and stack depth without restricting integers to a runtime scalar width.
+    fn default() -> Self {
+        Self {
+            nodes: 131_072,
+            text_bytes: 8_388_608,
+            edges: 262_144,
+            depth: 64,
+        }
+    }
+}
+
 /// Resource exhaustion never masquerades as a specification diagnostic.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DocumentResource {
+    Nodes,
+    TextBytes,
+    Edges,
     Depth,
 }
 
@@ -196,12 +220,32 @@ fn float_key(value: f64) -> Key<'static> {
     )
 }
 
+/// Charge before allocation or traversal; successful prefixes are never refunded.
+fn charge(
+    used: &mut usize,
+    amount: usize,
+    limit: usize,
+    resource: DocumentResource,
+) -> Result<(), DocumentError> {
+    *used = used
+        .checked_add(amount)
+        .filter(|n| *n <= limit)
+        .ok_or(DocumentError::Limit { resource, limit })?;
+    Ok(())
+}
+
 impl Document {
     /// Prove a layout edit preserves decoded values, including scalar kinds.
     /// Mapping declaration order may change; sequence order remains significant.
-    pub fn same_style_value(&self, other: &Self) -> bool {
+    /// A bounded comparison refuses work beyond the decoded edge budget.
+    pub fn same_style_value(&self, other: &Self, maximum: usize) -> bool {
         let mut pending = vec![(self.root, other.root)];
+        let mut used = 0usize;
         while let Some((left, right)) = pending.pop() {
+            used += 1;
+            if used > maximum {
+                return false;
+            }
             match (&self.nodes[left], &other.nodes[right]) {
                 (DocumentNode::Sequence(a), DocumentNode::Sequence(b)) => {
                     if a.len() != b.len() {
@@ -216,6 +260,10 @@ impl Document {
                     for (key, value) in a {
                         let mut found = None;
                         for (candidate, item) in b {
+                            used += 1;
+                            if used > maximum {
+                                return false;
+                            }
                             if self.nodes[*key] == other.nodes[*candidate] {
                                 found = Some(*item);
                                 break;
@@ -235,12 +283,24 @@ impl Document {
     }
 
     /// Validate every occurrence and reject sharing, cycles, duplicate keys and unreachable data.
-    pub fn new(nodes: Vec<DocumentNode>, root: usize) -> Result<Self, DocumentError> {
+    pub fn new(
+        nodes: Vec<DocumentNode>,
+        root: usize,
+        limits: DocumentLimits,
+    ) -> Result<Self, DocumentError> {
         if root >= nodes.len() {
             return Err(DocumentError::InvalidRoot);
         }
+        let mut count = 0;
+        charge(
+            &mut count,
+            nodes.len(),
+            limits.nodes,
+            DocumentResource::Nodes,
+        )?;
         let mut owned = vec![false; nodes.len()];
         let mut depths = Vec::with_capacity(nodes.len());
+        let (mut bytes, mut edges) = (0, 0);
         for (index, node) in nodes.iter().enumerate() {
             let mut depth = 1;
             let mut child = |id: usize| -> Result<(), DocumentError> {
@@ -256,6 +316,12 @@ impl Document {
             };
             match node {
                 DocumentNode::Text(text) | DocumentNode::Integer(text) => {
+                    charge(
+                        &mut bytes,
+                        text.len(),
+                        limits.text_bytes,
+                        DocumentResource::TextBytes,
+                    )?;
                     if matches!(node, DocumentNode::Integer(_)) && !canonical_integer(text) {
                         return Err(DocumentError::InvalidInteger);
                     }
@@ -264,11 +330,22 @@ impl Document {
                     return Err(DocumentError::NonFinite)
                 }
                 DocumentNode::Sequence(items) => {
+                    charge(
+                        &mut edges,
+                        items.len(),
+                        limits.edges,
+                        DocumentResource::Edges,
+                    )?;
                     for &id in items {
                         child(id)?;
                     }
                 }
                 DocumentNode::Mapping(items) => {
+                    let amount = items.len().checked_mul(2).ok_or(DocumentError::Limit {
+                        resource: DocumentResource::Edges,
+                        limit: limits.edges,
+                    })?;
+                    charge(&mut edges, amount, limits.edges, DocumentResource::Edges)?;
                     let mut keys = BTreeSet::new();
                     for &(key, value) in items {
                         child(key)?;
@@ -281,7 +358,7 @@ impl Document {
                 }
                 _ => {}
             }
-            let limit = crate::limits::Limits::YAML_DEPTH;
+            let limit = limits.depth.min(64);
             if depth > limit {
                 return Err(DocumentError::Limit {
                     resource: DocumentResource::Depth,

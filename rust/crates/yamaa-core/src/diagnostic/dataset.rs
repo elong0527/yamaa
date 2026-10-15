@@ -1,5 +1,8 @@
 //! Classified dataset failures, borrowed without replaying table or host effects.
-use super::{ConditionCode as C, Context, Diagnostic, ProjectionError};
+use super::{
+    ConditionCode as C, Context, Diagnostic, ProjectionBudget, ProjectionError,
+    MAX_PROJECTION_BYTES,
+};
 use crate::{
     reduction::NumericReducer,
     value::{Value, ValueType},
@@ -60,58 +63,92 @@ fn type_name(value: ValueType) -> &'static str {
         ValueType::DateTime => "datetime",
     }
 }
-
-/// Static admission and raw runtime key comparisons retain the same authored cause.
-pub(crate) fn lookup_key_type(
-    path: &str,
-    intermediate: &str,
-    source: &str,
-    expected: ValueType,
-    actual: ValueType,
-) -> Diagnostic {
-    Diagnostic {
-        code: C::LookupKeyType,
-        spec_paths: vec![path.into()],
-        context: [
-            ("intermediate".into(), text(intermediate)),
-            ("source".into(), text(source)),
-            ("expected".into(), text(type_name(expected))),
-            ("actual".into(), text(type_name(actual))),
-        ]
-        .into(),
-        source_span: None,
-        operand_route: None,
-    }
-}
 impl DatasetFinding<'_> {
-    /// Preserve complete facts and refuse contradictory classified causes.
-    pub fn diagnostic(self) -> Result<Diagnostic, ProjectionError> {
+    pub fn diagnostic(self) -> Option<Diagnostic> {
+        self.diagnostic_with_limit(MAX_PROJECTION_BYTES).ok()
+    }
+
+    /// Admit the complete path and context before allocating any owned fact.
+    /// Invalid typed causes and resource refusal preserve the original attempt.
+    pub fn diagnostic_with_limit(self, maximum: usize) -> Result<Diagnostic, ProjectionError> {
+        let mut budget = ProjectionBudget::new(maximum)?;
         let (path, code) = match self {
-            Self::MultipleValues { path, count, .. } => {
+            Self::MultipleValues {
+                path,
+                identifier,
+                count,
+            } => {
                 if count < 2 {
                     return Err(ProjectionError::InvalidContext);
                 }
+                budget.text(path)?;
+                budget.field("identifier", identifier)?;
+                budget.text("value_count")?;
+                budget.charge(32)?;
                 (path, C::DatasetMultipleValues)
             }
-            Self::UnmatchedKey { path, .. } => (path, C::DatasetUnmatchedKey),
-            Self::MultipleMatches { path, count, .. } => {
+            Self::UnmatchedKey {
+                path,
+                dataset,
+                intermediate,
+            } => {
+                budget.text(path)?;
+                budget.field("dataset", dataset)?;
+                budget.field("intermediate", intermediate)?;
+                (path, C::DatasetUnmatchedKey)
+            }
+            Self::MultipleMatches {
+                path,
+                dataset,
+                intermediate,
+                count,
+            } => {
                 if count < 2 {
                     return Err(ProjectionError::InvalidContext);
                 }
+                budget.text(path)?;
+                budget.field("dataset", dataset)?;
+                budget.field("intermediate", intermediate)?;
+                budget.text("match_count")?;
+                budget.charge(32)?;
                 (path, C::DatasetMultipleMatches)
             }
             Self::BaselineAmbiguity {
-                path, date, count, ..
+                path,
+                column,
+                date,
+                count,
             } => {
                 if count < 2 || !matches!(date, Value::Date(_) | Value::DateTime(_)) {
                     return Err(ProjectionError::InvalidContext);
                 }
+                budget.text(path)?;
+                budget.field("column", column)?;
+                budget.field("operation", "baseline_flag")?;
+                budget.text("date")?;
+                // Every admitted temporal spelling fits this fixed capacity;
+                // formatting remains after the whole-context admission.
+                budget.charge(128)?;
+                budget.text("match_count")?;
+                budget.charge(32)?;
                 (path, C::DatasetBaselineAmbiguity)
             }
-            Self::ReductionInputType { path, actual, .. } => {
+            Self::ReductionInputType {
+                path,
+                expression,
+                reducer,
+                source,
+                actual,
+            } => {
                 if matches!(actual, ValueType::Int | ValueType::Float) {
                     return Err(ProjectionError::InvalidContext);
                 }
+                budget.text(path)?;
+                budget.field("expr", expression)?;
+                budget.field("reducer", reducer.name())?;
+                budget.field("source", source)?;
+                budget.field("expected", "numeric")?;
+                budget.field("actual", type_name(actual))?;
                 (path, C::DatasetReductionInputType)
             }
         };

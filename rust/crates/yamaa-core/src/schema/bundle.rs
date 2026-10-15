@@ -1,7 +1,10 @@
 //! Complete decoded-bundle structure. Filesystem authority and YAML stay in adapters.
 //! A structure is not executable: defaults and document values still need interpretation.
 
-use super::{Descriptor, DescriptorError, DescriptorIssue, Document, DocumentNode as N};
+use super::{
+    Descriptor, DescriptorBudget, DescriptorError, DescriptorIssue, DescriptorLimits, Document,
+    DocumentNode as N,
+};
 use std::{
     collections::{BTreeMap, BTreeSet},
     vec,
@@ -14,9 +17,37 @@ pub struct SchemaModule {
     pub document: Document,
 }
 
-/// Fixed semantic recursion guard, independent of input storage.
+/// Aggregate structure expansion is bounded independently from descriptor compilation.
+#[derive(Clone, Copy, Debug)]
+pub struct BundleLimits {
+    pub modules: usize,
+    pub input_nodes: usize,
+    pub input_text_bytes: usize,
+    pub expanded_fields: usize,
+    pub work: usize,
+    pub descriptors: DescriptorLimits,
+}
+impl Default for BundleLimits {
+    /// Include and field-reuse recursion also have an unconditional depth ceiling of 64.
+    fn default() -> Self {
+        Self {
+            modules: 128,
+            input_nodes: 262_144,
+            input_text_bytes: 16_777_216,
+            expanded_fields: 65_536,
+            work: 4_194_304,
+            descriptors: DescriptorLimits::default(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BundleResource {
+    Modules,
+    InputNodes,
+    InputTextBytes,
+    ExpandedFields,
+    Work,
     Depth,
 }
 
@@ -148,11 +179,6 @@ struct Named {
     name: String,
     raw: Raw,
 }
-#[derive(Clone)]
-struct ExpandedFields {
-    entries: Vec<Raw>,
-    repeated: bool,
-}
 struct RawRegistry {
     name: String,
     module: usize,
@@ -161,9 +187,27 @@ struct RawRegistry {
 
 struct Builder {
     modules: Vec<SchemaModule>,
+    limits: BundleLimits,
+    work: usize,
+    expanded: usize,
+    descriptor_budget: DescriptorBudget,
     descriptors: Vec<LocatedDescriptor>,
     issues: Vec<BundleIssue>,
     references: Vec<(Raw, String, String)>,
+}
+
+/// Charge a logical counter before iteration or expansion and retain successful prefixes.
+fn charge(
+    used: &mut usize,
+    amount: usize,
+    limit: usize,
+    resource: BundleResource,
+) -> Result<(), BundleError> {
+    *used = used
+        .checked_add(amount)
+        .filter(|n| *n <= limit)
+        .ok_or(BundleError::Limit { resource, limit })?;
+    Ok(())
 }
 
 /// Includes admit only the contract's basename grammar, independent of host path rules.
@@ -191,8 +235,13 @@ impl Builder {
     fn node(&self, raw: Raw) -> &N {
         &self.modules[raw.module].document.nodes()[raw.node]
     }
-    /// Find a descriptor member in its retained declaring document.
+    /// Find a descriptor member; the scan is charged even if no name matches.
     fn field(&mut self, raw: Raw, name: &str) -> Result<Option<Raw>, BundleError> {
+        let amount = match self.node(raw) {
+            N::Mapping(items) => items.len(),
+            _ => 1,
+        };
+        self.work(amount)?;
         Ok(self.modules[raw.module]
             .document
             .field(raw.node, name)
@@ -201,8 +250,18 @@ impl Builder {
                 node,
             }))
     }
+    /// Account scans, lookups and copied names with a request-owned work ceiling.
+    fn work(&mut self, amount: usize) -> Result<(), BundleError> {
+        charge(
+            &mut self.work,
+            amount,
+            self.limits.work,
+            BundleResource::Work,
+        )
+    }
     /// Append a structured finding without discarding its declaring module or path.
     fn issue(&mut self, raw: Raw, path: &str, kind: BundleIssueKind) -> Result<(), BundleError> {
+        self.work(path.len().saturating_add(1))?;
         self.issues.push(BundleIssue {
             module: raw.module,
             path: path.into(),
@@ -224,12 +283,18 @@ impl Builder {
         path: &str,
         class_field: bool,
     ) -> Result<Option<usize>, BundleError> {
-        let report = Descriptor::admit(&self.modules[raw.module].document, raw.node, class_field)
-            .map_err(BundleError::Descriptor)?;
+        let report = Descriptor::admit(
+            &self.modules[raw.module].document,
+            raw.node,
+            class_field,
+            &mut self.descriptor_budget,
+        )
+        .map_err(BundleError::Descriptor)?;
         for finding in report.issues() {
             self.issue(raw, path, BundleIssueKind::Descriptor(finding.clone()))?;
         }
         for reference in report.references() {
+            self.work(path.len().saturating_add(reference.len()).saturating_add(1))?;
             self.references.push((raw, path.into(), reference.clone()));
         }
         Ok(report.into_descriptor().map(|descriptor| {
@@ -248,6 +313,7 @@ impl Builder {
         let mut fields = Vec::new();
         let mut names = BTreeSet::new();
         for (index, &raw) in entries.iter().enumerate() {
+            self.work(1)?;
             let N::Mapping(items) = self.node(raw) else {
                 self.issue(
                     raw,
@@ -277,6 +343,7 @@ impl Builder {
                 continue;
             }
             let name = name.clone();
+            self.work(name.len())?;
             let field_path = format!("{path}.{name}");
             if !names.insert(name.clone()) {
                 self.issue(
@@ -298,15 +365,15 @@ impl Builder {
         }
         Ok(fields)
     }
-    /// Expand inherited immutable field occurrences in their declaring order.
+    /// Expand immutable field occurrences, charging every copied occurrence across classes.
     fn expand(
         &mut self,
         index: usize,
         classes: &[Named],
         names: &BTreeMap<String, usize>,
-        expanded: &mut [Option<ExpandedFields>],
+        expanded: &mut [Option<Vec<Raw>>],
         active: &mut Vec<usize>,
-    ) -> Result<ExpandedFields, BundleError> {
+    ) -> Result<Vec<Raw>, BundleError> {
         if active.contains(&index) {
             let mut cycle: Vec<_> = active.iter().map(|&id| classes[id].name.clone()).collect();
             cycle.push(classes[index].name.clone());
@@ -317,12 +384,13 @@ impl Builder {
             ));
         }
         if let Some(fields) = &expanded[index] {
+            self.work(fields.len())?;
             return Ok(fields.clone());
         }
-        if active.len() >= crate::limits::Limits::SEMANTIC_DEPTH {
+        if active.len() >= 64 {
             return Err(BundleError::Limit {
                 resource: BundleResource::Depth,
-                limit: crate::limits::Limits::SEMANTIC_DEPTH,
+                limit: 64,
             });
         }
         active.push(index);
@@ -331,9 +399,8 @@ impl Builder {
             unreachable!("class classified at collection");
         };
         let entries = entries.clone();
+        self.work(entries.len())?;
         let mut result = Vec::new();
-        let mut occurrences = BTreeSet::new();
-        let mut repeated = false;
         for node in entries {
             let item = Raw {
                 module: raw.module,
@@ -358,32 +425,25 @@ impl Builder {
                     ));
                 };
                 let copied = self.expand(target, classes, names, expanded, active)?;
-                if !repeated {
-                    for field in copied.entries {
-                        result.push(field);
-                        if !occurrences.insert((field.module, field.node)) {
-                            repeated = true;
-                            break;
-                        }
-                    }
-                }
-            } else if !repeated {
+                charge(
+                    &mut self.expanded,
+                    copied.len(),
+                    self.limits.expanded_fields,
+                    BundleResource::ExpandedFields,
+                )?;
+                result.extend(copied);
+            } else {
+                charge(
+                    &mut self.expanded,
+                    1,
+                    self.limits.expanded_fields,
+                    BundleResource::ExpandedFields,
+                )?;
                 result.push(item);
-                if !occurrences.insert((item.module, item.node)) {
-                    repeated = true;
-                }
             }
         }
         active.pop();
-        // A repeated leaf necessarily repeats a field name or shape defect.
-        // Keep the prefix through that occurrence so the normal descriptor pass
-        // reports any earlier defect first, at the selected class's paths. Later
-        // reuse edges still receive complete structural validation. Cache the
-        // bounded prefix too, so invalid reuse DAGs cannot multiply traversals.
-        let result = ExpandedFields {
-            entries: result,
-            repeated,
-        };
+        self.work(result.len())?;
         expanded[index] = Some(result.clone());
         Ok(result)
     }
@@ -396,6 +456,7 @@ impl SchemaStructure {
         modules: Vec<SchemaModule>,
         entry: usize,
         root_name: &str,
+        limits: BundleLimits,
     ) -> Result<Self, BundleError> {
         if modules.is_empty() || entry >= modules.len() {
             return Err(BundleError::Invalid(vec![BundleIssue {
@@ -404,6 +465,14 @@ impl SchemaStructure {
                 kind: BundleIssueKind::ModuleName,
             }]));
         }
+        let mut count = 0;
+        charge(
+            &mut count,
+            modules.len(),
+            limits.modules,
+            BundleResource::Modules,
+        )?;
+        let (mut nodes, mut bytes) = (0, 0);
         let mut module_names = BTreeMap::new();
         for (index, module) in modules.iter().enumerate() {
             if module.name.is_empty() || module.name.contains(['/', '\\']) {
@@ -420,9 +489,35 @@ impl SchemaStructure {
                     kind: BundleIssueKind::DuplicateModule(module.name.clone()),
                 }]));
             }
+            charge(
+                &mut bytes,
+                module.name.len(),
+                limits.input_text_bytes,
+                BundleResource::InputTextBytes,
+            )?;
+            charge(
+                &mut nodes,
+                module.document.nodes().len(),
+                limits.input_nodes,
+                BundleResource::InputNodes,
+            )?;
+            for node in module.document.nodes() {
+                if let N::Text(text) | N::Integer(text) = node {
+                    charge(
+                        &mut bytes,
+                        text.len(),
+                        limits.input_text_bytes,
+                        BundleResource::InputTextBytes,
+                    )?;
+                }
+            }
         }
         let mut builder = Builder {
             modules,
+            limits,
+            work: 0,
+            expanded: 0,
+            descriptor_budget: DescriptorBudget::new(limits.descriptors),
             descriptors: Vec::new(),
             issues: Vec::new(),
             references: Vec::new(),
@@ -435,6 +530,7 @@ impl SchemaStructure {
         let mut raw_aliases = Vec::new();
         let mut raw_registries: Vec<RawRegistry> = Vec::new();
         while let Some((module, ancestors)) = pending.pop() {
+            builder.work(1)?;
             let raw = Raw {
                 module,
                 node: builder.modules[module].document.root(),
@@ -450,16 +546,17 @@ impl SchemaStructure {
             if !completed.insert(module) {
                 continue;
             }
-            if ancestors.len() >= crate::limits::Limits::SEMANTIC_DEPTH {
+            if ancestors.len() >= 64 {
                 return Err(BundleError::Limit {
                     resource: BundleResource::Depth,
-                    limit: crate::limits::Limits::SEMANTIC_DEPTH,
+                    limit: 64,
                 });
             }
             let N::Mapping(entries) = builder.node(raw) else {
                 return Err(builder.fail(raw, "$", BundleIssueKind::ExpectedMapping));
             };
             let entries = entries.clone();
+            builder.work(entries.len())?;
             let Some(v) = builder.field(raw, "version")? else {
                 return Err(builder.fail(raw, "$", BundleIssueKind::Version));
             };
@@ -489,6 +586,7 @@ impl SchemaStructure {
                     return Err(builder.fail(raw, "includes", BundleIssueKind::IncludesList));
                 };
                 let items = items.clone();
+                builder.work(items.len())?;
                 for node in items {
                     let N::Text(name) = builder.node(Raw { module, node }) else {
                         return Err(builder.fail(
@@ -512,6 +610,7 @@ impl SchemaStructure {
                             BundleIssueKind::MissingInclude(name),
                         ));
                     };
+                    builder.work(ancestors.len().saturating_add(1))?;
                     let mut chain = ancestors.clone();
                     chain.push(module);
                     pending.push((target, chain));
@@ -528,6 +627,7 @@ impl SchemaStructure {
                     return Err(builder.fail(raw, "$", BundleIssueKind::DeclarationName));
                 }
                 let name = name.clone();
+                builder.work(name.len().saturating_add(1))?;
                 let value = Raw { module, node };
                 let kind = match builder.node(value) {
                     N::Sequence(_) => 0,
@@ -585,6 +685,10 @@ impl SchemaStructure {
                         let N::Mapping(items) = builder.node(value) else {
                             unreachable!()
                         };
+                        builder.work(items.len())?;
+                        let N::Mapping(items) = builder.node(value) else {
+                            unreachable!()
+                        };
                         let items = items.clone();
                         for (key, payload) in items {
                             let key = Raw { module, node: key };
@@ -593,6 +697,15 @@ impl SchemaStructure {
                                 node: payload,
                             };
                             for &(previous, _) in &raw_registries[index].entries {
+                                let bytes = |node: &N| match node {
+                                    N::Text(text) | N::Integer(text) => text.len(),
+                                    N::Float(_) => 2048,
+                                    _ => 1,
+                                };
+                                builder.work(
+                                    bytes(builder.node(previous))
+                                        .saturating_add(bytes(builder.node(key))),
+                                )?;
                                 if super::document::scalar_keys_equal(
                                     builder.node(previous),
                                     builder.node(key),
@@ -638,20 +751,16 @@ impl SchemaStructure {
         let mut expanded = vec![None; raw_classes.len()];
         let mut classes = Vec::new();
         for (index, class) in raw_classes.iter().enumerate() {
-            let expanded = builder.expand(
+            let entries = builder.expand(
                 index,
                 &raw_classes,
                 &class_names,
                 &mut expanded,
                 &mut Vec::new(),
             )?;
-            let fields = builder.fields(&expanded.entries, &class.name)?;
-            if expanded.repeated {
-                return Err(BundleError::Invalid(std::mem::take(&mut builder.issues)));
-            }
             classes.push(SchemaClass {
                 name: class.name.clone(),
-                fields,
+                fields: builder.fields(&entries, &class.name)?,
             });
         }
         let registry_names: BTreeMap<_, _> = raw_registries

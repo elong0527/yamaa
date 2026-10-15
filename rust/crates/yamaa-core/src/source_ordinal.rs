@@ -5,6 +5,11 @@ use crate::{
     value::ColumnType,
 };
 
+#[derive(Clone, Copy, Debug)]
+pub struct Limits {
+    pub columns: usize,
+    pub cells: usize,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     #[error("source ordinal collision")]
@@ -13,6 +18,8 @@ pub enum Error {
     InvalidName,
     #[error("source ordinal invalid table")]
     InvalidTable,
+    #[error("source ordinal limit")]
+    Limit,
     #[error(
         "source ordinal resource limit: resource={resource:?}, limit={limit:?}, actual={actual:?}"
     )]
@@ -48,7 +55,12 @@ pub struct Ordinal {
     rows: usize,
 }
 impl Ordinal {
-    pub fn admit(schema: &TableSchema, rows: usize, name: &str) -> Result<Self, Error> {
+    pub fn admit(
+        schema: &TableSchema,
+        rows: usize,
+        name: &str,
+        limits: Limits,
+    ) -> Result<Self, Error> {
         if name.is_empty() {
             return Err(Error::InvalidName);
         }
@@ -61,14 +73,27 @@ impl Ordinal {
             .checked_add(1)
             .ok_or(Error::ResourceLimit {
                 resource: "columns",
-                limit: crate::limits::Limits::COLUMNS,
+                limit: limits.columns,
                 actual: None,
             })?;
-        crate::limits::Limits::table(rows, columns).map_err(|error| Error::ResourceLimit {
-            resource: error.resource,
-            limit: error.limit,
-            actual: error.actual,
-        })?;
+        if columns > limits.columns {
+            return Err(Error::ResourceLimit {
+                resource: "columns",
+                limit: limits.columns,
+                actual: Some(columns),
+            });
+        }
+        let cells = rows.checked_mul(columns);
+        if cells.is_none_or(|cells| cells > limits.cells) {
+            return Err(Error::ResourceLimit {
+                resource: "cells",
+                limit: limits.cells,
+                actual: cells,
+            });
+        }
+        if i64::try_from(rows).is_err() {
+            return Err(Error::Limit);
+        }
         let mut columns = schema.columns().to_vec();
         columns.push(Column {
             name: String::from(name),
@@ -94,10 +119,11 @@ pub fn prepare(
     source: &crate::specification::SourceDeclaration,
     schema: &crate::table::TableSchema,
     rows: usize,
+    limits: Limits,
 ) -> Result<Option<Ordinal>, Error> {
     source
         .ordinal
         .as_deref()
-        .map(|name| Ordinal::admit(schema, rows, name))
+        .map(|name| Ordinal::admit(schema, rows, name, limits))
         .transpose()
 }

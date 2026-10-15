@@ -2,8 +2,8 @@
 
 use super::{
     document::scalar_keys_equal, validation::matches_member, Document, DocumentNode as N,
-    NormalizationError, NormalizationResource, SchemaAliasKind, SchemaField, SchemaShape,
-    SchemaStructure, TypeExpression, TypeNode, ValidationError,
+    NormalizationBudget, NormalizationError, NormalizationResource, SchemaAliasKind, SchemaField,
+    SchemaShape, SchemaStructure, TypeExpression, TypeNode, ValidationError,
 };
 
 /// An occurrence in one retained input, not a host identity or content digest.
@@ -48,21 +48,22 @@ impl<'a> Member<'a> {
     }
 }
 
-struct Run<'a> {
+struct Run<'a, 'b> {
     schema: &'a SchemaStructure,
+    budget: &'b mut NormalizationBudget,
     nodes: Vec<N>,
     origins: Vec<CompositionOrigin>,
 }
-impl Run<'_> {
+impl Run<'_, '_> {
     fn step(&mut self, depth: usize) -> Result<(), NormalizationError> {
-        let limit = crate::limits::Limits::SEMANTIC_DEPTH;
+        let limit = self.budget.limits.depth.min(128);
         if depth > limit {
             return Err(NormalizationError::Limit {
                 resource: NormalizationResource::Depth,
                 limit,
             });
         }
-        Ok(())
+        self.budget.work(1)
     }
     fn push(&mut self, value: N, site: Site<'_>) -> usize {
         let id = self.nodes.len();
@@ -76,8 +77,13 @@ impl Run<'_> {
     fn copy(&mut self, site: Site<'_>, depth: usize) -> Result<usize, NormalizationError> {
         self.step(depth)?;
         let value = match site.value() {
-            N::Text(_) | N::Integer(_) => site.value().clone(),
+            N::Text(text) | N::Integer(text) => {
+                self.budget.work(text.len())?;
+                self.budget.reserve(text.len(), 0)?;
+                site.value().clone()
+            }
             N::Sequence(items) => {
+                self.budget.reserve(0, items.len())?;
                 let mut values = Vec::with_capacity(items.len());
                 for &item in items {
                     values.push(self.copy(site.child(item), depth + 1)?);
@@ -85,6 +91,7 @@ impl Run<'_> {
                 N::Sequence(values)
             }
             N::Mapping(items) => {
+                self.budget.reserve(0, items.len().saturating_mul(2))?;
                 let mut values = Vec::with_capacity(items.len());
                 for &(key, value) in items {
                     values.push((
@@ -94,7 +101,10 @@ impl Run<'_> {
                 }
                 N::Mapping(values)
             }
-            value => value.clone(),
+            value => {
+                self.budget.reserve(0, 0)?;
+                value.clone()
+            }
         };
         Ok(self.push(value, site))
     }
@@ -109,6 +119,7 @@ impl Run<'_> {
             .get(descriptor)
             .ok_or(ValidationError::InvalidDescriptor)?;
         for expression in descriptor.descriptor.members() {
+            self.budget.work(1)?;
             if matches_member(
                 schema,
                 site.document,
@@ -116,6 +127,7 @@ impl Run<'_> {
                 site.node,
                 true,
                 &[],
+                &mut self.budget.validation,
             )? {
                 return Ok(Some(Member {
                     expression,
@@ -157,6 +169,12 @@ impl Run<'_> {
         };
         for &(candidate, value) in items {
             let node = &mapping.document.nodes()[candidate];
+            self.budget.work(
+                key.value()
+                    .length()
+                    .unwrap_or(1)
+                    .saturating_add(node.length().unwrap_or(1)),
+            )?;
             if scalar_keys_equal(key.value(), node) {
                 return Ok(Some((candidate, value)));
             }
@@ -177,6 +195,7 @@ impl Run<'_> {
         };
         // Conservative reservation also bounds the temporary container capacity.
         let capacity = before.len().saturating_add(after.len());
+        self.budget.reserve(0, capacity.saturating_mul(2))?;
         let mut output = Vec::with_capacity(capacity);
         for &(key, value) in before {
             let inherited = old.child(value);
@@ -188,6 +207,8 @@ impl Run<'_> {
                         N::Text(text) => Some(text.as_str()),
                         _ => None,
                     };
+                    self.budget
+                        .work(fields.len().saturating_mul(name.map_or(1, str::len)))?;
                     if let Some(field) = fields.iter().find(|f| Some(f.name.as_str()) == name) {
                         self.descriptor(field.descriptor, inherited, incoming, depth + 1)?
                     } else {
@@ -251,11 +272,19 @@ impl Run<'_> {
                                 if let (N::Text(a), N::Text(b)) =
                                     (old.child(old_key).value(), new.child(new_key).value())
                                 {
+                                    self.budget.work(a.len().saturating_add(b.len()))?;
                                     if a == b {
                                         let registry = &self.schema.registries()[id];
+                                        self.budget.work(
+                                            registry
+                                                .entries
+                                                .len()
+                                                .saturating_mul(b.len().saturating_add(1)),
+                                        )?;
                                         if let Some(entry) =
                                             registry.entries.iter().find(|entry| entry.name == *b)
                                         {
+                                            self.budget.reserve(0, 2)?;
                                             let value = match &entry.shape {
                                                 SchemaShape::Class(fields) => self.mapping(
                                                     Some(fields),
@@ -298,11 +327,13 @@ impl SchemaStructure {
         descriptor: usize,
         accumulated: &Document,
         incoming: &Document,
+        budget: &mut NormalizationBudget,
     ) -> Result<ComposedValue, NormalizationError> {
         self.compose_descriptor_at(
             descriptor,
             (accumulated, accumulated.root()),
             (incoming, incoming.root()),
+            budget,
         )
     }
 
@@ -311,6 +342,7 @@ impl SchemaStructure {
         descriptor: usize,
         accumulated: (&Document, usize),
         incoming: (&Document, usize),
+        budget: &mut NormalizationBudget,
     ) -> Result<ComposedValue, NormalizationError> {
         if descriptor >= self.descriptors().len()
             || accumulated.1 >= accumulated.0.nodes().len()
@@ -320,6 +352,7 @@ impl SchemaStructure {
         }
         let mut run = Run {
             schema: self,
+            budget,
             nodes: Vec::new(),
             origins: Vec::new(),
         };
@@ -337,7 +370,8 @@ impl SchemaStructure {
             },
             0,
         )?;
-        let document = Document::new(run.nodes, root).map_err(NormalizationError::Document)?;
+        let document = Document::new(run.nodes, root, run.budget.limits.storage)
+            .map_err(NormalizationError::Document)?;
         Ok(ComposedValue {
             document,
             origins: run.origins,

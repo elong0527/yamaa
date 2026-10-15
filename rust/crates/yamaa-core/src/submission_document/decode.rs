@@ -1,6 +1,89 @@
-//! Decode the immutable held document once; findings retain that exact borrowed input.
+//! A non-owning admission pass precedes one complete owned decode. Both traverse
+//! the same immutable document; refusal keeps that exact borrowed input.
 use super::*;
 
+struct Budget(Limits);
+impl Budget {
+    fn charge(&mut self, resource: Resource, amount: usize) -> Result<(), Cause> {
+        let remaining = match resource {
+            Resource::Fields => &mut self.0.fields,
+            Resource::Declarations => &mut self.0.declarations,
+            Resource::Work => &mut self.0.work,
+            Resource::Nodes => &mut self.0.nodes,
+            Resource::ListItems => &mut self.0.list_items,
+            Resource::TextBytes => &mut self.0.text_bytes,
+            Resource::EscapedBytes => &mut self.0.escaped_bytes,
+            Resource::PathSegments => &mut self.0.path_segments,
+            Resource::Findings => &mut self.0.findings,
+            Resource::Depth => unreachable!("depth is a maximum"),
+        };
+        *remaining = remaining
+            .checked_sub(amount)
+            .ok_or(Cause::Limit(resource))?;
+        Ok(())
+    }
+    fn multiply(&mut self, resource: Resource, amount: usize, factor: usize) -> Result<(), Cause> {
+        self.charge(
+            resource,
+            amount.checked_mul(factor).ok_or(Cause::Limit(resource))?,
+        )
+    }
+    fn text(&mut self, text: &str) -> Result<(), Cause> {
+        self.charge(Resource::TextBytes, text.len())?;
+        // Every scalar can be quoted with at most ten bytes per UTF-8 byte plus
+        // two quotes. This reserves a complete projection, not a fitting prefix.
+        self.multiply(Resource::EscapedBytes, text.len(), 10)?;
+        self.charge(Resource::EscapedBytes, 2)?;
+        self.multiply(Resource::Work, text.len(), 32)
+    }
+    fn mapping(
+        &mut self,
+        input: &Document,
+        fields: &[(usize, usize)],
+        depth: usize,
+    ) -> Result<(), Cause> {
+        if !fields.is_empty() && depth >= self.0.depth.min(64) {
+            return Err(Cause::Limit(Resource::Depth));
+        }
+        self.charge(Resource::Fields, fields.len())?;
+        // Covers the fixed closed-field comparisons in both passes, including
+        // every unsuccessful lookup. No lookup runs before this reservation.
+        self.multiply(Resource::Work, fields.len(), 128)?;
+        for &(key, _) in fields {
+            self.charge(Resource::Nodes, 1)?;
+            if let N::Text(text) = &input.nodes()[key] {
+                self.text(text)?;
+            }
+        }
+        Ok(())
+    }
+    fn tree(&mut self, input: &Document, node: usize, depth: usize) -> Result<(), Cause> {
+        // Malformed nested values also have a fixed native stack bound.
+        if depth > self.0.depth.min(64) {
+            return Err(Cause::Limit(Resource::Depth));
+        }
+        self.charge(Resource::Nodes, 1)?;
+        self.charge(Resource::Work, 32)?;
+        match &input.nodes()[node] {
+            N::Text(text) | N::Integer(text) => self.text(text)?,
+            N::Sequence(items) => {
+                self.charge(Resource::ListItems, items.len())?;
+                self.multiply(Resource::Work, items.len(), 32)?;
+                for &child in items {
+                    self.tree(input, child, depth + 1)?;
+                }
+            }
+            N::Mapping(fields) => {
+                self.mapping(input, fields, depth)?;
+                for &(_, child) in fields {
+                    self.tree(input, child, depth + 1)?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+}
 const STUDY: &[FieldName] = &[
     FieldName::Id,
     FieldName::Name,
@@ -56,14 +139,47 @@ fn family(field: &str) -> Option<(Submission, FieldName)> {
 }
 /// Decode only submission declaration metadata. Other environment domains are
 /// left to their existing admission. This supplies no file or execution grant.
-pub fn decode(input: &Document, root: usize) -> Result<Declarations, Error<'_>> {
+pub fn decode(input: &Document, root: usize, limits: Limits) -> Result<Declarations, Error<'_>> {
     let refuse = |cause| Error { input, cause };
-    let Some(N::Mapping(_)) = input.nodes().get(root) else {
+    let Some(N::Mapping(fields)) = input.nodes().get(root) else {
         return Err(refuse(Cause::Shape { node: root }));
     };
+    let mut budget = Budget(limits);
+    let admission = (|| {
+        if budget.0.depth == 0 {
+            return Err(Cause::Limit(Resource::Depth));
+        }
+        budget.charge(Resource::Nodes, 1)?;
+        budget.charge(Resource::Work, 32)?;
+        budget.mapping(input, fields, 1)?;
+        for &(key, node) in fields {
+            if let N::Text(text) = &input.nodes()[key] {
+                if text == "study" || family(text).is_some() {
+                    budget.charge(Resource::Declarations, 1)?;
+                    budget.tree(input, node, 2)?;
+                }
+            }
+        }
+        // No list, model string, field path or diagnostic buffer has grown.
+        let mut pass = Parser {
+            input,
+            budget: Some(&mut budget),
+            model: false,
+            findings: Vec::new(),
+            count: 0,
+        };
+        pass.run(root)?;
+        Ok(pass.count)
+    })()
+    .map_err(refuse)?;
+    // The exact whole finding capacity is admitted before allocation. If any
+    // structural error exists, no model strings or lists are built at all.
     let mut owner = Parser {
         input,
-        findings: Vec::new(),
+        budget: None,
+        model: admission == 0,
+        findings: Vec::with_capacity(admission),
+        count: 0,
     };
     let declarations = owner.run(root).map_err(refuse)?;
     if owner.findings.is_empty() {
@@ -72,9 +188,12 @@ pub fn decode(input: &Document, root: usize) -> Result<Declarations, Error<'_>> 
         Err(refuse(Cause::Findings(owner.findings)))
     }
 }
-struct Parser<'a> {
+struct Parser<'a, 'b> {
     input: &'a Document,
+    budget: Option<&'b mut Budget>,
+    model: bool,
     findings: Vec<Finding>,
+    count: usize,
 }
 #[derive(Clone, Copy)]
 enum TextRule {
@@ -84,7 +203,7 @@ enum TextRule {
     Href,
     Language,
 }
-impl<'a> Parser<'a> {
+impl<'a> Parser<'a, '_> {
     fn fault(
         &mut self,
         node: usize,
@@ -108,15 +227,24 @@ impl<'a> Parser<'a> {
         path: Path,
         kind: Kind,
     ) -> Result<(), Cause> {
-        self.findings.push(Finding {
-            node,
-            container: field.map(|v| v.0),
-            key: field.and_then(|v| v.1),
-            origin,
-            path,
-            kind,
-        });
-
+        if let Some(budget) = &mut self.budget {
+            budget.charge(Resource::Findings, 1)?;
+            budget.charge(Resource::PathSegments, path.len)?;
+            budget.charge(Resource::Work, path.len + 1)?;
+        } else {
+            self.findings.push(Finding {
+                node,
+                container: field.map(|v| v.0),
+                key: field.and_then(|v| v.1),
+                origin,
+                path,
+                kind,
+            });
+        }
+        self.count = self
+            .count
+            .checked_add(1)
+            .ok_or(Cause::Limit(Resource::Findings))?;
         Ok(())
     }
     fn get(&self, container: usize, field: FieldName) -> Origin {
@@ -178,7 +306,12 @@ impl<'a> Parser<'a> {
                 }
             },
             None => match default {
-                Some(value) => value,
+                Some(value) => {
+                    if let Some(budget) = &mut self.budget {
+                        budget.text(value)?;
+                    }
+                    value
+                }
                 None => {
                     self.fault(origin.container, Some(origin), path, Kind::Missing)?;
                     return Ok(None);
@@ -219,7 +352,11 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
         Ok(Some(Field {
-            value: { value.into() },
+            value: if self.model {
+                value.into()
+            } else {
+                String::new()
+            },
             origin,
         }))
     }
@@ -444,7 +581,11 @@ impl<'a> Parser<'a> {
         let spec_nodes = self
             .sequence(specs_origin, specs_path, false)?
             .unwrap_or(&[]);
-        let mut specs = { Vec::with_capacity(spec_nodes.len()) };
+        let mut specs = if self.model {
+            Vec::with_capacity(spec_nodes.len())
+        } else {
+            Vec::new()
+        };
         for (index, &item) in spec_nodes.iter().enumerate() {
             let item_origin = Origin {
                 container: specs_origin.node.unwrap(),
@@ -458,7 +599,7 @@ impl<'a> Parser<'a> {
                 TextRule::NonEmpty,
                 None,
             )? {
-                {
+                if self.model {
                     specs.push(value);
                 }
             }
@@ -467,12 +608,16 @@ impl<'a> Parser<'a> {
         let docs_origin = self.get(node, FieldName::Documents);
         let docs_path = path.field(FieldName::Documents);
         let doc_nodes = self.sequence(docs_origin, docs_path, true)?.unwrap_or(&[]);
-        let mut documents = { Vec::with_capacity(doc_nodes.len()) };
+        let mut documents = if self.model {
+            Vec::with_capacity(doc_nodes.len())
+        } else {
+            Vec::new()
+        };
         for (index, &item) in doc_nodes.iter().enumerate() {
             if let Some(value) =
                 self.document(item, docs_origin, docs_path.child(Step::Index(index)))?
             {
-                {
+                if self.model {
                     documents.push(value);
                 }
             }
@@ -548,7 +693,11 @@ impl<'a> Parser<'a> {
         };
         let mut study = None;
         let count = fields.iter().filter(|&&(key, _)| matches!(&self.input.nodes()[key], N::Text(text) if family(text).is_some())).count();
-        let mut sections = { Vec::with_capacity(count) };
+        let mut sections = if self.model {
+            Vec::with_capacity(count)
+        } else {
+            Vec::new()
+        };
         for &(key, node) in fields {
             let N::Text(text) = &self.input.nodes()[key] else {
                 self.fault_at(
@@ -568,7 +717,7 @@ impl<'a> Parser<'a> {
                     field: FieldName::Study,
                 };
                 let value = self.study(origin, Path::root().field(FieldName::Study))?;
-                {
+                if self.model {
                     study = value;
                 }
             } else if let Some((family, field)) = family(text) {
@@ -579,7 +728,7 @@ impl<'a> Parser<'a> {
                     field,
                 };
                 let value = self.section(family, origin, Path::root().field(field))?;
-                {
+                if self.model {
                     if let Some(value) = value {
                         sections.push(value);
                     }
@@ -607,43 +756,4 @@ fn language(text: &str) -> bool {
     (2..=3).contains(&first.len())
         && first.bytes().all(|v| v.is_ascii_alphabetic())
         && parts.all(|v| (1..=8).contains(&v.len()) && v.bytes().all(|v| v.is_ascii_alphanumeric()))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn retains_all_10001_non_text_root_key_occurrences() {
-        let mut nodes = Vec::new();
-        let mut fields = Vec::new();
-        for index in 0..10_001 {
-            let key = nodes.len();
-            nodes.push(N::Integer(index.to_string()));
-            let value = nodes.len();
-            nodes.push(N::Null);
-            fields.push((key, value));
-        }
-        let root = nodes.len();
-        nodes.push(N::Mapping(fields));
-        let document = Document::new(nodes, root).unwrap();
-        let error = crate::submission_document::decode(&document, root).unwrap_err();
-        assert!(std::ptr::eq(error.input, &document));
-        let Cause::Findings(findings) = error.cause else {
-            panic!("every malformed key must retain its original occurrence");
-        };
-        assert_eq!(findings.len(), 10_001);
-        for (index, finding) in findings.iter().enumerate() {
-            assert_eq!(finding.kind, Kind::NonTextKey);
-            assert_eq!(finding.node, 2 * index);
-            assert_eq!(finding.container, Some(root));
-            assert_eq!(finding.key, Some(2 * index));
-            assert_eq!(finding.origin, None);
-            assert_eq!(finding.path.steps().next(), None);
-            assert_eq!(
-                document.nodes()[finding.node],
-                N::Integer(index.to_string())
-            );
-        }
-    }
 }

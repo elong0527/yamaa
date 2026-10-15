@@ -2,6 +2,24 @@
 //! Pure byte admission; filesystem authority and physical tables are outer boundaries.
 use std::collections::BTreeSet;
 
+#[derive(Clone, Copy, Debug)]
+pub struct Limits {
+    pub bytes: usize,
+    pub fields: usize,
+    /// Includes the header; a zero-row source still has one record.
+    pub records: usize,
+}
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            bytes: 1024 * 1024 * 1024,
+            // The profile counts the header as fields and one record.
+            fields: 640_000_000 + crate::specification::DEFAULT_MAX_COLUMNS,
+            records: 10_000_000 + 1,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Field {
     Index(usize),
@@ -15,11 +33,10 @@ pub enum Error {
         record: usize,
         field: Field,
     },
-    #[error("csv source limit: resource={resource:?}, limit={limit:?}, actual={actual:?}")]
+    #[error("csv source limit: resource={resource:?}, limit={limit:?}")]
     Limit {
         resource: &'static str,
         limit: usize,
-        actual: Option<usize>,
     },
 }
 /// Closed semantic causes detected by the profile scanner.
@@ -90,13 +107,6 @@ fn failure(cause: ProfileCause, record: usize, field: usize) -> Error {
         field: Field::Index(field),
     }
 }
-fn limit_failure(error: crate::limits::LimitExceeded) -> Error {
-    Error::Limit {
-        resource: error.resource,
-        limit: error.limit,
-        actual: error.actual,
-    }
-}
 
 /// Every value is collected text or missing; no numeric, NA-token or locale inference.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -138,10 +148,26 @@ fn coordinates(prefix: &[u8]) -> (usize, usize) {
     (record, field)
 }
 
-/// Decode completely, then scan all syntax before header and row-width findings.
-/// File and table boundaries precede retaining the corresponding bytes or shape.
-pub fn parse(content: &[u8]) -> Result<CsvSource, Error> {
-    crate::limits::Limits::source_bytes(content.len()).map_err(limit_failure)?;
+/// Decode completely, then scan all syntax, then validate header and row widths.
+/// Limits are request policy failures, never repaired records or language findings.
+pub fn parse(content: &[u8], limits: Limits) -> Result<CsvSource, Error> {
+    parse_with_admission(content, limits, |_| Ok(()))
+}
+
+/// Admit modeled retained ownership before each scanner allocation. The callback
+/// charges field slots (32 bytes), record owners (24 bytes), and copied text.
+/// A refusal is request policy, independent of CSV semantic findings.
+pub fn parse_with_admission(
+    content: &[u8],
+    limits: Limits,
+    mut admit: impl FnMut(usize) -> Result<(), Error>,
+) -> Result<CsvSource, Error> {
+    if content.len() > limits.bytes {
+        return Err(Error::Limit {
+            resource: "bytes",
+            limit: limits.bytes,
+        });
+    }
     let text = std::str::from_utf8(content).map_err(|error| {
         let (record, field) = coordinates(&content[..error.valid_up_to()]);
         failure(ProfileCause::InvalidText, record, field)
@@ -152,18 +178,21 @@ pub fn parse(content: &[u8]) -> Result<CsvSource, Error> {
     if text.is_empty() {
         return Err(failure(ProfileCause::HeaderAbsent, 1, 1));
     }
-    let Scanned {
-        records,
-        width_failure,
-    } = scan(text)?;
+    let records = scan(text, limits, &mut admit)?;
     let mut records = records.into_iter();
     let header = records.next().expect("nonempty text produces a record");
+    admit(header.len().checked_mul(32).ok_or(Error::Limit {
+        resource: "storage_bytes",
+        limit: usize::MAX,
+    })?)?;
     let mut names = Vec::with_capacity(header.len());
     let mut seen = BTreeSet::new();
     for (index, name) in header.into_iter().enumerate() {
         let Some(name) = name else {
             return Err(failure(ProfileCause::FieldNameEmpty, 1, index + 1));
         };
+        admit(32)?;
+        admit(name.len())?;
         if !seen.insert(name.clone()) {
             return Err(Error::Profile {
                 cause: ProfileCause::FieldNameDuplicate,
@@ -172,9 +201,6 @@ pub fn parse(content: &[u8]) -> Result<CsvSource, Error> {
             });
         }
         names.push(name);
-    }
-    if let Some(error) = width_failure {
-        return Err(error);
     }
     let mut rows = Vec::new();
     for (index, record) in records.enumerate() {
@@ -187,54 +213,41 @@ pub fn parse(content: &[u8]) -> Result<CsvSource, Error> {
         }
         rows.push(record);
     }
-    crate::limits::Limits::table(rows.len(), names.len()).map_err(limit_failure)?;
     Ok(CsvSource {
         names,
         records: rows,
     })
 }
 
-struct Scanned {
-    records: Vec<Vec<Option<String>>>,
-    width_failure: Option<Error>,
-}
-/// The previous physical record count includes the header; adding a data record
-/// gives exactly that many data rows. The header itself has zero data rows.
-fn admit_record(previous_records: usize, columns: usize) -> Result<(), Error> {
-    crate::limits::Limits::table(previous_records, columns).map_err(limit_failure)
-}
-impl Scanned {
-    fn push(&mut self, record: Vec<Option<String>>, number: usize) -> Result<(), Error> {
-        let width = self.records.first().map_or(record.len(), Vec::len);
-        admit_record(number - 1, width)?;
-        if number > 1 && record.len() != width && self.width_failure.is_none() {
-            self.width_failure = Some(failure(
-                ProfileCause::RecordWidth,
-                number,
-                record.len().min(width) + 1,
-            ));
-        }
-        // A malformed record cannot form a table. Keep its first finding and
-        // finish lexical scanning, while retaining only the valid prefix.
-        if self.width_failure.is_none() {
-            self.records.push(record);
-        }
-        Ok(())
-    }
-}
-
-fn scan(text: &str) -> Result<Scanned, Error> {
+fn scan(
+    text: &str,
+    limits: Limits,
+    admit: &mut impl FnMut(usize) -> Result<(), Error>,
+) -> Result<Vec<Vec<Option<String>>>, Error> {
     let bytes = text.as_bytes();
-    let mut records = Scanned {
-        records: Vec::new(),
-        width_failure: None,
-    };
+    let mut records = Vec::new();
     let mut record = Vec::new();
-    let mut index = 0;
-    let mut number = 1;
+    let (mut index, mut fields) = (0, 0);
     loop {
+        if fields >= limits.fields {
+            return Err(Error::Limit {
+                resource: "fields",
+                limit: limits.fields,
+            });
+        }
+        if records.len() >= limits.records {
+            return Err(Error::Limit {
+                resource: "records",
+                limit: limits.records,
+            });
+        }
+        if record.is_empty() {
+            admit(24)?;
+        }
+        admit(32)?;
+        fields += 1;
+        let number = records.len() + 1;
         let column = record.len() + 1;
-        crate::limits::Limits::columns(column).map_err(limit_failure)?;
         let field = if bytes.get(index) == Some(&b'"') {
             index += 1;
             let mut start = index;
@@ -243,8 +256,10 @@ fn scan(text: &str) -> Result<Scanned, Error> {
                 match bytes.get(index) {
                     None => return Err(failure(ProfileCause::QuoteUnterminated, number, column)),
                     Some(b'"') => {
+                        admit(index - start)?;
                         value.push_str(&text[start..index]);
                         if bytes.get(index + 1) == Some(&b'"') {
+                            admit(1)?;
                             value.push('"');
                             index += 2;
                             start = index;
@@ -275,13 +290,13 @@ fn scan(text: &str) -> Result<Scanned, Error> {
                     _ => index += 1,
                 }
             }
-
+            admit(index - start)?;
             text[start..index].to_owned()
         };
         record.push(if field.is_empty() { None } else { Some(field) });
         match bytes.get(index) {
             None => {
-                records.push(record, number)?;
+                records.push(record);
                 break;
             }
             Some(b',') => {
@@ -297,9 +312,8 @@ fn scan(text: &str) -> Result<Scanned, Error> {
             Some(b'\n') => index += 1,
             _ => unreachable!("scanned field stops at a delimiter"),
         }
-        records.push(record, number)?;
+        records.push(record);
         record = Vec::new();
-        number += 1;
         if index >= bytes.len() {
             break;
         }
@@ -308,73 +322,57 @@ fn scan(text: &str) -> Result<Scanned, Error> {
 }
 
 #[cfg(test)]
-mod boundary_tests {
-    use super::*;
-    use crate::limits::Limits;
-
-    #[test]
-    fn record_geometry_excludes_the_header_without_allocating_rows_or_cells() {
-        assert_eq!(admit_record(0, Limits::COLUMNS), Ok(()));
-        assert_eq!(admit_record(Limits::TABLE_ROWS, 64), Ok(()));
-        assert_eq!(
-            admit_record(Limits::TABLE_ROWS + 1, 1),
-            Err(Error::Limit {
-                resource: "table_rows",
-                limit: Limits::TABLE_ROWS,
-                actual: Some(Limits::TABLE_ROWS + 1),
-            })
-        );
-        assert_eq!(admit_record(3_575_418, 179), Ok(()));
-        assert_eq!(
-            admit_record(3_575_419, 179),
-            Err(Error::Limit {
-                resource: "table_cells",
-                limit: Limits::TABLE_CELLS,
-                actual: Some(Limits::TABLE_CELLS + 1),
-            })
-        );
-    }
-}
-
-#[cfg(test)]
-mod field_boundary_tests {
+mod admission_tests {
     use super::*;
 
     #[test]
-    fn field_admission_covers_empty_leading_and_post_line_ending_fields() {
-        for prefix in ["", "A\n", "A\r\n", "\n", "\r\n"] {
-            let source = format!("{prefix}{}", ",".repeat(crate::limits::Limits::COLUMNS));
-            assert_eq!(
-                scan(&source).err(),
-                Some(Error::Limit {
-                    resource: "columns",
-                    limit: crate::limits::Limits::COLUMNS,
-                    actual: Some(crate::limits::Limits::COLUMNS + 1),
-                }),
-                "{prefix:?}"
-            );
+    fn owned_scanner_charge_stops_before_the_exact_next_byte() {
+        for limit in [178, 179] {
+            let mut used = 0usize;
+            let result = parse_with_admission(b"A\nx\n", Limits::default(), |amount| {
+                let required = used + amount;
+                if required > limit {
+                    return Err(Error::Limit {
+                        resource: "storage_bytes",
+                        limit,
+                    });
+                }
+                used = required;
+                Ok(())
+            });
+            assert_eq!(used, limit);
+            if limit == 179 {
+                assert_eq!(
+                    result.unwrap(),
+                    parse(b"A\nx\n", Limits::default()).unwrap()
+                );
+            } else {
+                assert_eq!(
+                    result,
+                    Err(Error::Limit {
+                        resource: "storage_bytes",
+                        limit
+                    })
+                );
+            }
         }
     }
 
     #[test]
-    fn exact_column_boundary_is_accepted_and_next_field_stops_before_decoding() {
-        let header = (0..crate::limits::Limits::COLUMNS)
-            .map(|index| format!("C{index}"))
-            .collect::<Vec<_>>()
-            .join(",");
-        let admitted = parse(header.as_bytes()).unwrap();
-        assert_eq!(admitted.names.len(), crate::limits::Limits::COLUMNS);
-        assert!(admitted.records.is_empty());
-        // The next field is not scanned or allocated, even if its quoted
-        // spelling would otherwise fail only at the end of a long payload.
-        let oversized = format!("{header},\"");
-        assert_eq!(
-            parse(oversized.as_bytes()),
-            Err(Error::Limit {
-                resource: "columns",
-                limit: crate::limits::Limits::COLUMNS,
-                actual: Some(crate::limits::Limits::COLUMNS + 1),
+    fn semantic_failure_keeps_the_actual_admitted_prefix() {
+        let mut used = 0;
+        let result = parse_with_admission(b"A\n\"x", Limits::default(), |amount| {
+            used += amount;
+            Ok(())
+        });
+        assert_eq!(used, 113);
+        assert!(matches!(
+            result,
+            Err(Error::Profile {
+                cause: ProfileCause::QuoteUnterminated,
+                record: 2,
+                ..
             })
-        );
+        ));
     }
 }
