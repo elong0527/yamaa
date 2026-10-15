@@ -206,7 +206,7 @@ async def upload_completed_job(job_dir: Path) -> bool:
         receipt.update(status="failed", error=str(error))
         print(f"Harbor Hub upload failed for {job_dir}: {error}", file=sys.stderr)
         print(
-            f"Retry with: python {Path(__file__)} --upload-only {job_dir}",
+            f"Retry with: python -m evaluations.harbor.run --upload-only {job_dir}",
             file=sys.stderr,
         )
     receipt["finished_at"] = datetime.now(UTC).isoformat()
