@@ -4,7 +4,7 @@ use crate::{
     csv_source::{self, TextTableError},
     specification_run::Error,
 };
-use serde_json::{json, Value};
+use yamaa_core::json::{json, Value};
 use yamaa_core::specification::{
     BindError, BindFinding, PreflightFinding, PrepareError, SourceDeclaration,
 };
@@ -54,7 +54,7 @@ pub(crate) fn portable_definition(
     paths: Vec<String>,
     context: yamaa_core::diagnostic::Context,
 ) -> Value {
-    let context: serde_json::Map<_, _> = context.into_iter().collect();
+    let context: yamaa_core::json::Map<_, _> = context.into_iter().collect();
     diagnostic(
         definition.phase,
         definition.condition,

@@ -1,10 +1,10 @@
 //! Governed sidecar declarations and static findings, without file authority.
 use super::{output_profile, text, PrepareError};
+use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode, Diagnostic},
     schema::{Document, DocumentNode},
 };
-use serde_json::Value as JsonValue;
 use std::vec;
 
 #[derive(Clone, Debug, Default)]

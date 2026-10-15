@@ -1,12 +1,12 @@
 //! Typed civil arithmetic and duration conversion share the existing temporal binder.
 use super::temporal::{ordinal, ElapsedUnit, Temporal, TemporalKind};
+use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     table::ValueRef,
     temporal::{Date, DateTime, DateTimePrecision},
     value::{ColumnType, Value},
 };
-use serde_json::Value as JsonValue;
 use std::vec;
 
 #[derive(Debug, PartialEq)]

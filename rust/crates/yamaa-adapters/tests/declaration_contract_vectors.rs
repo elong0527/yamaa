@@ -6,9 +6,9 @@ mod declaration {
         //! Direct native checks of unchanged authored grammar, regex and rounding truth.
         use a::Reducer;
         use n::NumericFunction;
-        use serde_json::{json, Value as Json};
         use std::collections::BTreeSet;
         use yamaa_adapters::yaml_decode::decode_yaml;
+        use yamaa_core::json::{json, Value as Json};
         use yamaa_core::schema::{Document, DocumentNode};
         use yamaa_core::{
             aggregate_parser as a,
@@ -907,7 +907,6 @@ mod declaration {
         }
     }
     mod inheritance_capture {
-        use serde_json::{json, Value};
         use std::{collections::BTreeMap, rc::Rc};
         use yamaa_adapters::{
             shipped_schema, specification_diagnostics,
@@ -915,6 +914,7 @@ mod declaration {
                 CapturedSchema, InheritanceError, InheritancePort, Source, SourceFailure,
             },
         };
+        use yamaa_core::json::{json, Value};
         use yamaa_core::{inheritance as graph, inheritance_preparation as lifecycle};
         const VALID:&str="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n";
 
@@ -1250,7 +1250,7 @@ mod declaration {
                         };
                         (key.clone(), tree(document, value))
                     })
-                    .collect::<serde_json::Map<_, _>>()
+                    .collect::<yamaa_core::json::Map<_, _>>()
                     .into(),
             }
         }
@@ -1973,7 +1973,7 @@ mod declaration {
     }
     mod odm_declaration_fixture {
         use crate::support::odm_declaration as fixture;
-        use serde_json::{json, Value};
+        use yamaa_core::json::{json, Value};
 
         fn spec(derivation: Value) -> Value {
             json!({"schema_version":"1.0", "domain":"RESULT", "keys":["USUBJID"],
@@ -2029,7 +2029,7 @@ mod declaration {
             source["input"]["DM"] = json!("never-read-other.csv");
             source["rows"] =
                 json!([{"id":"other_source", "dataset":"DM", "derivations":{"AGE":{"literal":0}}}]);
-            // serde_json's authored fixture text orders input DM before ODM.
+            // yamaa_core::json's authored fixture text orders input DM before ODM.
             let observed = observe(source.clone(), &[vec!["USUBJID".into()], header()]);
             assert_eq!(observed["status"], "prepared");
             assert_eq!(
@@ -2131,7 +2131,6 @@ mod declaration {
         //! Shipped-schema successors for specification/test_intermediate_verification.py
         //! retired in #2110. Original valid and invalid verification payloads are kept;
         //! private Python model instances are replaced by the native check boundary.
-        use serde_json::{json, Value};
         use std::{
             fs,
             path::PathBuf,
@@ -2139,6 +2138,7 @@ mod declaration {
         };
         use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
+        use yamaa_core::json::{json, Value};
 
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         struct Study(PathBuf);
@@ -2251,7 +2251,6 @@ mod declaration {
     }
     mod preparation_dispatch {
         //! Existing YAML representation and independent complete outcomes around engine delegation.
-        use serde_json::{json, Value};
         use std::sync::Arc;
         use yamaa_adapters::{
             specification_diagnostics::capture_failure,
@@ -2261,6 +2260,7 @@ mod declaration {
             yaml_decode::{decode_yaml, DecodeFailure},
         };
         use yamaa_core::inheritance::{Source as Identity, SourceError};
+        use yamaa_core::json::{json, Value};
         use yamaa_core::schema::{DocumentNode as N, NormalizationError, SchemaSource};
 
         const SCHEMA: &str = "version: '1.0'\nroot_class:\n  - schema_version: {type: str}\n  - domain: {type: [str, int], default: DEFAULT}\n  - input: {type: dict}\n  - keys: {type: 'list[str]'}\n  - output: {type: dict}\n  - columns: {type: 'list[column_class]'}\n  - windows: {type: 'dict[str, window_spec]'}\ncolumn_class:\n  - name: {type: str}\n  - type: {type: str}\n  - derivation: {type: handled_expression_class}\nhandled_expression_class:\n  - value: {type: expression}\nexpression: {registry: expressions}\nexpressions:\n  row_number:\n    - window: {type: window_selection}\nwindow_selection: {type: [str, window_spec]}\nwindow_spec:\n  - group_by: {type: 'list[str]'}\n  - order_by: {type: 'list[order_term]'}\norder_term:\n  - variable: {type: str}\n";

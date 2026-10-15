@@ -23,7 +23,7 @@ impl Finding {
         Self {
             code,
             path: path.into(),
-            context: [("detail".into(), serde_json::Value::String(detail.into()))].into(),
+            context: [("detail".into(), crate::json::Value::String(detail.into()))].into(),
         }
     }
 }
@@ -816,7 +816,7 @@ fn compose_values(
                 ] {
                     finding
                         .context
-                        .insert(key.into(), serde_json::Value::String(value.into()));
+                        .insert(key.into(), crate::json::Value::String(value.into()));
                 }
                 if finding.code == ConditionCode::SubmissionValueOriginRefuted {
                     let origin = effective
@@ -839,7 +839,7 @@ fn compose_values(
                     ] {
                         finding
                             .context
-                            .insert(key.into(), serde_json::Value::String(value.into()));
+                            .insert(key.into(), crate::json::Value::String(value.into()));
                     }
                 }
             }

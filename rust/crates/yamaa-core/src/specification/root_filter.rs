@@ -1,11 +1,11 @@
 //! A root predicate reads only the base driver, before key construction (REQ-1170).
 use super::*;
+use crate::json::Value as JsonValue;
 use crate::{
     bound_expression::BoundPredicate,
     diagnostic::{ConditionCode, Diagnostic},
     predicate_compiler,
 };
-use serde_json::Value as JsonValue;
 
 #[derive(Debug)]
 pub(super) struct RootFilter {

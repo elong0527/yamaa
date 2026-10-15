@@ -1,7 +1,7 @@
 //! Independent vocabulary/context truth from actual shared parser failures.
 #![allow(unused_imports)]
-pub(crate) use serde_json::Value as V;
 pub(crate) use std::collections::BTreeSet;
+pub(crate) use yamaa_core::json::Value as V;
 pub(crate) use yamaa_core::{
     aggregate_parser::{parse_aggregate, ParseError as A},
     diagnostic::{ConditionCode, Context, Diagnostic},
@@ -112,7 +112,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
 
 pub(crate) fn predicate_reached(
 ) -> std::collections::BTreeSet<yamaa_core::diagnostic::ConditionCode> {
-    pub(crate) use serde_json::Value as V;
+    pub(crate) use yamaa_core::json::Value as V;
     pub(crate) use yamaa_core::{
         diagnostic::ConditionCode as C,
         predicate_parser::{parse_predicate, ParseError},

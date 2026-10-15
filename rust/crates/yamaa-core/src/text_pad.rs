@@ -149,7 +149,7 @@ impl DeclarationError {
             spec_paths: std::vec![std::format!("{path}.width")],
             context: [(
                 "expected".into(),
-                serde_json::Value::String("a positive integer width".into()),
+                crate::json::Value::String("a positive integer width".into()),
             )]
             .into_iter()
             .collect(),

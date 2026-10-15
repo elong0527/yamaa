@@ -489,7 +489,7 @@ conditions! {
 }
 
 /// JSON context retains arbitrary-width integer numbers and ordered sequences.
-pub type Context = BTreeMap<String, serde_json::Value>;
+pub type Context = BTreeMap<String, crate::json::Value>;
 
 /// Owned semantic data from the failure site. Missing optional geometry means
 /// unavailable, not zero; ordered paths/routes preserve the original evaluation.

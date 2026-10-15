@@ -8,9 +8,9 @@ use crate::{
     project_report::{self, Classified},
     specification_report::Error,
 };
-use serde_json::Value;
 use std::collections::BTreeMap;
 use yamaa_core::function_signature::ProjectFunctionIdentity;
+use yamaa_core::json::Value;
 use yamaa_core::{
     dataset::RowIdentity,
     function_invocation::{FailureKind, InvocationFailure},
@@ -89,10 +89,13 @@ impl<'a, 'f, E> Facts<'a, 'f, E> {
                     .ok_or(Error::InvalidObservation)?;
                 context.insert(
                     "source".into(),
-                    serde_json::json!(view.document().source().identity),
+                    yamaa_core::json::json!(view.document().source().identity),
                 );
-                context.insert("entry".into(), serde_json::json!(entry));
-                context.insert("declaring_sources".into(), serde_json::json!([declaring]));
+                context.insert("entry".into(), yamaa_core::json::json!(entry));
+                context.insert(
+                    "declaring_sources".into(),
+                    yamaa_core::json::json!([declaring]),
+                );
                 Ok(Some(value))
             }
             Err(invocation::Error::Opaque(_)) => Ok(None),

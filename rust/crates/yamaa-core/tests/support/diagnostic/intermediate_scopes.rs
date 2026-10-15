@@ -1,7 +1,7 @@
 //! Owned causes reached by the compiler and eager donor uniqueness descriptor.
 use crate::support::document::Tree;
-use serde_json::Value as V;
 use std::collections::BTreeSet;
+use yamaa_core::json::Value as V;
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
     schema::{Document, SpecificationDocument},

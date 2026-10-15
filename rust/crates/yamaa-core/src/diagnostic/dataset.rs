@@ -1,10 +1,10 @@
 //! Classified dataset failures, borrowed without replaying table or host effects.
 use super::{ConditionCode as C, Context, Diagnostic, ProjectionError};
+use crate::json::Value as JsonValue;
 use crate::{
     reduction::NumericReducer,
     value::{Value, ValueType},
 };
-use serde_json::Value as JsonValue;
 
 /// Facts retained by a failed dataset attempt. Identity, matched keys and
 /// partition observations remain attached to that attempt outside this finding.

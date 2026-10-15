@@ -2024,8 +2024,8 @@ mod project {
     mod specification_project_functions {
         use crate::support::id_source_schema as source;
         use crate::support::project_call_compiler as support;
-        use serde_json::Value as JsonValue;
         use support::{call, function, specification, Tree};
+        use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             bound_expression::Read,
             dataset::{Expression, FunctionInput},

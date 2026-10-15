@@ -1,12 +1,12 @@
 //! Source eligibility is compiled in core and bound after actual source ingestion.
 use super::*;
+use crate::json::Value as JsonValue;
 use crate::{
     bound_expression::BoundPredicate,
     diagnostic::{ConditionCode as C, Diagnostic},
     predicate_compiler,
     value::Value,
 };
-use serde_json::Value as JsonValue;
 mod row_sources;
 pub(super) use row_sources::bind as bind_row;
 

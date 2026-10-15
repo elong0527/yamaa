@@ -1,10 +1,10 @@
 //! Portable producer causes retain authored geometry without study data.
 use super::{Cause, Contract, Error};
+use crate::json::Value as V;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     value::ColumnType,
 };
-use serde_json::Value as V;
 use std::vec;
 
 pub(crate) fn text(value: &str) -> V {

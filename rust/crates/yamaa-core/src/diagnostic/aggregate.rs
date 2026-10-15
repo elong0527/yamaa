@@ -1,11 +1,11 @@
 //! Aggregate causes retain the authored expression and enclosing row grain.
 use super::{ConditionCode as C, Diagnostic, ProjectionError};
+use crate::json::Value as V;
 use crate::{
     dataset::AggregatePhase,
     key_relation::ComparableType,
     value::{ColumnType, Value, ValueType},
 };
-use serde_json::Value as V;
 
 #[derive(Clone, Copy, Debug)]
 pub enum AggregateFinding<'a> {

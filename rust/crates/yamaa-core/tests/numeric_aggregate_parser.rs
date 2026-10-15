@@ -1576,11 +1576,11 @@ mod numeric {
                 assert_eq!(finding.spec_paths, ["filter"]);
                 assert_eq!(
                     finding.context["predicate"],
-                    serde_json::Value::String(expression.into())
+                    yamaa_core::json::Value::String(expression.into())
                 );
                 assert_eq!(
                     finding.context["position"],
-                    serde_json::Value::from(position.character)
+                    yamaa_core::json::Value::from(position.character)
                 );
             }
             assert!(matches!(

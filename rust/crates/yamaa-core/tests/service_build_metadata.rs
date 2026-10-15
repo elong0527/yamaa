@@ -1002,7 +1002,7 @@ mod service {
         #[test]
         fn resource_observations_keep_original_normative_and_implementation_wire_owners() {
             use define::ResourceObservation as R;
-            use serde_json::Value as C;
+            use yamaa_core::json::Value as C;
 
             for (path, observation, code, requirement) in [
                 (
@@ -1064,8 +1064,8 @@ mod service {
         }
         #[test]
         fn changed_resource_uses_the_authored_define_field_and_ingest_cause() {
-            use serde_json::Value as C;
             use yamaa_core::diagnostic::ConditionCode;
+            use yamaa_core::json::Value as C;
             let finding = define::resource_diagnostic(
                 "datasets.DM.artifact",
                 "../declared.csv",
@@ -1087,7 +1087,7 @@ mod service {
         #[test]
         fn publication_stage_projection_preserves_full_width_artifact_index_and_cause_text() {
             use define::PublicationFailure as P;
-            use serde_json::Value as C;
+            use yamaa_core::json::Value as C;
 
             for (stage, code, phase, requirement) in [
                 (
@@ -1148,7 +1148,7 @@ mod service {
                 assert_eq!(finding.spec_paths, ["sdtm.specs[0]"]);
                 assert_eq!(
                     finding.context,
-                    serde_json::from_value(serde_json::json!({
+                    yamaa_core::json::from_value(yamaa_core::json::json!({
                         "path": "declared.yaml", "stage": "define", "code": "resource_limit",
                         "resource": resource, "limit": limit, "actual": limit + 1,
                     }))

@@ -1,10 +1,10 @@
 //! Typed ODM causes preserve fixed-schema metadata and complete row scope.
 use super::{ConditionCode as C, Diagnostic};
+use crate::json::Value as V;
 use crate::{
     dataset::AggregatePhase,
     value::{ColumnType, Value},
 };
-use serde_json::Value as V;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OdmDeclared {

@@ -5,8 +5,8 @@ mod project {
     mod specification_project_rows {
         use crate::support::id_source_schema as source;
         use crate::support::project_call_compiler as support;
-        use serde_json::Value as JsonValue;
         use support::{call, function, specification_with_rows, Tree};
+        use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             bound_expression::Read,
             dataset::{Expression, FunctionInput},
@@ -224,7 +224,7 @@ mod project {
 
         #[test]
         fn transitive_nonlocal_defaults_report_one_issue_per_column_with_all_overriding_rows() {
-            use serde_json::Value as JsonValue;
+            use yamaa_core::json::Value as JsonValue;
             let spec = specification_with_rows(
                 vec![
                     (

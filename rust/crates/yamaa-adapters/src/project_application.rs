@@ -275,7 +275,7 @@ fn preparation_boundary(
         let Ok(message) = crate::specification_diagnostics::inheritance_failure_ref(error) else {
             return refused("prepare");
         };
-        let Ok(value) = serde_json::from_str::<serde_json::Value>(&message) else {
+        let Ok(value) = serde_json::from_str::<yamaa_core::json::Value>(&message) else {
             return refused("prepare");
         };
         return if value["outcome"]["status"] == "resource_limit" {
@@ -321,8 +321,8 @@ mod resource_tests {
         assert_eq!(project, original);
         assert_eq!(project.len(), 1);
         assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&project[0].context).unwrap(),
-            serde_json::json!({"stage":"prepare", "code":"inventory"})
+            serde_json::from_str::<yamaa_core::json::Value>(&project[0].context).unwrap(),
+            yamaa_core::json::json!({"stage":"prepare", "code":"inventory"})
         );
     }
 
@@ -352,8 +352,8 @@ mod resource_tests {
         );
         assert_eq!(issue.requirement, None);
         assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&issue.context).unwrap(),
-            serde_json::json!({
+            serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap(),
+            yamaa_core::json::json!({
                 "code":"resource_limit", "stage":"prepare", "phase":"validation", "resource":"semantic_depth", "limit":128,
             })
         );

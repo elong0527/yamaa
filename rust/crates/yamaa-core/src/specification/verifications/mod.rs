@@ -4,13 +4,13 @@
 use super::*;
 mod lookups;
 use crate::dataset::{Check, CountBoundError, RowCount, RowCountBound, Verification};
+use crate::json::Value as JsonValue;
 use crate::{
     bound_expression::BoundPredicate,
     diagnostic::{ConditionCode, Diagnostic},
     predicate_compiler,
     value::Value,
 };
-use serde_json::Value as JsonValue;
 
 #[derive(Clone, Debug)]
 enum DeclarationFinding {

@@ -401,10 +401,10 @@ pub(super) fn prepare(
             );
             value.context.insert(
                 "relations".into(),
-                serde_json::Value::Array(
+                crate::json::Value::Array(
                     derive_relations
                         .iter()
-                        .map(|relation| serde_json::Value::String(relation.clone()))
+                        .map(|relation| crate::json::Value::String(relation.clone()))
                         .collect(),
                 ),
             );

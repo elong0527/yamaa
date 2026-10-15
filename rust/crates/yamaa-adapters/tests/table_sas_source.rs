@@ -318,13 +318,13 @@ mod table {
     }
     mod source_diagnostics {
         //! Borrowed codec projections compare independently captured complete diagnostics.
-        use serde_json::{json, Value};
         use yamaa_adapters::{
             csv_source::{self, TextTableError},
             parquet_source as parquet, source_diagnostics, specification_diagnostics as projection,
             specification_run::Error,
             typed_csv,
         };
+        use yamaa_core::json::{json, Value};
         use yamaa_core::{
             diagnostic::{ParquetFinding, SourceFinding},
             specification::{SourceDeclaration, SourceProfile},

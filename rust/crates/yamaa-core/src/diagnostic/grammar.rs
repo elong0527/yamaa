@@ -1,10 +1,10 @@
 //! Numeric, aggregate and predicate grammar findings retain original spelling in core.
 use super::{ConditionCode as C, Context, Diagnostic};
+use crate::json::Value as V;
 use crate::{
     aggregate_parser::GrammarFailure as A, numeric_parser::GrammarFailure as N,
     predicate_parser::GrammarFailure as P,
 };
-use serde_json::Value as V;
 
 fn text(value: &str) -> V {
     V::String(value.into())

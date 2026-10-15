@@ -1691,9 +1691,9 @@ mod execution {
     }
     mod dataset_aggregate {
         //! Independent relation, complete-context and opaque-read ordering controls.
-        use serde_json::Value as V;
         use std::cell::RefCell;
         use yamaa_core::dataset::*;
+        use yamaa_core::json::Value as V;
         use yamaa_core::{
             aggregate_compiler::compile_aggregate,
             diagnostic::ConditionCode as C,
@@ -2383,12 +2383,12 @@ mod execution {
     mod dataset_diagnostic {
         mod borrowed {
             use crate::support::table_schema as schema;
-            use serde_json::Value as V;
             use std::{cell::RefCell, convert::Infallible};
             use yamaa_core::dataset::{
                 Assignment, DatasetPlan, ExecutionError, Expression, RowIdentity, RowMode,
                 RowTemplate,
             };
+            use yamaa_core::json::Value as V;
             use yamaa_core::{
                 reduction::NumericReducer,
                 table::{CellError, TableAccess, TableSchema, ValueRef},

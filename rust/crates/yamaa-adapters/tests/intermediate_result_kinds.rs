@@ -195,8 +195,8 @@ fn known_date_choices_reject_incompatible_filter_types_in_check_and_build() {
         assert_eq!(checked[0].requirement.as_deref(), Some("REQ-0190"));
         assert_eq!(checked[0].spec_paths, ["intermediates[0].filter"]);
         assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&checked[0].context).unwrap(),
-            serde_json::json!({"left_type":"date","right_type":"str"})
+            serde_json::from_str::<yamaa_core::json::Value>(&checked[0].context).unwrap(),
+            yamaa_core::json::json!({"left_type":"date","right_type":"str"})
         );
         study.input();
         let result = file_application::domain(request(), identity(&path)).unwrap();
@@ -277,8 +277,8 @@ fn unknown_choices_report_the_actual_integer_when_date_sources_are_missing() {
         assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0190"));
         assert_eq!(issues[0].spec_paths, ["intermediates[0].filter"]);
         assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&issues[0].context).unwrap(),
-            serde_json::json!({"left_type":"int","right_type":"date"})
+            serde_json::from_str::<yamaa_core::json::Value>(&issues[0].context).unwrap(),
+            yamaa_core::json::json!({"left_type":"int","right_type":"date"})
         );
         assert!(result.output().is_none());
         assert!(!study.0.join("out.csv").exists());
@@ -329,8 +329,8 @@ fn assert_integer_day_count(expression: &str, integer_row: &str, float_row: &str
         ["intermediates[0].derivations.EXENDT.date_shift.days"]
     );
     assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&issues[0].context).unwrap(),
-        serde_json::json!({"source":"SELECTED","expected":"int","actual":"float"})
+        serde_json::from_str::<yamaa_core::json::Value>(&issues[0].context).unwrap(),
+        yamaa_core::json::json!({"source":"SELECTED","expected":"int","actual":"float"})
     );
     assert!(result.output().is_none());
 }
@@ -484,8 +484,8 @@ fn unknown_numeric_operands_do_not_invent_an_integer_result_kind() {
     assert_eq!(issues[0].condition, "incompatible_input_type");
     assert_eq!(issues[0].spec_paths, ["intermediates[0].filter"]);
     assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&issues[0].context).unwrap(),
-        serde_json::json!({"left_type":"float","right_type":"str"})
+        serde_json::from_str::<yamaa_core::json::Value>(&issues[0].context).unwrap(),
+        yamaa_core::json::json!({"left_type":"float","right_type":"str"})
     );
     assert!(result.output().is_none());
 }
@@ -576,8 +576,8 @@ fn assert_nested_lookup_type_error(
     assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0323"));
     assert_eq!(issues[0].spec_paths, [expected_path]);
     assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&issues[0].context).unwrap(),
-        serde_json::json!({
+        serde_json::from_str::<yamaa_core::json::Value>(&issues[0].context).unwrap(),
+        yamaa_core::json::json!({
             "intermediate":"DATES", "source":expected_source, "expected":"int", "actual":"date"
         })
     );

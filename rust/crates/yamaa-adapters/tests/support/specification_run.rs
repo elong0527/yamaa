@@ -17,13 +17,13 @@ pub(crate) use yamaa_core::{
 pub(crate) use yamaa_core::dataset::{self, DatasetPlan};
 
 /// Rows of a converted readable JSON fixture (formerly hex-encoded TSV).
-pub(crate) fn fixture_rows(truth: &str) -> Vec<serde_json::Value> {
+pub(crate) fn fixture_rows(truth: &str) -> Vec<yamaa_core::json::Value> {
     serde_json::from_str(truth).unwrap()
 }
 
 /// Exact bytes of a fixture text cell; the two non-UTF-8 cells in the whole
 /// fixture set are tagged as {"hex": "..."} objects instead of strings.
-pub(crate) fn fixture_bytes(value: &serde_json::Value) -> Vec<u8> {
+pub(crate) fn fixture_bytes(value: &yamaa_core::json::Value) -> Vec<u8> {
     if let Some(text) = value.as_str() {
         return text.as_bytes().to_vec();
     }
@@ -37,7 +37,7 @@ pub(crate) fn fixture_bytes(value: &serde_json::Value) -> Vec<u8> {
 pub(crate) fn spec_findings(
     error: &yamaa_adapters::specification_run::Error,
     source: Option<&yamaa_core::specification::SourceDeclaration>,
-) -> Option<Vec<serde_json::Value>> {
+) -> Option<Vec<yamaa_core::json::Value>> {
     yamaa_adapters::specification_diagnostics::findings(error, source)
         .expect("valid authored source finding context")
 }
@@ -104,11 +104,11 @@ pub(crate) fn independent_failed_reports(
     expected_counts: (usize, usize),
     content: &[u8],
 ) {
-    pub(crate) use serde_json::Value;
     pub(crate) use yamaa_adapters::{
         specification_report::{self, ArtifactPort, Identity},
         specification_run::{PreparedRun, SourcePort},
     };
+    pub(crate) use yamaa_core::json::Value;
     pub(crate) use yamaa_core::specification::SourceDeclaration;
     pub(crate) struct Port(usize, Arc<[u8]>);
     impl SourcePort for Port {
@@ -173,7 +173,7 @@ pub(crate) fn independent_failed_reports(
                         fields[1].to_owned(),
                         serde_json::from_str(fields[2]).unwrap(),
                         (fields.len() == 4)
-                            .then(|| fixture_bytes(&serde_json::json!({"hex": fields[3]}))),
+                            .then(|| fixture_bytes(&yamaa_core::json::json!({"hex": fields[3]}))),
                     )
                 })
                 .collect()
@@ -289,9 +289,9 @@ pub(crate) fn independent_scalar_reports(fixture: &str, prefix: &str, expected_c
         .unwrap();
         drop(run);
         drop(attempt);
-        let expected: serde_json::Value = row["expected"].clone();
+        let expected: yamaa_core::json::Value = row["expected"].clone();
         let mut unsaved = expected.clone();
-        unsaved["artifacts"] = serde_json::json!([]);
+        unsaved["artifacts"] = yamaa_core::json::json!([]);
         assert_eq!(
             result.observations(),
             unsaved,
@@ -408,7 +408,7 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
                     .map(|response| &response.outcome)
             )
         });
-        let expected: serde_json::Value = row["expected"].clone();
+        let expected: yamaa_core::json::Value = row["expected"].clone();
         // Require the captured row-filter citations without changing any finding.
         if prefix == "row-filter"
             && matches!(
@@ -428,8 +428,11 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
                 let mut phase_boundaries = 0;
                 for finding in values.as_array().unwrap() {
                     if finding["condition"] == "phase_boundary" {
-                        assert_eq!(finding["requirement"], serde_json::json!("REQ-0068"));
-                        assert_eq!(finding["spec_paths"], serde_json::json!(["rows[0].filter"]));
+                        assert_eq!(finding["requirement"], yamaa_core::json::json!("REQ-0068"));
+                        assert_eq!(
+                            finding["spec_paths"],
+                            yamaa_core::json::json!(["rows[0].filter"])
+                        );
                         phase_boundaries += 1;
                     }
                 }
@@ -437,7 +440,7 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
             }
         }
         let mut unsaved = expected.clone();
-        unsaved["artifacts"] = serde_json::json!([]);
+        unsaved["artifacts"] = yamaa_core::json::json!([]);
         assert_eq!(result.observations(), unsaved, "{}", case);
         if port.expected.is_empty() {
             assert!(result.output().is_none());

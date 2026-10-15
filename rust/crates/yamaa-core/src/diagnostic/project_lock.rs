@@ -1,7 +1,7 @@
 //! Classified host packaging facts projected without metadata or version effects.
 use super::Diagnostic;
 use crate::application_issue;
-use serde_json::Value as JsonValue;
+use crate::json::Value as JsonValue;
 
 /// These tokens are already classified by a host packaging tool. They are not
 /// exception text, and core never decides which installed version is equivalent.

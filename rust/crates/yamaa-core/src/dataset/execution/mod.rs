@@ -846,11 +846,11 @@ fn finish<E>(
                             diagnostic.spec_paths.push(std::format!("{path}.absent"));
                             diagnostic.context.insert(
                                 "variable".into(),
-                                serde_json::Value::String(variable.clone()),
+                                crate::json::Value::String(variable.clone()),
                             );
                             diagnostic.context.insert(
                                 "handler".into(),
-                                serde_json::Value::String("absent".into()),
+                                crate::json::Value::String("absent".into()),
                             );
                             return Err(Box::new(ExecutionError::SemanticDiagnostic {
                                 diagnostic,

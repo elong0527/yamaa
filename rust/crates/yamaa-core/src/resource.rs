@@ -1,7 +1,7 @@
 //! Classified resource failures; filesystem authority remains with the resource port.
 
 use crate::diagnostic::{ConditionCode, Diagnostic};
-use serde_json::Value as JsonValue;
+use crate::json::Value as JsonValue;
 
 /// A resource adapter reports an observed cause explicitly. An arbitrary host
 /// exception, panic or resource limit is never inferred to be one of these causes.

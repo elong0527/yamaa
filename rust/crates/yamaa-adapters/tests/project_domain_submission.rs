@@ -197,15 +197,17 @@ mod project {
             let contexts = run
                 .issues()
                 .iter()
-                .map(|issue| serde_json::from_str::<serde_json::Value>(&issue.context).unwrap())
+                .map(|issue| {
+                    serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap()
+                })
                 .collect::<Vec<_>>();
             assert_eq!(
                 contexts[0],
-                serde_json::json!({"column":"RESULT", "codelist":"DEFAULT", "failure_count":1, "keys":[{"ID":1,"LBTESTCD":"CREAT"}], "values":["G"]})
+                yamaa_core::json::json!({"column":"RESULT", "codelist":"DEFAULT", "failure_count":1, "keys":[{"ID":1,"LBTESTCD":"CREAT"}], "values":["G"]})
             );
             assert_eq!(
                 contexts[1],
-                serde_json::json!({"column":"RESULT", "codelist":"GLUCOSE", "failure_count":1, "keys":[{"ID":2,"LBTESTCD":"GLUC"}], "values":["D"]})
+                yamaa_core::json::json!({"column":"RESULT", "codelist":"GLUCOSE", "failure_count":1, "keys":[{"ID":2,"LBTESTCD":"GLUC"}], "values":["D"]})
             );
             assert!(run.save().is_err());
             assert!(!study.0.join("output.csv").exists());
@@ -602,8 +604,8 @@ mod project {
                 );
                 assert_eq!(issue.spec_paths, [expected_path]);
                 assert_eq!(
-                    serde_json::from_str::<serde_json::Value>(&issue.context).unwrap(),
-                    serde_json::json!({"column":"RESULT","failure_count":1,"keys":[{"ID":1,"LBTESTCD":expected_key}],"max":maximum})
+                    serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap(),
+                    yamaa_core::json::json!({"column":"RESULT","failure_count":1,"keys":[{"ID":1,"LBTESTCD":expected_key}],"max":maximum})
                 );
                 assert!(run.save().is_err());
             }
@@ -737,7 +739,7 @@ mod project {
                 );
                 assert_eq!(issues[0].spec_paths, ["rows.glucose.submission.RESULT"]);
                 let context =
-                    serde_json::from_str::<serde_json::Value>(&issues[0].context).unwrap();
+                    serde_json::from_str::<yamaa_core::json::Value>(&issues[0].context).unwrap();
                 assert_eq!(context["column"], "RESULT");
                 assert_eq!(
                     context[field],
@@ -1013,7 +1015,7 @@ mod project {
             assert_eq!(findings[0].spec_paths, ["input.OTHER.schema"]);
             assert_eq!(
                 findings[0].context["reason"],
-                serde_json::Value::String("contradictory_snapshot".into())
+                yamaa_core::json::Value::String("contradictory_snapshot".into())
             );
         }
         #[test]
@@ -1045,7 +1047,7 @@ mod project {
                 assert_eq!(findings[0].spec_paths, [format!("input.{dataset}.schema")]);
                 assert_eq!(
                     findings[0].context["reason"],
-                    serde_json::Value::String("undeclared_metadata".into())
+                    yamaa_core::json::Value::String("undeclared_metadata".into())
                 );
             }
             // The shipped structural root rejects explicit-null schema before this
@@ -1595,7 +1597,8 @@ mod project {
                     issue.spec_paths,
                     [format!("{}.tests[0]", sources(&functions)[index].path)]
                 );
-                let context: serde_json::Value = serde_json::from_str(&issue.context).unwrap();
+                let context: yamaa_core::json::Value =
+                    serde_json::from_str(&issue.context).unwrap();
                 assert_eq!(context["function"], functions[index].definition().name);
                 assert_eq!(context["case"], "normal");
                 assert_eq!(context["args"]["x"], 7);
@@ -1653,7 +1656,8 @@ mod project {
             assert!(Rc::ptr_eq(held, &port.payload));
             let issues =
                 test_issues(&sources(&functions), &failures, &[host, host, host, host]).unwrap();
-            let context: serde_json::Value = serde_json::from_str(&issues[0].context).unwrap();
+            let context: yamaa_core::json::Value =
+                serde_json::from_str(&issues[0].context).unwrap();
             assert_eq!(context["failure"]["condition"], "function_call_failed");
             assert_eq!(context["failure"]["requirement"], "REQ-0701");
             assert_eq!(context["failure"]["context"]["host_message"], "é\0🙂");
@@ -1761,7 +1765,8 @@ mod project {
                 })],
             )
             .unwrap();
-            let context: serde_json::Value = serde_json::from_str(&issues[0].context).unwrap();
+            let context: yamaa_core::json::Value =
+                serde_json::from_str(&issues[0].context).unwrap();
             assert_eq!(context["host_error"], "ValueError");
             assert_eq!(context["host_message"], text);
             assert!(context.get("host_details_truncated").is_none());
@@ -1814,7 +1819,8 @@ mod project {
                 expected: float(0.0),
             }];
             let issues = test_issues(&selected, &correct, &[None]).unwrap();
-            let context: serde_json::Value = serde_json::from_str(&issues[0].context).unwrap();
+            let context: yamaa_core::json::Value =
+                serde_json::from_str(&issues[0].context).unwrap();
             assert_eq!(
                 context["expected"].as_f64().unwrap().to_bits(),
                 0.0_f64.to_bits()
@@ -1833,7 +1839,8 @@ mod project {
                 expected: Value::Int(i64::MIN),
             }];
             let issues = test_issues(&selected, &failures, &[None]).unwrap();
-            let context: serde_json::Value = serde_json::from_str(&issues[0].context).unwrap();
+            let context: yamaa_core::json::Value =
+                serde_json::from_str(&issues[0].context).unwrap();
             assert_eq!(context["expected"].as_i64(), Some(i64::MIN));
             assert_eq!(context["args"]["x"].as_i64(), Some(i64::MIN));
             assert_eq!(context["actual"].as_i64(), Some(i64::MAX));
@@ -1868,7 +1875,8 @@ mod project {
                 expected: Value::Str("authored é\0🙂".into()),
             }];
             let issues = test_issues(&selected, &failures, &[None]).unwrap();
-            let context: serde_json::Value = serde_json::from_str(&issues[0].context).unwrap();
+            let context: yamaa_core::json::Value =
+                serde_json::from_str(&issues[0].context).unwrap();
             assert_eq!(context["expected"], "authored é\0🙂");
             assert_eq!(context["actual"], "actual é\0🙂");
         }
@@ -1968,11 +1976,11 @@ mod project {
                 ("verification", "allowed_values_failed", Some("REQ-0957"))
             );
             assert_eq!(issue.spec_paths, ["columns.CODE.submission.codelist"]);
-            let context: serde_json::Value = serde_json::from_str(&issue.context).unwrap();
+            let context: yamaa_core::json::Value = serde_json::from_str(&issue.context).unwrap();
             assert_eq!(context["column"], "CODE");
             assert_eq!(context["codelist"], "SEX");
             assert_eq!(context["keys"][0]["ID"].as_i64(), Some(i64::MAX));
-            assert_eq!(context["values"], serde_json::json!(["é\0🙂"]));
+            assert_eq!(context["values"], yamaa_core::json::json!(["é\0🙂"]));
             assert_eq!(codelist_issues(&compiled, &records).unwrap(), issues);
             assert_eq!(
                 before,
@@ -2014,8 +2022,9 @@ mod project {
             let text = "\0".repeat(1_500_000);
             let records = vec![record(Value::Str(text.clone()))];
             let issues = codelist_issues(&compiled, &records).unwrap();
-            let context: serde_json::Value = serde_json::from_str(&issues[0].context).unwrap();
-            assert_eq!(context["values"], serde_json::json!([text]));
+            let context: yamaa_core::json::Value =
+                serde_json::from_str(&issues[0].context).unwrap();
+            assert_eq!(context["values"], yamaa_core::json::json!([text]));
             let mut many = record(Value::Str("bad".into()));
             many.failed_count = 65_537;
             many.evaluated_count = 65_537;
@@ -2029,7 +2038,8 @@ mod project {
                 .collect();
             let issues = codelist_issues(&compiled, &[many]).unwrap();
             assert_eq!(issues.len(), 1);
-            let context: serde_json::Value = serde_json::from_str(&issues[0].context).unwrap();
+            let context: yamaa_core::json::Value =
+                serde_json::from_str(&issues[0].context).unwrap();
             assert_eq!(context["failure_count"], 65_537);
             assert_eq!(context["values"].as_array().unwrap().len(), 65_537);
             assert_eq!(context["keys"].as_array().unwrap().len(), 65_537);
@@ -2037,13 +2047,13 @@ mod project {
         }
     }
     mod project_environment_diagnostics {
-        use serde_json::Value;
         use std::{rc::Rc, sync::Arc};
         use yamaa_adapters::{
             project_environment_diagnostics::{admission, Error as ProjectionError},
             project_source::{self, CaptureFailure, CapturePort, Failure, Kind, Reply, Request},
             specification_source::{CapturedSchema, Source},
         };
+        use yamaa_core::json::Value;
         use yamaa_core::{project_environment::LockKind, project_function::Language};
         fn source(identity: &str, bytes: &str) -> Source {
             Source {

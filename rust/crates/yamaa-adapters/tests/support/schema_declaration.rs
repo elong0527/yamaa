@@ -1,9 +1,9 @@
 //! Project only core-admitted findings from the retained authored arenas.
-use serde_json::{json, Map, Number, Value};
 use yamaa_adapters::{
     specification_source::{CapturedSchema, Source},
     yaml_decode::decode_yaml,
 };
+use yamaa_core::json::{json, Map, Number, Value};
 use yamaa_core::schema::{admit_schema_diagnostics, SchemaDiagnosticValue as V};
 
 fn value(value: V<'_>) -> Value {
@@ -71,7 +71,7 @@ pub fn observe_input(input: SchemaInput, document: &str, root: Option<&str>) -> 
             let context = finding
                 .context
                 .map(|(name, field)| (name.into(), value(field)))
-                .collect::<Map<_, _>>();
+                .collect::<Map<String, _>>();
             json!({"phase": finding.phase, "condition": finding.condition,
                 "requirement": finding.requirement, "spec_paths": [finding.path],
                 "context": context})

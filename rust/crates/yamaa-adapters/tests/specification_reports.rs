@@ -7,11 +7,11 @@ mod execution {
 
         #[test]
         fn original_window_failures_match_independent_diagnostics_and_completed_observations() {
-            use serde_json::{json, Value as Json};
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
                 specification_run::{PreparedRun, SourcePort},
             };
+            use yamaa_core::json::{json, Value as Json};
             use yamaa_core::specification::SourceDeclaration;
             struct Host {
                 bytes: Arc<[u8]>,
@@ -410,10 +410,10 @@ mod execution {
                     &mut data,
                 )
                 .unwrap();
-                let mut expected: serde_json::Value =
+                let mut expected: yamaa_core::json::Value =
                     serde_json::from_str(include_str!("fixtures/specs/schema-inheritance.json"))
                         .unwrap();
-                expected["source_reads"][0]["snapshots_created"] = serde_json::json!(created);
+                expected["source_reads"][0]["snapshots_created"] = yamaa_core::json::json!(created);
                 assert_eq!(report, expected);
             }
             assert_eq!(
@@ -439,11 +439,11 @@ mod execution {
 
         #[test]
         fn classified_capture_failures_retain_complete_reports_without_publication() {
-            use serde_json::json;
             use yamaa_adapters::{
                 specification_report::{self, Identity},
                 specification_run::{PortError, PreparedRun, SourcePort},
             };
+            use yamaa_core::json::json;
             use yamaa_core::resource::ResourceFailure;
             use yamaa_core::specification::SourceDeclaration;
             struct Payload {
@@ -586,7 +586,7 @@ mod execution {
                             .expect("independent capture truth missing");
                         assert_eq!(
                             expected,
-                            serde_json::from_str::<serde_json::Value>(row[3]).unwrap()
+                            serde_json::from_str::<yamaa_core::json::Value>(row[3]).unwrap()
                         );
                         let result =
                             specification_report::build_result(&run, &attempt, metadata()).unwrap();
@@ -734,7 +734,7 @@ mod execution {
                     .unwrap();
                     assert_eq!(
                         report["diagnostics"],
-                        serde_json::json!([{"phase":"validation","condition":"resource_path_missing","requirement":"REQ-0785","spec_paths":["input.SRC.path"],"context":{"dataset":"SRC","path":written}}])
+                        yamaa_core::json::json!([{"phase":"validation","condition":"resource_path_missing","requirement":"REQ-0785","spec_paths":["input.SRC.path"],"context":{"dataset":"SRC","path":written}}])
                     );
                 }
             }
@@ -772,7 +772,7 @@ mod execution {
             use yamaa_core::resource::ResourceFailure;
             use yamaa_core::specification::SourceDeclaration;
             struct Port {
-                failures: serde_json::Value,
+                failures: yamaa_core::json::Value,
                 inspected: Vec<String>,
             }
             impl SourcePort for Port {
@@ -835,7 +835,7 @@ mod execution {
                 let mut attempt = run.execute_with_port(&mut port);
                 assert_eq!(port.inspected, ["DM", "AE", "MEDDRA"]);
                 assert!(attempt.sources.is_empty());
-                let expected = serde_json::from_str::<serde_json::Value>(fields[2]).unwrap();
+                let expected = serde_json::from_str::<yamaa_core::json::Value>(fields[2]).unwrap();
                 let result =
                     specification_report::build_result(&run, &attempt, metadata()).unwrap();
                 assert_eq!(result.observations(), expected, "{}", fields[0]);
@@ -934,11 +934,11 @@ mod execution {
 
         #[test]
         fn exact_wide_count_bounds_preserve_empty_counts_and_completed_check_prefix() {
-            use serde_json::json;
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
                 specification_run::{PreparedRun, SourcePort},
             };
+            use yamaa_core::json::json;
             use yamaa_core::specification::SourceDeclaration;
             struct Host {
                 bytes: Arc<[u8]>,
@@ -1071,11 +1071,11 @@ mod execution {
                 let error =
                     yamaa_adapters::specification_run::PreparedRun::prepare(prepare(&schema, &raw))
                         .unwrap_err();
-                let actual: serde_json::Value = serde_json::from_str(
+                let actual: yamaa_core::json::Value = serde_json::from_str(
                     &yamaa_adapters::specification_diagnostics::failure(&error, None),
                 )
                 .unwrap();
-                let expected: serde_json::Value = row["expected"].clone();
+                let expected: yamaa_core::json::Value = row["expected"].clone();
                 assert_eq!(actual, expected, "{}", row["case"].as_str().unwrap());
                 count += 1;
             }
@@ -1218,8 +1218,8 @@ mod execution {
                 let run =
                     PreparedRun::prepare(prepare(&schema, &fixture_bytes(&row["source"]))).unwrap();
                 let inputs: BTreeMap<String, String> =
-                    serde_json::from_value(row["inputs"].clone()).unwrap();
-                let expected: serde_json::Value = row["expected"].clone();
+                    yamaa_core::json::from_value(row["inputs"].clone()).unwrap();
+                let expected: yamaa_core::json::Value = row["expected"].clone();
                 // A second attempt must neither inherit choices nor accumulate handler counts.
                 for _ in 0..2 {
                     let mut port = Port {
@@ -1247,7 +1247,7 @@ mod execution {
                     )
                     .unwrap();
                     let mut unsaved = expected.clone();
-                    unsaved["artifacts"] = serde_json::json!([]);
+                    unsaved["artifacts"] = yamaa_core::json::json!([]);
                     assert_eq!(result.observations(), unsaved, "{}", case);
                     if port.expected.is_empty() {
                         assert!(result.output().is_none());
@@ -1336,7 +1336,7 @@ mod execution {
             for row in fixture_rows(include_str!("fixtures/original_mapping_cut.json")) {
                 let case = row["case"].as_str().unwrap();
                 assert_eq!(
-                    serde_json::from_slice::<serde_json::Value>(&fixture_bytes(
+                    serde_json::from_slice::<yamaa_core::json::Value>(&fixture_bytes(
                         &row["expected_wire"]
                     ))
                     .unwrap(),
@@ -1345,8 +1345,8 @@ mod execution {
                 let run =
                     PreparedRun::prepare(prepare(&schema, &fixture_bytes(&row["source"]))).unwrap();
                 let inputs: BTreeMap<String, String> =
-                    serde_json::from_value(row["inputs"].clone()).unwrap();
-                let expected: serde_json::Value = row["expected"].clone();
+                    yamaa_core::json::from_value(row["inputs"].clone()).unwrap();
+                let expected: yamaa_core::json::Value = row["expected"].clone();
                 // A second attempt must neither inherit choices nor accumulate handler counts.
                 for _ in 0..2 {
                     let mut port = Port {
@@ -1374,7 +1374,7 @@ mod execution {
                     )
                     .unwrap();
                     let mut unsaved = expected.clone();
-                    unsaved["artifacts"] = serde_json::json!([]);
+                    unsaved["artifacts"] = yamaa_core::json::json!([]);
                     assert_eq!(result.observations(), unsaved, "{}", case);
                     if port.expected.is_empty() {
                         assert!(result.output().is_none());
@@ -1417,7 +1417,7 @@ mod execution {
                     bytes: raw.to_vec(),
                 })
                 .unwrap_err();
-            let finding: serde_json::Value = serde_json::from_str(
+            let finding: yamaa_core::json::Value = serde_json::from_str(
                 &yamaa_adapters::specification_diagnostics::capture_failure(&error),
             )
             .unwrap();
@@ -1428,7 +1428,7 @@ mod execution {
                 .iter()
                 .any(|issue| issue["condition"] == "unknown_field"
                     && issue["spec_paths"]
-                        == serde_json::json!(["columns.ID.derivation.source.condition"])));
+                        == yamaa_core::json::json!(["columns.ID.derivation.source.condition"])));
         }
 
         #[test]
@@ -1440,7 +1440,7 @@ mod execution {
                     &schema, &bytes,
                 ))
                 .unwrap_err();
-                let expected: serde_json::Value = row["expected"].clone();
+                let expected: yamaa_core::json::Value = row["expected"].clone();
                 assert_eq!(
                     spec_findings(&error, None).unwrap(),
                     expected["outcome"]["diagnostics"]

@@ -9,13 +9,13 @@ use crate::{
     report_storage::StoredReport,
     specification_report::Error as ReportError,
 };
-use serde_json::Value;
 use std::{
     any::Any,
     collections::VecDeque,
     panic::{catch_unwind, AssertUnwindSafe},
     sync::Arc,
 };
+use yamaa_core::json::Value;
 use yamaa_core::producer_publication::PreparedPublication;
 
 /// Lexical collisions across the complete authored graph are metadata facts.
@@ -430,10 +430,10 @@ impl Publication {
                 .map(|(_, request)| request.observation.clone())
                 .collect(),
         );
-        result["publication"] = serde_json::json!({
+        result["publication"] = yamaa_core::json::json!({
             "status":"failure", "mode":if diagnostic {"diagnostic"} else {"complete"},
             "entered":self.requests(diagnostic).take(entered).enumerate()
-                .map(|(position, (_, request))| serde_json::json!({"node":request.node,
+                .map(|(position, (_, request))| yamaa_core::json::json!({"node":request.node,
                     "field":request.field,"path":request.path,"published":position < completed})).collect::<Vec<_>>(),
             "error":{"stage":"publication","code":"publication_incomplete","node":null,"field":null}
         });

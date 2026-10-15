@@ -1,10 +1,10 @@
 //! Borrowed ingestion facts with complete diagnostic contexts.
 use super::{ConditionCode as C, Context, Diagnostic};
+use crate::json::Value as V;
 use crate::{
     csv_source::{Field, ProfileCause},
     value::ColumnType,
 };
-use serde_json::Value as V;
 
 /// Exact codec facts. Codec parsing and physical schema conversion remain external.
 #[derive(Clone, Copy, Debug)]

@@ -1,6 +1,6 @@
 //! Typed resource policies retain their applied bounds and authored owners.
 use crate::{csv_source::TextTableError, specification_run::Error};
-use serde_json::Value;
+use yamaa_core::json::Value;
 use yamaa_core::{
     dataset::{ExecutionError, Resource},
     specification::SourceDeclaration,
@@ -317,7 +317,7 @@ mod tests {
         assert_eq!(projected["outcome"]["actual"], 10_000_001);
         assert_eq!(
             projected["outcome"]["spec_paths"],
-            serde_json::json!(["input.XW"])
+            yamaa_core::json::json!(["input.XW"])
         );
     }
 
@@ -362,9 +362,9 @@ mod tests {
             );
             let value = refusal.value("ingest", "source_limit");
             assert_eq!(value["context"]["resource"], resource);
-            assert_eq!(value["context"]["limit"], serde_json::json!(limit));
-            assert_eq!(value["context"]["actual"], serde_json::json!(actual));
-            assert_eq!(value["spec_paths"], serde_json::json!(["input.XW"]));
+            assert_eq!(value["context"]["limit"], yamaa_core::json::json!(limit));
+            assert_eq!(value["context"]["actual"], yamaa_core::json::json!(actual));
+            assert_eq!(value["spec_paths"], yamaa_core::json::json!(["input.XW"]));
         }
     }
 }

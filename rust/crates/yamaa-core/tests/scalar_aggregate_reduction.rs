@@ -426,7 +426,7 @@ mod scalar {
         }
     }
     mod declarative_rounding {
-        use serde_json::Value as JsonValue;
+        use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             dataset::Rounding, diagnostic::ConditionCode, table::ValueRef, value::Value,
         };
@@ -811,7 +811,7 @@ mod scalar {
 
         #[test]
         fn original_zero_year_month_prefix_retains_both_operation_diagnostics() {
-            use serde_json::Value as JsonValue;
+            use yamaa_core::json::Value as JsonValue;
             for (kind, name) in [
                 (
                     date_policy_kind(P::Year, D::Position("first")),
@@ -911,9 +911,9 @@ mod scalar {
 
         #[test]
         fn calendar_policy_preserves_wide_integers_and_unreachable_month_precedence() {
-            use serde_json::Value as JsonValue;
             use yamaa_core::dataset::DatePolicyError;
             use yamaa_core::diagnostic::ConditionCode as C;
+            use yamaa_core::json::Value as JsonValue;
             let wide = "9".repeat(5000);
             let DatePolicyError::Diagnostic(error) =
                 date_policy(Some(&wide), D::Number("0"), P::Month, "date").unwrap_err()

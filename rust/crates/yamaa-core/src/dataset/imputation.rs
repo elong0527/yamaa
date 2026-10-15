@@ -1,11 +1,11 @@
 //! Declarative partial-date completion and precision preserve collected fields.
+use crate::json::Value as V;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     table::ValueRef,
     temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
     value::Value,
 };
-use serde_json::Value as V;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DayRule {

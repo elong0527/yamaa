@@ -1,12 +1,12 @@
 //! Family-independent submission admission and completed-column length binding.
 //! Standard, document and terminology composition remains the Define use case.
 use super::*;
+use crate::json::Value as V;
 use crate::{
     dataset::{Check, Verification},
     diagnostic::{ConditionCode as C, Diagnostic},
     value::Value,
 };
-use serde_json::Value as V;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn present_field(d: &Document, node: usize, name: &str) -> Option<usize> {

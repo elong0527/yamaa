@@ -1182,6 +1182,7 @@ dependencies = [
  "libm",
  "num-bigint",
  "ryu",
+ "serde",
  "serde_json",
  "thiserror",
 ]

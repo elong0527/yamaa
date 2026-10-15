@@ -50,11 +50,11 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
                     .push(std::format!("{}.{}", operation.path(), handler));
                 diagnostic.context.insert(
                     "variable".into(),
-                    serde_json::Value::String(operation.source().into()),
+                    crate::json::Value::String(operation.source().into()),
                 );
                 diagnostic
                     .context
-                    .insert("handler".into(), serde_json::Value::String(handler.into()));
+                    .insert("handler".into(), crate::json::Value::String(handler.into()));
                 return Err(retained_diagnostic(diagnostic, true, candidate, plan, row));
             }
         }

@@ -12,7 +12,7 @@ use std::{
     vec,
 };
 
-use serde_json::Value as Json;
+use crate::json::Value as Json;
 
 #[derive(Clone, Debug)]
 pub struct Failure {
@@ -93,21 +93,12 @@ pub struct Logs {
     pub warning: Option<LogTable>,
 }
 
-// JSON integers may be wider than binary64. Only authored fractional/exponent
-// numbers use the runtime float formatter; integer digits remain exact.
-fn float_number(number: &serde_json::Number) -> bool {
-    number
-        .as_str()
-        .bytes()
-        .any(|byte| matches!(byte, b'.' | b'e' | b'E'))
-}
-
 fn validate_json(value: &Json, depth: usize) -> Result<(), Error> {
     Limits::semantic_depth(depth)?;
     match value {
         Json::Number(number) => {
             let text = number.as_str();
-            if float_number(number) {
+            if !number.is_integer() {
                 if number.as_f64().is_none() {
                     return Err(Error::InvalidRecord);
                 }
@@ -165,7 +156,7 @@ impl Writer {
             Json::Null => self.write("null"),
             Json::Bool(value) => self.write(if *value { "true" } else { "false" }),
             Json::String(value) => self.string(value),
-            Json::Number(number) if float_number(number) => {
+            Json::Number(number) if !number.is_integer() => {
                 let value = number
                     .as_f64()
                     .and_then(FiniteFloat::new)

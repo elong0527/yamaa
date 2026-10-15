@@ -8,7 +8,8 @@ publish.workspace = true
 
 [dependencies]
 thiserror = "2.0.21"
-serde_json = { version = "1.0.145", features = ["arbitrary_precision"] }
+serde = "1.0.228"
+serde_json = { version = "1.0.145", features = ["raw_value"] }
 # Canonical numeric formatting and portable mathematics.
 ryu = { version = "1.0.20", default-features = false }
 # Disable architecture-specific math implementations. Exact: the portable-math

@@ -1,4 +1,5 @@
 //! Dataset-JSON byte writer over a held published table; never executes a spec.
+use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::ConditionCode,
     limits::{LimitExceeded, Limits},
@@ -6,7 +7,6 @@ use crate::{
     table::{TableAccess, ValueRef},
     value::Value,
 };
-use serde_json::Value as JsonValue;
 use std::{
     collections::BTreeMap,
     io::{self, Write},

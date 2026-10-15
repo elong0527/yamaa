@@ -1,7 +1,7 @@
 //! Actual binder, scope and dependency failures reach the canonical cause registry.
 #![allow(unused_imports)]
-pub(crate) use serde_json::Value as V;
 pub(crate) use std::collections::BTreeSet;
+pub(crate) use yamaa_core::json::Value as V;
 pub(crate) use yamaa_core::{
     column_dependencies,
     diagnostic::{ConditionCode, Context, Diagnostic},

@@ -1,10 +1,10 @@
 //! Pure column checks over completed values; effect order belongs to the engine.
+use crate::json::Value as JsonValue;
 use crate::{
     dataset::{Check, PlanError},
     diagnostic::{ConditionCode, Definition, Diagnostic},
     value::{compare_present, ColumnType, Value},
 };
-use serde_json::Value as JsonValue;
 use std::vec;
 
 /// Full offending positions retain row order; hosts may bound their displayed keys.

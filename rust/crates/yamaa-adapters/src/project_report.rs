@@ -7,7 +7,7 @@ use crate::{
     project_run::{Attempt, BoundaryFailure, PreparedRun},
     specification_report::{self as report, BuildResult, Identity},
 };
-use serde_json::{json, Value};
+use yamaa_core::json::{json, Value};
 use yamaa_core::{
     dataset::{CheckRecord, ExecutionError},
     function_invocation::FailureKind,

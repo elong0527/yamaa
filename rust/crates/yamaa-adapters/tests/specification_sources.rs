@@ -329,8 +329,8 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn original_yaml_run_returns_complete_independent_portable_failures() {
-            use serde_json::json;
             use yamaa_adapters::specification_run::PreparedRun;
+            use yamaa_core::json::json;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             for (name, condition, requirement, column, expr, keys) in [
@@ -373,7 +373,7 @@ output: {{path: output.csv, columns: [I, S]}}
                         .unwrap();
                     assert!(response.table.is_none());
                     assert_eq!(
-                        serde_json::from_str::<serde_json::Value>(&response.outcome).unwrap(),
+                        serde_json::from_str::<yamaa_core::json::Value>(&response.outcome).unwrap(),
                         expected
                     );
                 }
@@ -427,8 +427,8 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn compiler_diagnostics_match_independent_reference_paths_context_and_phase() {
-            use serde_json::json;
             use yamaa_adapters::specification_run::PreparedRun;
+            use yamaa_core::json::json;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/negative-zero-division");
@@ -494,7 +494,8 @@ output: {{path: output.csv, columns: [I, S]}}
             );
             let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
             let response = run.execute_csv(&data).unwrap();
-            let response: serde_json::Value = serde_json::from_str(&response.outcome).unwrap();
+            let response: yamaa_core::json::Value =
+                serde_json::from_str(&response.outcome).unwrap();
             assert_eq!(
                 response["outcome"]["diagnostic"]["condition"],
                 "division_by_zero"
@@ -503,8 +504,8 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn preflight_reports_all_findings_in_reference_order_before_source_access() {
-            use serde_json::json;
             use yamaa_adapters::specification_run::PreparedRun;
+            use yamaa_core::json::json;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let raw =
@@ -534,8 +535,8 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn core_preflight_matches_independent_complete_findings() {
-            use serde_json::Value;
             use yamaa_adapters::{specification_diagnostics, specification_run::PreparedRun};
+            use yamaa_core::json::Value;
             let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let mut count = 0;
             for row in include_str!("fixtures/preflight.tsv").lines().skip(1) {
@@ -625,8 +626,8 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn binding_collects_ordered_findings_before_dependency_diagnostics() {
-            use serde_json::json;
             use yamaa_adapters::specification_run::PreparedRun;
+            use yamaa_core::json::json;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/negative-zero-division");
@@ -825,7 +826,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 assert_eq!(port.reads, 1);
                 // Independently authored complete failure truth; benchmark source and
                 // diagnostic declarations also receive a separate reference comparison.
-                let mut expected: serde_json::Value = serde_json::from_slice(
+                let mut expected: yamaa_core::json::Value = serde_json::from_slice(
                     &std::fs::read(
                         Path::new(env!("CARGO_MANIFEST_DIR"))
                             .join("tests/fixtures/specs")
@@ -847,15 +848,15 @@ output: {{path: output.csv, columns: [I, S]}}
                     },
                 )
                 .unwrap();
-                expected["backend"] = serde_json::json!("rust");
+                expected["backend"] = yamaa_core::json::json!("rust");
                 assert_eq!(actual.observations_value(false), expected, "{name}");
             }
         }
 
         #[test]
         fn declared_source_types_preserve_ingestion_diagnostics_before_formula_errors() {
-            use serde_json::json;
             use yamaa_adapters::specification_run::PreparedRun;
+            use yamaa_core::json::json;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/negative-zero-division");
@@ -986,8 +987,8 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path() {
-            use serde_json::json;
             use yamaa_adapters::specification_run::PreparedRun;
+            use yamaa_core::json::json;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/adam-adlb-ordered-sum");
@@ -1065,11 +1066,11 @@ output: {{path: output.csv, columns: [I, S]}}
         #[test]
         fn original_success_report_follows_actual_atomic_publication_and_output_failures_do_not_publish(
         ) {
-            use serde_json::{json, Value as Json};
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, CompleteError, Identity},
                 specification_run::{PreparedRun, SourcePort},
             };
+            use yamaa_core::json::{json, Value as Json};
             use yamaa_core::specification::SourceDeclaration;
             struct Captured {
                 bytes: Arc<[u8]>,
@@ -1254,11 +1255,11 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn verification_declarations_preserve_completed_prefix_and_phase_precedence() {
-            use serde_json::{json, Value as Json};
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
                 specification_run::{PreparedRun, SourcePort},
             };
+            use yamaa_core::json::{json, Value as Json};
             use yamaa_core::specification::SourceDeclaration;
             struct Host {
                 bytes: Arc<[u8]>,
@@ -1436,8 +1437,8 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn row_group_declarations_and_shared_scope_keep_authored_diagnostics() {
-            use serde_json::json;
             use yamaa_adapters::specification_run::PreparedRun;
+            use yamaa_core::json::json;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let raw =
@@ -1517,11 +1518,11 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn original_sum_reports_nonnumeric_values_but_publishes_all_missing_groups() {
-            use serde_json::{json, Value as Json};
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
                 specification_run::{PreparedRun, SourcePort},
             };
+            use yamaa_core::json::{json, Value as Json};
             use yamaa_core::specification::SourceDeclaration;
             struct Host {
                 bytes: Arc<[u8]>,
@@ -1645,11 +1646,11 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
-            use serde_json::{json, Value as Json};
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
                 specification_run::{PreparedRun, SourcePort},
             };
+            use yamaa_core::json::{json, Value as Json};
             use yamaa_core::specification::SourceDeclaration;
             struct Host {
                 bytes: Arc<[u8]>,
@@ -1869,12 +1870,12 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn original_lookup_complete_report_uses_all_captured_sources_and_actual_handlers() {
-            use serde_json::{json, Value as Json};
             use std::collections::BTreeMap;
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
                 specification_run::{PreparedRun, SourcePort},
             };
+            use yamaa_core::json::{json, Value as Json};
             use yamaa_core::specification::SourceDeclaration;
             struct Host {
                 content: BTreeMap<String, Arc<[u8]>>,
@@ -1978,11 +1979,11 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn original_lookup_failures_match_independent_diagnostics_and_completed_observations() {
-            use serde_json::{json, Value as Json};
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
                 specification_run::{PreparedRun, SourcePort},
             };
+            use yamaa_core::json::{json, Value as Json};
             use yamaa_core::specification::SourceDeclaration;
             struct Host {
                 case: std::path::PathBuf,
@@ -2163,23 +2164,23 @@ output: {{path: output.csv, columns: [I, S]}}
                 .execute_csv(&std::fs::read(case.join("input/dm.csv")).unwrap())
                 .err()
                 .unwrap();
-            let actual: serde_json::Value = serde_json::from_str(
+            let actual: yamaa_core::json::Value = serde_json::from_str(
                 &specification_diagnostics::failure(&error, Some(run.source())),
             )
             .unwrap();
             assert_eq!(
                 actual,
-                serde_json::json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"bind","code":"source_count"}})
+                yamaa_core::json::json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"bind","code":"source_count"}})
             );
         }
 
         #[test]
         fn original_window_yaml_compiles_and_publishes_complete_independent_report() {
-            use serde_json::{json, Value as Json};
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
                 specification_run::{PreparedRun, SourcePort},
             };
+            use yamaa_core::json::{json, Value as Json};
             use yamaa_core::specification::SourceDeclaration;
             struct Host {
                 bytes: Arc<[u8]>,
