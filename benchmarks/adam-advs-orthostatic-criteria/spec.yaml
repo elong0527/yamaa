@@ -1,0 +1,244 @@
+schema_version: "1.0"
+domain: ADVS
+keys: [STUDYID, USUBJID, AVISIT, PARAMCD]
+input:
+  VS: {path: input/vs.csv, types: {VSSEQ: int, VSSTRESN: float}}
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, AVISIT, PARAMCD, PARAM, AVAL, AVALC]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    derivation: VS.VISIT
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: PARAM
+    type: str
+    label: Parameter
+
+  # The visit's supine reading and its reading after three minutes standing,
+  # one pair per test. Each row template gathers only the pairs it needs; the
+  # others stay empty. None is in the output.
+  - name: SYSBP_SUP
+    type: float
+    label: Supine Systolic Blood Pressure
+    derivation: {literal: null}
+
+  - name: SYSBP_STD
+    type: float
+    label: Standing Systolic Blood Pressure at 3 Minutes
+    derivation: {literal: null}
+
+  - name: DIABP_SUP
+    type: float
+    label: Supine Diastolic Blood Pressure
+    derivation: {literal: null}
+
+  - name: DIABP_STD
+    type: float
+    label: Standing Diastolic Blood Pressure at 3 Minutes
+    derivation: {literal: null}
+
+  - name: HR_SUP
+    type: float
+    label: Supine Heart Rate
+    derivation: {literal: null}
+
+  - name: HR_STD
+    type: float
+    label: Standing Heart Rate at 3 Minutes
+    derivation: {literal: null}
+
+  # Standing minus supine, so a fall is negative; empty when either reading
+  # is missing or was not taken. Not in the output.
+  - name: SYSBP_CHG
+    type: float
+    label: Systolic Blood Pressure Change on Standing
+    derivation:
+      compute:
+        expr: "SYSBP_STD - SYSBP_SUP"
+
+  - name: DIABP_CHG
+    type: float
+    label: Diastolic Blood Pressure Change on Standing
+    derivation:
+      compute:
+        expr: "DIABP_STD - DIABP_SUP"
+
+  - name: HR_CHG
+    type: float
+    label: Heart Rate Change on Standing
+    derivation:
+      compute:
+        expr: "HR_STD - HR_SUP"
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: {literal: null}
+
+  - name: AVALC
+    type: str
+    label: Analysis Value (C)
+    derivation: {literal: null}
+    verifications:
+      allowed_values:
+        values: ["Y", "N"]
+
+rows:
+  # One change record per subject and visit with both systolic readings;
+  # ONLY() fails if the visit has more than one of either.
+  - id: systolic_change
+    group_by: [VS.STUDYID, VS.USUBJID, VS.VISIT]
+    filter: "AVAL IS NOT NULL"
+    derivations:
+      PARAMCD: {literal: SYSBPOC}
+      PARAM: {literal: Systolic Blood Pressure Change on Standing (mmHg)}
+      SYSBP_SUP:
+        aggregate:
+          filter: "VS.VSTESTCD = 'SYSBP' AND VS.VSPOS = 'SUPINE'"
+          expr: "ONLY(VS.VSSTRESN)"
+      SYSBP_STD:
+        aggregate:
+          filter: >-
+            VS.VSTESTCD = 'SYSBP' AND VS.VSPOS = 'STANDING'
+            AND VS.VSTPT = 'AFTER 3 MIN STANDING'
+          expr: "ONLY(VS.VSSTRESN)"
+      AVAL: SYSBP_CHG
+
+  - id: diastolic_change
+    group_by: [VS.STUDYID, VS.USUBJID, VS.VISIT]
+    filter: "AVAL IS NOT NULL"
+    derivations:
+      PARAMCD: {literal: DIABPOC}
+      PARAM: {literal: Diastolic Blood Pressure Change on Standing (mmHg)}
+      DIABP_SUP:
+        aggregate:
+          filter: "VS.VSTESTCD = 'DIABP' AND VS.VSPOS = 'SUPINE'"
+          expr: "ONLY(VS.VSSTRESN)"
+      DIABP_STD:
+        aggregate:
+          filter: >-
+            VS.VSTESTCD = 'DIABP' AND VS.VSPOS = 'STANDING'
+            AND VS.VSTPT = 'AFTER 3 MIN STANDING'
+          expr: "ONLY(VS.VSSTRESN)"
+      AVAL: DIABP_CHG
+
+  - id: heart_rate_change
+    group_by: [VS.STUDYID, VS.USUBJID, VS.VISIT]
+    filter: "AVAL IS NOT NULL"
+    derivations:
+      PARAMCD: {literal: HROC}
+      PARAM: {literal: Heart Rate Change on Standing (beats/min)}
+      HR_SUP:
+        aggregate:
+          filter: "VS.VSTESTCD = 'HR' AND VS.VSPOS = 'SUPINE'"
+          expr: "ONLY(VS.VSSTRESN)"
+      HR_STD:
+        aggregate:
+          filter: >-
+            VS.VSTESTCD = 'HR' AND VS.VSPOS = 'STANDING'
+            AND VS.VSTPT = 'AFTER 3 MIN STANDING'
+          expr: "ONLY(VS.VSSTRESN)"
+      AVAL: HR_CHG
+
+  # Either fall is enough, even when the other change is missing; N needs
+  # both changes. The flag is unknown otherwise, and that visit gets no
+  # record.
+  - id: orthostatic_hypotension
+    group_by: [VS.STUDYID, VS.USUBJID, VS.VISIT]
+    filter: "AVALC IS NOT NULL"
+    derivations:
+      PARAMCD: {literal: OHYPO}
+      PARAM: {literal: Orthostatic Hypotension}
+      SYSBP_SUP:
+        aggregate:
+          filter: "VS.VSTESTCD = 'SYSBP' AND VS.VSPOS = 'SUPINE'"
+          expr: "ONLY(VS.VSSTRESN)"
+      SYSBP_STD:
+        aggregate:
+          filter: >-
+            VS.VSTESTCD = 'SYSBP' AND VS.VSPOS = 'STANDING'
+            AND VS.VSTPT = 'AFTER 3 MIN STANDING'
+          expr: "ONLY(VS.VSSTRESN)"
+      DIABP_SUP:
+        aggregate:
+          filter: "VS.VSTESTCD = 'DIABP' AND VS.VSPOS = 'SUPINE'"
+          expr: "ONLY(VS.VSSTRESN)"
+      DIABP_STD:
+        aggregate:
+          filter: >-
+            VS.VSTESTCD = 'DIABP' AND VS.VSPOS = 'STANDING'
+            AND VS.VSTPT = 'AFTER 3 MIN STANDING'
+          expr: "ONLY(VS.VSSTRESN)"
+      AVALC:
+        flag:
+          condition: "SYSBP_CHG <= -20 OR DIABP_CHG <= -10"
+          false_value: "N"
+          missing: null
+
+  # A rise of 30 beats/min or more; no record when the change is missing.
+  - id: orthostatic_tachycardia
+    group_by: [VS.STUDYID, VS.USUBJID, VS.VISIT]
+    filter: "AVALC IS NOT NULL"
+    derivations:
+      PARAMCD: {literal: OTACHY}
+      PARAM: {literal: Orthostatic Tachycardia}
+      HR_SUP:
+        aggregate:
+          filter: "VS.VSTESTCD = 'HR' AND VS.VSPOS = 'SUPINE'"
+          expr: "ONLY(VS.VSSTRESN)"
+      HR_STD:
+        aggregate:
+          filter: >-
+            VS.VSTESTCD = 'HR' AND VS.VSPOS = 'STANDING'
+            AND VS.VSTPT = 'AFTER 3 MIN STANDING'
+          expr: "ONLY(VS.VSSTRESN)"
+      AVALC:
+        flag:
+          condition: "HR_CHG >= 30"
+          false_value: "N"
+          missing: null
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AVISIT, PARAMCD]
+  - row_count:
+      min: 15
+      max: 15
+  - assert:
+      id: a-change-record-holds-a-value-and-no-flag
+      when: "PARAMCD IN ('SYSBPOC', 'DIABPOC', 'HROC')"
+      require: "AVAL IS NOT NULL AND AVALC IS NULL"
+  - assert:
+      id: a-flag-record-holds-a-flag-and-no-value
+      when: "PARAMCD IN ('OHYPO', 'OTACHY')"
+      require: "AVALC IS NOT NULL AND AVAL IS NULL"
+  - assert:
+      id: hypotension-is-met-only-by-a-large-enough-fall
+      when: "PARAMCD = 'OHYPO' AND AVALC = 'Y'"
+      require: "SYSBP_CHG <= -20 OR DIABP_CHG <= -10"
+  - assert:
+      id: no-hypotension-needs-both-changes
+      when: "PARAMCD = 'OHYPO' AND AVALC = 'N'"
+      require: "SYSBP_CHG > -20 AND DIABP_CHG > -10"
+  - assert:
+      id: tachycardia-is-met-only-by-a-large-enough-rise
+      when: "PARAMCD = 'OTACHY' AND AVALC = 'Y'"
+      require: "HR_CHG >= 30"

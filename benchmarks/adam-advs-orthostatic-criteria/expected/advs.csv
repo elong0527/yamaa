@@ -1,0 +1,16 @@
+STUDYID,USUBJID,AVISIT,PARAMCD,PARAM,AVAL,AVALC
+YAMAA-01,YAMAA-01-101,BASELINE,SYSBPOC,Systolic Blood Pressure Change on Standing (mmHg),-20,
+YAMAA-01,YAMAA-01-101,WEEK 2,SYSBPOC,Systolic Blood Pressure Change on Standing (mmHg),-19,
+YAMAA-01,YAMAA-01-102,WEEK 2,SYSBPOC,Systolic Blood Pressure Change on Standing (mmHg),-8,
+YAMAA-01,YAMAA-01-101,BASELINE,DIABPOC,Diastolic Blood Pressure Change on Standing (mmHg),-6,
+YAMAA-01,YAMAA-01-101,WEEK 2,DIABPOC,Diastolic Blood Pressure Change on Standing (mmHg),-9,
+YAMAA-01,YAMAA-01-102,BASELINE,DIABPOC,Diastolic Blood Pressure Change on Standing (mmHg),-10,
+YAMAA-01,YAMAA-01-101,BASELINE,HROC,Heart Rate Change on Standing (beats/min),30,
+YAMAA-01,YAMAA-01-101,WEEK 2,HROC,Heart Rate Change on Standing (beats/min),29,
+YAMAA-01,YAMAA-01-102,BASELINE,HROC,Heart Rate Change on Standing (beats/min),18,
+YAMAA-01,YAMAA-01-101,BASELINE,OHYPO,Orthostatic Hypotension,,Y
+YAMAA-01,YAMAA-01-101,WEEK 2,OHYPO,Orthostatic Hypotension,,N
+YAMAA-01,YAMAA-01-102,BASELINE,OHYPO,Orthostatic Hypotension,,Y
+YAMAA-01,YAMAA-01-101,BASELINE,OTACHY,Orthostatic Tachycardia,,Y
+YAMAA-01,YAMAA-01-101,WEEK 2,OTACHY,Orthostatic Tachycardia,,N
+YAMAA-01,YAMAA-01-102,BASELINE,OTACHY,Orthostatic Tachycardia,,N
