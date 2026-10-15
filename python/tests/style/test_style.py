@@ -333,6 +333,23 @@ def test_crlf_line_width_counts_the_line_without_its_ending(
         assert [item.message.split(";")[0] for item in findings] == expected
 
 
+def test_lone_cr_line_endings_are_lines_and_a_final_break(tmp_path: Path) -> None:
+    # YAML also breaks lines on a lone carriage return, and the shared
+    # reader assigns later nodes later line marks: a lone-CR file's lines
+    # are its CR-separated lines, its final CR is a line break, and a fix
+    # writes the CR ending back rather than converting the file to LF.
+    text = CANONICAL.replace("\n\noutput:", "\noutput:").replace("\n", "\r")
+    path = tmp_path / "spec.yaml"
+    path.write_bytes(text.encode("utf-8"))
+    assert _names(path) == ["root_spacing"]
+    changed, remaining = fix_file(path, orders=ORDERS)
+    assert changed is True
+    assert remaining == ()
+    data = path.read_bytes()
+    assert b"\n" not in data
+    assert data.decode("utf-8").replace("\r", "\n") == CANONICAL
+
+
 def test_blank_lines_inside_a_block_scalar_are_value_text(tmp_path: Path) -> None:
     text = CANONICAL.replace(
         "    derivation: DM.STUDYID\n",

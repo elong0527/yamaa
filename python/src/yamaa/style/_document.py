@@ -68,18 +68,20 @@ def parse(text: str) -> Document:
     if not _style_same_value(raw, raw):
         raise yaml.YAMLError("shared YAML reader refused the style document")
     root = yaml.compose(text, Loader=yaml.BaseLoader)
-    lines = text.split("\n")
+    # Split on every line ending YAML recognises: splitting on "\n" alone
+    # leaves a CRLF file's carriage return on each line (width and layout
+    # are then judged with it) and collapses a lone-CR file into one line
+    # whose marks point past the end of the list. The ending is part of the
+    # line ending, not of the line, and fixes write it back.
+    lines = re.split(r"\r\n|\r|\n", text)
     if lines and lines[-1] == "":
         lines.pop()
-    # A CRLF file's lines keep their carriage return when split on "\n"
-    # alone; it is part of the line ending, not of the line, so width and
-    # layout are judged without it and fixes write the ending back.
-    lines = [line[:-1] if line.endswith("\r") else line for line in lines]
+    newline = "\r\n" if "\r\n" in text else "\r" if "\r" in text else "\n"
     document = Document(
         text=text,
         lines=lines,
         root=root,
-        newline="\r\n" if "\r\n" in text else "\n",
+        newline=newline,
     )
     if root is not None:
         document.content_lines = frozenset(_content_lines(root))

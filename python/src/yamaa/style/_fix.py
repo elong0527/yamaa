@@ -9,6 +9,7 @@ unchanged. A refused edit leaves its finding reported.
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
@@ -41,7 +42,12 @@ class _Edit:
 
 
 def _comments(text: str) -> Counter[str]:
-    return Counter(line.strip() for line in text.split("\n") if "#" in line)
+    # Lines break on CR, LF, and CRLF alike (see _document.parse): splitting
+    # on "\n" alone would count a lone-CR file as one line and refuse every
+    # proved fix on it.
+    return Counter(
+        line.strip() for line in re.split(r"\r\n|\r|\n", text) if "#" in line
+    )
 
 
 def proved(before: str, after: str) -> bool:
