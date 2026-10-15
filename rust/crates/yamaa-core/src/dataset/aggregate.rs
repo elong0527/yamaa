@@ -238,6 +238,16 @@ impl BoundAggregate {
                 {
                     return Err(PlanError::InvalidSource);
                 }
+                // REQ-0470: every group_by column of a qualified aggregate
+                // must also be one of the keys it joins on. The Matched
+                // executor matches on keys only, so any other group_by
+                // column would silently merge distinct donor groups.
+                if group_by
+                    .iter()
+                    .any(|column| keys.iter().all(|key| key.source_column != *column))
+                {
+                    return Err(PlanError::InvalidSource);
+                }
                 (donor, Some(group_by.as_slice()))
             }
             AggregateRelation::Output { group_by } => {

@@ -572,3 +572,76 @@ fn every_argument_is_collected_before_a_potential_earlier_fold_overflow() {
         [(0, 0), (1, 0), (2, 0), (0, 0), (0, 1), (1, 1), (2, 1)]
     );
 }
+
+#[test]
+fn qualified_group_by_outside_the_join_keys_is_refused_req_0470() {
+    use yamaa_core::dataset::PlanError;
+    // Two donor groups share the join key ID=1 but differ in PARAM, the
+    // group_by column. Matching on keys only would silently merge them.
+    let primary = table(vec![vec![Value::Int(1), Value::Int(0)]]);
+    let donor = Table {
+        schema: schema(&["ID", "PARAM", "V"]),
+        rows: vec![
+            vec![Value::Int(1), Value::Int(10), Value::Int(2)],
+            vec![Value::Int(1), Value::Int(20), Value::Int(3)],
+        ],
+        reads: Default::default(),
+        fail: None,
+    };
+    let plan_for = |group_by: Vec<usize>| {
+        let bound = BoundAggregate::new(
+            compile_aggregate("SUM(S.V)", "aggregate", Default::default()).unwrap(),
+            AggregateRelation::Matched {
+                source: AggregateSource::Secondary(0),
+                keys: vec![IntermediateKey {
+                    source_column: 0,
+                    path: "aggregate.key.ID".into(),
+                    value: MatchValue::Variable(MatchRead::Output {
+                        column: 0,
+                        identifier: "ID".into(),
+                    }),
+                }],
+                group_by,
+            },
+            vec![AggregateBinding {
+                name: "S.V".into(),
+                column: 2,
+            }],
+            None,
+            AggregatePhase::Derivation,
+            None,
+            "aggregate",
+        )
+        .unwrap();
+        DatasetPlan::new_with_sources(
+            primary.schema.clone(),
+            vec![SecondarySource {
+                name: "S".into(),
+                schema: donor.schema.clone(),
+            }],
+            schema(&["ID", "RESULT"]),
+            vec![RowTemplate {
+                mode: RowMode::Records,
+                assignments: vec![assignment(0, Expression::Source(0))],
+                filter: None,
+            }],
+            vec![assignment(1, Expression::Aggregate(Box::new(bound)))],
+            vec![0],
+            vec![],
+        )
+    };
+    // PARAM (donor column 1) is not a join/output key: refused at
+    // validation (plan admission), before any execution.
+    assert_eq!(plan_for(vec![1]), Err(PlanError::InvalidSource));
+    // Positive control: grouping by the join key itself is compliant, and
+    // the admitted aggregate executes exactly as before.
+    let plan = plan_for(vec![0]).unwrap();
+    assert_eq!(
+        plan.execute_observed_sources(&primary, &[&donor], limits())
+            .result
+            .unwrap()
+            .dataset
+            .rows(),
+        &[vec![Value::Int(1), Value::Int(5)]]
+    );
+}

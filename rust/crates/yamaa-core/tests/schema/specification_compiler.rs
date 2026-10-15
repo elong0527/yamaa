@@ -1582,3 +1582,66 @@ fn column_ceilings_admit_1024_and_refuse_1025() {
     assert_eq!(resource.actual, Some(1025));
     assert_eq!(resource.spec_paths, ["input.SRC.types"]);
 }
+
+#[test]
+fn qualified_aggregate_group_by_must_be_an_output_key_req_0470() {
+    use yamaa_core::{
+        diagnostic::ConditionCode,
+        table::{Column, TableSchema},
+    };
+    use Tree::*;
+    // Donor SRC has ID (the output/join key), PARAM (a second grouping
+    // column) and V. Two donor groups share the key ID=1 but differ in
+    // PARAM, so a group_by on SRC.PARAM that is not an output key would
+    // silently merge those groups in the Matched executor, which matches
+    // on keys only.
+    let donor = TableSchema::new(vec![
+        Column {
+            name: "ID".into(),
+            kind: ColumnType::Int,
+        },
+        Column {
+            name: "PARAM".into(),
+            kind: ColumnType::Int,
+        },
+        Column {
+            name: "V".into(),
+            kind: ColumnType::Int,
+        },
+    ])
+    .unwrap();
+    let document_for = |group: &str| {
+        operation_document(
+            "aggregate",
+            Map(vec![
+                ("expr", Text("SUM(SRC.V)")),
+                ("group_by", List(vec![Text(group)])),
+            ]),
+            "input.csv",
+        )
+    };
+    // Non-compliant: PARAM is not an output key (spec keys are [ID]).
+    let prepared = PreparedSpecification::prepare(&document_for("SRC.PARAM")).unwrap();
+    let Err(BindError::Invalid(findings)) = prepared.bind(&donor) else {
+        panic!("qualified aggregate grouping by a non-output-key column must be refused");
+    };
+    let diagnostics = findings[0].diagnostics(prepared.source()).unwrap();
+    let diagnostic = diagnostics
+        .iter()
+        .find(|d| d.definition().requirement == Some("REQ-0470"))
+        .unwrap_or_else(|| panic!("expected a REQ-0470 diagnostic, got {diagnostics:?}"));
+    assert_eq!(diagnostic.code, ConditionCode::AggregateGroupNotOutputKey);
+    assert_eq!(diagnostic.definition().phase, "validation");
+    assert_eq!(
+        diagnostic.definition().condition,
+        "invalid_aggregate_context"
+    );
+    assert_eq!(
+        diagnostic.spec_paths,
+        ["columns.VALUE.derivation.aggregate.group_by"]
+    );
+    // Positive control: grouping by the output key itself is compliant and
+    // the same aggregate still binds (and so can execute).
+    let prepared = PreparedSpecification::prepare(&document_for("SRC.ID")).unwrap();
+    prepared.bind(&donor).unwrap();
+}
