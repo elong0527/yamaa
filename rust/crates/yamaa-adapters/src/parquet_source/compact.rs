@@ -5,6 +5,8 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Error {
     Malformed,
+    /// A structurally valid payload cannot fit the canonical Arrow table.
+    Representation,
 }
 
 #[derive(Debug, PartialEq)]
