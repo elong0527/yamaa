@@ -84,7 +84,17 @@ pub(crate) fn publication_failure(error: &crate::file_publication::Error) -> Fai
     let code = match error {
         E::Cleanup { .. } => "cleanup_incomplete",
         E::Changed => "target_changed",
-        E::Limit => "publication_limit",
+        E::Limit(error) => {
+            return resource_rejected(
+                "output",
+                "publication_limit",
+                error.resource,
+                error.limit,
+                error.actual,
+                Vec::new(),
+            )
+        }
+        E::StagingCollision => "staging_collision",
         E::InvalidTarget => "invalid_target",
         E::PathMismatch => "path_mismatch",
         E::Io(_) => {
@@ -602,7 +612,7 @@ impl RuntimePort for Native<'_> {
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Result<Domain, Failure> {
         let attempt = prepared.build_with_observer(scope);
-        if let Some(error) = file_preparation::public_opaque_resource_failure(&attempt) {
+        if let Some(error) = file_preparation::opaque_resource_failure(&attempt) {
             return Err(resource_failure("capture", error));
         }
         scope.phase(yamaa_core::application_observer::Phase::Output);
@@ -713,7 +723,7 @@ mod tests {
         fs::create_dir_all(root.join("input")).unwrap();
         let study = Study(fs::canonicalize(root).unwrap());
         const VERIFICATION_HEADER: &str = "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n";
-        // Valid precision can still exceed the artifact byte budget: each large
+        // The output preserves declared precision: each large
         // finite float needs 309 whole digits plus the declared 18 fractional digits.
         let mut input = String::from("ID,VALUE\n");
         for id in 1..=26_000 {

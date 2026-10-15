@@ -734,7 +734,7 @@ pub(crate) fn output_diagnostics(
         .map(|finding| crate::specification_diagnostics::portable_diagnostic(finding.diagnostic()))
         .collect()
 }
-/// Render all portable observations and enforce report/output budgets before
+/// Render all retained observations and validate output boundaries before
 /// publication. A host publication failure is retained, never a success report.
 pub fn complete<E, P: ArtifactPort>(
     run: &dyn RunView,

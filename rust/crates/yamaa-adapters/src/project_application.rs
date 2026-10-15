@@ -35,7 +35,7 @@ pub fn prepare(
 }
 pub(crate) fn environment_path(environment: &str) -> Result<String, crate::file_resources::Error> {
     use crate::file_resources::Error;
-    if environment.is_empty() || environment.len() > 65536 || environment.contains('\0') {
+    if environment.is_empty() || environment.contains('\0') {
         return Err(Error::InvalidPath);
     }
     let environment = std::path::absolute(environment).map_err(|_| Error::InvalidPath)?;
@@ -74,7 +74,9 @@ pub fn failure(error: &Error, host: Language) -> Failure {
                 error, None,
             )),
             crate::file_preparation::Error::Compile(_) => refused("prepare"),
-            crate::file_preparation::Error::Inventory(_) => refused("inventory"),
+            crate::file_preparation::Error::Inventory(_) => {
+                file_application::rejected("prepare", "inventory")
+            }
         },
         Error::Project(file_project::Error::Compile(run)) => match &run.rejection.error {
             PrepareError::Invalid(_) => {

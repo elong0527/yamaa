@@ -105,8 +105,6 @@ pub mod specification_run;
 
 pub mod project_preparation;
 
-pub mod capacity;
-
 pub mod dictionary_preparation;
 
 pub mod document_preparation;

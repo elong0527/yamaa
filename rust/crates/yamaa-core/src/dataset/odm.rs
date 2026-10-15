@@ -190,11 +190,10 @@ pub(super) fn validate_template(
 }
 
 macro_rules! walk {
-    ($expression:ident, $visitor:ident, $recurse:ident, $sources:ident, $depth:ident, $remaining:ident $(, $mutable:tt)?) => {{
-        if $depth > EXPRESSION_DEPTH_LIMIT || *$remaining == 0 {
+    ($expression:ident, $visitor:ident, $recurse:ident, $sources:ident, $depth:ident $(, $mutable:tt)?) => {{
+        if $depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PlanError::InvalidColumns);
         }
-        *$remaining -= 1;
         match $expression {
             Expression::Odm(bound) => $visitor(bound)?,
             Expression::SourceBinding { source, .. }
@@ -203,25 +202,25 @@ macro_rules! walk {
             | Expression::StrExtract { source, .. }
             | Expression::StrCase { source, .. }
             | Expression::StrPad { source, .. }
-            | Expression::Round { source, .. } => $recurse(&$($mutable)? source.expression, $visitor, $depth + 1, $remaining)?,
+            | Expression::Round { source, .. } => $recurse(&$($mutable)? source.expression, $visitor, $depth + 1)?,
             Expression::Extreme { operands, .. }
             | Expression::StrConcat { operands, .. }
             | Expression::StrTemplate { operands, .. }
             | Expression::Imputation { operands, .. }
             | Expression::Temporal { operands, .. } => {
                 for operand in operands {
-                    $recurse(&$($mutable)? operand.expression, $visitor, $depth + 1, $remaining)?;
+                    $recurse(&$($mutable)? operand.expression, $visitor, $depth + 1)?;
                 }
             }
             Expression::Case(branches) => {
                 for branch in branches {
-                    $recurse(&$($mutable)? branch.assignment.expression, $visitor, $depth + 1, $remaining)?;
+                    $recurse(&$($mutable)? branch.assignment.expression, $visitor, $depth + 1)?;
                 }
             }
             Expression::FirstAvailable(selection) => {
                 for operand in selection.$sources() {
                     if let SelectionRead::Expression(assignment) = &$($mutable)? operand.read {
-                        $recurse(&$($mutable)? assignment.expression, $visitor, $depth + 1, $remaining)?;
+                        $recurse(&$($mutable)? assignment.expression, $visitor, $depth + 1)?;
                     }
                 }
             }
@@ -239,39 +238,27 @@ pub(crate) fn visit(
     expression: &Expression,
     visitor: &mut impl FnMut(&BoundOdm) -> Result<(), PlanError>,
 ) -> Result<(), PlanError> {
-    let mut remaining = EXPRESSION_NODE_LIMIT;
-    visit_at(expression, visitor, 0, &mut remaining)
+    visit_at(expression, visitor, 0)
 }
 fn visit_at(
     expression: &Expression,
     visitor: &mut impl FnMut(&BoundOdm) -> Result<(), PlanError>,
     depth: usize,
-    remaining: &mut usize,
 ) -> Result<(), PlanError> {
-    walk!(expression, visitor, visit_at, sources, depth, remaining)
+    walk!(expression, visitor, visit_at, sources, depth)
 }
 pub(crate) fn visit_mut(
     expression: &mut Expression,
     visitor: &mut impl FnMut(&mut BoundOdm) -> Result<(), PlanError>,
 ) -> Result<(), PlanError> {
-    let mut remaining = EXPRESSION_NODE_LIMIT;
-    visit_mut_at(expression, visitor, 0, &mut remaining)
+    visit_mut_at(expression, visitor, 0)
 }
 fn visit_mut_at(
     expression: &mut Expression,
     visitor: &mut impl FnMut(&mut BoundOdm) -> Result<(), PlanError>,
     depth: usize,
-    remaining: &mut usize,
 ) -> Result<(), PlanError> {
-    walk!(
-        expression,
-        visitor,
-        visit_mut_at,
-        sources_mut,
-        depth,
-        remaining,
-        mut
-    )
+    walk!(expression, visitor, visit_mut_at, sources_mut, depth, mut)
 }
 
 #[cfg(test)]
@@ -294,7 +281,7 @@ mod tests {
         })
         .unwrap();
         let mut expression = Expression::Odm(std::boxed::Box::new(bound));
-        for _ in 0..66 {
+        for _ in 0..129 {
             expression = Expression::Case(std::vec![CaseBranch {
                 when: None,
                 assignment: std::boxed::Box::new(Assignment {

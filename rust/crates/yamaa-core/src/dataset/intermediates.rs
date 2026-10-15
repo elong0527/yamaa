@@ -165,18 +165,12 @@ pub fn visit_output_dependencies<'a>(
         lookup: &impl Fn(usize) -> Option<&'a Intermediate>,
         visitor: &mut impl FnMut(usize),
         depth: usize,
-        work: &mut usize,
     ) -> Result<(), PlanError> {
-        if depth > 64 || *work == 0 {
+        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PlanError::InvalidIntermediate);
         }
-        *work -= 1;
         let item = lookup(index).ok_or(PlanError::InvalidIntermediate)?;
         for column in item.output_dependencies() {
-            if *work == 0 {
-                return Err(PlanError::InvalidIntermediate);
-            }
-            *work -= 1;
             visitor(column);
         }
         for field in item.current_fields() {
@@ -184,12 +178,12 @@ pub fn visit_output_dependencies<'a>(
                 if child >= index {
                     return Err(PlanError::InvalidIntermediate);
                 }
-                visit(child, lookup, visitor, depth + 1, work)?;
+                visit(child, lookup, visitor, depth + 1)?;
             }
         }
         Ok(())
     }
-    visit(index, &lookup, &mut visitor, 0, &mut 16_777_216)
+    visit(index, &lookup, &mut visitor, 0)
 }
 
 /// Bind declarations globally; completed-value availability is checked at each read.

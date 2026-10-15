@@ -421,7 +421,7 @@ impl Parser<'_> {
                     reason: "invalid group name",
                 });
             }
-            // Decoding cannot grow beyond the already admitted source byte budget.
+            // Decoding a literal character cannot grow its UTF-8 representation.
             name.push(c);
         }
         if name.is_empty() {

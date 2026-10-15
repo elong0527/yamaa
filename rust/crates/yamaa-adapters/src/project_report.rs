@@ -332,9 +332,6 @@ pub fn build_result<'a, C, E>(
     id: Identity<'_>,
     facts: &[Classified<'a, E>],
 ) -> Result<BuildResult, Error<'a, C, E>> {
-    if facts.len() > 65_536 {
-        return Err(report::Error::OutputLimit.into());
-    }
     // Distinct zero-sized values can share an address. Never grant one fact
     // authority over another held failure merely because their pointers agree.
     if std::mem::size_of::<E>() == 0 && !facts.is_empty() {

@@ -44,7 +44,7 @@ impl MatchRead {
         output: &TableSchema,
         available: &[bool],
     ) -> Result<ColumnType, PlanError> {
-        if self.identifier().is_empty() || self.identifier().len() > 65_536 {
+        if self.identifier().is_empty() {
             return Err(PlanError::InvalidIntermediate);
         }
         let column = match self {
@@ -202,7 +202,7 @@ impl MatchValue {
             return Err(PlanError::InvalidIntermediate);
         }
         if let Self::Contextual(declaration) = self {
-            if declaration.identifier().is_empty() || declaration.identifier().len() > 65_536 {
+            if declaration.identifier().is_empty() {
                 return Err(PlanError::InvalidIntermediate);
             }
         }
@@ -226,12 +226,11 @@ pub(super) fn validate_declaration(
     output: &TableSchema,
     available: &[bool],
 ) -> Result<(), PlanError> {
-    if keys.is_empty() || keys.len() > 64 {
+    if keys.is_empty() || keys.len() > crate::limits::Limits::KEYS {
         return Err(PlanError::InvalidIntermediate);
     }
     for (index, key) in keys.iter().enumerate() {
         if key.path.is_empty()
-            || key.path.len() > 65_536
             || keys[..index]
                 .iter()
                 .any(|prior| prior.source_column == key.source_column)

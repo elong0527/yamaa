@@ -539,11 +539,6 @@ fn validate_columns(columns: &[usize], width: usize) -> Result<(), PlanError> {
     Ok(())
 }
 
-/// Enforce grouped source scope and already-completed output dependencies.
-#[allow(clippy::too_many_arguments)]
-const EXPRESSION_DEPTH_LIMIT: usize = 64;
-const EXPRESSION_NODE_LIMIT: usize = 65_536;
-
 #[allow(clippy::too_many_arguments)]
 fn validate_function_intermediates(
     arguments: &[FunctionArgument],
@@ -579,7 +574,6 @@ fn validate_assignment(
     mode: &RowMode,
     record_derivation: bool,
 ) -> Result<(), PlanError> {
-    let mut remaining = EXPRESSION_NODE_LIMIT;
     validate_assignment_at(
         assignment,
         available,
@@ -590,7 +584,6 @@ fn validate_assignment(
         output,
         mode,
         0,
-        &mut remaining,
         record_derivation,
         false,
     )
@@ -606,7 +599,6 @@ fn validate_record_assignment(
     intermediates: &[Intermediate],
     output: &TableSchema,
 ) -> Result<(), PlanError> {
-    let mut remaining = EXPRESSION_NODE_LIMIT;
     validate_assignment_at(
         assignment,
         available,
@@ -617,7 +609,6 @@ fn validate_record_assignment(
         output,
         &RowMode::Records,
         0,
-        &mut remaining,
         false,
         false,
     )
@@ -754,14 +745,12 @@ fn validate_assignment_at(
     output: &TableSchema,
     mode: &RowMode,
     depth: usize,
-    remaining: &mut usize,
     record_derivation: bool,
     destination_free: bool,
 ) -> Result<(), PlanError> {
-    if depth > EXPRESSION_DEPTH_LIMIT || *remaining == 0 {
+    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
         return Err(PlanError::InvalidColumns);
     }
-    *remaining -= 1;
     if assignment.path.is_empty() {
         return Err(PlanError::EmptyPath);
     }
@@ -797,7 +786,7 @@ fn validate_assignment_at(
             }
         }
         Expression::Case(branches) => {
-            if branches.is_empty() || branches.len() > 1024 || branches[0].when.is_none() {
+            if branches.is_empty() || branches[0].when.is_none() {
                 return Err(PlanError::InvalidColumns);
             }
             for (index, branch) in branches.iter().enumerate() {
@@ -840,7 +829,6 @@ fn validate_assignment_at(
                     output,
                     mode,
                     depth + 1,
-                    remaining,
                     record_derivation,
                     destination_free,
                 )?;
@@ -903,7 +891,6 @@ fn validate_assignment_at(
                 output,
                 mode,
                 depth + 1,
-                remaining,
                 record_derivation,
                 destination_free,
             )?;
@@ -932,7 +919,6 @@ fn validate_assignment_at(
                     output,
                     mode,
                     depth + 1,
-                    remaining,
                     record_derivation,
                     destination_free,
                 )?;
@@ -969,7 +955,6 @@ fn validate_assignment_at(
                 output,
                 mode,
                 depth + 1,
-                remaining,
                 record_derivation,
                 destination_free,
             )?;
@@ -992,7 +977,6 @@ fn validate_assignment_at(
                     output,
                     mode,
                     depth + 1,
-                    remaining,
                     record_derivation,
                     destination_free,
                 )?;
@@ -1022,7 +1006,6 @@ fn validate_assignment_at(
                     output,
                     mode,
                     depth + 1,
-                    remaining,
                     record_derivation,
                     destination_free,
                 )?;
@@ -1052,7 +1035,6 @@ fn validate_assignment_at(
                     output,
                     mode,
                     depth + 1,
-                    remaining,
                     record_derivation,
                     destination_free,
                 )?;
@@ -1102,7 +1084,6 @@ fn validate_assignment_at(
                         output,
                         mode,
                         depth + 1,
-                        remaining,
                         record_derivation,
                         destination_free,
                     )?;
@@ -1137,7 +1118,6 @@ fn validate_assignment_at(
                 output,
                 mode,
                 depth + 1,
-                remaining,
                 record_derivation,
                 destination_free,
             )?;
@@ -2140,6 +2120,8 @@ impl DatasetPlan {
     }
 }
 
+#[cfg(test)]
+mod admission_boundaries;
 #[cfg(test)]
 mod donor_admission_tests;
 
