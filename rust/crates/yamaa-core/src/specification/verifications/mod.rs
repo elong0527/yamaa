@@ -199,14 +199,6 @@ impl Verifications {
         column: Option<usize>,
     ) -> Result<Self, PrepareError> {
         let mut result = Self::default();
-        if entries.len() > 16 {
-            return Err(PrepareError::limit(
-                "verifications",
-                16,
-                Some(entries.len()),
-                Some(prefix),
-            ));
-        }
         let mut extra = Vec::new();
         for (index, &id) in entries.iter().enumerate() {
             let (op, payload) = operation(d, id)?;
