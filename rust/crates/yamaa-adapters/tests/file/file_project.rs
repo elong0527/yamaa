@@ -482,7 +482,6 @@ fn selected_ordinary_environment_owner_preserves_fresh_activation_and_inherited_
         Language::Python,
         schemas::domain_schema(),
         schemas::environment_schema(),
-        Default::default(),
     )
     .unwrap() else {
         panic!("ordinary capability");

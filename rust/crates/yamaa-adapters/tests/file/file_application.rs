@@ -75,7 +75,7 @@ fn changed_source_retains_original_snapshot_and_ingest_issue_and_refuses_both_sa
     fs::write(study.0.join("output.csv"), b"prior saved output").unwrap();
     let path = study.text("spec.yaml");
     let (mut resources, entry) = file_configuration::resources(&path).unwrap();
-    let original = resources.capture("input.csv", 16).unwrap().0;
+    let original = resources.capture("input.csv").unwrap().0;
     let mut prepared = FileSpecification::prepare(resources, &entry).unwrap();
     let reads = prepared.capture_reads();
     fs::write(study.0.join("input.csv"), b"ID\n2\n").unwrap();
@@ -86,11 +86,7 @@ fn changed_source_retains_original_snapshot_and_ingest_issue_and_refuses_both_sa
             yamaa_adapters::file_resources::Error::Changed
         ))
     ));
-    assert_eq!(
-        file_preparation::opaque_resource_failure(&attempt),
-        Some(&yamaa_adapters::file_resources::Error::Changed)
-    );
-    assert!(file_preparation::public_opaque_resource_failure(&attempt).is_none());
+    assert!(file_preparation::opaque_resource_failure(&attempt).is_none());
     assert_eq!(prepared.capture_reads(), reads);
     assert_eq!(original.as_ref(), b"ID\n1\n");
     let result =
@@ -576,7 +572,7 @@ fn compiler_refusals_retain_the_same_capacity_on_plain_and_environment_routes() 
                 assert_eq!(
                     serde_json::from_str::<serde_json::Value>(&issue.context).unwrap(),
                     json!({
-                        "stage":"prepare", "code":"compiler_limit", "resource":resource, "limit":limit, "actual":actual, "incomplete_checks_from":"specification",
+                        "stage":"prepare", "code":"compiler_limit", "resource":resource, "limit":limit, "actual":actual,
                     })
                 );
             }
@@ -585,70 +581,85 @@ fn compiler_refusals_retain_the_same_capacity_on_plain_and_environment_routes() 
 }
 
 #[test]
-fn inherited_and_decoder_refusals_keep_resource_phase_on_both_public_routes() {
-    use serde_json::json;
-    for (resource, limit, phase, stage) in [
-        ("depth", 64, "inheritance", "prepare"),
-        ("numeric_digits", 4096, "yaml_decode", "capture"),
-    ] {
-        let study = Study::new();
-        if resource == "depth" {
-            fs::write(study.0.join("base.yaml"), VALID).unwrap();
-            for index in 0..65 {
-                let parent = if index < 64 {
-                    format!("layer-{}.yaml", index + 1)
-                } else {
-                    "base.yaml".into()
-                };
-                fs::write(
-                    study.0.join(format!("layer-{index}.yaml")),
-                    format!("schema_version: '1.0'\nparents: [{parent}]\n"),
-                )
-                .unwrap();
-            }
-            fs::write(
-                study.0.join("spec.yaml"),
-                "schema_version: '1.0'\nparents: [layer-0.yaml]\n",
-            )
-            .unwrap();
+fn iterative_inheritance_admits_sixty_five_layers_on_both_public_routes() {
+    let study = Study::new();
+    fs::write(study.0.join("base.yaml"), VALID).unwrap();
+    fs::write(study.0.join("input.csv"), b"ID\n1\n").unwrap();
+    for index in 0..65 {
+        let parent = if index < 64 {
+            format!("layer-{}.yaml", index + 1)
         } else {
-            fs::write(
-                study.0.join("spec.yaml"),
-                format!("value: {}\n", "9".repeat(4097)),
-            )
-            .unwrap();
-        }
+            "base.yaml".into()
+        };
         fs::write(
-            study.0.join("environment.yaml"),
-            "schema_version: '1.0'\nlanguage: python\n",
+            study.0.join(format!("layer-{index}.yaml")),
+            format!("schema_version: '1.0'\nparents: [{parent}]\n"),
         )
         .unwrap();
-        let spec = study.text("spec.yaml");
-        let environment = study.text("environment.yaml");
-        for environment in [None, Some(environment.as_str())] {
-            let request = || Request {
-                specification: &spec,
-                environment,
-            };
-            for issues in [
-                file_application::check(request(), identity(&spec)),
-                file_application::domain(request(), identity(&spec))
-                    .err()
-                    .unwrap(),
-            ] {
-                assert_eq!(issues.len(), 1, "{resource}, {environment:?}");
-                assert_eq!(issues[0].phase, "engine");
-                assert_eq!(issues[0].condition, "engine_rejected");
-                assert_eq!(issues[0].requirement, None);
-                let mut expected = json!({"code":"resource_limit","stage":stage,"phase":phase,"resource":resource,"limit":limit,"incomplete_checks_from":"specification"});
-                if resource == "numeric_digits" {
-                    expected["actual"] = json!(4097);
-                }
-                assert_eq!(
-                    serde_json::from_str::<serde_json::Value>(&issues[0].context).unwrap(),
-                    expected
-                );
-            }
+    }
+    fs::write(
+        study.0.join("spec.yaml"),
+        "schema_version: '1.0'\nparents: [layer-0.yaml]\n",
+    )
+    .unwrap();
+    fs::write(
+        study.0.join("environment.yaml"),
+        "schema_version: '1.0'\nlanguage: python\n",
+    )
+    .unwrap();
+    let spec = study.text("spec.yaml");
+    let environment = study.text("environment.yaml");
+    for environment in [None, Some(environment.as_str())] {
+        let request = || Request {
+            specification: &spec,
+            environment,
+        };
+        assert!(file_application::check(request(), identity(&spec)).is_empty());
+        let mut result = file_application::domain(request(), identity(&spec)).unwrap();
+        assert!(result.issues().is_empty());
+        assert!(result.output().is_some());
+        assert!(result.save().unwrap());
+        assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n1\n");
+    }
+}
+
+#[test]
+fn wide_integer_in_source_keeps_its_exact_language_finding_on_both_public_routes() {
+    let study = Study::new();
+    let digits = "9".repeat(4097);
+    fs::write(
+        study.0.join("spec.yaml"),
+        format!("schema_version: {digits}\n"),
+    )
+    .unwrap();
+    fs::write(
+        study.0.join("environment.yaml"),
+        "schema_version: '1.0'\nlanguage: python\n",
+    )
+    .unwrap();
+    let spec = study.text("spec.yaml");
+    let environment = study.text("environment.yaml");
+    for environment in [None, Some(environment.as_str())] {
+        let request = || Request {
+            specification: &spec,
+            environment,
+        };
+        for issues in [
+            file_application::check(request(), identity(&spec)),
+            file_application::domain(request(), identity(&spec))
+                .err()
+                .unwrap(),
+        ] {
+            assert_eq!(issues.len(), 1);
+            let issue = &issues[0];
+            assert_eq!(issue.phase, "validation");
+            assert_eq!(issue.condition, "schema_version_mismatch");
+            assert_eq!(issue.requirement.as_deref(), Some("REQ-0281"));
+            assert_eq!(issue.spec_paths, ["schema_version"]);
+            assert_eq!(
+                issue.context,
+                format!(r#"{{"actual":{digits},"expected":"1.0"}}"#)
+            );
         }
     }
 }
@@ -672,7 +683,9 @@ fn matching_budget_refusal_retains_pattern_path_and_applied_bound() {
         ["columns.TERM.verifications[0].matches.pattern"]
     );
     let context: serde_json::Value = serde_json::from_str(&findings[0].context).unwrap();
-    assert_eq!(context["resource"], "predicate_regex_state_cells");
-    assert_eq!(context["limit"], 1_000_000);
+    assert_eq!(
+        context,
+        serde_json::json!({"code":"execution_limit","stage":"execute","resource":"regex_steps","limit":1_000_000})
+    );
     assert!(!study.0.join("output.csv").exists());
 }

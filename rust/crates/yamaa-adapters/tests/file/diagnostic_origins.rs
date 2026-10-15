@@ -59,7 +59,6 @@ fn physical_row_indices_preserve_literal_parent_ids_and_refuse_invalid_slots() {
             Language::Python,
             shipped_schema::capture().unwrap(),
             shipped_schema::capture_environment().unwrap(),
-            Default::default(),
         )
         .unwrap();
         let Prepared::Plain(prepared) = &owner else {
@@ -122,7 +121,6 @@ fn ready_static_owner_returns_contributor_without_changing_public_issue_context(
         Language::Python,
         shipped_schema::capture().unwrap(),
         shipped_schema::capture_environment().unwrap(),
-        Default::default(),
     )
     .unwrap();
     let before = source_metadata::selected_reads(&owner);

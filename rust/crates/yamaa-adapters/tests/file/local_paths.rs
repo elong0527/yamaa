@@ -198,9 +198,9 @@ fn parent_and_absolute_dot_aliases_share_bytes_and_detect_later_changes() {
     let declaring = resources.resolve("root.yaml").unwrap();
     let relative = "../shared/data.csv";
     let absolute = study.text("shared/../shared/./data.csv");
-    let (first, fresh) = resources.capture_from(&declaring, relative, 32).unwrap();
+    let (first, fresh) = resources.capture_from(&declaring, relative).unwrap();
     assert!(fresh);
-    let (second, fresh) = resources.capture_from(&declaring, &absolute, 32).unwrap();
+    let (second, fresh) = resources.capture_from(&declaring, &absolute).unwrap();
     assert!(!fresh);
     assert!(std::sync::Arc::ptr_eq(&first, &second));
     assert_eq!(resources.capture_reads(), 1);
@@ -210,7 +210,7 @@ fn parent_and_absolute_dot_aliases_share_bytes_and_detect_later_changes() {
     );
     fs::write(study.0.join("shared/data.csv"), b"ID\n8\n").unwrap();
     assert_eq!(
-        resources.capture_from(&declaring, relative, 32).err(),
+        resources.capture_from(&declaring, relative).err(),
         Some(Error::Changed)
     );
     assert_eq!(first.as_ref(), b"ID\n7\n");
@@ -294,38 +294,41 @@ fn local_path_admission_still_rejects_uri_backslash_and_empty_segments() {
 }
 
 #[test]
-fn retired_python_refused_alias_cannot_become_a_snapshot_verification_dependency() {
+fn metadata_refused_alias_cannot_become_a_snapshot_verification_dependency() {
+    use yamaa_core::limits::Limits;
     let study = Study::new();
     let source = study.0.join("entry/source.csv");
     let alias = study.0.join("entry/alias.csv");
-    fs::write(&source, b"retained").unwrap();
+    let content = vec![b'x'; Limits::SPEC_BYTES + 1];
+    fs::write(&source, &content).unwrap();
     fs::hard_link(&source, &alias).unwrap();
     let mut resources = study.resources();
-    let (snapshot, created) = resources.capture("source.csv", 8).unwrap();
+    let (snapshot, created) = resources.capture("source.csv").unwrap();
     assert!(created);
     for name in ["source.csv", "alias.csv"] {
-        assert_eq!(resources.capture(name, 7), Err(Error::Limit));
+        assert_eq!(
+            resources.capture_metadata(name),
+            Err(Error::Limit(Limits::spec_bytes(content.len()).unwrap_err()))
+        );
     }
     fs::remove_file(alias).unwrap();
-    let (again, created) = resources.capture("source.csv", 8).unwrap();
+    let (again, created) = resources.capture("source.csv").unwrap();
     assert!(!created && std::sync::Arc::ptr_eq(&snapshot, &again));
-    assert_eq!(snapshot.as_ref(), b"retained");
+    assert_eq!(snapshot.as_ref(), content);
     assert_eq!(resources.capture_reads(), 1);
 }
 
 #[test]
-fn retired_python_unicode_names_and_binary_snapshots_do_not_scale_to_the_byte_ceiling() {
+fn unicode_names_and_binary_snapshots_keep_exact_bytes_without_reopening() {
     let study = Study::new();
     let name = "donn\u{e9}es-\u{1f9ea}.csv";
     let content = b"ID\r\n001\x1a\x00\r\n";
     fs::write(study.0.join("entry").join(name), content).unwrap();
     let mut resources = study.resources();
-    // The old Python boundary also admitted arbitrary-sized integer ceilings;
-    // the native boundary's largest usize still must only capture this file.
-    let (snapshot, created) = resources.capture(name, usize::MAX).unwrap();
+    let (snapshot, created) = resources.capture(name).unwrap();
     assert!(created);
     assert_eq!(snapshot.as_ref(), content);
-    let (again, created) = resources.capture(name, content.len()).unwrap();
+    let (again, created) = resources.capture(name).unwrap();
     assert!(!created && std::sync::Arc::ptr_eq(&snapshot, &again));
     assert_eq!(resources.capture_reads(), 1);
 }
@@ -350,13 +353,10 @@ fn retired_python_junctions_reject_descent_and_keep_caller_selected_root_authori
             .unwrap();
         assert!(output.status.success(), "{output:?}");
         let mut resources = study.resources();
-        assert_eq!(
-            resources.capture("link&data/dm.csv", 7),
-            Err(Error::Symlink)
-        );
+        assert_eq!(resources.capture("link&data/dm.csv"), Err(Error::Symlink));
         assert_eq!(resources.capture_reads(), 0);
         let mut selected = Resources::for_entry(&link).unwrap();
-        let (bytes, created) = selected.capture("dm.csv", 7).unwrap();
+        let (bytes, created) = selected.capture("dm.csv").unwrap();
         assert!(created);
         assert_eq!(bytes.as_ref(), b"ID\n001\n");
         drop(selected);
