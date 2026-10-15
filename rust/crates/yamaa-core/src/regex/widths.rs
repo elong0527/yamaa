@@ -355,7 +355,15 @@ impl<'a> Analysis<'a> {
         }
         self.lookup[&(environment, number)]
     }
-    fn merge(&mut self, paths: Vec<Path>) -> Path {
+    fn merge(&mut self, mut paths: Vec<Path>) -> Path {
+        // All bodies have already been visited, including assertions and
+        // arithmetic in unavailable iterations. Empty optional iterations
+        // cannot contribute captures or domain choices to subsequent paths.
+        let unavailable = paths[0];
+        paths.retain(|path| path.domain != self.expressions.absent);
+        if paths.is_empty() {
+            return unavailable;
+        }
         if paths.len() == 1 {
             return paths[0];
         }
@@ -565,6 +573,13 @@ impl Expressions {
         expressions
     }
     fn intern(&mut self, expression: Expression) -> usize {
+        match expression {
+            Expression::Project(child, _) if matches!(self.nodes[child], Expression::Value(_)) => {
+                return child;
+            }
+            Expression::Optional(child, Some(0), _) => return self.present(child),
+            _ => {}
+        }
         if let Some(&id) = self.identities.get(&expression) {
             return id;
         }
@@ -673,6 +688,8 @@ impl Expressions {
     fn positive(&mut self, expression: usize) -> usize {
         if let Expression::Value(value) = self.nodes[expression] {
             self.intern(Expression::Value(value.and_then(Extent::positive)))
+        } else if matches!(self.nodes[expression], Expression::Present(_)) {
+            self.absent
         } else {
             self.intern(Expression::Positive(expression))
         }
@@ -1669,6 +1686,172 @@ mod tests {
         }
         source.push(')');
         source
+    }
+
+    fn inspect_fixed_assertion(source: &str) -> (bool, usize, usize, usize) {
+        let mut pattern = Pattern::compile(&source.replacen("(?<=", "(?=", 1)).unwrap();
+        let id = pattern
+            .nodes
+            .iter()
+            .rposition(|node| matches!(node.kind, Kind::Look { .. }))
+            .unwrap();
+        let Kind::Look { behind, .. } = &mut pattern.nodes[id].kind else {
+            unreachable!()
+        };
+        *behind = true;
+        let mut analysis = Analysis::new(&pattern.nodes, pattern.root);
+        let initial = Path {
+            width: analysis.expressions.zero,
+            captures: 0,
+            domain: analysis.expressions.zero,
+        };
+        analysis.visit(pattern.root, initial, false).unwrap();
+        analysis.expressions.check_arithmetic().unwrap();
+        let fixed = analysis
+            .expressions
+            .is_fixed(analysis.behind[id].unwrap(), pattern.nodes[id].byte)
+            .unwrap();
+        (
+            fixed,
+            analysis.expressions.fixed.len(),
+            analysis.expressions.ranges.len(),
+            analysis.expressions.nodes.len(),
+        )
+    }
+
+    #[test]
+    fn unavailable_empty_iterations_do_not_form_capture_domain_products() {
+        for count in [2, 4, 30] {
+            for (unit, groups) in [
+                (r"(?:()|())?", 2),
+                (r"(()|())?", 3),
+                (r"(?:()|())*", 2),
+                (r"(?:()|())", 2),
+                (r"(?:()|()){1,2}", 2),
+                (r"(?:(?=())|(?=()))?", 2),
+                (r"(?:((?=))|((?=)))?", 2),
+                (r"(?:(?=(?:()|())))?", 2),
+                (r"(?:(?=(a))|(?=(b)))?", 2),
+                (r"(?:(())?|(()))?", 4),
+                (r"(?:()|())??", 2),
+            ] {
+                let choices = unit.repeat(count);
+                let all = references(groups * count);
+                for source in [
+                    format!("{choices}(?<={all})"),
+                    format!(r"{choices}{all}(?<=\1)"),
+                    format!(r"(?:{choices}{all}){{0}}(?<=\1)"),
+                    format!("(?:{choices}){{2}}(?<={all})"),
+                    format!(r"{choices}(?!{all})(?<=\1)"),
+                ] {
+                    let (fixed, queries, ranges, expressions) = inspect_fixed_assertion(&source);
+                    assert!(fixed, "{source}");
+                    // Small counts are checked first so a regression fails
+                    // before attempting a large symbolic branch product.
+                    assert!(
+                        queries <= count * 10,
+                        "{count} choices retained {queries} fixedness queries: {source}"
+                    );
+                    assert!(
+                        ranges <= count * 10,
+                        "{count} choices retained {ranges} exact queries: {source}"
+                    );
+                    assert!(
+                        expressions <= count * count * 20,
+                        "{expressions} expressions: {source}"
+                    );
+                    Pattern::compile(&source).unwrap();
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn optional_empty_iterations_restore_captures_but_required_ones_participate() {
+        for source in [r"^(?:()|())?(?<=\1\2)$", r"^(?:()|()){0,2}(?<=\1\2)$"] {
+            assert_eq!(
+                Pattern::compile(source)
+                    .unwrap()
+                    .full_match("")
+                    .unwrap()
+                    .unwrap()
+                    .groups,
+                [Some(""), None, None]
+            );
+        }
+        for source in [r"^(?:()|()){1,2}(?<=\1\2)$", r"^(?:()|()){2}(?<=\1\2)$"] {
+            assert_eq!(
+                Pattern::compile(source)
+                    .unwrap()
+                    .full_match("")
+                    .unwrap()
+                    .unwrap()
+                    .groups,
+                [Some(""), Some(""), None]
+            );
+        }
+        assert_eq!(
+            Pattern::compile(r"^(?:(?=(a))|(?=(b)))?(?<=\1\2)a$")
+                .unwrap()
+                .full_match("a")
+                .unwrap()
+                .unwrap()
+                .groups,
+            [Some("a"), None, None]
+        );
+        assert_eq!(
+            Pattern::compile(r"^(?:(?=(a))|(?=(b))){1,2}a(?<=\1\2)$")
+                .unwrap()
+                .full_match("a")
+                .unwrap()
+                .unwrap()
+                .groups,
+            [Some("a"), Some("a"), None]
+        );
+    }
+
+    #[test]
+    fn unavailable_empty_iterations_still_validate_inner_assertions_and_arithmetic() {
+        assert_eq!(
+            Pattern::compile(r"(?:(?<=a*)())?(?<=\1)"),
+            Err(CompileError::Invalid {
+                byte: 3,
+                reason: "variable-length lookbehind",
+            })
+        );
+        for assertion in ["=", "!"] {
+            let source = format!(r"(?:(?{assertion}(aa)\1{{{}}}))?(?<=\1)", usize::MAX);
+            assert_eq!(
+                Pattern::compile(&source),
+                Err(CompileError::Unsupported {
+                    byte: source.find(r"\1").unwrap(),
+                    feature: "pattern width exceeds addressable range",
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn nullable_consuming_captures_still_prove_variable_width() {
+        for count in [2, 4, 8] {
+            let choices = r"(?:(a?)|(b?))?".repeat(count);
+            let source = choices.clone() + "(?<=" + &references(2 * count) + ")";
+            let (fixed, queries, ranges, expressions) = inspect_fixed_assertion(&source);
+            assert!(!fixed);
+            assert!(queries <= count * 10, "{queries} fixedness queries");
+            assert!(ranges <= count * 10, "{ranges} exact queries");
+            assert!(
+                expressions <= count * count * 60,
+                "{expressions} expressions"
+            );
+            assert_eq!(
+                Pattern::compile(&source),
+                Err(CompileError::Invalid {
+                    byte: choices.len(),
+                    reason: "variable-length lookbehind",
+                })
+            );
+        }
     }
 
     fn inspect_arithmetic(source: &str) -> (Result<(), CompileError>, usize) {
