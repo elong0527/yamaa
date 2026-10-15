@@ -168,6 +168,7 @@ def test_compiler_refusal_details_on_check_and_domain(
         assert json.loads(issue["context"]) == {
             "code": "compiler_limit",
             "stage": "prepare",
+            "incomplete_checks_from": "specification",
             "resource": resource,
             "limit": limit,
             "actual": actual,
@@ -208,6 +209,7 @@ def test_preparation_and_yaml_resource_refusals_preserve_bound_and_phase(
         assert context == {
             "code": "resource_limit",
             "stage": stage,
+            "incomplete_checks_from": "specification",
             "phase": phase,
             "resource": resource,
             "limit": limit,

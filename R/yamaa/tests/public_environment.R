@@ -486,6 +486,7 @@ qualify_matching_budget <- function() {
     context <- jsonlite::fromJSON(failed$issues$context[[1]], simplifyVector = FALSE)
     stopifnot(identical(context$code, truth$context$code),
       identical(context$stage, truth$context$stage),
+      identical(context$incomplete_checks_from, truth$context$incomplete_checks_from),
       identical(context$resource, truth$context$resource),
       identical(context$limit, truth$context$limit),
       inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"),

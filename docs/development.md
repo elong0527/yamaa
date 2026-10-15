@@ -36,6 +36,25 @@ describe public usage and installation. The
 describes crate checks. [Release guidance](release.md) owns migration decisions
 and pending acceptance.
 
+## Resource refusal diagnostics
+
+Typed resource refusals retain `engine_rejected`, the null requirement, the resource,
+its bound, known usage and authored paths. Their context also contains
+`incomplete_checks_from`: the earliest lifecycle scope for which complete check
+results are unavailable. `specification` covers capture and preparation;
+`source_binding` covers input admission and binding; `data` covers execution and
+data verification; `output` covers serialization, reports and publication.
+`build` is retained when a build/report boundary cannot establish a narrower
+scope. Other boundaries retain their stage name.
+
+The field means that remaining checks in that scope and later checks applicable
+to the requested operation have no complete result. Earlier checks may already
+have run, and an output refusal does not invalidate completed data checks. It
+does not claim individual requirements were checked or skipped, or run extra
+work after a resource refusal. Static `check` still does not request data
+execution. Reduce the exhausted resource and rerun to obtain the remaining
+findings.
+
 ## Local checks
 
 Read [AGENTS.md](https://github.com/elong0527/yamaa/blob/main/AGENTS.md) before
