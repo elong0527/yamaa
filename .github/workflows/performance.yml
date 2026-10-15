@@ -512,6 +512,19 @@ jobs:
           path: ${{ runner.temp }}/linux-evidence/performance-r-ubuntu-24.04-source
       - name: Independently replay all 54 candidate cells without numeric budgets
         run: python rust/tools/audit_public_performance.py --input "${RUNNER_TEMP}/linux-evidence/input.json" --collection-scope linux-installed --check-collection --output "${RUNNER_TEMP}/linux-coverage-audit"
+      - name: Preserve independently readable scoped performance record
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: performance-linux-installed-audit-record
+          retention-days: 90
+          path: |
+            ${{ runner.temp }}/linux-coverage-audit/performance-audit.json
+            ${{ runner.temp }}/linux-coverage-audit/performance-audit.md
+            ${{ runner.temp }}/linux-evidence/input.json
+            ${{ runner.temp }}/linux-evidence/run.json
+            ${{ runner.temp }}/linux-evidence/native-run.json
+          if-no-files-found: error
       - name: Preserve raw source, metadata and independent scoped coverage report
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
