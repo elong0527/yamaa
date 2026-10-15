@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use yamaa_core::dataset::{Check, CountBoundError, RowCountBound, MAX_COUNT_BOUND_BYTES};
+use yamaa_core::dataset::{Check, CountBoundError, RowCountBound};
 
 fn bound(value: &str) -> RowCountBound {
     RowCountBound::new(value).unwrap()
@@ -63,14 +63,18 @@ fn exact_count_bounds_preserve_decimal_order_and_machine_count_width() {
 }
 
 #[test]
-fn bound_admission_precedes_copy_and_rejects_noncanonical_spellings() {
+fn wide_bound_ownership_is_exact_and_noncanonical_spellings_are_rejected() {
     for invalid in ["", "-", "+1", "-0", "00", "01", "-01", " 1", "1.0", "١"] {
         assert_eq!(RowCountBound::new(invalid), Err(CountBoundError::Invalid));
     }
-    let boundary = "9".repeat(MAX_COUNT_BOUND_BYTES);
+    let boundary = "9".repeat(16_385);
     assert_eq!(bound(&boundary).decimal(), boundary);
     assert_eq!(
-        RowCountBound::new(&(boundary + "9")),
-        Err(CountBoundError::Limit)
+        bound(&(boundary.clone() + "9")).decimal(),
+        boundary.clone() + "9"
+    );
+    assert_eq!(
+        bound(&boundary).compare_count(usize::MAX),
+        Ordering::Greater
     );
 }

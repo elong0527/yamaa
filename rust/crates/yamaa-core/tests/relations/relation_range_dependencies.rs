@@ -44,7 +44,6 @@ fn item(identifier: &str, current: CurrentRead) -> Intermediate {
                     kind: Some(ValueType::Int),
                 }),
                 None,
-                4096,
             )
             .unwrap(),
         ),
@@ -102,8 +101,7 @@ fn a_transitive_kept_range_read_cannot_enter_a_prewindow_filter() {
     .unwrap();
     assert_eq!(dependencies, [0, 0, 1]);
     let filter = BoundPredicate::new(
-        yamaa_core::predicate_compiler::compile("VALUE > 0", "row.filter", Default::default())
-            .unwrap(),
+        yamaa_core::predicate_compiler::compile("VALUE > 0", "row.filter").unwrap(),
         vec![Binding {
             name: "VALUE".into(),
             read: Read::Column(2),
@@ -161,7 +159,6 @@ fn a_declared_current_kind_cannot_be_forged_to_bypass_range_admission() {
                 kind: Some(ValueType::Int),
             }),
             None,
-            4096,
         )
         .unwrap(),
     );

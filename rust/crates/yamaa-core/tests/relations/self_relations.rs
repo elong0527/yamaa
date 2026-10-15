@@ -118,8 +118,7 @@ fn typed_aggregate_raw_field_labels_cannot_invent_a_self_relation_owner() {
             AggregateBinding, AggregatePhase, AggregateRelation, AggregateSource, BoundAggregate,
         },
     };
-    let expression =
-        compile_aggregate("SUM(P.V)", "rows[0].V.aggregate", Default::default()).unwrap();
+    let expression = compile_aggregate("SUM(P.V)", "rows[0].V.aggregate").unwrap();
     let aggregate = BoundAggregate::new(
         expression,
         AggregateRelation::Matched {

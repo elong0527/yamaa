@@ -24,7 +24,6 @@ fn range(lower: bool, upper: bool) -> RelationRange {
         None,
         lower.then(|| bound(0, None)),
         upper.then(|| bound(1, None)),
-        16_777_216,
     )
     .unwrap()
 }
@@ -55,8 +54,7 @@ fn declared_bounds_are_optional_but_cannot_both_be_omitted() {
             },
             None,
             None,
-            None,
-            4096
+            None
         ),
         Err(RelationRangeError::NoBounds)
     );
@@ -190,8 +188,7 @@ fn known_type_mismatch_is_refused_before_any_endpoint_context_exists() {
             },
             Some(ValueType::Date),
             Some(bound(0, Some(ValueType::Int))),
-            Some(bound(1, Some(ValueType::Int))),
-            4096
+            Some(bound(1, Some(ValueType::Int)))
         ),
         Err(RelationRangeError::Incomparable(RelationRangeTypes {
             value: ValueType::Date,

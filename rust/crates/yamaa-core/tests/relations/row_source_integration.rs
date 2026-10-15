@@ -67,8 +67,7 @@ fn hidden_raw_reads_remain_refused_after_keyed_or_secondary_row_construction() {
 #[test]
 fn source_selection_readers_of_windows_remain_unavailable_to_record_filters() {
     let predicate = BoundPredicate::new(
-        yamaa_core::predicate_compiler::compile("VALUE > 1", "rows[0].filter", Default::default())
-            .unwrap(),
+        yamaa_core::predicate_compiler::compile("VALUE > 1", "rows[0].filter").unwrap(),
         vec![Binding {
             name: "VALUE".into(),
             read: Read::Column(2),

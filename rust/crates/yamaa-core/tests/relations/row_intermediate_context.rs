@@ -5,9 +5,7 @@ use yamaa_core::{
         Assignment, DatasetPlan, Expression, Intermediate, IntermediateKey, MatchRead, MatchValue,
         PlanError, RowMode, RowTemplate, SecondarySource, SourceSchemas,
     },
-    schema::{
-        Document, DocumentLimits, DocumentNode as N, SpecificationDocument, ValidationBudget,
-    },
+    schema::{Document, DocumentNode as N, SpecificationDocument},
     specification::{BindError, PrepareError, PreparedSpecification},
     value::{ColumnType as T, Value},
 };
@@ -118,12 +116,9 @@ fn doc(
     ]);
     let mut nodes = Vec::new();
     let root = tree.append(&mut nodes);
-    SpecificationDocument::admit(
-        Document::new(nodes, root, DocumentLimits::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap()
+    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap()
 }
 #[test]
 fn common_authored_input_needs_no_base_and_can_follow_secondary_input_in_written_order() {
@@ -305,23 +300,18 @@ fn unknown_named_field_retains_full_lookup_cause_at_authored_read_boundary() {
     }
 }
 #[test]
-fn whole_source_metadata_admission_precedes_schema_copy_even_without_source_rows() {
+fn complete_source_metadata_is_preserved_even_without_source_rows() {
     let prepared =
         PreparedSpecification::prepare(&doc(false, [Some("SRC"), Some("SRC")], false, "P.V"))
             .unwrap();
     let huge = "q".repeat(1_000_000);
     let src = schema(&[("ID", T::Str), ("K", T::Str), (&huge, T::Str)]);
     let donor = schema(&[("K", T::Str), ("V", T::Str)]);
-    assert!(matches!(
-        prepared.bind_sources(&[&src, &donor]),
-        Err(BindError::Catalog(
-            yamaa_core::reference_binding::Error::Limit {
-                resource: "row_intermediate_metadata",
-                ..
-            }
-        ))
-    ));
+    let plan = prepared.bind_sources(&[&src, &donor]).unwrap();
+    assert_eq!(plan.source().columns()[2].name, huge);
+    assert_eq!(src.columns()[2].name, huge);
 }
+
 #[test]
 fn typed_record_plan_requires_completed_keys_and_admits_grouped_named_reads() {
     let src = schema(&[("ID", T::Str)]);

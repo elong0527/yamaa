@@ -90,8 +90,7 @@ fn malformed_row_filter_columns_retain_the_existing_scope_error() {
     for mode in [RowMode::Records, RowMode::Groups(vec![0]), RowMode::Keys] {
         for column in [1, usize::MAX] {
             let filter = BoundPredicate::new(
-                yamaa_core::predicate_compiler::compile("F > 0", "row.filter", Default::default())
-                    .unwrap(),
+                yamaa_core::predicate_compiler::compile("F > 0", "row.filter").unwrap(),
                 vec![Binding {
                     name: "F".into(),
                     read: Read::Column(column),
@@ -132,8 +131,7 @@ fn record_filters_reject_windows_and_group_filters_admit_completed_windows() {
     for mode in [RowMode::Records, RowMode::Groups(vec![0])] {
         for column in [0, 1, 2] {
             let filter = BoundPredicate::new(
-                yamaa_core::predicate_compiler::compile("F > 0", "row.filter", Default::default())
-                    .unwrap(),
+                yamaa_core::predicate_compiler::compile("F > 0", "row.filter").unwrap(),
                 vec![Binding {
                     name: "F".into(),
                     read: Read::Column(column),
@@ -267,7 +265,7 @@ fn nested_windows_admit_completed_dependencies_and_refuse_uncompleted_dependenci
     };
     assert!(make(window.clone()).is_ok());
     let predicate = BoundPredicate::new(
-        yamaa_core::predicate_compiler::compile("ID > 0", "case.when", Default::default()).unwrap(),
+        yamaa_core::predicate_compiler::compile("ID > 0", "case.when").unwrap(),
         vec![Binding {
             name: "ID".into(),
             read: Read::Column(0),
@@ -467,7 +465,7 @@ fn column_value_admission_requires_converted_values_and_valid_types_and_bounds()
     )
     .is_ok());
     assert!(make(ColumnType::Str, Check::MaxLength(1)).is_ok());
-    let pattern = yamaa_core::regex::Pattern::compile("b", Default::default()).unwrap();
+    let pattern = yamaa_core::regex::Pattern::compile("b").unwrap();
     assert_eq!(
         make(ColumnType::Int, Check::Matches(pattern.clone())),
         Err(PlanError::InvalidColumns)

@@ -4,12 +4,10 @@ use yamaa_core::{
     bound_expression::{Binding, Read},
     dataset::{
         compile_dataset, AssignmentDeclaration as A, DatasetCompileError as Error,
-        DatasetCompileLimits, DatasetDeclaration, Expression, ExpressionDeclaration as D,
-        FunctionArgument, FunctionInput, PlanError, RowMode, SourceSchemas, TemplateDeclaration,
-        Window, WindowKind,
+        DatasetDeclaration, Expression, ExpressionDeclaration as D, FunctionArgument,
+        FunctionInput, PlanError, RowMode, SourceSchemas, TemplateDeclaration, Window, WindowKind,
     },
     function_signature::{FunctionIdentity, InvocationPlan, Parameter, Presence},
-    numeric_compiler::CompileError,
     value::{ColumnType, Value, ValueType},
 };
 
@@ -81,11 +79,8 @@ fn call(slot: usize) -> D {
 
 #[test]
 fn compiling_preserves_deferred_arithmetic_and_authored_path() {
-    let compiled = compile_dataset(
-        declaration(compute("ID + 1 / 0", "ID", Read::Column(0))),
-        Default::default(),
-    )
-    .unwrap();
+    let compiled =
+        compile_dataset(declaration(compute("ID + 1 / 0", "ID", Read::Column(0)))).unwrap();
     let Expression::Compute(numeric) = &compiled.plan().columns()[0].expression else {
         panic!("compiled numeric expression")
     };
@@ -105,34 +100,27 @@ fn compiling_preserves_deferred_arithmetic_and_authored_path() {
 #[test]
 fn grammar_binding_and_phase_errors_are_owned_by_pure_compilation() {
     assert!(matches!(
-        compile_dataset(
-            declaration(compute("ID +", "ID", Read::Column(0))),
-            Default::default()
-        ),
-        Err(Error::Numeric(CompileError::Parse(_)))
+        compile_dataset(declaration(compute("ID +", "ID", Read::Column(0)))),
+        Err(Error::Numeric(
+            yamaa_core::numeric_parser::ParseError::Grammar { .. }
+        ))
     ));
     assert!(matches!(
-        compile_dataset(
-            declaration(compute("ID + 1", "OTHER", Read::Column(0))),
-            Default::default()
-        ),
+        compile_dataset(declaration(compute("ID + 1", "OTHER", Read::Column(0)))),
         Err(Error::Plan(PlanError::InvalidColumns))
     ));
     assert!(matches!(
-        compile_dataset(
-            declaration(compute("ID + 1", "ID", Read::Column(1))),
-            Default::default()
-        ),
+        compile_dataset(declaration(compute("ID + 1", "ID", Read::Column(1)))),
         Err(Error::Plan(PlanError::UnavailableColumn))
     ));
     assert!(matches!(
-        compile_dataset(declaration(call(0)), Default::default()),
+        compile_dataset(declaration(call(0))),
         Err(Error::Plan(PlanError::InvalidFunction))
     ));
 }
 
 #[test]
-fn one_budget_covers_function_copies_across_row_and_column_phases() {
+fn row_and_column_function_plans_retain_their_complete_shared_signature() {
     let mut input = declaration(call(0));
     input.functions = vec![signature()];
     input.templates[0].assignments[0].expression = D::Function {
@@ -143,32 +131,18 @@ fn one_budget_covers_function_copies_across_row_and_column_phases() {
         }],
     };
     input.templates[0].mode = RowMode::Records;
-    let policy = DatasetCompileLimits {
-        copied_parameters: 1,
-        ..Default::default()
+    let compiled = compile_dataset(input).unwrap();
+    let Expression::Function(row) = &compiled.plan().templates()[0].assignments[0].expression
+    else {
+        panic!("compiled row function")
     };
-    assert!(matches!(
-        compile_dataset(input, policy),
-        Err(Error::Limit("copied parameters"))
-    ));
-    let mut input = declaration(call(0));
-    input.functions = vec![signature()];
-    let policy = DatasetCompileLimits {
-        copied_text_bytes: 1,
-        ..Default::default()
+    let Expression::Function(column) = &compiled.plan().columns()[0].expression else {
+        panic!("compiled column function")
     };
-    assert!(matches!(
-        compile_dataset(input, policy),
-        Err(Error::Limit("copied text"))
-    ));
-    let mut input = declaration(call(0));
-    input.functions = vec![signature()];
-    let compiled = compile_dataset(input, Default::default()).unwrap();
-    let Expression::Function(function) = &compiled.plan().columns()[0].expression else {
-        panic!("compiled function")
-    };
-    assert_eq!(function.slot(), 0);
-    assert_eq!(function.signature(), &signature());
+    assert_eq!(row.slot(), 0);
+    assert_eq!(column.slot(), 0);
+    assert_eq!(row.signature(), &signature());
+    assert_eq!(column.signature(), &signature());
     assert_eq!(compiled.functions(), &[signature()]);
 }
 
@@ -181,17 +155,13 @@ fn legacy_number_and_value_window_forms_have_one_core_admission_gate() {
         filter: None,
     };
     assert!(matches!(
-        compile_dataset(
-            declaration(D::Number(window(WindowKind::Locf { column: 0 }))),
-            Default::default()
-        ),
+        compile_dataset(declaration(D::Number(window(WindowKind::Locf {
+            column: 0
+        })))),
         Err(Error::Plan(PlanError::InvalidWindow))
     ));
     assert!(matches!(
-        compile_dataset(
-            declaration(D::Window(window(WindowKind::Dense))),
-            Default::default()
-        ),
+        compile_dataset(declaration(D::Window(window(WindowKind::Dense)))),
         Err(Error::Plan(PlanError::InvalidWindow))
     ));
 }
@@ -209,7 +179,7 @@ fn invalid_recovery_never_exposes_a_partly_admitted_plan() {
             },
         });
     assert!(matches!(
-        compile_dataset(input, Default::default()),
+        compile_dataset(input),
         Err(Error::Plan(PlanError::InvalidConversionHandler))
     ));
 }
@@ -229,7 +199,7 @@ fn ignored_draft_faults_and_unused_reservations_cannot_publish_a_complete_prefix
         }
     };
     let complete_prefix = || {
-        let mut draft = DatasetCompiler::new(vec![signature()], Default::default()).unwrap();
+        let mut draft = DatasetCompiler::new(vec![signature()]);
         draft.begin_template(RowMode::Keys, None).unwrap();
         draft
             .template_assignment(assignment(0, D::Source(0)))

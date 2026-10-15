@@ -8,7 +8,7 @@ use yamaa_core::{
     predicate::{Condition, ErrorKind, EvaluationError, Route, Truth},
     predicate_compiler,
     schema::DocumentNode as N,
-    specification::{BindError, CompilationLimits, PrepareError, PreparedSpecification},
+    specification::{BindError, PreparedSpecification},
     table::{Column, TableSchema, ValueRef},
     value::{ColumnType, Value, ValueType},
 };
@@ -46,7 +46,7 @@ fn diagnostics(columns: Vec<(&str, &str, Tree)>) -> Vec<yamaa_core::diagnostic::
 }
 #[test]
 fn raw_truth_literals_presence_null_and_complete_name_map() {
-    let plan = predicate_compiler::compile("ID = 1", "flag.condition", Default::default()).unwrap();
+    let plan = predicate_compiler::compile("ID = 1", "flag.condition").unwrap();
     let bindings = vec![FlagBinding {
         name: "ID".into(),
         read: FlagRead::Read(Read::Column(0)),
@@ -130,27 +130,24 @@ fn nested_flag_declarations_precede_enclosing_case_reference_checkpoint() {
     );
 }
 #[test]
-fn whole_expression_quota_precedes_deferred_grammar_and_name_findings() {
-    let spec = specification(vec![
+fn independent_flag_admissions_keep_complete_deferred_grammar_and_name_findings() {
+    let first = diagnostics(vec![
         ("A", "str", flag("ID >> 1", None, None)),
         ("B", "str", flag("ABSENT = 1", None, None)),
     ]);
-    assert!(matches!(
-        PreparedSpecification::prepare_with_limits(
-            &spec,
-            CompilationLimits {
-                numeric_bytes: 8,
-                ..Default::default()
-            }
-        ),
-        Err(PrepareError::Limit(
-            yamaa_core::specification::CompilerLimit {
-                resource: "numeric_bytes",
-                ..
-            }
-        ))
-    ));
+    let second = diagnostics(vec![
+        ("A", "str", flag("ID >> 1", None, None)),
+        ("B", "str", flag("ABSENT = 1", None, None)),
+    ]);
+    assert_eq!(first, second);
+    assert_eq!(
+        first.iter().map(|d| d.code).collect::<Vec<_>>(),
+        [C::PredicateInvalidExpression, C::PredicateUnknownField]
+    );
+    assert_eq!(first[0].spec_paths, ["columns.A.derivation.flag.condition"]);
+    assert_eq!(first[1].spec_paths, ["columns.B.derivation.flag.condition"]);
 }
+
 #[test]
 fn regex_input_type_is_flag_owned_without_changing_generic_predicate_mapping() {
     let condition = Condition::ContainsExpectedText {
@@ -191,12 +188,8 @@ pub fn reached() -> std::collections::BTreeSet<C> {
             Ok(yamaa_core::value::Selection::Present(Value::Int(1)))
         }
     }
-    let plan = predicate_compiler::compile(
-        "str_contains(SRC.EXTRA,'a')",
-        "flag.condition",
-        Default::default(),
-    )
-    .unwrap();
+    let plan =
+        predicate_compiler::compile("str_contains(SRC.EXTRA,'a')", "flag.condition").unwrap();
     let finding =
         yamaa_core::dataset::flag_condition_diagnostic(&plan.evaluate(&mut IntPort).unwrap_err())
             .unwrap();
@@ -216,7 +209,7 @@ pub fn reached() -> std::collections::BTreeSet<C> {
 }
 
 #[test]
-fn all_unselected_literals_and_repeated_row_defaults_are_admitted_before_ownership() {
+fn all_unselected_literals_and_repeated_row_defaults_remain_complete() {
     use support::specification_with_rows;
     let names = (0..40).map(|i| format!("F{i}")).collect::<Vec<_>>();
     let columns = names
@@ -242,21 +235,29 @@ fn all_unselected_literals_and_repeated_row_defaults_are_admitted_before_ownersh
         })
         .collect();
     let spec = specification_with_rows(columns, rows);
-    assert!(matches!(
-        PreparedSpecification::prepare_with_limits(
-            &spec,
-            CompilationLimits {
-                model_text_bytes: 1_048_576,
-                ..Default::default()
-            }
-        ),
-        Err(PrepareError::Limit(
-            yamaa_core::specification::CompilerLimit {
-                resource: "flag_metadata",
-                ..
-            }
-        ))
-    ));
+    let source = TableSchema::new(vec![Column {
+        name: "ID".into(),
+        kind: ColumnType::Int,
+    }])
+    .unwrap();
+    let plan = PreparedSpecification::prepare(&spec)
+        .unwrap()
+        .bind(&source)
+        .unwrap();
+    assert_eq!(plan.templates().len(), 16);
+    let flags = plan
+        .columns()
+        .iter()
+        .filter_map(|assignment| match &assignment.expression {
+            yamaa_core::dataset::Expression::Flag(flag) => Some(flag),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(flags.len(), 40);
+    for flag in flags {
+        assert_eq!(flag.value(Truth::False), ValueRef::Str(&"x".repeat(10_000)));
+        assert_eq!(flag.value(Truth::Unknown), ValueRef::Missing);
+    }
 }
 
 #[test]

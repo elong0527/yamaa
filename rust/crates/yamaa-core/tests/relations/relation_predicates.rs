@@ -20,12 +20,8 @@ fn assignment(column: usize, expression: Expression) -> Assignment {
 fn filter(identifier: &str, read: CurrentRead) -> RelationPredicate {
     RelationPredicate::new(
         BoundPredicate::new(
-            predicate_compiler::compile(
-                &format!("D.V > {identifier}"),
-                "intermediates[0].filter",
-                Default::default(),
-            )
-            .unwrap(),
+            predicate_compiler::compile(&format!("D.V > {identifier}"), "intermediates[0].filter")
+                .unwrap(),
             vec![
                 Binding {
                     name: "D.V".into(),
@@ -173,7 +169,7 @@ fn wrong_driver_coordinates_hidden_in_numeric_reads_are_rejected_without_cells()
         },
     )));
     let numeric = yamaa_core::bound_expression::BoundNumeric::new(
-        yamaa_core::numeric_compiler::compile_numeric("P.V + 1", "C2", Default::default()).unwrap(),
+        yamaa_core::numeric_compiler::compile_numeric("P.V + 1", "C2").unwrap(),
         vec![Binding {
             name: "P.V".into(),
             read: Read::Intermediate {
@@ -318,8 +314,7 @@ fn kept_current_selectors_cannot_hide_a_first_template_self_read() {
 fn bound_intermediate_compute() -> Expression {
     Expression::Compute(
         yamaa_core::bound_expression::BoundNumeric::new(
-            yamaa_core::numeric_compiler::compile_numeric("P.V + 1", "C2", Default::default())
-                .unwrap(),
+            yamaa_core::numeric_compiler::compile_numeric("P.V + 1", "C2").unwrap(),
             vec![Binding {
                 name: "P.V".into(),
                 read: Read::Intermediate {
@@ -334,7 +329,7 @@ fn bound_intermediate_compute() -> Expression {
 fn bound_intermediate_flag() -> Expression {
     Expression::Flag(
         yamaa_core::dataset::Flag::new(
-            predicate_compiler::compile("P.V > 0", "C2", Default::default()).unwrap(),
+            predicate_compiler::compile("P.V > 0", "C2").unwrap(),
             vec![yamaa_core::dataset::FlagBinding {
                 name: "P.V".into(),
                 read: yamaa_core::dataset::FlagRead::Read(Read::Intermediate {
