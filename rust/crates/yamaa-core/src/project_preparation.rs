@@ -214,7 +214,6 @@ pub fn prepare<P: CapturePort, D: DecodePort>(
     };
     let mut failures = Vec::new();
     let mut origins = SourceOrigins::default();
-    let lock_was_written = declarations.lock.is_some();
     let mut captures = Vec::new();
     let mut lock = None;
     if let Some(written) = &declarations.lock {
@@ -385,20 +384,6 @@ pub fn prepare<P: CapturePort, D: DecodePort>(
             let (draft, admission) = match result {
                 Ok(environment) => (Box::new(environment.into_draft()), None),
                 Err(rejected) => (rejected.draft, Some(rejected.error)),
-            };
-            let admission = match admission {
-                Some(mut findings) => {
-                    // A failed capture does not make an authored reference absent.
-                    if lock_was_written {
-                        findings.retain(|finding| !matches!(finding, Finding::MissingLock));
-                    }
-                    if findings.is_empty() {
-                        None
-                    } else {
-                        Some(findings)
-                    }
-                }
-                error => error,
             };
             Err(Failure::Rejected(Box::new(RejectedEnvironment {
                 host,

@@ -23,6 +23,11 @@ study uses project functions or terminology. Paths resolve relative to their
 original declaring YAML layer under the [local path policy](../rules/storage/resources.md).
 There is no upward project-root discovery or public backend selector in this API.
 
+Project functions need their installed callable and declared conformance tests.
+The environment's packaging `lock` is optional. Declare it to verify installed
+called-package versions before activation; omit it to use the installed packages
+without a version audit. A declared lock must exist and be valid.
+
 Inputs can use CSV, Parquet, SAS datasets (`.sas7bdat`), or SAS Transport v5/v8
 (`.xpt`). SAS inputs explicitly declare `encoding`, for example
 `{path: input/dm.xpt, encoding: windows-1252, types: {SEQ: int, VISITDT: date}}`.

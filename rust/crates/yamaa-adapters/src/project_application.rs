@@ -3,7 +3,7 @@
 use crate::{
     file_application::{self, Failure},
     file_project::{self, FileProject},
-    project_source::{CaptureFailure, Failure as EnvironmentFailure},
+    project_source::Failure as EnvironmentFailure,
     specification_source::Error as SourceError,
 };
 use yamaa_core::{project_function::Language, specification::PrepareError};
@@ -116,26 +116,16 @@ fn environment_failure(
             for projection in [
                 diagnostics::scalar_sources(rejected),
                 diagnostics::schema_sources(rejected),
+                diagnostics::capture_sources(rejected),
             ] {
                 match projection {
                     Ok(rows) => issues.extend(rows),
+                    Err(diagnostics::Error::ResourceLimit(refusal)) => {
+                        return refusal.issues("environment", "resource_limit");
+                    }
                     Err(_) => return refused("environment"),
                 }
             }
-            for source in &rejected.sources {
-                match &source.error {
-                    CaptureFailure::Port(error) | CaptureFailure::Interrupted(error) => {
-                        issues.extend(file_application::resource_failure("environment", error))
-                    }
-                    CaptureFailure::Structural(SourceError::Findings(_))
-                    | CaptureFailure::Scalar { .. } => (),
-                    _ => issues.extend(file_application::rejected(
-                        "environment",
-                        "metadata_boundary",
-                    )),
-                }
-            }
-
             Ok(issues)
         }
         EnvironmentFailure::Interrupted { error, .. } => {
@@ -145,7 +135,12 @@ fn environment_failure(
             return file_application::rejected("environment", "environment_boundary")
         }
     };
-    projected.unwrap_or_else(|_| refused("environment"))
+    projected.unwrap_or_else(|error| match error {
+        diagnostics::Error::ResourceLimit(refusal) => {
+            refusal.issues("environment", "resource_limit")
+        }
+        _ => refused("environment"),
+    })
 }
 pub fn check(specification: &str, environment: &str, host: Language) -> Failure {
     crate::issue_rows::collect(
@@ -171,6 +166,9 @@ fn workflow_issues(error: &crate::file_workflow::Error, host: Language) -> Failu
         }
         crate::producer_check::Error::Original(error) => workflow_failure(error),
         crate::producer_check::Error::Projection(_) => refused("check"),
+        crate::producer_check::Error::ResourceLimit(refusal) => {
+            refusal.issues("environment", "resource_limit")
+        }
     })
 }
 
