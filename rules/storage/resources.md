@@ -114,12 +114,13 @@ written path.
 <a id="req-1247"></a>
 
 **REQ-1247.** A path that names an artifact the run itself produces, through the
-`schema` link of [Source ingestion](ingestion.md), denotes its declaration's
-location even before that file exists. The producer's `output.path` must name
-the same location. The producing specification that `schema` names already
-exists and resolves from the file that declares that link. Workflow execution
-consumes held serialized producer bytes; explicit Save publishes those bytes
-under [Publication](publication.md).
+`schema` link of [Source ingestion](ingestion.md), denotes its selected location
+even before that file exists. Both the artifact path and the `schema` link use
+the input's selected `relative_to` base under [REQ-0780](resources.md#req-0780).
+The producing specification that `schema` names already exists. Its
+`output.path`, resolved with the producer's own selected base, must name the same
+artifact location. Workflow execution consumes held serialized producer bytes;
+explicit Save publishes those bytes under [Publication](publication.md).
 
 <a id="req-0782"></a>
 
