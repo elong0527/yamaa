@@ -30,6 +30,19 @@ def main():
         if args.output_dir:
             command += ["--output-dir", str(args.output_dir.resolve())]
     else:
+        # Generated references and the benchmark index are built here, at
+        # docs build time, instead of being committed: materialize the rule
+        # references from rules/ + yaml/ and render the full benchmark index
+        # beside the generated gallery (excluded from the rendered site).
+        for generation in (
+            [".github/scripts/yaml-validation/generate_rule_reference.py"],
+            [
+                ".github/scripts/benchmark-docs/build_index.py",
+                "--output",
+                "docs/benchmark/readme-index.md",
+            ],
+        ):
+            subprocess.run([sys.executable, *generation], cwd=ROOT, check=True)
         command = ["-m", "mkdocs", "build", "--strict"]
     subprocess.run([sys.executable, *command], cwd=ROOT, check=True)
 

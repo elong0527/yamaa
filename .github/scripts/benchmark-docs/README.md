@@ -17,12 +17,13 @@ uv run --with-requirements .github/scripts/benchmark-docs/requirements.txt pytho
 uv run --with-requirements .github/scripts/benchmark-docs/requirements.txt python -m unittest discover -s .github/scripts/benchmark-docs -p 'test_*.py'
 ```
 
-The committed `benchmarks/README.md` index takes titles and lifecycle badges
-from case READMEs. Its membership and dashboard membership come from the same
-directory-derived public-conformance plan, including the two justified
-exclusions. Runnable Python/R entries are metadata; only an installed host
-inventory establishes observed qualification. The recorded conformance ratchet
-retains its original source, run, attempt, and artifact identities.
+The benchmark index rendered by `build_index.py` takes titles and lifecycle
+badges from case READMEs; it is generated at docs build time and not committed
+(the committed `benchmarks/README.md` carries only the heading and prose). Its
+membership and dashboard membership come from the same directory-derived
+public-conformance plan, including the two justified exclusions. Runnable
+Python/R entries are metadata; passing is gated by the native run, where every
+active benchmark must pass on every lane.
 
 Pass benchmark names instead of `--all` to regenerate only those pages, and
 `--check` to compare bytes without writing. Pinned dependencies and sorted,

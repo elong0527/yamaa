@@ -27,7 +27,7 @@ def render_index(fixtures, current):
         "",
         f"{len(payload['examples'])} authored cases; {active} active cases use the same public",
         "Python and R plan. Host entries describe runnable metadata. Actual passing",
-        "coverage is recorded separately in the [conformance observations](../rust/qualification/public-conformance.json).",
+        "coverage is gated by the native run: every active benchmark must pass on every lane.",
         "",
         "| Benchmark | Derives | Lifecycle | Public conformance |",
         "|---|---|---|---|",
@@ -53,6 +53,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--root", type=Path, default=ROOT)
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="write the rendered README to this path instead of in place",
+    )
     args = parser.parse_args()
     path = args.root / "benchmarks/README.md"
     try:
@@ -66,7 +71,9 @@ def main():
             print(f"Stale benchmark index: {path}", file=sys.stderr)
             return 1
     else:
-        path.write_text(result, encoding="utf-8")
+        target = args.output or path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(result, encoding="utf-8")
     return 0
 
 

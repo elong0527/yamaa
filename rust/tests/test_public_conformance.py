@@ -194,26 +194,18 @@ class PublicConformance(unittest.TestCase):
             {"define.xml", "dm.json", "spec_resolved.yaml"},
         )
 
-    def test_missing_record_errors_and_deliberately_broken_output_fails_ratchet(self):
-        ratchet = self.root / "ratchet.json"
-        judge.write_json(ratchet, {"python": ["simple"], "r": []})
+    def test_missing_record_errors_and_deliberately_broken_output_fails_gate(self):
         inventory = self.root / "inventory.json"
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(judge.compare(self.fixtures, self.observed, inventory), 0)
+            self.assertEqual(judge.compare(self.fixtures, self.observed, inventory), 1)
             self.assertEqual(judge.read_json(inventory)["summary"]["error"], 1)
             judge.write_json(
                 self.observed / "records/simple.json", {"builds": [self.build]}
             )
-            self.assertEqual(
-                judge.compare(self.fixtures, self.observed, inventory, ratchet), 0
-            )
+            self.assertEqual(judge.compare(self.fixtures, self.observed, inventory), 0)
             (self.observed / "work/simple/result.csv").write_text("broken\n")
-            self.assertEqual(
-                judge.compare(self.fixtures, self.observed, inventory, ratchet), 1
-            )
-        self.assertEqual(
-            judge.read_json(inventory)["ratchet"]["regressions"], ["simple"]
-        )
+            self.assertEqual(judge.compare(self.fixtures, self.observed, inventory), 1)
+        self.assertEqual(judge.read_json(inventory)["gate"]["failing"], ["simple"])
 
     def test_incomplete_multi_entry_run_errors(self):
         self.example["entries"]["python"].append(
@@ -222,38 +214,21 @@ class PublicConformance(unittest.TestCase):
         self.assertEqual(self.verdict()["verdict"], "error")
 
     def test_new_directory_is_required_on_both_hosts_without_a_registry_edit(self):
-        ratchet = self.root / "ratchet.json"
-        judge.write_json(ratchet, {"python": [], "r": []})
         inventory = self.root / "inventory.json"
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(
-                judge.compare(self.fixtures, self.observed, inventory, ratchet), 1
-            )
-        self.assertEqual(
-            judge.read_json(inventory)["ratchet"]["regressions"], ["simple"]
-        )
+            self.assertEqual(judge.compare(self.fixtures, self.observed, inventory), 1)
+        self.assertEqual(judge.read_json(inventory)["gate"]["failing"], ["simple"])
         metadata = judge.read_json(self.observed / "run.json")
         metadata["runtime"] = "r"
         judge.write_json(self.observed / "run.json", metadata)
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(
-                judge.compare(self.fixtures, self.observed, inventory, ratchet), 1
-            )
-        self.assertEqual(
-            judge.read_json(inventory)["ratchet"]["regressions"], ["simple"]
-        )
+            self.assertEqual(judge.compare(self.fixtures, self.observed, inventory), 1)
+        self.assertEqual(judge.read_json(inventory)["gate"]["failing"], ["simple"])
 
-    def test_unexpected_runner_record_and_duplicate_observations_are_rejected(self):
+    def test_unexpected_runner_record_is_rejected(self):
         judge.write_json(self.observed / "records/unexpected.json", {})
         with self.assertRaisesRegex(ValueError, "unexpected installed runner"):
             judge.compare(self.fixtures, self.observed, self.root / "inventory.json")
-        (self.observed / "records/unexpected.json").unlink()
-        ratchet = self.root / "ratchet.json"
-        judge.write_json(ratchet, {"python": ["simple", "simple"]})
-        with self.assertRaisesRegex(ValueError, "duplicate observed"):
-            judge.compare(
-                self.fixtures, self.observed, self.root / "inventory.json", ratchet
-            )
 
     def test_log_types_are_independent_and_saved_logs_are_compared(self):
         with (self.case / "spec.yaml").open("a") as stream:
@@ -542,7 +517,9 @@ class PublicConformance(unittest.TestCase):
         # #2190 fixes the 40 missing-handler empty children. The reviewed
         # forward-reference ordering exception remains permanent.
         self.assertEqual(len(expectations), 1)
-        self.assertTrue(expectations[("negative-forward-reference", "empty_child")]["permanent"])
+        self.assertTrue(
+            expectations[("negative-forward-reference", "empty_child")]["permanent"]
+        )
         for (benchmark, check), item in expectations.items():
             self.assertIn(benchmark, names)
             self.assertIn(check, {"empty_child", "key_order"})

@@ -101,7 +101,6 @@ installed-host checks and release qualification separate:
 For boundary/API guards and focused component checks beyond these targets:
 
 ```sh
-uv run --project python --no-sync python rust/tools/check_release_api.py
 uv run --project python --no-sync python rust/tools/check_shared_release_versions.py
 uv run --project python --no-sync python rust/tools/check_dependencies.py
 uv run --project python --no-sync python -m unittest discover -s rust/tests -p 'test_*.py'
@@ -165,10 +164,10 @@ Expected benchmark files and Parquet fixtures are independent truth; do not
 regenerate them to accommodate implementation changes.
 
 Normative rule checks derive current REQ owners from `rules/` and schema
-navigation from `yaml/`. The generated requirement and schema-field indexes follow
-those sources. Independent owner expectations live in
-[schema-navigation.tsv](https://github.com/elong0527/yamaa/blob/main/.github/scripts/yaml-validation/fixtures/schema-navigation.tsv);
-`test_rule_rewrite.py` checks every owner without regenerating this fixture.
+navigation from `yaml/`; the rule-rewrite checker validates every schema
+owner directly against the requirement definitions in those sources. The
+requirement and schema-field indexes are generated from the same sources at
+docs build time and are not committed.
 Run from the repository root:
 
 ```sh

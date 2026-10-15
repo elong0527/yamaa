@@ -71,14 +71,13 @@ canonical source file. Build and test commands live in
 commands; `rust/README.md` is the Rust entry point. `docs/release.md` owns current
 API/math/platform decisions and migration notes.
 Language contracts live in `rules/`, and host usage lives in `python/README.md`
-and `R/yamaa/README.md`. The declared API inventory is
-`rust/qualification/release-api.json`; check it from the repository root with
-`uv run --project python --no-sync python rust/tools/check_release_api.py`.
+and `R/yamaa/README.md`. Declared exports are read from the sources
+themselves (`__all__`, `python/src/yamaa/_native.pyi`, R `NAMESPACE` files);
+there is no committed API inventory to reconcile.
 
-Current REQ owners and generated references derive from `rules/` and `yaml/`.
-The independent schema-owner fixture is
-`.github/scripts/yaml-validation/fixtures/schema-navigation.tsv`; preserve its
-expectations when changing checkers. Run the rule/reference commands in
+Current REQ owners and generated references derive from `rules/` and `yaml/`;
+the rule-rewrite checker validates every schema navigation owner directly
+against those sources. Run the rule/reference commands in
 `docs/development.md` with the repository Python environment.
 
 Portable math golden values live in

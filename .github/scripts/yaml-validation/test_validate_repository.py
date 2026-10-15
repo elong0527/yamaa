@@ -2167,17 +2167,9 @@ class TestDerivedBenchmarkInventory(unittest.TestCase):
             ],
         }, names
 
-    def observations(self):
-        return {
-            'protocol': 'public-conformance-ratchet/1', 'benchmarks': 3,
-            'python': ['active'], 'r': ['active'],
-            'exclusions': [{'example': n, 'reason': r}
-                           for n, r in EXECUTION_CHECK.EXCLUDED.items()],
-        }
-
     def test_derived_cases_include_both_hosts_and_explicit_exclusions(self):
         payload, names = self.payload()
-        self.assertEqual(EXECUTION_CHECK.check_inventory(payload, names, self.observations()), [])
+        self.assertEqual(EXECUTION_CHECK.check_inventory(payload, names), [])
 
     def test_missing_duplicate_and_unexpected_cases_are_rejected(self):
         payload, names = self.payload()
@@ -2196,23 +2188,8 @@ class TestDerivedBenchmarkInventory(unittest.TestCase):
         self.assertIn('missing public host entry: active', errors)
         self.assertIn('exclusion reason differs: ' + names[1], errors)
 
-    def test_runnable_labels_cannot_replace_observed_passing_cases(self):
+    def test_stale_exclusions_are_rejected(self):
         payload, names = self.payload()
-        observed = self.observations()
-        observed['r'] = ['unexpected', 'unexpected']
-        errors = EXECUTION_CHECK.check_inventory(payload, names, observed)
-        self.assertIn('duplicate observed r case', errors)
-        self.assertIn('missing observed r case: active', errors)
-        self.assertIn('unexpected observed r case: unexpected', errors)
-
-    def test_stale_exclusions_and_observed_denominator_are_rejected(self):
-        payload, names = self.payload()
-        observed = self.observations()
-        observed['benchmarks'] = 2
-        observed['exclusions'] = []
-        errors = EXECUTION_CHECK.check_inventory(payload, names, observed)
-        self.assertIn('observed authored denominator differs', errors)
-        self.assertIn('observed exclusions differ', errors)
         self.assertIn('exclusion has no authored case: ' + names[1],
                       EXECUTION_CHECK.check_inventory(payload, names[:1]))
 

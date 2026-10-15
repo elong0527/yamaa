@@ -16,9 +16,21 @@ spec.loader.exec_module(module)
 
 
 class RepositoryCatalog(unittest.TestCase):
-    def test_checkout_fixtures_and_suites_are_all_registered(self):
+    def test_checkout_catalog_materializes_by_discovery(self):
         root = Path(__file__).resolve().parents[2]
-        module.load_catalog(root, root / "rust/qualification/supplemental.json")
+        catalog = module.load_catalog(
+            root, root / "rust/qualification/supplemental.json"
+        )
+        self.assertEqual(
+            {suite["path"] for suite in catalog["suites"]},
+            {
+                p.relative_to(root).as_posix()
+                for pattern in ("rust/tests/installed_*.py", "R/yamaa/tests/*.R")
+                for p in root.glob(pattern)
+            },
+        )
+        self.assertTrue(catalog["contracts"])
+        self.assertTrue(catalog["support_files"])
 
     def test_reference_consumers_cannot_reenter_installed_qualification(self):
         for source in (
@@ -136,9 +148,10 @@ class SupplementalEvidence(unittest.TestCase):
         self.output = self.directory / "evidence"
         self.contract = "rust/crates/example/tests/fixtures/cases.tsv"
         self.write(self.contract, "id\texpected\na\ttrue\n")
-        self.catalog = {
-            "version": "1",
-            "support_files": [],
+        # The committed catalog keeps only underivable data; suites and
+        # support fixtures below are discovered by glob instead.
+        self.catalog_file = {
+            "version": "2",
             "contracts": [
                 {
                     "path": self.contract,
@@ -147,7 +160,9 @@ class SupplementalEvidence(unittest.TestCase):
                     "consumers": ["rust/tests/installed_first.py"],
                 }
             ],
-            "suites": [],
+            "suite_levels": {},
+            "suite_ids": {},
+            "support_roles": {},
         }
         for name, code in (
             ("first", 'print("failed contract")\nraise SystemExit(1)\n'),
@@ -157,17 +172,9 @@ class SupplementalEvidence(unittest.TestCase):
             path = "rust/tests/" + filename
             self.write(path, code)
             (self.staged / filename).write_text(code)
-            self.catalog["suites"].append(
-                {
-                    "id": "python/" + name,
-                    "runtime": "python",
-                    "path": path,
-                    "staged_path": filename,
-                    "level": "component",
-                }
-            )
         self.catalog_path = self.directory / "catalog.json"
-        self.catalog_path.write_text(json.dumps(self.catalog))
+        self.save_catalog_file()
+        self.catalog = module.load_catalog(self.root, self.catalog_path)
         self.metadata = {
             "runtime_version": "test",
             "core_version": "test",
@@ -179,25 +186,30 @@ class SupplementalEvidence(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(contents)
 
-    def test_reconciliation_rejects_an_added_contract_and_a_removed_suite(self):
-        module.load_catalog(self.root, self.catalog_path)
+    def save_catalog_file(self):
+        self.catalog_path.write_text(json.dumps(self.catalog_file))
+
+    def test_added_fixture_and_suite_are_discovered_without_a_catalog_edit(self):
         self.write("rust/crates/example/tests/fixtures/new.tsv", "id\na\n")
-        with self.assertRaisesRegex(ValueError, "uncataloged"):
-            module.load_catalog(self.root, self.catalog_path)
+        catalog = module.load_catalog(self.root, self.catalog_path)
+        self.assertIn(
+            {"path": "rust/crates/example/tests/fixtures/new.tsv", "role": "input"},
+            catalog["support_files"],
+        )
         (self.root / "rust/crates/example/tests/fixtures/new.tsv").unlink()
+        self.write("R/yamaa/tests/new.R", "stopifnot(TRUE)\n")
+        catalog = module.load_catalog(self.root, self.catalog_path)
+        self.assertIn("r/new", {suite["id"] for suite in catalog["suites"]})
+
+    def test_removed_contract_consumer_is_rejected(self):
         (self.root / "rust/tests/installed_first.py").unlink()
         with self.assertRaisesRegex(ValueError, "missing contract consumer"):
             module.load_catalog(self.root, self.catalog_path)
 
     def test_whole_run_claim_is_invalid_for_supplemental_contracts(self):
-        self.catalog["contracts"][0]["level"] = "shared_run"
-        self.catalog_path.write_text(json.dumps(self.catalog))
+        self.catalog_file["contracts"][0]["level"] = "shared_run"
+        self.save_catalog_file()
         with self.assertRaisesRegex(ValueError, "invalid supplemental level"):
-            module.load_catalog(self.root, self.catalog_path)
-
-    def test_unknown_suite_cannot_disappear_from_inventory(self):
-        self.write("R/yamaa/tests/new.R", "stopifnot(TRUE)\n")
-        with self.assertRaisesRegex(ValueError, "suites differ"):
             module.load_catalog(self.root, self.catalog_path)
 
     def test_failed_command_retains_its_log_and_unrun_suffix(self):
@@ -270,17 +282,25 @@ class SupplementalEvidence(unittest.TestCase):
         self.assertEqual(report["evidence"], evidence)
         self.assertEqual(report["installation"], self.metadata)
 
-    def test_distinct_suite_ids_cannot_overwrite_the_same_log(self):
-        # Both IDs used to map to python-first-nested.log after slash replacement.
-        self.catalog["suites"][0]["id"] = "python/first/nested"
-        self.catalog["suites"][1]["id"] = "python/first-nested"
-        self.catalog_path.write_text(json.dumps(self.catalog))
+    def test_suite_identity_override_must_stay_a_simple_name(self):
+        # A nested identity would map two suites onto the same log name
+        # after slash replacement.
+        self.catalog_file["suite_ids"] = {
+            "rust/tests/installed_first.py": "python/first/nested"
+        }
+        self.save_catalog_file()
         with self.assertRaisesRegex(ValueError, "host/simple-name"):
             module.load_catalog(self.root, self.catalog_path)
 
+    def test_stale_suite_level_override_is_rejected(self):
+        self.catalog_file["suite_levels"] = {"python/ghost": "compile"}
+        self.save_catalog_file()
+        with self.assertRaisesRegex(ValueError, "stale suite level"):
+            module.load_catalog(self.root, self.catalog_path)
+
     def test_inventory_paths_cannot_escape_the_checkout(self):
-        self.catalog["contracts"][0]["consumers"] = ["../catalog.json"]
-        self.catalog_path.write_text(json.dumps(self.catalog))
+        self.catalog_file["contracts"][0]["consumers"] = ["../catalog.json"]
+        self.save_catalog_file()
         with self.assertRaisesRegex(ValueError, "path leaves root"):
             module.load_catalog(self.root, self.catalog_path)
 

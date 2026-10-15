@@ -1,105 +1,19 @@
 #!/usr/bin/env python3
-"""Requirement registry and canonical-citation check for the repository.
+"""Compatibility entry point for the merged requirement-registry check.
 
-Every requirement ID is defined exactly once, as a bold dotted marker
-``**REQ-0001.**`` in a markdown contract. Every other ``REQ-XXXX``
-citation in ``rules/`` must
-resolve to a definition. Fails
-on:
-
-- a requirement ID defined more than once;
-- a citation that references an ID with no definition;
-- a historical numbered requirement citation outside compatibility records and
-  tests that deliberately exercise those records.
-
-Fenced code blocks and inline code are stripped before scanning, so
-examples and quoted syntax do not count as definitions or citations.
+The duplicate/dangling-ID scan now lives in ``check_rule_rewrite.py`` as
+``requirement_registry_errors`` (the legacy historical-ID scan was dropped).
+This module remains only because ``.github/workflows/pr.yml`` invokes it by
+path; it delegates to the merged implementation and adds no checks of its own.
 """
 
 import argparse
-import re
 import sys
 from pathlib import Path
 
-DEFINITION = re.compile(r"\*\*(REQ-[0-9]{4,})\.\*\*")
-REFERENCE = re.compile(r"\bREQ-[0-9]{4,}\b")
-LEGACY_REFERENCE = re.compile(r"\bR[0-9]{3}-[0-9]+[a-z]?\b")
-FENCE_RUN = re.compile(r"```+|~~~+")
-INLINE_CODE = re.compile(r"`[^`\n]*`")
-FRONTMATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
-TEXT_SUFFIXES = {".md", ".py", ".r", ".yaml", ".yml"}
-LEGACY_ALLOWLIST = {
-    Path(".github/scripts/yaml-validation/test_requirement_registry.py"),
-    Path(".github/scripts/yaml-validation/test_rule_rewrite.py"),
-    Path(".github/scripts/yaml-validation/test_validate_repository.py"),
-    Path("python/tests/models/test_values.py"),
-}
+from check_rule_rewrite import requirement_registry_errors
 
-
-def strip_code(text):
-    """Yield lintable prose lines: no frontmatter, fenced blocks, or code.
-
-    A fence marker may open mid-line (e.g. ``**REQ-0160.** ```text``);
-    text before the marker still counts as prose.
-    """
-    body = FRONTMATTER.sub("", text)
-    in_fence = False
-    for line in body.splitlines():
-        markers = FENCE_RUN.findall(line)
-        if markers:
-            if not in_fence:
-                head = line[: FENCE_RUN.search(line).start()]
-                if head.strip():
-                    yield INLINE_CODE.sub("", head)
-            if len(markers) % 2 == 1:
-                in_fence = not in_fence
-            continue
-        if in_fence:
-            continue
-        yield INLINE_CODE.sub("", line)
-
-
-def check(root):
-    errors = []
-    rules = root / "rules"
-    defined = {}
-    cited = {}
-    for path in sorted(rules.glob("**/*.md")):
-        label = path.relative_to(rules).as_posix()
-        body = "\n".join(strip_code(path.read_text(encoding="ascii")))
-        for identifier in DEFINITION.findall(body):
-            defined.setdefault(identifier, []).append(label)
-        for identifier in REFERENCE.findall(body):
-            cited.setdefault(identifier, set()).add(label)
-    for identifier in sorted(defined):
-        locations = defined[identifier]
-        if len(locations) > 1:
-            errors.append(
-                f"duplicate requirement definition: {identifier} "
-                f"({len(locations)}x in {', '.join(sorted(set(locations)))})"
-            )
-    for identifier in sorted(set(cited) - set(defined)):
-        files = sorted(cited[identifier])
-        errors.append(
-            f"unresolved requirement citation: {identifier} ({', '.join(files)})"
-        )
-    for path in sorted(root.rglob("*")):
-        if not path.is_file() or path.suffix.lower() not in TEXT_SUFFIXES:
-            continue
-        relative = path.relative_to(root)
-        if relative in LEGACY_ALLOWLIST or any(
-            part in {".git", ".venv"} for part in relative.parts
-        ):
-            continue
-        for line_number, line in enumerate(
-            path.read_text(encoding="utf-8").splitlines(), start=1
-        ):
-            for identifier in LEGACY_REFERENCE.findall(line):
-                errors.append(
-                    "historical requirement citation outside compatibility "
-                    f"records: {relative.as_posix()}:{line_number}: {identifier}"
-                )
-    return errors
+check = requirement_registry_errors
 
 
 def main():
@@ -117,7 +31,9 @@ def main():
     if errors:
         print(f"FAIL: {len(errors)} requirement-registry violation(s).")
         return 1
-    print("PASS: current requirements resolve; historical IDs stay out of active sources.")
+    print(
+        "PASS: current requirements resolve; historical IDs stay out of active sources."
+    )
     return 0
 
 

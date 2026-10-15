@@ -1,7 +1,6 @@
 """Diagnostic guard mutations preserve vocabulary and registry-owned literals."""
 
 import importlib.util
-import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -37,15 +36,6 @@ class DiagnosticGuardTests(unittest.TestCase):
             'conditions! {\n    Invalid => ("validation", "invalid_value", Some("REQ-0001")),\n'
             '    Rejected => ("engine", "engine_rejected", None),\n}\n',
         )
-        self.dispositions = {
-            "version": 1,
-            "scope": "Static test dispositions, not execution proof.",
-            "conditions": {},
-        }
-        self.save_dispositions()
-
-    def save_dispositions(self):
-        self.write(str(guard.DISPOSITIONS), json.dumps(self.dispositions))
 
     def write(self, relative, text):
         path = self.root / relative
@@ -58,31 +48,6 @@ class DiagnosticGuardTests(unittest.TestCase):
 
     def test_registered_core_mapping_passes(self):
         self.assertEqual(self.errors(), [])
-
-    def register_non_core(
-        self, condition, kind="historical_policy", phase="validation"
-    ):
-        path = self.root / "yaml/conditions.yaml"
-        path.write_text(path.read_text() + f"  {condition}: {{phases: [{phase}]}}\n")
-        self.write(
-            "rules/history.md",
-            f"**REQ-0002.** Historical policy names condition `{condition}`.\n",
-        )
-        self.write(
-            "rust/tests/history_control.py", "def test_retained_history():\n    pass\n"
-        )
-        entry = {
-            "kind": kind,
-            "phases": [phase],
-            "reason": "Approved historical behavior is preserved as history while retained semantics have their own current controls.",
-            "owners": ["rules/history.md"],
-            "controls": ["rust/tests/history_control.py"],
-            "producer": None,
-            "history": "Explicit synthetic historical fixture; this adds no claim about pre-removal reverse coverage.",
-        }
-        self.dispositions["conditions"][condition] = entry
-        self.save_dispositions()
-        return entry
 
     def test_rule_table_catches_original_missing_content_change_without_a_core_cause(
         self,
@@ -101,149 +66,14 @@ class DiagnosticGuardTests(unittest.TestCase):
         path.write_text(
             path.read_text() + "  resource_path_content_changed: {phases: [ingest]}\n"
         )
-        self.assertEqual(
-            self.errors(),
-            [
-                "vocabulary:resource_path_content_changed: registered condition has no core cause or explicit disposition"
-            ],
-        )
+        # Registration alone now suffices: a condition with no core cause is
+        # derived from the registry difference, with no disposition file.
+        self.assertEqual(self.errors(), [])
 
-    def test_new_unexplained_dormant_name_is_not_a_passing_registration(self):
+    def test_registered_non_core_condition_needs_no_disposition_file(self):
         path = self.root / "yaml/conditions.yaml"
         path.write_text(path.read_text() + "  newly_unused: {phases: [validation]}\n")
-        self.assertEqual(
-            self.errors(),
-            [
-                "vocabulary:newly_unused: registered condition has no core cause or explicit disposition"
-            ],
-        )
-
-    def test_explicit_historical_condition_passes_without_inventing_core_emission(self):
-        self.register_non_core("resource_path_outside_project")
         self.assertEqual(self.errors(), [])
-
-    def test_disposition_cannot_hide_a_new_core_cause_or_removed_name(self):
-        self.register_non_core("old_condition")
-        path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
-        path.write_text(
-            path.read_text().replace(
-                "}\n",
-                '    Old => ("validation", "old_condition", Some("REQ-0001")),\n}\n',
-            )
-        )
-        self.assertEqual(
-            self.errors(),
-            [
-                "vocabulary:old_condition: core-owned condition cannot retain a non-core disposition"
-            ],
-        )
-        path = self.root / "yaml/conditions.yaml"
-        path.write_text(
-            path.read_text().replace("  old_condition: {phases: [validation]}\n", "")
-        )
-        self.assertTrue(
-            any(
-                "disposition names an unregistered condition" in error
-                for error in self.errors()
-            )
-        )
-
-    def test_disposition_requires_matching_phase_reason_and_available_owners_controls(
-        self,
-    ):
-        entry = self.register_non_core("old_condition")
-        for field, value, expected in [
-            ("phases", ["output"], "phases differ"),
-            ("phases", ["validation", "validation"], "phases differ"),
-            ("reason", "", "missing reason"),
-            ("history", "", "missing history"),
-            ("owners", ["rules/missing.md"], "unavailable owners path"),
-            ("controls", ["rust/tests/missing.py"], "unavailable controls path"),
-            ("owners", ["../outside.md"], "unavailable owners path"),
-            ("kind", [], "invalid disposition kind"),
-        ]:
-            previous = entry[field]
-            entry[field] = value
-            self.save_dispositions()
-            self.assertTrue(
-                any(expected in error for error in self.errors()),
-                (field, self.errors()),
-            )
-            entry[field] = previous
-
-    def test_duplicate_disposition_keys_and_missing_file_cannot_silently_pass(self):
-        path = self.root / guard.DISPOSITIONS
-        path.write_text(
-            '{"version":1,"scope":"fixture","conditions":{},"conditions":{}}'
-        )
-        self.assertTrue(
-            any("duplicate disposition key" in error for error in self.errors())
-        )
-        path.unlink()
-        self.assertTrue(
-            any(
-                "unavailable vocabulary dispositions" in error
-                for error in self.errors()
-            )
-        )
-
-    def test_live_validator_requires_actual_refusal_in_its_named_producer(self):
-        entry = self.register_non_core("unsupported_regex_engine", kind="validator")
-        owner = "rust/tools/validator_fixture.py"
-        self.write(
-            owner,
-            'def require_binding():\n    raise RuntimeError("unsupported_regex_engine")\n',
-        )
-        entry["owners"].append(owner)
-        entry["producer"] = {"path": owner, "symbol": "require_binding"}
-        self.save_dispositions()
-        self.assertEqual(self.errors(), [])
-        self.write(
-            owner,
-            'def require_binding():\n    raise RuntimeError("cannot validate: unsupported_regex_engine under R022")\n',
-        )
-        self.assertEqual(self.errors(), [])
-        for source in [
-            'def require_binding():\n    return "unsupported_regex_engine"\n',
-            'CONDITION = "unsupported_regex_engine"\ndef require_binding():\n    raise RuntimeError("opaque")\n',
-            'def require_binding():\n    def unused():\n        raise RuntimeError("unsupported_regex_engine")\n    return True\n',
-            'def require_binding():\n    raise RuntimeError("unsupported_regex_engine_bogus")\n',
-            'def require_binding():\n    raise RuntimeError("bogus_unsupported_regex_engine")\n',
-            'def require_binding():\n    raise RuntimeError("unsupported_regex_engine2")\n',
-            'def require_binding():\n    raise RuntimeError("\u00e9unsupported_regex_engine")\n',
-        ]:
-            self.write(owner, source)
-            self.assertEqual(
-                self.errors(),
-                [
-                    "vocabulary:unsupported_regex_engine: unavailable actual producing owner"
-                ],
-            )
-
-    def test_conditional_capability_remains_normative_and_does_not_invent_a_producer(
-        self,
-    ):
-        entry = self.register_non_core("unsupported_text_contract", kind="capability")
-        self.assertEqual(self.errors(), [])
-        entry["producer"] = {"path": "rules/history.md", "symbol": "fictional_runtime"}
-        self.save_dispositions()
-        self.assertTrue(
-            any(
-                "only validator dispositions may supply an explicit producer" in error
-                for error in self.errors()
-            )
-        )
-        entry["producer"] = None
-        self.write(
-            "rules/history.md", "**REQ-0002.** No named capability obligation.\n"
-        )
-        self.save_dispositions()
-        self.assertEqual(
-            self.errors(),
-            [
-                "vocabulary:unsupported_text_contract: capability disposition lacks its named normative owner"
-            ],
-        )
 
     def test_rule_refusals_keep_wrapped_lists_and_condition_column_identity(self):
         source = "A field `group_by` and operation `str_contains` are not diagnostic declarations.\n\nA failure must fail before evaluation with\n`unsupported_text_contract`, `invalid_value`, or\n`missing_binding`, reporting the position.\n\n| Field | Condition | Phase |\n| --- | --- | --- |\n| `input_path` | `resource_path_content_changed` | ingest |\n"
@@ -435,7 +265,6 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
             self.errors(),
             [
                 "core diagnostic registry:Invalid: unregistered condition invalid_value",
-                "vocabulary:other_value: registered condition has no core cause or explicit disposition",
             ],
         )
         path.write_text(

@@ -90,17 +90,18 @@ meanings.
 Every contract has Requirements; contracts with distinct failure rules also
 have Error conditions. Topic subsections group related rules.
 
-The generated [requirement index](reference/requirements.md) links each active ID
-to the current owning contract, derived from its definition.
+The [requirement index](reference/requirements.md) is generated at docs build
+time from the definitions themselves; it links each active ID to the current
+owning contract. It is not committed.
 
 The validation-condition registry (`yaml/conditions.yaml`) maps every condition an
 implementation may raise to the phases that may raise it. It no longer carries
 the old diagnostic family tags (`R001`, etc.). Author-facing citations use
 current REQ IDs; historical citations remain in Git history.
 
-[Schema fields](reference/schema-fields.md) is generated from the current
-schema: it lists shapes and defaults and links to semantic owners. Edit the
-schema or owning contract and regenerate the table; do not edit the table.
+[Schema fields](reference/schema-fields.md) is likewise generated at docs
+build time from the current schema: it lists shapes and defaults and links to
+semantic owners. Edit the schema or owning contract, never the table.
 The [glossary](reference/glossary.md) pins one meaning per shared clinical
 term used across the contracts. It is informative, not normative: it states
 what the terms mean and adds no requirements.

@@ -31,8 +31,10 @@ class BenchmarkIndex(unittest.TestCase):
     def test_generated_index_is_complete_and_stable(self):
         fixtures = index.ROOT / "benchmarks"
         current = (fixtures / "README.md").read_text(encoding="utf-8")
+        # The committed README carries only the heading; the table is
+        # generated at docs build time and must be complete and stable.
+        self.assertNotIn("| [`", current)
         result = index.render_index(fixtures, current)
-        self.assertEqual(result, current)
         self.assertEqual(index.render_index(fixtures, result), result)
         self.assertEqual(result.count("| [`"), 329)
         self.assertEqual(result.count("| Python, R |"), 327)

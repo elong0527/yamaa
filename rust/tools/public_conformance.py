@@ -275,7 +275,9 @@ def emit_plan(fixtures, output):
         _, contents = example_variants(fixtures, example)
         for relative, text in contents.items():
             for base in (
-                output / "variants", output / "r-inputs", output / "r-variant-inputs"
+                output / "variants",
+                output / "r-inputs",
+                output / "r-variant-inputs",
             ):
                 target = base / example["name"] / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -874,7 +876,7 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
     return finish()
 
 
-def compare(fixtures, observed, output, ratchet=None):
+def compare(fixtures, observed, output):
     meta = read_json(observed / "run.json")
     if meta["protocol"] != PROTOCOL or meta["runtime"] not in {"python", "r"}:
         raise ValueError("unknown runner protocol/runtime")
@@ -936,34 +938,29 @@ def compare(fixtures, observed, output, ratchet=None):
                 for stale in (r.get("metamorphic") or {}).get("stale", [])
             ],
         },
-        "ratchet": {"mode": "report-only"},
+        "gate": {"mode": "all-active-must-pass", "failing": []},
     }
-    status = 0
-    if ratchet:
-        # The current directories/exclusions define both hosts' mandatory set.
-        # Prior passing observations identify new passes; they are not a runtime registry.
-        previous = read_json(ratchet)[runtime]
-        if len(previous) != len(set(previous)):
-            raise ValueError(f"duplicate observed {runtime} case")
-        required = {
-            entry["name"] for entry in payload["examples"] if not entry["excluded"]
-        }
-        passed = {r["example"] for r in results if r["verdict"] == "pass"}
-        inventory["ratchet"] = {
-            "mode": "gate",
-            "regressions": sorted(required - passed),
-            "new_passes": sorted(passed - set(previous)),
-        }
-        status = int(bool(required - passed))
+    # The gate is derived from the current directories and exclusions alone:
+    # every active benchmark must pass on this lane. No prior observations
+    # are consulted, so a new benchmark needs no registry edit to be gated.
+    required = {entry["name"] for entry in payload["examples"] if not entry["excluded"]}
+    passed = {r["example"] for r in results if r["verdict"] == "pass"}
+    failing = sorted(required - passed)
+    inventory["gate"] = {"mode": "all-active-must-pass", "failing": failing}
+    status = int(bool(failing))
     write_json(output, inventory)
     print(
         json.dumps(
             {
                 "runtime": runtime,
                 **counts,
-                "ratchet": inventory["ratchet"],
+                "gate": inventory["gate"],
                 "failures": [
-                    {"example": r["example"], "verdict": r["verdict"], "findings": r["findings"]}
+                    {
+                        "example": r["example"],
+                        "verdict": r["verdict"],
+                        "findings": r["findings"],
+                    }
                     for r in results
                     if r["verdict"] not in ("pass", "excluded")
                 ],
@@ -984,12 +981,14 @@ def main(argv=None):
     judge.add_argument("--fixtures", type=Path, required=True)
     judge.add_argument("--observed", type=Path, required=True)
     judge.add_argument("--output", type=Path, required=True)
+    # Accepted for compatibility with the existing native workflow, which
+    # still passes the retired ratchet path; the gate reads no prior file.
     judge.add_argument("--ratchet", type=Path)
     args = parser.parse_args(argv)
     if args.command == "plan":
         emit_plan(args.fixtures, args.output)
         return 0
-    return compare(args.fixtures, args.observed, args.output, args.ratchet)
+    return compare(args.fixtures, args.observed, args.output)
 
 
 if __name__ == "__main__":
