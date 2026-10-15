@@ -125,33 +125,42 @@ impl PreparedInheritance {
 fn rebase<P: PathPort>(
     layer: &mut Layer,
     entry: &Source,
+    input_bases: &std::collections::BTreeMap<String, bool>,
     port: &mut P,
 ) -> Result<(), Error<P::Error>> {
     let document = &layer.document;
     let mut paths = Vec::new();
     if let Some(input) = document.field(document.root(), "input") {
         if let N::Mapping(inputs) = &document.nodes()[input] {
-            for &(_, source) in inputs {
+            for &(name, source) in inputs {
+                let from_entry = matches!(&document.nodes()[name], N::Text(name) if input_bases.get(name) == Some(&true));
                 for field in ["path", "schema"] {
                     if let Some(id) = document.field(source, field) {
-                        paths.push(id);
+                        paths.push((id, from_entry));
                     }
                 }
             }
         }
     }
     if let Some(output) = document.field(document.root(), "output") {
+        let from_entry = document
+            .field(output, "relative_to")
+            .is_some_and(|id| matches!(&document.nodes()[id], N::Text(base) if base == "entry"));
         for field in ["path", "warning_log", "verification_log"] {
             if let Some(id) = document.field(output, field) {
-                paths.push(id);
+                paths.push((id, from_entry));
             }
         }
     }
     let mut nodes = document.nodes().to_vec();
-    for id in paths {
+    for (id, from_entry) in paths {
         if let N::Text(written) = &document.nodes()[id] {
             let path = port
-                .rebase(&layer.source, entry, written)
+                .rebase(
+                    if from_entry { entry } else { &layer.source },
+                    entry,
+                    written,
+                )
                 .map_err(Error::Path)?;
             nodes[id] = N::Text(path);
         }
@@ -176,8 +185,30 @@ pub fn prepare<P: PathPort>(
     }
     let mut layers = inheritance::traverse(schema, entry.clone(), entry_document, port)
         .map_err(Error::Traversal)?;
+    // Input members merge immediate fields. Select the final explicit base
+    // before rebasing any contributing path, including a path whose base is
+    // overridden by a later layer independently from its written spelling.
+    let mut input_bases = std::collections::BTreeMap::new();
+    for layer in &layers {
+        let document = &layer.document;
+        if let Some(input) = document.field(document.root(), "input") {
+            if let N::Mapping(inputs) = &document.nodes()[input] {
+                for &(name, source) in inputs {
+                    let N::Text(name) = &document.nodes()[name] else {
+                        continue;
+                    };
+                    if let Some(base) = document.field(source, "relative_to") {
+                        input_bases.insert(
+                            name.clone(),
+                            matches!(&document.nodes()[base], N::Text(base) if base == "entry"),
+                        );
+                    }
+                }
+            }
+        }
+    }
     for layer in &mut layers {
-        rebase(layer, &entry, port)?;
+        rebase(layer, &entry, &input_bases, port)?;
     }
     let contributions = layers
         .iter()

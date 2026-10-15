@@ -3,6 +3,94 @@
 mod support;
 mod file {
     mod file_producer_build {
+        #[test]
+        fn study_relative_schema_links_select_each_producer_wrapper_and_its_output_base() {
+            use yamaa_adapters::{file_workflow, producer_result::prepare_owned_classified};
+            let study = Study::new();
+            study.write("shared/producer.yaml", "schema_version: '1.0'\ndomain: PRODUCER\nkeys: [ID]\ninput: {RAW: {path: input/raw.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]\noutput: {path: output/produced.csv, relative_to: entry, columns: [ID]}\n");
+            study.write("shared/consumer.yaml", "schema_version: '1.0'\ndomain: CONSUMER\nkeys: [ID]\ninput: {P: {path: output/produced.csv, schema: producer.yaml, relative_to: entry}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]\noutput: {path: output/final.csv, relative_to: entry, columns: [ID]}\n");
+            let mut results = Vec::new();
+            for (name, bytes) in [("first", b"ID\n1\n"), ("second", b"ID\n2\n")] {
+                study.write(&format!("{name}/input/raw.csv"), bytes);
+                study.write(
+                    &format!("{name}/spec.yaml"),
+                    "schema_version: '1.0'\nparents: ../shared/consumer.yaml\n",
+                );
+                study.write(
+                    &format!("{name}/producer.yaml"),
+                    "schema_version: '1.0'\nparents: ../shared/producer.yaml\n",
+                );
+                fs::create_dir(study.0.join(name).join("output")).unwrap();
+                let path = study.path(&format!("{name}/spec.yaml"));
+                let yamaa_core::build::Prepared::Producer(graph) = file_workflow::select_request(
+                    yamaa_core::domain_entry::Request {
+                        specification: &path,
+                        environment: None,
+                    },
+                    Language::Python,
+                )
+                .unwrap_or_else(|error| {
+                    panic!(
+                        "{:?}",
+                        yamaa_adapters::project_application::selection_failure(
+                            &error,
+                            Language::Python
+                        )
+                    )
+                }) else {
+                    panic!("selected producer workflow")
+                };
+                let consumer = &graph.graph().nodes()[0].document;
+                let schema = consumer.written_input_origin("P", "schema").unwrap();
+                assert_eq!(schema.declaring_source, study.path("shared/consumer.yaml"));
+                assert_eq!(schema.base_source, path);
+                let output = graph.graph().nodes()[1]
+                    .document
+                    .written_output_origin()
+                    .unwrap();
+                assert_eq!(output.declaring_source, study.path("shared/producer.yaml"));
+                assert_eq!(
+                    output.base_source,
+                    study.path(&format!("{name}/producer.yaml"))
+                );
+                let mut build = graph.into_build();
+                let mut activation = Activation::new(&study, Mode::Pass);
+                let owned = build.build_owned_reported(&mut activation, report_id(), scope());
+                assert!(owned.accepted());
+                assert!(activation.trace.is_empty());
+                let result = prepare_owned_classified(&owned, report_id(), &[]).unwrap();
+                assert!(result.issues().is_empty());
+                results.push((name, bytes, result));
+            }
+            // A direct link to the shared producer is its own entry. It cannot borrow
+            // an unrelated outer study's directory to repair an artifact mismatch.
+            study.write("third/spec.yaml", "schema_version: '1.0'\nparents: ../shared/consumer.yaml\ninput: {P: {schema: ../shared/producer.yaml}}\n");
+            let path = study.path("third/spec.yaml");
+            let issues = yamaa_adapters::file_application::check(
+                yamaa_core::domain_entry::Request {
+                    specification: &path,
+                    environment: None,
+                },
+                report_id(),
+            );
+            assert!(
+                issues
+                    .iter()
+                    .any(|issue| issue.condition == "producer_output_path_mismatch"),
+                "{issues:?}"
+            );
+            fs::remove_dir_all(study.0.join("shared")).unwrap();
+            for (name, bytes, result) in &mut results {
+                fs::remove_dir_all(study.0.join(*name).join("input")).unwrap();
+                for _ in 0..2 {
+                    assert!(result.save().unwrap());
+                    for output in ["output/produced.csv", "output/final.csv"] {
+                        assert_eq!(fs::read(study.0.join(*name).join(output)).unwrap(), *bytes);
+                    }
+                }
+            }
+        }
+
         use std::{
             fs,
             path::PathBuf,

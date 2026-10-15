@@ -346,7 +346,7 @@ fn collect_nodes(
                 .written_input_origin(dataset, "path")
                 .ok_or(Error::Boundary("input_origin"))?;
             let identity = resources
-                .resolve_from(schema_origin.declaring_source, schema_origin.written)
+                .resolve_from(schema_origin.base_source, schema_origin.written)
                 .map_err(|error| {
                     resource_at(
                         error,
@@ -357,7 +357,7 @@ fn collect_nodes(
             let producer = if let Some(&known) = identities.get(&identity) {
                 let prior = &documents[known];
                 resources
-                    .capture_metadata_from(schema_origin.declaring_source, schema_origin.written)
+                    .capture_metadata_from(schema_origin.base_source, schema_origin.written)
                     .map_err(|error| {
                         resource_at(
                             error,
@@ -369,7 +369,7 @@ fn collect_nodes(
             } else {
                 let prepared = file_preparation::prepare_document_from(
                     resources,
-                    Some(schema_origin.declaring_source),
+                    Some(schema_origin.base_source),
                     schema_origin.written,
                     Some(Arc::clone(schema)),
                 )
@@ -392,10 +392,10 @@ fn collect_nodes(
                 .written_output_origin()
                 .ok_or(Error::Boundary("output_origin"))?;
             let source_identity = resources
-                .location_from(input_origin.declaring_source, input_origin.written)
+                .location_from(input_origin.base_source, input_origin.written)
                 .map_err(Error::Resource)?;
             let output_identity = resources
-                .location_from(output.declaring_source, output.written)
+                .location_from(output.base_source, output.written)
                 .map_err(Error::Resource)?;
             producers.push(SuppliedProducer {
                 dataset: dataset.clone(),

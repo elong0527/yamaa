@@ -53,7 +53,7 @@ pub(crate) fn admit_locations(
             if let Some(origin) = document.written_output_field_origin(field) {
                 // Match ordinary metadata admission: an operational path
                 // refusal does not require output parents to exist at Build.
-                let Ok(location) = resources.location_from(origin.declaring_source, origin.written)
+                let Ok(location) = resources.location_from(origin.base_source, origin.written)
                 else {
                     continue;
                 };
@@ -363,10 +363,10 @@ impl Publication {
                 )
             };
             let selected = resources
-                .location_from(origin.declaring_source, origin.written)
+                .location_from(origin.base_source, origin.written)
                 .map_err(failure)?;
             let target = resources
-                .publication_target_from(origin.declaring_source, origin.written)
+                .publication_target_from(origin.base_source, origin.written)
                 .map_err(failure)?;
             if targets
                 .iter()

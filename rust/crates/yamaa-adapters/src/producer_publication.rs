@@ -72,10 +72,10 @@ impl Publication {
                 error,
             };
             let selected = resources
-                .location_from(origin.declaring_source, origin.written)
+                .location_from(origin.base_source, origin.written)
                 .map_err(failure)?;
             let target = resources
-                .publication_target_from(origin.declaring_source, origin.written)
+                .publication_target_from(origin.base_source, origin.written)
                 .map_err(failure)?;
             if targets
                 .iter()
