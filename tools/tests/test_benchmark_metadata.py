@@ -124,6 +124,10 @@ class BenchmarkMetadata(unittest.TestCase):
             {**self.metadata, "covers": ["flag", "flag"]},
             {**self.metadata, "covers": ["Flag"]},
             {**self.metadata, "covers": [None]},
+            {**self.metadata, "harbor": {}},
+            {**self.metadata, "harbor": {"opensas_exclusion": " "}},
+            {**self.metadata, "harbor": {"opensas_exclusion": True}},
+            {**self.metadata, "harbor": {"skip": "unregistered exclusion"}},
             {**self.metadata, "conformance": {"excluded": ""}},
             {**self.metadata, "conformance": {"metamorphic": []}},
             {
