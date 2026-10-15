@@ -189,9 +189,6 @@ impl Ports for Spy {
         self.events.push("verify_metadata");
         self.verification_error.take().map_or(Ok(()), Err)
     }
-    fn finish_metadata(&mut self) {
-        self.events.push("finish_metadata");
-    }
     fn capture_published(&mut self, _: &str, _: &str, _: &str) -> Result<Vec<u8>, Opaque> {
         panic!("no dataset selected")
     }
@@ -304,12 +301,7 @@ fn complete_metadata_and_rendering_precede_publication_and_save_is_one_shot() {
     assert!(attempt.outcome.is_ok());
     assert_eq!(
         spy.events,
-        [
-            "capture_environment",
-            "verify_metadata",
-            "finish_metadata",
-            "publisher"
-        ]
+        ["capture_environment", "verify_metadata", "publisher"]
     );
     assert_eq!(spy.clock_calls.get(), 0);
     assert!(spy.published.is_empty());

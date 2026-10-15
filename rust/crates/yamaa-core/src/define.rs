@@ -53,7 +53,6 @@ pub trait Ports {
     fn package_reference(&self, target: &str, define: &str) -> Option<String>;
     fn define_name(&self, location: &str) -> String;
     fn verify_metadata(&mut self, path: &str, source: &str) -> Result<(), Self::Error>;
-    fn finish_metadata(&mut self);
     fn capture_published(
         &mut self,
         path: &str,
@@ -350,7 +349,6 @@ impl<P: Ports> Application<P> {
         ports
             .verify_metadata(standard, identity)
             .map_err(Failure::Port)?;
-        ports.finish_metadata();
         if section.dataset_json.value {
             for ((dataset, (declaring, written, json)), location) in
                 composed.datasets().iter().zip(&outputs).zip(&locations)
