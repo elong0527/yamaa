@@ -2,8 +2,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::convert::Infallible;
 
 use yamaa_core::predicate::{
-    Comparison as C, Condition, ErrorKind, Limits, Node, Plan, PlanError, Resolver, Resource,
-    Route, Scalar, Truth,
+    Comparison as C, Condition, ErrorKind, Node, Plan, PlanError, Resolver, Route, Scalar, Truth,
 };
 use yamaa_core::temporal::{Date, DatePrecision, DateTime, DateTimePrecision};
 use yamaa_core::value::{Selection, Value, ValueType};
@@ -45,14 +44,13 @@ impl Resolver for Port {
 }
 
 /// Keep authored source context observable in failures.
-fn plan(nodes: Vec<Node>, limits: Limits) -> Plan {
+fn plan(nodes: Vec<Node>) -> Plan {
     let root = nodes.len() - 1;
     Plan::new(
         nodes,
         root,
         "rows[0].filter".into(),
         "original predicate".into(),
-        limits,
     )
     .unwrap()
 }
@@ -95,13 +93,10 @@ fn complete_three_valued_tables_and_null_tests() {
         (Value::Int(0), F),
     ] {
         for negated in [false, true] {
-            let p = plan(
-                vec![Node::IsNull {
-                    value: lit(value.clone()),
-                    negated,
-                }],
-                Limits::default(),
-            );
+            let p = plan(vec![Node::IsNull {
+                value: lit(value.clone()),
+                negated,
+            }]);
             assert_eq!(
                 p.evaluate(&mut Port::default()).unwrap(),
                 if negated { expected.negate() } else { expected }
@@ -168,7 +163,7 @@ fn comparison_promotion_order_missing_and_temporal_precision() {
         .into_iter()
         .zip(truth)
         {
-            let p = plan(vec![comparison(operator)], Limits::default());
+            let p = plan(vec![comparison(operator)]);
             let mut port = Port::with(&[("a", a.clone()), ("b", b.clone())]);
             assert_eq!(
                 p.evaluate(&mut port).unwrap(),
@@ -186,7 +181,7 @@ fn comparison_promotion_order_missing_and_temporal_precision() {
     ] {
         for (a, b) in [(Value::Missing, value.clone()), (value, Value::Missing)] {
             assert_eq!(
-                plan(vec![comparison(C::Equal)], Limits::default())
+                plan(vec![comparison(C::Equal)])
                     .evaluate(&mut Port::with(&[("a", a), ("b", b)]))
                     .unwrap(),
                 Truth::Unknown
@@ -213,7 +208,7 @@ fn comparison_promotion_order_missing_and_temporal_precision() {
             ValueType::DateTime,
         ),
     ] {
-        let error = plan(vec![comparison(C::Equal)], Limits::default())
+        let error = plan(vec![comparison(C::Equal)])
             .evaluate(&mut Port::with(&[("a", a), ("b", b)]))
             .unwrap_err();
         assert_eq!(
@@ -227,14 +222,11 @@ fn comparison_promotion_order_missing_and_temporal_precision() {
 #[test]
 fn eager_boolean_and_membership_failure_order() {
     for (truth, and) in [(false, true), (true, false)] {
-        let p = plan(
-            vec![
-                Node::Boolean(truth),
-                comparison(C::Equal),
-                if and { Node::And(0, 1) } else { Node::Or(0, 1) },
-            ],
-            Limits::default(),
-        );
+        let p = plan(vec![
+            Node::Boolean(truth),
+            comparison(C::Equal),
+            if and { Node::And(0, 1) } else { Node::Or(0, 1) },
+        ]);
         let mut port = Port::default();
         let error = p.evaluate(&mut port).unwrap_err();
         assert_eq!(port.trace, ["a"]);
@@ -248,14 +240,11 @@ fn eager_boolean_and_membership_failure_order() {
             })
         );
     }
-    let p = plan(
-        vec![Node::In {
-            value: id("a"),
-            items: vec![id("b"), id("c")],
-            negated: false,
-        }],
-        Limits::default(),
-    );
+    let p = plan(vec![Node::In {
+        value: id("a"),
+        items: vec![id("b"), id("c")],
+        negated: false,
+    }]);
     let mut port = Port::with(&[("a", Value::Int(1)), ("b", Value::Int(1))]);
     assert_eq!(p.evaluate(&mut port).unwrap_err().route, [Route::Item(1)]);
     assert_eq!(port.trace, ["a", "b", "c"]);
@@ -275,14 +264,11 @@ fn eager_boolean_and_membership_failure_order() {
             (vec![lit(Value::Int(2)), lit(Value::Int(3))], Truth::False),
         ] {
             assert_eq!(
-                plan(
-                    vec![Node::In {
-                        value: lit(Value::Int(1)),
-                        items,
-                        negated
-                    }],
-                    Limits::default()
-                )
+                plan(vec![Node::In {
+                    value: lit(Value::Int(1)),
+                    items,
+                    negated
+                }])
                 .evaluate(&mut Port::default())
                 .unwrap(),
                 if negated { expected.negate() } else { expected }
@@ -293,15 +279,12 @@ fn eager_boolean_and_membership_failure_order() {
 
 #[test]
 fn between_repeats_subject_before_comparisons() {
-    let p = plan(
-        vec![Node::Between {
-            value: id("x"),
-            lower: id("lo"),
-            upper: id("hi"),
-            negated: false,
-        }],
-        Limits::default(),
-    );
+    let p = plan(vec![Node::Between {
+        value: id("x"),
+        lower: id("lo"),
+        upper: id("hi"),
+        negated: false,
+    }]);
     let mut port = Port::with(&[("x", Value::Int(2)), ("lo", Value::Str("bad".into()))]);
     let error = p.evaluate(&mut port).unwrap_err();
     assert_eq!(port.trace, ["x", "lo", "x", "hi"]);
@@ -343,7 +326,7 @@ impl Resolver for FailingPort {
 
 #[test]
 fn opaque_resolution_and_condition_metadata() {
-    let error = plan(vec![comparison(C::Equal)], Limits::default())
+    let error = plan(vec![comparison(C::Equal)])
         .evaluate(&mut FailingPort)
         .unwrap_err();
     assert_eq!(
@@ -390,16 +373,13 @@ fn opaque_resolution_and_condition_metadata() {
 }
 
 /// Construct LIKE over literals without involving a regex library.
-fn like(value: &str, pattern: &str, escape: Option<char>, limits: Limits) -> Plan {
-    plan(
-        vec![Node::Like {
-            value: lit(Value::Str(value.into())),
-            pattern: lit(Value::Str(pattern.into())),
-            escape,
-            negated: false,
-        }],
-        limits,
-    )
+fn like(value: &str, pattern: &str, escape: Option<char>) -> Plan {
+    plan(vec![Node::Like {
+        value: lit(Value::Str(value.into())),
+        pattern: lit(Value::Str(pattern.into())),
+        escape,
+        negated: false,
+    }])
 }
 
 #[test]
@@ -422,36 +402,30 @@ fn unicode_like_escape_and_missing_precedence() {
         ("a\0b", "a_b", None, Truth::True),
     ] {
         assert_eq!(
-            like(value, pattern, escape, Limits::default())
+            like(value, pattern, escape)
                 .evaluate(&mut Port::default())
                 .unwrap(),
             expected,
             "{value:?} {pattern:?}"
         );
     }
-    let error = like("no match", "abc!", Some('!'), Limits::default())
+    let error = like("no match", "abc!", Some('!'))
         .evaluate(&mut Port::default())
         .unwrap_err();
     assert_eq!(error.kind, ErrorKind::Condition(Condition::DanglingEscape));
-    let p = plan(
-        vec![Node::Like {
-            value: lit(Value::Missing),
-            pattern: lit(Value::Int(1)),
-            escape: None,
-            negated: true,
-        }],
-        Limits::default(),
-    );
+    let p = plan(vec![Node::Like {
+        value: lit(Value::Missing),
+        pattern: lit(Value::Int(1)),
+        escape: None,
+        negated: true,
+    }]);
     assert_eq!(p.evaluate(&mut Port::default()).unwrap(), Truth::Unknown);
-    let p = plan(
-        vec![Node::Like {
-            value: lit(Value::Str("a".into())),
-            pattern: lit(Value::Bool(false)),
-            escape: None,
-            negated: false,
-        }],
-        Limits::default(),
-    );
+    let p = plan(vec![Node::Like {
+        value: lit(Value::Str("a".into())),
+        pattern: lit(Value::Bool(false)),
+        escape: None,
+        negated: false,
+    }]);
     assert_eq!(
         p.evaluate(&mut Port::default()).unwrap_err().kind,
         ErrorKind::Condition(Condition::ExpectedText {
@@ -501,7 +475,7 @@ fn like_matches_independent_exhaustive_short_oracle() {
                 Truth::False
             };
             assert_eq!(
-                like(&value, &pattern, None, Limits::default())
+                like(&value, &pattern, None)
                     .evaluate(&mut Port::default())
                     .unwrap(),
                 expected,
@@ -512,138 +486,65 @@ fn like_matches_independent_exhaustive_short_oracle() {
 }
 
 #[test]
-fn structural_budgets_include_expanded_occurrences_and_hard_depth() {
-    let admit = |nodes: Vec<Node>, limits| {
-        Plan::new(
-            nodes.clone(),
-            nodes.len() - 1,
-            String::new(),
-            String::new(),
-            limits,
-        )
-    };
+fn structural_admission_preserves_coordinates_and_fixed_semantic_depth() {
+    let admit =
+        |nodes: Vec<Node>| Plan::new(nodes.clone(), nodes.len() - 1, String::new(), String::new());
     assert_eq!(
-        admit(vec![Node::Not(0)], Limits::default()).unwrap_err(),
+        admit(vec![Node::Not(0)]).unwrap_err(),
         PlanError::InvalidChild
     );
     assert_eq!(
-        admit(
-            vec![Node::In {
-                value: lit(Value::Missing),
-                items: vec![],
-                negated: false
-            }],
-            Limits::default()
-        )
+        admit(vec![Node::In {
+            value: lit(Value::Missing),
+            items: vec![],
+            negated: false
+        }])
         .unwrap_err(),
         PlanError::EmptyMembership
     );
-    let limits = Limits {
-        resolutions: 3,
-        ..Limits::default()
-    };
-    let result = admit(
-        vec![Node::Between {
-            value: id("x"),
-            lower: id("lo"),
-            upper: id("hi"),
-            negated: false,
-        }],
-        limits,
-    );
-    assert!(matches!(result,Err(PlanError::Limit(e)) if e.resource==Resource::Resolutions));
-    let mut nodes = vec![Node::Boolean(true)];
+    // Shared arena references do not create an artificial expanded-work quota.
+    let mut shared = vec![Node::Boolean(true)];
     for i in 0..20 {
-        nodes.push(Node::And(i, i));
+        shared.push(Node::And(i, i));
     }
-    assert!(
-        matches!(admit(nodes,Limits::default()),Err(PlanError::Limit(e)) if e.resource==Resource::Work)
-    );
+    assert!(admit(shared).is_ok());
     let mut nodes = vec![Node::Boolean(true)];
-    for i in 0..64 {
+    for i in 0..127 {
         nodes.push(Node::Not(i));
     }
-    assert!(
-        matches!(admit(nodes,Limits {depth:usize::MAX,..Limits::default()}),Err(PlanError::Limit(e)) if e.resource==Resource::Depth && e.limit==64)
+    let edge = admit(nodes.clone()).unwrap();
+    assert_eq!(edge.evaluate(&mut Port::default()).unwrap(), Truth::False);
+    nodes.push(Node::Not(127));
+    assert_eq!(
+        admit(nodes).unwrap_err(),
+        PlanError::Limit(yamaa_core::limits::LimitExceeded {
+            resource: "semantic_depth",
+            limit: 128,
+            actual: Some(129),
+        })
     );
-    for limits in [
-        Limits {
-            nodes: 0,
-            ..Limits::default()
-        },
-        Limits {
-            work: 0,
-            ..Limits::default()
-        },
-        Limits {
-            depth: 0,
-            ..Limits::default()
-        },
-    ] {
-        assert!(matches!(
-            admit(vec![Node::Boolean(true)], limits),
-            Err(PlanError::Limit(_))
-        ));
-    }
 }
 
 #[test]
-fn text_and_like_limits_are_cumulative_and_reset_between_runs() {
-    // '%' costs one token, two initial cells and two cells per source scalar.
-    let p = like(
-        "abc",
-        "%",
-        None,
-        Limits {
-            like_work: 9,
-            ..Limits::default()
-        },
-    );
+fn repeated_like_and_text_comparisons_keep_the_original_truth_and_reads() {
+    let p = like("abc", "%", None);
     for _ in 0..2 {
         assert_eq!(p.evaluate(&mut Port::default()).unwrap(), Truth::True);
     }
-    let p = like(
-        "abc",
-        "%",
-        None,
-        Limits {
-            like_work: 8,
-            ..Limits::default()
-        },
-    );
-    assert!(
-        matches!(p.evaluate(&mut Port::default()).unwrap_err().kind,ErrorKind::Limit(e) if e.resource==Resource::LikeWork)
-    );
     let node = Node::Like {
         value: lit(Value::Str("abc".into())),
         pattern: lit(Value::Str("%".into())),
         escape: None,
         negated: false,
     };
-    let p = plan(
-        vec![node, Node::Or(0, 0)],
-        Limits {
-            like_work: 17,
-            ..Limits::default()
-        },
-    );
-    let error = p.evaluate(&mut Port::default()).unwrap_err();
-    assert_eq!(error.route, [Route::Right]);
-    assert!(matches!(error.kind,ErrorKind::Limit(e) if e.resource==Resource::LikeWork));
-    let p = plan(
-        vec![comparison(C::Equal)],
-        Limits {
-            text_bytes: 64,
-            ..Limits::default()
-        },
-    );
+    let p = plan(vec![node, Node::Or(0, 0)]);
+    assert_eq!(p.evaluate(&mut Port::default()).unwrap(), Truth::True);
+    let p = plan(vec![comparison(C::Equal)]);
     let mut port = Port::with(&[
         ("a", Value::Str("a".repeat(40))),
         ("b", Value::Str("a".repeat(40))),
     ]);
-    assert!(
-        matches!(p.evaluate(&mut port).unwrap_err().kind,ErrorKind::Limit(e) if e.resource==Resource::TextBytes)
-    );
+    assert_eq!(p.evaluate(&mut port).unwrap(), Truth::True);
     assert_eq!(port.trace, ["a", "b"]);
     assert_eq!(
         p.evaluate(&mut Port::with(&[
@@ -770,15 +671,10 @@ fn shared_reference_truth_and_occurrence_traces() {
             nodes.len() - 1,
             "rows[0].filter".into(),
             fields[1].into(),
-            Limits::default(),
         )
         .unwrap();
-        let compiled = yamaa_core::predicate_compiler::compile(
-            fields[1],
-            "rows[0].filter",
-            Default::default(),
-        )
-        .unwrap();
+        let compiled =
+            yamaa_core::predicate_compiler::compile(fields[1], "rows[0].filter").unwrap();
         // Both independently authored typed IR and original syntax must satisfy
         // the same truth and read trace; neither supplies the other's oracle.
         for p in [p, compiled] {
@@ -807,42 +703,13 @@ fn shared_reference_truth_and_occurrence_traces() {
 }
 
 #[test]
-fn shared_budgets_accumulate_across_plans_and_owning_work() {
-    use yamaa_core::predicate::{Budget, Usage};
-    let p = plan(vec![comparison(C::Equal)], Limits::default());
-    let mut budget = Budget::new(Usage {
-        work: 100,
-        resolutions: 4,
-        text_bytes: 5,
-        like_work: 100,
-        regex: Default::default(),
-    });
-    budget.work(2).unwrap();
-    budget.text(1).unwrap();
+fn repeated_plans_resolve_each_written_occurrence() {
+    let p = plan(vec![comparison(C::Equal)]);
     let mut port = Port::with(&[("a", Value::Str("x".into())), ("b", Value::Str("x".into()))]);
     for _ in 0..2 {
-        assert_eq!(
-            p.evaluate_with_budget(&mut port, &mut budget).unwrap(),
-            Truth::True
-        );
+        assert_eq!(p.evaluate(&mut port).unwrap(), Truth::True);
     }
-    assert_eq!(
-        budget.used(),
-        Usage {
-            work: 8,
-            resolutions: 4,
-            text_bytes: 5,
-            like_work: 0,
-            regex: Default::default(),
-        }
-    );
-    let failure = p.evaluate_with_budget(&mut port, &mut budget).unwrap_err();
-    assert!(matches!(failure.kind,ErrorKind::Limit(e) if e.resource==Resource::Resolutions));
     assert_eq!(port.trace, ["a", "b", "a", "b"]);
-    assert_eq!(budget.used().work, 10);
-    // Ordinary evaluation still starts a new scope and does not consume this one.
-    assert_eq!(p.evaluate(&mut port).unwrap(), Truth::True);
-    assert_eq!(budget.used().resolutions, 4);
 }
 
 struct BorrowingPort {
@@ -855,7 +722,7 @@ impl Resolver for BorrowingPort {
     fn resolve(&mut self, _: &str) -> Result<Selection, Self::Error> {
         panic!("owning fallback was called")
     }
-    /// Lend storage so refusal precedes copying its oversized contents.
+    /// Lend each written operand without invoking the owning fallback.
     fn resolve_value(
         &mut self,
         _: &str,
@@ -868,24 +735,13 @@ impl Resolver for BorrowingPort {
 }
 
 #[test]
-fn borrowed_text_checks_shared_limit_before_copy_and_next_resolution() {
-    use yamaa_core::predicate::{Budget, Usage};
-    let p = plan(vec![comparison(C::Equal)], Limits::default());
+fn borrowed_text_resolves_each_operand_without_owning_fallback() {
+    let p = plan(vec![comparison(C::Equal)]);
     let mut port = BorrowingPort {
         text: "large".repeat(100),
         calls: 0,
     };
-    let mut budget = Budget::new(Usage {
-        work: 100,
-        resolutions: 100,
-        text_bytes: 499,
-        like_work: 100,
-        regex: Default::default(),
-    });
-    let error = p.evaluate_with_budget(&mut port, &mut budget).unwrap_err();
-    assert!(matches!(error.kind,ErrorKind::Limit(e) if e.resource==Resource::TextBytes));
-    assert_eq!(error.route, [Route::Left]);
-    assert_eq!(port.calls, 1);
-    assert_eq!(budget.used().text_bytes, 0);
+    assert_eq!(p.evaluate(&mut port).unwrap(), Truth::True);
+    assert_eq!(port.calls, 2);
     assert_eq!(p.identifiers(), ["a", "b"]);
 }
