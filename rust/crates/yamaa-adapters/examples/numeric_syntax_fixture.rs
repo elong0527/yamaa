@@ -1,6 +1,8 @@
 //! Test fixture observation only; this is not an installed request protocol.
 #[path = "support/numeric_syntax.rs"]
 mod fixture;
+#[path = "support/syntax_spans.rs"]
+mod syntax_spans;
 use std::io::{self, BufRead};
 fn main() {
     let spans = std::env::args().any(|argument| argument == "--spans");
