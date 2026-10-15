@@ -1331,6 +1331,20 @@
       "path": "R/yamaa/tests/sas_sources.R",
       "staged_path": "sas_sources.R",
       "level": "shared_run"
+    },
+    {
+      "id": "python/longitudinal-capacity",
+      "runtime": "python",
+      "path": "rust/tests/installed_longitudinal_capacity.py",
+      "staged_path": "installed_longitudinal_capacity.py",
+      "level": "shared_run"
+    },
+    {
+      "id": "r/longitudinal-capacity",
+      "runtime": "r",
+      "path": "R/yamaa/tests/longitudinal_capacity.R",
+      "staged_path": "longitudinal_capacity.R",
+      "level": "shared_run"
     }
   ],
   "support_files": [

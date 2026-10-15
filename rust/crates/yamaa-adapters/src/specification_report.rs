@@ -445,7 +445,8 @@ impl BuildResult {
         if self.verification.is_none() {
             return Err(Error::InvalidObservation);
         }
-        let mut budget = crate::report_projection::Budget::new(16_777_216);
+        let mut budget =
+            crate::report_projection::Budget::new(yamaa_engine::capacity::REPORT_ENCODED_BYTES);
         budget.shared_report(self.prepared.prepared_report())?;
         self.prepared = rejected_output(
             self.prepared.prepared_report().clone(),
@@ -580,13 +581,27 @@ pub fn build_result<E>(
     attempt: &CapturedAttempt<E>,
     id: Identity<'_>,
 ) -> Result<BuildResult, Error> {
+    build_result_with_output_limit(
+        run,
+        attempt,
+        id,
+        yamaa_engine::dataset::ExecutionBudget::longitudinal().max_output_bytes,
+    )
+}
+
+pub(crate) fn build_result_with_output_limit<E>(
+    run: &dyn RunView,
+    attempt: &CapturedAttempt<E>,
+    id: Identity<'_>,
+    maximum: usize,
+) -> Result<BuildResult, Error> {
     let execution = attempt
         .result
         .as_ref()
         .ok()
         .and_then(|r| r.execution.as_ref());
     let observations = observations(run, attempt, &id)?;
-    prepare_result(run, execution, id, observations)
+    prepare_result_with_output_limit(run, execution, id, observations, maximum)
 }
 
 pub(crate) fn prepare_result(
@@ -595,12 +610,29 @@ pub(crate) fn prepare_result(
     id: Identity<'_>,
     observations: StoredReport,
 ) -> Result<BuildResult, Error> {
+    prepare_result_with_output_limit(
+        run,
+        execution,
+        id,
+        observations,
+        yamaa_engine::dataset::ExecutionBudget::longitudinal().max_output_bytes,
+    )
+}
+
+fn prepare_result_with_output_limit(
+    run: &dyn RunView,
+    execution: Option<&yamaa_engine::dataset::Execution>,
+    id: Identity<'_>,
+    observations: StoredReport,
+    maximum: usize,
+) -> Result<BuildResult, Error> {
     use yamaa_engine::specification_output::{self as output, CompleteError as E};
     let success = execution.is_some() && run.compiled().output_findings().is_empty();
     let logs = crate::verification_logs::prepare(run, &observations, success)?;
     let verification = logs.verification;
     let mut warning = logs.warning;
-    let mut copy_budget = crate::report_projection::Budget::new(16_777_216);
+    let mut copy_budget =
+        crate::report_projection::Budget::new(yamaa_engine::capacity::REPORT_ENCODED_BYTES);
     copy_budget.shared_report(&observations)?;
     let prepared = if let Some(error) = logs.failure {
         rejected_output(observations, &error, "log")
@@ -609,7 +641,7 @@ pub(crate) fn prepare_result(
         output::prepare(
             run.compiled(),
             execution,
-            8 * 1024 * 1024,
+            maximum.min(yamaa_engine::dataset::ExecutionBudget::longitudinal().max_output_bytes),
             &mut Report {
                 run,
                 id,
@@ -815,7 +847,8 @@ pub fn complete<E, P: ArtifactPort>(
 ) -> Result<Value, CompleteError<P::Error>> {
     let result = build_result(run, attempt, id)?;
     let items = result.publication_items();
-    let mut budget = crate::report_projection::Budget::new(16_777_216);
+    let mut budget =
+        crate::report_projection::Budget::new(yamaa_engine::capacity::REPORT_ENCODED_BYTES);
     let report = result.publication_observations(items.len(), &mut budget)?;
     for (path, bytes, _) in &items {
         publisher
@@ -861,8 +894,8 @@ impl yamaa_engine::specification_output::ArtifactEncoder for Encoder<'_> {
                 projection,
                 crate::parquet_artifact::Limits {
                     output_bytes: byte_limit,
-                    staged_bytes: 8 * 1024 * 1024,
-                    cells: 1_048_576,
+                    staged_bytes: yamaa_engine::capacity::SOURCE_BYTES,
+                    cells: yamaa_engine::capacity::OUTPUT_CELLS,
                     columns: 4096,
                 },
             )
@@ -1009,20 +1042,24 @@ pub(crate) fn artifact_report(
                 }
             }
         }
-        let records = crate::parquet_artifact::records(table, projection, 8 * 1024 * 1024)
-            .map_err(|error| match error {
-                crate::parquet_artifact::Error::Limit {
-                    resource,
-                    limit,
-                    actual,
-                } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                    resource,
-                    limit,
-                    actual,
-                    vec!["output.path".into()],
-                )),
-                _ => Error::InvalidObservation,
-            })?;
+        let records = crate::parquet_artifact::records(
+            table,
+            projection,
+            yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+        )
+        .map_err(|error| match error {
+            crate::parquet_artifact::Error::Limit {
+                resource,
+                limit,
+                actual,
+            } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                resource,
+                limit,
+                actual,
+                vec!["output.path".into()],
+            )),
+            _ => Error::InvalidObservation,
+        })?;
         ("", records)
     };
     report["artifacts"] = json!([{"name":run.compiled().output_name(),"profile":profile,"columns":run.compiled().projection(),"types":projection.iter().map(|&c|specification_diagnostics::type_name(table.schema().columns()[c].kind)).collect::<Vec<_>>(),"row_count":table.row_count(),"records":records,"byte_length":bytes.len(),"content":content}]);
