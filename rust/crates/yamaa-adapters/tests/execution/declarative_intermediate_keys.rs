@@ -109,7 +109,10 @@ fn resolved_source_keys_still_refuse_the_original_bad_donor_filter() {
     case["inputs"]["src.csv"] = serde_json::json!("ID,N\na,7\n");
     let fixture = Fixture::new();
     let mut result = fixture.run("resolved-source-key-bad-filter", &case);
-    assert!(fixture.check().is_empty());
+    assert_eq!(
+        fixture.check().iter().map(issue_json).collect::<Vec<_>>(),
+        result.issues().iter().map(issue_json).collect::<Vec<_>>()
+    );
     assert_eq!(
         result.issues().iter().map(issue_json).collect::<Vec<_>>(),
         serde_json::json!([{
@@ -139,7 +142,10 @@ fn ordinary_source_keys_keep_static_filter_types_before_key_cardinality() {
     ));
     let fixture = Fixture::new();
     let mut result = fixture.run("ordinary-source-key-bad-filter", &case);
-    assert!(fixture.check().is_empty());
+    assert_eq!(
+        fixture.check().iter().map(issue_json).collect::<Vec<_>>(),
+        result.issues().iter().map(issue_json).collect::<Vec<_>>()
+    );
     assert_eq!(
         result.issues().iter().map(issue_json).collect::<Vec<_>>(),
         serde_json::json!([{
@@ -150,4 +156,101 @@ fn ordinary_source_keys_keep_static_filter_types_before_key_cardinality() {
     assert!(result.output().is_none());
     assert!(matches!(result.save(), Err(file_application::FailedBuild)));
     assert!(!fixture.0.join("out.csv").exists());
+}
+
+#[test]
+fn deferred_filter_types_refuse_empty_missing_and_unread_selectors() {
+    let cases: serde_json::Value =
+        serde_json::from_str(include_str!("../fixtures/intermediate_key_reference.json")).unwrap();
+    for variant in [
+        "empty_donor",
+        "empty_driver",
+        "missing_filter_operand",
+        "unused",
+        "unread_branch",
+        "boolean_missing",
+    ] {
+        let mut case = cases["dependency_before_bad_filter"].clone();
+        case["inputs"]["src.csv"] = serde_json::json!("ID,N\na,7\n");
+        match variant {
+            "empty_donor" => case["inputs"]["tab.csv"] = serde_json::json!("K,KINT,KNUM,VAL\n"),
+            "empty_driver" => case["inputs"]["src.csv"] = serde_json::json!("ID,N\n"),
+            "missing_filter_operand" => {
+                case["inputs"]["tab.csv"] =
+                    serde_json::json!("K,KINT,KNUM,VAL\n\"       7\",,7,A\n")
+            }
+            "unused" => {
+                case["specification"] = serde_json::json!(case["specification"]
+                    .as_str()
+                    .unwrap()
+                    .replace("derivation: LOOK.VAL", "derivation: {literal: ok}"))
+            }
+            "unread_branch" => {
+                case["specification"] = serde_json::json!(case["specification"]
+                    .as_str()
+                    .unwrap()
+                    .replace("derivation: LOOK.VAL", "derivation: {case: [{when: 'FALSE', then: {source: LOOK.VAL}}, {otherwise: {literal: ok}}]}"))
+            }
+            "boolean_missing" => {
+                case["inputs"]["tab.csv"] = serde_json::json!("K,KINT,KNUM,VAL\n\"       7\",,7,A\n");
+                case["specification"] = serde_json::json!(case["specification"].as_str().unwrap().replace("TAB.KINT > 'bad'", "FALSE AND TAB.KINT > 'bad'"));
+            }
+            _ => unreachable!(),
+        }
+        let fixture = Fixture::new();
+        let mut result = fixture.run(variant, &case);
+        let expected = serde_json::json!([{"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0190","spec_paths":["intermediates[0].filter"],"context":{"left_type":"int","right_type":"str"}}]);
+        assert_eq!(
+            result.issues().iter().map(issue_json).collect::<Vec<_>>(),
+            expected.as_array().unwrap().as_slice(),
+            "{variant}"
+        );
+        assert_eq!(result.observations()["diagnostics"], expected, "{variant}");
+        assert_eq!(
+            result.observations()["nodes"][0]["diagnostics"],
+            expected,
+            "{variant}"
+        );
+        assert!(result.output().is_none(), "{variant}");
+        for _ in 0..2 {
+            assert!(
+                matches!(result.save(), Err(file_application::FailedBuild)),
+                "{variant}"
+            );
+        }
+        assert!(!fixture.0.join("out.csv").exists(), "{variant}");
+        for path in case["inputs"].as_object().unwrap().keys() {
+            fs::remove_file(fixture.0.join(path)).unwrap();
+        }
+        assert_eq!(
+            fixture.check().iter().map(issue_json).collect::<Vec<_>>(),
+            expected.as_array().unwrap().as_slice(),
+            "check without data: {variant}"
+        );
+    }
+}
+
+#[test]
+fn expression_keys_without_type_refusals_keep_successful_selection_and_saves() {
+    let cases: serde_json::Value =
+        serde_json::from_str(include_str!("../fixtures/intermediate_key_reference.json")).unwrap();
+    for filter in ["filter: \"TAB.KINT > 0\"", ""] {
+        let mut case = cases["dependency_before_bad_filter"].clone();
+        case["inputs"]["src.csv"] = serde_json::json!("ID,N\na,7\n");
+        case["specification"] = serde_json::json!(case["specification"]
+            .as_str()
+            .unwrap()
+            .replace("filter: \"TAB.KINT > 'bad'\"", filter));
+        let fixture = Fixture::new();
+        let mut result = fixture.run("valid-expression-key-filter", &case);
+        assert!(fixture.check().is_empty());
+        assert!(result.issues().is_empty());
+        for _ in 0..2 {
+            assert!(result.save().unwrap());
+            assert_eq!(
+                fs::read(fixture.0.join("out.csv")).unwrap(),
+                b"ID,V,V2\na,A,A\n"
+            );
+        }
+    }
 }

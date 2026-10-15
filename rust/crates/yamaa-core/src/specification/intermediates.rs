@@ -1183,6 +1183,28 @@ impl Declarations {
                     donor.insert(derived.name.clone(), kind);
                 }
             }
+            if let Some(Ok(filter)) = &declaration.filter {
+                findings.extend(
+                    static_types::predicate_kinds(filter, |name| {
+                        let (owner, field) = name
+                            .split_once('.')
+                            .or_else(|| (dataset == "SELF").then_some((dataset, name)))?;
+                        if owner == dataset {
+                            donor.get(field).copied().map(Into::into)
+                        } else {
+                            sources
+                                .iter()
+                                .find(|source| source.name == owner)
+                                .and_then(|source| {
+                                    source.types.iter().find(|(name, _)| name == field)
+                                })
+                                .map(|(_, kind)| (*kind).into())
+                        }
+                    })?
+                    .into_iter()
+                    .map(BindFinding::Predicate),
+                );
+            }
             for (field, value) in declaration.keys.iter().flatten() {
                 if let (Some(actual), Some(expected)) =
                     (donor.get(field), value.result_type(&catalog)?)

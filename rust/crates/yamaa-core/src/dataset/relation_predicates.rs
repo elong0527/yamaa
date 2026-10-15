@@ -93,12 +93,14 @@ impl CurrentField {
 pub struct RelationPredicate {
     predicate: BoundPredicate,
     current: Vec<CurrentField>,
+    deferred_type_findings: Vec<crate::diagnostic::Diagnostic>,
 }
 impl From<BoundPredicate> for RelationPredicate {
     fn from(predicate: BoundPredicate) -> Self {
         Self {
             predicate,
             current: Vec::new(),
+            deferred_type_findings: Vec::new(),
         }
     }
 }
@@ -127,7 +129,22 @@ impl RelationPredicate {
                 return Err(BindingError::UnusedName);
             }
         }
-        Ok(Self { predicate, current })
+        Ok(Self {
+            predicate,
+            current,
+            deferred_type_findings: Vec::new(),
+        })
+    }
+    pub(crate) fn with_deferred_type_findings(
+        mut self,
+        findings: Vec<crate::diagnostic::Diagnostic>,
+    ) -> Self {
+        self.deferred_type_findings = findings;
+        self
+    }
+    /// Known operand types retained until the current-key dependency checkpoint.
+    pub fn deferred_type_findings(&self) -> &[crate::diagnostic::Diagnostic] {
+        &self.deferred_type_findings
     }
     pub fn predicate(&self) -> &BoundPredicate {
         &self.predicate

@@ -230,7 +230,8 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
             partition: None,
             verifications: None,
         },
-        ExecutionError::IntermediateVerifications(diagnostics) => Outcome::Condition {
+        ExecutionError::IntermediateVerifications(diagnostics)
+        | ExecutionError::IntermediateFilterTypes(diagnostics) => Outcome::Condition {
             diagnostic: diagnostics::project(diagnostics.first().ok_or(Error::Internal)?.clone())?,
             identity: None,
             matched_key: None,
@@ -485,7 +486,8 @@ pub(crate) fn specification_response(
 ) -> Result<DatasetResponse, Error> {
     let intermediate_diagnostics = match &attempt.result {
         Err(error) => match error.as_ref() {
-            ExecutionError::IntermediateVerifications(diagnostics) => diagnostics.clone(),
+            ExecutionError::IntermediateVerifications(diagnostics)
+            | ExecutionError::IntermediateFilterTypes(diagnostics) => diagnostics.clone(),
             _ => Vec::new(),
         },
         _ => Vec::new(),

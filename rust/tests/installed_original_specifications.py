@@ -1582,6 +1582,51 @@ class ParquetOriginalOutput(unittest.TestCase):
 
 
 class PublicDomains(unittest.TestCase):
+    def test_deferred_filter_types_remain_visible_without_selector_observations(self):
+        import yamaa
+        reference = json.loads((ROOT / "key-reference.json").read_text(encoding="utf-8"))
+        type_findings = [{"phase": "validation", "condition": "incompatible_input_type", "requirement": "REQ-0190",
+            "spec_paths": ["intermediates[0].filter"], "context": {"left_type": "int", "right_type": "str"}}]
+        def findings(result):
+            rows = result.issues.to_dicts()
+            for row in rows:
+                row["context"] = json.loads(row["context"])
+            return rows
+        for variant in ("duplicate", "resolved", "empty_donor", "empty_driver", "missing_filter_operand", "unused", "unread_branch", "boolean_missing"):
+            with self.subTest(variant=variant), tempfile.TemporaryDirectory() as directory:
+                case = json.loads(json.dumps(reference["dependency_before_bad_filter"]))
+                if variant != "duplicate":
+                    case["inputs"]["src.csv"] = "ID,N\na,7\n"
+                if variant == "empty_donor":
+                    case["inputs"]["tab.csv"] = "K,KINT,KNUM,VAL\n"
+                elif variant == "empty_driver":
+                    case["inputs"]["src.csv"] = "ID,N\n"
+                elif variant in ("missing_filter_operand", "boolean_missing"):
+                    case["inputs"]["tab.csv"] = 'K,KINT,KNUM,VAL\n"       7",,7,A\n'
+                elif variant == "unused":
+                    case["specification"] = case["specification"].replace("derivation: LOOK.VAL", "derivation: {literal: ok}")
+                elif variant == "unread_branch":
+                    case["specification"] = case["specification"].replace("derivation: LOOK.VAL", "derivation: {case: [{when: 'FALSE', then: {source: LOOK.VAL}}, {otherwise: {literal: ok}}]}")
+                if variant == "boolean_missing":
+                    case["specification"] = case["specification"].replace("TAB.KINT > 'bad'", "FALSE AND TAB.KINT > 'bad'")
+                work = Path(directory)
+                entry = work / "spec.yaml"
+                entry.write_text(case["specification"], encoding="utf-8")
+                for path, content in case["inputs"].items():
+                    (work / path).write_text(content, encoding="utf-8")
+                result = yamaa.domain(entry)
+                expected = case["findings"] if variant == "duplicate" else type_findings
+                self.assertEqual(findings(result), expected)
+                self.assertIsNone(result.output)
+                for _ in range(2):
+                    with self.assertRaises(yamaa.DomainError):
+                        result.save()
+                self.assertFalse((work / "out.csv").exists())
+                for path in case["inputs"]:
+                    (work / path).unlink()
+                # Declared kinds remain available to check with no study files.
+                self.assertEqual(findings(yamaa.check(entry)), type_findings)
+
     def test_public_inheritance_introducing_nulls_and_inherited_clears(self):
         import yamaa
 
