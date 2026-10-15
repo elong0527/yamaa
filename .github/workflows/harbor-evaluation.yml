@@ -15,6 +15,7 @@ on:
     branches:
       - main
       - validation/issue-2297-harbor
+      - validation/issue-2297-r-rejection
     paths:
       - 'benchmarks/**'
       - 'evaluations/harbor/**'
@@ -84,19 +85,19 @@ jobs:
 
       - name: Grade every reference solution and check every prompt
         run: >-
-          uv run --project python --no-sync pytest
+          uv run --project python --no-sync pytest -ra
           python/tests/test_harbor_evaluation.py
           python/tests/test_harbor_opensas.py
           python/tests/test_harbor_reference_edges.py
 
       - name: Reject R literal golden writers
-        if: github.ref == 'refs/heads/validation/issue-2297-harbor'
+        if: github.ref == 'refs/heads/validation/issue-2297-harbor' || github.ref == 'refs/heads/validation/issue-2297-r-rejection'
         run: >-
           uv run --project python --no-sync python evaluations/harbor/check_pkqt_r_golden_copy.py
           --out "${RUNNER_TEMP}/pkqt-r-golden-copy"
 
       - name: Upload R rejection controls
-        if: always() && github.ref == 'refs/heads/validation/issue-2297-harbor'
+        if: always() && (github.ref == 'refs/heads/validation/issue-2297-harbor' || github.ref == 'refs/heads/validation/issue-2297-r-rejection')
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: pkqt-r-golden-copy
