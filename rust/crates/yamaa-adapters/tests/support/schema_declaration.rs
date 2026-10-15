@@ -1,10 +1,12 @@
 //! Project only core-admitted findings from the retained authored arenas.
 use serde_json::{json, Map, Number, Value};
 use yamaa_adapters::{
-    specification_source::{CapturedSchema, Source},
+    specification_source::{CapturedSchema, Limits, Source},
     yaml_decode::decode_yaml,
 };
-use yamaa_core::schema::{admit_schema_diagnostics, SchemaDiagnosticValue as V};
+use yamaa_core::schema::{
+    admit_schema_diagnostics, SchemaDiagnosticBudget, SchemaDiagnosticValue as V, ValidationBudget,
+};
 
 fn value(value: V<'_>) -> Value {
     match value {
@@ -43,14 +45,16 @@ pub fn observe_input(input: SchemaInput, document: &str, root: Option<&str>) -> 
     })
     .collect();
     let captured = match root {
-        Some(root) => CapturedSchema::admit_root(sources, 0, root),
-        None => CapturedSchema::admit(sources, 0),
+        Some(root) => CapturedSchema::admit_root(sources, 0, root, Limits::default()),
+        None => CapturedSchema::admit(sources, 0, Limits::default()),
     }
     .expect("admitted authored schema closure");
-    let decoded = decode_yaml(document.as_bytes()).expect("decoded authored document");
+    let decoded =
+        decode_yaml(document.as_bytes(), Default::default()).expect("decoded authored document");
     let schema = captured.structure();
+    let mut budget = ValidationBudget::new(Default::default());
     let types = schema
-        .parse_query_types(&[schema.root_class().name.clone()])
+        .parse_query_types(&[schema.root_class().name.clone()], &mut budget)
         .expect("captured root class");
     // This private control validates the declared class itself. Whole installed
     // preparation retains its separate shipped-schema/version admission gate.
@@ -61,10 +65,17 @@ pub fn observe_input(input: SchemaInput, document: &str, root: Option<&str>) -> 
             decoded.document.root(),
             "",
             false,
+            &mut budget,
         )
-        .expect("admitted custom-schema validation");
-    let report = admit_schema_diagnostics(schema, Some(&decoded.document), &findings, &[])
-        .expect("retained schema/document arenas admit every diagnostic");
+        .expect("bounded custom-schema validation");
+    let report = admit_schema_diagnostics(
+        schema,
+        Some(&decoded.document),
+        &findings,
+        &[],
+        &mut SchemaDiagnosticBudget::new(),
+    )
+    .expect("retained schema/document arenas admit every diagnostic");
     let issues = report
         .iter()
         .map(|finding| {

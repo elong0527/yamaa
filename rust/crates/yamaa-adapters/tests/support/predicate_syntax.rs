@@ -3,12 +3,13 @@ use serde_json::{json, Value};
 use yamaa_core::{
     predicate::Comparison,
     predicate_parser::{
-        parse_predicate, ParseError, ParseResource, ParsedKind, ParsedPredicate, TemporalKind,
+        parse_predicate, ParseError, ParseLimits, ParseResource, ParsedKind, ParsedPredicate,
+        TemporalKind,
     },
     regex::Resource,
 };
 pub fn observe(expression: &str) -> Value {
-    let outcome = match parse_predicate(expression) {
+    let outcome = match parse_predicate(expression, ParseLimits::default()) {
         Ok(parsed) => {
             json!({"status":"parsed","ast":ast(&parsed,parsed.root()),"identifiers":parsed.identifiers().collect::<Vec<_>>()})
         }
@@ -27,7 +28,7 @@ pub fn observe(expression: &str) -> Value {
             resource,
             limit,
         }) => {
-            json!({"status":"resource_limit","phase":"parse","resource":match resource {ParseResource::Depth=>"depth"},"limit":limit,"position":{"byte":position.byte,"character":position.character}})
+            json!({"status":"resource_limit","phase":"parse","resource":match resource {ParseResource::Bytes=>"bytes",ParseResource::Tokens=>"tokens",ParseResource::Nodes=>"nodes",ParseResource::Depth=>"depth"},"limit":limit,"position":{"byte":position.byte,"character":position.character}})
         }
         Err(ParseError::RegexLimit {
             position,
@@ -50,8 +51,17 @@ pub fn observe(expression: &str) -> Value {
 /// Preserve the exact owning regex policy name rather than calling it invalid syntax.
 fn regex_resource(resource: Resource) -> &'static str {
     match resource {
+        Resource::PatternBytes => "pattern_bytes",
+        Resource::Nodes => "nodes",
+        Resource::Groups => "groups",
         Resource::Depth => "depth",
+        Resource::Repetition => "repetition",
+        Resource::Width => "width",
+        Resource::WidthWork => "width_work",
+        Resource::WidthCells => "width_cells",
+        Resource::SubjectBytes => "subject_bytes",
         Resource::Work => "work",
+        Resource::StateCells => "state_cells",
     }
 }
 /// Temporal spelling is syntax metadata, not a conversion or precision policy.

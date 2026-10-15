@@ -9,8 +9,13 @@ fn projected_findings(
     error: &Error,
     source: Option<&yamaa_core::specification::SourceDeclaration>,
 ) -> Option<Vec<Value>> {
-    specification_diagnostics::findings(error, source)
-        .expect("valid authored source finding context")
+    specification_diagnostics::findings_with_limit(
+        error,
+        source,
+        yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
+    )
+    .ok()
+    .flatten()
 }
 
 use yamaa_core::{
@@ -66,7 +71,9 @@ pub fn observe(source: &str, headers: &[Vec<String>]) -> Value {
                     kind: Some(ColumnType::Str),
                 })
                 .collect::<Vec<_>>();
-            if let Err(findings) = odm_source::bind_fields(&stored) {
+            if let Err(findings) =
+                odm_source::bind_fields(&stored).expect("bounded authored metadata")
+            {
                 issues.extend(
                     projected_findings(&Error::OdmFields(findings), Some(source))
                         .expect("registered ODM metadata findings"),
