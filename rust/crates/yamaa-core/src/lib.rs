@@ -148,3 +148,10 @@ pub mod inheritance_capture;
 pub mod source_profile_inspection;
 
 pub mod producer_publication;
+
+#[cfg(test)]
+use crate::schema as document_schema;
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../tests/support/document.rs"]
+mod test_document;

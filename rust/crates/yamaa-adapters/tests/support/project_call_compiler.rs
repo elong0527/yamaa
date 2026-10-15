@@ -1,38 +1,10 @@
+pub use crate::support::document::Tree;
 use yamaa_core::{
     project_function::{Case, Definition, Function, Language, Parameter},
-    schema::{Document, DocumentNode as N, SpecificationDocument},
+    schema::{Document, SpecificationDocument},
     value::{ColumnType, Value, ValueType},
 };
-pub enum Tree {
-    Scalar(N),
-    Map(Vec<(String, Tree)>),
-    List(Vec<Tree>),
-}
-impl Tree {
-    pub fn text(value: &str) -> Self {
-        Self::Scalar(N::Text(value.into()))
-    }
-    pub fn map(fields: Vec<(&str, Self)>) -> Self {
-        Self::Map(fields.into_iter().map(|(k, v)| (k.into(), v)).collect())
-    }
-    fn append(self, nodes: &mut Vec<N>) -> usize {
-        let node = match self {
-            Self::Scalar(n) => n,
-            Self::List(items) => {
-                N::Sequence(items.into_iter().map(|item| item.append(nodes)).collect())
-            }
-            Self::Map(items) => N::Mapping(
-                items
-                    .into_iter()
-                    .map(|(key, item)| (Self::text(&key).append(nodes), item.append(nodes)))
-                    .collect(),
-            ),
-        };
-        let id = nodes.len();
-        nodes.push(node);
-        id
-    }
-}
+
 pub fn function(name: &str) -> Function {
     Function::admit(
         Language::Python,

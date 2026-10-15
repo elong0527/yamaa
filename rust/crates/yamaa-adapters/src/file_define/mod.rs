@@ -133,6 +133,9 @@ fn native_failure(failure: service::Failure<Failure, file_publication::Error>) -
         service::Failure::Publication { index, error } => Failure::Publication { index, error },
     }
 }
+#[cfg(test)]
+type AfterPublish = Box<dyn FnMut(&str)>;
+
 struct NativePorts {
     resources: Option<Resources>,
     host: Language,
@@ -140,7 +143,7 @@ struct NativePorts {
     environment_written: String,
     specifications: Vec<(String, String, std::sync::Arc<PreparedDocument>)>,
     #[cfg(test)]
-    after_publish: Option<Box<dyn FnMut(&str)>>,
+    after_publish: Option<AfterPublish>,
 }
 impl NativePorts {
     fn resources(&self) -> &Resources {

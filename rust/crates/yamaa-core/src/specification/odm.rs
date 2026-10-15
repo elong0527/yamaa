@@ -649,67 +649,47 @@ impl Declaration {
 #[cfg(test)]
 mod tests {
     use super::*;
-    enum Tree<'a> {
-        Text(&'a str),
-        Map(Vec<(&'a str, Tree<'a>)>),
-        List(Vec<Tree<'a>>),
-    }
-    impl Tree<'_> {
-        fn append(self, nodes: &mut Vec<N>) -> usize {
-            let node = match self {
-                Self::Text(text) => N::Text(text.into()),
-                Self::Map(fields) => N::Mapping(
-                    fields
-                        .into_iter()
-                        .map(|(key, value)| (Self::Text(key).append(nodes), value.append(nodes)))
-                        .collect(),
-                ),
-                Self::List(children) => N::Sequence(
-                    children
-                        .into_iter()
-                        .map(|child| child.append(nodes))
-                        .collect(),
-                ),
-            };
-            let index = nodes.len();
-            nodes.push(node);
-            index
-        }
-    }
+    use crate::test_document::Tree;
+
     #[test]
     fn dictionary_data_and_literal_values_cannot_select_odm_source_admission() {
-        use Tree::*;
         for expression in [
-            Map(vec![(
+            Tree::map(vec![(
                 "mapping",
-                Map(vec![
-                    ("source", Text("SRC.X")),
-                    ("dict", Map(vec![("odm", Text("SRC.IT.TEST.OID"))])),
+                Tree::map(vec![
+                    ("source", Tree::text("SRC.X")),
+                    (
+                        "dict",
+                        Tree::map(vec![("odm", Tree::text("SRC.IT.TEST.OID"))]),
+                    ),
                 ]),
             )]),
-            Map(vec![("literal", Text("SRC.IT.TEST.OID"))]),
+            Tree::map(vec![("literal", Tree::text("SRC.IT.TEST.OID"))]),
         ] {
-            let tree = Map(vec![
-                ("schema_version", Text("1.0")),
-                ("domain", Text("TEST")),
+            let tree = Tree::map(vec![
+                ("schema_version", Tree::text("1.0")),
+                ("domain", Tree::text("TEST")),
                 (
                     "input",
-                    Map(vec![("SRC", Map(vec![("path", Text("source.csv"))]))]),
+                    Tree::map(vec![(
+                        "SRC",
+                        Tree::map(vec![("path", Tree::text("source.csv"))]),
+                    )]),
                 ),
-                ("keys", List(vec![Text("ID")])),
+                ("keys", Tree::List(vec![Tree::text("ID")])),
                 (
                     "columns",
-                    List(vec![Map(vec![
-                        ("name", Text("ID")),
-                        ("type", Text("str")),
-                        ("derivation", Map(vec![("value", expression)])),
+                    Tree::List(vec![Tree::map(vec![
+                        ("name", Tree::text("ID")),
+                        ("type", Tree::text("str")),
+                        ("derivation", Tree::map(vec![("value", expression)])),
                     ])]),
                 ),
                 (
                     "output",
-                    Map(vec![
-                        ("path", Text("result.csv")),
-                        ("columns", List(vec![Text("ID")])),
+                    Tree::map(vec![
+                        ("path", Tree::text("result.csv")),
+                        ("columns", Tree::List(vec![Tree::text("ID")])),
                     ]),
                 ),
             ]);

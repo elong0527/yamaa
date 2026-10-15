@@ -21,6 +21,7 @@ use yamaa_core::{
 };
 
 mod scripted;
+#[allow(unused_imports)]
 pub use scripted::*;
 
 /// Ordered observations shared by independently owned fake ports.

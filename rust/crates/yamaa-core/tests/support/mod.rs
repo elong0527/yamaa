@@ -1,4 +1,5 @@
 //! Finite factories and observers owned by the yamaa-core integration suite.
+use yamaa_core::schema as document_schema;
 use yamaa_core::{
     table::{Column, TableSchema},
     value::ColumnType,
@@ -48,3 +49,9 @@ pub fn text_schema() -> TableSchema {
 }
 
 pub mod ports;
+
+pub mod document;
+
+pub mod diagnostic;
+
+pub mod dataset;

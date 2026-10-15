@@ -116,65 +116,50 @@ mod tests {
     fn strict_failure_moves_the_actual_normalized_checkpoint_allocation() {
         // Closed root with a bare window-bearing column list. The schema/input
         // arenas are independently authored; no adapter JSON or YAML participates.
-        enum Tree {
-            Text(&'static str),
-            List(Vec<Tree>),
-            Map(Vec<(&'static str, Tree)>),
-        }
-        use Tree::{List, Map, Text};
+        use crate::test_document::Tree;
+
         fn doc(tree: Tree) -> Document {
-            fn push(tree: Tree, nodes: &mut Vec<N>) -> usize {
-                let node = match tree {
-                    Text(text) => N::Text(text.into()),
-                    List(items) => N::Sequence(items.into_iter().map(|v| push(v, nodes)).collect()),
-                    Map(items) => N::Mapping(
-                        items
-                            .into_iter()
-                            .map(|(k, v)| (push(Text(k), nodes), push(v, nodes)))
-                            .collect(),
-                    ),
-                };
-                let id = nodes.len();
-                nodes.push(node);
-                id
-            }
-            let mut nodes = Vec::new();
-            let root = push(tree, &mut nodes);
-            Document::new(nodes, root).unwrap()
+            tree.document()
         }
         fn field(name: &'static str, kind: &'static str) -> Tree {
-            Map(vec![(name, Map(vec![("type", Text(kind))]))])
+            Tree::map(vec![(name, Tree::map(vec![("type", Tree::text(kind))]))])
         }
         let schema = SchemaStructure::admit(
             vec![SchemaModule {
                 name: "schema.yaml".into(),
-                document: doc(Map(vec![
-                    ("version", Text("1.0")),
+                document: doc(Tree::map(vec![
+                    ("version", Tree::text("1.0")),
                     (
                         "root",
-                        List(vec![
+                        Tree::List(vec![
                             field("schema_version", "str"),
                             field("columns", "list[column_class]"),
                         ]),
                     ),
                     (
                         "column_class",
-                        List(vec![
+                        Tree::List(vec![
                             field("name", "str"),
                             field("derivation", "handled_expression_class"),
                         ]),
                     ),
                     (
                         "handled_expression_class",
-                        List(vec![field("value", "expression")]),
+                        Tree::List(vec![field("value", "expression")]),
                     ),
-                    ("window_selection", Map(vec![("type", Text("str"))])),
-                    ("expression", Map(vec![("registry", Text("expressions"))])),
+                    (
+                        "window_selection",
+                        Tree::map(vec![("type", Tree::text("str"))]),
+                    ),
+                    (
+                        "expression",
+                        Tree::map(vec![("registry", Tree::text("expressions"))]),
+                    ),
                     (
                         "expressions",
-                        Map(vec![(
+                        Tree::map(vec![(
                             "row_number",
-                            List(vec![field("window", "window_selection")]),
+                            Tree::List(vec![field("window", "window_selection")]),
                         )]),
                     ),
                 ])),

@@ -108,7 +108,7 @@ mod boundary {
         dataset, function_invocation, specification_output as output, specification_run as run,
     };
     use yamaa_core::{
-        schema::{Document, DocumentNode as N, SpecificationDocument},
+        schema::{Document, SpecificationDocument},
         specification::{OutputFinding, PreparedSpecification, SourceDeclaration},
         table::{CellError, Column, TableAccess, TableSchema},
         value::{ColumnType, Value, ValueType},
@@ -136,69 +136,58 @@ mod boundary {
         assert_eq!(*error.token, 23);
     }
 
-    enum Tree<'a> {
-        Text(&'a str),
-        Map(Vec<(&'a str, Tree<'a>)>),
-        List(Vec<Tree<'a>>),
-    }
-    impl Tree<'_> {
-        fn append(self, nodes: &mut Vec<N>) -> usize {
-            let value = match self {
-                Self::Text(value) => N::Text(value.into()),
-                Self::List(values) => {
-                    N::Sequence(values.into_iter().map(|v| v.append(nodes)).collect())
-                }
-                Self::Map(values) => N::Mapping(
-                    values
-                        .into_iter()
-                        .map(|(k, v)| (Self::Text(k).append(nodes), v.append(nodes)))
-                        .collect(),
-                ),
-            };
-            let id = nodes.len();
-            nodes.push(value);
-            id
-        }
-    }
+    use crate::support::document::Tree;
+
     fn prepared(expression: &str) -> PreparedSpecification {
-        use Tree::*;
-        let tree = Map(vec![
-            ("schema_version", Text("1.0")),
-            ("domain", Text("TEST")),
+        let tree = Tree::map(vec![
+            ("schema_version", Tree::text("1.0")),
+            ("domain", Tree::text("TEST")),
             (
                 "input",
-                Map(vec![("SRC", Map(vec![("path", Text("input.csv"))]))]),
+                Tree::map(vec![(
+                    "SRC",
+                    Tree::map(vec![("path", Tree::text("input.csv"))]),
+                )]),
             ),
-            ("keys", List(vec![Text("ID")])),
+            ("keys", Tree::List(vec![Tree::text("ID")])),
             (
                 "output",
-                Map(vec![
-                    ("path", Text("result.csv")),
-                    ("columns", List(vec![Text("VALUE"), Text("ID")])),
+                Tree::map(vec![
+                    ("path", Tree::text("result.csv")),
+                    (
+                        "columns",
+                        Tree::List(vec![Tree::text("VALUE"), Tree::text("ID")]),
+                    ),
                 ]),
             ),
             (
                 "columns",
-                List(vec![
-                    Map(vec![
-                        ("name", Text("ID")),
-                        ("type", Text("int")),
+                Tree::List(vec![
+                    Tree::map(vec![
+                        ("name", Tree::text("ID")),
+                        ("type", Tree::text("int")),
                         (
                             "derivation",
-                            Map(vec![(
+                            Tree::map(vec![(
                                 "value",
-                                Map(vec![("source", Map(vec![("variable", Text("SRC.ID"))]))]),
+                                Tree::map(vec![(
+                                    "source",
+                                    Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
+                                )]),
                             )]),
                         ),
                     ]),
-                    Map(vec![
-                        ("name", Text("VALUE")),
-                        ("type", Text("int")),
+                    Tree::map(vec![
+                        ("name", Tree::text("VALUE")),
+                        ("type", Tree::text("int")),
                         (
                             "derivation",
-                            Map(vec![(
+                            Tree::map(vec![(
                                 "value",
-                                Map(vec![("compute", Map(vec![("expr", Text(expression))]))]),
+                                Tree::map(vec![(
+                                    "compute",
+                                    Tree::map(vec![("expr", Tree::text(expression))]),
+                                )]),
                             )]),
                         ),
                     ]),
