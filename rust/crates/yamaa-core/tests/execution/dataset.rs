@@ -1925,8 +1925,6 @@ fn repeated_failed_checks_keep_each_complete_identity() {
         .all(|record| record.offending_rows.len() == 2));
 }
 
-/// Work admission precedes grouped reads and the aggregate's eager argument collection.
-
 /// Completed missing keys are reportable; unconstructed key slots are not.
 #[test]
 fn conversion_failure_retains_completed_missing_identity() {
@@ -6290,7 +6288,7 @@ mod dataset_functions {
             &mut calls,
             Some(&mut |event| {
                 if let yamaa_core::dataset::ExecutionEvent::Phase(phase) = event {
-                    (&mut |phase| phases.push((phase, source.reads.borrow().len())))(phase);
+                    phases.push((phase, source.reads.borrow().len()));
                 }
             }),
         );
@@ -6407,7 +6405,7 @@ mod dataset_functions {
                 &mut callbacks(),
                 Some(&mut |event| {
                     if let yamaa_core::dataset::ExecutionEvent::Phase(phase) = event {
-                        (&mut |phase| phases.push(phase))(phase);
+                        phases.push(phase);
                     }
                 }),
             );
