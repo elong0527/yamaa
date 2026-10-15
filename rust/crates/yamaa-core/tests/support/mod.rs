@@ -1,5 +1,4 @@
 //! Finite factories and observers owned by the yamaa-core integration suite.
-use yamaa_core::schema as document_schema;
 use yamaa_core::{
     table::{Column, TableSchema},
     value::ColumnType,
@@ -47,11 +46,3 @@ pub fn id_value_schema() -> TableSchema {
 pub fn text_schema() -> TableSchema {
     table_schema(&[("ID", ColumnType::Str), ("TEXT", ColumnType::Str)])
 }
-
-pub mod ports;
-
-pub mod document;
-
-pub mod diagnostic;
-
-pub mod dataset;
