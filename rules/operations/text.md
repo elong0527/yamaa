@@ -457,7 +457,7 @@ whose length can vary. Fixed length lookbehind stays allowed, and
 
 | Field | Meaning |
 | --- | --- |
-| `expressions.mapping.source` | String variable used as the dictionary key. |
+| `expressions.mapping.source` | String variable used as the dictionary key, or a [filtered source](lookup.md#req-1052) carrying it with a filter, a selection, or an absent value. |
 | `expressions.mapping.dict` | Source-value to result-value dictionary, written inline or as the path of a YAML file holding it. A path is read once during workflow planning through the spec's [project resources](../storage/resources.md); its content must satisfy the inline dictionary contract. |
 | `expressions.mapping.case_sensitive` | Compare exactly when true; use [Text values](../values/text.md) ASCII folding when false. |
 | `expressions.mapping.missing` | Value returned when the source is missing; without it, a missing source fails ([REQ-0344](../execution/handlers.md#req-0344)). |
@@ -567,6 +567,11 @@ The portable matcher applies the fixed implementation policy documented in
 steps per complete match call. Each match starts a fresh counter covering search
 starts, backtracking, and nested assertions. This implementation boundary is
 separate from the regex grammar.
+
+Predicate `LIKE` lowers its validated literal and wildcard tokens directly to
+this matcher and applies the same fresh per-match step counter. Its `%` and `_`
+wildcards still match all Unicode scalars, including line terminators, under
+[Predicates](predicates.md#req-0176).
 
 A matching step refusal is reported as `engine_rejected`, with
 `resource: regex_steps`, the applied `limit`, and `actual` when known.

@@ -281,7 +281,7 @@ implementation returns the double for the written formula.
 
 | Field | Meaning |
 | --- | --- |
-| `expressions.cut.source` | Numeric variable to classify. |
+| `expressions.cut.source` | Numeric variable to classify, or a [filtered source](lookup.md#req-1052) carrying it with a filter, a selection, or an absent value. |
 | `expressions.cut.breaks` | Ascending interval boundaries. |
 | `expressions.cut.labels` | One label per interval; exactly one more than breaks. |
 | `expressions.cut.right` | Right-closed/left-open; false is left-closed/right-open. |

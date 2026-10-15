@@ -49,6 +49,138 @@ mod file {
         }
 
         #[test]
+        fn complete_output_replacement_resets_the_base_for_primary_and_both_sidecars() {
+            use yamaa_adapters::{file_application, specification_report::Identity};
+            use yamaa_core::{domain_entry::Request, schema::DocumentNode};
+
+            for inherited_base in ["", "relative_to: entry, "] {
+                let study = Study::new();
+                fs::write(study.0.join("shared/base.yaml"), format!("schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {{SRC: {{path: data.csv, types: {{ID: int}}}}}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: ignored.csv, {inherited_base}columns: [ID], warning_log: ignored-warning.csv, verification_log: ignored-verification.csv}}\n")).unwrap();
+                fs::write(study.0.join("shared/replacement.yaml"), "schema_version: '1.0'\nparents: base.yaml\noutput: {path: result.csv, columns: [ID], warning_log: warnings.csv, verification_log: verifications.csv}\n").unwrap();
+                fs::write(
+                    study.0.join("entry/spec.yaml"),
+                    "schema_version: '1.0'\nparents: ../shared/replacement.yaml\n",
+                )
+                .unwrap();
+                fs::write(study.0.join("shared/data.csv"), b"ID\n7\n").unwrap();
+                let path = study.text("entry/spec.yaml");
+                let (resources, entry) = file_configuration::resources(&path).unwrap();
+                let prepared = FileSpecification::prepare(resources, &entry).unwrap();
+                let document = prepared.run().document().model().document();
+                let output = document.field(document.root(), "output").unwrap();
+                for (field, written) in [
+                    ("path", "result.csv"),
+                    ("warning_log", "warnings.csv"),
+                    ("verification_log", "verifications.csv"),
+                ] {
+                    let node = document.field(output, field).unwrap();
+                    assert_eq!(
+                        document.nodes()[node],
+                        DocumentNode::Text(format!("../shared/{written}"))
+                    );
+                }
+                let base = document.field(output, "relative_to").unwrap();
+                assert_eq!(
+                    document.nodes()[base],
+                    DocumentNode::Text("declaring".into())
+                );
+                let origin = prepared.run().document().written_output_origin().unwrap();
+                assert_eq!(
+                    origin.declaring_source,
+                    study.text("shared/replacement.yaml")
+                );
+                assert_eq!(origin.base_source, study.text("shared/replacement.yaml"));
+                assert_eq!(origin.written, "result.csv");
+                drop(prepared);
+
+                let mut result = file_application::domain(
+                    Request {
+                        specification: &path,
+                        environment: None,
+                    },
+                    Identity {
+                        runtime: "test",
+                        runtime_version: "test",
+                        engine_version: "test",
+                        example: "test",
+                        specification: &path,
+                        base_directory: ".",
+                    },
+                )
+                .unwrap();
+                assert!(result.issues().is_empty(), "{:?}", result.issues());
+                assert!(!study.0.join("shared/result.csv").exists());
+                assert!(result.save().unwrap());
+                assert_eq!(
+                    fs::read(study.0.join("shared/result.csv")).unwrap(),
+                    b"ID\n7\n"
+                );
+                for written in ["result.csv", "warnings.csv", "verifications.csv"] {
+                    assert!(study.0.join("shared").join(written).is_file());
+                    assert!(!study.0.join("entry").join(written).exists());
+                }
+                for directory in ["shared", "entry"] {
+                    for written in [
+                        "ignored.csv",
+                        "ignored-warning.csv",
+                        "ignored-verification.csv",
+                    ] {
+                        assert!(!study.0.join(directory).join(written).exists());
+                    }
+                }
+            }
+        }
+
+        #[test]
+        fn output_selector_or_path_alone_cannot_patch_an_inherited_output() {
+            use yamaa_adapters::{file_application, specification_report::Identity};
+            use yamaa_core::domain_entry::Request;
+
+            let study = Study::new();
+            fs::write(study.0.join("shared/base.yaml"), "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: result.csv, relative_to: entry, columns: [ID], warning_log: warnings.csv, verification_log: verifications.csv}\n").unwrap();
+            for (output, expected) in [
+                (
+                    "{relative_to: declaring}",
+                    vec!["output.columns", "output.path"],
+                ),
+                ("{path: another.csv}", vec!["output.columns"]),
+            ] {
+                fs::write(
+                    study.0.join("entry/spec.yaml"),
+                    format!(
+                        "schema_version: '1.0'\nparents: ../shared/base.yaml\noutput: {output}\n"
+                    ),
+                )
+                .unwrap();
+                let path = study.text("entry/spec.yaml");
+                let issues = file_application::check(
+                    Request {
+                        specification: &path,
+                        environment: None,
+                    },
+                    Identity {
+                        runtime: "test",
+                        runtime_version: "test",
+                        engine_version: "test",
+                        example: "test",
+                        specification: &path,
+                        base_directory: ".",
+                    },
+                );
+                assert_eq!(issues.len(), expected.len(), "{issues:?}");
+                assert!(issues
+                    .iter()
+                    .all(|issue| issue.condition == "missing_required_field"));
+                let mut paths = issues
+                    .iter()
+                    .flat_map(|issue| issue.spec_paths.iter().map(String::as_str))
+                    .collect::<Vec<_>>();
+                paths.sort_unstable();
+                assert_eq!(paths, expected);
+            }
+        }
+
+        #[test]
         fn public_check_and_build_validate_written_paths_before_source_profiles() {
             use yamaa_adapters::{file_application, specification_report::Identity};
             use yamaa_core::domain_entry::Request;

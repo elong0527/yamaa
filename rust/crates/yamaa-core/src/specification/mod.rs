@@ -822,21 +822,26 @@ impl PreparedSpecification {
                 .transpose()?
                 .unwrap_or(&[]);
             if operands.len() > crate::limits::Limits::SOURCE_OPERANDS {
+                let name = text(d, field(d, column, "name")?)?;
                 return Err(PrepareError::limit(
                     "source_operands",
                     crate::limits::Limits::SOURCE_OPERANDS,
                     Some(operands.len()),
-                    Some("columns"),
+                    Some(&format!(
+                        "columns.{name}.derivation.first_available.sources"
+                    )),
                 ));
             }
         }
+        // Own row-shape admission before filters or default expansion allocate a plan.
         if let Some(rows) = d
             .field(root, "rows")
             .filter(|&id| !matches!(d.nodes()[id], N::Null))
         {
             for (index, &row) in sequence(d, rows)?.iter().enumerate() {
-                for (name, actual, maximum) in [
+                for (resource, name, actual, maximum) in [
                     (
+                        "group_keys",
                         "group_by",
                         d.field(row, "group_by")
                             .filter(|&id| !matches!(d.nodes()[id], N::Null))
@@ -846,6 +851,7 @@ impl PreparedSpecification {
                         crate::limits::Limits::KEYS,
                     ),
                     (
+                        "row_columns",
                         "derivations",
                         mapping(d, field(d, row, "derivations")?)?.len(),
                         crate::limits::Limits::COLUMNS,
@@ -853,7 +859,7 @@ impl PreparedSpecification {
                 ] {
                     if actual > maximum {
                         return Err(PrepareError::limit(
-                            name,
+                            resource,
                             maximum,
                             Some(actual),
                             Some(&format!("rows[{index}].{name}")),
