@@ -4,7 +4,7 @@ use yamaa_core::{
     conversion::convert,
     diagnostic::CONDITIONS,
     evaluation::{EvaluationErrorKind, NumericResolver},
-    numeric_compiler::{compile_numeric, compile_numeric_with_policy, CompileLimits, MathPolicy},
+    numeric_compiler::{compile_numeric, CompileLimits},
     numeric_parser::SourceSpan,
     value::{ColumnType, Selection, Value},
 };
@@ -177,13 +177,8 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     ] {
         // Existing component-only policy exposes the two math domain failures;
         // this test grants no new production numerical-policy qualification.
-        let plan = compile_numeric_with_policy(
-            expression,
-            "columns.X.compute",
-            CompileLimits::default(),
-            MathPolicy::PortableLibmV1,
-        )
-        .unwrap();
+        let plan =
+            compile_numeric(expression, "columns.X.compute", CompileLimits::default()).unwrap();
         let error = plan.evaluate(&mut Bindings).unwrap_err();
         let diagnostic = error.diagnostic().unwrap();
         let definition = diagnostic.definition();

@@ -1,6 +1,5 @@
-//! Compile bounded numeric syntax into the implemented scalar evaluator subset.
+//! Compile bounded numeric syntax using the pinned portable math contract.
 //!
-//! Unsupported functions are rejected before a plan can resolve any identifiers.
 //! Literal overflow is deferred until evaluation reaches it in written order.
 //! Compiled trees are private, so parse and resolution budgets cannot be bypassed
 //! by mutation. Budgets bound structure and call counts, not resolver running time.
@@ -12,16 +11,6 @@ use crate::numeric::{
 use crate::numeric_parser::{
     parse_numeric, NumericFunction, ParseError, ParseLimits, ParsedKind, ParsedNumeric, SourceSpan,
 };
-
-/// Explicit numerical behavior; neither choice claims a complete dataset backend.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MathPolicy {
-    /// Preserve the current supported subset; EXP/LN/POWER remain unsupported.
-    ReferenceSubset,
-    /// Opt into pinned libm 0.2.16 with default features disabled. Historical
-    /// Python platform math may differ; this is a deliberate migration policy.
-    PortableLibmV1,
-}
 
 /// Parse budgets also bound compilation/evaluation work; every identifier
 /// occurrence consumes one resolution, including repeated names. The static
@@ -42,22 +31,12 @@ impl Default for CompileLimits {
     }
 }
 
-/// A valid function not yet executable by this subset, in original source order.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UnsupportedFunction {
-    pub function: NumericFunction,
-    /// Exact written function name, excluding its arguments and parentheses.
-    pub name: SourceSpan,
-}
-
-/// Distinguish invalid syntax, parser policy, unsupported features and call policy.
+/// Distinguish invalid syntax, parser policy and call policy.
 /// None of these outcomes runs a resolver or selects a language lifecycle handler.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum CompileError {
     #[error("numeric compiler parse: {0:?}")]
     Parse(ParseError),
-    #[error("numeric compiler unsupported: functions={functions:?}")]
-    Unsupported { functions: Vec<UnsupportedFunction> },
     #[error("numeric compiler resolution limit: limit={limit:?}, required={required:?}")]
     ResolutionLimit { limit: usize, required: usize },
 }
@@ -72,13 +51,11 @@ pub struct CompiledEvaluationError<E> {
     pub evaluation: Box<EvaluationError<E>>,
 }
 
-/// Immutable executable plan for arithmetic, ABS, MOD, NULLIF, COALESCE and
-/// numeric extrema, CEIL, FLOOR, TRUNC and SQRT. Reusing a plan repeats resolution;
-/// no values or errors are cached.
+/// Immutable executable plan for the complete numeric vocabulary. Reusing a plan
+/// repeats resolution; no values or errors are cached.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CompiledNumeric {
     plan: NumericPlan,
-    math_policy: MathPolicy,
     sources: Vec<(Vec<Operand>, SourceSpan)>,
     resolutions: usize,
     identifiers: Vec<String>,
@@ -91,11 +68,6 @@ impl CompiledNumeric {
     /// The declared numeric result kind does not execute or resolve this plan.
     pub fn result_type(&self) -> crate::value::ColumnType {
         NUMERIC_RESULT_TYPE
-    }
-
-    /// Numerical policy explicitly chosen before any identifier resolution.
-    pub fn math_policy(&self) -> MathPolicy {
-        self.math_policy
     }
 
     /// Original source text, retained without normalization or reassociation.
@@ -144,8 +116,7 @@ impl CompiledNumeric {
     }
 }
 
-/// Parse and preflight the whole expression, then lower only supported syntax.
-/// Parser failures take priority; unsupported calls precede the resolution policy.
+/// Parse and preflight the whole expression before resolving any identifiers.
 /// No arithmetic folding, name binding, resolver invocation or handler accounting
 /// occurs here. Node/token/byte limits and the hard depth ceiling come from parsing.
 pub fn compile_numeric(
@@ -153,63 +124,19 @@ pub fn compile_numeric(
     spec_path: &str,
     limits: CompileLimits,
 ) -> Result<CompiledNumeric, CompileError> {
-    compile_numeric_with_policy(text, spec_path, limits, MathPolicy::ReferenceSubset)
-}
-
-/// Compile with a caller-selected numerical policy before any resolver effects.
-/// PortableLibmV1 enables EXP/LN/POWER but does not relax diagnostics, limits,
-/// association or exact comparison. Default callers keep the reference subset.
-pub fn compile_numeric_with_policy(
-    text: &str,
-    spec_path: &str,
-    limits: CompileLimits,
-    math_policy: MathPolicy,
-) -> Result<CompiledNumeric, CompileError> {
     let parsed = parse_numeric(text, limits.parse).map_err(CompileError::Parse)?;
-    let mut functions = Vec::new();
-    let mut resolutions = 0;
-    for node in parsed.nodes() {
-        match &node.kind {
-            ParsedKind::Call { function, name, .. }
-                if !(matches!(
-                    function,
-                    NumericFunction::Abs
-                        | NumericFunction::Sqrt
-                        | NumericFunction::Ceil
-                        | NumericFunction::Floor
-                        | NumericFunction::Trunc
-                        | NumericFunction::Mod
-                        | NumericFunction::Greatest
-                        | NumericFunction::Least
-                        | NumericFunction::NullIf
-                        | NumericFunction::Coalesce
-                        | NumericFunction::RoundHalfAwayFromZero
-                ) || (math_policy == MathPolicy::PortableLibmV1
-                    && matches!(
-                        function,
-                        NumericFunction::Exp | NumericFunction::Ln | NumericFunction::Power
-                    ))) =>
-            {
-                functions.push(UnsupportedFunction {
-                    function: *function,
-                    name: *name,
-                });
-            }
-            ParsedKind::Identifier => resolutions += 1,
-            _ => {}
-        }
-    }
-    if !functions.is_empty() {
-        functions.sort_by_key(|function| function.name.start);
-        return Err(CompileError::Unsupported { functions });
-    }
+    let resolutions = parsed
+        .nodes()
+        .iter()
+        .filter(|node| node.kind == ParsedKind::Identifier)
+        .count();
     if resolutions > limits.resolutions {
         return Err(CompileError::ResolutionLimit {
             limit: limits.resolutions,
             required: resolutions,
         });
     }
-    Ok(compile_parsed(&parsed, spec_path, math_policy, resolutions))
+    Ok(compile_parsed(&parsed, spec_path, resolutions))
 }
 
 /// R013 shares the same arithmetic evaluator and original spans. The parser has
@@ -232,24 +159,13 @@ pub(crate) fn compile_aggregate_subtree(
             required: resolutions,
         });
     }
-    Ok(compile_parsed(
-        &parsed,
-        spec_path,
-        MathPolicy::PortableLibmV1,
-        resolutions,
-    ))
+    Ok(compile_parsed(&parsed, spec_path, resolutions))
 }
 
-fn compile_parsed(
-    parsed: &ParsedNumeric,
-    spec_path: &str,
-    math_policy: MathPolicy,
-    resolutions: usize,
-) -> CompiledNumeric {
+fn compile_parsed(parsed: &ParsedNumeric, spec_path: &str, resolutions: usize) -> CompiledNumeric {
     let mut sources = Vec::new();
     let root = lower(parsed, parsed.root(), &mut Vec::new(), &mut sources);
     CompiledNumeric {
-        math_policy,
         plan: NumericPlan {
             spec_path: spec_path.into(),
             expression: parsed.expression().into(),

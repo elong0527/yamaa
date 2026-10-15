@@ -4,7 +4,7 @@
 use std::convert::Infallible;
 use yamaa_core::evaluation::NumericResolver;
 use yamaa_core::numeric::Number;
-use yamaa_core::numeric_compiler::{compile_numeric_with_policy, CompileLimits, MathPolicy};
+use yamaa_core::numeric_compiler::{compile_numeric, CompileLimits};
 use yamaa_core::value::{Selection, Value};
 
 /// Supply normalized values through the same compiled evaluator used by callers.
@@ -28,13 +28,7 @@ fn sample(id: &str, x: f64, y: f64) {
         ("LN", y, 0.0, "LN(A)"),
         ("POWER", y, x / 100.0, "POWER(A, B)"),
     ] {
-        let plan = compile_numeric_with_policy(
-            source,
-            "assessment",
-            CompileLimits::default(),
-            MathPolicy::PortableLibmV1,
-        )
-        .unwrap();
+        let plan = compile_numeric(source, "assessment", CompileLimits::default()).unwrap();
         let result = match plan.evaluate(&mut Inputs(a, b)).unwrap() {
             Number::Float(value) => value.get(),
             Number::Missing => f64::NAN,

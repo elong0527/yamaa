@@ -1,8 +1,6 @@
 use yamaa_core::evaluation::{EvaluationErrorKind, NumericCondition, NumericResolver, Operand};
 use yamaa_core::numeric::{round_half_away_from_zero as rounded, ArithmeticErrorKind, Number};
-use yamaa_core::numeric_compiler::{
-    compile_numeric_with_policy, CompileError, CompileLimits, MathPolicy,
-};
+use yamaa_core::numeric_compiler::{compile_numeric, CompileError, CompileLimits};
 use yamaa_core::value::{Selection, Value};
 
 /// Missing suppresses digits validation only after both operand values are available.
@@ -69,54 +67,50 @@ impl NumericResolver for Resolver {
     }
 }
 
-/// Both policies retain budgets, call/operand source spans and eager resolver failures.
+/// Compilation retains call/operand source spans and eager resolver failures.
 #[test]
 fn rounding_compilation_preserves_provenance_and_limits() {
-    for policy in [MathPolicy::ReferenceSubset, MathPolicy::PortableLibmV1] {
-        assert!(matches!(
-            compile_numeric_with_policy(
-                "ROUND_HALF_AWAY_FROM_ZERO(A, D)",
-                "spec",
-                CompileLimits {
-                    resolutions: 1,
-                    ..CompileLimits::default()
-                },
-                policy
-            ),
-            Err(CompileError::ResolutionLimit { required: 2, .. })
-        ));
-        for (text, span, path, expected_trace) in [
-            (
-                "1 + ROUND_HALF_AWAY_FROM_ZERO(A, D)",
-                "ROUND_HALF_AWAY_FROM_ZERO(A, D)",
-                vec![Operand::Right],
-                vec!["A", "D"],
-            ),
-            (
-                "ROUND_HALF_AWAY_FROM_ZERO(NULL, BROKEN)",
-                "BROKEN",
-                vec![Operand::Right],
-                vec!["BROKEN"],
-            ),
-        ] {
-            let plan = compile_numeric_with_policy(text, "spec", CompileLimits::default(), policy)
-                .unwrap();
-            let mut resolver = Resolver(Vec::new());
-            let error = plan.evaluate(&mut resolver).unwrap_err();
-            assert_eq!(&text[error.source_span.start..error.source_span.end], span);
-            assert_eq!(error.evaluation.location.spec_path, "spec");
-            assert_eq!(error.evaluation.location.operands, path);
-            assert_eq!(resolver.0, expected_trace);
-            match error.evaluation.kind {
-                EvaluationErrorKind::Numeric(NumericCondition::Arithmetic(
-                    ArithmeticErrorKind::InvalidRoundingDigits,
-                )) => assert!(text.starts_with("1 +")),
-                EvaluationErrorKind::Resolution { identifier, error } => {
-                    assert_eq!(identifier, "BROKEN");
-                    assert_eq!(error.0, "opaque failure");
-                }
-                _ => panic!("unexpected error"),
+    assert!(matches!(
+        compile_numeric(
+            "ROUND_HALF_AWAY_FROM_ZERO(A, D)",
+            "spec",
+            CompileLimits {
+                resolutions: 1,
+                ..CompileLimits::default()
+            },
+        ),
+        Err(CompileError::ResolutionLimit { required: 2, .. })
+    ));
+    for (text, span, path, expected_trace) in [
+        (
+            "1 + ROUND_HALF_AWAY_FROM_ZERO(A, D)",
+            "ROUND_HALF_AWAY_FROM_ZERO(A, D)",
+            vec![Operand::Right],
+            vec!["A", "D"],
+        ),
+        (
+            "ROUND_HALF_AWAY_FROM_ZERO(NULL, BROKEN)",
+            "BROKEN",
+            vec![Operand::Right],
+            vec!["BROKEN"],
+        ),
+    ] {
+        let plan = compile_numeric(text, "spec", CompileLimits::default()).unwrap();
+        let mut resolver = Resolver(Vec::new());
+        let error = plan.evaluate(&mut resolver).unwrap_err();
+        assert_eq!(&text[error.source_span.start..error.source_span.end], span);
+        assert_eq!(error.evaluation.location.spec_path, "spec");
+        assert_eq!(error.evaluation.location.operands, path);
+        assert_eq!(resolver.0, expected_trace);
+        match error.evaluation.kind {
+            EvaluationErrorKind::Numeric(NumericCondition::Arithmetic(
+                ArithmeticErrorKind::InvalidRoundingDigits,
+            )) => assert!(text.starts_with("1 +")),
+            EvaluationErrorKind::Resolution { identifier, error } => {
+                assert_eq!(identifier, "BROKEN");
+                assert_eq!(error.0, "opaque failure");
             }
+            _ => panic!("unexpected error"),
         }
     }
 }

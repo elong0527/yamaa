@@ -3,7 +3,7 @@ use std::convert::Infallible;
 use yamaa_core::evaluation::{EvaluationErrorKind, NumericCondition, NumericResolver, Operand};
 use yamaa_core::numeric::Number;
 use yamaa_core::numeric_compiler::{compile_numeric, CompileError, CompileLimits, CompiledNumeric};
-use yamaa_core::numeric_parser::{GrammarFailure, NumericFunction, ParseError, ParseResource};
+use yamaa_core::numeric_parser::{GrammarFailure, ParseError, ParseResource};
 use yamaa_core::value::{Selection, Value};
 
 /// Compile a test expression through the public source-to-plan entry point.
@@ -143,73 +143,18 @@ fn source_spans_identify_the_failed_node() {
     }
 }
 
-/// Unknown grammar functions differ from allowed functions outside this executor.
+/// Prohibited function spellings remain grammar errors with the current compiler.
 #[test]
-fn unsupported_features_are_preflighted_in_source_order() {
-    let text = "A + POWER(EXP(B), 2) + LN(A) + POWER(2, 3)";
-    let error = compile_numeric(text, "spec", CompileLimits::default()).unwrap_err();
-    let CompileError::Unsupported { functions } = error else {
-        panic!("unsupported required");
-    };
-    assert_eq!(
-        functions.iter().map(|f| f.function).collect::<Vec<_>>(),
-        [
-            NumericFunction::Power,
-            NumericFunction::Exp,
-            NumericFunction::Ln,
-            NumericFunction::Power
-        ]
-    );
-    assert_eq!(
-        functions
-            .iter()
-            .map(|f| &text[f.name.start..f.name.end])
-            .collect::<Vec<_>>(),
-        ["POWER", "EXP", "LN", "POWER"]
-    );
-    assert!(matches!(
-        compile_numeric(
-            "EXP(A)",
-            "spec",
-            CompileLimits {
-                resolutions: 0,
-                ..CompileLimits::default()
-            }
-        ),
-        Err(CompileError::Unsupported { .. })
-    ));
-    assert!(matches!(
-        compile_numeric("SQRT(A) + ROUND(B)", "spec", CompileLimits::default()),
-        Err(CompileError::Parse(ParseError::Grammar {
-            failure: GrammarFailure::ProhibitedFunction { .. },
-            ..
-        }))
-    ));
-    // Neither an early known arithmetic failure nor a later literal failure can
-    // turn a valid unimplemented expression into an executable partial plan.
-    for text in ["1 / 0 + EXP(A)", "9223372036854775808 + LN(A)"] {
+fn prohibited_functions_are_rejected_before_resolution() {
+    for text in ["SQRT(A) + ROUND(B)", "A + ROUND(B)"] {
         assert!(matches!(
             compile_numeric(text, "spec", CompileLimits::default()),
-            Err(CompileError::Unsupported { .. })
+            Err(CompileError::Parse(ParseError::Grammar {
+                failure: GrammarFailure::ProhibitedFunction { .. },
+                ..
+            }))
         ));
     }
-    assert!(matches!(
-        compile_numeric("A + ROUND(B)", "spec", CompileLimits::default()),
-        Err(CompileError::Parse(ParseError::Grammar {
-            failure: GrammarFailure::ProhibitedFunction { .. },
-            ..
-        }))
-    ));
-    for name in ["EXP", "LN"] {
-        assert!(matches!(
-            compile_numeric(&format!("{name}(A)"), "spec", CompileLimits::default()),
-            Err(CompileError::Unsupported { .. })
-        ));
-    }
-    assert!(matches!(
-        compile_numeric("POWER(A, B)", "spec", CompileLimits::default()),
-        Err(CompileError::Unsupported { .. })
-    ));
 }
 
 /// Static budgets count occurrences, protect deep execution/drop and reset per run.
