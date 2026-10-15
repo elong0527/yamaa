@@ -13,7 +13,7 @@ use yamaa_core::{
     value::{ColumnType as T, Value},
 };
 use yamaa_core::{
-    dataset::{ExecutionError, Limits},
+    dataset::{ExecutionError},
     function_invocation::{Argument, FunctionPort, HostError},
     function_signature::{FunctionIdentity, InvocationPlan},
 };
@@ -77,11 +77,7 @@ fn assignment(column: usize, expression: Expression) -> Assignment {
     }
 }
 fn predicate(text: &str, part: &str) -> BoundPredicate {
-    let compiled = predicate_compiler::compile(
-        text,
-        &format!("verifications[1].assert.{part}"),
-        Default::default(),
-    )
+    let compiled = predicate_compiler::compile(text, &format!("verifications[1].assert.{part}"))
     .unwrap();
     let bindings = compiled
         .identifiers()
@@ -203,19 +199,6 @@ fn build_plan(
     )
     .unwrap()
 }
-fn limits() -> Limits {
-    Limits {
-        source_rows: 100,
-        output_rows: 100,
-        output_cells: 1000,
-        key_cells: 1000,
-        work_cells: 100_000,
-        scalar_text_bytes: 100_000,
-        output_text_bytes: 100_000,
-        identity_cells: 1000,
-        identity_text_bytes: 100_000,
-    }
-}
 
 #[test]
 fn selected_choice_is_shared_with_construction_when_require_and_next_attempt_is_fresh() {
@@ -230,7 +213,7 @@ fn selected_choice_is_shared_with_construction_when_require_and_next_attempt_is_
     );
     for _ in 0..2 {
         trace.borrow_mut().clear();
-        let attempt = plan.execute_observed_sources(&src, &[&donor], limits());
+        let attempt = plan.execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
         let execution = attempt.result.unwrap();
         assert_eq!(
             execution.dataset.rows(),
@@ -270,7 +253,7 @@ fn false_when_still_evaluates_require_and_preserves_original_noncloneable_donor_
     let marker = Rc::new(());
     *donor.fail.borrow_mut() = Some((0, 1, Failure(payload, marker.clone())));
     let attempt = plan(&src, &donor, Some("FALSE"), "P.X = 2", false, false)
-        .execute_observed_sources(&src, &[&donor], limits());
+        .execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     let ExecutionError::SecondaryCell {
         path,
         source,
@@ -307,7 +290,7 @@ fn when_failure_precedes_require_and_keeps_original_opaque_payload_and_prefix() 
     let address = &*payload as *const u8;
     *donor.fail.borrow_mut() = Some((0, 2, Failure(payload, marker.clone())));
     let attempt = plan(&src, &donor, Some("P.Z > 0"), "P.X > 0", false, false)
-        .execute_observed_sources(&src, &[&donor], limits());
+        .execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     let ExecutionError::SecondaryCell {
         path,
         error: CellError::Access(Failure(payload, retained)),
@@ -330,7 +313,7 @@ fn absent_lookup_preserves_intermediate_diagnostic_identity_without_column_attri
     let (mut src, donor, trace) = tables();
     src.rows[0][0] = Value::Int(8);
     let attempt = plan(&src, &donor, Some("FALSE"), "P.X > 0", false, false)
-        .execute_observed_sources(&src, &[&donor], limits());
+        .execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     let ExecutionError::UnmatchedKey {
         path,
         dataset,
@@ -356,7 +339,7 @@ fn zero_output_type_admission_reads_no_donor_cells_or_functions() {
     let (mut src, donor, trace) = tables();
     src.rows.clear();
     let attempt = plan(&src, &donor, None, "P.X = 'invalid'", false, false)
-        .execute_observed_sources(&src, &[&donor], limits());
+        .execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     let ExecutionError::VerificationPredicate { error, records } = *attempt.result.unwrap_err()
     else {
         panic!("schema-only assertion type condition")
@@ -442,7 +425,7 @@ fn derived_donor_callback_counts_follow_one_materialization_per_attempt() {
     };
     for expected in [2, 4] {
         trace.borrow_mut().clear();
-        let attempt = plan.execute_observed_functions(&src, &[&donor], &mut calls, limits());
+        let attempt = plan.execute(&src, &[&donor], &mut calls, None);
         assert_eq!(
             attempt.result.unwrap().dataset.rows(),
             [vec![Value::Int(1), Value::Int(2)]]
@@ -461,7 +444,7 @@ fn derived_donor_callback_counts_follow_one_materialization_per_attempt() {
     trace.borrow_mut().clear();
     let empty_plan = plan;
     assert!(empty_plan
-        .execute_observed_functions(&empty, &[&donor], &mut calls, limits())
+        .execute(&empty, &[&donor], &mut calls, None)
         .result
         .is_ok());
     assert_eq!(calls.count, 4);

@@ -1,5 +1,5 @@
 use std::{cell::RefCell, convert::Infallible};
-use yamaa_core::{dataset::Limits, numeric_lifecycle::HandlerKind};
+use yamaa_core::{dataset::numeric_lifecycle::HandlerKind};
 use yamaa_core::{
     dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
@@ -34,19 +34,6 @@ fn schema(names: &[&str]) -> TableSchema {
             .collect(),
     )
     .unwrap()
-}
-fn limits() -> Limits {
-    Limits {
-        source_rows: 10,
-        output_rows: 10,
-        output_cells: 100,
-        key_cells: 100,
-        work_cells: 1000,
-        scalar_text_bytes: 1000,
-        output_text_bytes: 1000,
-        identity_cells: 100,
-        identity_text_bytes: 1000,
-    }
 }
 #[test]
 fn missing_concat_short_circuits_source_reads_and_retains_nested_handler_observations() {
@@ -109,7 +96,7 @@ fn missing_concat_short_circuits_source_reads_and_retains_nested_handler_observa
         vec![],
     )
     .unwrap();
-    let attempt = plan.execute_observed(&table, limits());
+    let attempt = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     assert_eq!(
         attempt.result.unwrap().dataset.rows(),
         [vec![Value::Str("a".into()), Value::Str("fallback".into())]]
@@ -180,7 +167,7 @@ fn equal_extremes_retain_the_first_dates_collected_precision() {
             vec![],
         )
         .unwrap();
-        let result = plan.execute_observed(&table, limits()).result.unwrap();
+        let result = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap();
         let Value::Date(date) = result.dataset.rows()[0][1] else {
             panic!("date result")
         };
@@ -267,7 +254,7 @@ fn equal_numeric_extremes_keep_first_present_signed_zero_and_collect_every_opera
                 vec![],
             )
             .unwrap();
-            let result = plan.execute_observed(&table, limits()).result.unwrap();
+            let result = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap();
             let Value::Float(value) = result.dataset.rows()[0][1] else {
                 panic!("float output")
             };

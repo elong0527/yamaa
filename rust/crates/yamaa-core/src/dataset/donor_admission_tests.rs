@@ -46,16 +46,12 @@ fn model(expression: Expression) -> Result<DatasetPlan, PlanError> {
     )
 }
 fn predicate() -> crate::predicate::Plan {
-    crate::predicate_compiler::compile("LATER > 0", "donor.when", Default::default()).unwrap()
+    crate::predicate_compiler::compile("LATER > 0", "donor.when").unwrap()
 }
 fn numeric(column: usize) -> Expression {
     Expression::Compute(
         BoundNumeric::new(
-            crate::numeric_compiler::compile_numeric(
-                "LATER + 1",
-                "donor.compute.expr",
-                Default::default(),
-            )
+            crate::numeric_compiler::compile_numeric("LATER + 1", "donor.compute.expr")
             .unwrap(),
             vec![Binding {
                 name: "LATER".into(),

@@ -1,7 +1,6 @@
 //! Primary donors borrow the original table even while a secondary drives construction.
 use crate::support::table_schema as schema;
 use std::cell::RefCell;
-use yamaa_core::dataset::Limits;
 use yamaa_core::{
     dataset::{
         Assignment, DatasetPlan, Expression, Intermediate, IntermediateKey, IntermediateSource,
@@ -114,23 +113,10 @@ fn fixture(failure: Option<(usize, usize)>) -> (Table, Table, DatasetPlan) {
     .unwrap();
     (primary, other, plan)
 }
-fn limits() -> Limits {
-    Limits {
-        source_rows: 10,
-        output_rows: 10,
-        output_cells: 100,
-        key_cells: 100,
-        work_cells: 100_000,
-        scalar_text_bytes: 100_000,
-        output_text_bytes: 100_000,
-        identity_cells: 100,
-        identity_text_bytes: 1000,
-    }
-}
 #[test]
 fn one_selection_per_current_row_reads_the_original_relation_without_copies() {
     let (primary, other, plan) = fixture(None);
-    let result = plan.execute_observed_sources(&primary, &[&other], limits());
+    let result = plan.execute(&primary, &[&other], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     assert!(result.handler_counts.is_empty());
     assert_eq!(
         result.result.unwrap().dataset.rows(),
@@ -165,7 +151,7 @@ fn one_selection_per_current_row_reads_the_original_relation_without_copies() {
 #[test]
 fn a_primary_donor_failure_keeps_its_original_owner_and_exact_read_prefix() {
     let (primary, other, plan) = fixture(Some((1, 0)));
-    let result = plan.execute_observed_sources(&primary, &[&other], limits());
+    let result = plan.execute(&primary, &[&other], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     let error = result.result.unwrap_err();
     assert!(
         matches!(*error, yamaa_core::dataset::ExecutionError::Cell { ref path, source_row: 1, error: CellError::Access("held primary failure") } if path == "intermediates[0]")

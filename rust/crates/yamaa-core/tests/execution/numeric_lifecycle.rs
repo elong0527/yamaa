@@ -108,7 +108,7 @@ impl NumericResolver for Resolver {
 /// Build the same application declaration used by the independent Python runner.
 fn derivation(expression: &str, target: ColumnType, handler: Option<Value>) -> NumericDerivation {
     NumericDerivation::new(
-        compile_numeric(expression, EXPRESSION, CompileLimits::default()).unwrap(),
+        compile_numeric(expression, EXPRESSION).unwrap(),
         target,
         COLUMN,
         handler.map(|value| LiteralHandler {
@@ -247,7 +247,7 @@ fn shared_numeric_lifecycle_vectors() {
 fn accounting_retains_zero_declarations_and_prior_firings_on_failure() {
     let good = derivation("A", ColumnType::Int, Some(Value::Int(7)));
     let bad = NumericDerivation::new(
-        compile_numeric("A", EXPRESSION, CompileLimits::default()).unwrap(),
+        compile_numeric("A", EXPRESSION).unwrap(),
         ColumnType::Int,
         "columns.B",
         Some(LiteralHandler {
@@ -339,11 +339,7 @@ fn opaque_resolver_failure_bypasses_handler_and_keeps_exact_provenance() {
 fn dependent_reads_converted_handler_value() {
     let first = derivation("RAW", ColumnType::Int, Some(Value::Str("7".into())));
     let next = NumericDerivation::new(
-        compile_numeric(
-            "A + 1",
-            "columns.B.derivation.value.compute",
-            CompileLimits::default(),
-        )
+        compile_numeric("A + 1", "columns.B.derivation.value.compute")
         .unwrap(),
         ColumnType::Int,
         "columns.B",

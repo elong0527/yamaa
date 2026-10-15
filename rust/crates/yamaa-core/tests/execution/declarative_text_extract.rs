@@ -9,7 +9,7 @@ use yamaa_core::{
     value::Value,
 };
 use yamaa_core::{
-    dataset::{ExecutionError, Limits, Resource},
+    dataset::{ExecutionError, Resource},
     numeric_lifecycle::HandlerKind,
 };
 #[derive(Debug)]
@@ -44,19 +44,6 @@ fn make_table(text: Value) -> Table {
         rows: vec![vec![Value::Str("row1".into()), text]],
         fail: RefCell::default(),
         reads: RefCell::default(),
-    }
-}
-fn limits() -> Limits {
-    Limits {
-        source_rows: 10,
-        output_rows: 10,
-        output_cells: 100,
-        key_cells: 100,
-        work_cells: 1000,
-        scalar_text_bytes: 1000,
-        output_text_bytes: 1000,
-        identity_cells: 100,
-        identity_text_bytes: 1000,
     }
 }
 fn assignment(column: usize, pattern: &str, group: &str, missing: Option<Value>) -> Assignment {
@@ -150,8 +137,12 @@ fn captures_missing_empty_and_handler_counts_have_one_read_and_conversion() {
         ),
     ] {
         let table = make_table(input);
-        let result = plan(pattern, group, Some(Value::Str("literal".into())))
-            .execute_observed(&table, limits());
+        let result = plan(pattern, group, Some(Value::Str("literal".into()))).execute(
+            &table,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
         assert_eq!(
             result.result.unwrap().dataset.rows(),
             [vec![Value::Str("row1".into()), expected]]
@@ -177,8 +168,12 @@ fn source_failure_preserves_original_nonclone_allocation_rc_and_effect_order() {
     let payload = Box::new(9);
     let address = &*payload as *const u8;
     *table.fail.borrow_mut() = Some(Failure(payload, marker.clone()));
-    let attempt =
-        plan("(a)", "1", Some(Value::Str("replacement".into()))).execute_observed(&table, limits());
+    let attempt = plan("(a)", "1", Some(Value::Str("replacement".into()))).execute(
+        &table,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     let ExecutionError::Cell {
         path,
         source_row,
@@ -253,7 +248,12 @@ fn nested_case_and_extraction_recoveries_register_all_sites_and_reach_only_selec
             vec![],
         )
         .unwrap();
-        let observed = plan.execute_observed(&table, limits());
+        let observed = plan.execute(
+            &table,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
         assert_eq!(
             observed.result.unwrap().dataset.rows(),
             [vec![
@@ -284,7 +284,12 @@ fn nested_case_and_extraction_recoveries_register_all_sites_and_reach_only_selec
 #[test]
 fn unhandled_mapping_failure_preserves_keys_and_context_admission() {
     let table = make_table(Value::Missing);
-    let attempt = plan("(a)", "1", None).execute_observed(&table, limits());
+    let attempt = plan("(a)", "1", None).execute(
+        &table,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     let ExecutionError::SemanticDiagnostic {
         diagnostic,
         identity,
@@ -301,7 +306,15 @@ fn unhandled_mapping_failure_preserves_keys_and_context_admission() {
     let mut quota = limits();
     quota.identity_cells = 0;
     assert!(matches!(
-        *plan("(a)", "1", None).execute(&table, quota).unwrap_err(),
+        *plan("(a)", "1", None)
+            .execute(
+                &table,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::IdentityCells,
             ..
@@ -310,7 +323,15 @@ fn unhandled_mapping_failure_preserves_keys_and_context_admission() {
     let mut quota = limits();
     quota.scalar_text_bytes = 20;
     assert!(matches!(
-        *plan("(a)", "1", None).execute(&table, quota).unwrap_err(),
+        *plan("(a)", "1", None)
+            .execute(
+                &table,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::ScalarTextBytes,
             ..
@@ -323,7 +344,15 @@ fn cumulative_regex_work_and_text_refusal_do_not_recover_or_retry() {
     let mut quota = limits();
     quota.work_cells = 0;
     assert!(matches!(
-        *plan("(a)", "1", None).execute(&table, quota).unwrap_err(),
+        *plan("(a)", "1", None)
+            .execute(
+                &table,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::WorkCells,
             ..
@@ -332,7 +361,12 @@ fn cumulative_regex_work_and_text_refusal_do_not_recover_or_retry() {
     assert!(table.reads.borrow().is_empty());
     let mut quota = limits();
     quota.work_cells = 10;
-    let attempt = plan("(x)", "1", Some(Value::Missing)).execute_observed(&table, quota);
+    let attempt = plan("(x)", "1", Some(Value::Missing)).execute(
+        &table,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     let error = attempt.result.unwrap_err();
     assert!(
         matches!(
@@ -357,7 +391,12 @@ fn cumulative_regex_work_and_text_refusal_do_not_recover_or_retry() {
     };
     let mut quota = limits();
     quota.work_cells = 12;
-    let attempt = plan("(a)", "1", None).execute_observed(&table, quota);
+    let attempt = plan("(a)", "1", None).execute(
+        &table,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     let error = attempt.result.unwrap_err();
     assert!(
         matches!(
@@ -371,7 +410,15 @@ fn cumulative_regex_work_and_text_refusal_do_not_recover_or_retry() {
     );
     assert_eq!(*table.reads.borrow(), [(0, 0), (0, 1), (1, 0), (1, 1)]);
     assert!(
-        plan("(a)", "1", None).execute(&table, limits()).is_ok(),
+        plan("(a)", "1", None)
+            .execute(
+                &table,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .is_ok(),
         "a fresh run has fresh counters"
     );
 }

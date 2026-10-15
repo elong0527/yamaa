@@ -10,7 +10,7 @@ use yamaa_core::{
 
 use yamaa_core::{
     dataset::{
-        Assignment, Check, DatasetPlan, ExecutionError, Expression, Limits, PlanError, RowMode,
+        Assignment, Check, DatasetPlan, ExecutionError, Expression, PlanError, RowMode,
         RowTemplate, Verification,
     },
     table_grouping::{partition, GroupingError},
@@ -63,20 +63,6 @@ fn assign(column: usize, expression: Expression) -> Assignment {
         path: format!("columns.C{column}.derivation"),
     }
 }
-/// Keep fixtures below explicit source, output and partition budgets.
-fn limits() -> Limits {
-    Limits {
-        source_rows: 100,
-        output_rows: 200,
-        output_cells: 2000,
-        key_cells: 2000,
-        work_cells: 10000,
-        scalar_text_bytes: 10000,
-        output_text_bytes: 10000,
-        identity_cells: 10000,
-        identity_text_bytes: 10000,
-    }
-}
 
 /// A completed later column waits for an earlier unchecked declaration; retained
 /// records survive the earlier column's conversion failure without reading again.
@@ -124,7 +110,12 @@ fn column_checks_wait_for_the_declared_prefix_and_retain_prior_records() {
         },
     ])
     .unwrap();
-    let attempt = plan.execute_observed(&source, limits());
+    let attempt = plan.execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(matches!(
         *attempt.result.unwrap_err(),
         ExecutionError::Conversion { .. }
@@ -139,7 +130,15 @@ fn column_checks_wait_for_the_declared_prefix_and_retain_prior_records() {
     );
     assert_eq!(*source.reads.borrow(), [(0, 0), (0, 1)]);
     let empty = table(&[("ID", ColumnType::Int), ("V", ColumnType::Int)], vec![]);
-    let result = plan.execute_observed(&empty, limits()).result.unwrap();
+    let result = plan
+        .execute(
+            &empty,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(
         result
             .verifications
@@ -194,7 +193,7 @@ fn repeated_column_patterns_share_subject_budget_and_retain_completed_checks() {
                     .map(|index| Verification {
                         path: format!("columns.V.verifications[{index}].matches"),
                         check: Check::Matches(
-                            yamaa_core::regex::Pattern::compile("b", Default::default()).unwrap(),
+                            yamaa_core::regex::Pattern::compile("b").unwrap(),
                         ),
                     })
                     .collect(),
@@ -206,11 +205,24 @@ fn repeated_column_patterns_share_subject_budget_and_retain_completed_checks() {
         scalar_text_bytes: 64,
         ..limits()
     };
-    assert!(make(1).execute(&source, low).is_ok());
+    assert!(make(1)
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .is_ok());
     let plan = make(10);
     for _ in 0..2 {
         source.reads.borrow_mut().clear();
-        let attempt = plan.execute_observed(&source, low);
+        let attempt = plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
         assert!(matches!(
             *attempt.result.unwrap_err(),
             ExecutionError::ScopedLimit {
@@ -232,7 +244,16 @@ fn repeated_column_patterns_share_subject_budget_and_retain_completed_checks() {
         );
     }
     assert_eq!(
-        plan.execute(&source, limits()).unwrap().verifications.len(),
+        plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .unwrap()
+        .verifications
+        .len(),
         11
     );
 }
@@ -288,9 +309,22 @@ fn permitted_value_work_is_admitted_before_comparison_and_retains_the_prior_chec
         work_cells: 100,
         ..limits()
     };
-    assert!(make(false).execute(&source, low).is_ok());
+    assert!(make(false)
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .is_ok());
     source.reads.borrow_mut().clear();
-    let attempt = make(true).execute_observed(&source, low);
+    let attempt = make(true).execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(matches!(
         *attempt.result.unwrap_err(),
         ExecutionError::Limit {
@@ -303,7 +337,13 @@ fn permitted_value_work_is_admitted_before_comparison_and_retains_the_prior_chec
     assert_eq!(attempt.retained_verifications[0].failed_count, 0);
     assert_eq!(
         make(true)
-            .execute(&source, limits())
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
             .unwrap()
             .verifications
             .len(),
@@ -350,7 +390,13 @@ fn grouped_count_avoids_unused_fields_and_withholds_output_on_read_failure() {
     };
     assert_eq!(
         plan(None)
-            .execute(&source, limits())
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
             .unwrap()
             .dataset
             .rows(),
@@ -363,11 +409,11 @@ fn grouped_count_avoids_unused_fields_and_withholds_output_on_read_failure() {
             *plan(column)
                 .execute(
                     &source,
-                    Limits {
-                        work_cells: 8,
-                        ..limits()
-                    }
+                    &[],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None
                 )
+                .result
                 .unwrap_err(),
             ExecutionError::Limit {
                 resource: Resource::WorkCells,
@@ -379,7 +425,15 @@ fn grouped_count_avoids_unused_fields_and_withholds_output_on_read_failure() {
     }
     source.reads.borrow_mut().clear();
     assert_eq!(
-        *plan(Some(1)).execute(&source, limits()).unwrap_err(),
+        *plan(Some(1))
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Reduction {
             path: "columns.C1.derivation".into(),
             error: TableReductionError::Cell {
@@ -432,11 +486,7 @@ fn computed(text: &str, bindings: &[(&str, Read)]) -> Expression {
     use yamaa_core::{bound_expression::Binding, dataset::BoundNumeric};
     Expression::Compute(
         BoundNumeric::new(
-            compile_numeric(
-                text,
-                "columns.N.derivation.compute",
-                CompileLimits::default(),
-            )
+            compile_numeric(text, "columns.N.derivation.compute")
             .unwrap(),
             bindings
                 .iter()
@@ -458,7 +508,7 @@ fn dataset_numeric_bindings_and_occurrence_budgets_are_explicit() {
         bound_expression::{Binding, BindingError},
         dataset::BoundNumeric,
     };
-    let compiled = compile_numeric("X + X * 2", "compute", CompileLimits::default()).unwrap();
+    let compiled = compile_numeric("X + X * 2", "compute").unwrap();
     assert_eq!(compiled.identifiers().collect::<Vec<_>>(), vec!["X"]);
     assert_eq!(compiled.resolution_count(), 2);
     assert_eq!(compiled.node_count(), 5);
@@ -500,7 +550,15 @@ fn dataset_numeric_bindings_and_occurrence_budgets_are_explicit() {
         ],
         vec![],
     );
-    let result = plan.execute(&source, limits()).unwrap();
+    let result = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(
         result.dataset.rows(),
         &[vec![Value::Int(1), Value::Int(21)]]
@@ -510,16 +568,25 @@ fn dataset_numeric_bindings_and_occurrence_budgets_are_explicit() {
         *plan
             .execute(
                 &source,
-                Limits {
-                    work_cells: 3,
-                    ..limits()
-                }
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
+            .result
             .unwrap_err(),
         ExecutionError::Limit { .. }
     ));
     assert_eq!(
-        plan.execute(&source, limits()).unwrap().dataset.rows(),
+        plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .unwrap()
+        .dataset
+        .rows(),
         result.dataset.rows()
     );
 }
@@ -546,7 +613,15 @@ fn dataset_numeric_failure_priority_preserves_ports_missingness_and_identity() {
     source.fail = Some((0, 1));
     let plan = make(&source, "1 / 0 + X", &[("X", Read::Source(1))]);
     assert!(matches!(
-        *plan.execute(&source, limits()).unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Numeric {
             identity: Some(_),
             ..
@@ -555,7 +630,15 @@ fn dataset_numeric_failure_priority_preserves_ports_missingness_and_identity() {
     assert_eq!(*source.reads.borrow(), vec![(0, 0)]);
     let plan = make(&source, "NULL + X", &[("X", Read::Source(1))]);
     assert!(matches!(
-        *plan.execute(&source, limits()).unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Cell {
             error: CellError::Access("source failure"),
             ..
@@ -564,11 +647,19 @@ fn dataset_numeric_failure_priority_preserves_ports_missingness_and_identity() {
     source.fail = None;
     let plan = make(&source, "X + 1", &[("X", Read::Source(1))]);
     assert!(
-        matches!(*plan.execute(&source,limits()).unwrap_err(),ExecutionError::Numeric { error,identity:None } if matches!(error.evaluation.kind,EvaluationErrorKind::Numeric(NumericCondition::IncompatibleInput { .. })))
+        matches!(*plan.execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(),ExecutionError::Numeric { error,identity:None } if matches!(error.evaluation.kind,EvaluationErrorKind::Numeric(NumericCondition::IncompatibleInput { .. })))
     );
     let plan = make(&source, "9223372036854775808", &[]);
     assert!(matches!(
-        *plan.execute(&source, limits()).unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Numeric {
             identity: Some(_),
             ..
@@ -576,7 +667,13 @@ fn dataset_numeric_failure_priority_preserves_ports_missingness_and_identity() {
     ));
     source.rows.clear();
     assert!(plan
-        .execute(&source, limits())
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
         .unwrap()
         .dataset
         .rows()
@@ -614,7 +711,16 @@ fn key_grain_numeric_dependencies_are_completed_values() {
     )
     .unwrap();
     assert_eq!(
-        plan.execute(&source, limits()).unwrap().dataset.rows(),
+        plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .unwrap()
+        .dataset
+        .rows(),
         &[vec![Value::Int(1), Value::Int(7), Value::float(3.5)]]
     );
     for (read, error) in [
@@ -686,7 +792,7 @@ fn grouping_uses_exact_logical_equality_without_sorting() {
         ],
     );
     assert_eq!(
-        partition(&source, &[0, 1, 2], 6, 18).unwrap(),
+        partition(&source, &[0, 1, 2]).unwrap(),
         vec![vec![0, 3], vec![1, 4], vec![2], vec![5]]
     );
     assert_eq!(
@@ -705,38 +811,38 @@ fn grouping_preflight_and_port_failures_are_distinct() {
         vec![vec![Value::Int(1)], vec![Value::Int(2)]],
     );
     assert_eq!(
-        partition(&source, &[], 2, 2),
+        partition(&source, &[]),
         Err(GroupingError::EmptyColumns)
     );
     assert_eq!(
-        partition(&source, &[0, 1], 2, 4),
+        partition(&source, &[0, 1]),
         Err(GroupingError::InvalidColumn {
             position: 1,
             column: 1
         })
     );
     assert_eq!(
-        partition(&source, &[0, 0], 2, 4),
+        partition(&source, &[0, 0]),
         Err(GroupingError::DuplicateColumn {
             position: 1,
             column: 0
         })
     );
     assert_eq!(
-        partition(&source, &[0], 1, 2),
+        partition(&source, &[0]),
         Err(GroupingError::RowLimit {
             limit: 1,
             required: 2
         })
     );
     assert_eq!(
-        partition(&source, &[0], 2, 1),
+        partition(&source, &[0]),
         Err(GroupingError::KeyCellLimit { limit: 1 })
     );
     assert!(source.reads.borrow().is_empty());
     source.fail = Some((1, 0));
     assert_eq!(
-        partition(&source, &[0], 2, 2),
+        partition(&source, &[0]),
         Err(GroupingError::Cell {
             row: 1,
             column: 0,
@@ -770,7 +876,15 @@ fn completed_values_and_whole_column_order() {
         ],
         vec![],
     );
-    let actual = plan.execute(&source, limits()).unwrap();
+    let actual = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(
         actual.dataset.rows(),
         &[
@@ -804,7 +918,16 @@ fn failures_keep_provenance_and_stop_later_columns() {
         ],
         vec![],
     );
-    match *plan.execute(&source, limits()).unwrap_err() {
+    match *plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err()
+    {
         ExecutionError::Conversion {
             path, output_row, ..
         } => {
@@ -819,11 +942,11 @@ fn failures_keep_provenance_and_stop_later_columns() {
         *plan
             .execute(
                 &source,
-                Limits {
-                    output_cells: 3,
-                    ..limits()
-                }
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
+            .result
             .unwrap_err(),
         ExecutionError::Limit {
             resource: yamaa_core::dataset::Resource::OutputCells,
@@ -834,7 +957,15 @@ fn failures_keep_provenance_and_stop_later_columns() {
     assert!(source.reads.borrow().is_empty());
     let wrong = table(&[("wrong", ColumnType::Str)], vec![]);
     assert!(matches!(
-        *plan.execute(&wrong, limits()).unwrap_err(),
+        *plan
+            .execute(
+                &wrong,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::SchemaMismatch
     ));
 }
@@ -875,8 +1006,15 @@ fn verification_failure_observations_survive_discarded_output() {
             },
         ],
     );
-    let ExecutionError::VerificationFailures(records) =
-        *plan.execute(&source, limits()).unwrap_err()
+    let ExecutionError::VerificationFailures(records) = *plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err()
     else {
         panic!("expected verification failure")
     };
@@ -921,7 +1059,16 @@ fn output_identity_checks_are_fatal_before_verification() {
             max: None,
         })],
     );
-    let ExecutionError::KeyFailures(records) = *plan.execute(&source, limits()).unwrap_err() else {
+    let ExecutionError::KeyFailures(records) = *plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err()
+    else {
         panic!("expected key failure")
     };
     assert_eq!(records.len(), 2);
@@ -964,7 +1111,15 @@ fn empty_tables_keep_schema_and_verify_zero_rows() {
             }),
         ],
     );
-    let result = plan.execute(&source, limits()).unwrap();
+    let result = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(result.dataset.schema(), &source.schema);
     assert_eq!(result.dataset.row_count(), 0);
     assert_eq!(
@@ -985,7 +1140,15 @@ fn empty_tables_keep_schema_and_verify_zero_rows() {
         })],
     );
     assert!(matches!(
-        *plan.execute(&source, limits()).unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::VerificationFailures(_)
     ));
     assert!(source.reads.borrow().is_empty());
@@ -1108,7 +1271,15 @@ fn adlb_ordered_sum_matches_committed_expected_artifact() {
         ],
     )
     .unwrap();
-    let actual = plan.execute(&source, limits()).unwrap();
+    let actual = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     let projection = [0, 1, 3, 4, 2, 5, 6];
     assert_eq!(
         projection
@@ -1182,8 +1353,15 @@ fn grouped_reduction_preserves_error_order_and_paths() {
     )
     .unwrap();
     source.fail = Some((2, 1));
-    let ExecutionError::Reduction { path, error, .. } =
-        *plan.execute(&source, limits()).unwrap_err()
+    let ExecutionError::Reduction { path, error, .. } = *plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err()
     else {
         panic!("expected reduction port error")
     };
@@ -1196,7 +1374,15 @@ fn grouped_reduction_preserves_error_order_and_paths() {
         }
     ));
     source.fail = None;
-    let ExecutionError::Reduction { error, .. } = *plan.execute(&source, limits()).unwrap_err()
+    let ExecutionError::Reduction { error, .. } = *plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err()
     else {
         panic!("expected arithmetic overflow")
     };
@@ -1245,7 +1431,15 @@ fn grouped_mean_preserves_temporal_metadata_and_missing_values() {
         vec![],
     )
     .unwrap();
-    let result = plan.execute(&source, limits()).unwrap();
+    let result = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(result.dataset.rows().len(), 1);
     let Value::Date(actual) = result.dataset.rows()[0][0] else {
         panic!("expected date")
@@ -1268,11 +1462,11 @@ fn grouping_distinguishes_adjacent_large_integers_and_empty_snapshots() {
         ],
     );
     assert_eq!(
-        partition(&source, &[0], 5, 5).unwrap(),
+        partition(&source, &[0]).unwrap(),
         vec![vec![0, 3], vec![1], vec![2], vec![4]]
     );
     let empty = table(&[("id", ColumnType::Int)], vec![]);
-    assert!(partition(&empty, &[0], 0, 0).unwrap().is_empty());
+    assert!(partition(&empty, &[0]).unwrap().is_empty());
     let plan = DatasetPlan::new(
         empty.schema.clone(),
         empty.schema.clone(),
@@ -1289,14 +1483,11 @@ fn grouping_distinguishes_adjacent_large_integers_and_empty_snapshots() {
     let actual = plan
         .execute(
             &empty,
-            Limits {
-                source_rows: 0,
-                output_rows: 0,
-                output_cells: 0,
-                key_cells: 0,
-                ..limits()
-            },
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
         )
+        .result
         .unwrap();
     assert_eq!(actual.dataset.schema(), &empty.schema);
     assert_eq!(actual.dataset.row_count(), 0);
@@ -1324,7 +1515,7 @@ fn grouping_resource_arithmetic_cannot_wrap() {
     }
     let source = Huge(schema(&[("a", ColumnType::Int), ("b", ColumnType::Int)]));
     assert_eq!(
-        partition(&source, &[0, 1], usize::MAX, usize::MAX),
+        partition(&source, &[0, 1]),
         Err(GroupingError::KeyCellLimit { limit: usize::MAX })
     );
 }
@@ -1360,7 +1551,15 @@ fn row_dependency_conversion_and_direct_access_failure_are_explicit() {
         vec![],
     )
     .unwrap();
-    let actual = plan.execute(&source, limits()).unwrap();
+    let actual = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(
         actual.dataset.rows()[0],
         vec![
@@ -1376,7 +1575,15 @@ fn row_dependency_conversion_and_direct_access_failure_are_explicit() {
         path,
         source_row,
         error,
-    } = *plan.execute(&source, limits()).unwrap_err()
+    } = *plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err()
     else {
         panic!("expected source error")
     };
@@ -1406,8 +1613,15 @@ fn repeated_unique_columns_keep_missing_combinations_and_paths_are_unique() {
         assignments.clone(),
         vec![verification(Check::Unique(vec![1, 1]))],
     );
-    let ExecutionError::VerificationFailures(records) =
-        *plan.execute(&source, limits()).unwrap_err()
+    let ExecutionError::VerificationFailures(records) = *plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err()
     else {
         panic!("expected duplicate missing combination")
     };
@@ -1469,7 +1683,16 @@ fn literal_conversion_only_occurs_for_constructed_values() {
                 )
                 .unwrap();
                 assert_eq!(
-                    plan.execute(&empty, limits()).unwrap().dataset.row_count(),
+                    plan.execute(
+                        &empty,
+                        &[],
+                        &mut yamaa_core::function_invocation::NoFunctions::new(),
+                        None
+                    )
+                    .result
+                    .unwrap()
+                    .dataset
+                    .row_count(),
                     0
                 );
                 let populated = table(
@@ -1481,7 +1704,15 @@ fn literal_conversion_only_occurs_for_constructed_values() {
                     output_row,
                     error,
                     identity,
-                } = *plan.execute(&populated, limits()).unwrap_err()
+                } = *plan
+                    .execute(
+                        &populated,
+                        &[],
+                        &mut yamaa_core::function_invocation::NoFunctions::new(),
+                        None,
+                    )
+                    .result
+                    .unwrap_err()
                 else {
                     panic!("expected per-value conversion error")
                 };
@@ -1525,7 +1756,15 @@ fn scalar_text_work_is_cumulative_and_separate_from_retained_text() {
         ..limits()
     };
     assert_eq!(
-        *plan.execute(&source, policy).unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::ScalarTextBytes,
             limit: 7,
@@ -1535,11 +1774,11 @@ fn scalar_text_work_is_cumulative_and_separate_from_retained_text() {
     let actual = plan
         .execute(
             &source,
-            Limits {
-                scalar_text_bytes: 8,
-                ..policy
-            },
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
         )
+        .result
         .unwrap();
     assert_eq!(
         actual.dataset.rows(),
@@ -1590,7 +1829,15 @@ fn mapping_and_cut_rows_without_diagnostics_do_not_consume_diagnostic_text_budge
         ],
         vec![],
     );
-    let mapped = mapping_plan.execute(&mapping_source, policy).unwrap();
+    let mapped = mapping_plan
+        .execute(
+            &mapping_source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(mapped.dataset.rows().len(), 20);
     assert!(mapped
         .dataset
@@ -1629,7 +1876,15 @@ fn mapping_and_cut_rows_without_diagnostics_do_not_consume_diagnostic_text_budge
         ],
         vec![],
     );
-    let cut = cut_plan.execute(&cut_source, policy).unwrap();
+    let cut = cut_plan
+        .execute(
+            &cut_source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(cut.dataset.rows().len(), 20);
     assert!(cut
         .dataset
@@ -1679,11 +1934,11 @@ fn mapping_selection_failure_still_charges_diagnostic_text_budget() {
         *plan
             .execute(
                 &source,
-                Limits {
-                    scalar_text_bytes: 100,
-                    ..limits()
-                }
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
+            .result
             .unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::ScalarTextBytes,
@@ -1696,11 +1951,11 @@ fn mapping_selection_failure_still_charges_diagnostic_text_budget() {
         *plan
             .execute(
                 &source,
-                Limits {
-                    scalar_text_bytes: 2000,
-                    ..limits()
-                }
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
+            .result
             .unwrap_err(),
         ExecutionError::SemanticDiagnostic { .. }
     ));
@@ -1747,11 +2002,11 @@ fn mapping_handler_conversion_failure_still_charges_diagnostic_text_budget() {
         *plan
             .execute(
                 &source,
-                Limits {
-                    scalar_text_bytes: 100,
-                    ..limits()
-                }
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
+            .result
             .unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::ScalarTextBytes,
@@ -1764,11 +2019,11 @@ fn mapping_handler_conversion_failure_still_charges_diagnostic_text_budget() {
         *plan
             .execute(
                 &source,
-                Limits {
-                    scalar_text_bytes: 2000,
-                    ..limits()
-                }
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
+            .result
             .unwrap_err(),
         ExecutionError::SemanticDiagnostic { .. }
     ));
@@ -1802,7 +2057,15 @@ fn output_text_limit_counts_bytes_and_fresh_runs_reset_counters() {
     };
     for _ in 0..2 {
         assert_eq!(
-            *plan.execute(&source, policy).unwrap_err(),
+            *plan
+                .execute(
+                    &source,
+                    &[],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None
+                )
+                .result
+                .unwrap_err(),
             ExecutionError::Limit {
                 resource: Resource::OutputTextBytes,
                 limit: 7,
@@ -1813,11 +2076,11 @@ fn output_text_limit_counts_bytes_and_fresh_runs_reset_counters() {
     assert_eq!(
         plan.execute(
             &source,
-            Limits {
-                output_text_bytes: 8,
-                ..policy
-            }
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
         )
+        .result
         .unwrap()
         .dataset
         .row_count(),
@@ -1865,7 +2128,15 @@ fn verification_identity_budgets_accumulate_across_checks() {
         ),
     ] {
         assert_eq!(
-            *plan.execute(&source, policy).unwrap_err(),
+            *plan
+                .execute(
+                    &source,
+                    &[],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None
+                )
+                .result
+                .unwrap_err(),
             ExecutionError::Limit {
                 resource,
                 limit: 3,
@@ -1876,12 +2147,11 @@ fn verification_identity_budgets_accumulate_across_checks() {
     let ExecutionError::VerificationFailures(records) = *plan
         .execute(
             &source,
-            Limits {
-                identity_cells: 4,
-                identity_text_bytes: 4,
-                ..limits()
-            },
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
         )
+        .result
         .unwrap_err()
     else {
         panic!("expected complete failed checks")
@@ -1931,15 +2201,11 @@ fn work_limits_fail_before_the_next_source_operation() {
     )
     .unwrap();
     let mut events = Vec::new();
-    let attempt = plan.execute_with_execution_observer(
+    let attempt = plan.execute(
         &source,
         &[],
         &mut yamaa_core::function_invocation::NoFunctions::new(),
-        Limits {
-            work_cells: 2,
-            ..limits()
-        },
-        &mut |event| events.push(event),
+        Some(&mut |event| events.push(event)),
     );
     assert_eq!(
         *attempt.result.unwrap_err(),
@@ -1979,11 +2245,11 @@ fn work_limits_fail_before_the_next_source_operation() {
         *plan
             .execute(
                 &source,
-                Limits {
-                    work_cells: 8,
-                    ..limits()
-                }
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
+            .result
             .unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::WorkCells,
@@ -2008,7 +2274,15 @@ fn conversion_failure_retains_completed_missing_identity_with_a_budget() {
         ],
         vec![],
     );
-    let ExecutionError::Conversion { identity, .. } = *plan.execute(&source, limits()).unwrap_err()
+    let ExecutionError::Conversion { identity, .. } = *plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err()
     else {
         panic!("expected conversion condition")
     };
@@ -2023,11 +2297,11 @@ fn conversion_failure_retains_completed_missing_identity_with_a_budget() {
         *plan
             .execute(
                 &source,
-                Limits {
-                    identity_cells: 0,
-                    ..limits()
-                }
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
+            .result
             .unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::IdentityCells,
@@ -2043,13 +2317,7 @@ use yamaa_core::predicate::{self, Comparison, Node, Scalar};
 /// Admit a single authored predicate and its explicit scope bindings.
 fn filter(node: Node, bindings: Vec<Binding>) -> Filter {
     Filter::new(
-        predicate::Plan::new(
-            vec![node],
-            0,
-            "rows[0].filter".into(),
-            "authored predicate".into(),
-            predicate::Limits::default(),
-        )
+        predicate::Plan::new(vec![node], 0, "rows[0].filter".into(), "authored predicate".into())
         .unwrap(),
         bindings,
     )
@@ -2099,7 +2367,16 @@ fn row_filters_keep_true_in_original_order_and_drop_unknown() {
     )
     .unwrap();
     assert_eq!(
-        plan.execute(&source, limits()).unwrap().dataset.rows(),
+        plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .unwrap()
+        .dataset
+        .rows(),
         &[
             vec![Value::Int(3), Value::Int(2)],
             vec![Value::Int(1), Value::Int(4)]
@@ -2144,7 +2421,16 @@ fn grouped_filters_follow_complete_reductions() {
     )
     .unwrap();
     assert_eq!(
-        plan.execute(&source, limits()).unwrap().dataset.rows(),
+        plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .unwrap()
+        .dataset
+        .rows(),
         &[vec![Value::Int(3), Value::Int(6)]]
     );
 }
@@ -2166,12 +2452,26 @@ fn filter_timing_preserves_conversion_and_empty_input_behavior() {
     )
     .unwrap();
     assert!(matches!(
-        *plan.execute(&source, limits()).unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Conversion { .. }
     ));
     let empty = table(&[("id", ColumnType::Int)], vec![]);
     assert!(plan
-        .execute(&empty, limits())
+        .execute(
+            &empty,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
         .unwrap()
         .dataset
         .rows()
@@ -2191,16 +2491,10 @@ fn filter_bindings_enforce_complete_names_and_phase_scope() {
             BindingError::UnusedName,
         ),
     ] {
-        let predicate = predicate::Plan::new(
-            vec![Node::IsNull {
+        let predicate = predicate::Plan::new(vec![Node::IsNull {
                 value: Scalar::Identifier("x".into()),
                 negated: false,
-            }],
-            0,
-            "rows[0].filter".into(),
-            "x IS NULL".into(),
-            predicate::Limits::default(),
-        )
+            }], 0, "rows[0].filter".into(), "x IS NULL".into())
         .unwrap();
         assert_eq!(Filter::new(predicate, bindings), Err(expected));
     }
@@ -2256,8 +2550,15 @@ fn filter_source_errors_keep_occurrence_and_provenance() {
         vec![],
     )
     .unwrap();
-    let ExecutionError::Predicate { source_row, error } =
-        *plan.execute(&source, limits()).unwrap_err()
+    let ExecutionError::Predicate { source_row, error } = *plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err()
     else {
         panic!("predicate port failure")
     };
@@ -2300,7 +2601,13 @@ fn rejected_candidates_release_retained_text_but_not_work() {
     };
     for _ in 0..2 {
         assert!(plan
-            .execute(&source, policy)
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
             .unwrap()
             .dataset
             .rows()
@@ -2310,11 +2617,11 @@ fn rejected_candidates_release_retained_text_but_not_work() {
         *plan
             .execute(
                 &source,
-                Limits {
-                    scalar_text_bytes: 5,
-                    ..policy
-                }
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
+            .result
             .unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::ScalarTextBytes,
@@ -2370,10 +2677,16 @@ fn filter_limits_are_cumulative_and_recover_on_new_execution() {
         ),
     ] {
         assert!(
-            matches!(*plan.execute(&source, policy).unwrap_err(), ExecutionError::Limit { resource: r, .. } if r == resource)
+            matches!(*plan.execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(), ExecutionError::Limit { resource: r, .. } if r == resource)
         );
         assert!(plan
-            .execute(&source, limits())
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
             .unwrap()
             .dataset
             .rows()
@@ -2384,13 +2697,7 @@ fn filter_limits_are_cumulative_and_recover_on_new_execution() {
 /// Supply a verification predicate with its actual owning declaration path.
 fn check_predicate(node: Node, bindings: Vec<Binding>, path: &str) -> Filter {
     Filter::new(
-        predicate::Plan::new(
-            vec![node],
-            0,
-            path.into(),
-            "authored verification predicate".into(),
-            predicate::Limits::default(),
-        )
+        predicate::Plan::new(vec![node], 0, path.into(), "authored verification predicate".into())
         .unwrap(),
         bindings,
     )
@@ -2422,7 +2729,14 @@ fn predicate_checks_follow_truth_tables_and_keep_every_record() {
                 require: check_predicate(node.clone(), vec![], "verifications[0].assert.require"),
             })],
         );
-        let result = plan.execute(&source, limits());
+        let result = plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
+            )
+            .result;
         if index == 0 {
             let records = result.unwrap().verifications;
             assert_eq!(records[0].evaluated_count, 2);
@@ -2468,7 +2782,14 @@ fn predicate_checks_follow_truth_tables_and_keep_every_record() {
                     }),
                 ],
             );
-            let result = plan.execute(&source, limits());
+            let result = plan
+                .execute(
+                    &source,
+                    &[],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None,
+                )
+                .result;
             if a == 0 && b != 0 {
                 let ExecutionError::VerificationFailures(records) = *result.unwrap_err() else {
                     panic!("guarded assert data failure")
@@ -2521,8 +2842,15 @@ fn predicate_declaration_validation_is_sequential_on_empty_output() {
                 }),
             ],
         );
-        let ExecutionError::VerificationPredicate { error, records } =
-            *plan.execute(&source, limits()).unwrap_err()
+        let ExecutionError::VerificationPredicate { error, records } = *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
+            )
+            .result
+            .unwrap_err()
         else {
             panic!("predicate declaration failure")
         };
@@ -2578,8 +2906,15 @@ fn assert_when_evaluates_dynamic_require_and_keeps_prefix() {
             }),
         ],
     );
-    let ExecutionError::VerificationPredicate { error, records } =
-        *plan.execute(&source, limits()).unwrap_err()
+    let ExecutionError::VerificationPredicate { error, records } = *plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err()
     else {
         panic!("dynamic require failure")
     };
@@ -2651,7 +2986,15 @@ fn predicate_declaration_checkpoint_does_not_evaluate_rows() {
             verification(Check::PredicateDeclaration(predicate)),
         ],
     );
-    let actual = plan.execute(&source, limits()).unwrap();
+    let actual = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(actual.verifications.len(), 1);
     assert_eq!(actual.dataset.rows(), source.rows);
 }
@@ -2688,11 +3031,11 @@ fn predicate_check_samples_share_budgets_and_fresh_runs_recover() {
         *plan
             .execute(
                 &source,
-                Limits {
-                    work_cells: 1,
-                    ..limits()
-                }
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
+            .result
             .unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::PredicateWork,
@@ -2701,7 +3044,16 @@ fn predicate_check_samples_share_budgets_and_fresh_runs_recover() {
         }
     ));
     assert_eq!(
-        plan.execute(&source, limits()).unwrap().verifications.len(),
+        plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .unwrap()
+        .verifications
+        .len(),
         2
     );
     let plan = record_plan(
@@ -2724,11 +3076,11 @@ fn predicate_check_samples_share_budgets_and_fresh_runs_recover() {
         *plan
             .execute(
                 &source,
-                Limits {
-                    scalar_text_bytes: 5,
-                    ..limits()
-                }
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
+            .result
             .unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::PredicateTextBytes,
@@ -2737,7 +3089,16 @@ fn predicate_check_samples_share_budgets_and_fresh_runs_recover() {
         }
     ));
     assert_eq!(
-        plan.execute(&source, limits()).unwrap().verifications[0].evaluated_count,
+        plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .unwrap()
+        .verifications[0]
+            .evaluated_count,
         0
     );
 }
@@ -2763,7 +3124,15 @@ fn all_or_none_declared_reads_share_work_budget_and_fresh_runs_recover() {
         ..limits()
     };
     let control = record_plan(&source, source.schema.clone(), assignments(), vec![]);
-    assert!(control.execute(&source, policy).is_ok());
+    assert!(control
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .is_ok());
     let columns = (0..5001).map(|index| 1 + index % 2).collect();
     let plan = record_plan(
         &source,
@@ -2772,14 +3141,30 @@ fn all_or_none_declared_reads_share_work_budget_and_fresh_runs_recover() {
         vec![verification(Check::AllOrNone(columns))],
     );
     assert!(matches!(
-        *plan.execute(&source, policy).unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::WorkCells,
             limit: 100,
             ..
         }
     ));
-    let result = plan.execute(&source, limits()).unwrap();
+    let result = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(result.verifications.len(), 1);
     assert_eq!(result.verifications[0].failed_count, 0);
     assert_eq!(result.verifications[0].evaluated_count, 1);
@@ -2835,7 +3220,15 @@ fn key_grain_preserves_order_membership_and_completed_conversion() {
         vec![assign(0, Expression::Source(0))],
         vec![assign(1, collect(1))],
     );
-    let result = plan.execute(&source, limits()).unwrap();
+    let result = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(
         result.dataset.rows(),
         &[
@@ -2867,7 +3260,17 @@ fn key_grain_preserves_order_membership_and_completed_conversion() {
         vec![],
     );
     assert_eq!(
-        reordered.execute(&source, limits()).unwrap().dataset.rows(),
+        reordered
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap()
+            .dataset
+            .rows(),
         &[
             vec![Value::Int(2), Value::Int(99)],
             vec![Value::Int(1), Value::Int(99)]
@@ -2894,7 +3297,15 @@ fn key_grain_conflicts_count_all_raw_values_and_keep_identity() {
         vec![assign(0, Expression::Source(0))],
         vec![assign(1, collect(1))],
     );
-    let error = plan.execute(&source, limits()).unwrap_err();
+    let error = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err();
     let ExecutionError::MultipleValues {
         path,
         identifier,
@@ -2913,7 +3324,15 @@ fn key_grain_conflicts_count_all_raw_values_and_keep_identity() {
     assert_eq!(identity.values, vec![Value::Int(1)]);
     source.fail = Some((4, 1));
     assert!(matches!(
-        *plan.execute(&source, limits()).unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Cell {
             source_row: 4,
             error: CellError::Access("source failure"),
@@ -2939,7 +3358,7 @@ fn key_grain_completes_all_key_probes_before_nonkeys() {
         vec![assign(1, collect(1))],
     );
     assert!(
-        matches!(*plan.execute(&source,limits()).unwrap_err(),ExecutionError::Conversion {path,identity:None,..} if path=="columns.ID")
+        matches!(*plan.execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(),ExecutionError::Conversion {path,identity:None,..} if path=="columns.ID")
     );
     assert_eq!(*source.reads.borrow(), vec![(0, 0), (1, 0)]);
 }
@@ -2984,7 +3403,15 @@ fn key_grain_missing_records_reach_output_gate_without_collapsing() {
         ],
         vec![assign(2, collect(2))],
     );
-    let error = plan.execute(&source, limits()).unwrap_err();
+    let error = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err();
     let ExecutionError::KeyFailures(records) = *error else {
         panic!("{error:?}")
     };
@@ -3036,7 +3463,17 @@ fn key_grain_budgets_cover_probes_and_release_duplicates() {
         ..limits()
     };
     assert_eq!(
-        plan.execute(&source, bounded).unwrap().dataset.rows().len(),
+        plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .unwrap()
+        .dataset
+        .rows()
+        .len(),
         1
     );
     source.reads.borrow_mut().clear();
@@ -3044,11 +3481,11 @@ fn key_grain_budgets_cover_probes_and_release_duplicates() {
         *plan
             .execute(
                 &source,
-                Limits {
-                    key_cells: 2,
-                    ..bounded
-                }
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
+            .result
             .unwrap_err(),
         ExecutionError::Grouping(GroupingError::KeyCellLimit { limit: 2 })
     ));
@@ -3057,11 +3494,11 @@ fn key_grain_budgets_cover_probes_and_release_duplicates() {
         *plan
             .execute(
                 &source,
-                Limits {
-                    output_text_bytes: 11,
-                    ..bounded
-                }
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
+            .result
             .unwrap_err(),
         ExecutionError::Limit {
             resource: yamaa_core::dataset::Resource::OutputTextBytes,
@@ -3072,24 +3509,38 @@ fn key_grain_budgets_cover_probes_and_release_duplicates() {
         *plan
             .execute(
                 &source,
-                Limits {
-                    scalar_text_bytes: 35,
-                    ..bounded
-                }
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
+            .result
             .unwrap_err(),
         ExecutionError::Limit {
             resource: yamaa_core::dataset::Resource::ScalarTextBytes,
             ..
         }
     ));
-    assert!(plan.execute(&source, bounded).is_ok());
+    assert!(plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .is_ok());
     let empty = table(
         &[("id", ColumnType::Str), ("value", ColumnType::Str)],
         vec![],
     );
     assert!(plan
-        .execute(&empty, bounded)
+        .execute(
+            &empty,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
         .unwrap()
         .dataset
         .rows()
@@ -3138,11 +3589,27 @@ fn collected_values_preserve_exact_identity_and_first_representation() {
         );
         match expected {
             None => assert!(matches!(
-                *plan.execute(&source, limits()).unwrap_err(),
+                *plan
+                    .execute(
+                        &source,
+                        &[],
+                        &mut yamaa_core::function_invocation::NoFunctions::new(),
+                        None
+                    )
+                    .result
+                    .unwrap_err(),
                 ExecutionError::MultipleValues { value_count: 2, .. }
             )),
             Some(expected) => {
-                let result = plan.execute(&source, limits()).unwrap();
+                let result = plan
+                    .execute(
+                        &source,
+                        &[],
+                        &mut yamaa_core::function_invocation::NoFunctions::new(),
+                        None,
+                    )
+                    .result
+                    .unwrap();
                 assert_eq!(result.dataset.rows()[0][1], expected);
                 if let Value::Float(v) = &result.dataset.rows()[0][1] {
                     assert_eq!(v.get().to_bits(), (-0.0_f64).to_bits());
@@ -3314,7 +3781,13 @@ fn numbering_preserves_output_order_exact_integers_nulls_and_partition_ties() {
         ],
     );
     let result = numbering_plan(&source, true, false)
-        .execute(&source, limits())
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
         .unwrap();
     let expected = [
         [3, 3, 2],
@@ -3329,7 +3802,13 @@ fn numbering_preserves_output_order_exact_integers_nulls_and_partition_ties() {
     }
     // Null placement never reverses with descending direction.
     let first = numbering_plan(&source, true, true)
-        .execute(&source, limits())
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
         .unwrap();
     assert_eq!(&first.dataset.rows()[3][3..], &[const { Value::Int(1) }; 3]);
     assert_eq!(source.reads.borrow().len(), 36); // No window revisits source data.
@@ -3352,7 +3831,13 @@ fn numbering_orders_floats_numerically_and_ties_signed_zero() {
             .collect(),
     );
     let result = numbering_plan(&source, false, false)
-        .execute(&source, limits())
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
         .unwrap();
     let expected = [[2, 2, 2], [1, 1, 1], [3, 2, 2], [4, 4, 3]];
     for (row, numbers) in result.dataset.rows().iter().zip(expected) {
@@ -3378,7 +3863,15 @@ fn numbering_ignores_temporal_precision_for_ties_and_handles_empty_scope() {
             .collect(),
     );
     let plan = numbering_plan(&source, false, false);
-    let result = plan.execute(&source, limits()).unwrap();
+    let result = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(
         &result.dataset.rows()[0][3..],
         &[const { Value::Int(2) }; 3]
@@ -3388,7 +3881,15 @@ fn numbering_ignores_temporal_precision_for_ties_and_handles_empty_scope() {
         &[Value::Int(3), Value::Int(2), Value::Int(2)]
     );
     source.rows.clear();
-    let empty = plan.execute(&source, limits()).unwrap();
+    let empty = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(empty.dataset.row_count(), 0);
     assert_eq!(empty.dataset.schema().columns().len(), 6);
 }
@@ -3462,7 +3963,15 @@ fn numbering_admits_complete_dependencies_in_completed_column_phase() {
             vec![Value::Int(7)],
         ],
     );
-    let result = record_plan.execute(&records, limits()).unwrap();
+    let result = record_plan
+        .execute(
+            &records,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(
         result.dataset.rows(),
         &[
@@ -3492,7 +4001,15 @@ fn numbering_accounts_comparison_work_text_and_recovers_with_fresh_budgets() {
     let mut bounded = limits();
     bounded.scalar_text_bytes = 3;
     assert!(matches!(
-        *plan.execute(&source, bounded).unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Limit {
             resource: yamaa_core::dataset::Resource::ScalarTextBytes,
             ..
@@ -3501,13 +4018,29 @@ fn numbering_accounts_comparison_work_text_and_recovers_with_fresh_budgets() {
     bounded = limits();
     bounded.work_cells = 20;
     assert!(matches!(
-        *plan.execute(&source, bounded).unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Limit {
             resource: yamaa_core::dataset::Resource::WorkCells,
             ..
         }
     ));
-    let result = plan.execute(&source, limits()).unwrap();
+    let result = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(
         &result.dataset.rows()[0][3..],
         &[Value::Int(3), Value::Int(3), Value::Int(2)]
@@ -3542,7 +4075,13 @@ fn window_filters_preserve_rows_and_number_only_true_in_sorted_partitions() {
         Some(positive(Read::Column(2))),
         ColumnType::Int,
     )
-    .execute(&source, limits())
+    .execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    )
+    .result
     .unwrap();
     let expected = [
         Some([1, 1, 1]),
@@ -3583,13 +4122,7 @@ fn missing_or_bad_window_predicate(and_false: bool) -> Filter {
         },
     ];
     Filter::new(
-        predicate::Plan::new(
-            nodes,
-            2,
-            "columns.SEQ.derivation.row_number".into(),
-            "V IS NULL OR V > 'x'".into(),
-            predicate::Limits::default(),
-        )
+        predicate::Plan::new(nodes, 2, "columns.SEQ.derivation.row_number".into(), "V IS NULL OR V > 'x'".into())
         .unwrap(),
         vec![binding("V", Read::Column(2))],
     )
@@ -3619,19 +4152,41 @@ fn window_filter_conditions_follow_partition_then_current_conversion_order() {
     );
     // The first partition returns 1; conversion fails before a later group's invalid comparison.
     assert!(matches!(
-        *plan.execute(&source, limits()).unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Conversion { output_row: 0, .. }
     ));
     source.rows[1][1] = Value::Str("a".into());
     // In the same partition, the later filter failure precedes conversion of the first number.
-    let ExecutionError::Predicate { error, .. } = *plan.execute(&source, limits()).unwrap_err()
+    let ExecutionError::Predicate { error, .. } = *plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err()
     else {
         panic!("partition predicate must precede current conversion")
     };
     assert_eq!(error.spec_path, "columns.SEQ.derivation.row_number");
     source.rows.clear();
     assert!(plan
-        .execute(&source, limits())
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
         .unwrap()
         .dataset
         .rows()
@@ -3657,7 +4212,15 @@ fn window_filter_boolean_operands_remain_eager() {
         ColumnType::Int,
     );
     assert!(matches!(
-        *plan.execute(&source, limits()).unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Predicate { .. }
     ));
 }
@@ -3687,16 +4250,25 @@ fn window_filter_limits_share_budget_and_fresh_execution_recovers() {
         *plan
             .execute(
                 &source,
-                Limits {
-                    work_cells: 30,
-                    ..limits()
-                }
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
+            .result
             .unwrap_err(),
         ExecutionError::Limit { .. }
     ));
     assert_eq!(
-        plan.execute(&source, limits()).unwrap().dataset.rows()[1][3],
+        plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .unwrap()
+        .dataset
+        .rows()[1][3],
         Value::Int(2)
     );
 }
@@ -3791,7 +4363,13 @@ fn value_windows_distinguish_neighbor_reads_previous_present_and_current_present
     ] {
         let result = value_window_plan(&source, kind, None)
             .unwrap()
-            .execute(&source, limits())
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
+            )
+            .result
             .unwrap();
         assert_eq!(
             result
@@ -3849,7 +4427,13 @@ fn value_window_offsets_use_only_eligible_positions_and_keep_excluded_results_mi
         Some(predicate),
     )
     .unwrap()
-    .execute(&source, limits())
+    .execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    )
+    .result
     .unwrap();
     assert_eq!(
         result
@@ -3897,7 +4481,16 @@ fn value_windows_bound_offsets_and_admit_completed_donors_before_io() {
         let plan =
             value_window_plan(&source, WindowKind::RowValue { column: 2, offset }, None).unwrap();
         assert_eq!(
-            plan.execute(&source, limits()).unwrap().dataset.rows()[0][3],
+            plan.execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap()
+            .dataset
+            .rows()[0][3],
             Value::Missing
         );
     }
@@ -3921,7 +4514,13 @@ fn value_window_donors_preserve_representation_and_obey_copy_budgets() {
     );
     let result = value_window_plan(&source, WindowKind::Locf { column: 2 }, None)
         .unwrap()
-        .execute(&source, limits())
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
         .unwrap();
     let Value::Date(donor) = result.dataset.rows()[1][3] else {
         panic!("retained date donor")
@@ -3943,11 +4542,11 @@ fn value_window_donors_preserve_representation_and_obey_copy_budgets() {
         *plan
             .execute(
                 &source,
-                Limits {
-                    scalar_text_bytes: 4,
-                    ..limits()
-                }
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
+            .result
             .unwrap_err(),
         ExecutionError::Limit {
             resource: yamaa_core::dataset::Resource::ScalarTextBytes,
@@ -3955,7 +4554,16 @@ fn value_window_donors_preserve_representation_and_obey_copy_budgets() {
         }
     ));
     assert_eq!(
-        plan.execute(&source, limits()).unwrap().dataset.rows()[1][3],
+        plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .unwrap()
+        .dataset
+        .rows()[1][3],
         Value::Str("🌱".into())
     );
 }
@@ -3994,7 +4602,13 @@ fn previous_non_missing_crosses_long_gaps_without_rescanning_each_prefix() {
     };
     let result = value_window_plan(&source, WindowKind::PreviousNonMissing { column: 2 }, None)
         .unwrap()
-        .execute(&source, budget)
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
         .unwrap();
     assert_eq!(result.dataset.rows()[0][3], Value::Missing);
     assert!(result.dataset.rows()[1..]
@@ -4067,7 +4681,13 @@ fn baseline_uses_row_specific_reference_and_missing_candidates() {
         ],
     );
     let result = baseline_plan(&source, vec![1], None)
-        .execute(&source, limits())
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
         .unwrap();
     assert_eq!(
         result
@@ -4108,7 +4728,13 @@ fn baseline_filters_exclude_later_rows_and_ties_without_dropping_output() {
             ],
         );
         let result = baseline_plan(&source, vec![], Some(positive(Read::Column(1))))
-            .execute(&source, limits())
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
+            )
+            .result
             .unwrap();
         assert_eq!(
             result.dataset.rows(),
@@ -4188,7 +4814,13 @@ fn baseline_search_keeps_original_candidate_and_row_specific_reference_rules() {
                 .collect(),
         );
         let result = baseline_plan(&source, vec![], Some(positive(Read::Column(1))))
-            .execute(&source, limits())
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
+            )
+            .result
             .unwrap();
         assert_eq!(result.dataset.row_count(), expected.len());
         assert_eq!(
@@ -4227,7 +4859,15 @@ fn baseline_ties_count_all_matches_and_charge_partition_identity() {
             .collect(),
     );
     let plan = baseline_plan(&source, vec![1], None);
-    let failure = plan.execute(&source, limits()).unwrap_err();
+    let failure = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err();
     match *failure {
         ExecutionError::BaselineAmbiguity {
             path,
@@ -4258,16 +4898,32 @@ fn baseline_ties_count_all_matches_and_charge_partition_identity() {
         },
     ] {
         assert!(matches!(
-            *plan.execute(&source, constrained).unwrap_err(),
+            *plan
+                .execute(
+                    &source,
+                    &[],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None
+                )
+                .result
+                .unwrap_err(),
             ExecutionError::Limit { .. }
         ));
     }
     assert!(matches!(
-        *plan.execute(&source, limits()).unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::BaselineAmbiguity { match_count: 3, .. }
     ));
     assert!(
-        matches!(*baseline_plan(&source, vec![], None).execute(&source, Limits { identity_cells: 0, ..limits() }).unwrap_err(), ExecutionError::BaselineAmbiguity { partition, .. } if partition.is_empty())
+        matches!(*baseline_plan(&source, vec![], None).execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(), ExecutionError::BaselineAmbiguity { partition, .. } if partition.is_empty())
     );
 }
 
@@ -4325,7 +4981,15 @@ fn root_filter_precedes_keys_and_retains_only_qualifying_feeders() {
         ],
     );
     let plan = root_filtered_plan(&source, positive(Read::Source(2))).unwrap();
-    let result = plan.execute(&source, limits()).unwrap();
+    let result = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(
         result.dataset.rows(),
         &[
@@ -4365,25 +5029,53 @@ fn root_filter_completes_before_key_failures_and_recovers() {
     let plan = root_filtered_plan(&source, positive(Read::Source(2))).unwrap();
     source.fail = Some((1, 2));
     assert!(matches!(
-        *plan.execute(&source, limits()).unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Predicate { source_row: 1, .. }
     ));
     assert_eq!(*source.reads.borrow(), vec![(0, 2), (1, 2)]);
     source.fail = None;
     assert!(matches!(
-        *plan.execute(&source, limits()).unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Conversion { identity: None, .. }
     ));
     let excluded = root_filtered_plan(&source, filter(Node::Boolean(false), vec![])).unwrap();
     assert!(excluded
-        .execute(&source, limits())
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
         .unwrap()
         .dataset
         .rows()
         .is_empty());
     source.rows.clear();
     assert!(plan
-        .execute(&source, limits())
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
         .unwrap()
         .dataset
         .rows()
@@ -4452,7 +5144,13 @@ fn selected_sources_narrow_feeders_without_dropping_rows() {
     );
     let result = selected_source_plan(&source, positive(Read::Source(2)))
         .unwrap()
-        .execute(&source, limits())
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
         .unwrap();
     assert_eq!(
         result.dataset.rows(),
@@ -4478,7 +5176,13 @@ fn selected_sources_narrow_feeders_without_dropping_rows() {
     );
     let excluded = selected_source_plan(&source, filter(Node::Boolean(false), vec![]))
         .unwrap()
-        .execute(&source, limits())
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
         .unwrap();
     assert_eq!(
         excluded.dataset.rows(),
@@ -4490,7 +5194,13 @@ fn selected_sources_narrow_feeders_without_dropping_rows() {
     assert!(matches!(
         *selected_source_plan(&source, filter(Node::Boolean(true), vec![]))
             .unwrap()
-            .execute(&source, limits())
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
             .unwrap_err(),
         ExecutionError::MultipleValues { value_count: 2, .. }
     ));
@@ -4525,7 +5235,15 @@ fn selected_source_filter_follows_keys_and_reuses_fresh_limits() {
     let plan = selected_source_plan(&source, positive(Read::Source(2))).unwrap();
     source.fail = Some((0, 2));
     assert!(matches!(
-        *plan.execute(&source, limits()).unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Conversion { identity: None, .. }
     ));
     assert_eq!(*source.reads.borrow(), vec![(0, 0), (1, 0)]);
@@ -4535,25 +5253,37 @@ fn selected_source_filter_follows_keys_and_reuses_fresh_limits() {
         *plan
             .execute(
                 &source,
-                Limits {
-                    work_cells: 1,
-                    ..limits()
-                }
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
+            .result
             .unwrap_err(),
         ExecutionError::Limit { .. }
     ));
     assert_eq!(
-        plan.execute(&source, limits())
-            .unwrap()
-            .dataset
-            .rows()
-            .len(),
+        plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .unwrap()
+        .dataset
+        .rows()
+        .len(),
         1
     );
     source.rows.clear();
     assert!(plan
-        .execute(&source, limits())
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
         .unwrap()
         .dataset
         .rows()
@@ -4594,13 +5324,29 @@ fn selected_source_finishes_predicates_before_any_donor_access() {
     );
     let plan = selected_source_plan(&source, predicate).unwrap();
     assert!(matches!(
-        *plan.execute(&source, limits()).unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Predicate { source_row: 1, .. }
     ));
     assert_eq!(*source.reads.borrow(), vec![(0, 0), (1, 0), (0, 2), (1, 2)]);
     source.rows[1][2] = Value::Str("%".into());
     assert!(matches!(
-        *plan.execute(&source, limits()).unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Cell { source_row: 0, .. }
     ));
 }
@@ -4677,7 +5423,12 @@ fn source_order_selects_present_donors_stably_and_counts_actual_choices() {
     ] {
         for (keep, expected) in [(Keep::First, first), (Keep::Last, last)] {
             let attempt = ordered_source_plan(&source, keep, descending, nulls_first, false)
-                .execute_observed(&source, limits());
+                .execute(
+                    &source,
+                    &[],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None,
+                );
             assert_eq!(
                 attempt.result.unwrap().dataset.rows(),
                 &[vec![Value::Int(1), Value::Int(expected)]]
@@ -4707,8 +5458,12 @@ fn source_order_selects_present_donors_stably_and_counts_actual_choices() {
         vec![Value::Int(2), Value::Str("10".into()), Value::Int(0)],
         vec![Value::Int(2), Value::Str("11".into()), Value::Int(1)],
     ]);
-    let attempt = ordered_source_plan(&repeated, Keep::Last, false, false, false)
-        .execute_observed(&repeated, limits());
+    let attempt = ordered_source_plan(&repeated, Keep::Last, false, false, false).execute(
+        &repeated,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert_eq!(attempt.result.unwrap().dataset.rows().len(), 2);
     assert_eq!(attempt.handler_counts.len(), 1);
     assert_eq!(attempt.handler_counts[0].count, 2);
@@ -4727,7 +5482,13 @@ fn source_order_selects_present_donors_stably_and_counts_actual_choices() {
     for (keep, expected) in [(Keep::First, 7), (Keep::Last, 9)] {
         assert_eq!(
             ordered_source_plan(&tied, keep, true, true, false)
-                .execute(&tied, limits())
+                .execute(
+                    &tied,
+                    &[],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None
+                )
+                .result
                 .unwrap()
                 .dataset
                 .rows(),
@@ -4753,7 +5514,12 @@ fn source_order_is_lazy_for_one_distinct_reading_and_restarts_observations() {
     );
     let plan = ordered_source_plan(&source, Keep::Last, false, false, false);
     source.fail = Some((0, 2));
-    let attempt = plan.execute_observed(&source, limits());
+    let attempt = plan.execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert_eq!(
         attempt.result.unwrap().dataset.rows(),
         &[vec![Value::Int(1), Value::Int(7)]]
@@ -4761,7 +5527,12 @@ fn source_order_is_lazy_for_one_distinct_reading_and_restarts_observations() {
     assert!(attempt.handler_counts.is_empty());
     assert!(!source.reads.borrow().iter().any(|(_, column)| *column == 2));
     source.rows[1][1] = Value::Str("8".into());
-    let attempt = plan.execute_observed(&source, limits());
+    let attempt = plan.execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(matches!(
         *attempt.result.unwrap_err(),
         ExecutionError::Cell { source_row: 0, .. }
@@ -4769,24 +5540,48 @@ fn source_order_is_lazy_for_one_distinct_reading_and_restarts_observations() {
     assert!(attempt.handler_counts.is_empty());
     source.fail = None;
     assert_eq!(
-        plan.execute_observed(&source, limits()).handler_counts[0].count,
+        plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .handler_counts[0]
+            .count,
         1
     );
     assert_eq!(
-        plan.execute_observed(&source, limits()).handler_counts[0].count,
+        plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .handler_counts[0]
+            .count,
         1
     );
     for row in &mut source.rows {
         row[1] = Value::Missing;
     }
-    let attempt = plan.execute_observed(&source, limits());
+    let attempt = plan.execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert_eq!(
         attempt.result.unwrap().dataset.rows(),
         &[vec![Value::Int(1), Value::Missing]]
     );
     assert!(attempt.handler_counts.is_empty());
     source.rows.clear();
-    let attempt = plan.execute_observed(&source, limits());
+    let attempt = plan.execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(attempt.result.unwrap().dataset.rows().is_empty());
     assert!(attempt.handler_counts.is_empty());
 }
@@ -4806,27 +5601,35 @@ fn source_order_counts_survive_conversion_and_resource_failures() {
             vec![Value::Int(1), Value::Str("bad".into()), Value::Int(1)],
         ],
     );
-    let attempt = ordered_source_plan(&source, Keep::Last, false, false, false)
-        .execute_observed(&source, limits());
+    let attempt = ordered_source_plan(&source, Keep::Last, false, false, false).execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(
         matches!(*attempt.result.unwrap_err(), ExecutionError::Conversion {path,identity:Some(_),..} if path=="columns.V")
     );
     assert_eq!(attempt.handler_counts[0].count, 1);
     source.rows[1][1] = Value::Str("8".into());
     let plan = ordered_source_plan(&source, Keep::Last, false, false, true);
-    let attempt = plan.execute_observed(&source, limits());
+    let attempt = plan.execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(
         matches!(*attempt.result.unwrap_err(), ExecutionError::Conversion {path,..} if path=="columns.LATER")
     );
     assert_eq!(attempt.handler_counts[0].count, 1);
     let mut observed_later_limit = false;
     for work_cells in 0..100 {
-        let attempt = plan.execute_observed(
+        let attempt = plan.execute(
             &source,
-            Limits {
-                work_cells,
-                ..limits()
-            },
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
         );
         if matches!(attempt.result,Err(error) if matches!(*error,ExecutionError::Limit {..}))
             && !attempt.handler_counts.is_empty()
@@ -4886,7 +5689,12 @@ fn source_order_uses_exact_typed_comparison_and_lazy_representation() {
                 },
             )],
         );
-        let attempt = plan.execute_observed(&source, limits());
+        let attempt = plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
         assert!(attempt.handler_counts.is_empty());
         let result = attempt.result.unwrap();
         match &result.dataset.rows()[0][1] {
@@ -4945,7 +5753,12 @@ fn source_order_uses_exact_typed_comparison_and_lazy_representation() {
         vec![assign(0, Expression::Source(0))],
         vec![assign(1, expression)],
     );
-    let attempt = plan.execute_observed(&source, limits());
+    let attempt = plan.execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert_eq!(
         attempt.result.unwrap().dataset.rows(),
         &[vec![Value::Int(1), Value::Int(8)]]
@@ -5103,7 +5916,12 @@ fn named_intermediates_cache_records_and_repeat_reading_handlers() {
     let plan = named_plan(&source, &secondary, item).unwrap();
     for _ in 0..2 {
         secondary.reads.borrow_mut().clear();
-        let attempt = plan.execute_observed_sources(&source, &[&secondary], limits());
+        let attempt = plan.execute(
+            &source,
+            &[&secondary],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
         assert_eq!(
             attempt.result.unwrap().dataset.rows(),
             &[
@@ -5160,9 +5978,12 @@ fn named_intermediates_preserve_join_and_conversion_failure_priority() {
     );
     let mut item = named_item();
     item.selection = None;
-    let attempt = named_plan(&source, &secondary, item)
-        .unwrap()
-        .execute_observed_sources(&source, &[&secondary], limits());
+    let attempt = named_plan(&source, &secondary, item).unwrap().execute(
+        &source,
+        &[&secondary],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(
         matches!(*attempt.result.unwrap_err(), ExecutionError::MultipleMatches { intermediate, path, match_count: 2, identity: Some(_), .. } if intermediate == "SELECTED" && path == "intermediates[0]")
     );
@@ -5174,18 +5995,24 @@ fn named_intermediates_preserve_join_and_conversion_failure_priority() {
         .all(|(_, column)| *column == 0));
     let mut item = named_item();
     item.no_match = None;
-    let attempt = named_plan(&source, &secondary, item)
-        .unwrap()
-        .execute_observed_sources(&source, &[&secondary], limits());
+    let attempt = named_plan(&source, &secondary, item).unwrap().execute(
+        &source,
+        &[&secondary],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(
         matches!(*attempt.result.unwrap_err(), ExecutionError::UnmatchedKey { matched_key, identity: Some(_), .. } if matched_key == vec![("ID".into(),Value::Int(2))])
     );
     assert_eq!(attempt.handler_counts.len(), 1);
     let mut item = named_item();
     item.no_match = Some(Value::Str("bad".into()));
-    let attempt = named_plan(&source, &secondary, item)
-        .unwrap()
-        .execute_observed_sources(&source, &[&secondary], limits());
+    let attempt = named_plan(&source, &secondary, item).unwrap().execute(
+        &source,
+        &[&secondary],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(matches!(
         *attempt.result.unwrap_err(),
         ExecutionError::Conversion { output_row: 1, .. }
@@ -5194,7 +6021,12 @@ fn named_intermediates_preserve_join_and_conversion_failure_priority() {
     secondary.rows[1][1] = Value::Str("bad".into());
     let attempt = named_plan(&source, &secondary, named_item())
         .unwrap()
-        .execute_observed_sources(&source, &[&secondary], limits());
+        .execute(
+            &source,
+            &[&secondary],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
     assert!(matches!(
         *attempt.result.unwrap_err(),
         ExecutionError::Conversion { output_row: 0, .. }
@@ -5219,14 +6051,24 @@ fn named_intermediate_filter_scope_and_resources_are_attempt_local() {
     let plan = named_plan(&source, &secondary, item).unwrap();
     assert!(matches!(
         *plan
-            .execute_observed_sources(&source, &[&secondary], limits())
+            .execute(
+                &source,
+                &[&secondary],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
             .result
             .unwrap_err(),
         ExecutionError::Predicate { .. }
     ));
     source.rows.clear();
     secondary.reads.borrow_mut().clear();
-    let empty = plan.execute_observed_sources(&source, &[&secondary], limits());
+    let empty = plan.execute(
+        &source,
+        &[&secondary],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(empty.result.unwrap().dataset.rows().is_empty());
     assert!(empty.handler_counts.is_empty());
     assert!(secondary.reads.borrow().is_empty());
@@ -5234,22 +6076,25 @@ fn named_intermediate_filter_scope_and_resources_are_attempt_local() {
     let plan = named_plan(&source, &secondary, named_item()).unwrap();
     assert!(matches!(
         *plan
-            .execute_observed_sources(
+            .execute(
                 &source,
                 &[&secondary],
-                Limits {
-                    work_cells: 1,
-                    ..limits()
-                }
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
             .result
             .unwrap_err(),
         ExecutionError::Limit { .. }
     ));
     assert_eq!(
-        plan.execute_observed_sources(&source, &[&secondary], limits())
-            .handler_counts
-            .len(),
+        plan.execute(
+            &source,
+            &[&secondary],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .handler_counts
+        .len(),
         2
     );
     let mut item = named_item();
@@ -5290,7 +6135,12 @@ fn secondary_lookup_uses_completed_keys_and_preserves_missing_reads() {
         ],
     );
     let plan = secondary_lookup_plan(&source, &secondary).unwrap();
-    let attempt = plan.execute_observed_sources(&source, &[&secondary], limits());
+    let attempt = plan.execute(
+        &source,
+        &[&secondary],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(attempt.handler_counts.is_empty());
     assert_eq!(
         attempt.result.unwrap().dataset.rows(),
@@ -5303,7 +6153,12 @@ fn secondary_lookup_uses_completed_keys_and_preserves_missing_reads() {
     assert!(!secondary.reads.borrow().contains(&(2, 1)));
     secondary.rows.clear();
     assert!(plan
-        .execute_observed_sources(&source, &[&secondary], limits())
+        .execute(
+            &source,
+            &[&secondary],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
         .result
         .unwrap()
         .dataset
@@ -5329,7 +6184,12 @@ fn secondary_lookup_counts_records_before_reading_donors() {
     );
     secondary.fail = Some((0, 1));
     let plan = secondary_lookup_plan(&source, &secondary).unwrap();
-    let attempt = plan.execute_observed_sources(&source, &[&secondary], limits());
+    let attempt = plan.execute(
+        &source,
+        &[&secondary],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     match *attempt.result.unwrap_err() {
         ExecutionError::MultipleMatches {
             dataset,
@@ -5349,7 +6209,12 @@ fn secondary_lookup_counts_records_before_reading_donors() {
     secondary.rows.truncate(1);
     assert!(matches!(
         *plan
-            .execute_observed_sources(&source, &[&secondary], limits())
+            .execute(
+                &source,
+                &[&secondary],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
             .result
             .unwrap_err(),
         ExecutionError::SecondaryCell {
@@ -5361,7 +6226,7 @@ fn secondary_lookup_counts_records_before_reading_donors() {
     secondary.fail = None;
     secondary.rows[0][1] = Value::Str("bad".into());
     assert!(
-        matches!(*plan.execute_observed_sources(&source,&[&secondary],limits()).result.unwrap_err(),ExecutionError::Conversion {path,identity:Some(_),..} if path=="columns.V")
+        matches!(*plan.execute(&source, &[&secondary], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(),ExecutionError::Conversion {path,identity:Some(_),..} if path=="columns.V")
     );
 }
 
@@ -5383,27 +6248,38 @@ fn secondary_lookup_validates_catalog_and_failure_order() {
     let plan = secondary_lookup_plan(&source, &secondary).unwrap();
     assert!(matches!(
         *plan
-            .execute_observed_sources(&source, &[&secondary], limits())
+            .execute(
+                &source,
+                &[&secondary],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
             .result
             .unwrap_err(),
         ExecutionError::Conversion { identity: None, .. }
     ));
     assert!(secondary.reads.borrow().is_empty());
     assert!(matches!(
-        *plan.execute(&source, limits()).unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::SchemaMismatch
     ));
     source.rows.pop();
     secondary.fail = None;
     assert!(matches!(
         *plan
-            .execute_observed_sources(
+            .execute(
                 &source,
                 &[&secondary],
-                Limits {
-                    source_rows: 1,
-                    ..limits()
-                }
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
             .result
             .unwrap_err(),
@@ -5414,13 +6290,23 @@ fn secondary_lookup_validates_catalog_and_failure_order() {
         }
     ));
     assert!(plan
-        .execute_observed_sources(&source, &[&secondary], limits())
+        .execute(
+            &source,
+            &[&secondary],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
         .result
         .is_ok());
     source.rows.clear();
     secondary.fail = Some((0, 0));
     assert!(plan
-        .execute_observed_sources(&source, &[&secondary], limits())
+        .execute(
+            &source,
+            &[&secondary],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
         .result
         .unwrap()
         .dataset
@@ -5478,7 +6364,12 @@ fn completed_conversion_handlers_preserve_counts_values_and_failures() {
         .with_conversion_handlers(declarations.clone())
         .unwrap();
     for _ in 0..2 {
-        let attempt = bound.execute_observed(&source, limits());
+        let attempt = bound.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
         assert_eq!(
             attempt.result.unwrap().dataset.rows(),
             vec![
@@ -5507,14 +6398,24 @@ fn completed_conversion_handlers_preserve_counts_values_and_failures() {
         );
     }
     let empty = table(&[("ID", ColumnType::Int), ("X", ColumnType::Str)], vec![]);
-    let attempt = bound.execute_observed(&empty, limits());
+    let attempt = bound.execute(
+        &empty,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(attempt.result.unwrap().dataset.rows().is_empty());
     assert!(attempt.handler_counts.iter().all(|entry| entry.count == 0));
     let missing = plan
         .clone()
         .with_conversion_handlers(vec![conversion_handler(1, Value::Missing)])
         .unwrap()
-        .execute_observed(&source, limits());
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
     assert_eq!(
         missing.result.unwrap().dataset.rows()[0],
         vec![Value::Int(1), Value::Missing, Value::Missing]
@@ -5523,14 +6424,24 @@ fn completed_conversion_handlers_preserve_counts_values_and_failures() {
         .clone()
         .with_conversion_handlers(vec![conversion_handler(1, Value::Str("still bad".into()))])
         .unwrap()
-        .execute_observed(&source, limits());
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
     assert!(
         matches!(*bad.result.unwrap_err(),ExecutionError::Conversion { path, identity:Some(_), .. } if path=="columns.C1.derivation.unconvertible")
     );
     assert_eq!(bad.handler_counts[0].count, 1);
     let mut broken = source;
     broken.fail = Some((0, 1));
-    let attempt = bound.execute_observed(&broken, limits());
+    let attempt = bound.execute(
+        &broken,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(matches!(
         *attempt.result.unwrap_err(),
         ExecutionError::Cell { .. }
@@ -5566,7 +6477,15 @@ fn conversion_handler_admission_and_reached_resource_accounting() {
             Value::Str("large unused replacement".into()),
         )])
         .unwrap();
-    assert!(bound.execute(&source, tiny).is_ok());
+    assert!(bound
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .is_ok());
     let bad = record_plan(
         &source,
         schema(&[("ID", ColumnType::Int)]),
@@ -5580,7 +6499,12 @@ fn conversion_handler_admission_and_reached_resource_accounting() {
     )
     .with_conversion_handlers(vec![conversion_handler(0, Value::Str("0".into()))])
     .unwrap()
-    .execute_observed(&source, tiny);
+    .execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(matches!(
         *bad.result.unwrap_err(),
         ExecutionError::Limit {
@@ -5644,11 +6568,16 @@ fn row_lookups_match_driver_fields_and_count_records_before_donor_reads() {
             driver.reads.borrow_mut().clear();
             right.reads.borrow_mut().clear();
             assert_eq!(
-                plan.execute_observed_sources(&driver, &[&right], limits())
-                    .result
-                    .unwrap()
-                    .dataset
-                    .rows(),
+                plan.execute(
+                    &driver,
+                    &[&right],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None
+                )
+                .result
+                .unwrap()
+                .dataset
+                .rows(),
                 &[vec![Value::Int(99), Value::Int(7)]]
             );
             assert_eq!(*right.reads.borrow(), vec![(0, 0), (1, 0), (0, 1)]);
@@ -5668,7 +6597,12 @@ fn row_lookups_match_driver_fields_and_count_records_before_donor_reads() {
     right.rows.push(right.rows[0].clone());
     right.fail = Some((0, 1));
     right.reads.borrow_mut().clear();
-    let failed = plan.execute_observed_sources(&driver, &[&right], limits());
+    let failed = plan.execute(
+        &driver,
+        &[&right],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     match *failed.result.unwrap_err() {
         ExecutionError::MultipleMatches {
             match_count,
@@ -5686,11 +6620,16 @@ fn row_lookups_match_driver_fields_and_count_records_before_donor_reads() {
     right.reads.borrow_mut().clear();
     let missing = table(&[("ID", ColumnType::Str)], vec![vec![Value::Missing]]);
     assert_eq!(
-        plan.execute_observed_sources(&missing, &[&right], limits())
-            .result
-            .unwrap()
-            .dataset
-            .rows(),
+        plan.execute(
+            &missing,
+            &[&right],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .unwrap()
+        .dataset
+        .rows(),
         &[vec![Value::Int(99), Value::Missing]]
     );
     assert!(right.reads.borrow().is_empty());
@@ -5698,7 +6637,12 @@ fn row_lookups_match_driver_fields_and_count_records_before_donor_reads() {
     failing.fail = Some((0, 0));
     assert!(matches!(
         *plan
-            .execute_observed_sources(&failing, &[&right], limits())
+            .execute(
+                &failing,
+                &[&right],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
             .result
             .unwrap_err(),
         ExecutionError::Cell { source_row: 0, .. }
@@ -5708,7 +6652,12 @@ fn row_lookups_match_driver_fields_and_count_records_before_donor_reads() {
     failing.reads.borrow_mut().clear();
     assert!(matches!(
         *plan
-            .execute_observed_sources(&failing, &[&right], tiny)
+            .execute(
+                &failing,
+                &[&right],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
             .result
             .unwrap_err(),
         ExecutionError::Limit { .. }
@@ -5780,7 +6729,12 @@ fn row_lookup_assignment_phase_controls_reads_for_discarded_candidates() {
             .unwrap();
             for _ in 0..2 {
                 right.reads.borrow_mut().clear();
-                let attempt = plan.execute_observed_sources(&driver, &[&right], limits());
+                let attempt = plan.execute(
+                    &driver,
+                    &[&right],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None,
+                );
                 if in_template {
                     assert!(matches!(
                         *attempt.result.unwrap_err(),
@@ -5801,7 +6755,12 @@ fn row_lookup_assignment_phase_controls_reads_for_discarded_candidates() {
                 right.rows.push(vec![Value::Int(2), Value::Int(20)]);
                 right.fail = Some((2, 1));
                 right.reads.borrow_mut().clear();
-                let attempt = plan.execute_observed_sources(&driver, &[&right], limits());
+                let attempt = plan.execute(
+                    &driver,
+                    &[&right],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None,
+                );
                 assert!(matches!(
                     *attempt.result.unwrap_err(),
                     ExecutionError::MultipleMatches { match_count: 2, .. }
@@ -5971,10 +6930,16 @@ mod dataset_functions {
         .unwrap();
         let mut calls = callbacks();
         let mut phases = Vec::new();
-        let measured =
-            plan.execute_with_phase_observer(&source, &[], &mut calls, limits(), &mut |phase| {
-                phases.push((phase, source.reads.borrow().len()))
-            });
+        let measured = plan.execute(
+            &source,
+            &[],
+            &mut calls,
+            Some(&mut |event| {
+                if let yamaa_core::dataset::ExecutionEvent::Phase(phase) = event {
+                    (&mut |phase| phases.push((phase, source.reads.borrow().len())))(phase);
+                }
+            }),
+        );
         assert_eq!(
             phases,
             vec![
@@ -5997,7 +6962,7 @@ mod dataset_functions {
         assert_eq!(reads, vec![(0, 0), (0, 2), (0, 1), (1, 0), (1, 2), (1, 1)]);
         source.reads.borrow_mut().clear();
         let mut plain_calls = callbacks();
-        let plain = plan.execute_observed_functions(&source, &[], &mut plain_calls, limits());
+        let plain = plan.execute(&source, &[], &mut plain_calls, None);
         assert_eq!(measured, plain);
         assert_eq!(calls.calls, plain_calls.calls);
         assert_eq!(*source.reads.borrow(), reads);
@@ -6031,12 +6996,11 @@ mod dataset_functions {
                 _ => (),
             }
             let mut events = Vec::new();
-            let attempt = plan.execute_with_execution_observer(
+            let attempt = plan.execute(
                 &source,
                 &[],
                 &mut callbacks(),
-                limits(),
-                &mut |event| events.push(event),
+                Some(&mut |event| events.push(event)),
             );
             assert_eq!(attempt.result.is_ok(), failure.is_none());
             let mut expected = Vec::new();
@@ -6083,12 +7047,15 @@ mod dataset_functions {
                 Finished => unreachable!(),
             }
             let mut phases = Vec::new();
-            let measured = plan.execute_with_phase_observer(
+            let measured = plan.execute(
                 &source,
                 &[],
                 &mut callbacks(),
-                limits(),
-                &mut |phase| phases.push(phase),
+                Some(&mut |event| {
+                    if let yamaa_core::dataset::ExecutionEvent::Phase(phase) = event {
+                        (&mut |phase| phases.push(phase))(phase);
+                    }
+                }),
             );
             let error = measured.result.unwrap_err();
             assert!(match failure {
@@ -6131,7 +7098,7 @@ mod dataset_functions {
         for count in 1..=2 {
             source.reads.borrow_mut().clear();
             let result = plan
-                .execute_observed_functions(&source, &[], &mut callbacks, limits())
+                .execute(&source, &[], &mut callbacks, None)
                 .result
                 .unwrap();
             assert_eq!(
@@ -6175,7 +7142,7 @@ mod dataset_functions {
         .unwrap();
         let mut callbacks = callbacks();
         let error = plan
-            .execute_observed_functions(&source, &[], &mut callbacks, limits())
+            .execute(&source, &[], &mut callbacks, None)
             .result
             .unwrap_err();
         assert!(matches!(
@@ -6206,7 +7173,7 @@ mod dataset_functions {
             .unwrap();
             let mut callbacks = callbacks();
             assert!(plan
-                .execute_observed_functions(&source, &[], &mut callbacks, limits())
+                .execute(&source, &[], &mut callbacks, None)
                 .result
                 .unwrap()
                 .dataset
@@ -6222,7 +7189,7 @@ mod dataset_functions {
                 vec![],
             );
             assert!(plan
-                .execute_observed_functions(&empty, &[], &mut callbacks, limits())
+                .execute(&empty, &[], &mut callbacks, None)
                 .result
                 .unwrap()
                 .dataset
@@ -6260,7 +7227,12 @@ mod dataset_functions {
         .unwrap();
         assert!(matches!(
             *plan
-                .execute_observed(&Unreadable, limits())
+                .execute(
+                    &Unreadable,
+                    &[],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None
+                )
                 .result
                 .unwrap_err(),
             ExecutionError::FunctionBinding { slot: 0 }
@@ -6269,7 +7241,7 @@ mod dataset_functions {
         callbacks.signature = signature(ColumnType::Str);
         assert!(matches!(
             *plan
-                .execute_observed_functions(&Unreadable, &[], &mut callbacks, limits())
+                .execute(&Unreadable, &[], &mut callbacks, None)
                 .result
                 .unwrap_err(),
             ExecutionError::FunctionBinding { slot: 0 }
@@ -6302,7 +7274,7 @@ mod dataset_functions {
         ] {
             let mut callbacks = callbacks();
             callbacks.result = result;
-            let attempt = plan.execute_observed_functions(&source, &[], &mut callbacks, limits());
+            let attempt = plan.execute(&source, &[], &mut callbacks, None);
             match *attempt.result.unwrap_err() {
                 ExecutionError::Function {
                     path,
@@ -6336,7 +7308,7 @@ mod dataset_functions {
         .unwrap()
         .with_conversion_handlers(vec![conversion_handler(1, Value::Int(9))])
         .unwrap();
-        let attempt = converted.execute_observed_functions(&source, &[], &mut callbacks, limits());
+        let attempt = converted.execute(&source, &[], &mut callbacks, None);
         assert_eq!(
             attempt.result.unwrap().dataset.rows(),
             &[
@@ -6434,7 +7406,7 @@ mod dataset_functions {
         tiny.work_cells = 3;
         assert!(matches!(
             *plan
-                .execute_observed_functions(&source, &[], &mut callbacks, tiny)
+                .execute(&source, &[], &mut callbacks, None)
                 .result
                 .unwrap_err(),
             ExecutionError::Limit { .. }
@@ -6442,7 +7414,7 @@ mod dataset_functions {
         assert_eq!(*source.reads.borrow(), vec![(0, 0)]);
         assert!(callbacks.calls.is_empty());
         assert!(plan
-            .execute_observed_functions(&source, &[], &mut callbacks, limits())
+            .execute(&source, &[], &mut callbacks, None)
             .result
             .is_ok());
         assert_eq!(callbacks.calls.len(), 1);
@@ -6461,7 +7433,7 @@ mod dataset_functions {
         tiny.scalar_text_bytes = 0;
         assert!(matches!(
             *text_plan
-                .execute_observed_functions(&source, &[], &mut callbacks, tiny)
+                .execute(&source, &[], &mut callbacks, None)
                 .result
                 .unwrap_err(),
             ExecutionError::Limit {
@@ -6492,7 +7464,7 @@ mod dataset_functions {
         let mut calls = callbacks();
         assert_eq!(
             grouped
-                .execute_observed_functions(&source, &[], &mut calls, limits())
+                .execute(&source, &[], &mut calls, None)
                 .result
                 .unwrap()
                 .dataset
@@ -6525,7 +7497,7 @@ mod dataset_functions {
         calls.calls.clear();
         assert_eq!(
             keyed
-                .execute_observed_functions(&source, &[], &mut calls, limits())
+                .execute(&source, &[], &mut calls, None)
                 .result
                 .unwrap()
                 .dataset
@@ -6593,7 +7565,7 @@ mod dataset_functions {
         calls.signature = signature(ColumnType::Str);
         calls.result = Ok(Value::Str("17".into()));
         assert_eq!(
-            plan.execute_observed_functions(&source, &[], &mut calls, limits())
+            plan.execute(&source, &[], &mut calls, None)
                 .result
                 .unwrap()
                 .dataset
@@ -6652,10 +7624,7 @@ mod dataset_functions {
         for _ in 0..2 {
             source.reads.borrow_mut().clear();
             let mut calls = callbacks();
-            let result = plan
-                .execute_observed_functions(&source, &[], &mut calls, limits())
-                .result
-                .unwrap();
+            let result = plan.execute(&source, &[], &mut calls, None).result.unwrap();
             assert_eq!(
                 result.dataset.rows(),
                 &[
@@ -6707,7 +7676,7 @@ mod dataset_functions {
         .unwrap();
         let mut calls = callbacks();
         let error = plan
-            .execute_observed_functions(&source, &[], &mut calls, limits())
+            .execute(&source, &[], &mut calls, None)
             .result
             .unwrap_err();
         match *error {
@@ -6743,7 +7712,7 @@ mod dataset_functions {
         source.reads.borrow_mut().clear();
         assert!(matches!(
             *plan
-                .execute_observed_functions(&source, &[], &mut calls, limits())
+                .execute(&source, &[], &mut calls, None)
                 .result
                 .unwrap_err(),
             ExecutionError::Cell {
@@ -6814,7 +7783,7 @@ mod dataset_functions {
         tiny.work_cells = 14;
         assert!(matches!(
             *plan
-                .execute_observed_functions(&source, &[], &mut calls, tiny)
+                .execute(&source, &[], &mut calls, None)
                 .result
                 .unwrap_err(),
             ExecutionError::Limit {
@@ -6824,10 +7793,7 @@ mod dataset_functions {
         ));
         assert_eq!(*source.reads.borrow(), vec![(0, 0), (1, 0)]);
         assert!(calls.calls.is_empty());
-        assert!(plan
-            .execute_observed_functions(&source, &[], &mut calls, limits())
-            .result
-            .is_ok());
+        assert!(plan.execute(&source, &[], &mut calls, None).result.is_ok());
         assert_eq!(calls.calls.len(), 1);
 
         let mut text_source = table(
@@ -6852,7 +7818,7 @@ mod dataset_functions {
         calls.calls.clear();
         assert!(matches!(
             *text_plan
-                .execute_observed_functions(&text_source, &[], &mut calls, tiny)
+                .execute(&text_source, &[], &mut calls, None)
                 .result
                 .unwrap_err(),
             ExecutionError::Limit {
@@ -6864,7 +7830,7 @@ mod dataset_functions {
         assert!(calls.calls.is_empty());
         text_source.rows.clear();
         assert!(text_plan
-            .execute_observed_functions(&text_source, &[], &mut calls, limits())
+            .execute(&text_source, &[], &mut calls, None)
             .result
             .is_ok());
         assert!(calls.calls.is_empty());
@@ -6877,7 +7843,7 @@ fn contains_limits_span_rows_templates_and_fresh_dataset_runs() {
     use yamaa_core::dataset::Resource;
     use yamaa_core::regex::{CompileLimits, MatchBudget, MatchLimits, Pattern};
     let subject = "a".repeat(100);
-    let pattern = Pattern::compile("z", CompileLimits::default()).unwrap();
+    let pattern = Pattern::compile("z").unwrap();
     let mut measured = MatchBudget::new(MatchLimits::default());
     assert!(pattern
         .search_with_budget(&subject, MatchLimits::default(), &mut measured)
@@ -6913,18 +7879,24 @@ fn contains_limits_span_rows_templates_and_fresh_dataset_runs() {
         let error = plan
             .execute(
                 &source,
-                Limits {
-                    work_cells: ceiling,
-                    ..limits()
-                },
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
             )
+            .result
             .unwrap_err();
         assert!(
             matches!(*error, ExecutionError::Limit { resource: Resource::PredicateRegexWork | Resource::PredicateRegexStateCells, limit, .. } if limit == ceiling)
         );
         assert_eq!(source.reads.borrow().len(), 2);
         assert!(plan
-            .execute(&source, limits())
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
             .unwrap()
             .dataset
             .rows()
@@ -6962,11 +7934,11 @@ fn contains_declaration_checks_do_not_reset_match_budgets() {
         single
             .execute(
                 &source,
-                Limits {
-                    work_cells: 1000,
-                    ..limits()
-                }
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
+            .result
             .unwrap()
             .verifications
             .len(),
@@ -6982,11 +7954,11 @@ fn contains_declaration_checks_do_not_reset_match_budgets() {
     let error = plan
         .execute(
             &source,
-            Limits {
-                work_cells: 1000,
-                ..limits()
-            },
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
         )
+        .result
         .unwrap_err();
     assert!(matches!(
         *error,
@@ -6997,7 +7969,16 @@ fn contains_declaration_checks_do_not_reset_match_budgets() {
         }
     ));
     assert_eq!(
-        plan.execute(&source, limits()).unwrap().verifications.len(),
+        plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .unwrap()
+        .verifications
+        .len(),
         2
     );
 }
@@ -7043,7 +8024,16 @@ fn numeric_reductions_check_present_values_after_collecting_source_arguments() {
         let plan = make(Some("T.x".into()));
         let fallback = make(None);
         assert_eq!(
-            plan.execute(&source, limits()).unwrap().dataset.rows(),
+            plan.execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap()
+            .dataset
+            .rows(),
             &[vec![Value::Str("A".into()), Value::Missing]]
         );
         source.rows[1][1] = Value::Str("2".into());
@@ -7051,7 +8041,15 @@ fn numeric_reductions_check_present_values_after_collecting_source_arguments() {
         // remain attached to the runtime type finding, with no output identity.
         for (plan, name) in [(&plan, "T.x"), (&fallback, "x")] {
             assert_eq!(
-                *plan.execute(&source, limits()).unwrap_err(),
+                *plan
+                    .execute(
+                        &source,
+                        &[],
+                        &mut yamaa_core::function_invocation::NoFunctions::new(),
+                        None
+                    )
+                    .result
+                    .unwrap_err(),
                 ExecutionError::ReductionType {
                     path: "columns.C1.derivation".into(),
                     expression: format!("{}(T.x)", reducer.name()),
@@ -7064,7 +8062,15 @@ fn numeric_reductions_check_present_values_after_collecting_source_arguments() {
         source.rows[0][1] = Value::Str("first bad value".into());
         source.fail = Some((1, 1));
         assert!(matches!(
-            *plan.execute(&source, limits()).unwrap_err(),
+            *plan
+                .execute(
+                    &source,
+                    &[],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None
+                )
+                .result
+                .unwrap_err(),
             ExecutionError::Reduction {
                 error: TableReductionError::Cell {
                     position: 1,
@@ -7076,7 +8082,13 @@ fn numeric_reductions_check_present_values_after_collecting_source_arguments() {
         source.fail = None;
         source.rows.clear();
         assert!(plan
-            .execute(&source, limits())
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
             .unwrap()
             .dataset
             .rows()
@@ -7135,7 +8147,17 @@ fn first_available_skips_unselected_reads_and_does_not_fallback_after_conversion
     let chosen = make(&[1, 2]);
     source.fail = Some((0, 1));
     assert_eq!(
-        skipped.execute(&source, limits()).unwrap().dataset.rows(),
+        skipped
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap()
+            .dataset
+            .rows(),
         &[vec![Value::Int(1), Value::Int(20)]]
     );
     assert!(source.reads.borrow().iter().all(|&(_, column)| column != 1));
@@ -7143,7 +8165,7 @@ fn first_available_skips_unselected_reads_and_does_not_fallback_after_conversion
     source.rows[1][1] = Value::Str("bad".into());
     source.reads.borrow_mut().clear();
     assert!(
-        matches!(*chosen.execute(&source, limits()).unwrap_err(),ExecutionError::Conversion { ref path, output_row:0, .. } if path=="columns.V")
+        matches!(*chosen.execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(),ExecutionError::Conversion { ref path, output_row:0, .. } if path=="columns.V")
     );
     assert!(source.reads.borrow().iter().all(|&(_, column)| column != 2));
 }
@@ -7228,7 +8250,12 @@ fn first_available_expression_owns_collection_failure_without_fallback() {
     };
     let plan = make(false);
     let absent = make(true);
-    let attempt = plan.execute_observed(&source, limits());
+    let attempt = plan.execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     let ExecutionError::MultipleValues {
         path,
         identifier,
@@ -7261,7 +8288,7 @@ fn first_available_expression_owns_collection_failure_without_fallback() {
     source.reads.borrow_mut().clear();
     source.fail = Some((1, 1));
     assert!(matches!(
-        *plan.execute(&source, limits()).unwrap_err(),
+        *plan.execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(),
         ExecutionError::Cell {
             path,
             source_row: 1,
@@ -7271,7 +8298,12 @@ fn first_available_expression_owns_collection_failure_without_fallback() {
     assert!(source.reads.borrow().iter().all(|&(_, column)| column != 2));
 
     source.reads.borrow_mut().clear();
-    let attempt = absent.execute_observed(&source, limits());
+    let attempt = absent.execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert_eq!(
         attempt.result.unwrap().dataset.rows(),
         &[vec![Value::Int(1), Value::Int(9)]]
@@ -7350,7 +8382,16 @@ fn ordered_cases_are_lazy_and_convert_the_selected_raw_value() {
     )
     .unwrap();
     assert_eq!(
-        plan.execute(&source, limits()).unwrap().dataset.rows(),
+        plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .unwrap()
+        .dataset
+        .rows(),
         &[
             vec![Value::Int(1), Value::Int(1), Value::Int(7)],
             vec![Value::Int(2), Value::Int(-1), Value::Int(8)],
@@ -7427,11 +8468,16 @@ fn named_record_matching_keeps_raw_driver_keys_independent_of_output_columns() {
     )
     .unwrap();
     assert_eq!(
-        plan.execute_observed_sources(&driver, &[&right], limits())
-            .result
-            .unwrap()
-            .dataset
-            .rows(),
+        plan.execute(
+            &driver,
+            &[&right],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .unwrap()
+        .dataset
+        .rows(),
         &[vec![
             Value::Int(1),
             Value::Str("OUTPUT".into()),
@@ -7447,7 +8493,12 @@ fn named_record_matching_keeps_raw_driver_keys_independent_of_output_columns() {
     );
     assert!(matches!(
         *plan
-            .execute_observed_sources(&conflict, &[&right], limits())
+            .execute(
+                &conflict,
+                &[&right],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
             .result
             .unwrap_err(),
         ExecutionError::MultipleValues { .. }
@@ -7541,7 +8592,15 @@ fn presentation_order_preserves_all_types_ties_and_direction_independent_nulls()
                     nulls_first,
                 }])
                 .unwrap();
-                let result = plan.execute(&source, limits()).unwrap();
+                let result = plan
+                    .execute(
+                        &source,
+                        &[],
+                        &mut yamaa_core::function_invocation::NoFunctions::new(),
+                        None,
+                    )
+                    .result
+                    .unwrap();
                 let present = if descending {
                     vec![1, 3, 4]
                 } else {
@@ -7618,7 +8677,15 @@ fn presentation_keeps_window_neighbors_and_rejects_invalid_terms() {
         nulls_first: false,
     }])
     .unwrap();
-    let result = plan.execute(&source, limits()).unwrap();
+    let result = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(
         result
             .dataset
@@ -7693,20 +8760,19 @@ fn presentation_budget_failure_retains_checks_and_recovers_on_a_fresh_run() {
         .find(|quota| {
             base.execute(
                 &source,
-                Limits {
-                    work_cells: *quota,
-                    ..limits()
-                },
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
             )
+            .result
             .is_ok()
         })
         .unwrap();
-    let attempt = ordered.execute_observed(
+    let attempt = ordered.execute(
         &source,
-        Limits {
-            work_cells: quota,
-            ..limits()
-        },
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
     );
     assert!(matches!(
         *attempt.result.unwrap_err(),
@@ -7717,7 +8783,15 @@ fn presentation_budget_failure_retains_checks_and_recovers_on_a_fresh_run() {
     ));
     assert_eq!(attempt.retained_verifications.len(), 1);
     assert_eq!(attempt.retained_verifications[0].failed_count, 0);
-    let recovered = ordered.execute(&source, limits()).unwrap();
+    let recovered = ordered
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(
         recovered.dataset.rows(),
         [
@@ -7757,11 +8831,11 @@ fn presentation_budget_failure_retains_checks_and_recovers_on_a_fresh_run() {
         *fatal
             .execute(
                 &source,
-                Limits {
-                    work_cells: quota,
-                    ..limits()
-                }
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
             )
+            .result
             .unwrap_err(),
         ExecutionError::VerificationFailures(_)
     ));
@@ -7812,7 +8886,12 @@ fn grouped_row_count_failures_retain_first_output_positions_and_empty_artifacts(
             }],
         )
         .unwrap();
-        let attempt = plan.execute_observed(&source, limits());
+        let attempt = plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
         let ExecutionError::VerificationFailures(records) = *attempt.result.unwrap_err() else {
             panic!("expected complete failed row-count records")
         };
@@ -7855,11 +8934,7 @@ fn filtered_intermediate_grouping_charges_only_eligible_key_cells() {
     rows[99][16] = Value::Int(1);
     let source = table(&fields, rows);
     let filter = BoundPredicate::new(
-        yamaa_core::predicate_compiler::compile(
-            "KEEP = 1",
-            "intermediates[0].filter",
-            Default::default(),
-        )
+        yamaa_core::predicate_compiler::compile("KEEP = 1", "intermediates[0].filter")
         .unwrap(),
         vec![Binding {
             name: "KEEP".into(),
@@ -7915,11 +8990,11 @@ fn filtered_intermediate_grouping_charges_only_eligible_key_cells() {
     let result = plan
         .execute(
             &source,
-            Limits {
-                work_cells: 1000,
-                ..limits()
-            },
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
         )
+        .result
         .unwrap();
     assert_eq!(result.dataset.rows(), [vec![Value::Int(1)]]);
 }

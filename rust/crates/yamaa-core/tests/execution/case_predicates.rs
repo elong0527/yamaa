@@ -3,7 +3,7 @@ use crate::support::table_schema as schema;
 use std::{cell::RefCell, rc::Rc};
 use yamaa_core::dataset::{
     Assignment, CaseBranch, Check, ColumnVerifications, ConversionHandler, DatasetPlan,
-    ExecutionError, Expression, Limits, RowMode, RowTemplate, Verification,
+    ExecutionError, Expression, RowMode, RowTemplate, Verification,
 };
 use yamaa_core::{
     bound_expression::{Binding, BoundPredicate, Read},
@@ -66,11 +66,7 @@ fn assignment(column: usize, expression: Expression, path: &str) -> Assignment {
 }
 fn predicate() -> BoundPredicate {
     BoundPredicate::new_contextual(
-        predicate_compiler::compile(
-            "SRC.FLAG > 0",
-            "columns.V.derivation.case[0].when",
-            Default::default(),
-        )
+        predicate_compiler::compile("SRC.FLAG > 0", "columns.V.derivation.case[0].when")
         .unwrap(),
         vec![Binding {
             name: "SRC.FLAG".into(),
@@ -117,11 +113,7 @@ fn plan(source: &Source, when: BoundPredicate) -> DatasetPlan {
                     CaseBranch {
                         when: Some(
                             BoundPredicate::new(
-                                predicate_compiler::compile(
-                                    "FALSE",
-                                    "columns.V.derivation.case[1].when",
-                                    Default::default(),
-                                )
+                                predicate_compiler::compile("FALSE", "columns.V.derivation.case[1].when")
                                 .unwrap(),
                                 vec![],
                             )
@@ -171,23 +163,10 @@ fn plan(source: &Source, when: BoundPredicate) -> DatasetPlan {
     }])
     .unwrap()
 }
-fn limits() -> Limits {
-    Limits {
-        source_rows: 100,
-        output_rows: 100,
-        output_cells: 1000,
-        key_cells: 1000,
-        work_cells: 10000,
-        scalar_text_bytes: 10000,
-        output_text_bytes: 10000,
-        identity_cells: 10000,
-        identity_text_bytes: 10000,
-    }
-}
 #[test]
 fn case_collects_distinct_present_values_and_skips_unselected_branch_reads() {
     let source = source();
-    let attempt = plan(&source, predicate()).execute_observed(&source, limits());
+    let attempt = plan(&source, predicate()).execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     let completed = attempt.result.unwrap();
     assert_eq!(
         completed.dataset.rows(),
@@ -224,7 +203,7 @@ fn case_collects_distinct_present_values_and_skips_unselected_branch_reads() {
 fn case_operand_failure_keeps_original_identity_and_completed_literal_and_check_prefix() {
     let mut source = source();
     source.fail = Some((1, 1));
-    let attempt = plan(&source, predicate()).execute_observed(&source, limits());
+    let attempt = plan(&source, predicate()).execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     let ExecutionError::Cell {
         path,
         source_row,
@@ -249,7 +228,7 @@ fn case_multiplicity_is_not_a_predicate_unknown_or_an_otherwise_fallback() {
     let mut source = source();
     source.fail = None;
     source.values[1][1] = Value::Int(2);
-    let attempt = plan(&source, predicate()).execute_observed(&source, limits());
+    let attempt = plan(&source, predicate()).execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     let ExecutionError::MultipleValues {
         path,
         identifier,
@@ -275,11 +254,7 @@ fn case_multiplicity_is_not_a_predicate_unknown_or_an_otherwise_fallback() {
 fn false_boolean_operand_keeps_the_written_eager_source_read_and_original_error() {
     let source = source();
     let when = BoundPredicate::new_contextual(
-        predicate_compiler::compile(
-            "FALSE AND SRC.BAD = 'bad'",
-            "columns.V.derivation.case[0].when",
-            Default::default(),
-        )
+        predicate_compiler::compile("FALSE AND SRC.BAD = 'bad'", "columns.V.derivation.case[0].when")
         .unwrap(),
         vec![Binding {
             name: "SRC.BAD".into(),
@@ -288,7 +263,7 @@ fn false_boolean_operand_keeps_the_written_eager_source_read_and_original_error(
         vec!["SRC.BAD".into()],
     )
     .unwrap();
-    let attempt = plan(&source, when).execute_observed(&source, limits());
+    let attempt = plan(&source, when).execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     let ExecutionError::Cell {
         path,
         source_row,

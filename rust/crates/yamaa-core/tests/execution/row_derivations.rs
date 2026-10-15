@@ -1,6 +1,6 @@
 use crate::support::table_schema as schema;
 use std::{cell::RefCell, rc::Rc};
-use yamaa_core::dataset::{ExecutionError, Limits};
+use yamaa_core::dataset::{ExecutionError};
 use yamaa_core::{
     bound_expression::{Binding, BoundPredicate, Read},
     dataset::{
@@ -41,19 +41,6 @@ fn assign(column: usize, expression: Expression, path: &str) -> Assignment {
         path: path.into(),
     }
 }
-fn limits() -> Limits {
-    Limits {
-        source_rows: 10,
-        output_rows: 10,
-        output_cells: 100,
-        key_cells: 100,
-        work_cells: 10_000,
-        scalar_text_bytes: 1000,
-        output_text_bytes: 1000,
-        identity_cells: 100,
-        identity_text_bytes: 1000,
-    }
-}
 #[test]
 fn grouped_filter_removes_candidates_before_numbering_windows() {
     let source = schema(&[("ID", ColumnType::Int)]);
@@ -67,7 +54,7 @@ fn grouped_filter_removes_candidates_before_numbering_windows() {
         failure: None,
     };
     let filter = BoundPredicate::new(
-        yamaa_core::predicate_compiler::compile("N > 1", "row.filter", Default::default()).unwrap(),
+        yamaa_core::predicate_compiler::compile("N > 1", "row.filter").unwrap(),
         vec![Binding {
             name: "N".into(),
             read: Read::Column(1),
@@ -116,7 +103,7 @@ fn grouped_filter_removes_candidates_before_numbering_windows() {
     )
     .unwrap();
     assert_eq!(
-        plan.execute(&table, limits()).unwrap().dataset.rows(),
+        plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap().dataset.rows(),
         [
             vec![Value::Int(1), Value::Int(2), Value::Int(1)],
             vec![Value::Int(3), Value::Int(2), Value::Int(2)],
@@ -158,7 +145,7 @@ fn grouped_filter_uses_one_eligibility_pass_before_windows() {
         payload: Rc::from("filter source was revisited"),
     };
     let filter = BoundPredicate::new(
-        yamaa_core::predicate_compiler::compile("KEEP > 0", "row.filter", Default::default())
+        yamaa_core::predicate_compiler::compile("KEEP > 0", "row.filter")
             .unwrap(),
         vec![Binding {
             name: "KEEP".into(),
@@ -213,7 +200,7 @@ fn grouped_filter_uses_one_eligibility_pass_before_windows() {
     // Repeating the predicate after the windows consumes additional work.
     let mut bounded = limits();
     bounded.work_cells = 40;
-    let attempt = plan.execute_observed(&table, bounded);
+    let attempt = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     assert!(attempt.handler_counts.is_empty() && attempt.retained_verifications.is_empty());
     assert_eq!(
         attempt.result.unwrap().dataset.rows(),
@@ -270,7 +257,7 @@ fn windows_number_each_template_after_filter_without_revisiting_sources() {
         })
     };
     let filter = BoundPredicate::new(
-        yamaa_core::predicate_compiler::compile("ID > 1", "row.filter", Default::default())
+        yamaa_core::predicate_compiler::compile("ID > 1", "row.filter")
             .unwrap(),
         vec![Binding {
             name: "ID".into(),
@@ -317,7 +304,7 @@ fn windows_number_each_template_after_filter_without_revisiting_sources() {
         vec![],
     )
     .unwrap();
-    let result = plan.execute(&table, limits()).unwrap();
+    let result = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap();
     assert_eq!(
         result.dataset.rows(),
         [
@@ -382,7 +369,7 @@ fn nested_case_selection_keeps_authored_reads_and_original_failure() {
     let output = schema(&[("ID", ColumnType::Int), ("RESULT", ColumnType::Str)]);
     let path = "rows[0].derivations.RESULT.case[0].then.first_available";
     let predicate = BoundPredicate::new(
-        yamaa_core::predicate_compiler::compile("ID > 0", "row.case.when", Default::default())
+        yamaa_core::predicate_compiler::compile("ID > 0", "row.case.when")
             .unwrap(),
         vec![Binding {
             name: "ID".into(),
@@ -424,7 +411,7 @@ fn nested_case_selection_keeps_authored_reads_and_original_failure() {
         vec![],
     )
     .unwrap();
-    let attempt = plan.execute_observed(&table, limits());
+    let attempt = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     let error = attempt.result.unwrap_err();
     let ExecutionError::Cell {
         path: actual,
@@ -458,7 +445,7 @@ fn unselected_nested_function_requires_activation_before_every_table_method() {
         failure: None,
     };
     let predicate = BoundPredicate::new(
-        yamaa_core::predicate_compiler::compile("ID < 0", "case.when", Default::default()).unwrap(),
+        yamaa_core::predicate_compiler::compile("ID < 0", "case.when").unwrap(),
         vec![Binding {
             name: "ID".into(),
             read: Read::Column(0),
@@ -506,7 +493,7 @@ fn unselected_nested_function_requires_activation_before_every_table_method() {
     )
     .unwrap();
     assert!(matches!(
-        *plan.execute(&table, limits()).unwrap_err(),
+        *plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(),
         ExecutionError::FunctionBinding { slot: 0 }
     ));
     assert!(table.reads.borrow().is_empty());
@@ -567,7 +554,7 @@ fn distinct_driver_failure_retains_its_source_coordinate_payload_and_entered_pre
         vec![],
     )
     .unwrap();
-    let attempt = plan.execute_observed_sources(&primary, &[&secondary], limits());
+    let attempt = plan.execute(&primary, &[&secondary], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     let error = attempt.result.unwrap_err();
     let ExecutionError::Cell {
         path,
@@ -658,7 +645,7 @@ fn wrapped_first_available_reads_the_completed_template_window() {
         vec![],
     )
     .unwrap();
-    let result = plan.execute(&table, limits()).unwrap();
+    let result = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap();
     assert_eq!(
         result.dataset.rows(),
         [
@@ -722,11 +709,7 @@ fn wrapped_selection_cannot_hide_an_unactivated_function() {
                             Expression::Case(vec![CaseBranch {
                                 when: Some(
                                     BoundPredicate::new(
-                                        yamaa_core::predicate_compiler::compile(
-                                            "1 = 1",
-                                            "row.RESULT.case.when",
-                                            Default::default(),
-                                        )
+                                        yamaa_core::predicate_compiler::compile("1 = 1", "row.RESULT.case.when")
                                         .unwrap(),
                                         vec![],
                                     )
@@ -771,7 +754,7 @@ fn wrapped_selection_cannot_hide_an_unactivated_function() {
     )
     .unwrap();
     assert!(matches!(
-        *plan.execute(&Untouched, limits()).unwrap_err(),
+        *plan.execute(&Untouched, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(),
         ExecutionError::FunctionBinding { slot: 0 }
     ));
 }

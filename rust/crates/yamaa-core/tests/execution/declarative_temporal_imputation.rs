@@ -10,7 +10,7 @@ use yamaa_core::{
     value::{ColumnType as T, Value},
 };
 use yamaa_core::{
-    dataset::{ExecutionError, Limits, Resource},
+    dataset::{ExecutionError, Resource},
     numeric_lifecycle::HandlerKind,
 };
 #[derive(Debug, PartialEq)]
@@ -54,19 +54,6 @@ fn make_table(source: Value) -> Table {
         fail: RefCell::default(),
         bad_column: usize::MAX,
         reads: RefCell::default(),
-    }
-}
-fn limits() -> Limits {
-    Limits {
-        source_rows: 10,
-        output_rows: 10,
-        output_cells: 100,
-        key_cells: 100,
-        work_cells: 1000,
-        scalar_text_bytes: 1000,
-        output_text_bytes: 1000,
-        identity_cells: 100,
-        identity_text_bytes: 1000,
     }
 }
 fn make_plan(table: &Table, missing: Option<Value>, invalid: Option<Value>) -> DatasetPlan {
@@ -130,7 +117,7 @@ fn complete_sources_and_recovered_values_never_read_the_bound() {
         table.bad_column = 2;
         *table.fail.borrow_mut() = Some(Failure(Box::new(7), Rc::new(())));
         let result = make_plan(&table, Some(Value::Missing), Some(Value::Missing))
-            .execute_observed(&table, limits());
+            .execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
         assert!(result.result.is_ok());
         assert_eq!(*table.reads.borrow(), [0, 1]);
         assert!(table.fail.borrow().is_some());
@@ -158,7 +145,7 @@ fn opaque_bound_failure_preserves_nonclone_payload_identity_and_is_never_retried
     let address = &*failure.0 as *const u8;
     *table.fail.borrow_mut() = Some(failure);
     let result = make_plan(&table, Some(Value::Missing), Some(Value::Missing))
-        .execute_observed(&table, limits());
+        .execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     let ExecutionError::Cell {
         path,
         error: CellError::Access(Failure(payload, retained_marker)),
@@ -214,7 +201,7 @@ fn runtime_impute_failure_retains_current_key_and_is_not_answered_by_invalid_han
         vec![],
     )
     .unwrap();
-    let attempt = plan.execute_observed(&table, limits());
+    let attempt = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     let ExecutionError::SemanticDiagnostic {
         diagnostic,
         identity,
@@ -231,7 +218,7 @@ fn runtime_impute_failure_retains_current_key_and_is_not_answered_by_invalid_han
     table.bad_column = 2;
     *table.fail.borrow_mut() = Some(Failure(Box::new(6), Rc::new(())));
     assert!(matches!(
-        *plan.execute_observed(&table, limits()).result.unwrap_err(),
+        *plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(),
         ExecutionError::Cell {
             error: CellError::Access(_),
             ..
@@ -246,7 +233,7 @@ fn cumulative_work_quota_precedes_parsing_and_current_key_copy_is_separately_adm
     let mut bounded = limits();
     bounded.work_cells = 0;
     assert!(matches!(
-        *plan.execute_observed(&table, bounded).result.unwrap_err(),
+        *plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::WorkCells,
             ..
@@ -259,7 +246,7 @@ fn cumulative_work_quota_precedes_parsing_and_current_key_copy_is_separately_adm
     bounded.scalar_text_bytes = 7;
     assert!(matches!(
         *operation
-            .execute_observed(&source, bounded)
+            .execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None)
             .result
             .unwrap_err(),
         ExecutionError::Limit {
@@ -273,7 +260,7 @@ fn cumulative_work_quota_precedes_parsing_and_current_key_copy_is_separately_adm
     let mut bounded = limits();
     bounded.identity_cells = 0;
     assert!(matches!(
-        *plan.execute_observed(&table, bounded).result.unwrap_err(),
+        *plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::IdentityCells,
             ..
@@ -326,7 +313,7 @@ fn recovered_datetime_literal_is_converted_once_and_its_handler_is_counted() {
         vec![],
     )
     .unwrap();
-    let attempt = plan.execute_observed(&table, limits());
+    let attempt = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     assert_eq!(
         attempt.result.unwrap().dataset.rows(),
         [vec![

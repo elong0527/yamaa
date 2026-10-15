@@ -2,7 +2,7 @@ use crate::support::table_schema as schema;
 use serde_json::Value as V;
 use std::{cell::RefCell, convert::Infallible};
 use yamaa_core::dataset::{
-    Assignment, DatasetPlan, ExecutionError, Expression, Limits, RowIdentity, RowMode, RowTemplate,
+    Assignment, DatasetPlan, ExecutionError, Expression, RowIdentity, RowMode, RowTemplate,
 };
 use yamaa_core::{
     diagnostic::ProjectionError,
@@ -150,19 +150,6 @@ impl TableAccess for Table {
             .ok_or(CellError::OutOfBounds { row, column })
     }
 }
-fn limits() -> Limits {
-    Limits {
-        source_rows: 100,
-        output_rows: 100,
-        output_cells: 1000,
-        key_cells: 1000,
-        work_cells: 10000,
-        scalar_text_bytes: 10000,
-        output_text_bytes: 10000,
-        identity_cells: 10000,
-        identity_text_bytes: 10000,
-    }
-}
 #[test]
 fn projection_never_replays_reads_and_later_source_failure_keeps_its_precedence() {
     let mut source = Table {
@@ -201,7 +188,7 @@ fn projection_never_replays_reads_and_later_source_failure_keeps_its_precedence(
         vec![],
     )
     .unwrap();
-    let error = plan.execute(&source, limits()).unwrap_err();
+    let error = plan.execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err();
     let reads = source.reads.borrow().clone();
     let finding = error.diagnostic().unwrap();
     assert_eq!(finding.definition().requirement, Some("REQ-0075"));
@@ -212,7 +199,7 @@ fn projection_never_replays_reads_and_later_source_failure_keeps_its_precedence(
         matches!(&*error,ExecutionError::MultipleValues {identity:Some(value),..} if value.values == [Value::Int(1)])
     );
     source.fail = Some((2, 1));
-    let error = plan.execute(&source, limits()).unwrap_err();
+    let error = plan.execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err();
     assert!(error.diagnostic().is_none());
     assert!(matches!(
         &*error,

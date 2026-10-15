@@ -62,19 +62,6 @@ fn assignment(column: usize, expression: Expression) -> Assignment {
         path: format!("columns[{column}].derivation"),
     }
 }
-fn limits() -> Limits {
-    Limits {
-        source_rows: 100,
-        output_rows: 100,
-        output_cells: 1000,
-        key_cells: 1000,
-        work_cells: 10000,
-        scalar_text_bytes: 10000,
-        output_text_bytes: 10000,
-        identity_cells: 10000,
-        identity_text_bytes: 10000,
-    }
-}
 fn aggregate(
     text: &str,
     relation: AggregateRelation,
@@ -84,11 +71,7 @@ fn aggregate(
 ) -> Expression {
     Expression::Aggregate(Box::new(
         BoundAggregate::new(
-            compile_aggregate(
-                text,
-                "columns.RESULT.derivation.aggregate.expr",
-                Default::default(),
-            )
+            compile_aggregate(text, "columns.RESULT.derivation.aggregate.expr")
             .unwrap(),
             relation,
             bindings
@@ -117,7 +100,7 @@ fn qualified_predicates_visit_only_matching_donor_records() {
     ]);
     donor.fail = Some((1, 1));
     let predicate = BoundPredicate::new(
-        yamaa_core::predicate_compiler::compile("S.V > 0", "aggregate.filter", Default::default())
+        yamaa_core::predicate_compiler::compile("S.V > 0", "aggregate.filter")
             .unwrap(),
         vec![Binding {
             name: "S.V".into(),
@@ -126,7 +109,7 @@ fn qualified_predicates_visit_only_matching_donor_records() {
     )
     .unwrap();
     let bound = BoundAggregate::new(
-        compile_aggregate("SUM(S.V)", "aggregate", Default::default()).unwrap(),
+        compile_aggregate("SUM(S.V)", "aggregate").unwrap(),
         AggregateRelation::Matched {
             source: AggregateSource::Secondary(0),
             keys: vec![IntermediateKey {
@@ -167,11 +150,16 @@ fn qualified_predicates_visit_only_matching_donor_records() {
     )
     .unwrap();
     assert_eq!(
-        plan.execute_observed_sources(&primary, &[&donor], limits())
-            .result
-            .unwrap()
-            .dataset
-            .rows(),
+        plan.execute(
+            &primary,
+            &[&donor],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .unwrap()
+        .dataset
+        .rows(),
         &[vec![Value::Int(1), Value::Int(5)]]
     );
     assert_eq!(*donor.reads.borrow(), [(0, 0), (0, 1), (1, 0), (0, 1)]);
@@ -267,7 +255,12 @@ fn correlated_sum_and_mean_keep_donor_order_through_cancellation_and_missing_val
         )
         .unwrap();
         let result = plan
-            .execute_observed_sources(&primary, &[&donor], limits())
+            .execute(
+                &primary,
+                &[&donor],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
+            )
             .result
             .unwrap();
         assert_eq!(result.dataset.rows().len(), 1);
@@ -331,7 +324,12 @@ fn grouped_numeric_reducers_and_record_star_keep_order_and_empty_distinctions() 
         vec![],
     )
     .unwrap();
-    let attempt = plan.execute_observed(&source, limits());
+    let attempt = plan.execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(attempt.handler_counts.is_empty());
     assert_eq!(
         attempt.result.unwrap().dataset.rows(),
@@ -386,7 +384,16 @@ fn a_qualified_primary_relation_is_reduced_before_joining_to_each_record() {
     )
     .unwrap();
     assert_eq!(
-        plan.execute(&source, limits()).unwrap().dataset.rows(),
+        plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .unwrap()
+        .dataset
+        .rows(),
         [
             vec![Value::Int(1), Value::Int(3), Value::Int(8)],
             vec![Value::Int(1), Value::Int(5), Value::Int(8)]
@@ -426,7 +433,12 @@ fn output_group_reduction_reads_the_complete_constructed_relation() {
         vec![],
     )
     .unwrap();
-    let attempt = plan.execute_observed(&source, limits());
+    let attempt = plan.execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     // The missing output key causes its independent retained key failure only
     // after the reducer has seen the complete output relation.
     assert!(matches!(
@@ -443,7 +455,16 @@ fn output_group_reduction_reads_the_complete_constructed_relation() {
         vec![Value::Missing, Value::Int(7)],
     ]);
     assert_eq!(
-        plan.execute(&source, limits()).unwrap().dataset.rows(),
+        plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .unwrap()
+        .dataset
+        .rows(),
         [
             vec![Value::Int(1), Value::Int(3), Value::Int(2)],
             vec![Value::Int(1), Value::Int(5), Value::Int(2)],
@@ -486,7 +507,12 @@ fn only_is_eager_and_retains_complete_group_context_before_outer_coalesce() {
         vec![],
     )
     .unwrap();
-    let attempt = plan.execute_observed(&source, limits());
+    let attempt = plan.execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(attempt.handler_counts.is_empty());
     let ExecutionError::SemanticDiagnostic {
         diagnostic,
@@ -561,7 +587,15 @@ fn every_argument_is_collected_before_a_potential_earlier_fold_overflow() {
     )
     .unwrap();
     assert!(matches!(
-        *plan.execute(&source, limits()).unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Cell {
             source_row: 2,
             error: CellError::Access("late original"),
@@ -591,7 +625,7 @@ fn qualified_group_by_outside_the_join_keys_is_refused_req_0470() {
     };
     let plan_for = |group_by: Vec<usize>| {
         let bound = BoundAggregate::new(
-            compile_aggregate("SUM(S.V)", "aggregate", Default::default()).unwrap(),
+            compile_aggregate("SUM(S.V)", "aggregate").unwrap(),
             AggregateRelation::Matched {
                 source: AggregateSource::Secondary(0),
                 keys: vec![IntermediateKey {
@@ -638,11 +672,16 @@ fn qualified_group_by_outside_the_join_keys_is_refused_req_0470() {
     // the admitted aggregate executes exactly as before.
     let plan = plan_for(vec![0]).unwrap();
     assert_eq!(
-        plan.execute_observed_sources(&primary, &[&donor], limits())
-            .result
-            .unwrap()
-            .dataset
-            .rows(),
+        plan.execute(
+            &primary,
+            &[&donor],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
+        .result
+        .unwrap()
+        .dataset
+        .rows(),
         &[vec![Value::Int(1), Value::Int(5)]]
     );
 }

@@ -1,7 +1,7 @@
 //! Lazy reads, exact raw truth, handler ownership and attempt-local refusals.
 use crate::support::table_schema as schema;
 use std::{cell::RefCell, rc::Rc};
-use yamaa_core::dataset::{ExecutionError, Limits, Resource};
+use yamaa_core::dataset::{ExecutionError, Resource};
 use yamaa_core::{
     bound_expression::Read,
     dataset::{
@@ -51,19 +51,6 @@ fn table() -> Table {
         fail: RefCell::default(),
     }
 }
-fn limits() -> Limits {
-    Limits {
-        source_rows: 100,
-        output_rows: 100,
-        output_cells: 1000,
-        key_cells: 1000,
-        work_cells: 10000,
-        scalar_text_bytes: 10000,
-        output_text_bytes: 10000,
-        identity_cells: 1000,
-        identity_text_bytes: 10000,
-    }
-}
 fn assign(column: usize, expression: Expression) -> Assignment {
     Assignment {
         column,
@@ -74,11 +61,7 @@ fn assign(column: usize, expression: Expression) -> Assignment {
 fn flag(expr: &str, read: FlagRead, true_value: Value) -> Expression {
     Expression::Flag(
         Flag::new(
-            predicate_compiler::compile(
-                expr,
-                "columns.C1.derivation.flag.condition",
-                Default::default(),
-            )
+            predicate_compiler::compile(expr, "columns.C1.derivation.flag.condition")
             .unwrap(),
             vec![FlagBinding {
                 name: "AGE".into(),
@@ -124,7 +107,7 @@ fn three_truths_only_selected_literal_conversion_and_one_outer_handler_owner() {
             },
         }])
         .unwrap();
-    let attempt = plan.execute_observed(&table, limits());
+    let attempt = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     assert_eq!(
         attempt.result.unwrap().dataset.rows(),
         [
@@ -151,7 +134,7 @@ fn opaque_read_moves_once_and_never_selects_a_branch_or_later_row() {
     let payload = Box::new(7);
     let address = &*payload as *const u8;
     *table.fail.borrow_mut() = Some(Failure(payload, marker.clone()));
-    let attempt = plan(&table, Value::Int(1)).execute_observed(&table, limits());
+    let attempt = plan(&table, Value::Int(1)).execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     let ExecutionError::Cell {
         path,
         source_row,
@@ -228,7 +211,7 @@ fn repeated_named_operands_share_choice_and_suppress_inherited_no_match_counts()
         vec![],
     )
     .unwrap();
-    let attempt = plan.execute_observed_sources(&table, &[&donor], limits());
+    let attempt = plan.execute(&table, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     assert_eq!(
         attempt.result.unwrap().dataset.rows(),
         [
@@ -252,7 +235,7 @@ fn cumulative_predicate_budget_refuses_before_later_effect_and_retry_is_fresh() 
     let table = table();
     let mut quota = limits();
     quota.work_cells = 0;
-    let result = plan(&table, Value::Int(1)).execute(&table, quota);
+    let result = plan(&table, Value::Int(1)).execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result;
     assert!(matches!(
         *result.unwrap_err(),
         ExecutionError::Limit {
@@ -263,13 +246,13 @@ fn cumulative_predicate_budget_refuses_before_later_effect_and_retry_is_fresh() 
     assert!(table.reads.borrow().is_empty());
     let mut quota = limits();
     quota.work_cells = 5;
-    let result = plan(&table, Value::Int(1)).execute(&table, quota);
+    let result = plan(&table, Value::Int(1)).execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result;
     assert!(result.is_err());
     let prefix = table.reads.borrow().clone();
     assert_eq!(prefix, [(0, 0), (0, 1)]);
     table.reads.borrow_mut().clear();
     assert!(plan(&table, Value::Int(1))
-        .execute(&table, limits())
+        .execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result
         .is_ok());
     assert_eq!(table.reads.borrow().len(), 6);
 }
@@ -304,7 +287,7 @@ fn implicit_collections_refuse_ambiguity_with_complete_authored_key_identity() {
         vec![],
     )
     .unwrap();
-    let attempt = plan.execute_observed(&table, limits());
+    let attempt = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     let ExecutionError::MultipleValues {
         path,
         identifier,
@@ -346,7 +329,7 @@ fn selected_text_refusal_precedes_conversion_recovery_and_counters_accumulate() 
         .unwrap();
     let mut quota = limits();
     quota.scalar_text_bytes = 2;
-    let attempt = plan.execute_observed(&table, quota);
+    let attempt = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     assert!(matches!(
         *attempt.result.unwrap_err(),
         ExecutionError::Limit {
@@ -364,7 +347,7 @@ fn selected_text_refusal_precedes_conversion_recovery_and_counters_accumulate() 
     assert_eq!(*table.reads.borrow(), [(0, 0), (0, 1)]);
     let constant = Expression::Flag(
         Flag::new(
-            predicate_compiler::compile("TRUE", "flag.condition", Default::default()).unwrap(),
+            predicate_compiler::compile("TRUE", "flag.condition").unwrap(),
             vec![],
             Value::Str("Y".into()),
             None,
@@ -386,7 +369,7 @@ fn selected_text_refusal_precedes_conversion_recovery_and_counters_accumulate() 
     )
     .unwrap();
     table.reads.borrow_mut().clear();
-    let attempt = plan.execute_observed(&table, quota);
+    let attempt = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     assert!(matches!(
         *attempt.result.unwrap_err(),
         ExecutionError::Limit {
@@ -397,13 +380,13 @@ fn selected_text_refusal_precedes_conversion_recovery_and_counters_accumulate() 
     ));
     assert!(attempt.handler_counts.is_empty());
     assert_eq!(*table.reads.borrow(), [(0, 0), (1, 0), (2, 0)]);
-    assert!(plan.execute(&table, limits()).is_ok());
+    assert!(plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.is_ok());
 }
 fn named_plan(table: &Table, donor: &Table, filtered: bool) -> DatasetPlan {
     use yamaa_core::bound_expression::{Binding, BoundPredicate};
     let filter = filtered.then(|| {
         BoundPredicate::new(
-            predicate_compiler::compile("TAB.V > 0", "intermediates[0].filter", Default::default())
+            predicate_compiler::compile("TAB.V > 0", "intermediates[0].filter")
                 .unwrap(),
             vec![Binding {
                 name: "TAB.V".into(),
@@ -477,11 +460,7 @@ fn lazy_filter_and_donor_opaque_failures_keep_original_payload_and_effect_bounda
             reads: RefCell::default(),
             fail: RefCell::new(Some(Failure(payload, marker.clone()))),
         };
-        let attempt = named_plan(&table, &donor, filtered).execute_observed_sources(
-            &table,
-            &[&donor],
-            limits(),
-        );
+        let attempt = named_plan(&table, &donor, filtered).execute(&table, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
         let failure = if filtered {
             let ExecutionError::Predicate { source_row, error } = *attempt.result.unwrap_err()
             else {

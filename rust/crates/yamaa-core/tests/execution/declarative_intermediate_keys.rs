@@ -1,7 +1,7 @@
 //! Destination-free authored key execution, effect boundaries and exact equality.
 use crate::support::table_schema as schema;
 use std::{cell::RefCell, rc::Rc};
-use yamaa_core::dataset::{ExecutionError, Limits, Resource};
+use yamaa_core::dataset::{ExecutionError, Resource};
 use yamaa_core::{
     bound_expression::{Binding, BoundPredicate, Read},
     dataset::{
@@ -110,19 +110,6 @@ fn pad(width: &str) -> MatchValue {
         ),
     }
 }
-fn limits() -> Limits {
-    Limits {
-        source_rows: 100,
-        output_rows: 100,
-        output_cells: 100,
-        key_cells: 100,
-        work_cells: 10000,
-        scalar_text_bytes: 10000,
-        output_text_bytes: 10000,
-        identity_cells: 100,
-        identity_text_bytes: 10000,
-    }
-}
 fn plan(src: &Table, tab: &Table, item: Intermediate, target: T) -> Result<DatasetPlan, PlanError> {
     let assign = |column, expression| Assignment {
         column,
@@ -166,17 +153,11 @@ fn plan(src: &Table, tab: &Table, item: Intermediate, target: T) -> Result<Datas
 }
 fn filter() -> BoundPredicate {
     BoundPredicate::new(
-        predicate::Plan::new(
-            vec![Node::Compare {
+        predicate::Plan::new(vec![Node::Compare {
                 operator: Comparison::Greater,
                 left: Scalar::Identifier("TAB.FILTER".into()),
                 right: Scalar::Literal(Value::Int(0)),
-            }],
-            0,
-            "intermediates[0].filter".into(),
-            "TAB.FILTER > 0".into(),
-            Default::default(),
-        )
+            }], 0, "intermediates[0].filter".into(), "TAB.FILTER > 0".into())
         .unwrap(),
         vec![Binding {
             name: "TAB.FILTER".into(),
@@ -197,7 +178,7 @@ fn padding_without_dummy_output_preserves_unicode_width_and_single_cached_select
     let plan = plan(&src, &tab, selected, T::Int).unwrap();
     for _ in 0..2 {
         trace.borrow_mut().clear();
-        let observed = plan.execute_observed_sources(&src, &[&tab], limits());
+        let observed = plan.execute(&src, &[&tab], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
         assert_eq!(
             observed.result.unwrap().dataset.rows(),
             [vec![Value::Int(1), Value::Int(7), Value::Int(7)]]
@@ -228,7 +209,7 @@ fn expression_dependency_opaque_failure_precedes_filter_and_preserves_payload_id
     selected.filter = Some(filter().into());
     let observed = plan(&src, &tab, selected, T::Str)
         .unwrap()
-        .execute_observed_sources(&src, &[&tab], limits());
+        .execute(&src, &[&tab], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     let ExecutionError::Cell {
         path,
         source_row,
@@ -257,7 +238,7 @@ fn ordinary_selector_keeps_filter_before_raw_dependency_and_its_opaque_payload()
     selected.filter = Some(filter().into());
     let observed = plan(&src, &tab, selected, T::Str)
         .unwrap()
-        .execute_observed_sources(&src, &[&tab], limits());
+        .execute(&src, &[&tab], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     let ExecutionError::Predicate { error, .. } = *observed.result.unwrap_err() else {
         panic!("original predicate port failure")
     };
@@ -283,7 +264,7 @@ fn missing_first_key_does_not_skip_later_padding_refusal_or_current_dependency()
     let selected = item(vec![key(MatchValue::Literal(Value::Missing)), later]);
     let observed = plan(&src, &tab, selected, T::Str)
         .unwrap()
-        .execute_observed_sources(&src, &[&tab], limits());
+        .execute(&src, &[&tab], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     assert!(matches!(
         *observed.result.unwrap_err(),
         ExecutionError::Limit {
@@ -300,7 +281,7 @@ fn key_missingness_never_matches_and_counts_each_reading_handler() {
     let (src, tab, _) = tables(Value::Missing, T::Str, Value::Missing);
     let observed = plan(&src, &tab, item(vec![key(pad("4"))]), T::Str)
         .unwrap()
-        .execute_observed_sources(&src, &[&tab], limits());
+        .execute(&src, &[&tab], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     assert_eq!(
         observed.result.unwrap().dataset.rows(),
         [vec![Value::Int(1), Value::Missing, Value::Missing]]
@@ -327,14 +308,7 @@ fn whole_work_and_cumulative_retention_refuse_before_later_effects_and_fresh_ret
         T::Str,
     )
     .unwrap();
-    let observed = plan.execute_observed_sources(
-        &src,
-        &[&tab],
-        Limits {
-            work_cells: 0,
-            ..limits()
-        },
-    );
+    let observed = plan.execute(&src, &[&tab], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     assert!(matches!(
         *observed.result.unwrap_err(),
         ExecutionError::Limit {
@@ -343,14 +317,7 @@ fn whole_work_and_cumulative_retention_refuse_before_later_effects_and_fresh_ret
         }
     ));
     assert!(trace.borrow().is_empty());
-    let observed = plan.execute_observed_sources(
-        &src,
-        &[&tab],
-        Limits {
-            scalar_text_bytes: 3,
-            ..limits()
-        },
-    );
+    let observed = plan.execute(&src, &[&tab], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     assert!(matches!(
         *observed.result.unwrap_err(),
         ExecutionError::Limit {
@@ -361,7 +328,7 @@ fn whole_work_and_cumulative_retention_refuse_before_later_effects_and_fresh_ret
     assert_eq!(*trace.borrow(), [("SRC", 0, 0), ("SRC", 0, 1)]);
     trace.borrow_mut().clear();
     assert!(plan
-        .execute_observed_sources(&src, &[&tab], limits())
+        .execute(&src, &[&tab], &mut yamaa_core::function_invocation::NoFunctions::new(), None)
         .result
         .is_ok());
     assert!(trace
@@ -391,7 +358,7 @@ fn typed_numeric_matching_preserves_precision_and_defers_the_sole_output_convers
             T::Int,
         )
         .unwrap()
-        .execute_observed_sources(&src, &[&tab], limits());
+        .execute(&src, &[&tab], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
         assert_eq!(
             observed.result.unwrap().dataset.rows(),
             [vec![
@@ -419,7 +386,7 @@ fn typed_numeric_matching_preserves_precision_and_defers_the_sole_output_convers
         T::Int,
     )
     .unwrap()
-    .execute_observed_sources(&src, &[&tab], limits());
+    .execute(&src, &[&tab], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     assert!(matches!(
         *observed.result.unwrap_err(),
         ExecutionError::MultipleMatches { match_count: 2, .. }
@@ -471,14 +438,7 @@ fn donor_filter_completes_before_padding_evaluation_or_its_output_quota() {
     selected.filter = Some(filter().into());
     let observed = plan(&src, &tab, selected, T::Str)
         .unwrap()
-        .execute_observed_sources(
-            &src,
-            &[&tab],
-            Limits {
-                scalar_text_bytes: 100,
-                ..limits()
-            },
-        );
+        .execute(&src, &[&tab], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     assert!(matches!(
         *observed.result.unwrap_err(),
         ExecutionError::Predicate { .. }
@@ -503,7 +463,7 @@ fn donor_filter_keeps_only_true_in_written_order_before_match_count_and_value() 
     selected.filter = Some(filter().into());
     let observed = plan(&src, &tab, selected, T::Int)
         .unwrap()
-        .execute_observed_sources(&src, &[&tab], limits());
+        .execute(&src, &[&tab], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     assert_eq!(
         observed.result.unwrap().dataset.rows(),
         [vec![Value::Int(1), Value::Int(8), Value::Int(8)]]
@@ -546,7 +506,7 @@ fn typed_calendar_and_datetime_keys_compare_calendar_values_including_collected_
             T::Str,
         )
         .unwrap()
-        .execute_observed_sources(&src, &[&tab], limits());
+        .execute(&src, &[&tab], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
         assert_eq!(
             observed.result.unwrap().dataset.rows(),
             [vec![

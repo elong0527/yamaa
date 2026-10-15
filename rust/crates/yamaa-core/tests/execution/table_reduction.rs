@@ -135,7 +135,7 @@ fn read_all_arguments_before_folding_and_preserve_opaque_error() {
         let mut table = Table::new(vec![first, Value::Int(1), Value::Missing, Value::Int(0)]);
         table.fail_at = Some(2);
         assert_eq!(
-            reduce_column(&table, 0, &[0, 1, 2, 3], 4, NumericReducer::Sum, "SUM(A)"),
+            reduce_column(&table, 0, &[0, 1, 2, 3], 4, NumericReducer::Sum),
             Err(TableReductionError::Cell {
                 position: 2,
                 error: CellError::Access(PortError("read failed"))
@@ -155,7 +155,7 @@ fn arithmetic_failure_precedes_later_type_failure_after_all_reads() {
         Value::Int(1),
         Value::Str("bad".into()),
     ]);
-    let result = reduce_column(&table, 0, &[0, 1, 2], 3, NumericReducer::Sum, "SUM(A)");
+    let result = reduce_column(&table, 0, &[0, 1, 2], 3, NumericReducer::Sum);
     let Err(TableReductionError::Reduction(ReductionError::Arithmetic { argument, error })) =
         result
     else {
@@ -176,7 +176,7 @@ fn arithmetic_failure_precedes_later_type_failure_after_all_reads() {
 fn preflight_limits_and_coordinates_do_not_read_cells() {
     let table = Table::new(vec![Value::Int(1), Value::Int(2)]);
     let reduce = |column, rows: &[usize], limit| {
-        reduce_column(&table, column, rows, limit, NumericReducer::Sum, "SUM(A)")
+        reduce_column(&table, column, rows, limit, NumericReducer::Sum)
     };
     assert_eq!(
         reduce(0, &[0, 1], 1),
@@ -216,7 +216,7 @@ fn empty_and_filtered_relations_preserve_schema_missing_and_order() {
     assert_eq!(empty.schema().columns()[0].name, "A");
     assert_eq!(empty.schema().columns()[0].kind, ColumnType::Int);
     assert_eq!(
-        reduce_column(&empty, 0, &[], 0, NumericReducer::Mean, "MEAN(A)"),
+        reduce_column(&empty, 0, &[], 0, NumericReducer::Mean),
         Ok(Number::Missing)
     );
     assert_eq!(
@@ -230,7 +230,7 @@ fn empty_and_filtered_relations_preserve_schema_missing_and_order() {
         Value::Int(4),
     ]);
     assert_eq!(
-        reduce_column(&table, 0, &[0, 2, 3], 3, NumericReducer::Mean, "MEAN(A)"),
+        reduce_column(&table, 0, &[0, 2, 3], 3, NumericReducer::Mean),
         Ok(Number::float(3.0))
     );
     assert_eq!(*table.reads.borrow(), [0, 2, 3]);

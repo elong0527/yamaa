@@ -2,7 +2,7 @@
 use serde_json::Value as JsonValue;
 use std::cell::RefCell;
 use yamaa_core::dataset::{
-    Assignment, DatasetPlan, ExecutionError, Expression, Limits, RowMode, RowTemplate,
+    Assignment, DatasetPlan, ExecutionError, Expression, RowMode, RowTemplate,
 };
 use yamaa_core::{
     bound_expression::{Binding, BoundPredicate, Read},
@@ -85,19 +85,6 @@ fn plan(schema: &TableSchema, right: Value) -> DatasetPlan {
     )
     .unwrap()
 }
-fn limits() -> Limits {
-    Limits {
-        source_rows: 10,
-        output_rows: 10,
-        output_cells: 10,
-        key_cells: 10,
-        work_cells: 100,
-        scalar_text_bytes: 100,
-        output_text_bytes: 100,
-        identity_cells: 100,
-        identity_text_bytes: 100,
-    }
-}
 #[test]
 fn opaque_cell_identity_survives_repeated_projection_without_retry_or_later_reads() {
     let payload = Opaque(Box::new(91));
@@ -105,7 +92,7 @@ fn opaque_cell_identity_survives_repeated_projection_without_retry_or_later_read
     let table = source(Some(payload));
     let plan = plan(&table.schema, Value::Int(7));
     assert!(table.reads.borrow().is_empty());
-    let Err(failure) = plan.execute(&table, limits()) else {
+    let Err(failure) = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result else {
         panic!("source failure must abort")
     };
     let ExecutionError::Predicate { source_row, error } = &*failure else {
@@ -137,7 +124,7 @@ fn opaque_cell_identity_survives_repeated_projection_without_retry_or_later_read
 fn semantic_filter_failure_precedes_assignments_and_the_next_source_record() {
     let table = source(None);
     let plan = plan(&table.schema, Value::Str("incompatible".into()));
-    let Err(failure) = plan.execute(&table, limits()) else {
+    let Err(failure) = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result else {
         panic!("incompatible comparison must abort")
     };
     let ExecutionError::Predicate { source_row, error } = &*failure else {

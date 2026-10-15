@@ -9,7 +9,7 @@ use yamaa_core::{
     value::Value,
 };
 use yamaa_core::{
-    dataset::{ExecutionError, Limits, Resource},
+    dataset::{ExecutionError, Resource},
     numeric_lifecycle::HandlerKind,
 };
 #[derive(Debug)]
@@ -44,19 +44,6 @@ fn make_table(text: Value) -> Table {
         rows: vec![vec![Value::Str("row1".into()), text]],
         fail: RefCell::default(),
         reads: RefCell::default(),
-    }
-}
-fn limits() -> Limits {
-    Limits {
-        source_rows: 10,
-        output_rows: 10,
-        output_cells: 100,
-        key_cells: 100,
-        work_cells: 1000,
-        scalar_text_bytes: 1000,
-        output_text_bytes: 1000,
-        identity_cells: 100,
-        identity_text_bytes: 1000,
     }
 }
 fn assignment(column: usize, mode: Case, missing: Option<Value>) -> Assignment {
@@ -105,7 +92,12 @@ fn all_ascii_modes_preserve_non_ascii_and_perform_one_source_read() {
         (Case::Title, "Ab\u{00e9}C_D"),
     ] {
         let table = make_table(Value::Str("aB\u{00e9}c_D".into()));
-        let attempt = plan(mode, Some(Value::Missing)).execute_observed(&table, limits());
+        let attempt = plan(mode, Some(Value::Missing)).execute(
+            &table,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
         assert_eq!(
             attempt.result.unwrap().dataset.rows(),
             [vec![Value::Str("row1".into()), Value::Str(expected.into())]]
@@ -124,7 +116,12 @@ fn literal_recovery_is_not_case_transformed_and_is_converted_once() {
         (Value::Int(7), Value::Str("7".into())),
     ] {
         let table = make_table(Value::Missing);
-        let attempt = plan(Case::Lower, Some(handler)).execute_observed(&table, limits());
+        let attempt = plan(Case::Lower, Some(handler)).execute(
+            &table,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
         assert_eq!(
             attempt.result.unwrap().dataset.rows(),
             [vec![Value::Str("row1".into()), expected]]
@@ -141,7 +138,13 @@ fn literal_recovery_is_not_case_transformed_and_is_converted_once() {
 fn semantic_missing_preserves_complete_core_facts_and_admitted_current_keys() {
     let table = make_table(Value::Missing);
     let error = plan(Case::Upper, None)
-        .execute(&table, limits())
+        .execute(
+            &table,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
         .unwrap_err();
     let ExecutionError::SemanticDiagnostic {
         diagnostic,
@@ -182,8 +185,15 @@ fn semantic_missing_preserves_complete_core_facts_and_admitted_current_keys() {
         vec![],
     )
     .unwrap();
-    let ExecutionError::SemanticDiagnostic { identity, .. } =
-        *plan.execute(&table, limits()).unwrap_err()
+    let ExecutionError::SemanticDiagnostic { identity, .. } = *plan
+        .execute(
+            &table,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err()
     else {
         panic!("key missing");
     };
@@ -213,7 +223,12 @@ fn nested_owned_case_operands_register_and_count_each_handler_once() {
     let declaration =
         DatasetPlan::new(schema(), schema(), declarations, vec![], vec![0], vec![]).unwrap();
     let table = make_table(Value::Missing);
-    let attempt = declaration.execute_observed(&table, limits());
+    let attempt = declaration.execute(
+        &table,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert_eq!(
         attempt.result.unwrap().dataset.rows(),
         [vec![Value::Str("row1".into()), Value::Str("mixed".into())]]
@@ -238,8 +253,12 @@ fn original_nonclone_error_allocation_and_rc_identity_return_without_retry_or_ha
     let payload = Box::new(9);
     let address = &*payload as *const u8;
     *table.fail.borrow_mut() = Some(Failure(payload, marker.clone()));
-    let attempt =
-        plan(Case::Upper, Some(Value::Str("fallback".into()))).execute_observed(&table, limits());
+    let attempt = plan(Case::Upper, Some(Value::Str("fallback".into()))).execute(
+        &table,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     let ExecutionError::Cell {
         path,
         source_row,
@@ -261,7 +280,15 @@ fn cumulative_work_text_output_and_identity_limits_refuse_before_next_effect() {
     let mut quota = limits();
     quota.work_cells = 0;
     assert!(matches!(
-        *plan(Case::Upper, None).execute(&table, quota).unwrap_err(),
+        *plan(Case::Upper, None)
+            .execute(
+                &table,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::WorkCells,
             ..
@@ -271,7 +298,15 @@ fn cumulative_work_text_output_and_identity_limits_refuse_before_next_effect() {
     let mut quota = limits();
     quota.scalar_text_bytes = 7;
     assert!(matches!(
-        *plan(Case::Upper, None).execute(&table, quota).unwrap_err(),
+        *plan(Case::Upper, None)
+            .execute(
+                &table,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::ScalarTextBytes,
             ..
@@ -290,7 +325,15 @@ fn cumulative_work_text_output_and_identity_limits_refuse_before_next_effect() {
     let mut quota = limits();
     quota.scalar_text_bytes = 11;
     assert!(matches!(
-        *plan(Case::Upper, None).execute(&table, quota).unwrap_err(),
+        *plan(Case::Upper, None)
+            .execute(
+                &table,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::ScalarTextBytes,
             ..
@@ -301,7 +344,15 @@ fn cumulative_work_text_output_and_identity_limits_refuse_before_next_effect() {
     let mut quota = limits();
     quota.identity_cells = 0;
     assert!(matches!(
-        *plan(Case::Upper, None).execute(&table, quota).unwrap_err(),
+        *plan(Case::Upper, None)
+            .execute(
+                &table,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::IdentityCells,
             ..
@@ -310,8 +361,12 @@ fn cumulative_work_text_output_and_identity_limits_refuse_before_next_effect() {
     let table = make_table(Value::Missing);
     let mut quota = limits();
     quota.scalar_text_bytes = 4;
-    let attempt =
-        plan(Case::Upper, Some(Value::Str("MiXeD".into()))).execute_observed(&table, quota);
+    let attempt = plan(Case::Upper, Some(Value::Str("MiXeD".into()))).execute(
+        &table,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(matches!(
         *attempt.result.unwrap_err(),
         ExecutionError::Limit {
@@ -327,7 +382,15 @@ fn cumulative_work_text_output_and_identity_limits_refuse_before_next_effect() {
     let mut quota = limits();
     quota.output_text_bytes = 4;
     assert!(matches!(
-        *plan(Case::Upper, None).execute(&table, quota).unwrap_err(),
+        *plan(Case::Upper, None)
+            .execute(
+                &table,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::OutputTextBytes,
             ..

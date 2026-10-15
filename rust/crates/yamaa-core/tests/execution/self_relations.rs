@@ -1,7 +1,6 @@
 //! SELF selection reads only borrowed completed donors; opaque source prefix is exact.
 use crate::support::table_schema as schema;
 use std::cell::RefCell;
-use yamaa_core::dataset::Limits;
 use yamaa_core::{
     dataset::{
         Assignment, DatasetPlan, Expression, Intermediate, IntermediateKey, IntermediateSource,
@@ -162,21 +161,7 @@ fn completed_grouped_and_stored_driver_templates_add_no_study_reads() {
         vec![],
     )
     .unwrap();
-    let attempt = plan.execute_observed_sources(
-        &primary,
-        &[&other],
-        Limits {
-            source_rows: 10,
-            output_rows: 10,
-            output_cells: 100,
-            key_cells: 100,
-            work_cells: 100_000,
-            scalar_text_bytes: 100_000,
-            output_text_bytes: 100_000,
-            identity_cells: 100,
-            identity_text_bytes: 1000,
-        },
-    );
+    let attempt = plan.execute(&primary, &[&other], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
     let result = attempt.result.unwrap();
     assert_eq!(
         result.dataset.rows(),

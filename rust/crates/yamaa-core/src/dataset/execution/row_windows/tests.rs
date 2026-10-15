@@ -1,4 +1,3 @@
-use crate::dataset::Limits;
 use crate::{
     bound_expression::{Binding, BoundPredicate, Read},
     dataset::{
@@ -47,19 +46,6 @@ fn assign(column: usize, expression: Expression) -> Assignment {
         path: format!("row.C{column}"),
     }
 }
-fn limits() -> Limits {
-    Limits {
-        source_rows: 10,
-        output_rows: 10,
-        output_cells: 100,
-        key_cells: 100,
-        work_cells: 10_000,
-        scalar_text_bytes: 1000,
-        output_text_bytes: 1000,
-        identity_cells: 100,
-        identity_text_bytes: 1000,
-    }
-}
 fn plan(expression: &str, name: &str, column: usize) -> DatasetPlan {
     DatasetPlan::new(
         schema(&["ID"]),
@@ -85,11 +71,7 @@ fn plan(expression: &str, name: &str, column: usize) -> DatasetPlan {
             ],
             filter: Some(
                 BoundPredicate::new(
-                    crate::predicate_compiler::compile(
-                        expression,
-                        "row.filter",
-                        Default::default(),
-                    )
+                    crate::predicate_compiler::compile(expression, "row.filter")
                     .unwrap(),
                     vec![Binding {
                         name: name.into(),
@@ -147,7 +129,7 @@ fn grouped_window_filter_runs_once_after_complete_windows_without_renumbering() 
         };
         assert_eq!(
             plan(expression, name, column)
-                .execute(&table, limits())
+                .execute(&table, &[], &mut crate::function_invocation::NoFunctions::new(), None).result
                 .unwrap()
                 .dataset
                 .rows(),
@@ -215,15 +197,11 @@ fn grouped_postwindow_filters_use_contextual_join_and_named_lookup_reads_lazily(
         let mut template = plan("SEQ > 1", "SEQ", 1).templates()[0].clone();
         template.filter = Some(
             BoundPredicate::new_contextual(
-                crate::predicate_compiler::compile(
-                    if keep {
+                crate::predicate_compiler::compile(if keep {
                         "SEQ > 1 AND MATCH = 2"
                     } else {
                         "SEQ < 0 AND MATCH = 2"
-                    },
-                    "row.filter",
-                    Default::default(),
-                )
+                    }, "row.filter")
                 .unwrap(),
                 vec![
                     Binding {
@@ -275,7 +253,7 @@ fn grouped_postwindow_filters_use_contextual_join_and_named_lookup_reads_lazily(
             vec![]
         };
         assert_eq!(
-            plan.execute(&table, limits()).unwrap().dataset.rows(),
+            plan.execute(&table, &[], &mut crate::function_invocation::NoFunctions::new(), None).result.unwrap().dataset.rows(),
             expected
         );
         // The source value column is captured once. Contextual evaluation over

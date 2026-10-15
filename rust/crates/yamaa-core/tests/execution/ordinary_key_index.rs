@@ -1,7 +1,7 @@
 //! Independent donor order, missingness and native-effect controls for large keys.
 use crate::support::table_schema as schema;
 use std::{cell::RefCell, rc::Rc};
-use yamaa_core::dataset::{ExecutionError, Limits, Resource};
+use yamaa_core::dataset::{ExecutionError, Resource};
 use yamaa_core::numeric_lifecycle::HandlerKind;
 use yamaa_core::table_grouping::GroupingError;
 use yamaa_core::{
@@ -129,15 +129,11 @@ fn fixture(keep: Keep, mode: Mode, selection: bool) -> (Table, Table, DatasetPla
         });
     }
     let correlated = matches!(mode, Mode::Correlated);
-    let predicate = predicate_compiler::compile(
-        if correlated {
+    let predicate = predicate_compiler::compile(if correlated {
             "DONOR.ACTIVE = BASE.ACTIVE"
         } else {
             "DONOR.ACTIVE = 1"
-        },
-        "intermediates[0].filter",
-        Default::default(),
-    )
+        }, "intermediates[0].filter")
     .unwrap();
     let mut bindings = vec![Binding {
         name: "DONOR.ACTIVE".into(),
@@ -220,19 +216,6 @@ fn fixture(keep: Keep, mode: Mode, selection: bool) -> (Table, Table, DatasetPla
     .unwrap();
     (primary, donors, plan, trace)
 }
-fn limits(index: bool) -> Limits {
-    Limits {
-        source_rows: 1024,
-        output_rows: 1024,
-        output_cells: 2048,
-        key_cells: if index { 4096 } else { 65 },
-        work_cells: 1_000_000,
-        scalar_text_bytes: 1_000_000,
-        output_text_bytes: 1_000_000,
-        identity_cells: 1024,
-        identity_text_bytes: 1_000_000,
-    }
-}
 fn expected(keep: Keep) -> Vec<Vec<Value>> {
     (0..65)
         .map(|i| {
@@ -248,13 +231,13 @@ fn expected(keep: Keep) -> Vec<Vec<Value>> {
         .collect()
 }
 #[test]
-fn indexed_and_scan_truth_keep_filter_order_missingness_and_stable_first_last() {
+fn indexed_truth_keeps_filter_order_missingness_and_stable_first_last() {
     for keep in [Keep::First, Keep::Last] {
-        for index in [true, false] {
+        for _ in 0..2 {
             let (primary, donors, plan, trace) = fixture(keep, Mode::Ordinary, true);
             // Every first donor is filtered out before its key can be inspected.
             *donors.failure.borrow_mut() = Some((0, 0, Original(Box::new(17), Rc::new(()))));
-            let attempted = plan.execute_observed_sources(&primary, &[&donors], limits(index));
+            let attempted = plan.execute(&primary, &[&donors], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
             assert_eq!(attempted.result.unwrap().dataset.rows(), expected(keep));
             let events = trace.borrow();
             let first_current = events
@@ -273,8 +256,8 @@ fn indexed_and_scan_truth_keep_filter_order_missingness_and_stable_first_last() 
                 .filter(|(name, _, col)| *name == "DONOR" && *col == 0)
                 .copied()
                 .collect::<Vec<_>>();
-            assert_eq!(key_reads.len(), if index { 192 } else { 192 * 63 });
-            if index {
+            assert_eq!(key_reads.len(), 192);
+            {
                 assert_eq!(
                     key_reads,
                     (0..256)
@@ -289,10 +272,10 @@ fn indexed_and_scan_truth_keep_filter_order_missingness_and_stable_first_last() 
 #[test]
 fn expression_composite_and_correlated_selectors_keep_the_existing_scan() {
     for mode in [Mode::Expression, Mode::Composite, Mode::Correlated] {
-        for index in [true, false] {
+        for _ in 0..2 {
             let (primary, donors, plan, trace) = fixture(Keep::First, mode, true);
             assert_eq!(
-                plan.execute_observed_sources(&primary, &[&donors], limits(index))
+                plan.execute(&primary, &[&donors], &mut yamaa_core::function_invocation::NoFunctions::new(), None)
                     .result
                     .unwrap()
                     .dataset
@@ -318,13 +301,13 @@ fn expression_composite_and_correlated_selectors_keep_the_existing_scan() {
 #[test]
 fn first_donor_failure_retains_original_identity_and_the_exact_scan_prefix() {
     let mut traces = Vec::new();
-    for index in [true, false] {
+    for _ in 0..2 {
         let (primary, donors, plan, trace) = fixture(Keep::First, Mode::Ordinary, true);
         let payload = Original(Box::new(29), Rc::new(()));
         let pointer = payload.0.as_ref() as *const u8;
         let marker = Rc::clone(&payload.1);
         *donors.failure.borrow_mut() = Some((130, 0, payload));
-        let attempted = plan.execute_observed_sources(&primary, &[&donors], limits(index));
+        let attempted = plan.execute(&primary, &[&donors], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
         let ExecutionError::SecondaryCell {
             source: 0,
             source_row: 130,
@@ -342,9 +325,9 @@ fn first_donor_failure_retains_original_identity_and_the_exact_scan_prefix() {
 }
 #[test]
 fn multiple_match_refusal_reads_no_order_or_payload_and_builds_no_result() {
-    for index in [true, false] {
+    for _ in 0..2 {
         let (primary, donors, plan, trace) = fixture(Keep::First, Mode::Ordinary, false);
-        let attempted = plan.execute_observed_sources(&primary, &[&donors], limits(index));
+        let attempted = plan.execute(&primary, &[&donors], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
         assert!(matches!(
             *attempted.result.unwrap_err(),
             ExecutionError::MultipleMatches { match_count: 3, .. }
@@ -360,7 +343,7 @@ fn multiple_match_refusal_reads_no_order_or_payload_and_builds_no_result() {
 fn missing_donor_keys_and_selected_missing_payload_keep_distinct_handler_outcomes() {
     for keep in [Keep::First, Keep::Last] {
         let mut observations = Vec::new();
-        for index in [true, false] {
+        for _ in 0..2 {
             let (primary, mut donors, plan, _) = fixture(keep, Mode::Ordinary, true);
             for row in [5, 6, 7] {
                 donors.rows[row][0] = Value::Missing;
@@ -369,7 +352,7 @@ fn missing_donor_keys_and_selected_missing_payload_keep_distinct_handler_outcome
             for row in [9, 11] {
                 donors.rows[row][3] = Value::Missing;
             }
-            let attempted = plan.execute_observed_sources(&primary, &[&donors], limits(index));
+            let attempted = plan.execute(&primary, &[&donors], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
             let mut truth = expected(keep);
             truth[1][1] = Value::Missing;
             truth[2][1] = Value::Missing;
@@ -401,14 +384,14 @@ fn missing_donor_keys_and_selected_missing_payload_keep_distinct_handler_outcome
 #[test]
 fn entire_source_filter_finishes_before_current_key_and_donor_key_effects() {
     let mut traces = Vec::new();
-    for index in [true, false] {
+    for _ in 0..2 {
         let (primary, donors, plan, trace) = fixture(Keep::First, Mode::Ordinary, true);
         let original = Original(Box::new(41), Rc::new(()));
         let pointer = original.0.as_ref() as *const u8;
         let marker = Rc::clone(&original.1);
         *donors.failure.borrow_mut() = Some((130, 2, original));
         *primary.failure.borrow_mut() = Some((0, 1, Original(Box::new(43), Rc::new(()))));
-        let attempted = plan.execute_observed_sources(&primary, &[&donors], limits(index));
+        let attempted = plan.execute(&primary, &[&donors], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
         let ExecutionError::Predicate {
             source_row: 130,
             error,
@@ -437,14 +420,14 @@ fn entire_source_filter_finishes_before_current_key_and_donor_key_effects() {
 #[test]
 fn failing_current_key_reads_no_donor_key_order_or_payload() {
     let mut traces = Vec::new();
-    for index in [true, false] {
+    for _ in 0..2 {
         let (primary, donors, plan, trace) = fixture(Keep::First, Mode::Ordinary, true);
         let original = Original(Box::new(47), Rc::new(()));
         let pointer = original.0.as_ref() as *const u8;
         let marker = Rc::clone(&original.1);
         *primary.failure.borrow_mut() = Some((1, 1, original));
         *donors.failure.borrow_mut() = Some((130, 0, Original(Box::new(53), Rc::new(()))));
-        let attempted = plan.execute_observed_sources(&primary, &[&donors], limits(index));
+        let attempted = plan.execute(&primary, &[&donors], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
         let ExecutionError::Cell {
             source_row: 1,
             error: CellError::Access(original),
@@ -465,57 +448,3 @@ fn failing_current_key_reads_no_donor_key_order_or_payload() {
     assert_eq!(traces[0], traces[1]);
 }
 
-#[test]
-fn existing_capacity_controls_keep_key_refusal_and_stop_work_or_text_before_payload() {
-    for (key_cells, work_cells, scalar_text_bytes) in [
-        (64, 1_000_000, 1_000_000),
-        (4096, 0, 1_000_000),
-        (4096, 1_000_000, 0),
-    ] {
-        let (primary, donors, plan, trace) = fixture(Keep::First, Mode::Ordinary, true);
-        let bounded = Limits {
-            key_cells,
-            work_cells,
-            scalar_text_bytes,
-            ..limits(true)
-        };
-        let attempted = plan.execute_observed_sources(&primary, &[&donors], bounded);
-        match *attempted.result.unwrap_err() {
-            ExecutionError::OutputGrouping(GroupingError::KeyCellLimit { limit: 64 })
-                if key_cells == 64 => {}
-            ExecutionError::Limit {
-                resource: Resource::WorkCells,
-                limit: 0,
-                ..
-            } if work_cells == 0 => {}
-            ExecutionError::Limit {
-                resource: Resource::ScalarTextBytes,
-                limit: 0,
-                ..
-            } if scalar_text_bytes == 0 => {}
-            other => panic!("original capacity refusal: {other:?}"),
-        }
-        assert!(
-            !trace
-                .borrow()
-                .iter()
-                .any(|(name, _, column)| *name == "DONOR" && matches!(column, 1 | 3))
-                || key_cells == 64
-        );
-        if key_cells == 64 {
-            // Records complete before output-key admission. A low key budget
-            // disables optional indexing without weakening that later refusal.
-            assert_eq!(
-                trace
-                    .borrow()
-                    .iter()
-                    .filter(|(name, _, column)| *name == "DONOR" && *column == 0)
-                    .count(),
-                192 * 63
-            );
-        }
-        if work_cells == 0 {
-            assert!(trace.borrow().is_empty());
-        }
-    }
-}

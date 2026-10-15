@@ -11,7 +11,7 @@ use yamaa_core::{
     value::{ColumnType as T, Value},
 };
 use yamaa_core::{
-    dataset::{ExecutionError, Limits, Resource},
+    dataset::{ExecutionError, Resource},
     function_invocation::{Argument, FunctionPort, HostError},
     function_signature::{FunctionIdentity, InvocationPlan},
 };
@@ -169,19 +169,6 @@ fn plan(src: &Table, donor: &Table, id_type: T, column: Expression) -> DatasetPl
     )
     .unwrap()
 }
-fn limits() -> Limits {
-    Limits {
-        source_rows: 100,
-        output_rows: 100,
-        output_cells: 100,
-        key_cells: 100,
-        work_cells: 10_000,
-        scalar_text_bytes: 10_000,
-        output_text_bytes: 10_000,
-        identity_cells: 100,
-        identity_text_bytes: 10_000,
-    }
-}
 
 #[test]
 fn two_key_reads_share_the_choice_but_columns_and_fresh_attempts_select_again() {
@@ -199,7 +186,7 @@ fn two_key_reads_share_the_choice_but_columns_and_fresh_attempts_select_again() 
     for _ in 0..2 {
         trace.borrow_mut().clear();
         let result = p
-            .execute_observed_sources(&src, &[&donor], limits())
+            .execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None)
             .result
             .unwrap();
         assert_eq!(
@@ -268,7 +255,7 @@ fn selected_key_cell_failure_moves_once_and_prevents_the_next_key_or_column() {
         source_row,
         ..
     } = *p
-        .execute_observed_sources(&src, &[&donor], limits())
+        .execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None)
         .result
         .unwrap_err()
     else {
@@ -332,7 +319,7 @@ fn all_key_conversions_precede_callbacks_and_work_refusals_keep_the_existing_lim
         count: 0,
     };
     assert!(matches!(
-        *p.execute_observed_functions(&src, &[&donor], &mut calls, limits())
+        *p.execute(&src, &[&donor], &mut calls, None)
             .result
             .unwrap_err(),
         ExecutionError::Conversion { .. }
@@ -348,7 +335,7 @@ fn all_key_conversions_precede_callbacks_and_work_refusals_keep_the_existing_lim
         ..limits()
     };
     assert!(matches!(
-        *p.execute_observed_functions(&src, &[&donor], &mut calls, limited)
+        *p.execute(&src, &[&donor], &mut calls, None)
             .result
             .unwrap_err(),
         ExecutionError::Limit {
