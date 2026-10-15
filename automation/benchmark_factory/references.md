@@ -157,6 +157,66 @@ Conventions used below:
   TA: cross-TA. Grounding: canonical PFS censoring conventions and
   censoring-reason descriptions for ADTTE benchmarks.
 
+- **CDISC Controlled Terminology** (CDISC and NCI EVS, quarterly) -
+  https://evs.nci.nih.gov/ftp1/CDISC/SDTM/SDTM%20Terminology.txt and
+  https://evs.nci.nih.gov/ftp1/CDISC/ADaM/ADaM%20Terminology.txt -
+  SDTM ECG test codes QTAG (C117783, "QT Interval, Aggregate"), RRAG
+  (C117791, "RR Interval, Aggregate") and QTCFAG (C117786, "QTcF Interval,
+  Aggregate"), each aggregated over the beats of one ECG; ADaM derivation
+  type AVERAGE (C81209, "average value over a defined set of records").
+  TA: cross-TA. Grounding: exact codes and labels for ADEG and other
+  BDS work items. SDTM PK Parameters Code (C85839) CMAX, AUCLST, AUCIFO and
+  TMAX, with the PK Parameters (C85493) submission values "Max Conc", "AUC to
+  Last Nonzero Conc", "AUC Infinity Obs" and "Time of CMAX Observation" ("Time
+  of CMAX" is a synonym); Not Done (C66789) "NOT DONE". Grounding (ADPP):
+  PARAMCD and PARAM literals and the not-done pre-dose sample.
+  For adam-adpp-accumulation-ratio: ARAUC "Accumulation Ratio AUCTAU" (AUC
+  over the dosing interval at steady state divided by that over the initial
+  dosing interval), ARCMAX "Accumulation Ratio Cmax", AUCTAU and CMAX; PKUNIT
+  (C85494) RATIO, h*ng/mL, ng/mL: the PARAMCD, PARAM and AVALU literals and
+  the direction of a PK ratio.
+  For adam-adpp-dose-normalized: the dose-normalized CMAXD "Max Conc Norm by
+  Dose", AUCLSTD "AUC to Last Nonzero Conc Norm by Dose" and AUCIFOD "AUC
+  Infinity Obs Norm by Dose", each "divided by the dose" (no Tmax or half-life
+  code is dose-normalized), and PKUDMG (ng/mL/mg, h*ng/mL/mg).
+
+- **SDTMIG v3.3** (CDISC, 2018) -
+  https://www.cdisc.org/standards/foundational/sdtmig/sdtmig-v3-3/html -
+  Section 6.3.3 ECG Test Results (EG): one record per ECG observation per
+  replicate per time point; "EGREPNUM is used to differentiate between
+  multiple repetitions of a test within a given time frame"; QTCFAG is
+  used for Fridericia's formula; the extracted-replicate example gives
+  the results of one replicate the same EGREPNUM. TA: cross-TA (QT).
+  Grounding: replicate identity for ECG averaging work items. Section 6.3.11.1
+  Pharmacokinetics Concentrations (PC): PCSTRESN "should store all numeric test
+  results or findings"; the worked example has a parent and a metabolite record
+  from one sample and time point, and writes a result below the limit of
+  quantification as "<0.1" in PCSTRESC with no PCSTRESN: one record per analyte
+  and no numeric value for a below-limit result
+  (adam-adeg-time-matched-concentration). PC and PP domains: PP is "One record
+  per PK parameter per time-concentration profile per modeling method per
+  subject"; "The values in PPRFTDTC should be the same as that in PCRFTDTC for
+  related records". The PC example holds the pre-dose sample at PCTPT "PREDOSE"
+  and a below-limit result as PCSTRESC "<0.1" with no PCSTRESN and PCLLOQ 0.10.
+  Grounding (ADPP): the PP-to-PC link and the pre-dose sample of
+  adam-adpp-carryover-exclusion.
+  For adam-adpp-dose-normalized: PP assumption 3 (PKUDMG/PKUDUG for parameters
+  normalized by a dose in mg or ug) and EX (6.1.3.1): EXDOSE is the amount per
+  administration, EXDOSFRQ the number of administrations per period, natural
+  key STUDYID, USUBJID, EXTRT, EXSTDTC; the dose of a profile is the EX record
+  starting at its PPRFTDTC.
+  For adam-adpp-accumulation-ratio: 6.3.11.2 PPSTAT "Used to indicate that a
+  parameter was not calculated", with PPREASND; the PP examples show Day 1
+  and a later day without calling either steady state (the not-calculated
+  case and the steady-state choice a work item must state).
+
+- **What is ADNCA and Why is it Important?** (Pinnacle 21 webinar slides,
+  2024) - https://help.pinnacle21.certara.net/webinars/What-is-ADNCA.pdf -
+  Public summary of the ADaMIG for Non-compartmental Analysis Input Data
+  v1.0 (whose text needs a CDISC sign-in): AVALU "Analysis Value Unit",
+  PKUNIT codelist, Required. TA: cross-TA (clinical pharmacology).
+  Grounding: AVALU on ADPC/ADPP records.
+
 ## pharmaverse
 
 - **admiral** - https://github.com/pharmaverse/admiral -
@@ -216,10 +276,86 @@ Conventions used below:
   Centiloid by tracer/pipeline/reference region). Grounding: compact
   tracer-dependent conversion benchmark with exact expected values.
 
+- **admiral ECG functions and ADEG template** (admiral 1.5.0 and main) -
+  https://pharmaverse.github.io/admiral/cran-release/reference/compute_qtc.html,
+  https://pharmaverse.github.io/admiral/cran-release/reference/derive_param_qtc.html,
+  https://github.com/pharmaverse/admiral/blob/main/inst/templates/ad_adeg.R -
+  `compute_qtc()` (Fridericia: QT over the cube root of RR / 1000, QT and
+  RR in msec); the template derives QTcF per collected record, then adds
+  `DTYPE = "AVERAGE"` records per PARAMCD with `derive_summary_records()`
+  "if least 2 records available". TA: QT. Grounding: order of correction
+  and averaging, and the minimum-count choice a work item must state.
+  derive_basetype_records()
+  (https://pharmaverse.github.io/admiral/cran-release/reference/derive_basetype_records.html)
+  sets BASETYPE when a parameter has more than one baseline definition
+  (ADaMIG v1.3 section 4.2.1.6): non-null wherever BASE is, one value per
+  definition; the template flags ABLFL and carries BASE by subject,
+  parameter and BASETYPE (derive_var_base stops on two baseline records in
+  a group) and leaves CHG on baseline records "to producer choice".
+  Grounding: several baselines per parameter keyed by BASETYPE
+  (adam-adeg-time-matched-baseline).
+
+- **admiral analysis flags and the ADPP template** (admiral 1.5.0) -
+  https://pharmaverse.github.io/admiral/cran-release/articles/pk_adnca.html,
+  https://pharmaverse.github.io/admiral/cran-release/articles/bds_finding.html,
+  https://pharmaverse.github.io/admiral/cran-release/reference/derive_var_extreme_flag.html,
+  https://github.com/pharmaverse/admiral/blob/v1.5.0/inst/templates/ad_adpp.R -
+  pk_adnca: "This is also an opportunity to derive analysis flags" (ANL01FL,
+  ANL02FL, set to "Y"); bds_finding: "an analysis flag (e.g. ANLxxFL) may be
+  used to choose the appropriate record for analysis", and TRTA/TRTP match ADSL
+  treatment variables such as TRTSEQP; derive_var_extreme_flag() defaults
+  true_value "Y", false_value NA_character_; ad_adpp.R gives each PPTESTCD its
+  PARAMCD and PARAM and sets AVAL = PPSTRESN. TA: cross-TA (clinical
+  pharmacology). Grounding: Y-or-null analysis flags and the PP-to-ADPP mapping
+  of the ADPP work items (public stand-in for the ADaMIG flag text, which needs
+  a CDISC sign-in).
+  For adam-adpp-dose-normalized: the template's parameter lookup names CMAXD
+  "Max Conc Norm by Dose" and AUCIFOD "AUC Infinity Obs Norm by Dose" with no
+  unit in PARAM; no dose-normalized record is added without a dose.
+  For adam-adpp-accumulation-ratio: derive_param_computed()
+  (https://pharmaverse.github.io/admiral/cran-release/reference/derive_param_computed.html)
+  adds a record only when each contributing parameter has exactly one record
+  and no contributing value is missing (keep_nas default): which computed
+  records exist when an input value is missing.
+
+- **PKNCA** (humanpred; not a pharmaverse package) -
+  https://humanpred.github.io/pknca/ -
+  Open-source R package for non-compartmental analysis (site 0.12.1.9002,
+  release 0.12.1). Its "Post-Processing" article: the built-in exclusion
+  functions "will exclude all results that either apply to the current value or
+  are dependents of the current value (parameters that depend on it)";
+  exclude() records a reason for exclusion per result. TA: cross-TA (clinical
+  pharmacology). Grounding: an exclusion acts on a result and its dependents,
+  not on the subject's other parameters (adam-adpp-comparison-sets judges pairs
+  per parameter).
+
+- **aNCA** (pharmaverse, commit f8d921b) -
+  https://github.com/pharmaverse/aNCA -
+  Shiny/R NCA application. Its CDISC export (R/export_cdisc.R) builds ADPP
+  with PARAMCD = PPTESTCD, PARAM = PPTEST, AVAL = PPSTRESN and AVALU =
+  PPSTRESU; its manual uses the actual dose DOSEA "for dose normalization
+  of parameters like Cmax and AUC". TA: PK. Grounding: ADPP variable
+  conventions and which parameters adam-adpp-dose-normalized normalizes.
+  Its "Ratio Calculations" article
+  (https://pharmaverse.github.io/aNCA/articles/ratio-calculations.html)
+  defines the accumulation ratio AR{param} as the parameter at a later dose
+  profile over the first-dose profile (ATPTREF), within subject when "Mean
+  across subjects" is no; the later profile is the study's choice
+  (adam-adpp-accumulation-ratio).
+
+- **PKNCA pk.calc.dn** (PKNCA 0.12.1; not a pharmaverse package) -
+  https://humanpred.github.io/pknca/reference/pk.calc.dn.html -
+  "Determine dose normalized NCA parameter": the parameter divided by the
+  dose (pk.calc.dn(90, 10) is 9), registered for AUC, AUMC and
+  concentration parameters (cmax, auclast, aucinf.obs, ...) but not Tmax or
+  half-life; an interval without a dose gets a missing dose. TA: PK.
+  Grounding: the dose-normalization formula and its parameter scope in
+  adam-adpp-dose-normalized.
+
 Pin package versions in work-item specs. Mid-2026 reference points:
 admiral 1.5.0, admiralonco 1.4.1, admiralophtha 1.5.0, admiralvaccine 0.6.0,
 admiralpeds 0.4.0, admiralmetabolic 0.3.0, admiralneuro 0.3.0,
-pharmaversesdtm 1.5.0.
+pharmaversesdtm 1.5.0; PKNCA 0.12.1 (not pharmaverse), aNCA at commit f8d921b.
 
 ## CDISC therapeutic area user guides (TAUGs)
 
@@ -301,7 +437,35 @@ task specs).
   datasets (https://www.fda.gov/media/116187/download), NASH datasets
   including ADMI from SDTM MI (https://www.fda.gov/media/151864/download).
   Grounding: TA-flavored derivation work items (e.g. "build ADMI per FDA
-  NASH specs") complementing CDISC TAUGs.
+  NASH specs") complementing CDISC TAUGs. QT Studies TS section 3.0 (ADEG):
+  derived records "for the average of the individual replicate values ...
+  at each nominal time point" with DTYPE "AVERAGE", PARAMCD at most 4
+  characters, EGREPNUM as the replicate number, and Table 4's average of
+  AVAL per PARAMCD. QT Studies TS comparator variables (Table 1: ACOMPFL, COMP,
+  COMPBASE, COMPCHG, CCOMPCHG = CHG minus COMPCHG, COMPTYPE; Table 5: a
+  parallel study's placebo group means by COMPTYPE "Placebo group at 0.5 h",
+  shown on the drug and the placebo rows; appendix: in a parallel study with a
+  nested crossover, the Day 14 placebo rows of both nested-crossover arms carry
+  ACOMPFL "because the placebo is the comparator in this example", the baseline
+  rows ABLFL) ground the placebo-corrected change
+  (adam-adeg-placebo-corrected-change). The QT Studies TS pairs ADEG with ADPC:
+  APERIOD, APERDAY, ATPT and ATPTN coded the same in both "so mapping of
+  time-matched measures can be performed"; ECGPCFL "Y" for "a matching nominal
+  PK sample time point for the nominal ECG time point" (Tables 7-8: a 12 h ECG
+  without a sample, a 14 h sample without an ECG); ADPC AVAL from PCSTRESN with
+  LLOQFL; CQTANLFL on drug and placebo days, never on baseline days (Table 9);
+  placebo coded "Placebo" in TRTx (adam-adeg-time-matched-concentration). QT
+  Studies TS Tables 1 and 6 (ADEG, ADPC) list the indexed analysis flags
+  ANL01FL, ANL02FL and ANLzzFL ("Selection variable to identify the exact set
+  of records used in the analysis number zz", controlled term Y) and TRTSEQP
+  "Planned Sequence of Treatments"; the BE ANDA analysis datasets TS uses
+  "ANL01FL = analysis with imputed scores" and "ANL02FL = analysis without
+  imputed scores" (terms Y, N) and TRTSEQP in ADSL. Grounding: public source
+  for indexed analysis flags and TRTSEQP in ADPP work items. The QT Studies
+  TS ADEG tables (Table 1 variables; Tables 2 and 4 time-matched baseline
+  days with BASETYPE "Baseline Day 1 h"; the appendix's per-period Day -1
+  in a nested crossover) ground the ADEG baseline benchmarks
+  (adam-adeg-time-matched-baseline).
 
 - **PHUSE Test Data Factory (TDF)** - https://advance.phuse.global/display/WEL/Test+Dataset+Factory -
   data: https://github.com/phuse-org/phuse-scripts/blob/master/data/adam/TDF_ADaM_v1.0.zip
@@ -321,6 +485,113 @@ task specs).
   Adjudicated events in SDTM (--LNKID plus RELREC) vs ADaM (analysis flags).
   TA: cross-TA. Grounding: "identify which assessments survive to ADaM"
   flag-derivation work items.
+
+- **FDA guidance: Bioequivalence Studies With Pharmacokinetic Endpoints for
+  Drugs Submitted Under an ANDA** (FDA, 2026) -
+  https://www.fda.gov/media/192774/download -
+  "If the pre-dose value is >5 percent of the Cmax, applicants should drop the
+  subject of the affected period from BE study evaluations"; the test uses "the
+  Cmax value for the subject in that period" and names no period; 12 to 18
+  samples "including a pre-dose sample, per subject, per dose". TA: cross-TA
+  (generics). Grounding: the 5 percent carry-over rule, per period, of
+  adam-adpp-carryover-exclusion.
+
+- **FDA guidance: Bioavailability Studies Submitted in NDAs or INDs -
+  General Considerations** (FDA, 2022) -
+  https://www.fda.gov/media/121311/download -
+  Appendix A: pre-dose concentrations above 5 percent of Cmax, worded per
+  subject, with "this subject's data should be flagged and reported"; III.A.7
+  BA of the test product fasted and the effect of food. TA: cross-TA.
+  Grounding: keeping excluded records in ADPP with a flag; the test-fasted
+  treatment as test of one comparison and reference of the other.
+  Multiple-dose studies dose to steady state and sample across the dosing
+  interval at steady state; steady-state parameters AUC0-TAU, Cmax, Cmin,
+  Ctrough: which profile of a multiple-dose study is the steady-state one
+  (adam-adpp-accumulation-ratio).
+
+- **FDA guidance: Statistical Approaches to Establishing Bioequivalence**
+  (FDA, 2026) - https://www.fda.gov/media/163638/download -
+  Missing data: complete case analysis ("removes subjects missing one or both
+  periods") and available case analysis ("uses all observed data"),
+  prespecified; III.H multiple references: "using only the data from those
+  products". TA: cross-TA. Grounding: the complete-pair reading of
+  adam-adpp-comparison-sets and its documented alternative.
+
+- **FDA guidance: Assessing the Effects of Food on Drugs in INDs and NDAs**
+  (FDA, 2026) - https://www.fda.gov/media/121313/download -
+  Fed versus fasted crossover "with the fasted treatment arm serving as the
+  reference"; a three-way crossover for two formulations; log-transformed AUC
+  and Cmax. TA: cross-TA. Grounding: the food-effect comparison of
+  adam-adpp-comparison-sets.
+
+- **PHUSE FAQ-004: SDTM/ADaM IG Nuances** (PHUSE, living FAQ; the cited
+  answer is dated 8 July 2020) -
+  https://phuse.s3.eu-central-1.amazonaws.com/Deliverables/Optimizing+the+Use+of+Data+Standards/FAQ-004.pdf -
+  "Storing a rounded value in AVAL is not good practice, as it typically
+  results in a loss of precision for calculations in the tables."
+  TA: cross-TA. Grounding: an unrounded AVAL on derived records, rounded
+  in the listing or table program (adam-adpp-dose-normalized,
+  adam-adpp-accumulation-ratio).
+
+## ICH and EMA guidelines
+
+- **ICH E14** (ICH, 2005) -
+  https://database.ich.org/sites/default/files/E14_Guideline.pdf -
+  Clinical evaluation of QT/QTc prolongation; section 3.1 lists the
+  correction formulae, Fridericia's printed as QT/RR^0.33. TA: QT.
+  Grounding: names the corrections; state the exact exponent in a prompt.
+  Section 3.2.1 (the largest time-matched mean difference between drug and
+  placebo, baseline-adjusted) grounds the by-time-point double delta
+  (adam-adeg-placebo-corrected-change). Section 2.2.2: "Data on the drug
+  concentrations around the time of ECG assessment would aid this assessment";
+  3.2.3: "the relationship of drug concentrations to changes in QT/QTc
+  interval": pairing each ECG time point with its concentration
+  (adam-adeg-time-matched-concentration).
+
+- **ICH E14/S7B Questions and Answers** (ICH, Step 4, 2022-02-21) -
+  https://database.ich.org/sites/default/files/E14-S7B_QAs_Step4_2022_0221.pdf -
+  Q&A 1.5: Fridericia's correction is appropriate in most situations;
+  Q&A 4.2: "the average of the parameters from about 3 ECGs" within
+  several minutes of each nominal time point. TA: QT. Grounding: replicate
+  averaging and the correction choice in ADEG work items. Q&A 4.1 (in a
+  placebo-controlled parallel design, drug and placebo means, each averaged
+  across the study population, compared at each time point) and Q&A 5.1
+  (concentration-QTc data from first-in-human and multiple ascending dose
+  studies) ground one placebo group per time point for the whole study
+  (adam-adeg-placebo-corrected-change). Q&A 4.2 also names the
+  "time-matched" baseline (the same time points on the day before
+  treatment as on the treatment day) and the "pre-dose" baseline, for
+  parallel and crossover designs: which baseline an ECG time point takes
+  (adam-adeg-time-matched-baseline).
+
+- **EMA Guideline on the Investigation of Bioequivalence**
+  (CPMP/EWP/QWP/1401/98 Rev. 1, 2010) -
+  https://www.ema.europa.eu/en/documents/scientific-guideline/guideline-investigation-bioequivalence-rev1_en.pdf -
+  4.1.7: "The lower limit of quantitation should be 1/20 of Cmax or lower".
+  4.1.8: subjects without "evaluable data for both of the test and reference
+  products" are not included; each comparison excludes the treatments "not
+  relevant for the comparison in question"; Reasons for exclusion, item 2:
+  "Subjects with non-zero baseline concentrations > 5% of Cmax"; Carry-over
+  effects: "examination of the pre-treatment plasma concentrations in period 2
+  (and beyond if applicable)", and a pre-dose concentration "greater than 5
+  percent of the Cmax value for the subject in that period" excludes "the data
+  from that subject for that period"; log transformation. TA: cross-TA.
+  Grounding: both ADPP benchmarks; the period-2-and-beyond wording is the
+  alternative to checking the first period too.
+
+- **ICH M13A: Bioequivalence for Immediate-Release Solid Oral Dosage Forms**
+  (ICH, Step 4, 2024) -
+  https://database.ich.org/sites/default/files/ICH_M13A_Step4_Final_Guideline_2024_0723.pdf -
+  2.2.2.2: a concentration below the LLOQ "should be treated as zero in PK
+  parameter calculations"; 2.2.3.1: each comparison excludes "the data from the
+  treatment arms that are not relevant for the comparison in question";
+  2.2.3.2: "all subjects who provide evaluable data for both the test and
+  comparator products"; 2.2.3.3: carry-over examined "in period 2 and beyond if
+  applicable", then "excluding the data from that period". TA: cross-TA.
+  Grounding: both ADPP benchmarks.
+  For adam-adpp-dose-normalized: 2.1.6, dose proportionality "should consider
+  Cmax and AUC as appropriate PK parameters" and compares the "dose-adjusted
+  mean Cmax and AUC".
 
 ## ODM to SDTM mapping, define.xml, and ARM
 

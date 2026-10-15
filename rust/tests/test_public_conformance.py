@@ -510,7 +510,7 @@ class PublicConformance(unittest.TestCase):
     def test_corpus_inventory_has_all_entries_and_approved_exclusions(self):
         corpus = judge.plan(ROOT.parent / "benchmarks")
         names = {e["name"]: e for e in corpus["examples"]}
-        self.assertEqual(len(names), 321)
+        self.assertEqual(len(names), 329)
         self.assertEqual(len(names["sdtm-dm-race-ethnicity"]["entries"]["python"]), 2)
         self.assertEqual(
             names["schema-inheritance"]["entries"]["r"][0]["specification"],
@@ -531,11 +531,11 @@ class PublicConformance(unittest.TestCase):
             self.assertEqual(example["variants"]["python"], example["variants"]["r"])
             for variant in example["variants"]["python"]:
                 kinds[variant["kind"]] += 1
-        # The counts reviewed in #2291: one empty child per active entry, and
-        # 99 key-order-eligible positive entries.
+        # One empty child per entry; the eight PK/QT cases add five
+        # key-order-eligible positive entries to the current main population.
         self.assertEqual(
             kinds,
-            {"empty_child": 321, "key_order_control": 100, "key_order_permuted": 100},
+            {"empty_child": 329, "key_order_control": 105, "key_order_permuted": 105},
         )
         expectations = judge.load_metamorphic_expectations(ROOT.parent / "benchmarks")
         names = {e["name"] for e in corpus["examples"]}

@@ -1,0 +1,127 @@
+schema_version: "1.0"
+domain: ADPP
+keys: [STUDYID, USUBJID, VISIT, PARAMCD]
+input:
+  PP: {path: input/pp.csv, types: {PPSTRESN: float}}
+  EX: {path: input/ex.csv, types: {EXDOSE: float}}
+
+output:
+  path: adpp.csv
+  columns: [STUDYID, USUBJID, VISIT, PARAMCD, PARAM, AVAL, AVALU]
+
+# The administration that starts at the profile's reference time, its dose
+# in mg. One dosing record per subject and start; a dose unit other than mg
+# or ug fails. No dosing record at the reference time reads as a zero dose,
+# which normalizes nothing.
+intermediates:
+  - id: DOSE
+    dataset: EX
+    key: {STUDYID: PP.STUDYID, USUBJID: PP.USUBJID, EXSTDTC: PP.PPRFTDTC}
+    columns: [DOSE_MG]
+    no_match: 0
+    derivations:
+      MGDIV:
+        mapping:
+          source: EXDOSU
+          dict: {mg: 1, ug: 1000}
+      DOSE_MG:
+        compute:
+          expr: "EXDOSE / MGDIV"
+    verifications:
+      - unique: [STUDYID, USUBJID, EXSTDTC]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: PP.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: PP.USUBJID
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+    derivation: PP.VISIT
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: PARAM
+    type: str
+    label: Parameter
+
+  # The dose in mg of the one administration that starts at the profile's
+  # reference time; empty on the collected records, zero when no dosing
+  # record starts then (that profile gets no added record). Not in the
+  # output.
+  - name: DOSE_MG
+    type: float
+    label: Administered Dose in mg
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+
+  - name: AVALU
+    type: str
+    label: Analysis Value Unit
+
+rows:
+  # Every PP record, as collected.
+  - id: collected
+    dataset: PP
+    derivations:
+      PARAMCD: PP.PPTESTCD
+      PARAM: PP.PPTEST
+      DOSE_MG: {literal: null}
+      AVAL: PP.PPSTRESN
+      AVALU: PP.PPSTRESU
+
+  # One dose-normalized record per maximum concentration or area under the
+  # curve record that has a value and a dosing record at its reference time.
+  - id: dose_normalized
+    dataset: PP
+    filter: "PARAMCD IS NOT NULL AND AVAL IS NOT NULL"
+    derivations:
+      PARAMCD:
+        mapping:
+          source: PP.PPTESTCD
+          dict: {CMAX: CMAXD, AUCLST: AUCLSTD, AUCIFO: AUCIFOD}
+          unmapped: null
+      PARAM:
+        mapping:
+          source: PP.PPTESTCD
+          dict:
+            CMAX: Max Conc Norm by Dose
+            AUCLST: AUC to Last Nonzero Conc Norm by Dose
+            AUCIFO: AUC Infinity Obs Norm by Dose
+          unmapped: null
+      DOSE_MG: DOSE.DOSE_MG
+      AVAL:
+        compute:
+          expr: "PP.PPSTRESN / NULLIF(DOSE_MG, 0)"
+      AVALU:
+        str_template:
+          template: "{PP.PPSTRESU}/mg"
+          missing: null
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, VISIT, PARAMCD]
+  - row_count:
+      min: 34
+      max: 34
+  # A collected record never carries a dose, so this fails when the input
+  # already holds one of the dose-normalized codes.
+  - assert:
+      id: no-pre-existing-target
+      require: "NOT (PARAMCD IN ('CMAXD', 'AUCLSTD',
+        'AUCIFOD') AND DOSE_MG IS NULL)"
+  - assert:
+      id: dose-is-positive
+      when: "DOSE_MG IS NOT NULL"
+      require: "DOSE_MG > 0"

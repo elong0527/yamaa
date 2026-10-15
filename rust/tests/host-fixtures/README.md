@@ -61,8 +61,8 @@ introducing null values, empty children and inherited clears in both hosts.
 
 ## Public conformance mapping
 
-The existing public-conformance plan owns 321 authored benchmark names, including
-316 active cases. Its runtime observations, saved outputs and independent golden
+The existing public-conformance plan owns 329 authored benchmark names, including
+327 active cases. Its runtime observations, saved outputs and independent golden
 comparison remain the complete public benchmark gate. The following supplemental
 controls reuse those same independently authored source/report owners while
 adding host or private lifecycle assertions:

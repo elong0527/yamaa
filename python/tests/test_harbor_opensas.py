@@ -26,7 +26,7 @@ PROMPTED = sorted(p.parent.name for p in build.PROMPTS.glob("*/full.md"))
 CONFIDENT = sorted(set(PROMPTED) - set(build.OPENSAS_EXCLUSIONS))
 
 
-def test_opensas_selection_builds_all_137_native_input_cases(tmp_path):
+def test_opensas_selection_builds_all_145_native_input_cases(tmp_path):
     tasks, skipped = build.build_selection(
         PROMPTED,
         languages=["opensas"],
@@ -35,7 +35,7 @@ def test_opensas_selection_builds_all_137_native_input_cases(tmp_path):
         commit="test",
         strict=False,
     )
-    assert len(tasks) == len(CONFIDENT) == 137
+    assert len(tasks) == len(CONFIDENT) == 145
     assert sorted(t.name for t in tasks) == sorted(
         f"{name}-opensas" for name in CONFIDENT
     )
