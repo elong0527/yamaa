@@ -562,8 +562,8 @@ validation with `ambiguous_dictionary`.
 
 ### Regular expressions: Errors
 
-The portable matcher applies the fixed implementation policy in
-[release guidance](../../docs/release.md#resource-limits): 1,000,000 interpreter
+The portable matcher applies the fixed implementation policy documented in
+`docs/release.md` under Resource limits: 1,000,000 interpreter
 steps per complete match call. Each match starts a fresh counter covering search
 starts, backtracking, and nested assertions. This implementation boundary is
 separate from the regex grammar.

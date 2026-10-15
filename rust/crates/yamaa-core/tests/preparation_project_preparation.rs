@@ -558,23 +558,32 @@ mod preparation {
                 panic!()
             };
             assert_eq!(effects(&log), full_effects());
-            let Some(findings) = rejected.admission else {
-                panic!()
-            };
-            assert!(matches!(
-                findings[0],
-                Finding::LanguageMismatch {
-                    declared: Language::R,
-                    host: Language::Python
-                }
-            ));
-            assert!(matches!(
-                findings[1],
-                Finding::LockKindMismatch {
-                    language: Language::R,
-                    actual: LockKind::Uv
-                }
-            ));
+            // The shared Python fixture's three callables are also invalid under R.
+            assert_eq!(
+                rejected.admission,
+                Some(vec![
+                    Finding::LanguageMismatch {
+                        declared: Language::R,
+                        host: Language::Python,
+                    },
+                    Finding::LockKindMismatch {
+                        language: Language::R,
+                        actual: LockKind::Uv,
+                    },
+                    Finding::Function {
+                        function: 0,
+                        finding: yamaa_core::project_function::Finding::InvalidCallable,
+                    },
+                    Finding::Function {
+                        function: 1,
+                        finding: yamaa_core::project_function::Finding::InvalidCallable,
+                    },
+                    Finding::Function {
+                        function: 2,
+                        finding: yamaa_core::project_function::Finding::InvalidCallable,
+                    },
+                ])
+            );
         }
 
         #[test]
