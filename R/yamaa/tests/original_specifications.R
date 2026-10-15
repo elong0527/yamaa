@@ -2313,6 +2313,86 @@ local({
   cat("original namespace declarations preserve complete paired public refusals before source reads\n")
 })
 
+local({
+  for (truth in host_truth[["predicate_suggestions"]]) {
+    directory <- tempfile("predicate-suggestions-"); dir.create(directory)
+    for (name in names(truth$inputs)) {
+      source <- file.path(directory,name)
+      dir.create(dirname(source),recursive=TRUE,showWarnings=FALSE)
+      writeBin(charToRaw(truth$inputs[[name]]),source)
+    }
+    entry <- file.path(directory,"spec.yaml")
+    writeBin(charToRaw(truth$specification),entry)
+    for (attempt in 1:2) {
+      checked <- yamaa_check(entry); result <- yamaa_domain(entry)
+      for (check in list(list(frame=checked$issues,expected=truth$check_issues),
+                         list(frame=result$issues,expected=truth$issues))) {
+        frame <- check$frame
+        stopifnot(nrow(frame)==length(check$expected))
+        for (index in seq_along(check$expected)) {
+          expected <- check$expected[[index]]
+          stopifnot(identical(frame$phase[[index]],expected$phase),
+            identical(frame$condition[[index]],expected$condition),
+            identical(frame$requirement[[index]],expected$requirement),
+            identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
+            identical(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
+        }
+      }
+      if (!is.null(truth$csv)) stopifnot(identical(result$save(),TRUE),
+        identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
+      else stopifnot(is.null(result$output),
+        inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        !file.exists(file.path(directory,"out.csv")))
+    }
+    unlink(directory,recursive=TRUE)
+  }
+  cat("original predicate qualified suggestions preserve unknown names and paired output\n")
+})
+
+local({
+  for (truth in host_truth[["intermediate_dependencies"]]) {
+    directory <- tempfile("intermediate-dependencies-"); dir.create(directory)
+    entry <- file.path(directory,"spec.yaml")
+    writeBin(charToRaw(truth$specification),entry)
+    for (inputs_present in c(FALSE,TRUE)) {
+      if (inputs_present) for (name in names(truth$inputs)) {
+        path <- file.path(directory,name)
+        dir.create(dirname(path),recursive=TRUE,showWarnings=FALSE)
+        writeBin(charToRaw(truth$inputs[[name]]),path)
+      } else if (!length(truth$issues)) next
+      for (attempt in 1:2) {
+        checked <- yamaa_check(entry)
+        result <- yamaa_domain(entry)
+        for (frame in list(checked$issues,result$issues)) {
+          stopifnot(nrow(frame)==length(truth$issues))
+          for (index in seq_along(truth$issues)) {
+            expected <- truth$issues[[index]]
+            stopifnot(identical(frame$phase[[index]],expected$phase),
+              identical(frame$condition[[index]],expected$condition),
+              identical(frame$requirement[[index]],expected$requirement),
+              identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
+              identical(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
+          }
+        }
+        stopifnot(!file.exists(file.path(directory,"out.csv")))
+        if (length(truth$issues)) stopifnot(is.null(result$output),
+          is.null(get(".domain_observations",asNamespace("yamaa"))(result)),
+          inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"))
+        else {
+          if (!is.null(truth$output_rows)) stopifnot(identical(result$output$K,"r1"),
+            identical(result$output$XVAL,1))
+          stopifnot(identical(result$save(),TRUE),
+            identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
+          unlink(file.path(directory,"out.csv"))
+        }
+      }
+    }
+    stopifnot(identical(rawfile(entry),charToRaw(truth$specification)))
+    unlink(directory,recursive=TRUE)
+  }
+  cat("original intermediate cycles and forward donor dependencies preserve complete paired findings and saved bytes\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)
