@@ -232,3 +232,26 @@ fn flat_capture_pairs_retain_a_fresh_choice_at_every_dependency() {
         }
     );
 }
+
+#[test]
+fn repeated_capture_sums_preserve_fixed_incoming_correlations() {
+    // In each block, the first/third capture pair has width one or two,
+    // while the second/fourth has width two or one. Repeating both complete
+    // sums twice therefore has fixed width six per block. Thirty independent
+    // binary choices still produce the single total width 180.
+    for blocks in [1, 3, 30] {
+        let mut source = "(?:(a)(bc)|(ab)(c))".repeat(blocks);
+        source.push_str("(?<=(?:");
+        for block in 0..blocks {
+            write!(source, r"\{}\{}", 4 * block + 1, 4 * block + 3).unwrap();
+        }
+        source.push_str("){2}(?:");
+        for block in 0..blocks {
+            write!(source, r"\{}\{}", 4 * block + 2, 4 * block + 4).unwrap();
+        }
+        source.push_str("){2})");
+
+        let pattern = Pattern::compile(&source).unwrap();
+        assert_eq!(pattern.group_count(), 4 * blocks);
+    }
+}
