@@ -777,6 +777,10 @@ pub(super) fn bind(
             )?;
         }
     }
+    // Baseline for the REQ-0470 guard below: findings already reported
+    // (for example an ungrouped identifier) must not suppress it, while
+    // findings from resolving the group_by columns themselves must.
+    let group_columns_before = findings.len();
     let mut group_columns = Vec::new();
     for (index, name) in grain.iter().enumerate() {
         if let Some((column, _)) = resolve(
@@ -795,7 +799,7 @@ pub(super) fn bind(
     // `key` pairs or the defaults inferred from the output keys. The
     // Matched executor matches donor records on those keys only, so a
     // group_by column outside them would silently merge distinct groups.
-    if matches!(phase, Phase::Column { .. }) && findings.len() == before {
+    if matches!(phase, Phase::Column { .. }) && findings.len() == group_columns_before {
         if let Some(relation_name) = relation {
             let applicable: Vec<&str> = match &declaration.keys {
                 Some(pairs) => pairs.iter().map(|(field, _)| field.as_str()).collect(),
