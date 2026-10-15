@@ -62,7 +62,7 @@ pub enum Error {
     Limit,
 }
 
-pub const VERIFICATION_COLUMNS: &[&str] = &[
+pub(crate) const VERIFICATION_COLUMNS: &[&str] = &[
     "REPORT_VERSION",
     "ARTIFACT",
     "SPEC_PATH",
@@ -77,7 +77,7 @@ pub const VERIFICATION_COLUMNS: &[&str] = &[
     "FAILURE_COUNT",
     "DETAILS",
 ];
-pub const WARNING_COLUMNS: &[&str] = &[
+pub(crate) const WARNING_COLUMNS: &[&str] = &[
     "LOG_VERSION",
     "ARTIFACT",
     "SEVERITY",

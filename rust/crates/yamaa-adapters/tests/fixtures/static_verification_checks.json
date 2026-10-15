@@ -1,0 +1,216 @@
+[
+  {
+    "case": "allowed_empty_list",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"allowed_values\": {\"values\": [], \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "expected": [
+      {
+        "condition": "invalid_declaration",
+        "context": "{\"reason\":\"allowed_values requires values\"}",
+        "phase": "validation",
+        "requirement": "REQ-0397",
+        "spec_paths": [
+          "columns.V.verifications[0].allowed_values"
+        ]
+      }
+    ]
+  },
+  {
+    "case": "allowed_missing_literal",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"allowed_values\": {\"values\": [null], \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "expected": [
+      {
+        "condition": "invalid_declaration",
+        "context": "{\"reason\":\"listed value None is not a int value\"}",
+        "phase": "validation",
+        "requirement": "REQ-0404",
+        "spec_paths": [
+          "columns.V.verifications[0].allowed_values"
+        ]
+      }
+    ]
+  },
+  {
+    "case": "allowed_bad_literal",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"allowed_values\": {\"values\": [\"bad\"], \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "expected": [
+      {
+        "condition": "invalid_declaration",
+        "context": "{\"reason\":\"listed value 'bad' is not a int value\"}",
+        "phase": "validation",
+        "requirement": "REQ-0404",
+        "spec_paths": [
+          "columns.V.verifications[0].allowed_values"
+        ]
+      }
+    ]
+  },
+  {
+    "case": "range_empty_bounds",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"range\": {\"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "expected": [
+      {
+        "condition": "invalid_declaration",
+        "context": "{\"reason\":\"range requires one bound\"}",
+        "phase": "validation",
+        "requirement": "REQ-0399",
+        "spec_paths": [
+          "columns.V.verifications[0].range"
+        ]
+      }
+    ]
+  },
+  {
+    "case": "range_reverse_bounds",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"range\": {\"min\": 20, \"max\": 10, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "expected": [
+      {
+        "condition": "invalid_declaration",
+        "context": "{\"reason\":\"range min exceeds max\"}",
+        "phase": "validation",
+        "requirement": "REQ-0399",
+        "spec_paths": [
+          "columns.V.verifications[0].range"
+        ]
+      }
+    ]
+  },
+  {
+    "case": "range_wrong_type",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"range\": {\"min\": 10, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "expected": [
+      {
+        "condition": "invalid_declaration",
+        "context": "{\"reason\":\"a str column does not admit this verification\"}",
+        "phase": "validation",
+        "requirement": "REQ-0404",
+        "spec_paths": [
+          "columns.V.verifications[0].range"
+        ]
+      }
+    ]
+  },
+  {
+    "case": "length_empty_zero",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"max_length\": {\"max\": 0, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "expected": [
+      {
+        "condition": "invalid_declaration",
+        "context": "{\"reason\":\"max_length max is at least one\"}",
+        "phase": "validation",
+        "requirement": "REQ-0400",
+        "spec_paths": [
+          "columns.V.verifications[0].max_length"
+        ]
+      }
+    ]
+  },
+  {
+    "case": "length_wrong_type",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"max_length\": {\"max\": 2, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "expected": [
+      {
+        "condition": "invalid_declaration",
+        "context": "{\"reason\":\"a int column does not admit this verification\"}",
+        "phase": "validation",
+        "requirement": "REQ-0404",
+        "spec_paths": [
+          "columns.V.verifications[0].max_length"
+        ]
+      }
+    ]
+  },
+  {
+    "case": "conversion_still_deferred",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"allowed_values\": {\"values\": [], \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "expected": [
+      {
+        "condition": "invalid_declaration",
+        "context": "{\"reason\":\"allowed_values requires values\"}",
+        "phase": "validation",
+        "requirement": "REQ-0397",
+        "spec_paths": [
+          "columns.V.verifications[0].allowed_values"
+        ]
+      }
+    ]
+  },
+  {
+    "case": "range_held",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"range\": {\"min\": 10, \"max\": 20, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "expected": []
+  },
+  {
+    "case": "length_held",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"max_length\": {\"max\": 2, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "expected": []
+  },
+  {
+    "case": "unicode_bad_pattern",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"\\u00e9(\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "expected": [
+      {
+        "condition": "invalid_regex",
+        "context": "{\"pattern\":\"é(\"}",
+        "phase": "validation",
+        "requirement": "REQ-0827",
+        "spec_paths": [
+          "columns.V.verifications[0].matches.pattern"
+        ]
+      }
+    ]
+  },
+  {
+    "case": "duplicate_identifier",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"id-present\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"same\"}}, {\"not_missing\": {\"id\": \"same\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{\"unique\": {\"columns\": [\"ID\"]}}]\n",
+    "expected": [
+      {
+        "condition": "duplicate_identifier",
+        "context": "{\"reason\":\"verification id 'same' repeats columns.V.verifications[0].not_missing\"}",
+        "phase": "validation",
+        "requirement": "REQ-0398",
+        "spec_paths": [
+          "columns.V.verifications[1].not_missing"
+        ]
+      }
+    ]
+  },
+  {
+    "case": "ordered_column_and_dataset_findings",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"range\": {\"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{row_count: {}}]\n",
+    "expected": [
+      {
+        "condition": "invalid_declaration",
+        "context": "{\"reason\":\"range requires one bound\"}",
+        "phase": "validation",
+        "requirement": "REQ-0399",
+        "spec_paths": [
+          "columns.V.verifications[0].range"
+        ]
+      },
+      {
+        "condition": "invalid_declaration",
+        "context": "{\"reason\":\"row_count requires one bound\"}",
+        "phase": "validation",
+        "requirement": "REQ-0399",
+        "spec_paths": [
+          "verifications[0].row_count"
+        ]
+      }
+    ]
+  },
+  {
+    "case": "bad_before_later_limit",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(\", \"id\": \"value-rule\"}}, {\"matches\": {\"pattern\": \"a{1000001}\", \"id\": \"later-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "expected": [
+      {
+        "condition": "invalid_regex",
+        "context": "{\"pattern\":\"(\"}",
+        "phase": "validation",
+        "requirement": "REQ-0827",
+        "spec_paths": [
+          "columns.V.verifications[0].matches.pattern"
+        ]
+      }
+    ]
+  }
+]

@@ -2,7 +2,6 @@
 use yamaa_core::{
     producer_graph::{self, Error, Limits, PreparedGraph, SuppliedNode},
     project_environment::ExecutionEnvironment,
-    specification::PrepareError,
 };
 
 #[derive(Debug)]
@@ -27,12 +26,5 @@ impl CheckedProducerGraph {
     /// Static checking continues to refuse the ordinary single-document route.
     pub fn into_build(self) -> crate::producer_build::PreparedBuild {
         crate::producer_build::PreparedBuild::new(self.metadata.into_build())
-    }
-    /// No source, activation, build or publication port is accepted by check.
-    /// #1741 must qualify graph orchestration before this capability can execute.
-    pub fn execution_capability(
-        &self,
-    ) -> Result<&crate::domain::CheckedSpecification, PrepareError> {
-        Err(self.metadata.execution_refusal())
     }
 }

@@ -1,0 +1,466 @@
+[
+  {
+    "id": "i64_min",
+    "source": "-9223372036854775808",
+    "expected": {
+      "outcome": {
+        "document": {
+          "nodes": [
+            {
+              "kind": "integer",
+              "value": "-9223372036854775808"
+            }
+          ],
+          "root": 0
+        },
+        "locations": [
+          {
+            "column": 1,
+            "line": 1,
+            "offset": 0
+          }
+        ],
+        "status": "decoded"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "i64_max",
+    "source": "9223372036854775807",
+    "expected": {
+      "outcome": {
+        "document": {
+          "nodes": [
+            {
+              "kind": "integer",
+              "value": "9223372036854775807"
+            }
+          ],
+          "root": 0
+        },
+        "locations": [
+          {
+            "column": 1,
+            "line": 1,
+            "offset": 0
+          }
+        ],
+        "status": "decoded"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "beyond_i64",
+    "source": "9223372036854775808",
+    "expected": {
+      "outcome": {
+        "document": {
+          "nodes": [
+            {
+              "kind": "integer",
+              "value": "9223372036854775808"
+            }
+          ],
+          "root": 0
+        },
+        "locations": [
+          {
+            "column": 1,
+            "line": 1,
+            "offset": 0
+          }
+        ],
+        "status": "decoded"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "hex_beyond_i64",
+    "source": "0x8000000000000000",
+    "expected": {
+      "outcome": {
+        "document": {
+          "nodes": [
+            {
+              "kind": "integer",
+              "value": "9223372036854775808"
+            }
+          ],
+          "root": 0
+        },
+        "locations": [
+          {
+            "column": 1,
+            "line": 1,
+            "offset": 0
+          }
+        ],
+        "status": "decoded"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "negative_zero",
+    "source": "-0.0",
+    "expected": {
+      "outcome": {
+        "document": {
+          "nodes": [
+            {
+              "bits": "8000000000000000",
+              "kind": "float"
+            }
+          ],
+          "root": 0
+        },
+        "locations": [
+          {
+            "column": 1,
+            "line": 1,
+            "offset": 0
+          }
+        ],
+        "status": "decoded"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "yaml12_string",
+    "source": "yes",
+    "expected": {
+      "outcome": {
+        "document": {
+          "nodes": [
+            {
+              "kind": "text",
+              "value": "yes"
+            }
+          ],
+          "root": 0
+        },
+        "locations": [
+          {
+            "column": 1,
+            "line": 1,
+            "offset": 0
+          }
+        ],
+        "status": "decoded"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "nonfinite",
+    "source": "-.Inf",
+    "expected": {
+      "outcome": {
+        "document": {
+          "nodes": [
+            {
+              "kind": "null"
+            }
+          ],
+          "root": 0
+        },
+        "locations": [
+          {
+            "column": 1,
+            "line": 1,
+            "offset": 0
+          }
+        ],
+        "status": "decoded"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "empty",
+    "source": "",
+    "expected": {
+      "outcome": {
+        "document": {
+          "nodes": [
+            {
+              "kind": "null"
+            }
+          ],
+          "root": 0
+        },
+        "locations": [
+          {
+            "column": 1,
+            "line": 1,
+            "offset": 0
+          }
+        ],
+        "status": "decoded"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "decomposed_text",
+    "source": "\"e\\u0301\"",
+    "expected": {
+      "outcome": {
+        "document": {
+          "nodes": [
+            {
+              "kind": "text",
+              "value": "é"
+            }
+          ],
+          "root": 0
+        },
+        "locations": [
+          {
+            "column": 1,
+            "line": 1,
+            "offset": 0
+          }
+        ],
+        "status": "decoded"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "mapping_integer",
+    "source": "x: 9007199254740993\n",
+    "expected": {
+      "outcome": {
+        "document": {
+          "nodes": [
+            {
+              "kind": "text",
+              "value": "x"
+            },
+            {
+              "kind": "integer",
+              "value": "9007199254740993"
+            },
+            {
+              "entries": [
+                [
+                  0,
+                  1
+                ]
+              ],
+              "kind": "mapping"
+            }
+          ],
+          "root": 2
+        },
+        "locations": [
+          {
+            "column": 1,
+            "line": 1,
+            "offset": 0
+          },
+          {
+            "column": 4,
+            "line": 1,
+            "offset": 3
+          },
+          {
+            "column": 1,
+            "line": 1,
+            "offset": 0
+          }
+        ],
+        "status": "decoded"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "surrogate_path",
+    "source": "x: [\"a\\uD800\"]",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "invalid_text",
+            "context": {
+              "code_point": "U+D800",
+              "offset": 1
+            },
+            "spec_paths": [
+              "$.x[0]"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "duplicate",
+    "source": "x: 1\nx: 2\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "invalid_yaml",
+            "context": {
+              "column": 1,
+              "line": 2,
+              "reason": "found duplicate key 'x'"
+            },
+            "spec_paths": [
+              "$"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "anchor",
+    "source": "x: &a 1\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "invalid_yaml",
+            "context": {
+              "column": 4,
+              "line": 1,
+              "reason": "YAML anchors are not allowed"
+            },
+            "spec_paths": [
+              "$"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "merge",
+    "source": "<<: 1\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "invalid_yaml",
+            "context": {
+              "column": 1,
+              "line": 1,
+              "reason": "YAML merge keys are not allowed"
+            },
+            "spec_paths": [
+              "$"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "numeric_key_duplicate",
+    "source": "{true: a, 1: b}",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "invalid_yaml",
+            "context": {
+              "column": 11,
+              "line": 1,
+              "reason": "found duplicate key '1'"
+            },
+            "spec_paths": [
+              "$"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "private_use_not_surrogate",
+    "source": "\"\\uD800\": a\n\"\\uE000\": b\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "invalid_text",
+            "context": {
+              "code_point": "U+D800",
+              "offset": 0
+            },
+            "spec_paths": [
+              "$.<key>"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "multiple_documents",
+    "source": "---\n1\n---\n2",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "invalid_yaml",
+            "context": {
+              "column": 1,
+              "line": 3,
+              "reason": "expected a single document in the stream"
+            },
+            "spec_paths": [
+              "$"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "non_ascii",
+    "source": {
+      "hex": "783a20ff"
+    },
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "non_ascii_source",
+            "context": {
+              "column": 4,
+              "line": 1
+            },
+            "spec_paths": [
+              "$"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "yaml/1"
+    }
+  }
+]

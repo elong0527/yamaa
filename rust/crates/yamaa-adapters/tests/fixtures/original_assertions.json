@@ -1,0 +1,2423 @@
+[
+  {
+    "case": "held",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"id\": \"positive\", \"when\": \"V IS NOT NULL\", \"require\": \"V > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "input": "ID,V\na,10\nb,\nc,7\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 17,
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "content": "ID,V\na,10\nb,\nc,7\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V",
+            "a,10",
+            "b,",
+            "c,7"
+          ],
+          "row_count": 3,
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "assert-held",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "7"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "int",
+                "value": "7"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": "prefix"
+        },
+        {
+          "check": "assert",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0384",
+          "severity": "error",
+          "spec_path": "verifications[1].assert",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": "positive"
+        },
+        {
+          "check": "row_count",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0385",
+          "severity": "error",
+          "spec_path": "verifications[2].row_count",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": null
+        }
+      ]
+    },
+    "artifact": "ID,V\na,10\nb,\nc,7\n"
+  },
+  {
+    "case": "failed",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"id\": \"above-eight\", \"require\": \"V > 8\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "input": "ID,V\na,10\nb,\nc,7\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "assert_failed",
+          "context": {
+            "failure_count": 2,
+            "keys": [
+              {
+                "ID": "b"
+              },
+              {
+                "ID": "c"
+              }
+            ],
+            "verification_id": "above-eight"
+          },
+          "phase": "verification",
+          "requirement": "REQ-0384",
+          "spec_paths": [
+            "verifications[1].assert"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "assert-failed",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "assert_failed",
+              "context": {
+                "failure_count": 2,
+                "keys": [
+                  {
+                    "ID": "b"
+                  },
+                  {
+                    "ID": "c"
+                  }
+                ],
+                "verification_id": "above-eight"
+              },
+              "phase": "verification",
+              "requirement": "REQ-0384",
+              "spec_paths": [
+                "verifications[1].assert"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "7"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": "prefix"
+        },
+        {
+          "check": "assert",
+          "evaluated_count": 3,
+          "failure": {
+            "condition": "assert_failed",
+            "context": {
+              "failure_count": 2,
+              "keys": [
+                {
+                  "ID": "b"
+                },
+                {
+                  "ID": "c"
+                }
+              ],
+              "verification_id": "above-eight"
+            },
+            "log_context": {
+              "failure_count": 2,
+              "keys": [
+                {
+                  "ID": "b"
+                },
+                {
+                  "ID": "c"
+                }
+              ],
+              "verification_id": "above-eight"
+            },
+            "offending_keys": [
+              {
+                "ID": "b"
+              },
+              {
+                "ID": "c"
+              }
+            ],
+            "phase": "verification",
+            "requirement": "REQ-0384",
+            "severity": "error",
+            "spec_paths": [
+              "verifications[1].assert"
+            ]
+          },
+          "requirement": "REQ-0384",
+          "severity": "error",
+          "spec_path": "verifications[1].assert",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": "above-eight"
+        },
+        {
+          "check": "row_count",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0385",
+          "severity": "error",
+          "spec_path": "verifications[2].row_count",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": null
+        }
+      ]
+    },
+    "artifact": ""
+  },
+  {
+    "case": "inactive",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"when\": \"FALSE\", \"require\": \"FALSE\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "input": "ID,V\na,10\nb,\nc,7\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 17,
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "content": "ID,V\na,10\nb,\nc,7\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V",
+            "a,10",
+            "b,",
+            "c,7"
+          ],
+          "row_count": 3,
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "assert-inactive",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "7"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "int",
+                "value": "7"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": "prefix"
+        },
+        {
+          "check": "assert",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0384",
+          "severity": "error",
+          "spec_path": "verifications[1].assert",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": null
+        },
+        {
+          "check": "row_count",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0385",
+          "severity": "error",
+          "spec_path": "verifications[2].row_count",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": null
+        }
+      ]
+    },
+    "artifact": "ID,V\na,10\nb,\nc,7\n"
+  },
+  {
+    "case": "unknown_when",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"when\": \"V > 0\", \"require\": \"FALSE\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "input": "ID,V\na,10\nb,\nc,7\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "assert_failed",
+          "context": {
+            "failure_count": 2,
+            "keys": [
+              {
+                "ID": "a"
+              },
+              {
+                "ID": "c"
+              }
+            ]
+          },
+          "phase": "verification",
+          "requirement": "REQ-0384",
+          "spec_paths": [
+            "verifications[1].assert"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "assert-unknown_when",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "assert_failed",
+              "context": {
+                "failure_count": 2,
+                "keys": [
+                  {
+                    "ID": "a"
+                  },
+                  {
+                    "ID": "c"
+                  }
+                ]
+              },
+              "phase": "verification",
+              "requirement": "REQ-0384",
+              "spec_paths": [
+                "verifications[1].assert"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "7"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": "prefix"
+        },
+        {
+          "check": "assert",
+          "evaluated_count": 3,
+          "failure": {
+            "condition": "assert_failed",
+            "context": {
+              "failure_count": 2,
+              "keys": [
+                {
+                  "ID": "a"
+                },
+                {
+                  "ID": "c"
+                }
+              ]
+            },
+            "log_context": {
+              "failure_count": 2,
+              "keys": [
+                {
+                  "ID": "a"
+                },
+                {
+                  "ID": "c"
+                }
+              ]
+            },
+            "offending_keys": [
+              {
+                "ID": "a"
+              },
+              {
+                "ID": "c"
+              }
+            ],
+            "phase": "verification",
+            "requirement": "REQ-0384",
+            "severity": "error",
+            "spec_paths": [
+              "verifications[1].assert"
+            ]
+          },
+          "requirement": "REQ-0384",
+          "severity": "error",
+          "spec_path": "verifications[1].assert",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": null
+        },
+        {
+          "check": "row_count",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0385",
+          "severity": "error",
+          "spec_path": "verifications[2].row_count",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": null
+        }
+      ]
+    },
+    "artifact": ""
+  },
+  {
+    "case": "null_require",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"when\": \"V IS NULL\", \"require\": \"V IS NOT NULL\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "input": "ID,V\na,10\nb,\nc,7\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "assert_failed",
+          "context": {
+            "failure_count": 1,
+            "keys": [
+              {
+                "ID": "b"
+              }
+            ]
+          },
+          "phase": "verification",
+          "requirement": "REQ-0384",
+          "spec_paths": [
+            "verifications[1].assert"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "assert-null_require",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "assert_failed",
+              "context": {
+                "failure_count": 1,
+                "keys": [
+                  {
+                    "ID": "b"
+                  }
+                ]
+              },
+              "phase": "verification",
+              "requirement": "REQ-0384",
+              "spec_paths": [
+                "verifications[1].assert"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "7"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": "prefix"
+        },
+        {
+          "check": "assert",
+          "evaluated_count": 3,
+          "failure": {
+            "condition": "assert_failed",
+            "context": {
+              "failure_count": 1,
+              "keys": [
+                {
+                  "ID": "b"
+                }
+              ]
+            },
+            "log_context": {
+              "failure_count": 1,
+              "keys": [
+                {
+                  "ID": "b"
+                }
+              ]
+            },
+            "offending_keys": [
+              {
+                "ID": "b"
+              }
+            ],
+            "phase": "verification",
+            "requirement": "REQ-0384",
+            "severity": "error",
+            "spec_paths": [
+              "verifications[1].assert"
+            ]
+          },
+          "requirement": "REQ-0384",
+          "severity": "error",
+          "spec_path": "verifications[1].assert",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": null
+        },
+        {
+          "check": "row_count",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0385",
+          "severity": "error",
+          "spec_path": "verifications[2].row_count",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": null
+        }
+      ]
+    },
+    "artifact": ""
+  },
+  {
+    "case": "empty",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"require\": \"V > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "input": "ID,V\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 5,
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "content": "ID,V\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V"
+          ],
+          "row_count": 0,
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "assert-empty",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "output",
+          "rows": [],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 0,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": "prefix"
+        },
+        {
+          "check": "assert",
+          "evaluated_count": 0,
+          "failure": null,
+          "requirement": "REQ-0384",
+          "severity": "error",
+          "spec_path": "verifications[1].assert",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": null
+        },
+        {
+          "check": "row_count",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0385",
+          "severity": "error",
+          "spec_path": "verifications[2].row_count",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": null
+        }
+      ]
+    },
+    "artifact": "ID,V\n"
+  },
+  {
+    "case": "unknown_field",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"when\": \"FALSE\", \"require\": \"Z > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "input": "ID,V\na,10\nb,\nc,7\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "unknown_field",
+          "context": {
+            "identifier": "Z"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0405",
+          "spec_paths": [
+            "verifications[1].assert.require"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "assert-unknown_field",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "unknown_field",
+              "context": {
+                "identifier": "Z"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0405",
+              "spec_paths": [
+                "verifications[1].assert.require"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "7"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ]
+    },
+    "artifact": ""
+  },
+  {
+    "case": "qualified_field",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"require\": \"SRC.V > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "input": "ID,V\na,10\nb,\nc,7\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "unknown_field",
+          "context": {
+            "identifier": "SRC.V"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0405",
+          "spec_paths": [
+            "verifications[1].assert.require"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "assert-qualified_field",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "unknown_field",
+              "context": {
+                "identifier": "SRC.V"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0405",
+              "spec_paths": [
+                "verifications[1].assert.require"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "7"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ]
+    },
+    "artifact": ""
+  },
+  {
+    "case": "grammar",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"require\": \"V >\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "input": "ID,V\na,10\nb,\nc,7\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "invalid_predicate",
+          "context": {
+            "position": 3,
+            "predicate": "V >"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0188",
+          "spec_paths": [
+            "verifications[1].assert.require"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "assert-grammar",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "invalid_predicate",
+              "context": {
+                "position": 3,
+                "predicate": "V >"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0188",
+              "spec_paths": [
+                "verifications[1].assert.require"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "7"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ]
+    },
+    "artifact": ""
+  },
+  {
+    "case": "grammar_after_when",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"when\": \"V > 0\", \"require\": \"V >\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "input": "ID,V\na,10\nb,\nc,7\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "invalid_predicate",
+          "context": {
+            "position": 3,
+            "predicate": "V >"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0188",
+          "spec_paths": [
+            "verifications[1].assert.require"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "assert-grammar_after_when",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "invalid_predicate",
+              "context": {
+                "position": 3,
+                "predicate": "V >"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0188",
+              "spec_paths": [
+                "verifications[1].assert.require"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "7"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ]
+    },
+    "artifact": ""
+  },
+  {
+    "case": "bad_when",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"when\": \"V = 'bad'\", \"require\": \"TRUE\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "input": "ID,V\na,10\nb,\nc,7\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "incompatible_input_type",
+          "context": {
+            "left_type": "int",
+            "right_type": "str"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0190",
+          "spec_paths": [
+            "verifications[1].assert.when"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "assert-bad_when",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "incompatible_input_type",
+              "context": {
+                "left_type": "int",
+                "right_type": "str"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0190",
+              "spec_paths": [
+                "verifications[1].assert.when"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "7"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ]
+    },
+    "artifact": ""
+  },
+  {
+    "case": "inactive_bad_require",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"when\": \"FALSE\", \"require\": \"V = 'bad'\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "input": "ID,V\na,10\nb,\nc,7\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "incompatible_input_type",
+          "context": {
+            "left_type": "int",
+            "right_type": "str"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0190",
+          "spec_paths": [
+            "verifications[1].assert.require"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "assert-inactive_bad_require",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "incompatible_input_type",
+              "context": {
+                "left_type": "int",
+                "right_type": "str"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0190",
+              "spec_paths": [
+                "verifications[1].assert.require"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "7"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ]
+    },
+    "artifact": ""
+  },
+  {
+    "case": "empty_bad_require",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"require\": \"V = 'bad'\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "input": "ID,V\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "incompatible_input_type",
+          "context": {
+            "left_type": "int",
+            "right_type": "str"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0190",
+          "spec_paths": [
+            "verifications[1].assert.require"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "assert-empty_bad_require",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "incompatible_input_type",
+              "context": {
+                "left_type": "int",
+                "right_type": "str"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0190",
+              "spec_paths": [
+                "verifications[1].assert.require"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 0,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ]
+    },
+    "artifact": ""
+  },
+  {
+    "case": "duplicate_id",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"id\": \"prefix\", \"require\": \"TRUE\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "input": "ID,V\na,10\nb,\nc,7\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "duplicate_identifier",
+          "context": {
+            "reason": "verification id 'prefix' repeats verifications[0].unique"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0398",
+          "spec_paths": [
+            "verifications[1].assert"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "assert-duplicate_id",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "duplicate_identifier",
+              "context": {
+                "reason": "verification id 'prefix' repeats verifications[0].unique"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0398",
+              "spec_paths": [
+                "verifications[1].assert"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "7"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ]
+    },
+    "artifact": ""
+  },
+  {
+    "case": "bad_when_before_grammar",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"when\": \"V = 'bad'\", \"require\": \"V >\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "input": "ID,V\na,10\nb,\nc,7\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "incompatible_input_type",
+          "context": {
+            "left_type": "int",
+            "right_type": "str"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0190",
+          "spec_paths": [
+            "verifications[1].assert.when"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "assert-bad_when_before_grammar",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "incompatible_input_type",
+              "context": {
+                "left_type": "int",
+                "right_type": "str"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0190",
+              "spec_paths": [
+                "verifications[1].assert.when"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "7"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ]
+    },
+    "artifact": ""
+  },
+  {
+    "case": "bad_when_before_unknown",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"when\": \"V = 'bad'\", \"require\": \"Z > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "input": "ID,V\na,10\nb,\nc,7\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "incompatible_input_type",
+          "context": {
+            "left_type": "int",
+            "right_type": "str"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0190",
+          "spec_paths": [
+            "verifications[1].assert.when"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "assert-bad_when_before_unknown",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "incompatible_input_type",
+              "context": {
+                "left_type": "int",
+                "right_type": "str"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0190",
+              "spec_paths": [
+                "verifications[1].assert.when"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "7"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ]
+    },
+    "artifact": ""
+  },
+  {
+    "case": "unknown_order",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"when\": \"FALSE\", \"require\": \"Z > 0 OR A > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "input": "ID,V\na,10\nb,\nc,7\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "unknown_field",
+          "context": {
+            "identifier": "A"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0405",
+          "spec_paths": [
+            "verifications[1].assert.require"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "assert-unknown_order",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "unknown_field",
+              "context": {
+                "identifier": "A"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0405",
+              "spec_paths": [
+                "verifications[1].assert.require"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "7"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ]
+    },
+    "artifact": ""
+  }
+]

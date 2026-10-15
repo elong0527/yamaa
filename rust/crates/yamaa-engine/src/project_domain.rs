@@ -13,7 +13,7 @@ use yamaa_core::{
     table::TableAccess,
 };
 
-pub type BuildEvidence<'a, P, D> = (
+pub(crate) type BuildEvidence<'a, P, D> = (
     &'a mut CapturedAttempt<
         <P as SourcePort>::Error,
         <D as SourceDecoder>::Error,

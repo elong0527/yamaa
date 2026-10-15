@@ -1,0 +1,131 @@
+[
+  {
+    "case": "fold_collision",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: unread.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.UNKNOWN, dict: {Y: 1, y: 1}, case_sensitive: false}\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "ambiguous_dictionary",
+            "context": {
+              "entries": [
+                "Y",
+                "y"
+              ],
+              "folded_key": "Y"
+            },
+            "phase": "validation",
+            "requirement": "REQ-0714",
+            "spec_paths": [
+              "columns.V.derivation.mapping.dict"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "specification/prototype"
+    }
+  },
+  {
+    "case": "ordered_collisions",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: unread.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 1, y: 2, a: 3, A: 4}, case_sensitive: false}\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "ambiguous_dictionary",
+            "context": {
+              "entries": [
+                "a",
+                "A"
+              ],
+              "folded_key": "A"
+            },
+            "phase": "validation",
+            "requirement": "REQ-0714",
+            "spec_paths": [
+              "columns.V.derivation.mapping.dict"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "specification/prototype"
+    }
+  },
+  {
+    "case": "unselected_collision",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: unread.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: str\n    label: V\n    derivation:\n      case:\n        - when: 'FALSE'\n          then: {mapping: {source: SRC.X, dict: {Y: 1, y: 2}, case_sensitive: false}}\n        - otherwise: {literal: 1}\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "ambiguous_dictionary",
+            "context": {
+              "entries": [
+                "Y",
+                "y"
+              ],
+              "folded_key": "Y"
+            },
+            "phase": "validation",
+            "requirement": "REQ-0714",
+            "spec_paths": [
+              "columns.V.derivation.case[0].then.mapping.dict"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "specification/prototype"
+    }
+  },
+  {
+    "case": "duplicate_breaks",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: unread.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [1, 1], labels: [a, b, c]}\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "invalid_field_type",
+            "context": {
+              "expected": "ascending breaks",
+              "operation": "cut"
+            },
+            "phase": "validation",
+            "requirement": "REQ-1118",
+            "spec_paths": [
+              "columns.V.derivation.cut"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "specification/prototype"
+    }
+  },
+  {
+    "case": "label_count",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: unread.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [1], labels: [a]}\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "invalid_field_type",
+            "context": {
+              "expected": "one label more than breaks",
+              "operation": "cut"
+            },
+            "phase": "validation",
+            "requirement": "REQ-1118",
+            "spec_paths": [
+              "columns.V.derivation.cut"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "specification/prototype"
+    }
+  }
+]

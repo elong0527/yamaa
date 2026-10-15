@@ -1,8 +1,4 @@
 //! Shipped schema identity and raw preparation without host schema interpretation.
-// Preserve this original embedded assertion in each preparation context.
-#[allow(clippy::duplicate_mod)]
-#[path = "../support/schema_requirement_expectations.rs"]
-mod schema_requirement_expectations;
 
 use yamaa_adapters::{
     shipped_schema,
@@ -104,11 +100,11 @@ fn standalone_findings_retain_source_and_resolve_context_without_host_interpreta
     let cases = [
         (
             VALID.replace("'1.0'", "'99.0'"),
-            json!({"phase":"validation","condition":"schema_version_mismatch","requirement":null,"spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0"}}),
+            json!({"phase":"validation","condition":"schema_version_mismatch","requirement":"REQ-0281","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0"}}),
         ),
         (
             VALID.replace("schema_version: '1.0'\n", ""),
-            json!({"phase":"validation","condition":"schema_version_mismatch","requirement":null,"spec_paths":["schema_version"],"context":{"expected":"1.0","actual":null}}),
+            json!({"phase":"validation","condition":"schema_version_mismatch","requirement":"REQ-0281","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":null}}),
         ),
         (
             VALID.replace("domain: TEST", "domain: bad-name"),
@@ -136,7 +132,7 @@ fn standalone_findings_retain_source_and_resolve_context_without_host_interpreta
         let actual: Value = serde_json::from_str(&capture_failure(&error)).unwrap();
         assert_eq!(
             actual,
-            schema_requirement_expectations::reconciled(&json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[expected]}}).to_string(), false)
+            json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[expected]}})
         );
     }
     let integer = "922337203685477580812345678901234567890";
@@ -206,12 +202,11 @@ fn source_failures_preserve_independent_decoder_findings_before_any_host_effect(
     use serde_json::{json, Value};
     use yamaa_adapters::specification_diagnostics::inheritance_failure;
     let mut count = 0;
-    for line in include_str!("../fixtures/yaml_transport.tsv")
-        .lines()
-        .skip(1)
+    for row in serde_json::from_str::<Vec<Value>>(include_str!("../fixtures/yaml_transport.json"))
+        .unwrap()
+        .iter()
     {
-        let fields = line.split('\t').collect::<Vec<_>>();
-        let mut expected: Value = serde_json::from_str(fields[2]).unwrap();
+        let mut expected: Value = row["expected"].clone();
         if expected["outcome"]["status"] != "invalid" {
             continue;
         }
@@ -228,11 +223,15 @@ fn source_failures_preserve_independent_decoder_findings_before_any_host_effect(
                 finding["context"]["path"] = json!("source.yaml");
             }
         }
-        let bytes = fields[1]
-            .as_bytes()
-            .chunks_exact(2)
-            .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
-            .collect();
+        let bytes: Vec<u8> = if let Some(text) = row["source"].as_str() {
+            text.as_bytes().to_vec()
+        } else {
+            let hex = row["source"]["hex"].as_str().unwrap();
+            hex.as_bytes()
+                .chunks_exact(2)
+                .map(|p| u8::from_str_radix(std::str::from_utf8(p).unwrap(), 16).unwrap())
+                .collect()
+        };
         let error = shipped_schema::prepare(
             Source {
                 identity: "source.yaml".into(),
@@ -243,7 +242,7 @@ fn source_failures_preserve_independent_decoder_findings_before_any_host_effect(
         )
         .unwrap_err();
         let actual: Value = serde_json::from_str(&inheritance_failure(error).unwrap()).unwrap();
-        assert_eq!(actual, expected, "{}", fields[0]);
+        assert_eq!(actual, expected, "{}", row["id"].as_str().unwrap());
         count += 1;
     }
     assert_eq!(count, 8);
@@ -329,7 +328,7 @@ fn inherited_layer_and_composed_findings_resolve_without_exposing_context_arenas
     let outcome: Value = serde_json::from_str(&inheritance_failure(missing).unwrap()).unwrap();
     assert_eq!(
         outcome["outcome"],
-        schema_requirement_expectations::reconciled(&json!({"status":"invalid","diagnostics":[{"phase":"validation","condition":"missing_required_field","requirement":null,"spec_paths":["domain"],"context":{"field":"domain","class":"root_class"}}]}).to_string(), true)
+        json!({"status":"invalid","diagnostics":[{"phase":"validation","condition":"missing_required_field","requirement":"REQ-0285","spec_paths":["domain"],"context":{"field":"domain","class":"root_class"}}]})
     );
     let unknown = inherited_error(
         &entry.replace("source: SRC.ID", "compute: {expr: UNKNOWN}"),

@@ -28,7 +28,7 @@ fn complete_graph_metadata_never_grants_the_ordinary_build_capability() {
     assert_eq!(checked.metadata().root(), 1);
     assert_eq!(checked.metadata().called_functions(), [0, 2]);
     assert_eq!(checked.metadata().nodes()[1].activation_slots(), [1]);
-    let Err(PrepareError::Unsupported(features)) = checked.execution_capability() else {
+    let PrepareError::Unsupported(features) = checked.metadata().execution_refusal() else {
         panic!("metadata graph must refuse execution")
     };
     assert_eq!(
@@ -49,7 +49,7 @@ fn complete_graph_metadata_never_grants_the_ordinary_build_capability() {
     )
     .unwrap();
     assert!(
-        matches!(leaf.execution_capability(), Err(PrepareError::Unsupported(features))
+        matches!(leaf.metadata().execution_refusal(), PrepareError::Unsupported(features)
         if features.len() == 1 && features[0].operation == "producer_workflow" && features[0].path == "input")
     );
     let Err(PrepareError::Invalid(findings)) = yamaa_engine::domain::check(&root) else {

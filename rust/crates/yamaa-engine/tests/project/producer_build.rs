@@ -120,6 +120,12 @@ struct Study {
     unwind: Option<Arc<()>>,
 }
 impl StudyPort for Study {
+    fn resource_failure(
+        &self,
+        _error: &Self::Error,
+    ) -> Option<yamaa_core::resource::ResourceFailure> {
+        None
+    }
     type Error = &'static str;
     fn inspect(&mut self, node: &Node, source: &SourceDeclaration) -> Result<(), Self::Error> {
         assert_eq!((node.identity(), source.name.as_str()), ("/p", "RAW"));
@@ -177,8 +183,20 @@ struct Decoder {
     cardinality: Rc<Cell<usize>>,
     trace: Trace,
     failure: bool,
+    used: Option<build::DecodeUsage>,
 }
 impl SourceDecoder for Decoder {
+    fn continue_after(&self, _error: &Self::Error) -> bool {
+        false
+    }
+    fn decode_with_interpretation(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        _interpretation: yamaa_core::specification::SourceInterpretation,
+    ) -> Result<Self::Table, Self::Error> {
+        self.decode(source, bytes)
+    }
     type Error = &'static str;
     type Table = Table;
     fn decode(&mut self, source: &SourceDeclaration, bytes: &[u8]) -> Result<Table, Self::Error> {
@@ -354,6 +372,7 @@ impl Ports {
                 unwind: None,
             },
             decoder: Decoder {
+                used: None,
                 schema_case: 0,
                 cells: Rc::new(Cell::new(0)),
                 cardinality: Rc::new(Cell::new(0)),
@@ -1754,6 +1773,9 @@ fn caller_owned_attempt_survives_original_host_unwind_with_incomplete_entered_no
 }
 
 impl yamaa_engine::producer_build::DecodePort for Decoder {
+    fn usage(&self) -> Option<build::DecodeUsage> {
+        self.used
+    }
     fn decode_bounded(
         &mut self,
         source: &SourceDeclaration,
@@ -1765,8 +1787,23 @@ impl yamaa_engine::producer_build::DecodePort for Decoder {
         {
             return Err(build::DecodeError::Codec("original bounded codec refusal"));
         }
+        // This codec's modeled charges are the admitted input bytes themselves.
+        self.used = Some(build::DecodeUsage {
+            storage_bytes: bytes.len(),
+            work_bytes: bytes.len(),
+        });
         self.decode(source, bytes)
             .map_err(build::DecodeError::Codec)
+    }
+    fn decode_bounded_interpreted(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        contract: Option<&yamaa_core::producer_contract::Contract>,
+        limits: yamaa_engine::producer_build::DecodeLimits,
+        _interpretation: yamaa_core::specification::SourceInterpretation,
+    ) -> Result<Table, build::DecodeError<Self::Error>> {
+        self.decode_bounded(source, bytes, contract, limits)
     }
 }
 
@@ -1896,23 +1933,28 @@ fn actual_graph_has_one_work_ceiling_and_input_slot_reservations_at_exact_bounda
             ]
         );
         if rows == 2 {
-            assert_eq!(attempt.nodes.len(), 1);
+            // The pooled rows ceiling refuses the producer's second source at
+            // decode time after both nodes are entered.
+            assert_eq!(attempt.nodes.len(), 2);
             assert_eq!(attempt.nodes[0].node, 1);
+            let producer = attempt.nodes.iter().find(|node| node.node == 0).unwrap();
+            let Err(PortError::Run(yamaa_engine::specification_run::RunError::Sources(errors))) =
+                &producer.dataset.result
+            else {
+                panic!("pooled rows ceiling refusal")
+            };
             assert!(matches!(
-                attempt.nodes[0]
-                    .dataset
-                    .result
-                    .as_ref()
-                    .unwrap()
-                    .result
-                    .as_ref()
-                    .map_err(|e| &**e),
-                Err(ExecutionError::Limit { .. })
+                errors.as_slice(),
+                [(
+                    1,
+                    build::DecodeError::ResourceLimit {
+                        resource: "rows",
+                        limit: 2,
+                        actual: Some(3)
+                    }
+                )]
             ));
             assert_eq!(ports.decoder.cells.get(), 0);
-            assert!(!trace.iter().any(|e| e == "invoke:beta:1"
-                || e == "invoke:alpha:1"
-                || e.starts_with("encode:")));
         } else {
             assert_eq!(attempt.nodes.len(), 2);
             assert!(attempt.nodes[0]
@@ -2127,9 +2169,9 @@ fn owned_column_weighted_output_cells_keep_the_completed_producer_at_the_exact_b
         [("/root", 4), ("/p", 2)]
     );
     // The root owns four columns, while its serialized projection keeps three.
-    // Total12 reserves8 root cells and4 producer cells; total11 reserves7/3.
-    // The producer needs only2, so both runs enter the same completed prefix.
-    for (cells, accepted, root_calls) in [(12, true, 2), (11, false, 0)] {
+    // The pooled budget charges actual output cells: the producer uses 2 and
+    // the root 8, so a total of 10 completes and 9 refuses at the root node.
+    for (cells, accepted, root_calls) in [(10, true, 2), (9, false, 0)] {
         let mut ports = Ports::new();
         let mut codec = RootCodec(Codec {
             trace: Rc::clone(&ports.codec.trace),
@@ -2264,7 +2306,6 @@ fn owned_column_weighted_output_cells_keep_the_completed_producer_at_the_exact_b
 
 struct PoolDecoder {
     inner: Decoder,
-    pooled: bool,
     raw_rows: usize,
     consumer_rows: usize,
     known: bool,
@@ -2272,6 +2313,17 @@ struct PoolDecoder {
     admitted: Vec<build::DecodeLimits>,
 }
 impl SourceDecoder for PoolDecoder {
+    fn continue_after(&self, _error: &Self::Error) -> bool {
+        false
+    }
+    fn decode_with_interpretation(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        _interpretation: yamaa_core::specification::SourceInterpretation,
+    ) -> Result<Self::Table, Self::Error> {
+        self.decode(source, bytes)
+    }
     type Error = &'static str;
     type Table = Table;
     fn decode(&mut self, source: &SourceDeclaration, bytes: &[u8]) -> Result<Table, Self::Error> {
@@ -2286,8 +2338,15 @@ impl SourceDecoder for PoolDecoder {
     }
 }
 impl build::DecodePort for PoolDecoder {
-    fn pool_capacity(&self) -> bool {
-        self.pooled
+    fn decode_bounded_interpreted(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        contract: Option<&yamaa_core::producer_contract::Contract>,
+        limits: build::DecodeLimits,
+        _interpretation: yamaa_core::specification::SourceInterpretation,
+    ) -> Result<Table, build::DecodeError<Self::Error>> {
+        self.decode_bounded(source, bytes, contract, limits)
     }
     fn usage(&self) -> Option<build::DecodeUsage> {
         self.used
@@ -2338,19 +2397,17 @@ fn uneven_prepared() -> build::PreparedBuild {
 }
 #[test]
 fn native_uneven_graph_uses_actual_row_and_decoder_pools_without_grant_multiplication() {
-    for (pooled, rows, consumer_rows, cells, known, accepted) in [
-        (false, 10, 1, 16, true, false),
-        (true, 10, 1, 16, true, true),
-        (true, 8, 1, 16, true, true),
-        (true, 7, 1, 16, true, false),
-        (true, 10, 4, 24, true, false),
-        (true, 10, 1, 15, true, false),
-        (true, 10, 1, 16, false, false),
+    for (rows, consumer_rows, cells, known, accepted) in [
+        (10, 1, 16, true, true),
+        (8, 1, 16, true, true),
+        (7, 1, 16, true, false),
+        (10, 4, 24, true, false),
+        (10, 1, 15, true, false),
+        (10, 1, 16, false, false),
     ] {
         let mut ports = Ports::new();
         let mut decoder = PoolDecoder {
             inner: ports.decoder,
-            pooled,
             raw_rows: 7,
             consumer_rows,
             known,
@@ -2380,7 +2437,7 @@ fn native_uneven_graph_uses_actual_row_and_decoder_pools_without_grant_multiplic
         assert_eq!(
             attempt.outcome.is_ok(),
             accepted,
-            "pooled={pooled} rows={rows} known={known}: {:?}",
+            "rows={rows} known={known}: {:?}",
             attempt.outcome
         );
         if accepted {
@@ -2392,7 +2449,7 @@ fn native_uneven_graph_uses_actual_row_and_decoder_pools_without_grant_multiplic
                 18 * std::mem::size_of::<Value>()
             );
             assert_eq!(decoder.admitted[1].work_bytes, b"ID,VALUE\n1,1\n".len());
-        } else if pooled && known {
+        } else if known {
             let Err(PortError::Run(yamaa_engine::specification_run::RunError::Sources(errors))) =
                 &attempt.nodes[1].dataset.result
             else {
@@ -2416,18 +2473,9 @@ fn native_uneven_graph_uses_actual_row_and_decoder_pools_without_grant_multiplic
                 );
             }
             assert_eq!(decoder.inner.cells.get(), 0);
-        } else if pooled {
+        } else {
             assert_eq!(decoder.admitted[1].storage_bytes, 0);
             assert_eq!(decoder.admitted[1].work_bytes, 0);
-        } else {
-            assert_eq!(attempt.nodes.len(), 1);
-            assert!(attempt.nodes[0]
-                .dataset
-                .result
-                .as_ref()
-                .unwrap()
-                .result
-                .is_err());
         }
         assert_eq!(ports.study.reads, 1);
     }
@@ -2435,6 +2483,12 @@ fn native_uneven_graph_uses_actual_row_and_decoder_pools_without_grant_multiplic
 
 struct PrefixStudy(usize);
 impl StudyPort for PrefixStudy {
+    fn resource_failure(
+        &self,
+        _error: &Self::Error,
+    ) -> Option<yamaa_core::resource::ResourceFailure> {
+        None
+    }
     type Error = &'static str;
     fn capture_reads(&self) -> usize {
         self.0
@@ -2460,6 +2514,14 @@ struct PrefixDecoder {
     admitted: Vec<build::DecodeLimits>,
 }
 impl SourceDecoder for PrefixDecoder {
+    fn decode_with_interpretation(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        _interpretation: yamaa_core::specification::SourceInterpretation,
+    ) -> Result<Self::Table, Self::Error> {
+        self.decode(source, bytes)
+    }
     type Error = &'static str;
     type Table = Table;
     fn continue_after(&self, error: &Self::Error) -> bool {
@@ -2470,8 +2532,15 @@ impl SourceDecoder for PrefixDecoder {
     }
 }
 impl build::DecodePort for PrefixDecoder {
-    fn pool_capacity(&self) -> bool {
-        true
+    fn decode_bounded_interpreted(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        contract: Option<&yamaa_core::producer_contract::Contract>,
+        limits: build::DecodeLimits,
+        _interpretation: yamaa_core::specification::SourceInterpretation,
+    ) -> Result<Table, build::DecodeError<Self::Error>> {
+        self.decode_bounded(source, bytes, contract, limits)
     }
     fn usage(&self) -> Option<build::DecodeUsage> {
         self.used

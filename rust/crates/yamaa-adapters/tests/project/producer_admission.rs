@@ -66,7 +66,7 @@ fn original_documents_and_distinct_metadata_remain_held_without_study_authority(
         ["ID", "VALUE"]
     );
     assert!(
-        matches!(admitted.checked().execution_capability(),Err(PrepareError::Unsupported(features)) if features[0].path=="input.SRC.schema")
+        matches!(admitted.checked().metadata().execution_refusal(),PrepareError::Unsupported(features) if features[0].path=="input.SRC.schema")
     );
 }
 struct Parent {

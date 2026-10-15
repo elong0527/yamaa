@@ -49,27 +49,6 @@ impl ReadFailure {
     }
 }
 
-/// Independent root obligations remain observable when an inline scalar cannot
-/// decode. The normalized root is retained, and lock format is never inferred
-/// from an uncaptured path. No partial function or terminology model is created.
-pub fn root_diagnostics(
-    document: &crate::schema::Document,
-    host: Language,
-) -> Result<Vec<Diagnostic>, Error> {
-    let findings = root_findings(document, host)?;
-    let findings = findings.into_iter().flatten().collect::<Vec<_>>();
-    diagnostics(
-        &Draft {
-            language: None,
-            lock: None,
-            functions: None,
-            codelists: Vec::new(),
-            has_study: false,
-            submissions: Vec::new(),
-        },
-        &findings,
-    )
-}
 fn root_findings(
     document: &crate::schema::Document,
     host: Language,

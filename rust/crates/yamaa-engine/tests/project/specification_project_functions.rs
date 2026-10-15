@@ -86,6 +86,21 @@ struct Port {
     requested: bool,
 }
 impl SourcePort for Port {
+    fn resource_failure(
+        &self,
+        _error: &Self::Error,
+    ) -> Option<yamaa_core::resource::ResourceFailure> {
+        None
+    }
+    fn capture_observed(
+        &mut self,
+        source: &SourceDeclaration,
+        byte_limit: usize,
+        origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+    ) -> Result<Arc<[u8]>, Self::Error> {
+        *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
+        self.capture(source, byte_limit)
+    }
     type Error = Payload;
     fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), Payload> {
         assert_eq!(source.path, "input.csv");
@@ -129,6 +144,17 @@ struct Decoder {
     cells: Rc<Cell<usize>>,
 }
 impl SourceDecoder for Decoder {
+    fn continue_after(&self, _error: &Self::Error) -> bool {
+        false
+    }
+    fn decode_with_interpretation(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        _interpretation: yamaa_core::specification::SourceInterpretation,
+    ) -> Result<Self::Table, Self::Error> {
+        self.decode(source, bytes)
+    }
     type Error = Payload;
     type Table = Table;
     fn decode(&mut self, source: &SourceDeclaration, bytes: &[u8]) -> Result<Table, Payload> {

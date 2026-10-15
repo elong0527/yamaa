@@ -114,10 +114,6 @@ impl ExecutionEnvironment {
     pub fn inventory(&self) -> &crate::submission_inventory::Inventory {
         &self.inventory
     }
-    pub fn with_inventory(mut self, inventory: crate::submission_inventory::Inventory) -> Self {
-        self.attach_inventory(inventory);
-        self
-    }
     pub fn attach_inventory(&mut self, inventory: crate::submission_inventory::Inventory) {
         self.inventory = inventory;
     }

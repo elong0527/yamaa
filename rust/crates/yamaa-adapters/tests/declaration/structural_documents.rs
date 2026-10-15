@@ -147,12 +147,13 @@ fn environment_parents_and_retired_runtime_fields_are_complete_schema_findings()
         assert_eq!(finding.path, field);
         assert_eq!(finding.definition().condition, "unknown_field");
         assert_eq!(finding.definition().requirement, Some("REQ-0285"));
-        assert_eq!(finding.context, vec![
-            ("field", C::Text(field.into())),
-            ("class", C::Text("environment_class".into())),
-            ("retired", C::Boolean(true)),
-            ("suggestion", C::Text("replace the retired environment format with language, lock and functions definitions containing function, description, params, returns and tests (REQ-1080, REQ-1083); see benchmarks/adam-adsl-bmi".into())),
-        ]);
+        assert_eq!(
+            finding.context,
+            vec![
+                ("field", C::Text(field.into())),
+                ("class", C::Text("environment_class".into())),
+            ]
+        );
     }
 }
 

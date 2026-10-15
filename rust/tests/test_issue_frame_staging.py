@@ -17,9 +17,10 @@ spec.loader.exec_module(stage)
 
 class IssueFrameTruth(unittest.TestCase):
     def test_decoder_replay_changes_only_normative_citations_and_source_identity(self):
-        fixture = stage.REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/yaml_transport.tsv"
-        with fixture.open(encoding="utf-8", newline="") as stream:
-            original = {row["id"]: row for row in csv.DictReader(stream, delimiter="\t")}
+        original = {
+            row["id"]: {"source_hex": stage.fixture_hex(row["source"]), "expected": json.dumps(row["expected"])}
+            for row in stage.fixture_rows("yaml_transport")
+        }
         requirements = {"non_ascii_source": "REQ-0705", "invalid_text": "REQ-0029", "invalid_yaml": "REQ-0280"}
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

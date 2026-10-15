@@ -150,7 +150,7 @@ pub enum Error {
 
 /// Only the held compiled owner and complete metadata are accepted. A successful
 /// result proves names/types in this scope, never source values or execution.
-pub type NormalizedSchemas = Result<Vec<TableSchema>, Vec<Diagnostic>>;
+pub(crate) type NormalizedSchemas = Result<Vec<TableSchema>, Vec<Diagnostic>>;
 
 pub fn check(
     prepared: &PreparedSpecification,
@@ -232,7 +232,7 @@ fn normalize(
                         diagnostics.push(
                             finding
                                 .finding(&source.dataset)
-                                .diagnostic()
+                                .diagnostic_with_limit(yamaa_core::diagnostic::MAX_PROJECTION_BYTES)
                                 .map_err(|_| Error::Projection)?,
                         );
                     }
@@ -266,7 +266,7 @@ fn normalize(
                         finding
                             .finding(&source.dataset)
                             .ok_or(Error::Projection)?
-                            .diagnostic()
+                            .diagnostic_with_limit(yamaa_core::diagnostic::MAX_PROJECTION_BYTES)
                             .map_err(|_| Error::Projection)?,
                     );
                     continue;
@@ -294,7 +294,7 @@ fn normalize(
                             declared.ordinal.as_deref().ok_or(Error::Projection)?,
                         )
                         .ok_or(Error::Projection)?
-                        .diagnostic()
+                        .diagnostic_with_limit(yamaa_core::diagnostic::MAX_PROJECTION_BYTES)
                         .map_err(|_| Error::Projection)?,
                 );
                 continue;
@@ -318,7 +318,7 @@ pub struct GraphSourceSchema {
     pub source: SourceSchema,
 }
 
-pub type GraphNormalizedSchemas = Result<Vec<Vec<TableSchema>>, Vec<(usize, Diagnostic)>>;
+pub(crate) type GraphNormalizedSchemas = Result<Vec<Vec<TableSchema>>, Vec<(usize, Diagnostic)>>;
 
 pub fn graph_check(
     graph: &yamaa_core::producer_graph::PreparedGraph,
@@ -336,7 +336,7 @@ pub fn graph_check(
 
 /// Producer published fields and external metadata share the original complete
 /// budget/admission pass before any native logical schema copies are made.
-pub fn graph_normalized_schemas(
+pub(crate) fn graph_normalized_schemas(
     graph: &yamaa_core::producer_graph::PreparedGraph,
     external: &[GraphSourceSchema],
     limits: Limits,
@@ -425,7 +425,7 @@ pub fn graph_normalized_schemas(
                                 declaration.ordinal.as_deref().ok_or(Error::Projection)?,
                             )
                             .ok_or(Error::Projection)?
-                            .diagnostic()
+                            .diagnostic_with_limit(yamaa_core::diagnostic::MAX_PROJECTION_BYTES)
                             .map_err(|_| Error::Projection)?,
                     )),
                 }
@@ -459,7 +459,7 @@ pub fn graph_normalized_schemas(
     Ok(Ok(schemas))
 }
 
-pub const MAX_CAPTURE_BYTES: usize = 8_388_608;
+pub(crate) const MAX_CAPTURE_BYTES: usize = 8_388_608;
 
 /// A closed slot and caller ceiling are admitted before a resource port enters.
 pub fn admit_capture(index: usize, slots: usize, maximum: usize) -> Result<(), Error> {

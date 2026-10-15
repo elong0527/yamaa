@@ -73,7 +73,7 @@ pub enum EnvironmentFailure<E, D, X> {
     Preparation(crate::project_preparation::Failure<E, D, X>),
 }
 
-pub type EnvironmentPreparation<R, D> = Result<
+pub(crate) type EnvironmentPreparation<R, D> = Result<
     crate::project_preparation::PreparedEnvironment<
         <D as crate::project_preparation::DecodePort>::Document,
     >,
@@ -261,7 +261,7 @@ pub trait Ports {
     }
 }
 
-pub type PreparedRequest<P> = Result<
+pub(crate) type PreparedRequest<P> = Result<
     Prepared<<P as Ports>::Plain, <P as Ports>::Project, <P as Ports>::Producer>,
     <P as Ports>::Failure,
 >;

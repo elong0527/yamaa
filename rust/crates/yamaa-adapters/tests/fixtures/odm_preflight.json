@@ -1,0 +1,193 @@
+[
+  {
+    "case": "column_invalid_context",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv, DM: absent.csv}\nbase: DM\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "invalid_odm_context",
+            "context": {
+              "dataset": "SRC",
+              "location": "column"
+            },
+            "phase": "validation",
+            "requirement": "REQ-1277",
+            "spec_paths": [
+              "columns.VAL.derivation.odm"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "specification/prototype"
+    }
+  },
+  {
+    "case": "row_invalid_context",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv, DM: absent.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {literal: U}}\nrows:\n  - id: subjects\n    dataset: DM\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n      VAL: {odm: SRC.IT.TEST.OID}\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "invalid_odm_context",
+            "context": {
+              "dataset": "SRC",
+              "location": "row"
+            },
+            "phase": "validation",
+            "requirement": "REQ-1277",
+            "spec_paths": [
+              "rows[0].derivations.VAL.odm"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "specification/prototype"
+    }
+  },
+  {
+    "case": "intermediate_invalid_context",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\nintermediates:\n  - id: DONOR\n    dataset: SRC\n    derivations:\n      V: {odm: SRC.IT.TEST.OID}\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "invalid_odm_context",
+            "context": {
+              "dataset": "SRC",
+              "location": "intermediate"
+            },
+            "phase": "validation",
+            "requirement": "REQ-1277",
+            "spec_paths": [
+              "intermediates[0].derivations.V.odm"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "specification/prototype"
+    }
+  },
+  {
+    "case": "derive_invalid_context",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {aggregate: {derive: [{name: D, type: str, derivation: {odm: SRC.IT.TEST.OID}}], expr: 'MAX(D)'}}}\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "invalid_odm_context",
+            "context": {
+              "dataset": "SRC",
+              "location": "derive"
+            },
+            "phase": "validation",
+            "requirement": "REQ-1277",
+            "spec_paths": [
+              "columns.VAL.derivation.aggregate.derive[0].derivation.odm"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "specification/prototype"
+    }
+  },
+  {
+    "case": "unknown_input",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: ABSENT.IT.TEST.OID}}\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "unknown_field",
+            "context": {
+              "identifier": "ABSENT.IT.TEST.OID"
+            },
+            "phase": "validation",
+            "requirement": "REQ-0103",
+            "spec_paths": [
+              "columns.VAL.derivation.odm.item"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "specification/prototype"
+    }
+  },
+  {
+    "case": "filter_vendor",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: {item: SRC.IT.TEST.OID, filter: \"SRC.VENDOR = 'Y'\"}}}\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "unknown_field",
+            "context": {
+              "dataset": "SRC",
+              "identifier": "SRC.VENDOR"
+            },
+            "phase": "validation",
+            "requirement": "REQ-0103",
+            "spec_paths": [
+              "columns.VAL.derivation.odm.filter"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "specification/prototype"
+    }
+  },
+  {
+    "case": "declared_types",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: {path: source.csv, types: {Value: int}}}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "odm_schema_field_type",
+            "context": {
+              "dataset": "SRC",
+              "declared": "types"
+            },
+            "phase": "validation",
+            "requirement": "REQ-1275",
+            "spec_paths": [
+              "input.SRC.types"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "specification/prototype"
+    }
+  },
+  {
+    "case": "declared_ordinal",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: {path: source.csv, ordinal: SOURCEORD}}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "odm_schema_field_type",
+            "context": {
+              "dataset": "SRC",
+              "declared": "ordinal"
+            },
+            "phase": "validation",
+            "requirement": "REQ-1295",
+            "spec_paths": [
+              "input.SRC.ordinal"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "specification/prototype"
+    }
+  }
+]

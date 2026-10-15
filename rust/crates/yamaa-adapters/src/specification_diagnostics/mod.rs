@@ -88,62 +88,6 @@ pub(crate) fn portable_definition(
         context.into(),
     ))
 }
-/// Return semantic findings only. Policy/transport/internal errors deliberately
-/// have no fabricated language condition and must remain host boundary failures.
-/// Unbounded owned compatibility; new callers use findings_with_limit to distinguish
-/// explicit projection refusal from an opaque boundary error before removal.
-pub fn findings(error: &Error, source: Option<&SourceDeclaration>) -> Option<Vec<Value>> {
-    match error {
-        Error::Sources(errors) => {
-            let mut result = Vec::new();
-            for (source, error) in errors {
-                result.extend(findings(error, Some(source))?);
-            }
-            Some(result)
-        }
-        Error::Prepare(PrepareError::Invalid(errors)) => errors.iter().map(preparing).collect(),
-        Error::Bind(error) => binding(error, source?),
-        Error::Ordinal(error) => {
-            let source = source?;
-            Some(vec![portable_diagnostic(
-                error
-                    .finding(&source.name, source.ordinal.as_deref()?)?
-                    .diagnostic()
-                    .ok()?,
-            )?])
-        }
-        Error::OdmFields(_) | Error::OdmValues(_) => {
-            crate::source_diagnostics::findings(error, source)
-                .ok()?
-                .and_then(|findings| findings.into_iter().map(portable_diagnostic).collect())
-        }
-        Error::ParquetSource(error) => {
-            let source = source?;
-            Some(vec![portable_diagnostic(
-                error.diagnostic(&source.name, &source.path)?,
-            )?])
-        }
-        Error::SasSource(error) => {
-            let source = source?;
-            Some(vec![portable_diagnostic(
-                error
-                    .finding(&source.name, &source.path)?
-                    .diagnostic()
-                    .ok()?,
-            )?])
-        }
-        Error::TypedSource(crate::typed_csv::Error::Typing(error)) => {
-            Some(vec![portable_diagnostic(error.diagnostic(&source?.name)?)?])
-        }
-        Error::Source(TextTableError::Csv(error)) => {
-            let source = source?;
-            Some(vec![portable_diagnostic(
-                error.diagnostic(&source.name, &source.path)?,
-            )?])
-        }
-        _ => None,
-    }
-}
 /// Complete ingestion reports are admitted in core before copying codec facts.
 /// Other existing preparation/binding projections retain their admission policy.
 pub fn findings_with_limit(
@@ -159,15 +103,20 @@ pub fn findings_with_limit(
         | Error::Source(_)
         | Error::Ordinal(_)
         | Error::OdmFields(_)
-        | Error::OdmValues(_) => Ok(crate::source_diagnostics::findings_with_limit(
-            error, source, maximum,
-        )?
-        .and_then(|findings| {
-            findings
-                .into_iter()
-                .map(portable_diagnostic)
-                .collect::<Option<Vec<_>>>()
-        })),
+        | Error::OdmValues(_) => {
+            crate::source_diagnostics::findings_with_limit(error, source, maximum)?
+                .map(|findings| {
+                    findings
+                        .into_iter()
+                        .map(|finding| {
+                            portable_diagnostic(finding).ok_or_else(|| {
+                                yamaa_core::diagnostic::ProjectionError::InvalidContext.into()
+                            })
+                        })
+                        .collect()
+                })
+                .transpose()
+        }
         Error::Prepare(PrepareError::Invalid(errors)) => Ok(errors.iter().map(preparing).collect()),
         Error::Bind(error) => Ok(source.and_then(|source| binding(error, source))),
         _ => Ok(None),

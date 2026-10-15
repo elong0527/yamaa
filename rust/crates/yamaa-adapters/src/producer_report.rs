@@ -675,7 +675,7 @@ fn decoded_finding(
             Some(source),
             budget.remaining_bytes(),
         )
-        .map_err(|_| Error::OutputLimit)?
+        .map_err(Error::from)?
         else {
             return Ok(false);
         };
@@ -764,7 +764,13 @@ fn decoded_finding(
         }
         _ => return Ok(false),
     }
-    let Some(values) = crate::specification_diagnostics::findings(error, Some(source)) else {
+    let Some(values) = crate::specification_diagnostics::findings_with_limit(
+        error,
+        Some(source),
+        budget.remaining_bytes(),
+    )
+    .map_err(Error::from)?
+    else {
         return Ok(false);
     };
     findings.extend(values);
@@ -1277,6 +1283,43 @@ pub fn attempt_report_classified<'a, E>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn decoded_context_refusal_is_an_error_and_does_not_drop_the_finding() {
+        let source = yamaa_core::specification::SourceDeclaration {
+            name: "RAW".into(),
+            path: "raw.csv".into(),
+            types: vec![],
+            profile: yamaa_core::specification::SourceProfile::Csv,
+            encoding: None,
+            empty_string_present: false,
+            ordinal: None,
+        };
+        let value = "x".repeat(1000);
+        let error = yamaa_engine::producer_build::DecodeError::Codec(
+            crate::specification_run::Error::TypedSource(crate::typed_csv::Error::Typing(
+                yamaa_core::typed_csv::Error::FieldParse {
+                    field: "N".into(),
+                    target: yamaa_core::value::ColumnType::Int,
+                    value: value.clone(),
+                },
+            )),
+        );
+        let mut findings = Vec::new();
+        assert!(matches!(
+            decoded_finding(&mut Budget::new(10_000), &mut findings, &source, &error),
+            Err(Error::OutputLimit)
+        ));
+        assert!(findings.is_empty());
+        assert!(
+            decoded_finding(&mut Budget::new(100_000), &mut findings, &source, &error).unwrap()
+        );
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0]["context"]["value"], value);
+        assert_eq!(
+            findings[0]["spec_paths"],
+            serde_json::json!(["input.RAW.types.N"])
+        );
+    }
     #[test]
     fn native_header_mismatch_reporting_keeps_the_actual_authored_cause_and_refuses_before_copy() {
         use crate::{project_source_decoder::Decoder, specification_source::Source};

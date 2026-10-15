@@ -139,6 +139,18 @@ impl<E> ScriptedSource<E> {
 }
 impl<E> SourcePort for ScriptedSource<E> {
     type Error = E;
+    fn resource_failure(&self, _error: &E) -> Option<yamaa_core::resource::ResourceFailure> {
+        None
+    }
+    fn capture_observed(
+        &mut self,
+        source: &SourceDeclaration,
+        byte_limit: usize,
+        origin: &mut Option<crate::specification_run::SourceOrigin>,
+    ) -> Result<Arc<[u8]>, E> {
+        *origin = Some(crate::specification_run::SourceOrigin::Resource);
+        self.capture(source, byte_limit)
+    }
     fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), E> {
         self.log.record(Event::Inspect(source.clone()));
         let step = self
@@ -194,6 +206,14 @@ impl<E, T: TableAccess> SourceDecoder for ScriptedDecoder<E, T> {
     type Table = T;
     fn continue_after(&self, _: &E) -> bool {
         self.continue_after_failure
+    }
+    fn decode_with_interpretation(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        _interpretation: yamaa_core::specification::SourceInterpretation,
+    ) -> Result<T, E> {
+        self.decode(source, bytes)
     }
     fn decode(&mut self, source: &SourceDeclaration, bytes: &[u8]) -> Result<T, E> {
         self.log.record(Event::Decode {

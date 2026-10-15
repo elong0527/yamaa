@@ -34,7 +34,7 @@ fn malformed_external_carriers_have_no_language_projection_or_index_panic() {
             .convert(source)
             .unwrap_err();
         assert!(matches!(error, Error::InvalidSource));
-        assert!(error.diagnostic("SRC").is_none());
+        assert!(error.finding("SRC").is_none());
     }
     for (declarations, maximum) in [
         (vec![("".into(), ColumnType::Int)], 1),
@@ -49,7 +49,7 @@ fn malformed_external_carriers_have_no_language_projection_or_index_panic() {
     ] {
         let error = PreparedTypes::new(&declarations, maximum).err().unwrap();
         assert!(matches!(error, Error::InvalidDeclarations));
-        assert!(error.diagnostic("SRC").is_none());
+        assert!(error.finding("SRC").is_none());
     }
 }
 

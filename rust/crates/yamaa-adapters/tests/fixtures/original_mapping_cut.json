@@ -1,0 +1,3363 @@
+[
+  {
+    "case": "exact_typed",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 1, y: 2.0, Z: null}, missing: null, unmapped: 7}\n",
+    "inputs": {
+      "SRC": "ID,X\na,Y\nb,y\nc,Z\nd,\ne,Q\n"
+    },
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 23,
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "content": "ID,V\na,1\nb,2\nc,\nd,\ne,7\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V",
+            "a,1",
+            "b,2",
+            "c,",
+            "d,",
+            "e,7"
+          ],
+          "row_count": 5,
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-exact_typed",
+      "handler_counts": [
+        {
+          "count": 1,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.mapping.missing"
+        },
+        {
+          "count": 1,
+          "handler": "unmapped",
+          "spec_path": "columns.V.derivation.mapping.unmapped"
+        }
+      ],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [
+            {
+              "count": 1,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.mapping.missing"
+            },
+            {
+              "count": 1,
+              "handler": "unmapped",
+              "spec_path": "columns.V.derivation.mapping.unmapped"
+            }
+          ],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "X"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "Y"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "y"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "Z"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "d"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "e"
+              },
+              {
+                "type": "str",
+                "value": "Q"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "d"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "e"
+              },
+              {
+                "type": "int",
+                "value": "7"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V\na,1\nb,2\nc,\nd,\ne,7\n",
+    "expected_wire": "{\"artifacts\":[{\"byte_length\":23,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\na,1\\nb,2\\nc,\\nd,\\ne,7\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\",\"a,1\",\"b,2\",\"c,\",\"d,\",\"e,7\"],\"row_count\":5,\"types\":[\"str\",\"int\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-exact_typed\",\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.mapping.missing\"},{\"count\":1,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.mapping.unmapped\"}],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.mapping.missing\"},{\"count\":1,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.mapping.unmapped\"}],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"X\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"Y\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"str\",\"value\":\"y\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"str\",\"value\":\"Z\"}],[{\"type\":\"str\",\"value\":\"d\"},{\"type\":\"missing\",\"value\":null}],[{\"type\":\"str\",\"value\":\"e\"},{\"type\":\"str\",\"value\":\"Q\"}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"str\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"int\",\"value\":\"1\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"int\",\"value\":\"2\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"missing\",\"value\":null}],[{\"type\":\"str\",\"value\":\"d\"},{\"type\":\"missing\",\"value\":null}],[{\"type\":\"str\",\"value\":\"e\"},{\"type\":\"int\",\"value\":\"7\"}]],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"int\"]}],\"unsupported\":[],\"verifications\":[]}"
+  },
+  {
+    "case": "ascii_fold",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {'yes': 'matched', \"\\u00e9a\": 'foreign', \"\\u00c9a\": 'capital', \"\\u00df\": 'sharp', 'ss': 'double'}, case_sensitive: false, unmapped: 'other'}\n",
+    "inputs": {
+      "SRC": "ID,X\na,YES\nb,éA\nc,ÉA\nd,ß\ne,SS\nf,éB\n"
+    },
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 60,
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "content": "ID,V\na,matched\nb,foreign\nc,capital\nd,sharp\ne,double\nf,other\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V",
+            "a,matched",
+            "b,foreign",
+            "c,capital",
+            "d,sharp",
+            "e,double",
+            "f,other"
+          ],
+          "row_count": 6,
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-ascii_fold",
+      "handler_counts": [
+        {
+          "count": 1,
+          "handler": "unmapped",
+          "spec_path": "columns.V.derivation.mapping.unmapped"
+        }
+      ],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [
+            {
+              "count": 1,
+              "handler": "unmapped",
+              "spec_path": "columns.V.derivation.mapping.unmapped"
+            }
+          ],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "X"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "YES"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "éA"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "ÉA"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "d"
+              },
+              {
+                "type": "str",
+                "value": "ß"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "e"
+              },
+              {
+                "type": "str",
+                "value": "SS"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "f"
+              },
+              {
+                "type": "str",
+                "value": "éB"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "matched"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "foreign"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "capital"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "d"
+              },
+              {
+                "type": "str",
+                "value": "sharp"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "e"
+              },
+              {
+                "type": "str",
+                "value": "double"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "f"
+              },
+              {
+                "type": "str",
+                "value": "other"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V\na,matched\nb,foreign\nc,capital\nd,sharp\ne,double\nf,other\n",
+    "expected_wire": "{\"artifacts\":[{\"byte_length\":60,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\na,matched\\nb,foreign\\nc,capital\\nd,sharp\\ne,double\\nf,other\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\",\"a,matched\",\"b,foreign\",\"c,capital\",\"d,sharp\",\"e,double\",\"f,other\"],\"row_count\":6,\"types\":[\"str\",\"str\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-ascii_fold\",\"handler_counts\":[{\"count\":1,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.mapping.unmapped\"}],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[{\"count\":1,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.mapping.unmapped\"}],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"X\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"YES\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"str\",\"value\":\"éA\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"str\",\"value\":\"ÉA\"}],[{\"type\":\"str\",\"value\":\"d\"},{\"type\":\"str\",\"value\":\"ß\"}],[{\"type\":\"str\",\"value\":\"e\"},{\"type\":\"str\",\"value\":\"SS\"}],[{\"type\":\"str\",\"value\":\"f\"},{\"type\":\"str\",\"value\":\"éB\"}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"str\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"matched\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"str\",\"value\":\"foreign\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"str\",\"value\":\"capital\"}],[{\"type\":\"str\",\"value\":\"d\"},{\"type\":\"str\",\"value\":\"sharp\"}],[{\"type\":\"str\",\"value\":\"e\"},{\"type\":\"str\",\"value\":\"double\"}],[{\"type\":\"str\",\"value\":\"f\"},{\"type\":\"str\",\"value\":\"other\"}]],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"str\"]}],\"unsupported\":[],\"verifications\":[]}"
+  },
+  {
+    "case": "missing_separate",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 'present'}, missing: 'missing', unmapped: null}\n",
+    "inputs": {
+      "SRC": "ID,X\na,\nb,Q\nc,Y\n"
+    },
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 28,
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "content": "ID,V\na,missing\nb,\nc,present\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V",
+            "a,missing",
+            "b,",
+            "c,present"
+          ],
+          "row_count": 3,
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-missing_separate",
+      "handler_counts": [
+        {
+          "count": 1,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.mapping.missing"
+        },
+        {
+          "count": 1,
+          "handler": "unmapped",
+          "spec_path": "columns.V.derivation.mapping.unmapped"
+        }
+      ],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [
+            {
+              "count": 1,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.mapping.missing"
+            },
+            {
+              "count": 1,
+              "handler": "unmapped",
+              "spec_path": "columns.V.derivation.mapping.unmapped"
+            }
+          ],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "X"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "Q"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "Y"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "missing"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "present"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V\na,missing\nb,\nc,present\n",
+    "expected_wire": "{\"artifacts\":[{\"byte_length\":28,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\na,missing\\nb,\\nc,present\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\",\"a,missing\",\"b,\",\"c,present\"],\"row_count\":3,\"types\":[\"str\",\"str\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-missing_separate\",\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.mapping.missing\"},{\"count\":1,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.mapping.unmapped\"}],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.mapping.missing\"},{\"count\":1,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.mapping.unmapped\"}],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"X\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"missing\",\"value\":null}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"str\",\"value\":\"Q\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"str\",\"value\":\"Y\"}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"str\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"missing\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"missing\",\"value\":null}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"str\",\"value\":\"present\"}]],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"str\"]}],\"unsupported\":[],\"verifications\":[]}"
+  },
+  {
+    "case": "empty_rows",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 'present'}, missing: 'missing', unmapped: 'other'}\n",
+    "inputs": {
+      "SRC": "ID,X\n"
+    },
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 5,
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "content": "ID,V\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V"
+          ],
+          "row_count": 0,
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-empty_rows",
+      "handler_counts": [
+        {
+          "count": 0,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.mapping.missing"
+        },
+        {
+          "count": 0,
+          "handler": "unmapped",
+          "spec_path": "columns.V.derivation.mapping.unmapped"
+        }
+      ],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.mapping.missing"
+            },
+            {
+              "count": 0,
+              "handler": "unmapped",
+              "spec_path": "columns.V.derivation.mapping.unmapped"
+            }
+          ],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "X"
+          ],
+          "name": "SRC",
+          "rows": [],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "output",
+          "rows": [],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V\n",
+    "expected_wire": "{\"artifacts\":[{\"byte_length\":5,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\"],\"row_count\":0,\"types\":[\"str\",\"str\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-empty_rows\",\"handler_counts\":[{\"count\":0,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.mapping.missing\"},{\"count\":0,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.mapping.unmapped\"}],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[{\"count\":0,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.mapping.missing\"},{\"count\":0,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.mapping.unmapped\"}],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"X\"],\"name\":\"SRC\",\"rows\":[],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"str\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"str\"]}],\"unsupported\":[],\"verifications\":[]}"
+  },
+  {
+    "case": "unused_invalid_literal",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 1, UNUSED: true}, missing: 'bad', unmapped: 'bad'}\n",
+    "inputs": {
+      "SRC": "ID,X\na,Y\n"
+    },
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 9,
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "content": "ID,V\na,1\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V",
+            "a,1"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-unused_invalid_literal",
+      "handler_counts": [
+        {
+          "count": 0,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.mapping.missing"
+        },
+        {
+          "count": 0,
+          "handler": "unmapped",
+          "spec_path": "columns.V.derivation.mapping.unmapped"
+        }
+      ],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.mapping.missing"
+            },
+            {
+              "count": 0,
+              "handler": "unmapped",
+              "spec_path": "columns.V.derivation.mapping.unmapped"
+            }
+          ],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "X"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "Y"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V\na,1\n",
+    "expected_wire": "{\"artifacts\":[{\"byte_length\":9,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\na,1\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\",\"a,1\"],\"row_count\":1,\"types\":[\"str\",\"int\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-unused_invalid_literal\",\"handler_counts\":[{\"count\":0,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.mapping.missing\"},{\"count\":0,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.mapping.unmapped\"}],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[{\"count\":0,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.mapping.missing\"},{\"count\":0,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.mapping.unmapped\"}],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"X\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"Y\"}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"str\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"int\",\"value\":\"1\"}]],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"int\"]}],\"unsupported\":[],\"verifications\":[]}"
+  },
+  {
+    "case": "filtered_driver",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      mapping:\n        source: {variable: SRC.X, filter: \"SRC.F = 'Y'\"}\n        dict: {A: 1, B: 2}\n        missing: 9\n",
+    "inputs": {
+      "SRC": "ID,X,F\na,A,Y\nb,B,N\n"
+    },
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 13,
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "content": "ID,V\na,1\nb,9\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V",
+            "a,1",
+            "b,9"
+          ],
+          "row_count": 2,
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-filtered_driver",
+      "handler_counts": [
+        {
+          "count": 1,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.mapping.missing"
+        }
+      ],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [
+            {
+              "count": 1,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.mapping.missing"
+            }
+          ],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "X",
+            "F"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "A"
+              },
+              {
+                "type": "str",
+                "value": "Y"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "B"
+              },
+              {
+                "type": "str",
+                "value": "N"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "9"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V\na,1\nb,9\n",
+    "expected_wire": "{\"artifacts\":[{\"byte_length\":13,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\na,1\\nb,9\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\",\"a,1\",\"b,9\"],\"row_count\":2,\"types\":[\"str\",\"int\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-filtered_driver\",\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.mapping.missing\"}],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.mapping.missing\"}],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"X\",\"F\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"A\"},{\"type\":\"str\",\"value\":\"Y\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"str\",\"value\":\"B\"},{\"type\":\"str\",\"value\":\"N\"}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"str\",\"str\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"int\",\"value\":\"1\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"int\",\"value\":\"9\"}]],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"int\"]}],\"unsupported\":[],\"verifications\":[]}"
+  },
+  {
+    "case": "secondary_source",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      mapping: {source: DONOR.X, dict: {A: 1, B: 2}, missing: 9}\n",
+    "inputs": {
+      "DONOR": "ID,X\na,A\nb,B\n",
+      "SRC": "ID\na\nb\nc\n"
+    },
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 17,
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "content": "ID,V\na,1\nb,2\nc,9\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V",
+            "a,1",
+            "b,2",
+            "c,9"
+          ],
+          "row_count": 3,
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-secondary_source",
+      "handler_counts": [
+        {
+          "count": 1,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.mapping.missing"
+        }
+      ],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [
+            {
+              "count": 1,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.mapping.missing"
+            }
+          ],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        },
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "donor.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "X"
+          ],
+          "name": "DONOR",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "A"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "B"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "int",
+                "value": "9"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V\na,1\nb,2\nc,9\n",
+    "expected_wire": "{\"artifacts\":[{\"byte_length\":17,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\na,1\\nb,2\\nc,9\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\",\"a,1\",\"b,2\",\"c,9\"],\"row_count\":3,\"types\":[\"str\",\"int\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-secondary_source\",\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.mapping.missing\"}],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.mapping.missing\"}],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1},{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"donor.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"}],[{\"type\":\"str\",\"value\":\"b\"}],[{\"type\":\"str\",\"value\":\"c\"}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\"]},{\"columns\":[\"ID\",\"X\"],\"name\":\"DONOR\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"A\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"str\",\"value\":\"B\"}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"str\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"int\",\"value\":\"1\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"int\",\"value\":\"2\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"int\",\"value\":\"9\"}]],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"int\"]}],\"unsupported\":[],\"verifications\":[]}"
+  },
+  {
+    "case": "lazy_case",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      case:\n        - when: \"ID = 'a'\"\n          then: {mapping: {source: SRC.X, dict: {Y: 1}, missing: 'bad', unmapped: null}}\n        - otherwise: {literal: 9}\n",
+    "inputs": {
+      "SRC": "ID,X\na,Y\nb,\n"
+    },
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 13,
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "content": "ID,V\na,1\nb,9\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V",
+            "a,1",
+            "b,9"
+          ],
+          "row_count": 2,
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-lazy_case",
+      "handler_counts": [
+        {
+          "count": 0,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.case[0].then.mapping.missing"
+        },
+        {
+          "count": 0,
+          "handler": "unmapped",
+          "spec_path": "columns.V.derivation.case[0].then.mapping.unmapped"
+        }
+      ],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.case[0].then.mapping.missing"
+            },
+            {
+              "count": 0,
+              "handler": "unmapped",
+              "spec_path": "columns.V.derivation.case[0].then.mapping.unmapped"
+            }
+          ],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "X"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "Y"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "9"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V\na,1\nb,9\n",
+    "expected_wire": "{\"artifacts\":[{\"byte_length\":13,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\na,1\\nb,9\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\",\"a,1\",\"b,9\"],\"row_count\":2,\"types\":[\"str\",\"int\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-lazy_case\",\"handler_counts\":[{\"count\":0,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.case[0].then.mapping.missing\"},{\"count\":0,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.case[0].then.mapping.unmapped\"}],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[{\"count\":0,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.case[0].then.mapping.missing\"},{\"count\":0,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.case[0].then.mapping.unmapped\"}],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"X\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"Y\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"missing\",\"value\":null}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"str\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"int\",\"value\":\"1\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"int\",\"value\":\"9\"}]],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"int\"]}],\"unsupported\":[],\"verifications\":[]}"
+  },
+  {
+    "case": "nested_concat",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      str_concat:\n        sources:\n          - {literal: 'got:'}\n          - {mapping: {source: SRC.X, dict: {Y: 'yes'}, missing: 'empty', unmapped: 'other'}}\n",
+    "inputs": {
+      "SRC": "ID,X\na,Y\nb,\nc,N\n"
+    },
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 39,
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "content": "ID,V\na,got:yes\nb,got:empty\nc,got:other\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V",
+            "a,got:yes",
+            "b,got:empty",
+            "c,got:other"
+          ],
+          "row_count": 3,
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-nested_concat",
+      "handler_counts": [
+        {
+          "count": 1,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.str_concat.sources[1].mapping.missing"
+        },
+        {
+          "count": 1,
+          "handler": "unmapped",
+          "spec_path": "columns.V.derivation.str_concat.sources[1].mapping.unmapped"
+        }
+      ],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [
+            {
+              "count": 1,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.str_concat.sources[1].mapping.missing"
+            },
+            {
+              "count": 1,
+              "handler": "unmapped",
+              "spec_path": "columns.V.derivation.str_concat.sources[1].mapping.unmapped"
+            }
+          ],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "X"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "Y"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "N"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "got:yes"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "got:empty"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "got:other"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V\na,got:yes\nb,got:empty\nc,got:other\n",
+    "expected_wire": "{\"artifacts\":[{\"byte_length\":39,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\na,got:yes\\nb,got:empty\\nc,got:other\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\",\"a,got:yes\",\"b,got:empty\",\"c,got:other\"],\"row_count\":3,\"types\":[\"str\",\"str\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-nested_concat\",\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.str_concat.sources[1].mapping.missing\"},{\"count\":1,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.str_concat.sources[1].mapping.unmapped\"}],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.str_concat.sources[1].mapping.missing\"},{\"count\":1,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.str_concat.sources[1].mapping.unmapped\"}],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"X\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"Y\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"missing\",\"value\":null}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"str\",\"value\":\"N\"}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"str\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"got:yes\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"str\",\"value\":\"got:empty\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"str\",\"value\":\"got:other\"}]],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"str\"]}],\"unsupported\":[],\"verifications\":[]}"
+  },
+  {
+    "case": "record_mapping",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n  - name: V\n    type: int\n    label: V\nrows:\n  - id: collected\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      V:\n        mapping: {source: SRC.X, dict: {Y: 1}, missing: 8, unmapped: 9}\n",
+    "inputs": {
+      "SRC": "ID,X\na,Y\nb,\nc,N\n"
+    },
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 17,
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "content": "ID,V\na,1\nb,8\nc,9\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V",
+            "a,1",
+            "b,8",
+            "c,9"
+          ],
+          "row_count": 3,
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-record_mapping",
+      "handler_counts": [
+        {
+          "count": 1,
+          "handler": "missing",
+          "spec_path": "rows[0].derivations.V.mapping.missing"
+        },
+        {
+          "count": 1,
+          "handler": "unmapped",
+          "spec_path": "rows[0].derivations.V.mapping.unmapped"
+        }
+      ],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [
+            {
+              "count": 1,
+              "handler": "missing",
+              "spec_path": "rows[0].derivations.V.mapping.missing"
+            },
+            {
+              "count": 1,
+              "handler": "unmapped",
+              "spec_path": "rows[0].derivations.V.mapping.unmapped"
+            }
+          ],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "X"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "Y"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "N"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "8"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "int",
+                "value": "9"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V\na,1\nb,8\nc,9\n",
+    "expected_wire": "{\"artifacts\":[{\"byte_length\":17,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\na,1\\nb,8\\nc,9\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\",\"a,1\",\"b,8\",\"c,9\"],\"row_count\":3,\"types\":[\"str\",\"int\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-record_mapping\",\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"rows[0].derivations.V.mapping.missing\"},{\"count\":1,\"handler\":\"unmapped\",\"spec_path\":\"rows[0].derivations.V.mapping.unmapped\"}],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"rows[0].derivations.V.mapping.missing\"},{\"count\":1,\"handler\":\"unmapped\",\"spec_path\":\"rows[0].derivations.V.mapping.unmapped\"}],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"X\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"Y\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"missing\",\"value\":null}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"str\",\"value\":\"N\"}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"str\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"int\",\"value\":\"1\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"int\",\"value\":\"8\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"int\",\"value\":\"9\"}]],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"int\"]}],\"unsupported\":[],\"verifications\":[]}"
+  },
+  {
+    "case": "left_closed",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: float}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [18, 65], labels: [child, adult, older], right: false, missing: null}\n",
+    "inputs": {
+      "SRC": "ID,N\na,17.5\nb,18.0\nc,65.0\nd,65.5\ne,\n"
+    },
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 40,
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "content": "ID,V\na,child\nb,adult\nc,older\nd,older\ne,\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V",
+            "a,child",
+            "b,adult",
+            "c,older",
+            "d,older",
+            "e,"
+          ],
+          "row_count": 5,
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-left_closed",
+      "handler_counts": [
+        {
+          "count": 1,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.cut.missing"
+        }
+      ],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [
+            {
+              "count": 1,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.cut.missing"
+            }
+          ],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "N"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "float",
+                "value": "4031800000000000"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "float",
+                "value": "4032000000000000"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "float",
+                "value": "4050400000000000"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "d"
+              },
+              {
+                "type": "float",
+                "value": "4050600000000000"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "e"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "float"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "child"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "adult"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "older"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "d"
+              },
+              {
+                "type": "str",
+                "value": "older"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "e"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V\na,child\nb,adult\nc,older\nd,older\ne,\n",
+    "expected_wire": "{\"artifacts\":[{\"byte_length\":40,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\na,child\\nb,adult\\nc,older\\nd,older\\ne,\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\",\"a,child\",\"b,adult\",\"c,older\",\"d,older\",\"e,\"],\"row_count\":5,\"types\":[\"str\",\"str\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-left_closed\",\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.cut.missing\"}],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.cut.missing\"}],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"N\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"float\",\"value\":\"4031800000000000\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"float\",\"value\":\"4032000000000000\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"float\",\"value\":\"4050400000000000\"}],[{\"type\":\"str\",\"value\":\"d\"},{\"type\":\"float\",\"value\":\"4050600000000000\"}],[{\"type\":\"str\",\"value\":\"e\"},{\"type\":\"missing\",\"value\":null}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"float\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"child\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"str\",\"value\":\"adult\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"str\",\"value\":\"older\"}],[{\"type\":\"str\",\"value\":\"d\"},{\"type\":\"str\",\"value\":\"older\"}],[{\"type\":\"str\",\"value\":\"e\"},{\"type\":\"missing\",\"value\":null}]],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"str\"]}],\"unsupported\":[],\"verifications\":[]}"
+  },
+  {
+    "case": "right_closed",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: float}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [18, 65], labels: [child, adult, older], right: true, missing: null}\n",
+    "inputs": {
+      "SRC": "ID,N\na,17.5\nb,18.0\nc,65.0\nd,65.5\ne,\n"
+    },
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 40,
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "content": "ID,V\na,child\nb,child\nc,adult\nd,older\ne,\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V",
+            "a,child",
+            "b,child",
+            "c,adult",
+            "d,older",
+            "e,"
+          ],
+          "row_count": 5,
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-right_closed",
+      "handler_counts": [
+        {
+          "count": 1,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.cut.missing"
+        }
+      ],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [
+            {
+              "count": 1,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.cut.missing"
+            }
+          ],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "N"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "float",
+                "value": "4031800000000000"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "float",
+                "value": "4032000000000000"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "float",
+                "value": "4050400000000000"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "d"
+              },
+              {
+                "type": "float",
+                "value": "4050600000000000"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "e"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "float"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "child"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "child"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "adult"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "d"
+              },
+              {
+                "type": "str",
+                "value": "older"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "e"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V\na,child\nb,child\nc,adult\nd,older\ne,\n",
+    "expected_wire": "{\"artifacts\":[{\"byte_length\":40,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\na,child\\nb,child\\nc,adult\\nd,older\\ne,\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\",\"a,child\",\"b,child\",\"c,adult\",\"d,older\",\"e,\"],\"row_count\":5,\"types\":[\"str\",\"str\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-right_closed\",\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.cut.missing\"}],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.cut.missing\"}],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"N\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"float\",\"value\":\"4031800000000000\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"float\",\"value\":\"4032000000000000\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"float\",\"value\":\"4050400000000000\"}],[{\"type\":\"str\",\"value\":\"d\"},{\"type\":\"float\",\"value\":\"4050600000000000\"}],[{\"type\":\"str\",\"value\":\"e\"},{\"type\":\"missing\",\"value\":null}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"float\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"child\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"str\",\"value\":\"child\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"str\",\"value\":\"adult\"}],[{\"type\":\"str\",\"value\":\"d\"},{\"type\":\"str\",\"value\":\"older\"}],[{\"type\":\"str\",\"value\":\"e\"},{\"type\":\"missing\",\"value\":null}]],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"str\"]}],\"unsupported\":[],\"verifications\":[]}"
+  },
+  {
+    "case": "integer_boundary",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [9007199254740992.0], labels: [before, after], right: true}\n",
+    "inputs": {
+      "SRC": "ID,N\na,9007199254740992\nb,9007199254740993\n"
+    },
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 22,
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "content": "ID,V\na,before\nb,after\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V",
+            "a,before",
+            "b,after"
+          ],
+          "row_count": 2,
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-integer_boundary",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "N"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "9007199254740992"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "9007199254740993"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "before"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "after"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V\na,before\nb,after\n",
+    "expected_wire": "{\"artifacts\":[{\"byte_length\":22,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\na,before\\nb,after\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\",\"a,before\",\"b,after\"],\"row_count\":2,\"types\":[\"str\",\"str\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-integer_boundary\",\"handler_counts\":[],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"N\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"int\",\"value\":\"9007199254740992\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"int\",\"value\":\"9007199254740993\"}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"int\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"before\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"str\",\"value\":\"after\"}]],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"str\"]}],\"unsupported\":[],\"verifications\":[]}"
+  },
+  {
+    "case": "single_interval",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [], labels: [all], missing: blank}\n",
+    "inputs": {
+      "SRC": "ID,N\na,-1\nb,\nc,99\n"
+    },
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 25,
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "content": "ID,V\na,all\nb,blank\nc,all\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V",
+            "a,all",
+            "b,blank",
+            "c,all"
+          ],
+          "row_count": 3,
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-single_interval",
+      "handler_counts": [
+        {
+          "count": 1,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.cut.missing"
+        }
+      ],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [
+            {
+              "count": 1,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.cut.missing"
+            }
+          ],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "N"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "-1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "int",
+                "value": "99"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "all"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "blank"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "all"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V\na,all\nb,blank\nc,all\n",
+    "expected_wire": "{\"artifacts\":[{\"byte_length\":25,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\na,all\\nb,blank\\nc,all\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\",\"a,all\",\"b,blank\",\"c,all\"],\"row_count\":3,\"types\":[\"str\",\"str\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-single_interval\",\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.cut.missing\"}],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.cut.missing\"}],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"N\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"int\",\"value\":\"-1\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"missing\",\"value\":null}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"int\",\"value\":\"99\"}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"int\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"all\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"str\",\"value\":\"blank\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"str\",\"value\":\"all\"}]],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"str\"]}],\"unsupported\":[],\"verifications\":[]}"
+  },
+  {
+    "case": "record_cut",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n  - name: V\n    type: str\n    label: V\nrows:\n  - id: collected\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      V:\n        cut: {source: SRC.N, breaks: [18], labels: [child, adult], missing: blank}\n",
+    "inputs": {
+      "SRC": "ID,N\na,17\nb,18\nc,\n"
+    },
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 29,
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "content": "ID,V\na,child\nb,adult\nc,blank\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V",
+            "a,child",
+            "b,adult",
+            "c,blank"
+          ],
+          "row_count": 3,
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-record_cut",
+      "handler_counts": [
+        {
+          "count": 1,
+          "handler": "missing",
+          "spec_path": "rows[0].derivations.V.cut.missing"
+        }
+      ],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [
+            {
+              "count": 1,
+              "handler": "missing",
+              "spec_path": "rows[0].derivations.V.cut.missing"
+            }
+          ],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "N"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "17"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "18"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "child"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "adult"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "blank"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V\na,child\nb,adult\nc,blank\n",
+    "expected_wire": "{\"artifacts\":[{\"byte_length\":29,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\na,child\\nb,adult\\nc,blank\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\",\"a,child\",\"b,adult\",\"c,blank\"],\"row_count\":3,\"types\":[\"str\",\"str\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-record_cut\",\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"rows[0].derivations.V.cut.missing\"}],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"rows[0].derivations.V.cut.missing\"}],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"N\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"int\",\"value\":\"17\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"int\",\"value\":\"18\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"missing\",\"value\":null}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"int\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"child\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"str\",\"value\":\"adult\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"str\",\"value\":\"blank\"}]],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"str\"]}],\"unsupported\":[],\"verifications\":[]}"
+  },
+  {
+    "case": "unmapped_fatal",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 'yes'}, missing: 'missing'}\n",
+    "inputs": {
+      "SRC": "ID,X\na,N\n"
+    },
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "unmapped_value",
+          "context": {
+            "keys": [
+              {
+                "ID": "a"
+              }
+            ],
+            "source": "SRC.X",
+            "value": "N"
+          },
+          "phase": "mapping",
+          "requirement": "REQ-0334",
+          "spec_paths": [
+            "columns.V.derivation.mapping"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-unmapped_fatal",
+      "handler_counts": [
+        {
+          "count": 0,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.mapping.missing"
+        }
+      ],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "unmapped_value",
+              "context": {
+                "keys": [
+                  {
+                    "ID": "a"
+                  }
+                ],
+                "source": "SRC.X",
+                "value": "N"
+              },
+              "phase": "mapping",
+              "requirement": "REQ-0334",
+              "spec_paths": [
+                "columns.V.derivation.mapping"
+              ]
+            }
+          ],
+          "handler_counts": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.mapping.missing"
+            }
+          ],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "X"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "N"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "",
+    "expected_wire": "{\"artifacts\":[],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[{\"condition\":\"unmapped_value\",\"context\":{\"keys\":[{\"ID\":\"a\"}],\"source\":\"SRC.X\",\"value\":\"N\"},\"phase\":\"mapping\",\"requirement\":\"REQ-0334\",\"spec_paths\":[\"columns.V.derivation.mapping\"]}],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-unmapped_fatal\",\"handler_counts\":[{\"count\":0,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.mapping.missing\"}],\"nodes\":[{\"diagnostics\":[{\"condition\":\"unmapped_value\",\"context\":{\"keys\":[{\"ID\":\"a\"}],\"source\":\"SRC.X\",\"value\":\"N\"},\"phase\":\"mapping\",\"requirement\":\"REQ-0334\",\"spec_paths\":[\"columns.V.derivation.mapping\"]}],\"handler_counts\":[{\"count\":0,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.mapping.missing\"}],\"outcome\":\"failure\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"failure\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"X\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"N\"}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"str\"]}],\"unsupported\":[],\"verifications\":[]}"
+  },
+  {
+    "case": "mapping_missing_fatal",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 'yes'}, unmapped: 'other'}\n",
+    "inputs": {
+      "SRC": "ID,X\na,\n"
+    },
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "missing_input",
+          "context": {
+            "keys": [
+              {
+                "ID": "a"
+              }
+            ],
+            "variable": "SRC.X"
+          },
+          "phase": "mapping",
+          "requirement": "REQ-0334",
+          "spec_paths": [
+            "columns.V.derivation.mapping"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-mapping_missing_fatal",
+      "handler_counts": [
+        {
+          "count": 0,
+          "handler": "unmapped",
+          "spec_path": "columns.V.derivation.mapping.unmapped"
+        }
+      ],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "missing_input",
+              "context": {
+                "keys": [
+                  {
+                    "ID": "a"
+                  }
+                ],
+                "variable": "SRC.X"
+              },
+              "phase": "mapping",
+              "requirement": "REQ-0334",
+              "spec_paths": [
+                "columns.V.derivation.mapping"
+              ]
+            }
+          ],
+          "handler_counts": [
+            {
+              "count": 0,
+              "handler": "unmapped",
+              "spec_path": "columns.V.derivation.mapping.unmapped"
+            }
+          ],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "X"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "",
+    "expected_wire": "{\"artifacts\":[],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[{\"condition\":\"missing_input\",\"context\":{\"keys\":[{\"ID\":\"a\"}],\"variable\":\"SRC.X\"},\"phase\":\"mapping\",\"requirement\":\"REQ-0334\",\"spec_paths\":[\"columns.V.derivation.mapping\"]}],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-mapping_missing_fatal\",\"handler_counts\":[{\"count\":0,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.mapping.unmapped\"}],\"nodes\":[{\"diagnostics\":[{\"condition\":\"missing_input\",\"context\":{\"keys\":[{\"ID\":\"a\"}],\"variable\":\"SRC.X\"},\"phase\":\"mapping\",\"requirement\":\"REQ-0334\",\"spec_paths\":[\"columns.V.derivation.mapping\"]}],\"handler_counts\":[{\"count\":0,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.mapping.unmapped\"}],\"outcome\":\"failure\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"failure\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"X\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"missing\",\"value\":null}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"str\"]}],\"unsupported\":[],\"verifications\":[]}"
+  },
+  {
+    "case": "cut_missing_fatal",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [18], labels: [child, adult]}\n",
+    "inputs": {
+      "SRC": "ID,N\na,\n"
+    },
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "missing_input",
+          "context": {
+            "keys": [
+              {
+                "ID": "a"
+              }
+            ],
+            "variable": "SRC.N"
+          },
+          "phase": "cut",
+          "requirement": "REQ-0334",
+          "spec_paths": [
+            "columns.V.derivation.cut"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-cut_missing_fatal",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "missing_input",
+              "context": {
+                "keys": [
+                  {
+                    "ID": "a"
+                  }
+                ],
+                "variable": "SRC.N"
+              },
+              "phase": "cut",
+              "requirement": "REQ-0334",
+              "spec_paths": [
+                "columns.V.derivation.cut"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "N"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "",
+    "expected_wire": "{\"artifacts\":[],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[{\"condition\":\"missing_input\",\"context\":{\"keys\":[{\"ID\":\"a\"}],\"variable\":\"SRC.N\"},\"phase\":\"cut\",\"requirement\":\"REQ-0334\",\"spec_paths\":[\"columns.V.derivation.cut\"]}],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-cut_missing_fatal\",\"handler_counts\":[],\"nodes\":[{\"diagnostics\":[{\"condition\":\"missing_input\",\"context\":{\"keys\":[{\"ID\":\"a\"}],\"variable\":\"SRC.N\"},\"phase\":\"cut\",\"requirement\":\"REQ-0334\",\"spec_paths\":[\"columns.V.derivation.cut\"]}],\"handler_counts\":[],\"outcome\":\"failure\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"failure\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"N\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"missing\",\"value\":null}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"int\"]}],\"unsupported\":[],\"verifications\":[]}"
+  },
+  {
+    "case": "cut_text_type",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.X, breaks: [18], labels: [child, adult]}\n",
+    "inputs": {
+      "SRC": "ID,X\na,20\n"
+    },
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "incompatible_input_type",
+          "context": {
+            "actual": "str",
+            "expected": "numeric",
+            "source": "SRC.X"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0306",
+          "spec_paths": [
+            "columns.V.derivation.cut.source"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-cut_text_type",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "incompatible_input_type",
+              "context": {
+                "actual": "str",
+                "expected": "numeric",
+                "source": "SRC.X"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0306",
+              "spec_paths": [
+                "columns.V.derivation.cut.source"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "X"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "20"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "",
+    "expected_wire": "{\"artifacts\":[],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[{\"condition\":\"incompatible_input_type\",\"context\":{\"actual\":\"str\",\"expected\":\"numeric\",\"source\":\"SRC.X\"},\"phase\":\"validation\",\"requirement\":\"REQ-0306\",\"spec_paths\":[\"columns.V.derivation.cut.source\"]}],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-cut_text_type\",\"handler_counts\":[],\"nodes\":[{\"diagnostics\":[{\"condition\":\"incompatible_input_type\",\"context\":{\"actual\":\"str\",\"expected\":\"numeric\",\"source\":\"SRC.X\"},\"phase\":\"validation\",\"requirement\":\"REQ-0306\",\"spec_paths\":[\"columns.V.derivation.cut.source\"]}],\"handler_counts\":[],\"outcome\":\"failure\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"failure\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"X\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"20\"}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"str\"]}],\"unsupported\":[],\"verifications\":[]}"
+  },
+  {
+    "case": "invalid_missing_literal",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 1}, missing: 'bad'}\n",
+    "inputs": {
+      "SRC": "ID,X\na,\n"
+    },
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "conversion_failed",
+          "context": {
+            "from": "str",
+            "handler": "missing",
+            "keys": [
+              {
+                "ID": "a"
+              }
+            ],
+            "to": "int",
+            "value": "bad",
+            "variable": "SRC.X"
+          },
+          "phase": "convert",
+          "requirement": "REQ-0013",
+          "spec_paths": [
+            "columns.V",
+            "columns.V.derivation.mapping.missing"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-invalid_missing_literal",
+      "handler_counts": [
+        {
+          "count": 1,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.mapping.missing"
+        }
+      ],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "conversion_failed",
+              "context": {
+                "from": "str",
+                "handler": "missing",
+                "keys": [
+                  {
+                    "ID": "a"
+                  }
+                ],
+                "to": "int",
+                "value": "bad",
+                "variable": "SRC.X"
+              },
+              "phase": "convert",
+              "requirement": "REQ-0013",
+              "spec_paths": [
+                "columns.V",
+                "columns.V.derivation.mapping.missing"
+              ]
+            }
+          ],
+          "handler_counts": [
+            {
+              "count": 1,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.mapping.missing"
+            }
+          ],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "X"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "",
+    "expected_wire": "{\"artifacts\":[],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[{\"condition\":\"conversion_failed\",\"context\":{\"from\":\"str\",\"handler\":\"missing\",\"keys\":[{\"ID\":\"a\"}],\"to\":\"int\",\"value\":\"bad\",\"variable\":\"SRC.X\"},\"phase\":\"convert\",\"requirement\":\"REQ-0013\",\"spec_paths\":[\"columns.V\",\"columns.V.derivation.mapping.missing\"]}],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-invalid_missing_literal\",\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.mapping.missing\"}],\"nodes\":[{\"diagnostics\":[{\"condition\":\"conversion_failed\",\"context\":{\"from\":\"str\",\"handler\":\"missing\",\"keys\":[{\"ID\":\"a\"}],\"to\":\"int\",\"value\":\"bad\",\"variable\":\"SRC.X\"},\"phase\":\"convert\",\"requirement\":\"REQ-0013\",\"spec_paths\":[\"columns.V\",\"columns.V.derivation.mapping.missing\"]}],\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.mapping.missing\"}],\"outcome\":\"failure\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"failure\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"X\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"missing\",\"value\":null}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"str\"]}],\"unsupported\":[],\"verifications\":[]}"
+  },
+  {
+    "case": "multiple_distinct_input",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: {variable: SRC.X, filter: \"SRC.F = 'Y'\"}, dict: {Y: yes}, missing: blank, unmapped: other}\n",
+    "inputs": {
+      "SRC": "ID,X,F\na,Y,Y\na,Q,Y\n"
+    },
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "multiple_values_per_key",
+          "context": {
+            "identifier": "SRC.X",
+            "keys": [
+              {
+                "ID": "a"
+              }
+            ],
+            "value_count": 2
+          },
+          "phase": "derivation",
+          "requirement": "REQ-0075",
+          "spec_paths": [
+            "columns.V.derivation.mapping"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "mapping-cut-multiple_distinct_input",
+      "handler_counts": [
+        {
+          "count": 0,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.mapping.missing"
+        },
+        {
+          "count": 0,
+          "handler": "unmapped",
+          "spec_path": "columns.V.derivation.mapping.unmapped"
+        }
+      ],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "multiple_values_per_key",
+              "context": {
+                "identifier": "SRC.X",
+                "keys": [
+                  {
+                    "ID": "a"
+                  }
+                ],
+                "value_count": 2
+              },
+              "phase": "derivation",
+              "requirement": "REQ-0075",
+              "spec_paths": [
+                "columns.V.derivation.mapping"
+              ]
+            }
+          ],
+          "handler_counts": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.mapping.missing"
+            },
+            {
+              "count": 0,
+              "handler": "unmapped",
+              "spec_path": "columns.V.derivation.mapping.unmapped"
+            }
+          ],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "src.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "X",
+            "F"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "Y"
+              },
+              {
+                "type": "str",
+                "value": "Y"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "Q"
+              },
+              {
+                "type": "str",
+                "value": "Y"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "",
+    "expected_wire": "{\"artifacts\":[],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[{\"condition\":\"multiple_values_per_key\",\"context\":{\"identifier\":\"SRC.X\",\"keys\":[{\"ID\":\"a\"}],\"value_count\":2},\"phase\":\"derivation\",\"requirement\":\"REQ-0075\",\"spec_paths\":[\"columns.V.derivation.mapping\"]}],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-multiple_distinct_input\",\"handler_counts\":[{\"count\":0,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.mapping.missing\"},{\"count\":0,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.mapping.unmapped\"}],\"nodes\":[{\"diagnostics\":[{\"condition\":\"multiple_values_per_key\",\"context\":{\"identifier\":\"SRC.X\",\"keys\":[{\"ID\":\"a\"}],\"value_count\":2},\"phase\":\"derivation\",\"requirement\":\"REQ-0075\",\"spec_paths\":[\"columns.V.derivation.mapping\"]}],\"handler_counts\":[{\"count\":0,\"handler\":\"missing\",\"spec_path\":\"columns.V.derivation.mapping.missing\"},{\"count\":0,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.mapping.unmapped\"}],\"outcome\":\"failure\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"failure\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"X\",\"F\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"Y\"},{\"type\":\"str\",\"value\":\"Y\"}],[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"Q\"},{\"type\":\"str\",\"value\":\"Y\"}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"str\",\"str\"]}],\"unsupported\":[],\"verifications\":[]}"
+  }
+]

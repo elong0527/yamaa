@@ -4,7 +4,6 @@ use yamaa_core::{
     producer_admission::{self, Candidate, Error, Limits, Prepared},
     project_environment::ExecutionEnvironment,
     schema::SpecificationDocument,
-    specification::PrepareError,
 };
 
 #[derive(Debug)]
@@ -31,12 +30,5 @@ pub fn check(
 impl CheckedProducerMetadata {
     pub fn metadata(&self) -> &Prepared {
         &self.prepared
-    }
-    /// Until #1741 qualifies orchestration, callers cannot obtain the ordinary
-    /// check/build capability. Refusal precedes every source or runtime effect.
-    pub fn execution_capability(
-        &self,
-    ) -> Result<&crate::domain::CheckedSpecification, PrepareError> {
-        Err(self.prepared.execution_refusal())
     }
 }

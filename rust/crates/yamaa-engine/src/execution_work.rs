@@ -37,7 +37,8 @@ impl Usage {
 }
 
 /// One whole-attempt owner; interrupted executions reserve all remaining capacity.
-/// Legacy callers keep their existing work-only accounting and local policies.
+/// The work-only owner is the base accounting; pooled owners add the native
+/// graph's measured execution charges and retained geometry.
 pub struct WorkBudget {
     limit: usize,
     used: Cell<usize>,

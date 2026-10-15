@@ -21,7 +21,7 @@ fn checked_metadata_never_grants_the_ordinary_build_or_activation_capability() {
         checked.metadata().producers()[0].producer_identity(),
         "/producer.yaml"
     );
-    let Err(PrepareError::Unsupported(features)) = checked.execution_capability() else {
+    let PrepareError::Unsupported(features) = checked.metadata().execution_refusal() else {
         panic!("producer workflow is not qualified")
     };
     assert_eq!(features[0].operation, "producer_workflow");

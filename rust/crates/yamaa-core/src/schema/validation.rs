@@ -48,44 +48,6 @@ impl SchemaDiagnostic {
     }
 }
 
-// These are historical spellings, scoped to their former schema owner. They
-// remain invalid; the hints do not admit aliases or change finding order.
-const ENVIRONMENT_MIGRATION: &str = "replace the retired environment format with language, lock and functions definitions containing function, description, params, returns and tests (REQ-1080, REQ-1083); see benchmarks/adam-adsl-bmi";
-
-fn retired_field_hint(class: &str, field: &str) -> Option<&'static str> {
-    match (class, field) {
-        ("assert", "expr") => Some("replace expr with require (REQ-0384)"),
-        ("function", "contract_version") => {
-            Some("delete contract_version; a call takes name and args only (REQ-1085)")
-        }
-        ("environment_class", "version" | "runtime")
-        | ("function_definition_class", "contract" | "binding" | "conformance") => {
-            Some(ENVIRONMENT_MIGRATION)
-        }
-        _ => None,
-    }
-}
-
-fn retired_operation_hint(registry: &str, operation: &str) -> Option<&'static str> {
-    match (registry, operation) {
-        ("dataset_verifications", "implies") => {
-            Some("replace implies with assert using when and require (REQ-0383)")
-        }
-        _ => None,
-    }
-}
-
-fn migration_context(
-    mut context: Vec<(&'static str, SchemaContext)>,
-    suggestion: Option<&str>,
-) -> Vec<(&'static str, SchemaContext)> {
-    if let Some(suggestion) = suggestion {
-        context.push(("retired", SchemaContext::Boolean(true)));
-        context.push(("suggestion", SchemaContext::Text(suggestion.into())));
-    }
-    context
-}
-
 /// Each default is interpreted against its descriptor after all references resolve.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DefaultDiagnostics {
@@ -483,19 +445,6 @@ impl Run<'_, '_> {
         let N::Mapping(items) = &self.input.nodes()[site.value] else {
             return self.invalid(site, name);
         };
-        let missing_hint = match name {
-            "assert" if self.field(site.value, "expr")?.is_some() => {
-                retired_field_hint("assert", "expr")
-            }
-            "function_definition_class"
-                if self.field(site.value, "contract")?.is_some()
-                    || self.field(site.value, "binding")?.is_some()
-                    || self.field(site.value, "conformance")?.is_some() =>
-            {
-                Some(ENVIRONMENT_MIGRATION)
-            }
-            _ => None,
-        };
         let mut diagnostics = Vec::new();
         for field in fields {
             self.budget.work(1)?;
@@ -516,13 +465,10 @@ impl Run<'_, '_> {
                         } else {
                             ConditionCode::SchemaMissingRequiredField
                         },
-                        migration_context(
-                            vec![
-                                ("field", Self::text(&field.name)),
-                                ("class", Self::text(name)),
-                            ],
-                            missing_hint,
-                        ),
+                        vec![
+                            ("field", Self::text(&field.name)),
+                            ("class", Self::text(name)),
+                        ],
                     )?)
                 }
                 None => {}
@@ -542,10 +488,7 @@ impl Run<'_, '_> {
                 diagnostics.push(self.diagnostic(
                     site.child(site.value, &path),
                     ConditionCode::SchemaUnknownField,
-                    migration_context(
-                        vec![("field", Self::text(&key)), ("class", Self::text(name))],
-                        retired_field_hint(name, &key),
-                    ),
+                    vec![("field", Self::text(&key)), ("class", Self::text(name))],
                 )?);
             }
         }
@@ -692,13 +635,10 @@ impl Run<'_, '_> {
                         return Ok(vec![self.diagnostic(
                             site.child(site.value, &path),
                             ConditionCode::SchemaUnknownOperation,
-                            migration_context(
-                                vec![
-                                    ("registry", Self::text(&registry.name)),
-                                    ("operation", Self::text(&operation)),
-                                ],
-                                retired_operation_hint(&registry.name, &operation),
-                            ),
+                            vec![
+                                ("registry", Self::text(&registry.name)),
+                                ("operation", Self::text(&operation)),
+                            ],
                         )?]);
                     };
                     match &entry.shape {
@@ -912,60 +852,6 @@ impl SchemaStructure {
                 fragment,
             },
         )
-    }
-    /// Select a projected union member, including an empty union after cycle filtering.
-    pub fn matching_types<'a>(
-        &self,
-        types: &'a [TypeExpression],
-        input: &Document,
-        value: usize,
-        fragment: bool,
-        budget: &mut ValidationBudget,
-    ) -> Result<Option<&'a str>, ValidationError> {
-        if value >= input.nodes().len() {
-            return Err(ValidationError::InvalidDescriptor);
-        }
-        for member in types {
-            if matches_member(
-                self,
-                input,
-                (member, member.root()),
-                value,
-                fragment,
-                &[],
-                budget,
-            )? {
-                return Ok(member.node_text(member.root()));
-            }
-        }
-        Ok(None)
-    }
-    /// Return the first matching written type for an admitted descriptor, without expansion.
-    pub fn matching_member<'a>(
-        &'a self,
-        descriptor: usize,
-        input: &Document,
-        value: usize,
-        fragment: bool,
-        budget: &mut ValidationBudget,
-    ) -> Result<Option<&'a str>, ValidationError> {
-        if descriptor >= self.descriptors().len() || value >= input.nodes().len() {
-            return Err(ValidationError::InvalidDescriptor);
-        }
-        for member in self.descriptors()[descriptor].descriptor.members() {
-            if matches_member(
-                self,
-                input,
-                (member, member.root()),
-                value,
-                fragment,
-                &[],
-                budget,
-            )? {
-                return Ok(member.node_text(member.root()));
-            }
-        }
-        Ok(None)
     }
     /// Validate a raw document, checking its version before every other authored field.
     pub fn validate_document(

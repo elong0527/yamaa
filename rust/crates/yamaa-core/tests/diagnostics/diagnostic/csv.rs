@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use yamaa_core::{
     csv_source::{parse, Limits},
-    diagnostic::{ConditionCode, ContextValue as C},
+    diagnostic::{ConditionCode, ContextValue as C, MAX_PROJECTION_BYTES},
     value::Value,
 };
 pub(super) fn reached() -> BTreeSet<ConditionCode> {
@@ -79,7 +79,11 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
         ),
     ] {
         let error = parse(input, Limits::default()).unwrap_err();
-        let finding = error.diagnostic("SRC", "source.csv").unwrap();
+        let finding = error
+            .finding("SRC", "source.csv")
+            .unwrap()
+            .diagnostic_with_limit(MAX_PROJECTION_BYTES)
+            .unwrap();
         let definition = finding.definition();
         assert_eq!(
             (
@@ -114,7 +118,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
         },
     )
     .unwrap_err();
-    assert!(error.diagnostic("SRC", "source.csv").is_none());
+    assert!(error.finding("SRC", "source.csv").is_none());
     assert!(error.requirement().is_none());
     reached
 }
@@ -155,7 +159,11 @@ pub(super) fn typing_reached() -> std::collections::BTreeSet<yamaa_core::diagnos
         let error = types
             .convert(csv_source::parse(content, Default::default()).unwrap())
             .unwrap_err();
-        let diagnostic = error.diagnostic("SRC").unwrap();
+        let diagnostic = error
+            .finding("SRC")
+            .unwrap()
+            .diagnostic_with_limit(MAX_PROJECTION_BYTES)
+            .unwrap();
         let definition = diagnostic.definition();
         assert_eq!(
             (

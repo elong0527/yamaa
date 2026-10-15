@@ -87,16 +87,6 @@ impl Error {
             path,
         })
     }
-    /// Unbounded owned compatibility. New callers use whole borrowed report admission;
-    /// this existing Option signature and codec-boundary refusals stay unchanged.
-    pub fn diagnostic(
-        &self,
-        dataset: &str,
-        path: &str,
-    ) -> Option<yamaa_core::diagnostic::Diagnostic> {
-        self.finding(dataset, path)
-            .map(yamaa_core::diagnostic::SourceFinding::owned_compatibility)
-    }
 }
 
 impl From<reader::Error> for Error {

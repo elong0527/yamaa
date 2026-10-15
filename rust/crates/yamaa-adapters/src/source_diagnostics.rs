@@ -1,7 +1,7 @@
 //! Extract retained codec facts; core admits their complete ordered projection.
 use crate::{csv_source::TextTableError, specification_run::Error};
 use yamaa_core::diagnostic::{
-    admit_source_diagnostics, Diagnostic, ProjectionError, SourceFinding, MAX_PROJECTION_BYTES,
+    admit_source_diagnostics, Diagnostic, ProjectionError, SourceFinding,
 };
 use yamaa_engine::specification::SourceDeclaration;
 
@@ -118,13 +118,6 @@ fn append<'a>(
         _ => borrowed.push(finding(error, source).ok_or(ProjectionError::InvalidContext)?),
     }
     Ok(())
-}
-
-pub fn findings(
-    error: &Error,
-    source: Option<&SourceDeclaration>,
-) -> Result<Option<Vec<Diagnostic>>, SourceProjectionError> {
-    findings_with_limit(error, source, MAX_PROJECTION_BYTES)
 }
 
 /// Preserve authored input order across codec findings and engine-owned required

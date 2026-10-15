@@ -78,7 +78,6 @@ fn assert_complete(error: &Error, source: &SourceDeclaration, expected: &Value) 
             .unwrap(),
         *wanted
     );
-    assert_eq!(projection::findings(error, Some(source)).unwrap(), *wanted);
     let failure: Value = serde_json::from_str(&projection::failure(error, Some(source))).unwrap();
     assert_eq!(
         failure,
@@ -90,14 +89,19 @@ fn assert_complete(error: &Error, source: &SourceDeclaration, expected: &Value) 
 fn all_independent_csv_profile_reports_survive_bounded_original_projection() {
     let declaration = source("SRC", "source.csv");
     let mut count = 0;
-    for line in include_str!("../fixtures/csv_profile_diagnostics.tsv")
-        .lines()
-        .skip(1)
+    for row in
+        serde_json::from_str::<Vec<Value>>(include_str!("../fixtures/csv_profile_diagnostics.json"))
+            .unwrap()
+            .iter()
     {
-        let fields: Vec<_> = line.split('\t').collect();
-        let expected: Value = serde_json::from_str(fields[2]).unwrap();
+        let expected: Value = row["expected"].clone();
+        let source_bytes: Vec<u8> = if let Some(text) = row["source_bytes"].as_str() {
+            text.as_bytes().to_vec()
+        } else {
+            bytes(row["source_bytes"]["hex"].as_str().unwrap())
+        };
         let error = Error::Source(TextTableError::Csv(
-            csv_source::parse(&bytes(fields[3]), Default::default()).unwrap_err(),
+            csv_source::parse(&source_bytes, Default::default()).unwrap_err(),
         ));
         assert_complete(&error, &declaration, &expected["diagnostics"]);
         count += 1;
@@ -109,13 +113,12 @@ fn all_independent_csv_profile_reports_survive_bounded_original_projection() {
 fn all_independent_typing_reports_keep_original_first_bad_field_and_value() {
     let declaration = source("SRC", "source.csv");
     let mut count = 0;
-    for line in include_str!("../fixtures/source_typing.tsv")
-        .lines()
-        .skip(1)
+    for row in serde_json::from_str::<Vec<Value>>(include_str!("../fixtures/source_typing.json"))
+        .unwrap()
+        .iter()
     {
-        let fields: Vec<_> = line.split('\t').collect();
-        let expected: Value = serde_json::from_str(fields[2]).unwrap();
-        let types = match fields[0] {
+        let expected: Value = row["expected"].clone();
+        let types = match row["case"].as_str().unwrap() {
             "unknown-field" => vec![
                 ("ID".into(), ColumnType::Int),
                 ("ABSENT".into(), ColumnType::Int),
@@ -128,14 +131,14 @@ fn all_independent_typing_reports_keep_original_first_bad_field_and_value() {
             "invalid-temporal" => vec![("V".into(), ColumnType::Date)],
             _ => panic!("unknown independent fixture"),
         };
+        let source_bytes: Vec<u8> = if let Some(text) = row["source_bytes"].as_str() {
+            text.as_bytes().to_vec()
+        } else {
+            bytes(row["source_bytes"]["hex"].as_str().unwrap())
+        };
         let error = Error::TypedSource(
-            typed_csv::parse(
-                &bytes(fields[3]),
-                &types,
-                Default::default(),
-                table_limits(),
-            )
-            .unwrap_err(),
+            typed_csv::parse(&source_bytes, &types, Default::default(), table_limits())
+                .unwrap_err(),
         );
         assert_complete(&error, &declaration, &expected["diagnostics"]);
         count += 1;
@@ -401,7 +404,7 @@ fn default_projection_refuses_full_oversized_value_without_truncation_or_partial
         ),
     ]);
     assert_eq!(
-        source_diagnostics::findings(&error, None),
+        source_diagnostics::findings_with_limit(&error, None, MAX_PROJECTION_BYTES),
         Err(source_diagnostics::SourceProjectionError::Context(
             ProjectionError::Limit
         ))
@@ -411,8 +414,16 @@ fn default_projection_refuses_full_oversized_value_without_truncation_or_partial
         failure,
         json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"ingest","code":"diagnostic_context_limit"}})
     );
-    // The former owned API retains its contract while callers migrate explicitly.
-    assert_eq!(projection::findings(&error, None).unwrap().len(), 2);
+    // The specification-level projection with an explicit unbounded limit
+    // still collects both findings; only the bounded source projection
+    // above refuses the oversized context.
+    assert_eq!(
+        projection::findings_with_limit(&error, None, usize::MAX)
+            .unwrap()
+            .unwrap()
+            .len(),
+        2
+    );
     let Error::Sources(errors) = &error else {
         panic!()
     };
@@ -543,7 +554,10 @@ fn reached_opaque_barrier_stops_before_later_deep_and_oversized_semantic_facts()
         source_diagnostics::findings_with_limit(&error, None, 0),
         Ok(None)
     );
-    assert_eq!(source_diagnostics::findings(&error, None), Ok(None));
+    assert_eq!(
+        source_diagnostics::findings_with_limit(&error, None, MAX_PROJECTION_BYTES),
+        Ok(None)
+    );
     let failure: Value = serde_json::from_str(&projection::failure(&error, None)).unwrap();
     assert_eq!(
         failure["outcome"],
@@ -566,9 +580,10 @@ fn structural_frame_refusal_precedes_only_unreached_late_barriers_and_preserves_
     };
     let pointer = stored_type.as_ptr();
     let admitted = nested(leaf, source_diagnostics::MAX_SOURCE_REPORT_FRAMES);
-    let diagnostics = source_diagnostics::findings(&admitted, None)
-        .unwrap()
-        .unwrap();
+    let diagnostics =
+        source_diagnostics::findings_with_limit(&admitted, None, MAX_PROJECTION_BYTES)
+            .unwrap()
+            .unwrap();
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(diagnostics[0].spec_paths, ["input.DEEP.path"]);
     // The outer collection requires one more active frame, and must refuse before
@@ -582,7 +597,7 @@ fn structural_frame_refusal_precedes_only_unreached_late_barriers_and_preserves_
         Err(source_diagnostics::SourceProjectionError::TraversalLimit)
     );
     assert_eq!(
-        source_diagnostics::findings(&refused, None),
+        source_diagnostics::findings_with_limit(&refused, None, MAX_PROJECTION_BYTES),
         Err(source_diagnostics::SourceProjectionError::TraversalLimit)
     );
     let failure: Value = serde_json::from_str(&projection::failure(&refused, None)).unwrap();

@@ -277,14 +277,6 @@ fn encode_dataset_projection<T: TableAccess<Error = std::convert::Infallible>>(
     encode_table_projection(table, projection, budget)
 }
 
-/// Export accepted output without a fixed byte or single-batch restriction.
-pub fn encode_dataset_with_budget(
-    table: &Dataset,
-    budget: ExecutionBudget,
-) -> Result<Vec<u8>, Error> {
-    encode_table_projection(table, None, budget)
-}
-
 fn encode_table_projection<T: TableAccess<Error = std::convert::Infallible>>(
     table: &T,
     projection: Option<&[usize]>,
@@ -297,20 +289,12 @@ fn encode_table_projection<T: TableAccess<Error = std::convert::Infallible>>(
 
 /// Lazily rebuild accepted values into sanitized Arrow batches.
 /// No batch is exposed until the complete dataset has passed engine checks.
-pub struct DatasetBatches<'a, T = Dataset> {
+pub(crate) struct DatasetBatches<'a, T = Dataset> {
     table: &'a T,
     projection: Option<&'a [usize]>,
     start: usize,
     batch_rows: usize,
     remaining: usize,
-}
-
-/// Chunk an already accepted dataset; None preserves single-batch export.
-pub fn dataset_batches(
-    table: &Dataset,
-    budget: ExecutionBudget,
-) -> Result<DatasetBatches<'_>, Error> {
-    table_batches(table, None, budget)
 }
 
 fn table_batches<'a, T: TableAccess<Error = std::convert::Infallible>>(
@@ -385,16 +369,6 @@ impl<T: TableAccess<Error = std::convert::Infallible>> Iterator for DatasetBatch
 impl<T: TableAccess<Error = std::convert::Infallible>> std::iter::FusedIterator
     for DatasetBatches<'_, T>
 {
-}
-
-/// Write chunks directly to the supplied sink, bounding cumulative encoded bytes.
-/// A sink failure can leave a partial stream; publication belongs to the caller.
-pub fn write_dataset_with_budget(
-    table: &Dataset,
-    output: &mut impl Write,
-    budget: ExecutionBudget,
-) -> Result<(), Error> {
-    write_table_projection(table, None, output, budget)
 }
 
 fn write_table_projection<T: TableAccess<Error = std::convert::Infallible>>(
@@ -573,9 +547,6 @@ fn check_field(field: arrow_ipc::Field<'_>, top: bool) -> Result<(), Error> {
 /// Only little-endian uncompressed V5 streams with explicit EOS are accepted.
 pub(crate) struct SnapshotShape {
     pub schema: TableSchema,
-    pub rows: usize,
-    pub cells: usize,
-    pub batches: usize,
 }
 
 pub(crate) fn preflight(mut input: &[u8], budget: ExecutionBudget) -> Result<SnapshotShape, Error> {
@@ -595,15 +566,7 @@ pub(crate) fn preflight(mut input: &[u8], budget: ExecutionBudget) -> Result<Sna
                 return Err(Error::InvalidStream);
             }
             let schema = schema.ok_or(Error::InvalidStream)?;
-            let cells = rows
-                .checked_mul(schema.columns().len())
-                .ok_or(Error::ShapeLimit)?;
-            return Ok(SnapshotShape {
-                schema,
-                rows,
-                cells,
-                batches,
-            });
+            return Ok(SnapshotShape { schema });
         }
         let length = usize::try_from(length).map_err(|_| Error::InvalidStream)?;
         if length > MAX_METADATA {

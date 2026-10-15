@@ -97,12 +97,6 @@ impl Error {
             path,
         })
     }
-    /// Unbounded owned compatibility; use complete borrowed report admission for new callers.
-    /// This existing Option signature is retained until its callers migrate.
-    pub fn diagnostic(&self, dataset: &str, path: &str) -> Option<crate::diagnostic::Diagnostic> {
-        self.finding(dataset, path)
-            .map(crate::diagnostic::SourceFinding::owned_compatibility)
-    }
 }
 fn failure(cause: ProfileCause, record: usize, field: usize) -> Error {
     Error::Profile {

@@ -195,19 +195,41 @@ pub(crate) fn source(error: &Error, source: &SourceDeclaration) -> Option<Refusa
     ))
 }
 /// A mixed ingestion collection retains authored order and the original barrier.
-pub(crate) fn source_findings(error: &Error, source: &SourceDeclaration) -> Option<Vec<Value>> {
+pub(crate) fn source_findings(
+    error: &Error,
+    source: &SourceDeclaration,
+) -> Result<Option<Vec<Value>>, crate::source_diagnostics::SourceProjectionError> {
+    source_findings_at(error, source, 0)
+}
+fn source_findings_at(
+    error: &Error,
+    source: &SourceDeclaration,
+    depth: usize,
+) -> Result<Option<Vec<Value>>, crate::source_diagnostics::SourceProjectionError> {
+    let projected = crate::specification_diagnostics::findings_with_limit(
+        error,
+        Some(source),
+        yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
+    )?;
+    if projected.is_some() {
+        return Ok(projected);
+    }
     if let Error::Sources(errors) = error {
+        if depth == crate::source_diagnostics::MAX_SOURCE_REPORT_FRAMES {
+            return Err(crate::source_diagnostics::SourceProjectionError::TraversalLimit);
+        }
         let mut findings = Vec::new();
         for (source, error) in errors {
-            findings.extend(source_findings(error, source)?);
+            let Some(projected) = source_findings_at(error, source, depth + 1)? else {
+                return Ok(None);
+            };
+            findings.extend(projected);
         }
-        return Some(findings);
+        return Ok(Some(findings));
     }
-    crate::specification_diagnostics::findings(error, Some(source)).or_else(|| {
-        Some(vec![
-            self::source(error, source)?.value("ingest", "source_limit")?
-        ])
-    })
+    Ok(self::source(error, source)
+        .and_then(|refusal| refusal.value("ingest", "source_limit"))
+        .map(|finding| vec![finding]))
 }
 pub(crate) fn run_limit<E>(
     error: &yamaa_engine::specification_run::RunError<E>,
@@ -287,6 +309,32 @@ pub(crate) fn outcome(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn source_projection_refusals_survive_resource_fallback() {
+        use crate::source_diagnostics::SourceProjectionError;
+        use yamaa_core::diagnostic::{ProjectionError, MAX_PROJECTION_BYTES};
+        let error = Error::TypedSource(crate::typed_csv::Error::Typing(
+            yamaa_core::typed_csv::Error::FieldParse {
+                field: "N".into(),
+                target: yamaa_core::value::ColumnType::Int,
+                value: "x".repeat(MAX_PROJECTION_BYTES / 6),
+            },
+        ));
+        assert_eq!(
+            source_findings(&error, &input()),
+            Err(SourceProjectionError::Context(ProjectionError::Limit))
+        );
+        let mut error = Error::Source(TextTableError::Csv(
+            crate::csv_source::parse(b"", Default::default()).unwrap_err(),
+        ));
+        for _ in 0..=crate::source_diagnostics::MAX_SOURCE_REPORT_FRAMES {
+            error = Error::Sources(vec![(input(), error)]);
+        }
+        assert_eq!(
+            source_findings(&error, &input()),
+            Err(SourceProjectionError::TraversalLimit)
+        );
+    }
     fn input() -> SourceDeclaration {
         SourceDeclaration {
             name: "XW".into(),

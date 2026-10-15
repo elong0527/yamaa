@@ -25,7 +25,6 @@ pub struct OutputLimit {
 pub struct StringPad {
     source: String,
     path: String,
-    width_text: String,
     width: Option<usize>,
 }
 
@@ -79,7 +78,6 @@ impl StringPad {
         Ok(Self {
             source: source.into(),
             path: path.into(),
-            width_text: width.into(),
             width: width.parse().ok(),
         })
     }
@@ -89,10 +87,6 @@ impl StringPad {
     pub fn path(&self) -> &str {
         &self.path
     }
-    pub fn width_text(&self) -> &str {
-        &self.width_text
-    }
-
     /// The caller admits authored subject scan work before this call. No authored
     /// text is copied. Primitive conversion reuses the core conversion owner and
     /// allocates at most MAX_PRIMITIVE_TEXT_BYTES; bool preserves its existing error.

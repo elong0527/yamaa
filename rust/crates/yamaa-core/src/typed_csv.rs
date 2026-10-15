@@ -2,7 +2,7 @@
 use crate::{
     conversion::convert,
     csv_source::CsvSource,
-    diagnostic::{Diagnostic, SourceFinding},
+    diagnostic::SourceFinding,
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
 };
@@ -39,12 +39,6 @@ impl Error {
             }),
             Self::InvalidDeclarations | Self::InvalidSource => None,
         }
-    }
-    /// Unbounded owned compatibility; structural defects retain the existing None.
-    /// New callers should use complete borrowed report admission before removal.
-    pub fn diagnostic(&self, dataset: &str) -> Option<Diagnostic> {
-        self.finding(dataset)
-            .map(SourceFinding::owned_compatibility)
     }
 }
 

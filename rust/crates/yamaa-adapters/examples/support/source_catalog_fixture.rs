@@ -148,7 +148,7 @@ pub fn observe(request: Value) -> Value {
                         declaration.ordinal.as_deref().expect("authored ordinal"),
                     )
                     .expect("registered ordinal refusal")
-                    .diagnostic()
+                    .diagnostic_with_limit(yamaa_core::diagnostic::MAX_PROJECTION_BYTES)
                     .expect("portable ordinal refusal"))),
             }
         }

@@ -43,7 +43,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/odm_reads.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/odm_reads.json",
       "family": "odm",
       "level": "component",
       "consumers": [
@@ -54,7 +54,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/odm_deferred.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/odm_deferred.json",
       "family": "odm",
       "level": "component",
       "consumers": [
@@ -65,7 +65,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/odm_preflight.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/odm_preflight.json",
       "family": "odm",
       "level": "compile",
       "consumers": [
@@ -279,54 +279,6 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/schema_composition.tsv",
-      "family": "schema",
-      "level": "compile",
-      "consumers": [
-        "rust/tests/test_private_schema_requirements.py"
-      ]
-    },
-    {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/schema_inheritance_dependencies.tsv",
-      "family": "schema",
-      "level": "compile",
-      "consumers": [
-        "rust/tests/test_private_schema_requirements.py"
-      ]
-    },
-    {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/schema_layer_admission.tsv",
-      "family": "schema",
-      "level": "compile",
-      "consumers": [
-        "rust/tests/test_private_schema_requirements.py"
-      ]
-    },
-    {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/schema_model.tsv",
-      "family": "schema",
-      "level": "compile",
-      "consumers": [
-        "rust/tests/test_private_schema_requirements.py"
-      ]
-    },
-    {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/schema_transport.tsv",
-      "family": "schema",
-      "level": "compile",
-      "consumers": [
-        "rust/tests/test_private_schema_requirements.py"
-      ]
-    },
-    {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/schema_windows.tsv",
-      "family": "schema",
-      "level": "compile",
-      "consumers": [
-        "rust/tests/test_private_schema_requirements.py"
-      ]
-    },
-    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/tables/expected.json",
       "family": "tables",
       "level": "component",
@@ -335,7 +287,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/yaml_transport.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/yaml_transport.json",
       "family": "yaml",
       "level": "compile",
       "consumers": [
@@ -587,7 +539,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/csv_profile_diagnostics.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -598,7 +550,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/column_literals.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/column_literals.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -609,7 +561,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_conversion_handlers.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_conversion_handlers.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -620,7 +572,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_row_conversion_handlers.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_row_conversion_handlers.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -653,7 +605,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/source_typing.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/source_typing.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -720,7 +672,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/source_filters.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/source_filters.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -741,7 +693,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/first_available.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/first_available.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -762,7 +714,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_assertions.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_assertions.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -783,7 +735,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_all_or_none.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_all_or_none.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -794,7 +746,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -815,7 +767,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_column_values.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_column_values.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -846,7 +798,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_column_matches.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_column_matches.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -877,7 +829,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/static_verification_checks.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/static_verification_checks.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -888,7 +840,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/row_column_checks.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/row_column_checks.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -899,7 +851,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -910,7 +862,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/row_reductions.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/row_reductions.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -921,7 +873,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/row_filters.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/row_filters.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -932,7 +884,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/row_filter_admission.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/row_filter_admission.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -955,7 +907,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -966,7 +918,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -977,7 +929,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/mapping_cut_admission.tsv",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/mapping_cut_admission.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
