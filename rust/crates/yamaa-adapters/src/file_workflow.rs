@@ -3,7 +3,8 @@
 use crate::{
     file_graph::{FileGraph, RejectedGraph},
     file_project::{self, FileProject, RejectedOrdinary},
-    file_resources::Resources,
+    file_resources::{MetadataLimits, Resources},
+    producer_graph::Limits,
     specification_source::CapturedSchema,
 };
 use std::sync::Arc;
@@ -28,6 +29,7 @@ pub enum Error {
     Configuration(crate::file_configuration::Error),
     Schema(crate::specification_source::Error),
     Environment(Box<RejectedEnvironment>),
+    Admission(Box<RejectedAdmission>),
     Graph(Box<RejectedGraph>),
 }
 /// Even an early root decode or metadata transport failure retains the original
@@ -39,6 +41,55 @@ pub struct RejectedEnvironment {
     specification_schema: Arc<CapturedSchema>,
     environment_schema: Arc<CapturedSchema>,
     resources: Resources,
+}
+/// Known entry/schema refusal before the first environment read. Original
+/// resource captures and both schema capabilities remain owned without a
+/// fabricated environment capture or graph document.
+pub struct RejectedAdmission {
+    error: crate::file_graph::Error,
+    entry: Option<String>,
+    environment: Option<String>,
+    specification_schema: Arc<CapturedSchema>,
+    environment_schema: Arc<CapturedSchema>,
+    resources: Resources,
+}
+impl std::fmt::Debug for RejectedAdmission {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RejectedAdmission")
+            .field("error", &self.error)
+            .field("entry", &self.entry)
+            .field("environment", &self.environment)
+            .field("capture_reads", &self.capture_reads())
+            .finish_non_exhaustive()
+    }
+}
+impl RejectedAdmission {
+    pub fn error(&self) -> &crate::file_graph::Error {
+        &self.error
+    }
+    pub fn entry(&self) -> Option<&str> {
+        self.entry.as_deref()
+    }
+    pub fn environment(&self) -> Option<&str> {
+        self.environment.as_deref()
+    }
+    pub fn specification_schema(&self) -> &Arc<CapturedSchema> {
+        &self.specification_schema
+    }
+    pub fn environment_schema(&self) -> &Arc<CapturedSchema> {
+        &self.environment_schema
+    }
+    pub fn capture_reads(&self) -> usize {
+        self.resources.capture_reads()
+    }
+    pub fn retained_sources(
+        &self,
+        aliases: usize,
+        text: usize,
+    ) -> Result<crate::file_resources::RetainedSources, crate::file_resources::RetentionFailure>
+    {
+        self.resources.retain_sources(aliases, text)
+    }
 }
 impl RejectedEnvironment {
     pub fn error(&self) -> &file_project::Error {
@@ -60,8 +111,13 @@ impl RejectedEnvironment {
         self.resources.captured_sources()
     }
     /// Bounded owned aliases of held bytes; this performs no resource access.
-    pub fn retained_sources(&self) -> crate::file_resources::RetainedSources {
-        self.resources.retain_sources()
+    pub fn retained_sources(
+        &self,
+        aliases: usize,
+        text: usize,
+    ) -> Result<crate::file_resources::RetainedSources, crate::file_resources::RetentionFailure>
+    {
+        self.resources.retain_sources(aliases, text)
     }
     pub fn capture_reads(&self) -> usize {
         self.resources.capture_reads()
@@ -83,6 +139,7 @@ impl std::fmt::Debug for Error {
             Self::Configuration(error) => f.debug_tuple("Configuration").field(error).finish(),
             Self::Schema(error) => f.debug_tuple("Schema").field(error).finish(),
             Self::Environment(error) => f.debug_tuple("Environment").field(error).finish(),
+            Self::Admission(error) => f.debug_tuple("Admission").field(error).finish(),
             Self::Graph(error) => f.debug_tuple("Graph").field(error).finish(),
         }
     }
@@ -138,6 +195,7 @@ pub fn prepare(specification: &str, environment: &str, host: Language) -> Result
         host,
         request.specification_schema,
         request.environment_schema,
+        Default::default(),
     )
 }
 
@@ -148,16 +206,18 @@ pub fn prepare_with_resources(
     host: Language,
     specification_schema: Arc<CapturedSchema>,
     environment_schema: Arc<CapturedSchema>,
+    limits: Limits,
 ) -> Result<FileGraph, Error> {
-    let (resources, environment) = capture_environment(
+    let (resources, environment, entry) = capture_environment(
         resources,
         entry,
         Some(environment),
         host,
         Arc::clone(&specification_schema),
         environment_schema,
+        limits,
     )?;
-    FileGraph::capture_entry(resources, entry, environment, specification_schema)
+    FileGraph::capture_admitted_entry(resources, entry, environment)
         .and_then(FileGraph::prepare_captured)
         .map_err(Error::Graph)
 }
@@ -179,13 +239,19 @@ pub enum SelectionError {
 }
 impl SelectionError {
     /// Bounded aliases of originally retained bytes; no file access or replay.
-    pub fn retained_sources(&self) -> crate::file_resources::RetainedSources {
+    pub fn retained_sources(
+        &self,
+        aliases: usize,
+        text: usize,
+    ) -> Result<crate::file_resources::RetainedSources, crate::file_resources::RetentionFailure>
+    {
         match self {
-            Self::Preparation(Error::Environment(error)) => error.retained_sources(),
-            Self::Preparation(Error::Graph(error)) => error.retained_sources(),
-            Self::Ordinary(error) => error.retained_sources(),
-            Self::Plain(error) => error.retained_sources(),
-            Self::Preparation(Error::Configuration(_) | Error::Schema(_)) => Vec::new(),
+            Self::Preparation(Error::Admission(error)) => error.retained_sources(aliases, text),
+            Self::Preparation(Error::Environment(error)) => error.retained_sources(aliases, text),
+            Self::Preparation(Error::Graph(error)) => error.retained_sources(aliases, text),
+            Self::Ordinary(error) => error.retained_sources(aliases, text),
+            Self::Plain(error) => error.retained_sources(aliases, text),
+            Self::Preparation(Error::Configuration(_) | Error::Schema(_)) => Ok(Vec::new()),
         }
     }
 }
@@ -226,22 +292,18 @@ impl yamaa_core::build::PreparationPort for Metadata {
     ) -> Result<Self::Entry, SelectionError> {
         let request = configure(request.specification, request.environment)
             .map_err(SelectionError::Preparation)?;
-        let (resources, environment) = capture_environment(
+        let (resources, environment, entry) = capture_environment(
             request.resources,
             &request.entry,
             request.environment.as_deref(),
             self.host,
             Arc::clone(&request.specification_schema),
             request.environment_schema,
+            Default::default(),
         )
         .map_err(SelectionError::Preparation)?;
-        FileGraph::capture_entry(
-            resources,
-            &request.entry,
-            environment,
-            request.specification_schema,
-        )
-        .map_err(|error| SelectionError::Preparation(Error::Graph(error)))
+        FileGraph::capture_admitted_entry(resources, entry, environment)
+            .map_err(|error| SelectionError::Preparation(Error::Graph(error)))
     }
     fn selection(entry: &Self::Entry) -> &yamaa_core::build::EntrySelection {
         entry.selection()
@@ -269,6 +331,7 @@ pub fn select_with_resources(
     host: Language,
     specification_schema: Arc<CapturedSchema>,
     environment_schema: Arc<CapturedSchema>,
+    limits: Limits,
 ) -> Result<Selected, SelectionError> {
     select_with_optional_resources(
         resources,
@@ -277,6 +340,7 @@ pub fn select_with_resources(
         host,
         specification_schema,
         environment_schema,
+        limits,
     )
 }
 
@@ -287,18 +351,20 @@ pub fn select_with_optional_resources(
     host: Language,
     specification_schema: Arc<CapturedSchema>,
     environment_schema: Arc<CapturedSchema>,
+    limits: Limits,
 ) -> Result<Selected, SelectionError> {
     let has_environment = environment.is_some();
-    let (resources, environment) = capture_environment(
+    let (resources, environment, entry) = capture_environment(
         resources,
         entry,
         environment,
         host,
         Arc::clone(&specification_schema),
         environment_schema,
+        limits,
     )
     .map_err(SelectionError::Preparation)?;
-    let entry = FileGraph::capture_entry(resources, entry, environment, specification_schema)
+    let entry = FileGraph::capture_admitted_entry(resources, entry, environment)
         .map_err(|error| SelectionError::Preparation(Error::Graph(error)))?;
     yamaa_core::build::select(entry, has_environment, &mut Metadata { host })
 }
@@ -310,13 +376,75 @@ fn capture_environment(
     host: Language,
     specification_schema: Arc<CapturedSchema>,
     environment_schema: Arc<CapturedSchema>,
-) -> Result<(Resources, crate::project_source::OwnedEnvironment), Error> {
-    let owned_entry = entry.to_owned();
-    let owned_environment = environment.map(str::to_owned);
+    limits: Limits,
+) -> Result<
+    (
+        Resources,
+        crate::project_source::OwnedEnvironment,
+        crate::file_graph::AdmittedEntry,
+    ),
+    Error,
+> {
+    let paths = (|| {
+        resources
+            .ensure_metadata_budget(MetadataLimits {
+                bytes: limits.captured_bytes,
+                snapshots: limits.snapshots,
+                text: limits.graph.text_bytes,
+                work: limits.graph.work,
+            })
+            .map_err(file_project::Error::Resource)?;
+        resources
+            .charge_metadata_text(
+                entry
+                    .len()
+                    .checked_add(environment.map_or(0, str::len))
+                    .ok_or(file_project::Error::Resource(
+                        crate::file_resources::Error::Limit,
+                    ))?,
+            )
+            .map_err(file_project::Error::Resource)?;
+        Ok((entry.to_owned(), environment.map(str::to_owned)))
+    })();
+    let (owned_entry, owned_environment) = match paths {
+        Ok(paths) => paths,
+        Err(error) => {
+            return Err(Error::Environment(Box::new(RejectedEnvironment {
+                error,
+                entry: None,
+                environment: None,
+                specification_schema,
+                environment_schema,
+                resources,
+            })))
+        }
+    };
+    // Known root/schema limits and its written identity ownership are admitted
+    // before crossing the first environment capture boundary. The sealed token
+    // is consumed later; neither selection nor graph collection charges it again.
+    let admission = match crate::file_graph::admit_entry(
+        &mut resources,
+        entry,
+        Arc::clone(&specification_schema),
+        limits,
+    ) {
+        Ok(admitted) => admitted,
+        Err(error) => {
+            return Err(Error::Admission(Box::new(RejectedAdmission {
+                error,
+                entry: Some(owned_entry),
+                environment: owned_environment,
+                specification_schema,
+                environment_schema,
+                resources,
+            })))
+        }
+    };
     let Some(environment) = environment else {
         return Ok((
             resources,
             crate::project_source::OwnedEnvironment::without_environment(host),
+            admission,
         ));
     };
     match file_project::capture_environment(
@@ -325,7 +453,7 @@ fn capture_environment(
         host,
         Arc::clone(&environment_schema),
     ) {
-        Ok(environment) => Ok((resources, environment)),
+        Ok(environment) => Ok((resources, environment, admission)),
         Err(error) => Err(Error::Environment(Box::new(RejectedEnvironment {
             error,
             entry: Some(owned_entry),
@@ -379,9 +507,12 @@ mod root_read_tests {
         assert_eq!(issues[0].requirement.as_deref(), definition.requirement);
         assert_eq!(
             issues[0].context,
-            yamaa_core::json::json!({"cause":"unreadable", "path":path}).to_string()
+            serde_json::json!({"cause":"unreadable", "path":path}).to_string()
         );
-
+        assert!(matches!(
+            crate::producer_check::rejected_with_limit(&rejection, Language::Python, 1),
+            Err(crate::producer_check::Error::Projection(_))
+        ));
         assert_eq!(owner.error() as *const file_project::Error, original);
         assert_eq!(owner.capture_reads(), 0);
         assert_eq!(owner.captured_sources().count(), 0);

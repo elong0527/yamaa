@@ -5,7 +5,9 @@ use pyo3::{
     types::{PyBool, PyDate, PyDateTime, PyFloat, PyInt, PyString},
     IntoPyObjectExt,
 };
-use yamaa_adapters::callback::{BoundaryError as Error, CallbackError};
+use yamaa_adapters::callback::{
+    BoundaryError as Error, CallbackError, MAX_ERROR_BYTES, MAX_RESULT_BYTES,
+};
 use yamaa_core::{
     table::ValueRef,
     temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
@@ -33,21 +35,33 @@ pub(super) fn host_argument<'py>(
         }
     }
 }
+/// Retain a bounded UTF-8 prefix with explicit truncation, never split a codepoint.
+fn bounded(text: &str) -> (String, bool) {
+    let mut end = text.len().min(MAX_ERROR_BYTES);
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    (text[..end].into(), end != text.len())
+}
 /// Secondary __str__ failures cannot replace the original host exception class.
 pub(super) fn exception(py: Python<'_>, error: PyErr) -> CallbackError {
-    let class = error
+    let (class, class_truncated) = error
         .get_type(py)
         .name()
         .ok()
-        .and_then(|n| n.to_str().ok().map(str::to_owned))
-        .unwrap_or_else(|| "Exception".into());
-    let message = error
+        .and_then(|n| n.to_str().ok().map(bounded))
+        .unwrap_or_else(|| ("Exception".into(), false));
+    let (message, truncated) = error
         .value(py)
         .str()
         .ok()
-        .and_then(|s| s.to_str().ok().map(str::to_owned))
-        .unwrap_or_else(|| "<exception message unavailable>".into());
-    CallbackError::Exception { class, message }
+        .and_then(|s| s.to_str().ok().map(bounded))
+        .unwrap_or_else(|| ("<exception message unavailable>".into(), false));
+    CallbackError::Exception {
+        class,
+        message,
+        truncated: truncated || class_truncated,
+    }
 }
 /// Reject a returned representation without converting it to another logical type.
 fn rejected(reason: &str, returned: Option<String>) -> CallbackError {
@@ -86,6 +100,9 @@ pub(super) fn host_result(value: &Bound<'_, PyAny>) -> Result<Value, CallbackErr
         let text = text
             .to_cow()
             .map_err(|_| rejected("a returned string is not valid UTF-8", None))?;
+        if text.len() > MAX_RESULT_BYTES {
+            return Err(CallbackError::Boundary(Error::OutputLimit));
+        }
         return Ok(Value::Str(text.into_owned()));
     }
     let is_date = value.is_exact_instance_of::<PyDate>();
@@ -124,7 +141,7 @@ pub(super) fn host_result(value: &Bound<'_, PyAny>) -> Result<Value, CallbackErr
         .get_type()
         .name()
         .ok()
-        .and_then(|n| n.to_str().ok().map(str::to_owned));
+        .and_then(|n| n.to_str().ok().map(|s| bounded(s).0));
     Err(rejected(
         "a binding returned a value of no scalar type",
         kind,

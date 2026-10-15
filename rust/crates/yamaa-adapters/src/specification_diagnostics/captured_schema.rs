@@ -1,12 +1,21 @@
 //! Represent core-admitted schema findings without reparsing source YAML.
 use crate::specification_source::CapturedFindings;
-use yamaa_core::json::{json, Map, Number, Value};
+use serde_json::{json, Map, Number, Value};
 pub(crate) use yamaa_core::schema::SchemaDiagnosticError as Error;
 use yamaa_core::schema::{
-    admit_schema_diagnostics, Document, SchemaDiagnostic, SchemaDiagnosticValue as V,
-    SchemaStructure,
+    admit_schema_diagnostics, Document, SchemaDiagnostic, SchemaDiagnosticBudget,
+    SchemaDiagnosticValue as V, SchemaStructure,
 };
 
+pub(crate) struct Budget(SchemaDiagnosticBudget);
+impl Budget {
+    pub(crate) fn new() -> Self {
+        Self(SchemaDiagnosticBudget::new())
+    }
+    fn charge(&mut self, bytes: usize) -> Result<(), Error> {
+        self.0.charge(bytes)
+    }
+}
 fn value(value: V<'_>) -> Value {
     match value {
         V::Text(text) => json!(text),
@@ -35,7 +44,23 @@ pub(super) fn schema_findings(
     findings: &[SchemaDiagnostic],
     source_context: &[(&str, &str)],
 ) -> Result<Vec<Value>, Error> {
-    let report = admit_schema_diagnostics(schema, document, findings, source_context)?;
+    schema_findings_with_budget(
+        schema,
+        document,
+        findings,
+        source_context,
+        &mut Budget::new(),
+    )
+}
+pub(super) fn schema_findings_with_budget(
+    schema: &SchemaStructure,
+    document: Option<&Document>,
+    findings: &[SchemaDiagnostic],
+    source_context: &[(&str, &str)],
+    budget: &mut Budget,
+) -> Result<Vec<Value>, Error> {
+    let report =
+        admit_schema_diagnostics(schema, document, findings, source_context, &mut budget.0)?;
     Ok(report
         .iter()
         .map(|finding| {
@@ -64,6 +89,8 @@ pub(super) fn literal_outcome(outcome: Value) -> Result<Value, Error> {
             crate::issue_rows::Issue::from_diagnostic(finding.clone())
                 .map_err(|_| Error::InvalidContext)?;
         }
+        let mut budget = Budget::new();
+        budget.charge(outcome.to_string().len())?;
     }
     Ok(outcome)
 }

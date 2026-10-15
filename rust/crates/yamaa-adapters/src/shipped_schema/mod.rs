@@ -18,6 +18,7 @@ pub fn capture() -> Result<Arc<CapturedSchema>, Error> {
             })
             .collect(),
         0,
+        Default::default(),
     )
 }
 
@@ -33,6 +34,7 @@ pub fn capture_environment() -> Result<Arc<CapturedSchema>, Error> {
             .collect(),
         0,
         "environment_class",
+        Default::default(),
     )
 }
 

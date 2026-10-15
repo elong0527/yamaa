@@ -1,6 +1,6 @@
 //! Typed resource policies retain their applied bounds and authored owners.
 use crate::{csv_source::TextTableError, specification_run::Error};
-use yamaa_core::json::Value;
+use serde_json::Value;
 use yamaa_core::{
     dataset::{ExecutionError, Resource},
     specification::SourceDeclaration,
@@ -43,8 +43,10 @@ impl Refusal {
                 .expect("resource finding"),
         ]
     }
-    pub(crate) fn value(&self, stage: &str, code: &str) -> Value {
-        crate::specification_diagnostics::portable_diagnostic(self.diagnostic(stage, code))
+    pub(crate) fn value(&self, stage: &str, code: &str) -> Option<Value> {
+        Some(crate::specification_diagnostics::portable_diagnostic(
+            self.diagnostic(stage, code),
+        ))
     }
 }
 pub(crate) fn resource_name(resource: Resource) -> &'static str {
@@ -56,7 +58,18 @@ pub(crate) fn resource_name(resource: Resource) -> &'static str {
         Resource::OutputRows => "output_rows",
         Resource::OutputCells => "output_cells",
         Resource::OutputColumns => "output_columns",
-        Resource::RegexWork => "regex_steps",
+        Resource::WorkCells => "work_cells",
+        Resource::ScalarTextBytes => "scalar_text_bytes",
+        Resource::OutputTextBytes => "output_text_bytes",
+        Resource::IdentityCells => "identity_cells",
+        Resource::IdentityTextBytes => "identity_text_bytes",
+        Resource::PredicateWork => "predicate_work",
+        Resource::PredicateResolutions => "predicate_resolutions",
+        Resource::PredicateTextBytes => "predicate_text_bytes",
+        Resource::PredicateLikeWork => "predicate_like_work",
+        Resource::PredicateRegexSubjectBytes => "predicate_regex_subject_bytes",
+        Resource::PredicateRegexWork => "predicate_regex_work",
+        Resource::PredicateRegexStateCells => "predicate_regex_state_cells",
     }
 }
 fn input_paths(sources: &[SourceDeclaration]) -> Vec<String> {
@@ -115,12 +128,16 @@ pub(crate) fn execution<E>(
             *required,
             spec_paths.clone(),
         ),
-        ExecutionError::Grouping(yamaa_core::table_grouping::GroupingError::Limit(error))
-        | ExecutionError::OutputGrouping(yamaa_core::table_grouping::GroupingError::Limit(error))
-        | ExecutionError::Reduction {
-            error: yamaa_core::table_reduction::TableReductionError::Limit(error),
-            ..
-        } => (error.resource, error.limit, error.actual, Vec::new()),
+        ExecutionError::Grouping(yamaa_core::table_grouping::GroupingError::RowLimit {
+            limit,
+            required,
+        }) => ("rows", *limit, Some(*required), Vec::new()),
+        ExecutionError::Grouping(yamaa_core::table_grouping::GroupingError::KeyCellLimit {
+            limit,
+        })
+        | ExecutionError::OutputGrouping(
+            yamaa_core::table_grouping::GroupingError::KeyCellLimit { limit },
+        ) => ("key_cells", *limit, None, Vec::new()),
         _ => return None,
     };
     if spec_paths.is_empty() && matches!(resource, "rows" | "cells" | "columns" | "sources") {
@@ -148,11 +165,9 @@ pub(crate) fn source(error: &Error, source: &SourceDeclaration) -> Option<Refusa
             limit,
             actual,
         }) => (*resource, *limit, *actual),
-        Error::Source(TextTableError::Csv(crate::csv_source::Error::Limit {
-            resource,
-            limit,
-            actual,
-        })) => (*resource, *limit, *actual),
+        Error::Source(TextTableError::Csv(crate::csv_source::Error::Limit { resource, limit })) => {
+            (*resource, *limit, None)
+        }
         Error::Source(TextTableError::Table(crate::arrow_table::TableError::Limit {
             resource,
             limit,
@@ -186,34 +201,61 @@ pub(crate) fn source_findings(
     error: &Error,
     source: &SourceDeclaration,
 ) -> Result<Option<Vec<Value>>, crate::source_diagnostics::SourceProjectionError> {
-    let mut pending = vec![(source, error)];
-    let mut findings = Vec::new();
-    while let Some((source, error)) = pending.pop() {
-        if let Some(projected) = crate::specification_diagnostics::findings(error, Some(source))? {
-            findings.extend(projected);
-        } else if let Error::Sources(errors) = error {
-            pending.extend(errors.iter().rev().map(|(source, error)| (source, error)));
-        } else if let Some(refusal) = self::source(error, source) {
-            findings.push(refusal.value("ingest", "source_limit"));
-        } else {
-            return Ok(None);
-        }
+    source_findings_at(error, source, 0)
+}
+fn source_findings_at(
+    error: &Error,
+    source: &SourceDeclaration,
+    depth: usize,
+) -> Result<Option<Vec<Value>>, crate::source_diagnostics::SourceProjectionError> {
+    let projected = crate::specification_diagnostics::findings_with_limit(
+        error,
+        Some(source),
+        yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
+    )?;
+    if projected.is_some() {
+        return Ok(projected);
     }
-    Ok(Some(findings))
+    if let Error::Sources(errors) = error {
+        if depth == crate::source_diagnostics::MAX_SOURCE_REPORT_FRAMES {
+            return Err(crate::source_diagnostics::SourceProjectionError::TraversalLimit);
+        }
+        let mut findings = Vec::new();
+        for (source, error) in errors {
+            let Some(projected) = source_findings_at(error, source, depth + 1)? else {
+                return Ok(None);
+            };
+            findings.extend(projected);
+        }
+        return Ok(Some(findings));
+    }
+    Ok(self::source(error, source)
+        .and_then(|refusal| refusal.value("ingest", "source_limit"))
+        .map(|finding| vec![finding]))
 }
 pub(crate) fn run_limit<E>(
     error: &yamaa_core::specification_run::RunError<E>,
     sources: &[SourceDeclaration],
 ) -> Option<Refusal> {
-    let yamaa_core::specification_run::RunError::Boundary { source, error } = error else {
-        return None;
+    use yamaa_core::specification_run::RunError;
+    let (resource, limit, actual, source) = match error {
+        RunError::SourceBytes {
+            limit,
+            actual,
+            source,
+        } => ("bytes", *limit, *actual, Some(*source)),
+        RunError::SourceCells {
+            limit,
+            actual,
+            source,
+        } => ("cells", *limit, *actual, *source),
+        _ => return None,
     };
-    Some(Refusal::new(
-        error.resource,
-        error.limit,
-        error.actual,
-        vec![format!("input.{}", sources.get(*source)?.name)],
-    ))
+    let spec_paths = match source {
+        Some(index) => vec![format!("input.{}", sources.get(index)?.name)],
+        None => input_paths(sources),
+    };
+    Some(Refusal::new(resource, limit, actual, spec_paths))
 }
 
 pub(crate) fn outcome(
@@ -229,9 +271,20 @@ pub(crate) fn outcome(
         "output_rows" => "output_rows",
         "output_cells" => "output_cells",
         "output_columns" => "output_columns",
-        "table_rows" => "table_rows",
-        "table_cells" => "table_cells",
-        "regex_steps" => "regex_steps",
+        "source_rows" => "rows",
+        "key_cells" => "key_cells",
+        "work_cells" => "work_cells",
+        "scalar_text_bytes" => "scalar_text_bytes",
+        "output_text_bytes" => "output_text_bytes",
+        "identity_cells" => "identity_cells",
+        "identity_text_bytes" => "identity_text_bytes",
+        "predicate_work" => "predicate_work",
+        "predicate_resolutions" => "predicate_resolutions",
+        "predicate_text_bytes" => "predicate_text_bytes",
+        "predicate_like_work" => "predicate_like_work",
+        "predicate_regex_subject_bytes" => "predicate_regex_subject_bytes",
+        "predicate_regex_work" => "predicate_regex_work",
+        "predicate_regex_state_cells" => "predicate_regex_state_cells",
         _ => return None,
     };
     let limit = value["limit"].as_str()?.parse().ok()?;
@@ -259,25 +312,30 @@ pub(crate) fn outcome(
 mod tests {
     use super::*;
     #[test]
-    fn source_resource_fallback_preserves_complete_context_and_nested_findings() {
-        let value = "x".repeat(2_000_000);
+    fn source_projection_refusals_survive_resource_fallback() {
+        use crate::source_diagnostics::SourceProjectionError;
+        use yamaa_core::diagnostic::{ProjectionError, MAX_PROJECTION_BYTES};
         let error = Error::TypedSource(crate::typed_csv::Error::Typing(
             yamaa_core::typed_csv::Error::FieldParse {
                 field: "N".into(),
                 target: yamaa_core::value::ColumnType::Int,
-                value: value.clone(),
+                value: "x".repeat(MAX_PROJECTION_BYTES / 6),
             },
         ));
-        let findings = source_findings(&error, &input()).unwrap().unwrap();
-        assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0]["context"]["value"], value);
+        assert_eq!(
+            source_findings(&error, &input()),
+            Err(SourceProjectionError::Context(ProjectionError::Limit))
+        );
         let mut error = Error::Source(TextTableError::Csv(
-            crate::csv_source::parse(b"").unwrap_err(),
+            crate::csv_source::parse(b"", Default::default()).unwrap_err(),
         ));
-        for _ in 0..150 {
+        for _ in 0..=crate::source_diagnostics::MAX_SOURCE_REPORT_FRAMES {
             error = Error::Sources(vec![(input(), error)]);
         }
-        assert_eq!(source_findings(&error, &input()).unwrap().unwrap().len(), 1);
+        assert_eq!(
+            source_findings(&error, &input()),
+            Err(SourceProjectionError::TraversalLimit)
+        );
     }
     fn input() -> SourceDeclaration {
         SourceDeclaration {
@@ -291,21 +349,32 @@ mod tests {
         }
     }
     #[test]
-    fn fixed_sas_boundary_keeps_its_bound_and_input_owner() {
+    fn actual_sas_reader_quota_keeps_its_bound_and_input_owner() {
         let mut declaration = input();
         declaration.path = "v5.xpt".into();
         declaration.profile = yamaa_core::specification::SourceProfile::Xport;
         declaration.encoding = Some("windows-1252".into());
-        let failure = crate::sas_source::Error::Limit {
-            resource: "table_rows",
-            limit: 10_000_000,
-            actual: Some(10_000_001),
-        };
+        let failure = crate::sas_source::parse(
+            include_bytes!("../tests/fixtures/sas/v5.xpt"),
+            &declaration,
+            crate::sas_source::Limits {
+                source_bytes: 1_048_576,
+                work_bytes: 4_194_304,
+                retained_bytes: 4_194_304,
+            },
+            crate::arrow_table::TableLimits {
+                max_rows: 1,
+                max_columns: 1024,
+                max_cells: 1024,
+                max_batches: 1,
+            },
+        )
+        .unwrap_err();
         let failure = Error::SasSource(failure);
         let refusal = source(&failure, &declaration).unwrap();
-        assert_eq!(refusal.resource, "table_rows");
-        assert_eq!(refusal.limit, 10_000_000);
-        assert_eq!(refusal.actual, Some(10_000_001));
+        assert_eq!(refusal.resource, "rows");
+        assert_eq!(refusal.limit, 1);
+        assert_eq!(refusal.actual, Some(2));
         assert_eq!(refusal.spec_paths, ["input.XW"]);
         let projected: Value = serde_json::from_str(&crate::specification_diagnostics::failure(
             &failure,
@@ -314,12 +383,12 @@ mod tests {
         .unwrap();
         assert_eq!(projected["outcome"]["stage"], "ingest");
         assert_eq!(projected["outcome"]["code"], "sas_limit");
-        assert_eq!(projected["outcome"]["resource"], "table_rows");
-        assert_eq!(projected["outcome"]["limit"], 10_000_000);
-        assert_eq!(projected["outcome"]["actual"], 10_000_001);
+        assert_eq!(projected["outcome"]["resource"], "rows");
+        assert_eq!(projected["outcome"]["limit"], 1);
+        assert_eq!(projected["outcome"]["actual"], 2);
         assert_eq!(
             projected["outcome"]["spec_paths"],
-            yamaa_core::json::json!(["input.XW"])
+            serde_json::json!(["input.XW"])
         );
     }
 
@@ -344,62 +413,32 @@ mod tests {
         }
     }
     #[test]
-    fn intermediate_table_limits_survive_the_execution_outcome_wire_round_trip() {
-        use core::convert::Infallible;
-        use yamaa_core::{
-            limits::Limits, table_grouping::GroupingError, table_reduction::TableReductionError,
-        };
-
-        let sources = [input()];
-        for limit in [
-            Limits::table(Limits::TABLE_ROWS + 1, 1).unwrap_err(),
-            Limits::table(3_575_419, 179).unwrap_err(),
-        ] {
-            for error in [
-                ExecutionError::<Infallible>::Grouping(GroupingError::Limit(limit)),
-                ExecutionError::OutputGrouping(GroupingError::Limit(limit)),
-                ExecutionError::Reduction {
-                    path: "row_columns.TOTAL".into(),
-                    error: TableReductionError::Limit(limit),
-                    identity: None,
+    fn source_shape_refusal_keeps_the_supplied_quota_count_and_input() {
+        for (rows, cells, resource) in [(1, 64, "rows"), (64, 1, "cells")] {
+            let failure = crate::csv_source::parse_text_table(
+                b"ID\n1\n2\n",
+                Default::default(),
+                crate::arrow_table::TableLimits {
+                    max_rows: rows,
+                    max_cells: cells,
+                    max_columns: 1,
+                    max_batches: 1,
                 },
-            ] {
-                let encoded = crate::dataset_result::semantic_condition(&error).unwrap();
-                let wire = serde_json::to_string(&encoded).unwrap();
-                let decoded: Value = serde_json::from_str(&wire).unwrap();
-                let expected = Refusal::new(limit.resource, limit.limit, limit.actual, Vec::new());
-                assert_eq!(decoded["resource"], limit.resource);
-                assert_eq!(decoded["limit"], limit.limit.to_string());
-                assert_eq!(decoded["required"], limit.actual.unwrap().to_string());
-                assert_eq!(execution(&error, &sources, 0), Some(expected.clone()));
-                assert_eq!(outcome(&decoded, &sources, 0), Some(expected));
-            }
-        }
-    }
-    #[test]
-    fn fixed_source_geometry_refusals_keep_the_actual_count_and_input() {
-        crate::csv_source::parse_text_table(b"ID\n1\n2\n").unwrap();
-        for (resource, limit, actual) in [
-            ("table_rows", 10_000_000, 10_000_001),
-            ("table_cells", 640_000_000, 640_000_001),
-        ] {
-            let error = Error::Source(TextTableError::Table(
-                crate::arrow_table::TableError::Limit {
-                    resource,
-                    limit,
-                    required: Some(actual),
-                },
-            ));
+            )
+            .unwrap_err();
+            let error = Error::Source(failure);
+            let limit = 1;
+            let actual = Some(2);
             let refusal = source(&error, &input()).unwrap();
             assert_eq!(
                 refusal,
-                Refusal::new(resource, limit, Some(actual), vec!["input.XW".into()])
+                Refusal::new(resource, limit, actual, vec!["input.XW".into()])
             );
-            let value = refusal.value("ingest", "source_limit");
+            let value = refusal.value("ingest", "source_limit").unwrap();
             assert_eq!(value["context"]["resource"], resource);
-            assert_eq!(value["context"]["limit"], yamaa_core::json::json!(limit));
-            assert_eq!(value["context"]["actual"], yamaa_core::json::json!(actual));
-            assert_eq!(value["spec_paths"], yamaa_core::json::json!(["input.XW"]));
+            assert_eq!(value["context"]["limit"], serde_json::json!(limit));
+            assert_eq!(value["spec_paths"], serde_json::json!(["input.XW"]));
+            assert_eq!(value["context"].get("actual").is_some(), actual.is_some());
         }
     }
 }

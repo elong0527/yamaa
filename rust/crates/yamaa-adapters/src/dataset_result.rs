@@ -3,7 +3,7 @@ pub(crate) use crate::dataset_snapshot::Snapshot;
 use crate::{
     callback::{BoundaryError, CallbackError},
     execution_diagnostics::{self as diagnostics, arithmetic, conversion, Diagnostic},
-    ipc_table::{encode_dataset, serialize_json, TableError},
+    ipc_table::{bounded_json, encode_dataset, TableError},
     report_scalar::ScalarValue,
 };
 use serde::Serialize;
@@ -14,11 +14,16 @@ use yamaa_core::{
     table_grouping::GroupingError,
     table_reduction::TableReductionError,
 };
+pub(crate) const MAX_SOURCE_CELLS: usize =
+    dataset::ExecutionBudget::longitudinal().max_decoded_cells;
+pub(crate) const LIMITS: dataset::Limits = dataset::ExecutionBudget::longitudinal().execution;
+const MAX_OUTPUT_BYTES: usize = yamaa_core::capacity::REPORT_ENCODED_BYTES;
 /// Typed result and boundary failures are not language diagnostics.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DatasetError {
     InvalidObservation,
     UnsupportedOutcome,
+    OutputLimit,
     Function(BoundaryError),
     FunctionBinding,
     Table(TableError),
@@ -42,6 +47,7 @@ impl fmt::Display for DatasetError {
             Self::InvalidObservation => "invalid typed execution observation",
             Self::UnsupportedOutcome => "unsupported typed execution outcome",
 
+            Self::OutputLimit => "dataset response exceeds byte limit",
             Self::Function(error) => return error.fmt(f),
             Self::FunctionBinding => {
                 "dataset callback bindings do not match the admitted signatures"
@@ -251,7 +257,7 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
             verifications: None,
         },
         ExecutionError::BaselineAmbiguity { partition, .. } => Outcome::Condition {
-            diagnostic: diagnostics::failure(error)?,
+            diagnostic: diagnostics::failure(error, MAX_OUTPUT_BYTES)?,
             identity: None,
             matched_key: None,
             partition: Some(
@@ -271,7 +277,7 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
             identity: keys,
             ..
         } => Outcome::Condition {
-            diagnostic: diagnostics::failure(error)?,
+            diagnostic: diagnostics::failure(error, MAX_OUTPUT_BYTES)?,
             identity: keys.clone().map(identity),
             partition: None,
             verifications: None,
@@ -290,7 +296,7 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
             identity: keys,
             ..
         } => Outcome::Condition {
-            diagnostic: diagnostics::failure(error)?,
+            diagnostic: diagnostics::failure(error, MAX_OUTPUT_BYTES)?,
             identity: keys.clone().map(identity),
             partition: None,
             verifications: None,
@@ -307,7 +313,7 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
         ExecutionError::MultipleValues { identity: keys, .. } => Outcome::Condition {
             matched_key: None,
             partition: None,
-            diagnostic: diagnostics::failure(error)?,
+            diagnostic: diagnostics::failure(error, MAX_OUTPUT_BYTES)?,
             identity: keys.clone().map(identity),
             verifications: None,
         },
@@ -353,15 +359,18 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
             spec_paths: Vec::new(),
             source_index: None,
         },
-        ExecutionError::Grouping(GroupingError::Limit(error))
-        | ExecutionError::OutputGrouping(GroupingError::Limit(error))
-        | ExecutionError::Reduction {
-            error: TableReductionError::Limit(error),
-            ..
-        } => Outcome::Limit {
-            resource: error.resource,
-            limit: Some(error.limit.to_string()),
-            required: error.actual.map(|value| value.to_string()),
+        ExecutionError::Grouping(GroupingError::RowLimit { limit, required }) => Outcome::Limit {
+            resource: "source_rows",
+            limit: Some(limit.to_string()),
+            required: Some(required.to_string()),
+            spec_paths: Vec::new(),
+            source_index: None,
+        },
+        ExecutionError::Grouping(GroupingError::KeyCellLimit { limit })
+        | ExecutionError::OutputGrouping(GroupingError::KeyCellLimit { limit }) => Outcome::Limit {
+            resource: "key_cells",
+            limit: Some(limit.to_string()),
+            required: None,
             spec_paths: Vec::new(),
             source_index: None,
         },
@@ -397,7 +406,7 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
             partition: None,
             verifications: None,
             identity: None,
-            diagnostic: diagnostics::failure(error)?,
+            diagnostic: diagnostics::failure(error, MAX_OUTPUT_BYTES)?,
         },
         ExecutionError::Reduction {
             path,
@@ -466,11 +475,9 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
 }
 
 /// Borrow a retained non-host failure for the complete project report formatter.
-pub(crate) fn semantic_condition<E>(
-    error: &ExecutionError<E>,
-) -> Result<yamaa_core::json::Value, Error> {
+pub(crate) fn semantic_condition<E>(error: &ExecutionError<E>) -> Result<serde_json::Value, Error> {
     let outcome = semantic_failure(error, false)?;
-    yamaa_core::json::to_value(outcome).map_err(|_| Error::Internal)
+    serde_json::to_value(outcome).map_err(|_| Error::Internal)
 }
 
 /// Encode the admitted execution attempt, retaining typed results for publication.
@@ -498,20 +505,29 @@ pub(crate) fn specification_response(
             (None, outcome, None, records)
         }
     };
-    let outcome = serialize_json(&Envelope {
-        protocol: "execution/1",
-        outcome,
-        handler_counts: attempt
-            .handler_counts
-            .into_iter()
-            .map(|entry| HandlerCount {
-                spec_path: entry.spec_path,
-                handler: entry.handler.name(),
-                count: entry.count.to_string(),
-            })
-            .collect(),
-    })
-    .map_err(|_| Error::Internal)?;
+    let outcome = bounded_json(
+        &Envelope {
+            protocol: "execution/1",
+            outcome,
+            handler_counts: attempt
+                .handler_counts
+                .into_iter()
+                .map(|entry| HandlerCount {
+                    spec_path: entry.spec_path,
+                    handler: entry.handler.name(),
+                    count: entry.count.to_string(),
+                })
+                .collect(),
+        },
+        MAX_OUTPUT_BYTES,
+    )
+    .map_err(|error| {
+        if error == TableError::OutputLimit {
+            Error::OutputLimit
+        } else {
+            Error::Internal
+        }
+    })?;
     Ok(DatasetResponse {
         table,
         outcome,

@@ -1,4 +1,4 @@
-//! Physical inheritance decoding for retained engine preparation.
+//! Physical inheritance decoding and compatibility representation of engine preparation.
 use super::*;
 use yamaa_core::{inheritance_capture as application, inheritance_preparation as lifecycle};
 
@@ -18,18 +18,31 @@ pub enum InheritanceError<E> {
         captured_parents: Vec<CapturedParent>,
     },
 }
-pub(super) struct Decoder;
+pub(super) struct Decoder {
+    limits: DecodeLimits,
+}
+impl Decoder {
+    pub(super) fn new(limits: DecodeLimits) -> Self {
+        Self { limits }
+    }
+}
 impl application::DecodePort for Decoder {
     type Raw = DecodedYaml;
     type Error = Error;
     fn decode(&mut self, identity: &str, bytes: &[u8]) -> Result<DecodedYaml, Error> {
-        decode_yaml(bytes).map_err(|error| Error::Decode {
+        decode_yaml(bytes, self.limits).map_err(|error| Error::Decode {
             identity: identity.into(),
             error,
         })
     }
     fn document(raw: &DecodedYaml) -> &yamaa_core::schema::Document {
         &raw.document
+    }
+    fn limit_error(resource: application::CaptureResource) -> Error {
+        Error::Limit(match resource {
+            application::CaptureResource::CapturedBytes => "captured_bytes",
+            application::CaptureResource::IdentityBytes => "identity_bytes",
+        })
     }
 }
 impl CapturedSchema {
@@ -58,7 +71,15 @@ impl CapturedSchema {
             display_path,
             &raw,
             port,
-            &mut Decoder,
+            &mut Decoder {
+                limits: self.limits.decode,
+            },
+            application::Limits {
+                captured_bytes: self.limits.captured_bytes,
+                identity_bytes: self.limits.identity_bytes,
+                normalization: self.limits.normalization,
+                ..Default::default()
+            },
         );
         match prepared {
             Ok(prepared) => Ok(PreparedDocument {
@@ -71,6 +92,7 @@ impl CapturedSchema {
                 resource_aliases: Default::default(),
             }
             .prepare_dictionaries(port)?),
+            Err(application::Error::Entry(error)) => Err(InheritanceError::Entry(error)),
             Err(application::Error::Preparation {
                 error,
                 captured_parents,

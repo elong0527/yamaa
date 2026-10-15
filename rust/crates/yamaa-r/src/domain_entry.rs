@@ -48,6 +48,11 @@ fn resolve(handle: &Robj) -> std::result::Result<Rc<RefCell<State>>, String> {
         .ok_or_else(|| "unknown domain result handle".into())
 }
 fn text(bytes: &Raw) -> std::result::Result<&str, String> {
+    // The R facade retains at most 65537 Unicode characters. Let the shared
+    // application classify an oversized path as an issue before file access.
+    if bytes.len() > 65537 * 4 {
+        return Err("path argument byte limit".into());
+    }
     std::str::from_utf8(bytes.as_slice()).map_err(|_| "invalid path argument UTF-8".into())
 }
 fn environment(value: &Robj) -> std::result::Result<Option<Raw>, String> {
@@ -339,7 +344,18 @@ fn domain_preparation_sources(handle: Robj) -> List {
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
         if let Some(error) = &state._preparation {
-            let sources = error.retained_sources();
+            let sources = error
+                .retained_sources(
+                    yamaa_adapters::host_limits::RECORDS,
+                    yamaa_adapters::host_limits::REPLY_BYTES,
+                )
+                .map_err(|_| "source evidence limit; original preparation remains retained")?;
+            let mut remaining = yamaa_adapters::host_limits::SOURCE_BYTES;
+            for (_, bytes) in &sources {
+                remaining = remaining
+                    .checked_sub(bytes.len())
+                    .ok_or("source evidence limit; original preparation remains retained")?;
+            }
             return Ok(List::from_values(sources.iter().map(|(name, bytes)| {
                 list!(
                     name = Raw::from_bytes(name.as_bytes()),

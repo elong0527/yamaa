@@ -2,6 +2,12 @@
 //! A page's declared value count does not constrain the generic delta decoder.
 use super::compact::Error;
 
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Limits {
+    pub values: usize,
+    pub reconstructed_bytes: usize,
+}
+
 struct Cursor<'a> {
     bytes: &'a [u8],
     offset: usize,
@@ -28,7 +34,7 @@ impl<'a> Cursor<'a> {
         Err(Error::Malformed)
     }
     fn count(&mut self) -> Result<usize, Error> {
-        usize::try_from(self.unsigned()?).map_err(|_| Error::Malformed)
+        usize::try_from(self.unsigned()?).map_err(|_| Error::Limit)
     }
     fn signed(&mut self, bits: u32) -> Result<i64, Error> {
         let value = self.unsigned()?;
@@ -40,143 +46,105 @@ impl<'a> Cursor<'a> {
     }
 }
 
+fn bound(value: usize, maximum: usize, resource: &'static str) -> Result<(), Error> {
+    if value > maximum {
+        Err(Error::ResourceLimit {
+            resource,
+            limit: maximum,
+            actual: Some(value),
+        })
+    } else {
+        Ok(())
+    }
+}
 fn length(value: i64) -> Result<usize, Error> {
     usize::try_from(value).map_err(|_| Error::Malformed)
 }
-
-/// One delta integer stream, borrowing its current miniblock and width bytes.
-/// Keeping the cursor resumable lets byte-array prefixes and suffixes advance
-/// together without retaining one prefix length per value.
-struct Integers<'a> {
-    cursor: Cursor<'a>,
-    bits: u32,
-    count: usize,
-    first: Option<i64>,
-    previous: i64,
-    remaining: usize,
-    miniblocks: usize,
-    per_mini: usize,
-    minimum: i64,
-    widths: &'a [u8],
-    width: u8,
-    payload: &'a [u8],
-    index: usize,
-    mini_remaining: usize,
+fn charge(used: &mut usize, value: usize, maximum: usize) -> Result<(), Error> {
+    *used = used.checked_add(value).ok_or(Error::ResourceLimit {
+        resource: "expanded_bytes",
+        limit: maximum,
+        actual: None,
+    })?;
+    bound(*used, maximum, "expanded_bytes")
 }
 
-impl<'a> Integers<'a> {
-    fn new(bytes: &'a [u8], bits: u32, expected_values: usize) -> Result<Self, Error> {
-        if bits != 32 && bits != 64 {
-            return Err(Error::Malformed);
-        }
-        let mut cursor = Cursor { bytes, offset: 0 };
-        let block = cursor.count()?;
-        let miniblocks = cursor.count()?;
-        let count = cursor.count()?;
-        if count > expected_values {
-            return Err(Error::Malformed);
-        }
-        if block == 0
-            || !block.is_multiple_of(128)
-            || miniblocks == 0
-            || !block.is_multiple_of(miniblocks)
-        {
-            return Err(Error::Malformed);
-        }
-        let per_mini = block / miniblocks;
-        if per_mini == 0 || !per_mini.is_multiple_of(32) {
-            return Err(Error::Malformed);
-        }
-        let previous = cursor.signed(bits)?;
-        Ok(Self {
-            cursor,
-            bits,
-            count,
-            first: (count != 0).then_some(previous),
-            previous,
-            remaining: count.saturating_sub(1),
-            miniblocks,
-            per_mini,
-            minimum: 0,
-            widths: &[],
-            width: 0,
-            payload: &[],
-            index: 0,
-            mini_remaining: 0,
-        })
-    }
-
-    fn next_value(&mut self) -> Result<Option<i64>, Error> {
-        if let Some(first) = self.first.take() {
-            return Ok(Some(first));
-        }
-        if self.remaining == 0 {
-            return Ok(None);
-        }
-        if self.mini_remaining == 0 {
-            if self.widths.is_empty() {
-                self.minimum = self.cursor.signed(self.bits)?;
-                // All width bytes are stored, including unused miniblocks.
-                self.widths = self.cursor.take(self.miniblocks)?;
-            }
-            self.width = self.widths[0];
-            self.widths = &self.widths[1..];
-            if u32::from(self.width) > self.bits {
-                return Err(Error::Malformed);
-            }
-            let encoded = self
-                .per_mini
-                .checked_mul(usize::from(self.width))
-                .ok_or(Error::Malformed)?
-                / 8;
-            // Consume the complete padded miniblock before yielding a value.
-            // Unused miniblock widths remain uninterpreted when the stream ends.
-            self.payload = self.cursor.take(encoded)?;
-            self.mini_remaining = self.remaining.min(self.per_mini);
-            self.index = 0;
-        }
-        let bit = self
-            .index
-            .checked_mul(usize::from(self.width))
-            .ok_or(Error::Malformed)?;
-        let start = bit / 8;
-        let shift = bit % 8;
-        let octets = (shift + usize::from(self.width)).div_ceil(8);
-        let mut packed = 0u128;
-        for (offset, byte) in self.payload[start..start + octets].iter().enumerate() {
-            packed |= u128::from(*byte) << (offset * 8);
-        }
-        let mask = (1u128 << self.width) - 1;
-        let delta = ((packed >> shift) & mask) as u64;
-        self.previous = if self.bits == 32 {
-            (self.previous as i32)
-                .wrapping_add(self.minimum as i32)
-                .wrapping_add(delta as i32) as i64
-        } else {
-            self.previous
-                .wrapping_add(self.minimum)
-                .wrapping_add(delta as i64)
-        };
-        self.index += 1;
-        self.mini_remaining -= 1;
-        self.remaining -= 1;
-        Ok(Some(self.previous))
-    }
-}
-
-/// Visit the page's declared values, retaining no per-block allocation. Return the
+/// Visit only admitted values, retaining no per-block allocation. Return the
 /// exact next encoding offset, including padding in the last used miniblock.
 pub(super) fn scan(
     bytes: &[u8],
     bits: u32,
-    expected_values: usize,
+    maximum_values: usize,
     mut visit: impl FnMut(i64) -> Result<(), Error>,
 ) -> Result<(usize, usize), Error> {
-    let mut values = Integers::new(bytes, bits, expected_values)?;
-    while let Some(value) = values.next_value()? {
-        visit(value)?;
+    if bits != 32 && bits != 64 {
+        return Err(Error::Malformed);
     }
-    Ok((values.cursor.offset, values.count))
+    let mut cursor = Cursor { bytes, offset: 0 };
+    let block = cursor.count()?;
+    let miniblocks = cursor.count()?;
+    let count = cursor.count()?;
+    bound(count, maximum_values, "delta_values")?;
+    if block == 0
+        || !block.is_multiple_of(128)
+        || miniblocks == 0
+        || !block.is_multiple_of(miniblocks)
+    {
+        return Err(Error::Malformed);
+    }
+    let per_mini = block / miniblocks;
+    if per_mini == 0 || !per_mini.is_multiple_of(32) {
+        return Err(Error::Malformed);
+    }
+    let mut previous = cursor.signed(bits)?;
+    if count != 0 {
+        visit(previous)?;
+    }
+    let mut remaining = count.saturating_sub(1);
+    while remaining != 0 {
+        let minimum = cursor.signed(bits)?;
+        // `take` checks the stored bytes before interpreting any integer as an
+        // allocation/work request. Even a giant claimed block stays borrowed.
+        let widths = cursor.take(miniblocks)?;
+        for &width in widths {
+            if remaining == 0 {
+                break;
+            }
+            if u32::from(width) > bits {
+                return Err(Error::Malformed);
+            }
+            let encoded = per_mini
+                .checked_mul(usize::from(width))
+                .ok_or(Error::Malformed)?
+                / 8;
+            let payload = cursor.take(encoded)?;
+            let used = remaining.min(per_mini);
+            for index in 0..used {
+                let bit = index
+                    .checked_mul(usize::from(width))
+                    .ok_or(Error::Malformed)?;
+                let start = bit / 8;
+                let shift = bit % 8;
+                let octets = (shift + usize::from(width)).div_ceil(8);
+                let mut packed = 0u128;
+                for (offset, byte) in payload[start..start + octets].iter().enumerate() {
+                    packed |= u128::from(*byte) << (offset * 8);
+                }
+                let mask = (1u128 << width) - 1;
+                let delta = ((packed >> shift) & mask) as u64;
+                previous = if bits == 32 {
+                    (previous as i32)
+                        .wrapping_add(minimum as i32)
+                        .wrapping_add(delta as i32) as i64
+                } else {
+                    previous.wrapping_add(minimum).wrapping_add(delta as i64)
+                };
+                visit(previous)?;
+            }
+            remaining -= used;
+        }
+    }
+    Ok((cursor.offset, count))
 }
 
 /// Validate lengths and reconstructed strings before the ordinary decoder
@@ -185,67 +153,74 @@ pub(super) fn admit(
     bytes: &[u8],
     encoding: i64,
     physical_bits: u32,
-    expected_values: usize,
-) -> Result<(), Error> {
+    limits: Limits,
+) -> Result<usize, Error> {
+    let mut reconstruction = 0;
     match encoding {
         5 => {
-            if scan(bytes, physical_bits, expected_values, |_| Ok(()))?.1 != expected_values {
+            if scan(bytes, physical_bits, limits.values, |_| Ok(()))?.1 != limits.values {
                 return Err(Error::Malformed);
             }
         }
         6 => {
             let mut total = 0usize;
-            let (offset, count) = scan(bytes, 32, expected_values, |value| {
-                total = total.checked_add(length(value)?).ok_or(Error::Malformed)?;
-                Ok(())
+            let (offset, count) = scan(bytes, 32, limits.values, |value| {
+                charge(&mut total, length(value)?, limits.reconstructed_bytes)
             })?;
-            if count != expected_values || total > bytes.len() - offset {
+            reconstruction = total;
+            if count != limits.values || total > bytes.len() - offset {
                 return Err(Error::Malformed);
             }
         }
         7 => {
-            let (offset, count) = scan(bytes, 32, expected_values, |value| {
-                length(value)?;
+            let mut prefixes = Vec::new();
+            let (offset, count) = scan(bytes, 32, limits.values, |value| {
+                prefixes.push(length(value)?);
                 Ok(())
             })?;
-            let mut prefixes = Integers::new(&bytes[..offset], 32, expected_values)?;
+            let mut index = 0;
             let mut previous = 0;
-            let mut reconstructed = Some(0usize);
-            let mut stored = 0usize;
+            let mut stored = 0;
+            let mut reconstructed = 0;
             let (suffix_offset, suffix_count) =
-                scan(&bytes[offset..], 32, expected_values, |value| {
+                scan(&bytes[offset..], 32, limits.values, |value| {
                     let suffix = length(value)?;
-                    let prefix = length(prefixes.next_value()?.ok_or(Error::Malformed)?)?;
+                    let prefix = *prefixes.get(index).ok_or(Error::Malformed)?;
                     if prefix > previous {
                         return Err(Error::Malformed);
                     }
-                    previous = prefix.checked_add(suffix).ok_or(Error::Malformed)?;
-                    // Count the actual bytes before the physical decoder can
-                    // copy them. Keep validating the page if the total exceeds
-                    // Arrow's representation, so malformed data keeps priority.
-                    reconstructed = reconstructed.and_then(|total| total.checked_add(previous));
-                    stored = stored.checked_add(suffix).ok_or(Error::Malformed)?;
+                    previous = prefix.checked_add(suffix).ok_or(Error::ResourceLimit {
+                        resource: "expanded_bytes",
+                        limit: limits.reconstructed_bytes,
+                        actual: None,
+                    })?;
+                    charge(&mut reconstructed, previous, limits.reconstructed_bytes)?;
+                    charge(&mut stored, suffix, limits.reconstructed_bytes)?;
+                    index += 1;
                     Ok(())
                 })?;
-            if count != expected_values
+            reconstruction = reconstructed;
+            if count != limits.values
                 || count != suffix_count
                 || stored > bytes.len() - offset - suffix_offset
             {
                 return Err(Error::Malformed);
             }
-            if reconstructed.is_none_or(|total| total > i32::MAX as usize) {
-                return Err(Error::Representation);
-            }
         }
         _ => return Err(Error::Malformed),
     }
-    Ok(())
+    Ok(reconstruction)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    fn limits() -> Limits {
+        Limits {
+            values: 3,
+            reconstructed_bytes: 4096,
+        }
+    }
     fn unsigned(mut value: u64, output: &mut Vec<u8>) {
         while value > 127 {
             output.push((value as u8 & 127) | 128);
@@ -312,15 +287,24 @@ mod tests {
         // must not reach a decoder that assumes its first value exists.
         for count in [0, 1, 2] {
             assert_eq!(
-                admit(&progression(0, 0, count), 5, 64, 3),
+                admit(&progression(0, 0, count), 5, 64, limits()),
                 Err(Error::Malformed)
             );
         }
         let mut huge = vec![128, 1, 4];
         unsigned(u64::MAX, &mut huge);
+        let expected = if usize::BITS == 64 {
+            Error::ResourceLimit {
+                resource: "delta_values",
+                limit: 1024,
+                actual: Some(usize::MAX),
+            }
+        } else {
+            Error::Limit
+        };
         assert_eq!(
-            scan(&huge, 64, 1024, |_| panic!("invalid count")),
-            Err(Error::Malformed)
+            scan(&huge, 64, 1024, |_| panic!("not admitted")),
+            Err(expected)
         );
         for bytes in [
             vec![0, 1, 1, 0],
@@ -339,79 +323,61 @@ mod tests {
         assert_eq!(scan(&bytes, 64, 1024, |_| Ok(())), Err(Error::Malformed));
     }
     #[test]
-    fn byte_array_lengths_and_prefix_expansion_validate_actual_stored_strings() {
+    fn byte_array_lengths_and_prefix_expansion_are_charged_before_general_decode() {
         let mut lengths = progression(3, 0, 2);
         lengths.extend(b"abcdef");
-        admit(&lengths, 6, 32, 2).unwrap();
+        admit(
+            &lengths,
+            6,
+            32,
+            Limits {
+                values: 2,
+                ..limits()
+            },
+        )
+        .unwrap();
         lengths.pop();
-        assert_eq!(admit(&lengths, 6, 32, 2), Err(Error::Malformed));
         assert_eq!(
-            admit(&progression(-1, 0, 1), 6, 32, 3),
+            admit(
+                &lengths,
+                6,
+                32,
+                Limits {
+                    values: 2,
+                    ..limits()
+                }
+            ),
+            Err(Error::Malformed)
+        );
+        assert_eq!(
+            admit(&progression(-1, 0, 1), 6, 32, limits()),
             Err(Error::Malformed)
         );
         let mut data = progression(0, 3, 3); // 0,3,6 prefix lengths
         data.extend(progression(3, 0, 3)); // abc,def,ghi suffixes
         data.extend(b"abcdefghi");
-        admit(&data, 7, 32, 3).unwrap(); // abc,abcdef,abcdefghi = 18 bytes
+        admit(&data, 7, 32, limits()).unwrap(); // abc,abcdef,abcdefghi = 18 bytes
+        assert_eq!(
+            admit(
+                &data,
+                7,
+                32,
+                Limits {
+                    reconstructed_bytes: 17,
+                    ..limits()
+                }
+            ),
+            Err(Error::ResourceLimit {
+                resource: "expanded_bytes",
+                limit: 17,
+                actual: Some(18),
+            })
+        );
         let mut bad = progression(1, 0, 1); // first value cannot have a prefix
         bad.extend(progression(0, 0, 1));
-        assert_eq!(admit(&bad, 7, 32, 3), Err(Error::Malformed));
+        assert_eq!(admit(&bad, 7, 32, limits()), Err(Error::Malformed));
         let mut bad = progression(0, 0, 2);
         bad.extend(progression(0, 0, 1));
-        assert_eq!(admit(&bad, 7, 32, 3), Err(Error::Malformed));
-    }
-
-    #[test]
-    fn prefix_and_suffix_cursors_keep_independent_miniblock_padding() {
-        // Prefixes 0,1,2 use a padded 1-bit miniblock. The unused width bytes
-        // are deliberately outside the integer width and must stay ignored.
-        let mut bytes = vec![128, 1, 4, 3, 0, 0, 1, 255, 255, 255, 3, 0, 0, 0];
-        // Suffixes 1,1,1 use a different block/miniblock geometry: 256 / 8.
-        bytes.extend([128, 2, 8, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-        bytes.extend(b"abc");
-        admit(&bytes, 7, 32, 3).unwrap();
-        bytes.pop();
-        assert_eq!(admit(&bytes, 7, 32, 3), Err(Error::Malformed));
-    }
-
-    #[test]
-    fn prefix_expansion_admits_actual_arrow_offset_boundary_before_copying_values() {
-        // Each string appends 1024 bytes to its predecessor. Only about 2 MiB
-        // is stored, while the sum of the actual reconstructed values crosses
-        // signed-32-bit Arrow offsets between these two independently derived
-        // triangular totals.
-        for count in [2047usize, 2048] {
-            let total = 1024 * count * (count + 1) / 2;
-            let mut bytes = progression(0, 1024, count);
-            bytes.extend(progression(1024, 0, count));
-            bytes.resize(bytes.len() + 1024 * count, b'x');
-            assert_eq!(
-                admit(&bytes, 7, 32, count),
-                if total <= i32::MAX as usize {
-                    Ok(())
-                } else {
-                    Err(Error::Representation)
-                }
-            );
-            if total > i32::MAX as usize {
-                // A missing stored suffix remains invalid Parquet, even when
-                // the claimed reconstructed values exceed Arrow's offsets.
-                bytes.pop();
-                assert_eq!(admit(&bytes, 7, 32, count), Err(Error::Malformed));
-            }
-        }
-    }
-    #[test]
-    fn repeated_prefixes_cannot_expand_past_arrow_string_offsets() {
-        // Only 64 KiB of stored suffixes, but prefix reconstruction produces
-        // lengths 1, 2, ... count before the physical decoder copies them.
-        // Crossing Arrow's offset range is a representation refusal, while the
-        // stored Parquet suffixes remain structurally valid.
-        for (count, expected) in [(65_535, Ok(())), (65_536, Err(Error::Representation))] {
-            let mut data = progression(0, 1, count);
-            data.extend(progression(1, 0, count));
-            data.resize(data.len() + count, b'x');
-            assert_eq!(admit(&data, 7, 32, count), expected);
-        }
+        assert_eq!(admit(&bad, 7, 32, limits()), Err(Error::Malformed));
     }
 }

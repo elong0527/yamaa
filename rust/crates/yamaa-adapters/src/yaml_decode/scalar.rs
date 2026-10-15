@@ -25,7 +25,7 @@ fn decimal_float(text: &str) -> bool {
     }
 }
 
-pub(super) fn decode(text: String) -> Result<N, DecodeFailure> {
+pub(super) fn decode(text: String, limit: usize) -> Result<N, DecodeFailure> {
     match text.as_str() {
         "" | "~" | "null" | "Null" | "NULL" => return Ok(N::Null),
         "true" | "True" | "TRUE" => return Ok(N::Boolean(true)),
@@ -36,6 +36,13 @@ pub(super) fn decode(text: String) -> Result<N, DecodeFailure> {
     }
     let unsigned = text.strip_prefix(['+', '-']).unwrap_or(&text);
     if digits(unsigned, 10) {
+        if unsigned.len() > limit {
+            return Err(DecodeFailure::Limit(super::ResourceLimit {
+                resource: "numeric_digits",
+                limit,
+                actual: Some(unsigned.len()),
+            }));
+        }
         let value = unsigned.trim_start_matches('0');
         let canonical = if value.is_empty() {
             "0".into()
@@ -51,12 +58,26 @@ pub(super) fn decode(text: String) -> Result<N, DecodeFailure> {
             .strip_prefix(prefix)
             .filter(|value| digits(value, radix))
         {
+            if value.len() > limit {
+                return Err(DecodeFailure::Limit(super::ResourceLimit {
+                    resource: "numeric_digits",
+                    limit,
+                    actual: Some(value.len()),
+                }));
+            }
             let integer =
                 BigInt::parse_bytes(value.as_bytes(), radix).ok_or(DecodeFailure::Internal)?;
             return Ok(N::Integer(integer.to_string()));
         }
     }
     if decimal_float(&text) {
+        if text.bytes().filter(u8::is_ascii_digit).count() > limit {
+            return Err(DecodeFailure::Limit(super::ResourceLimit {
+                resource: "numeric_digits",
+                limit,
+                actual: Some(text.bytes().filter(u8::is_ascii_digit).count()),
+            }));
+        }
         let value: f64 = text.parse().map_err(|_| DecodeFailure::Internal)?;
         return Ok(yamaa_core::value::FiniteFloat::new(value)
             .map_or(N::Null, |value| N::Float(value.get())));

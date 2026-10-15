@@ -7,7 +7,7 @@ use crate::{
     project_run::{Attempt, BoundaryFailure, PreparedRun},
     specification_report::{self as report, BuildResult, Identity},
 };
-use yamaa_core::json::{json, Value};
+use serde_json::{json, Value};
 use yamaa_core::{
     dataset::{CheckRecord, ExecutionError},
     function_invocation::FailureKind,
@@ -80,6 +80,7 @@ pub(crate) fn diagnostic(issue: Issue) -> Result<Value, report::Error> {
 fn project_error<'a, C, E>(error: invocation::Error<'a, E>) -> Error<'a, C, E> {
     match error {
         invocation::Error::Opaque(error) => Error::Opaque(error),
+        invocation::Error::Limit => report::Error::OutputLimit.into(),
         invocation::Error::InvalidContext => invalid(),
     }
 }
@@ -89,8 +90,12 @@ pub(crate) fn checked_records(
     phase: &str,
     id: &Identity<'_>,
 ) -> Result<(Vec<Value>, Vec<Value>), report::Error> {
-    crate::project_codelist_diagnostics::codelist_issues(run.compiled(), records)
-        .map_err(|_| report::Error::InvalidObservation)?;
+    crate::project_codelist_diagnostics::codelist_issues(run.compiled(), records).map_err(
+        |error| match error {
+            crate::project_codelist_diagnostics::Error::Limit => report::Error::OutputLimit,
+            _ => report::Error::InvalidObservation,
+        },
+    )?;
     let phase = match phase {
         "output" => yamaa_core::verification_diagnostics::Phase::Output,
         "verification" => yamaa_core::verification_diagnostics::Phase::Verification,
@@ -130,12 +135,7 @@ pub(crate) fn validate_activation<E>(
                 .len()
         })
         .sum::<usize>();
-    let lock_ready = if run.environment().lock().is_some() {
-        observed.lock == LockObservation::Verified
-    } else {
-        observed.lock == LockObservation::NotRequested
-    };
-    let bound = lock_ready
+    let bound = observed.lock == LockObservation::Verified
         && observed.bindings.len() == selected.len()
         && observed
             .bindings
@@ -164,7 +164,7 @@ pub(crate) fn validate_activation<E>(
         }
         ActivationBoundary::Failed(Failure::Bindings(failures)) => {
             if failures.is_empty()
-                || !lock_ready
+                || observed.lock != LockObservation::Verified
                 || observed.bindings.len() != selected.len()
                 || !observed.tests.is_empty()
                 || observed.bindings.iter().any(|binding| {
@@ -260,8 +260,26 @@ pub(crate) fn activation_origins(
     issues: Vec<Issue>,
     functions: impl Iterator<Item = usize> + Clone,
 ) -> Result<Vec<Value>, report::Error> {
+    // Admit the complete origin lookup and temporary ownership before collecting
+    // indices or captures. Both ordinary runs and graph unions are sealed views.
+    let mut budget =
+        crate::report_projection::Budget::new(crate::specification_check::MAX_ISSUE_BYTES);
     let captured = run.captured_environment();
-
+    budget.entries(captured.captures().len())?;
+    budget.entries(paths.len())?;
+    for selected in functions.clone() {
+        budget.entries(1)?;
+        budget.work(captured.captures().len())?;
+        budget.text(&captured.root().source().identity)?;
+        budget.text(
+            paths
+                .get(selected)
+                .ok_or(report::Error::InvalidObservation)?,
+        )?;
+        for capture in captured.captures() {
+            budget.text(&capture.document.source().identity)?;
+        }
+    }
     let functions = functions.collect::<Vec<_>>();
     if issues.len() != functions.len() {
         return Err(report::Error::InvalidObservation);
@@ -277,6 +295,7 @@ pub(crate) fn activation_origins(
             _ => None,
         })
         .collect::<std::collections::BTreeMap<_, _>>();
+    let mut remaining = crate::specification_check::MAX_ISSUE_BYTES;
     let mut metadata = Vec::new();
     for &selected in &functions {
         let &index = run
@@ -298,7 +317,20 @@ pub(crate) fn activation_origins(
             .ok_or(report::Error::InvalidObservation)?;
         let external = external.get(name.as_str()).copied();
         let source = external.unwrap_or(entry);
+        for text in [source, entry, declaration] {
+            remaining = remaining
+                .checked_sub(
+                    text.len()
+                        .checked_mul(12)
+                        .and_then(|size| size.checked_add(128))
+                        .ok_or(report::Error::OutputLimit)?,
+                )
+                .ok_or(report::Error::OutputLimit)?;
+        }
         metadata.push((source, declaration, external.is_some()));
+    }
+    if !crate::issue_rows::within_limit(&issues, remaining) {
+        return Err(report::Error::OutputLimit);
     }
     issues
         .into_iter()
@@ -337,6 +369,9 @@ pub fn build_result<'a, C, E>(
     id: Identity<'_>,
     facts: &[Classified<'a, E>],
 ) -> Result<BuildResult, Error<'a, C, E>> {
+    if facts.len() > 65_536 {
+        return Err(report::Error::OutputLimit.into());
+    }
     // Distinct zero-sized values can share an address. Never grant one fact
     // authority over another held failure merely because their pointers agree.
     if std::mem::size_of::<E>() == 0 && !facts.is_empty() {
@@ -368,7 +403,16 @@ pub fn build_result<'a, C, E>(
         }
     }
     let activation = crate::project_activation_observations::activation(run, &attempt.activation)
-        .map_err(|_| invalid())?;
+        .map_err(|error| match error {
+        crate::project_activation_observations::Error::Limit {
+            resource,
+            limit,
+            actual,
+        } => Error::Report(report::Error::ResourceLimit(
+            crate::resource_diagnostics::Refusal::new(resource, limit, actual, Vec::new()),
+        )),
+        _ => invalid(),
+    })?;
     let boundary = match &attempt.boundary {
         Ok(()) => ActivationBoundary::Complete,
         Err(BoundaryFailure::Activation(error)) => ActivationBoundary::Failed(error),
@@ -415,7 +459,12 @@ pub fn build_result<'a, C, E>(
                     return Err(invalid());
                 }
                 crate::project_lock_diagnostics::issues(run.captured_environment(), findings)
-                    .map_err(|_| invalid())?
+                    .map_err(|error| match error {
+                        crate::project_lock_diagnostics::Error::Limit => {
+                            Error::Report(report::Error::OutputLimit)
+                        }
+                        _ => invalid(),
+                    })?
                     .into_iter()
                     .map(diagnostic)
                     .collect::<Result<Vec<_>, _>>()?
@@ -465,9 +514,9 @@ pub fn build_result<'a, C, E>(
         {
             return Err(invalid());
         }
-        result = report::envelope_sources(run, &attempt.dataset.sources, &id, true)?;
+        result = report::envelope_sources(run, &attempt.dataset.sources, &id)?;
     } else {
-        result = report::envelope_sources(run, &attempt.dataset.sources, &id, true)?;
+        result = report::envelope_sources(run, &attempt.dataset.sources, &id)?;
         match &attempt.dataset.result {
             Ok(dataset) => {
                 let (checks, findings) =
@@ -528,7 +577,11 @@ pub fn build_result<'a, C, E>(
                                 run.compiled().sources(),
                                 run.compiled().driver_index(),
                             ) {
-                                diagnostics.push(refusal.value("execute", "execution_limit"));
+                                diagnostics.push(
+                                    refusal
+                                        .value("execute", "execution_limit")
+                                        .ok_or_else(invalid)?,
+                                );
                             } else {
                                 let outcome = crate::dataset_result::semantic_condition(other)
                                     .map_err(|_| Error::Execution(other))?;
@@ -623,6 +676,7 @@ pub fn build_result<'a, C, E>(
                                 crate::source_diagnostics::admitted_findings(
                                     errors,
                                     run.compiled().sources(),
+                                    yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
                                 )
                                 .map_err(report::Error::from)?
                                 .map(|findings| {
@@ -636,7 +690,9 @@ pub fn build_result<'a, C, E>(
                                 failure,
                                 run.compiled().sources(),
                             )
-                            .map(|refusal| vec![refusal.value("ingest", "source_limit")]),
+                            .and_then(|refusal| {
+                                Some(vec![refusal.value("ingest", "source_limit")?])
+                            }),
                         }
                         .ok_or(Error::Source(error))?;
                         diagnostics.extend(findings);
@@ -649,5 +705,10 @@ pub fn build_result<'a, C, E>(
     report::set_diagnostics(&mut result, diagnostics);
     result["verifications"] = json!(verifications);
     result["activation"] = activation;
-    Ok(report::prepare_result(run, execution, id, result)?)
+    Ok(report::prepare_result(
+        run,
+        execution,
+        id,
+        report::bounded(result)?,
+    )?)
 }

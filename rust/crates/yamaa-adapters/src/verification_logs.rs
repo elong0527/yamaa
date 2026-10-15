@@ -3,8 +3,8 @@
 use crate::{
     public_table::PublicTable, specification_report::Error, specification_run_view::RunView,
 };
+use serde_json::{json, Value};
 use std::{collections::BTreeMap, sync::Arc};
-use yamaa_core::json::{json, Value};
 use yamaa_core::{
     dataset::VerificationSeverity,
     table::TableAccess,
@@ -58,10 +58,16 @@ fn count(record: &Value, field: &str) -> Result<usize, Error> {
         .and_then(|n| usize::try_from(n).ok())
         .ok_or(Error::InvalidObservation)
 }
-fn records(report: &Value) -> Result<Vec<Record>, Error> {
+fn records(report: &Value, limits: PreparationLimits) -> Result<Vec<Record>, Error> {
     let values = report["verifications"]
         .as_array()
         .ok_or(Error::InvalidObservation)?;
+    if values.len() > limits.core.records {
+        return Err(Error::OutputLimit);
+    }
+    // Admission precedes all owned metadata, full key and detail-context copies.
+    let mut budget = crate::report_projection::Budget::new(limits.report_bytes);
+    budget.json(&report["verifications"])?;
     values
         .iter()
         .map(|value| {
@@ -107,7 +113,7 @@ fn records(report: &Value) -> Result<Vec<Record>, Error> {
         })
         .collect()
 }
-fn held(path: &str, table: core::LogTable) -> Result<HeldLog, Error> {
+fn held(path: &str, table: core::LogTable, limits: PreparationLimits) -> Result<HeldLog, Error> {
     let (name, suffix) = path
         .rsplit('/')
         .next()
@@ -122,25 +128,54 @@ fn held(path: &str, table: core::LogTable) -> Result<HeldLog, Error> {
     };
     let projection = (0..table.schema().columns().len()).collect::<Vec<_>>();
     let bytes = if profile == "csv" {
-        crate::csv_artifact::render(&table, &projection, None).map_err(|e| match e {
-            crate::csv_artifact::Error::Limit {
-                resource,
-                limit,
-                actual,
-                ..
-            } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                resource,
-                limit,
-                actual,
-                Vec::new(),
-            )),
-            _ => Error::InvalidObservation,
+        crate::csv_artifact::render(&table, &projection, limits.output_bytes).map_err(|e| {
+            if let crate::csv_artifact::Error::Limit { limit, actual, .. } = e {
+                Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                    "output_bytes",
+                    limit,
+                    actual,
+                    Vec::new(),
+                ))
+            } else {
+                Error::InvalidObservation
+            }
         })?
     } else {
-        crate::parquet_artifact::render(&table, &projection).map_err(parquet_error)?
+        crate::parquet_artifact::render(
+            &table,
+            &projection,
+            crate::parquet_artifact::Limits {
+                output_bytes: limits.output_bytes,
+                staged_bytes: limits.output_bytes,
+                cells: limits.core.cells,
+                columns: 13,
+            },
+        )
+        .map_err(|e| {
+            if let crate::parquet_artifact::Error::Limit {
+                resource,
+                limit,
+                actual,
+            } = e
+            {
+                Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                    resource,
+                    limit,
+                    actual,
+                    Vec::new(),
+                ))
+            } else {
+                Error::InvalidObservation
+            }
+        })?
     };
+    let mut budget = crate::report_projection::Budget::new(limits.report_bytes);
+    budget.text(path)?;
     let (content, rows) = if profile == "csv" {
         let content = std::str::from_utf8(&bytes).map_err(|_| Error::InvalidObservation)?;
+        budget.text(content)?;
+        budget.text(content)?;
+        budget.entries(content.bytes().filter(|&byte| byte == b'\n').count())?;
         (
             content,
             content
@@ -151,16 +186,45 @@ fn held(path: &str, table: core::LogTable) -> Result<HeldLog, Error> {
                 .collect::<Vec<_>>(),
         )
     } else {
+        budget.shape(table.row_count(), projection.len())?;
+        for row in 0..table.row_count() {
+            for &column in &projection {
+                budget.cell(
+                    &table
+                        .cell(row, column)
+                        .map_err(|_| Error::InvalidObservation)?,
+                )?;
+            }
+        }
         (
             "",
-            crate::parquet_artifact::records(&table, &projection).map_err(parquet_error)?,
+            crate::parquet_artifact::records(&table, &projection, limits.report_bytes).map_err(
+                |e| {
+                    if let crate::parquet_artifact::Error::Limit {
+                        resource,
+                        limit,
+                        actual,
+                    } = e
+                    {
+                        Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                            resource,
+                            limit,
+                            actual,
+                            Vec::new(),
+                        ))
+                    } else {
+                        Error::InvalidObservation
+                    }
+                },
+            )?,
         )
     };
     let observation = json!({"name":name,"profile":profile,"columns":table.schema().columns().iter().map(|c|&c.name).collect::<Vec<_>>(),"types":table.schema().columns().iter().map(|c|crate::specification_diagnostics::type_name(c.kind)).collect::<Vec<_>>(),"row_count":table.row_count(),"records":rows,"byte_length":bytes.len(),"content":content});
-    let logical =
-        crate::ipc_table::encode_log_table(&table).map_err(|_| Error::InvalidObservation)?;
+    crate::ipc_table::bounded_json(&observation, limits.observation_bytes)
+        .map_err(|_| Error::OutputLimit)?;
+    let logical = crate::ipc_table::encode_log_table(&table).map_err(|_| Error::OutputLimit)?;
     let table = PublicTable::decode(&logical).map_err(|_| Error::InvalidObservation)?;
-    let ipc = table.ipc().map_err(|_| Error::InvalidObservation)?;
+    let ipc = table.ipc().map_err(|_| Error::OutputLimit)?;
     Ok(HeldLog {
         path: path.into(),
         bytes: bytes.into(),
@@ -169,26 +233,61 @@ fn held(path: &str, table: core::LogTable) -> Result<HeldLog, Error> {
         observation,
     })
 }
-fn parquet_error(error: crate::parquet_artifact::Error<std::convert::Infallible>) -> Error {
-    match error {
-        crate::parquet_artifact::Error::Limit {
-            resource,
-            limit,
-            actual,
-        } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-            resource,
-            limit,
-            actual,
-            Vec::new(),
-        )),
-        _ => Error::InvalidObservation,
-    }
-}
 #[derive(Default)]
 pub(crate) struct PreparedLogs {
     pub(crate) verification: Option<HeldLog>,
     pub(crate) warning: Option<HeldLog>,
     pub(crate) failure: Option<Error>,
+}
+/// Conservative graph shares admit record/context/table ownership before any
+/// codec or report copy grows. Public defaults follow the longitudinal profile.
+#[derive(Clone, Copy)]
+pub(crate) struct PreparationLimits {
+    pub(crate) core: core::Limits,
+    pub(crate) output_bytes: usize,
+    pub(crate) total_output_bytes: usize,
+    pub(crate) report_bytes: usize,
+    pub(crate) observation_bytes: usize,
+}
+impl Default for PreparationLimits {
+    fn default() -> Self {
+        Self {
+            core: core::Limits {
+                records: yamaa_core::capacity::OUTPUT_ROWS,
+                cells: yamaa_core::capacity::REPORT_CELLS,
+                text: yamaa_core::capacity::REPORT_ENCODED_BYTES,
+                json_nodes: yamaa_core::capacity::REPORT_CELLS,
+            },
+            output_bytes: yamaa_core::capacity::SOURCE_BYTES,
+            total_output_bytes: yamaa_core::capacity::SOURCE_BYTES,
+            report_bytes: yamaa_core::capacity::REPORT_ENCODED_BYTES,
+            observation_bytes: yamaa_core::capacity::REPORT_ENCODED_BYTES,
+        }
+    }
+}
+impl PreparationLimits {
+    pub(crate) fn graph(
+        nodes: usize,
+        logs: usize,
+        output_bytes: usize,
+        report_bytes: usize,
+    ) -> Self {
+        let nodes = nodes.max(1);
+        let slots = nodes.saturating_mul(logs.max(1));
+        let defaults = Self::default();
+        Self {
+            core: core::Limits {
+                records: defaults.core.records / nodes,
+                cells: defaults.core.cells / slots,
+                text: defaults.core.text / slots,
+                json_nodes: defaults.core.json_nodes / slots,
+            },
+            output_bytes: output_bytes.min(defaults.output_bytes / slots),
+            total_output_bytes: output_bytes,
+            report_bytes: report_bytes / logs.max(1),
+            observation_bytes: defaults.observation_bytes / slots,
+        }
+    }
 }
 pub(crate) fn prepare(
     run: &dyn RunView,
@@ -196,7 +295,7 @@ pub(crate) fn prepare(
     success: bool,
 ) -> Result<PreparedLogs, Error> {
     let mut output = PreparedLogs::default();
-    prepare_into(run, report, success, &mut output)?;
+    prepare_into(run, report, success, Default::default(), &mut output)?;
     Ok(output)
 }
 /// Fill retained caller-owned slots so a later warning failure or native unwind
@@ -205,6 +304,7 @@ pub(crate) fn prepare_into(
     run: &dyn RunView,
     report: &Value,
     success: bool,
+    limits: PreparationLimits,
     output: &mut PreparedLogs,
 ) -> Result<(), Error> {
     *output = PreparedLogs::default();
@@ -212,23 +312,17 @@ pub(crate) fn prepare_into(
     if !declarations.declared() {
         return Ok(());
     }
-    let records = records(report)?;
+    let records = records(report, limits)?;
     let logs = core::build(
         &records,
         run.compiled().output_path(),
         declarations.verification().is_some(),
         false,
         success,
+        limits.core,
     )
     .map_err(|error| match error {
-        core::Error::Limit(error) => {
-            Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                error.resource,
-                error.limit,
-                error.actual,
-                Vec::new(),
-            ))
-        }
+        core::Error::Limit => Error::OutputLimit,
         core::Error::InvalidRecord => Error::InvalidObservation,
     })?;
     output.verification = logs
@@ -239,25 +333,46 @@ pub(crate) fn prepare_into(
                     .verification()
                     .expect("declared verification log"),
                 table,
+                limits,
             )
         })
         .transpose()?;
     // The verification capability is retained before warning preparation enters.
+    let warning_limits = PreparationLimits {
+        output_bytes: limits.output_bytes.min(
+            limits
+                .total_output_bytes
+                .checked_sub(
+                    output
+                        .verification
+                        .as_ref()
+                        .map_or(0, |log| log.bytes().len()),
+                )
+                .ok_or(Error::OutputLimit)?,
+        ),
+        ..limits
+    };
     let warning = if let Some(path) = declarations.warning().filter(|_| success) {
-        core::build(&records, run.compiled().output_path(), false, true, true)
-            .map_err(|error| match error {
-                core::Error::Limit(error) => {
-                    Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                        error.resource,
-                        error.limit,
-                        error.actual,
-                        Vec::new(),
-                    ))
-                }
-                core::Error::InvalidRecord => Error::InvalidObservation,
-            })
-            .and_then(|logs| held(path, logs.warning.expect("declared warning log")))
-            .map(Some)
+        core::build(
+            &records,
+            run.compiled().output_path(),
+            false,
+            true,
+            true,
+            limits.core,
+        )
+        .map_err(|error| match error {
+            core::Error::Limit => Error::OutputLimit,
+            core::Error::InvalidRecord => Error::InvalidObservation,
+        })
+        .and_then(|logs| {
+            held(
+                path,
+                logs.warning.expect("declared warning log"),
+                warning_limits,
+            )
+        })
+        .map(Some)
     } else {
         Ok(None)
     };
@@ -283,7 +398,7 @@ pub(crate) fn location_findings(
             .written_output_field_origin(field)
             .and_then(|origin| {
                 resources
-                    .location_from(origin.base_source, origin.written)
+                    .location_from(origin.declaring_source, origin.written)
                     .ok()
             })
             .map(|location| (field, location))
