@@ -22,10 +22,10 @@ Docker; this folder only writes Harbor task directories and a job file.
 Results are not kept in this repository: runs are uploaded to Harbor Hub and
 reviewed on its leaderboards.
 
-Standalone `result.sas` sources are also prepared for the 140 prompted
+Standalone `result.sas` sources are also prepared for the 141 prompted
 derivation benchmarks. Their execution prerequisites, local checks and known
 compatibility gaps are documented in [solutions/opensas.md](solutions/opensas.md).
-The opensas track runs the 137 confident cases with native CSV inputs. Three
+The opensas track runs the 138 confident cases with native CSV inputs. Three
 prepared cases remain excluded: investigator comments (spaces-only text),
 randomization (Parquet input), and age quality (warning-log output).
 `build.py` records their reasons and rejects explicit requests to run them.
@@ -323,7 +323,7 @@ uv run --project python --no-sync python evaluations/harbor/smoke.py \
     --out ~/.cache/yamaa-harbor-opensas
 ```
 
-This runs oracle and nop on the same 137 cases, with no model key. The saved
+This runs oracle and nop on the same 138 cases, with no model key. The saved
 `sample.json` lists every selected task and exclusion; `summary.json` records
 each case's rewards and exceptions. Jobs retain the usual task snapshots,
 verifier grades and logs. Weekly and manual CI runs retain this complete
