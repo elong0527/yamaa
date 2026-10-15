@@ -764,7 +764,13 @@ fn decoded_finding(
         }
         _ => return Ok(false),
     }
-    let Some(values) = crate::specification_diagnostics::findings(error, Some(source)) else {
+    let Some(values) = crate::specification_diagnostics::findings_with_limit(
+        error,
+        Some(source),
+        yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
+    )
+    .ok()
+    .flatten() else {
         return Ok(false);
     };
     findings.extend(values);

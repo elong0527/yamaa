@@ -15,6 +15,20 @@ use yamaa_core::{
 use yamaa_engine::dataset::DatasetExecution;
 use yamaa_engine::dataset::{self, DatasetPlan};
 
+
+fn spec_findings(
+    error: &yamaa_adapters::specification_run::Error,
+    source: Option<&yamaa_engine::specification::SourceDeclaration>,
+) -> Option<Vec<serde_json::Value>> {
+    yamaa_adapters::specification_diagnostics::findings_with_limit(
+        error,
+        source,
+        yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
+    )
+    .ok()
+    .flatten()
+}
+
 fn text(d: &Document, id: usize) -> &str {
     let N::Text(value) = &d.nodes()[id] else {
         panic!("expected text")
@@ -518,7 +532,7 @@ fn source_ingestion_failure_precedes_deferred_formula_diagnostics() {
 #[test]
 fn compiler_diagnostics_match_independent_reference_paths_context_and_phase() {
     use serde_json::json;
-    use yamaa_adapters::{specification_diagnostics::findings, specification_run::PreparedRun};
+    use yamaa_adapters::{specification_run::PreparedRun};
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let schema = schema(&root.join("yaml"));
     let case = root.join("benchmarks/negative-zero-division");
@@ -554,7 +568,7 @@ fn compiler_diagnostics_match_independent_reference_paths_context_and_phase() {
         let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
         let error = run.execute_csv(&data).err().unwrap();
         assert_eq!(
-            findings(&error, Some(run.source())).unwrap(),
+            spec_findings(&error, Some(run.source())).unwrap(),
             vec![
                 json!({"phase":"validation","condition":condition,"requirement":requirement,"spec_paths":["columns.PCHG.derivation.compute.expr"],"context":context})
             ]
@@ -564,7 +578,7 @@ fn compiler_diagnostics_match_independent_reference_paths_context_and_phase() {
     let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
     let error = run.execute_csv(&data).err().unwrap();
     assert_eq!(
-        findings(&error, Some(run.source())).unwrap(),
+        spec_findings(&error, Some(run.source())).unwrap(),
         vec![
             json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0103","spec_paths":["columns.AVAL.derivation.source"],"context":{"identifier":"LB.BOGUS"}})
         ]
@@ -573,7 +587,7 @@ fn compiler_diagnostics_match_independent_reference_paths_context_and_phase() {
     let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
     let error = run.execute_csv(b"A\n\"bad").err().unwrap();
     assert_eq!(
-        findings(&error, Some(run.source())).unwrap(),
+        spec_findings(&error, Some(run.source())).unwrap(),
         vec![
             json!({"phase":"ingest","condition":"source_quote_unterminated","requirement":"REQ-0851","spec_paths":["input.LB.path"],"context":{"dataset":"LB","path":"input/lb.csv","record":2,"field":1}})
         ]
@@ -594,7 +608,7 @@ fn compiler_diagnostics_match_independent_reference_paths_context_and_phase() {
 #[test]
 fn preflight_reports_all_findings_in_reference_order_before_source_access() {
     use serde_json::json;
-    use yamaa_adapters::{specification_diagnostics::findings, specification_run::PreparedRun};
+    use yamaa_adapters::{specification_run::PreparedRun};
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let schema = schema(&root.join("yaml"));
     let raw =
@@ -611,7 +625,7 @@ fn preflight_reports_all_findings_in_reference_order_before_source_access() {
         );
     let error = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap_err();
     assert_eq!(
-        findings(&error, None).unwrap(),
+        spec_findings(&error, None).unwrap(),
         vec![
             json!({"phase":"validation","condition":"missing_derivation","spec_paths":["columns.PCHG.derivation"],"requirement":"REQ-0198","context":{"column":"PCHG"}}),
             json!({"phase":"validation","condition":"duplicate_identifier","spec_paths":["input.LB","domain"],"requirement":"REQ-0080","context":{"identifier":"LB"}}),
@@ -796,7 +810,7 @@ fn independent_failed_reports(
 #[test]
 fn binding_collects_ordered_findings_before_dependency_diagnostics() {
     use serde_json::json;
-    use yamaa_adapters::{specification_diagnostics::findings, specification_run::PreparedRun};
+    use yamaa_adapters::{specification_run::PreparedRun};
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let schema = schema(&root.join("yaml"));
     let case = root.join("benchmarks/negative-zero-division");
@@ -810,7 +824,7 @@ fn binding_collects_ordered_findings_before_dependency_diagnostics() {
     let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
     let error = run.execute_csv(&data).err().unwrap();
     assert_eq!(
-        findings(&error, Some(run.source())).unwrap(),
+        spec_findings(&error, Some(run.source())).unwrap(),
         vec![
             json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0103","spec_paths":["columns.AVAL.derivation.source"],"context":{"identifier":"LB.BOGUS"}}),
             unknown.clone(),
@@ -822,7 +836,7 @@ fn binding_collects_ordered_findings_before_dependency_diagnostics() {
     let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
     let error = run.execute_csv(&data).err().unwrap();
     assert_eq!(
-        findings(&error, Some(run.source())).unwrap(),
+        spec_findings(&error, Some(run.source())).unwrap(),
         vec![
             json!({"phase":"validation","condition":"qualified_identifier","requirement":"REQ-0442","spec_paths":["columns.PCHG.derivation.compute.expr"],"context":{"expr":expr,"identifier":"LB.LBSTRESN"}}),
             json!({"phase":"validation","condition":"qualified_identifier","requirement":"REQ-0442","spec_paths":["columns.PCHG.derivation.compute.expr"],"context":{"expr":expr,"identifier":"LB.LBBLRESN"}}),
@@ -898,7 +912,7 @@ fn compiler_budgets_precede_owned_planning_and_preserve_policy_boundary() {
             "{error:?}"
         );
         let error = specification_run::Error::Prepare(error);
-        assert!(specification_diagnostics::findings(&error, None).is_none());
+        assert!(spec_findings(&error, None).is_none());
         let envelope = serde_json::from_str::<serde_json::Value>(
             &specification_diagnostics::failure(&error, None),
         )
@@ -1102,7 +1116,7 @@ fn whole_failure_reports_match_reference_observations_from_actual_capture() {
 #[test]
 fn declared_source_types_preserve_ingestion_diagnostics_before_formula_errors() {
     use serde_json::json;
-    use yamaa_adapters::{specification_diagnostics::findings, specification_run::PreparedRun};
+    use yamaa_adapters::{specification_run::PreparedRun};
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let schema = schema(&root.join("yaml"));
     let case = root.join("benchmarks/negative-zero-division");
@@ -1121,7 +1135,7 @@ fn declared_source_types_preserve_ingestion_diagnostics_before_formula_errors() 
         .err()
         .unwrap();
     assert_eq!(
-        findings(&error, Some(run.source())).unwrap(),
+        spec_findings(&error, Some(run.source())).unwrap(),
         vec![
             json!({"phase":"ingest","condition":"field_parse_failed","requirement":"REQ-0536","spec_paths":["input.LB.types.LBSTRESN"],"context":{"dataset":"LB","field":"LBSTRESN","type":"int","value":"42.5"}})
         ]
@@ -1133,7 +1147,7 @@ fn declared_source_types_preserve_ingestion_diagnostics_before_formula_errors() 
         .err()
         .unwrap();
     assert_eq!(
-        findings(&error, Some(run.source())).unwrap(),
+        spec_findings(&error, Some(run.source())).unwrap(),
         vec![
             json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0532","spec_paths":["input.LB.types.ZZ"],"context":{"dataset":"LB","field":"ZZ"}})
         ]
@@ -1234,7 +1248,7 @@ fn original_ordered_sum_yaml_executes_all_seventeen_rows_with_exact_float_bits()
 #[test]
 fn aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path() {
     use serde_json::json;
-    use yamaa_adapters::{specification_diagnostics::findings, specification_run::PreparedRun};
+    use yamaa_adapters::{specification_run::PreparedRun};
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let schema = schema(&root.join("yaml"));
     let case = root.join("benchmarks/adam-adlb-ordered-sum");
@@ -1291,7 +1305,7 @@ fn aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path() 
         .unwrap();
         let error = run.execute_csv(&data).err().unwrap();
         assert_eq!(
-            findings(&error, Some(run.source())).unwrap(),
+            spec_findings(&error, Some(run.source())).unwrap(),
             vec![
                 json!({"phase":"validation","condition":condition,"requirement":requirement,"spec_paths":["rows[1].derivations.AVAL.aggregate"],"context":context})
             ]
@@ -1301,7 +1315,7 @@ fn aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path() 
             .replacen(",0.1", ",invalid", 1);
         let error = run.execute_csv(invalid_data.as_bytes()).err().unwrap();
         assert_eq!(
-            findings(&error, Some(run.source())).unwrap(),
+            spec_findings(&error, Some(run.source())).unwrap(),
             vec![
                 json!({"phase":"ingest","condition":"field_parse_failed","requirement":"REQ-0536","spec_paths":["input.LB.types.LBSTRESN"],"context":{"dataset":"LB","field":"LBSTRESN","type":"float","value":"invalid"}})
             ]
@@ -1685,7 +1699,7 @@ fn verification_declarations_preserve_completed_prefix_and_phase_precedence() {
 #[test]
 fn row_group_declarations_and_shared_scope_keep_authored_diagnostics() {
     use serde_json::json;
-    use yamaa_adapters::{specification_diagnostics, specification_run::PreparedRun};
+    use yamaa_adapters::specification_run::PreparedRun;
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let schema = schema(&root.join("yaml"));
     let raw =
@@ -1717,7 +1731,7 @@ fn row_group_declarations_and_shared_scope_keep_authored_diagnostics() {
         );
         let error = PreparedRun::prepare(prepare(&schema, written.as_bytes()))
             .expect_err("preflight without source");
-        assert_eq!(specification_diagnostics::findings(&error,None).unwrap(),json!([{"phase":"validation","condition":condition,"requirement":requirement,"spec_paths":["rows[1].group_by"],"context":context}]).as_array().unwrap().clone());
+        assert_eq!(spec_findings(&error,None).unwrap(),json!([{"phase":"validation","condition":condition,"requirement":requirement,"spec_paths":["rows[1].group_by"],"context":context}]).as_array().unwrap().clone());
     }
     let written = raw
         .replace("id: total", "id: total\n    dataset: ABSENT")
@@ -1725,7 +1739,7 @@ fn row_group_declarations_and_shared_scope_keep_authored_diagnostics() {
     let error = PreparedRun::prepare(prepare(&schema, written.as_bytes()))
         .err()
         .unwrap();
-    assert_eq!(specification_diagnostics::findings(&error,None).unwrap(),json!([{"phase":"validation","condition":"driver_unavailable","requirement":"REQ-0034","spec_paths":["rows[1].dataset"],"context":{"row":"total","dataset":"ABSENT"}}]).as_array().unwrap().clone());
+    assert_eq!(spec_findings(&error,None).unwrap(),json!([{"phase":"validation","condition":"driver_unavailable","requirement":"REQ-0034","spec_paths":["rows[1].dataset"],"context":{"row":"total","dataset":"ABSENT"}}]).as_array().unwrap().clone());
     let written = raw.replace(
         "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]",
         "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT, LB.ABSENT]",
@@ -1733,7 +1747,7 @@ fn row_group_declarations_and_shared_scope_keep_authored_diagnostics() {
     let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
     let error = run.execute_csv(&bytes).err().unwrap();
     assert_eq!(
-        specification_diagnostics::findings(&error, Some(run.source())).unwrap(),
+        spec_findings(&error, Some(run.source())).unwrap(),
         vec![
             json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0103","spec_paths":["rows[1].group_by[3]"],"context":{"identifier":"LB.ABSENT"}})
         ]
@@ -1757,7 +1771,7 @@ fn row_group_declarations_and_shared_scope_keep_authored_diagnostics() {
             .execute_csv(&bytes)
             .err()
             .expect("scope finding after ingestion");
-        assert_eq!(specification_diagnostics::findings(&error,Some(run.source())).unwrap(),json!([{"phase":"validation","condition":"ungrouped_driver_field","requirement":requirement,"spec_paths":[path],"context":context}]).as_array().unwrap().clone());
+        assert_eq!(spec_findings(&error,Some(run.source())).unwrap(),json!([{"phase":"validation","condition":"ungrouped_driver_field","requirement":requirement,"spec_paths":[path],"context":context}]).as_array().unwrap().clone());
     }
 }
 
@@ -1878,7 +1892,6 @@ fn original_sum_reports_nonnumeric_values_but_publishes_all_missing_groups() {
 fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
     use serde_json::{json, Value as Json};
     use yamaa_adapters::{
-        specification_diagnostics,
         specification_report::{self, ArtifactPort, Identity},
         specification_run::{PreparedRun, SourcePort},
     };
@@ -1956,7 +1969,7 @@ fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
     let run = PreparedRun::prepare(prepare(&schema, bad.as_bytes())).unwrap();
     let error = run.execute_csv(&host.bytes).err().unwrap();
     assert_eq!(
-        specification_diagnostics::findings(&error, Some(run.source())).unwrap(),
+        spec_findings(&error, Some(run.source())).unwrap(),
         vec![
             json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0103","spec_paths":["columns.PARAM.derivation.source"],"context":{"identifier":"LB.ABSENT"}})
         ]
@@ -1968,7 +1981,7 @@ fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
     let error = PreparedRun::prepare(prepare(&schema, bad.as_bytes()))
         .expect_err("dataset aggregate is not a row default");
     assert_eq!(
-        specification_diagnostics::findings(&error, None).unwrap(),
+        spec_findings(&error, None).unwrap(),
         vec![
             json!({"phase":"validation","condition":"duplicate_derivation","requirement":"REQ-1260","spec_paths":["columns.AVAL.derivation"],"context":{"column":"AVAL","rows":["collected","total"],"not_row_local":"aggregate"}})
         ]
@@ -1986,7 +1999,7 @@ fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
     let error = PreparedRun::prepare(prepare(&schema, bad.as_bytes()))
         .expect_err("preflight without source");
     assert_eq!(
-        specification_diagnostics::findings(&error, None).unwrap(),
+        spec_findings(&error, None).unwrap(),
         vec![
             json!({"phase":"validation","condition":"undeclared_column","requirement":"REQ-0202","spec_paths":["rows[0].derivations.ABSENT"],"context":{"column":"ABSENT"}}),
             json!({"phase":"validation","condition":"missing_derivation","requirement":"REQ-0200","spec_paths":["columns.PARAM.derivation"],"context":{"column":"PARAM","rows":["collected"]}}),
@@ -4092,7 +4105,7 @@ fn original_mapping_cut_admission_has_complete_findings_before_study_ports() {
                 .unwrap_err();
         let expected: serde_json::Value = serde_json::from_str(fields[2]).unwrap();
         assert_eq!(
-            yamaa_adapters::specification_diagnostics::findings(&error, None).unwrap(),
+            spec_findings(&error, None).unwrap(),
             expected["outcome"]["diagnostics"]
                 .as_array()
                 .unwrap()

@@ -203,7 +203,14 @@ pub(crate) fn source_findings(error: &Error, source: &SourceDeclaration) -> Opti
         }
         return Some(findings);
     }
-    crate::specification_diagnostics::findings(error, Some(source)).or_else(|| {
+    crate::specification_diagnostics::findings_with_limit(
+        error,
+        Some(source),
+        yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
+    )
+    .ok()
+    .flatten()
+    .or_else(|| {
         Some(vec![
             self::source(error, source)?.value("ingest", "source_limit")?
         ])

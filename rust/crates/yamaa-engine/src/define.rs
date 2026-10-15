@@ -403,7 +403,14 @@ impl<P: Ports> Application<P> {
                     let source = yamaa_core::csv_source::parse(bytes.as_ref(), Default::default())
                         .map_err(|error| {
                             error
-                                .diagnostic(dataset.id(), written)
+                                .finding(dataset.id(), written)
+                                .and_then(|finding| {
+                                    finding
+                                        .diagnostic_with_limit(
+                                            yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
+                                        )
+                                        .ok()
+                                })
                                 .map(|diagnostic| Failure::Diagnostic(vec![diagnostic]))
                                 .unwrap_or_else(|| {
                                     Failure::Metadata(vec![Finding::cause(
@@ -422,7 +429,14 @@ impl<P: Ports> Application<P> {
                         .and_then(|types| types.convert(source))
                         .map_err(|error| {
                             error
-                                .diagnostic(dataset.id())
+                                .finding(dataset.id())
+                                .and_then(|finding| {
+                                    finding
+                                        .diagnostic_with_limit(
+                                            yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
+                                        )
+                                        .ok()
+                                })
                                 .map(|diagnostic| Failure::Diagnostic(vec![diagnostic]))
                                 .unwrap_or_else(|| {
                                     Failure::Metadata(vec![Finding::cause(

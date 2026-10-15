@@ -1,6 +1,6 @@
 //! Closed source type admission over portable storage metadata, without a codec.
 use crate::{
-    diagnostic::{Diagnostic, ParquetFinding, SourceFinding},
+    diagnostic::{ParquetFinding, SourceFinding},
     table::{Column, TableSchema},
     value::ColumnType,
 };
@@ -99,11 +99,6 @@ impl Error {
             dataset,
             path,
         }
-    }
-    /// Unbounded owned compatibility. Complete borrowed report admission is the
-    /// replacement; this original always-semantic return signature is unchanged.
-    pub fn diagnostic(&self, dataset: &str, path: &str) -> Diagnostic {
-        self.finding(dataset, path).owned_compatibility()
     }
 }
 

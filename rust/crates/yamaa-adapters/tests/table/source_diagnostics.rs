@@ -78,7 +78,6 @@ fn assert_complete(error: &Error, source: &SourceDeclaration, expected: &Value) 
             .unwrap(),
         *wanted
     );
-    assert_eq!(projection::findings(error, Some(source)).unwrap(), *wanted);
     let failure: Value = serde_json::from_str(&projection::failure(error, Some(source))).unwrap();
     assert_eq!(
         failure,
@@ -401,7 +400,7 @@ fn default_projection_refuses_full_oversized_value_without_truncation_or_partial
         ),
     ]);
     assert_eq!(
-        source_diagnostics::findings(&error, None),
+        source_diagnostics::findings_with_limit(&error, None, MAX_PROJECTION_BYTES),
         Err(source_diagnostics::SourceProjectionError::Context(
             ProjectionError::Limit
         ))
@@ -411,8 +410,13 @@ fn default_projection_refuses_full_oversized_value_without_truncation_or_partial
         failure,
         json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"ingest","code":"diagnostic_context_limit"}})
     );
-    // The former owned API retains its contract while callers migrate explicitly.
-    assert_eq!(projection::findings(&error, None).unwrap().len(), 2);
+    assert_eq!(
+        projection::findings_with_limit(&error, None, MAX_PROJECTION_BYTES)
+            .unwrap()
+            .unwrap()
+            .len(),
+        2
+    );
     let Error::Sources(errors) = &error else {
         panic!()
     };
@@ -543,7 +547,7 @@ fn reached_opaque_barrier_stops_before_later_deep_and_oversized_semantic_facts()
         source_diagnostics::findings_with_limit(&error, None, 0),
         Ok(None)
     );
-    assert_eq!(source_diagnostics::findings(&error, None), Ok(None));
+    assert_eq!(source_diagnostics::findings_with_limit(&error, None, MAX_PROJECTION_BYTES), Ok(None));
     let failure: Value = serde_json::from_str(&projection::failure(&error, None)).unwrap();
     assert_eq!(
         failure["outcome"],
@@ -566,7 +570,7 @@ fn structural_frame_refusal_precedes_only_unreached_late_barriers_and_preserves_
     };
     let pointer = stored_type.as_ptr();
     let admitted = nested(leaf, source_diagnostics::MAX_SOURCE_REPORT_FRAMES);
-    let diagnostics = source_diagnostics::findings(&admitted, None)
+    let diagnostics = source_diagnostics::findings_with_limit(&admitted, None, MAX_PROJECTION_BYTES)
         .unwrap()
         .unwrap();
     assert_eq!(diagnostics.len(), 1);
@@ -582,7 +586,7 @@ fn structural_frame_refusal_precedes_only_unreached_late_barriers_and_preserves_
         Err(source_diagnostics::SourceProjectionError::TraversalLimit)
     );
     assert_eq!(
-        source_diagnostics::findings(&refused, None),
+        source_diagnostics::findings_with_limit(&refused, None, MAX_PROJECTION_BYTES),
         Err(source_diagnostics::SourceProjectionError::TraversalLimit)
     );
     let failure: Value = serde_json::from_str(&projection::failure(&refused, None)).unwrap();

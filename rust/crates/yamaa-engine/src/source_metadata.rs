@@ -232,7 +232,9 @@ fn normalize(
                         diagnostics.push(
                             finding
                                 .finding(&source.dataset)
-                                .diagnostic()
+                                .diagnostic_with_limit(
+                                    yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
+                                )
                                 .map_err(|_| Error::Projection)?,
                         );
                     }
@@ -266,7 +268,7 @@ fn normalize(
                         finding
                             .finding(&source.dataset)
                             .ok_or(Error::Projection)?
-                            .diagnostic()
+                            .diagnostic_with_limit(yamaa_core::diagnostic::MAX_PROJECTION_BYTES)
                             .map_err(|_| Error::Projection)?,
                     );
                     continue;
@@ -294,7 +296,7 @@ fn normalize(
                             declared.ordinal.as_deref().ok_or(Error::Projection)?,
                         )
                         .ok_or(Error::Projection)?
-                        .diagnostic()
+                        .diagnostic_with_limit(yamaa_core::diagnostic::MAX_PROJECTION_BYTES)
                         .map_err(|_| Error::Projection)?,
                 );
                 continue;
@@ -425,7 +427,7 @@ pub fn graph_normalized_schemas(
                                 declaration.ordinal.as_deref().ok_or(Error::Projection)?,
                             )
                             .ok_or(Error::Projection)?
-                            .diagnostic()
+                            .diagnostic_with_limit(yamaa_core::diagnostic::MAX_PROJECTION_BYTES)
                             .map_err(|_| Error::Projection)?,
                     )),
                 }

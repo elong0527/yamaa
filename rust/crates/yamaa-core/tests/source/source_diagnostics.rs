@@ -191,7 +191,7 @@ fn source_types_keep_declaration_then_stored_row_field_precedence_and_all_value_
         target: ColumnType::Int,
         value: long.clone(),
     };
-    let actual = error.finding("SRC").unwrap().diagnostic().unwrap();
+    let actual = error.finding("SRC").unwrap().diagnostic_with_limit(MAX_PROJECTION_BYTES).unwrap();
     assert_eq!(actual.context["value"], text(&long));
 }
 
@@ -352,7 +352,7 @@ fn diagnostic_positions_stay_mathematical_and_boundary_errors_have_no_condition(
         dataset: "SRC",
         path: "source.csv",
     };
-    let actual = finding.diagnostic().unwrap();
+    let actual = finding.diagnostic_with_limit(MAX_PROJECTION_BYTES).unwrap();
     assert_eq!(actual.context["record"], V::Integer(usize::MAX.to_string()));
     assert_eq!(actual.context["field"], V::Integer(usize::MAX.to_string()));
     let actual = SourceFinding::Parquet {
@@ -364,7 +364,7 @@ fn diagnostic_positions_stay_mathematical_and_boundary_errors_have_no_condition(
         dataset: "SRC",
         path: "data.parquet",
     }
-    .diagnostic()
+    .diagnostic_with_limit(MAX_PROJECTION_BYTES)
     .unwrap();
     assert_eq!(actual.context["row"], V::Integer(usize::MAX.to_string()));
     assert_eq!(actual.context["value"], V::Scalar(Value::Int(i64::MIN)));
@@ -379,6 +379,5 @@ fn diagnostic_positions_stay_mathematical_and_boundary_errors_have_no_condition(
         yamaa_core::typed_csv::Error::InvalidSource,
     ] {
         assert!(error.finding("SRC").is_none());
-        assert!(error.diagnostic("SRC").is_none());
     }
 }

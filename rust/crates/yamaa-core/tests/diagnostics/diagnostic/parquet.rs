@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 use yamaa_core::{
-    diagnostic::{ConditionCode, Context, ContextValue as V},
+    diagnostic::{ConditionCode, Context, ContextValue as V, MAX_PROJECTION_BYTES},
     parquet_source::{self as p, Converted, Field, Logical, Physical, Representation},
     value::{ColumnType, Value},
 };
@@ -65,7 +65,10 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
     ];
     let mut reached = BTreeSet::new();
     for (error, condition, requirement, extra) in errors {
-        let finding = error.diagnostic("SRC", "data.parquet");
+        let finding = error
+            .finding("SRC", "data.parquet")
+            .diagnostic_with_limit(MAX_PROJECTION_BYTES)
+            .unwrap();
         let def = finding.definition();
         assert_eq!(
             (def.phase, def.condition, def.requirement),

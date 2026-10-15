@@ -5,6 +5,19 @@ use yamaa_adapters::{
     specification_run::{Error, PreparedRun},
     specification_source::Source,
 };
+fn projected_findings(
+    error: &Error,
+    source: Option<&yamaa_engine::specification::SourceDeclaration>,
+) -> Option<Vec<Value>> {
+    specification_diagnostics::findings_with_limit(
+        error,
+        source,
+        yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
+    )
+    .ok()
+    .flatten()
+}
+
 use yamaa_core::{
     odm_source::{self, StoredField},
     specification::SourceInterpretation,
@@ -27,7 +40,7 @@ pub fn observe(source: &str, headers: &[Vec<String>]) -> Value {
     let run = match PreparedRun::prepare(document) {
         Ok(run) => run,
         Err(error) => {
-            return json!({"status":"declaration_refusal", "issues":specification_diagnostics::findings(&error,None), "fields":odm_source::FIELDS})
+            return json!({"status":"declaration_refusal", "issues":projected_findings(&error,None), "fields":odm_source::FIELDS})
         }
     };
     assert_eq!(
@@ -62,7 +75,7 @@ pub fn observe(source: &str, headers: &[Vec<String>]) -> Value {
                 odm_source::bind_fields(&stored).expect("bounded authored metadata")
             {
                 issues.extend(
-                    specification_diagnostics::findings(&Error::OdmFields(findings), Some(source))
+                    projected_findings(&Error::OdmFields(findings), Some(source))
                         .expect("registered ODM metadata findings"),
                 );
                 continue;
@@ -98,7 +111,7 @@ pub fn observe(source: &str, headers: &[Vec<String>]) -> Value {
     let binding = match run.compiled().bind_sources(&references) {
         Ok(_) => json!({"status":"bound", "issues":[]}),
         Err(error) => {
-            json!({"status":"binding_refusal", "issues":specification_diagnostics::findings(&Error::Bind(error),Some(run.source()))})
+            json!({"status":"binding_refusal", "issues":projected_findings(&Error::Bind(error),Some(run.source()))})
         }
     };
     json!({"status":"prepared", "fields":odm_source::FIELDS, "catalog":catalog, "odm_inputs":odm_inputs, "binding":binding})

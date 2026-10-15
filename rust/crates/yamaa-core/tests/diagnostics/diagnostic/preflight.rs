@@ -337,7 +337,7 @@ pub(super) fn output_reached() -> BTreeSet<ConditionCode> {
     let diagnostic = collision
         .finding("SRC", "ID")
         .unwrap()
-        .diagnostic()
+        .diagnostic_with_limit(yamaa_core::diagnostic::MAX_PROJECTION_BYTES)
         .unwrap();
     assert_eq!(
         (

@@ -1,7 +1,6 @@
 //! Borrowed ingestion facts, admitted as one ordered report before owned copies.
 use super::{
     ConditionCode as C, Context, ContextValue as V, Diagnostic, ProjectionBudget, ProjectionError,
-    MAX_PROJECTION_BYTES,
 };
 use crate::{
     csv_source::{Field, ProfileCause},
@@ -205,12 +204,9 @@ impl SourceFinding<'_> {
         let diagnostic = report.iter().next().expect("single admitted finding");
         Ok(diagnostic)
     }
-    pub fn diagnostic(self) -> Result<Diagnostic, ProjectionError> {
-        self.diagnostic_with_limit(MAX_PROJECTION_BYTES)
-    }
-    /// Unbounded owned compatibility for the existing error diagnostic methods.
-    /// Public callers should migrate to complete-report admission before removal.
-    pub fn owned_compatibility(self) -> Diagnostic {
+    /// Owned materialization for admitted in-crate reports; external callers
+    /// use complete-report admission (`admit_source_diagnostics`).
+    pub(crate) fn owned_compatibility(self) -> Diagnostic {
         if let Self::Odm { dataset, finding } = self {
             return finding.finding(dataset).owned();
         }
