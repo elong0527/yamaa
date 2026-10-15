@@ -76,6 +76,10 @@ impl Admission {
             maximum,
         }
     }
+    pub(super) fn used(&self) -> usize {
+        self.used
+    }
+
     pub(super) fn admit(
         &mut self,
         page: &Page<'_>,

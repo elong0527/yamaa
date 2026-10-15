@@ -1414,6 +1414,19 @@ impl Executor<'_> {
         work: Option<&crate::execution_work::WorkBudget>,
         execution_budget: Option<ExecutionBudget>,
     ) -> ExecutionAttempt<T::Error> {
+        let limits = work
+            .and_then(crate::execution_work::WorkBudget::node_limits)
+            .map_or(limits, |pool| Limits {
+                source_rows: limits.source_rows.min(pool.source_rows),
+                output_rows: limits.output_rows.min(pool.output_rows),
+                output_cells: limits.output_cells.min(pool.output_cells),
+                key_cells: limits.key_cells.min(pool.key_cells),
+                work_cells: limits.work_cells.min(pool.work_cells),
+                scalar_text_bytes: limits.scalar_text_bytes.min(pool.scalar_text_bytes),
+                output_text_bytes: limits.output_text_bytes.min(pool.output_text_bytes),
+                identity_cells: limits.identity_cells.min(pool.identity_cells),
+                identity_text_bytes: limits.identity_text_bytes.min(pool.identity_text_bytes),
+            });
         let active = core::cell::Cell::new(ExecutionPhase::Admission);
         let mut observer = |event| {
             if let ExecutionEvent::Phase(phase) = event {
@@ -1517,6 +1530,9 @@ impl Executor<'_> {
         work: Option<&crate::execution_work::WorkBudget>,
         execution_budget: Option<ExecutionBudget>,
     ) -> Result<Execution, Box<ExecutionError<T::Error>>> {
+        if work.is_some_and(crate::execution_work::WorkBudget::unknown_prefix) {
+            return Err(Box::new(ExecutionError::Capacity));
+        }
         functions::admit_plan(self.plan, functions)?;
         if table.schema() != self.plan.source()
             || secondary.len() != self.plan.secondary().len()
@@ -1598,12 +1614,18 @@ impl Executor<'_> {
                 required: rows,
             }));
         }
+        if let Some(prior) = work.and_then(crate::execution_work::WorkBudget::usage) {
+            Budget::admit_prefix(limits, prior)?;
+        }
         observer(ExecutionEvent::Exit {
             phase: ExecutionPhase::Admission,
             outcome: crate::application_observer::Outcome::Succeeded,
         });
         let reservation = work.map(crate::execution_work::WorkBudget::enter);
         let mut budget = match &reservation {
+            Some(reservation) if reservation.usage().is_some() => {
+                Budget::pooled(limits, reservation.usage().expect("pooled prefix"))
+            }
             Some(reservation) => {
                 Budget::with_work(limits, reservation.limit(), reservation.prior())
             }
@@ -1620,7 +1642,14 @@ impl Executor<'_> {
             &mut budget,
         );
         if let Some(reservation) = reservation {
-            reservation.complete(budget.used_work());
+            let shape = result.as_ref().ok().map(|execution| {
+                let rows = execution.dataset.row_count();
+                let cells = rows
+                    .checked_mul(execution.dataset.schema().columns().len())
+                    .expect("admitted output cells");
+                (rows, cells)
+            });
+            reservation.complete(budget.used_work(), budget.usage(), shape);
         }
         result
     }

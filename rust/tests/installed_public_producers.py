@@ -84,6 +84,53 @@ class PublicProducers(unittest.TestCase):
                 (directory / "provenance.json").write_text(provenance, encoding="utf-8")
         return json.loads(text)
 
+    def test_uneven_seven_to_one_graph_uses_both_artifact_profiles(self):
+        # Independent source/count truth: seven authored records, one group,
+        # then one producer record. Both native artifact routes retain seven and one.
+        # REQ-0047: the copied producer count is an explicit scalar group key.
+        self.write("raw/raw.csv", "ID,VALUE\n" + "".join(f"1,{value}\n" for value in range(1, 8)))
+        for profile in ("csv", "parquet"):
+            with self.subTest(profile=profile):
+                self.write("producer/p.yaml", f"""schema_version: '1.0'
+domain: COUNTED
+keys: [ID]
+input: {{RAW: {{path: ../raw/raw.csv, types: {{ID: int, VALUE: int}}}}}}
+rows:
+  - id: counted
+    dataset: RAW
+    group_by: [RAW.ID]
+    derivations: {{ID: RAW.ID, VALUE: {{aggregate: 'COUNT(RAW.*)'}}}}
+columns:
+  - {{name: ID, type: int, label: Identifier}}
+  - {{name: VALUE, type: int, label: Count}}
+output: {{path: ../generated/producer.{profile}, columns: [ID, VALUE]}}
+""")
+                self.write("consumer/root.yaml", f"""schema_version: '1.0'
+domain: ROOT
+keys: [ID]
+input: {{FIRST: {{path: ../generated/producer.{profile}, schema: ../producer/p.yaml}}}}
+rows:
+  - id: counted
+    dataset: FIRST
+    group_by: [FIRST.ID, FIRST.VALUE]
+    derivations: {{ID: FIRST.ID, SOURCE_COUNT: FIRST.VALUE, VALUE: {{aggregate: 'COUNT(FIRST.*)'}}}}
+columns:
+  - {{name: ID, type: int, label: Identifier}}
+  - {{name: SOURCE_COUNT, type: int, label: Original source count}}
+  - {{name: VALUE, type: int, label: Count}}
+output: {{path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}}
+""")
+                result = domain(self.root / "consumer/root.yaml")
+                self.assertEqual(result.issues.height, 0)
+                self.assertEqual(result.output.columns, ["ID", "SOURCE_COUNT", "VALUE"])
+                self.assertEqual(result.output.rows(), [(1, 7, 1)])
+                (self.root / "generated").mkdir(exist_ok=True)
+                for _ in range(2):
+                    self.assertTrue(result.save())
+                    self.assertEqual((self.root / "generated/root.csv").read_bytes(), b"ID,SOURCE_COUNT,VALUE\n1,7,1\n")
+                if profile == "csv":
+                    self.assertEqual((self.root / "generated/producer.csv").read_bytes(), b"ID,VALUE\n1,7\n")
+
     def test_absent_environment_graph_keeps_no_metadata_and_saves_held_artifacts(self):
         from yamaa import check
 

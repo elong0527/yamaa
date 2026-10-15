@@ -565,6 +565,13 @@ pub struct MatchBudget {
     used: MatchUsage,
 }
 impl MatchBudget {
+    /// Resume an explicitly owned scope from its already admitted prefix.
+    pub fn with_usage(limits: MatchLimits, used: MatchUsage) -> Self {
+        assert!(used.subject_bytes <= limits.subject_bytes);
+        assert!(used.work <= limits.work);
+        assert!(used.state_cells <= limits.state_cells);
+        Self { limits, used }
+    }
     /// Create an explicitly fresh scope with independently selected resource ceilings.
     pub fn new(limits: MatchLimits) -> Self {
         Self {

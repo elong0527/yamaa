@@ -103,7 +103,20 @@ pub(super) fn read_odm(bytes: &[u8], limits: Limits) -> Result<Decoded, Error> {
 }
 
 fn read_interpreted(bytes: &[u8], limits: Limits, odm: bool) -> Result<Decoded, Error> {
-    let frame = framing::admit(bytes, limits.framing)?;
+    read_with_usage(bytes, limits, odm, None)
+}
+
+pub(super) fn read_with_usage(
+    bytes: &[u8],
+    limits: Limits,
+    odm: bool,
+    mut usage: Option<&mut crate::source_decode_usage::Usage>,
+) -> Result<Decoded, Error> {
+    let frame = if let Some(usage) = usage.as_deref_mut() {
+        framing::admit_with_usage(bytes, limits.framing, usage)?
+    } else {
+        framing::admit(bytes, limits.framing)?
+    };
     let metadata = Arc::new(
         ParquetMetaDataReader::decode_metadata(frame.metadata).map_err(|_| Error::Malformed)?,
     );
@@ -160,7 +173,11 @@ fn read_interpreted(bytes: &[u8], limits: Limits, odm: bool) -> Result<Decoded, 
     for page in &frame.pages {
         let column = columns.get(page.column).ok_or(Error::Malformed)?;
         let decoded = compression::decode(page, limits.compression)?;
-        expansion.admit(page, &decoded, column)?;
+        let result = expansion.admit(page, &decoded, column);
+        if let Some(usage) = usage.as_deref_mut() {
+            usage.work(expansion.used());
+        }
+        result?;
         if let framing::Payload::DataV1 { values, .. } | framing::Payload::DataV2 { values, .. } =
             page.payload
         {
@@ -204,7 +221,12 @@ fn read_interpreted(bytes: &[u8], limits: Limits, odm: bool) -> Result<Decoded, 
                 })
         })
         .collect();
-    let raw = physical::read(bytes, &keep, limits.retained_bytes, &arrow_schema)?;
+    let mut remaining = limits.retained_bytes;
+    let result = physical::read(bytes, &keep, &mut remaining, &arrow_schema);
+    if let Some(usage) = usage.as_deref_mut() {
+        usage.storage(limits.retained_bytes - remaining);
+    }
+    let raw = result?;
     let group_rows = metadata
         .row_groups()
         .iter()
@@ -216,7 +238,7 @@ fn read_interpreted(bytes: &[u8], limits: Limits, odm: bool) -> Result<Decoded, 
         return Err(Error::Malformed);
     }
     if let Some((_, stored)) = odm_metadata {
-        return odm_decoded(raw, stored, row_count, limits);
+        return odm_decoded(raw, stored, row_count, limits, usage);
     }
     let schema = profile::columns(&arrow_schema, metadata.file_metadata().schema_descr())
         .map_err(Error::Profile)?;
@@ -301,11 +323,17 @@ fn read_interpreted(bytes: &[u8], limits: Limits, odm: bool) -> Result<Decoded, 
     ));
     let batch = RecordBatch::try_new(output_schema, arrays).map_err(|_| Error::Malformed)?;
     if batch.get_array_memory_size() > limits.retained_bytes {
+        if let Some(usage) = usage.as_deref_mut() {
+            usage.complete = false;
+        }
         return Err(Error::ResourceLimit {
             resource: "retained_bytes",
             limit: limits.retained_bytes,
             actual: Some(batch.get_array_memory_size()),
         });
+    }
+    if let Some(usage) = usage {
+        usage.storage(batch.get_array_memory_size());
     }
     Ok(Decoded {
         schema,
@@ -318,6 +346,7 @@ fn odm_decoded(
     stored: [usize; 11],
     row_count: usize,
     limits: Limits,
+    mut usage: Option<&mut crate::source_decode_usage::Usage>,
 ) -> Result<Decoded, Error> {
     use yamaa_core::{odm_source::FIELDS, table::Column};
     let schema = TableSchema::new(
@@ -364,11 +393,17 @@ fn odm_decoded(
     ));
     let batch = RecordBatch::try_new(output_schema, arrays).map_err(|_| Error::Malformed)?;
     if batch.get_array_memory_size() > limits.retained_bytes {
+        if let Some(usage) = usage.as_deref_mut() {
+            usage.complete = false;
+        }
         return Err(Error::ResourceLimit {
             resource: "retained_bytes",
             limit: limits.retained_bytes,
             actual: Some(batch.get_array_memory_size()),
         });
+    }
+    if let Some(usage) = usage {
+        usage.storage(batch.get_array_memory_size());
     }
     Ok(Decoded {
         schema,

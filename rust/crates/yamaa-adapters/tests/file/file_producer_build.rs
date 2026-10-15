@@ -92,6 +92,69 @@ const PRODUCER: &str = "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys: [I
 const CONSUMER: &str = "schema_version: '1.0'\ndomain: TEST\nbase: FIRST\nkeys: [ID]\ninput:\n  FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}\n  SECOND: {path: ../generated/producer.csv, schema: ../producer/./p.yaml}\nintermediates: [{id: SECOND_REFERENCE, dataset: SECOND, key: [ID], no_match: null}]\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}\n  - {name: FIRST_VALUE, type: float, label: First value, derivation: FIRST.VALUE}\n  - {name: SECOND_VALUE, type: float, label: Second value, derivation: SECOND_REFERENCE.VALUE}\n  - {name: VALUE, type: float, label: Reported value, derivation: {compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}}\noutput: {path: ../generated/root.csv, columns: [ID, VALUE], decimals: 2}\n";
 
 #[test]
+fn native_uneven_csv_and_parquet_graphs_fit_ten_and_exact_eight_source_rows() {
+    for format in ["csv", "parquet"] {
+        let study = Study::new();
+        study.write(
+            "raw/raw.csv",
+            "ID,VALUE\n1,1\n1,2\n1,3\n1,4\n1,5\n1,6\n1,7\n",
+        );
+        study.write("producer/p.yaml", format!("schema_version: '1.0'\ndomain: COUNTED\nkeys: [ID]\ninput: {{RAW: {{path: ../raw/raw.csv, types: {{ID: int, VALUE: int}}}}}}\nrows:\n  - id: counted\n    dataset: RAW\n    group_by: [RAW.ID]\n    derivations: {{ID: RAW.ID, VALUE: {{aggregate: 'COUNT(RAW.*)'}}}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier}}\n  - {{name: VALUE, type: int, label: Count}}\noutput: {{path: ../generated/producer.{format}, columns: [ID, VALUE]}}\n"));
+        study.write("consumer/root.yaml", format!("schema_version: '1.0'\ndomain: ROOT\nkeys: [ID]\ninput: {{FIRST: {{path: ../generated/producer.{format}, schema: ../producer/p.yaml}}}}\nrows:\n  - id: counted\n    dataset: FIRST\n    group_by: [FIRST.ID, FIRST.VALUE]\n    derivations: {{ID: FIRST.ID, SOURCE_COUNT: FIRST.VALUE, VALUE: {{aggregate: 'COUNT(FIRST.*)'}}}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier}}\n  - {{name: SOURCE_COUNT, type: int, label: Original source count}}\n  - {{name: VALUE, type: int, label: Count}}\noutput: {{path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}}\n"));
+        let mut build = study.build(Language::Python);
+        let mut activation = Activation::new(&study, Mode::Lock);
+        for rows in [10, 8, 7] {
+            let mut limits = Limits::default();
+            limits.engine.execution.source_rows = rows;
+            limits.engine.source_cells = 16;
+            limits.engine.source_storage_bytes = 4_096;
+            limits.engine.decode_work_bytes = 4_096;
+            limits.engine.execution.output_rows = 2;
+            limits.engine.execution.output_cells = 5;
+            let attempt = build.build(&mut activation, &mut Report::default(), limits);
+            assert_eq!(
+                attempt.accepted(),
+                rows >= 8,
+                "{format} rows={rows}: {:?}",
+                attempt.graph.outcome
+            );
+            assert!(activation.trace.is_empty());
+            if rows >= 8 {
+                assert_eq!(artifact(&attempt, 1), b"ID,SOURCE_COUNT,VALUE\n1,7,1\n");
+                let producer = attempt.graph.nodes[0]
+                    .dataset
+                    .result
+                    .as_ref()
+                    .unwrap()
+                    .result
+                    .as_ref()
+                    .unwrap();
+                assert_eq!(producer.dataset.row_count(), 1);
+                assert_eq!(producer.dataset.cell(0, 1).unwrap(), ValueRef::Int(7));
+                assert_eq!(
+                    attempt.graph.nodes[0].dataset.sources[0]
+                        .table
+                        .as_ref()
+                        .unwrap()
+                        .row_count(),
+                    7
+                );
+                assert_eq!(
+                    attempt.graph.nodes[1].dataset.sources[0]
+                        .table
+                        .as_ref()
+                        .unwrap()
+                        .row_count(),
+                    1
+                );
+            } else {
+                assert!(attempt.graph.nodes[1].dataset.sources[0].table.is_none());
+            }
+        }
+    }
+}
+
+#[test]
 fn producer_link_reduces_daily_doses_then_counts_days_before_any_publication() {
     use yamaa_adapters::producer_result::prepare_owned_classified;
     for language in [Language::Python, Language::R] {
