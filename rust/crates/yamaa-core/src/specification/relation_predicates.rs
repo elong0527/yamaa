@@ -80,9 +80,13 @@ pub(super) fn bind(
                 read,
             });
         } else {
-            let suggestion = (!name.contains('.')
-                && donor.columns().iter().any(|column| column.name == name))
-            .then(|| format!("{donor_name}.{name}"));
+            let bare = name.split_once('.').map_or(name, |(_, field)| field);
+            let suggestion = donor
+                .columns()
+                .iter()
+                .enumerate()
+                .any(|(column, metadata)| metadata.name == bare && admits(column))
+                .then(|| format!("{donor_name}.{bare}"));
             findings.push(BindFinding::Lookup(LookupFinding::reference(
                 plan.spec_path(),
                 name,
