@@ -4,7 +4,7 @@ import re
 
 ROOT = Path(__file__).resolve().parents[2]
 AUTHORITIES = (
-    "rust/crates/yamaa-engine/src/producer_publication.rs",
+    "rust/crates/yamaa-core/src/producer_publication.rs",
     "rust/crates/yamaa-adapters/src/producer_publication.rs",
     "rust/crates/yamaa-adapters/src/producer_log_publication.rs",
     "rust/crates/yamaa-adapters/src/producer_result.rs",

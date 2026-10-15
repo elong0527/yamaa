@@ -27,7 +27,7 @@ CAUSE = re.compile(
     r'(Some\("REQ-[0-9]{4,}"\)|None)\),\s*'
 )
 HOST_CRATES = {"yamaa-adapters", "yamaa-python", "yamaa-r"}
-CORE_CRATES = {"yamaa-core", "yamaa-engine"}
+CORE_CRATES = {"yamaa-core"}
 REGISTRY = Path("rust/crates/yamaa-core/src/diagnostic/mod.rs")
 SHIPPED_SCHEMA = Path("rust/crates/yamaa-adapters/src/shipped_schema/data.rs")
 PRIVATE_TEST_MODULE = Path(

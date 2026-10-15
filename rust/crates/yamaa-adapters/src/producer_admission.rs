@@ -7,7 +7,7 @@ use yamaa_core::{
     project_environment::ExecutionEnvironment,
     schema::DocumentNode as N,
 };
-use yamaa_engine::producer_admission::{self, CheckedProducerMetadata};
+use {yamaa_core::producer_admission, yamaa_core::producer_admission::Prepared};
 
 pub struct SuppliedProducer {
     pub dataset: String,
@@ -44,7 +44,7 @@ pub enum Error {
 pub struct PreparedProducers {
     consumer: Arc<PreparedDocument>,
     producers: Vec<SuppliedProducer>,
-    checked: CheckedProducerMetadata,
+    metadata: Prepared,
 }
 impl PreparedProducers {
     pub fn consumer(&self) -> &PreparedDocument {
@@ -53,8 +53,8 @@ impl PreparedProducers {
     pub fn producers(&self) -> &[SuppliedProducer] {
         &self.producers
     }
-    pub fn checked(&self) -> &CheckedProducerMetadata {
-        &self.checked
+    pub fn metadata(&self) -> &Prepared {
+        &self.metadata
     }
 }
 /// Raw entry/parent bytes and independent layer origins remain held beside the
@@ -210,7 +210,7 @@ pub fn prepare(
     limits: Limits,
 ) -> Result<PreparedProducers, Error> {
     let candidates = candidates(&consumer, &producers, limits)?;
-    let checked = producer_admission::check(
+    let metadata = producer_admission::prepare(
         &consumer.source().identity,
         consumer.model(),
         &candidates,
@@ -221,6 +221,6 @@ pub fn prepare(
     Ok(PreparedProducers {
         consumer,
         producers,
-        checked,
+        metadata,
     })
 }

@@ -4,7 +4,11 @@ use pyo3::{
     types::{PyInt, PyString, PyTuple},
 };
 use yamaa_adapters::callback::CallbackError;
-use yamaa_engine::host_values::{Date, DatePrecision, DateTime, DateTimePrecision, Value};
+use {
+    yamaa_core::temporal::Date, yamaa_core::temporal::DatePrecision,
+    yamaa_core::temporal::DateTime, yamaa_core::temporal::DateTimePrecision,
+    yamaa_core::value::Value,
+};
 
 /// An owned temporal or an invalid representation, never a generic object box.
 /// No public constructor, subclassing, fields or mutation are exposed to Python.

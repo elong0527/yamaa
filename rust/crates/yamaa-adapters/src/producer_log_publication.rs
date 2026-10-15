@@ -17,7 +17,9 @@ use std::{
     panic::{catch_unwind, AssertUnwindSafe},
     sync::Arc,
 };
-use yamaa_engine::producer_publication::{Limits, PreparedPublication};
+use {
+    yamaa_core::producer_publication::Limits, yamaa_core::producer_publication::PreparedPublication,
+};
 
 /// Lexical collisions across the complete authored graph are metadata facts.
 /// Existing-parent/physical alias checks remain at Save's whole-set preflight.
@@ -324,7 +326,7 @@ impl Publication {
         }
         let mut paths = limits.path_bytes;
         let mut bytes = limits.artifact_bytes;
-        let mut budget = Budget::new(yamaa_engine::capacity::REPORT_ENCODED_BYTES);
+        let mut budget = Budget::new(yamaa_core::capacity::REPORT_ENCODED_BYTES);
         let mut count = 0usize;
         each(attempt, primary, logs, |request| {
             count += 1;

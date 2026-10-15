@@ -1,8 +1,11 @@
 //! Closed name/type carriers for retained repository fixture binding checks.
 use crate::{issue_rows::Issue, specification_run_view::RunView};
-use yamaa_engine::source_metadata::{self as application, Kind, SourceSchema};
-pub use yamaa_engine::source_metadata::{Budget, Limits};
-pub use yamaa_engine::source_metadata::{InputMetadata, Profile};
+use {
+    yamaa_core::source_metadata as application, yamaa_core::source_metadata::Kind,
+    yamaa_core::source_metadata::SourceSchema,
+};
+pub use {yamaa_core::source_metadata::Budget, yamaa_core::source_metadata::Limits};
+pub use {yamaa_core::source_metadata::InputMetadata, yamaa_core::source_metadata::Profile};
 
 pub fn inputs(run: &dyn RunView) -> Result<Vec<InputMetadata>, Error> {
     let origins = run
@@ -127,7 +130,7 @@ fn project(findings: Vec<yamaa_core::diagnostic::Diagnostic>) -> Result<Vec<Issu
 }
 
 pub fn graph_inputs(graph: &crate::file_graph::FileGraph) -> Result<Vec<InputMetadata>, Error> {
-    let prepared = graph.graph().checked().metadata();
+    let prepared = graph.graph().metadata();
     let mut origins = Vec::new();
     for (node, supplied) in prepared.nodes().iter().zip(graph.graph().nodes()) {
         for source in node.sources() {
@@ -171,7 +174,7 @@ pub fn graph_check(
             source: admitted,
         })
         .collect::<Vec<_>>();
-    let metadata = graph.graph().checked().metadata();
+    let metadata = graph.graph().metadata();
     let findings = application::graph_check(metadata, &external, Limits::default())
         .map_err(Error::Application)?;
     let findings = findings
@@ -195,7 +198,7 @@ pub fn graph_check(
 pub fn selected_inputs(
     selected: &crate::file_workflow::Selected,
 ) -> Result<Vec<InputMetadata>, Error> {
-    use yamaa_engine::build::Prepared;
+    use yamaa_core::build::Prepared;
     match selected {
         Prepared::Plain(owner) => inputs(owner.run()),
         Prepared::Ordinary(owner) => inputs(owner.run()),
@@ -207,7 +210,7 @@ pub fn selected_check(
     selected: &crate::file_workflow::Selected,
     sources: &[Source],
 ) -> Result<Vec<Issue>, Error> {
-    use yamaa_engine::build::Prepared;
+    use yamaa_core::build::Prepared;
     match selected {
         Prepared::Plain(owner) => check(owner.run(), sources),
         Prepared::Ordinary(owner) => check(owner.run(), sources),
@@ -228,7 +231,7 @@ pub(crate) fn capture(
         .capture_from(&descriptor.declaring_source, &descriptor.written, maximum)
         .map(|(bytes, _)| bytes)
         .map_err(|error| {
-            use yamaa_engine::specification_run::SourcePort;
+            use yamaa_core::specification_run::SourcePort;
             match resources.resource_failure(&error) {
                 Some(failure) => vec![Issue::from_core(
                     failure.diagnostic(&descriptor.dataset, &descriptor.written),
@@ -244,7 +247,7 @@ pub fn selected_capture(
     index: usize,
     maximum: usize,
 ) -> Result<std::sync::Arc<[u8]>, Vec<Issue>> {
-    use yamaa_engine::build::Prepared;
+    use yamaa_core::build::Prepared;
     match selected {
         Prepared::Plain(owner) => owner.capture_input_metadata(index, maximum),
         Prepared::Ordinary(owner) => owner.capture_input_metadata(index, maximum),
@@ -253,7 +256,7 @@ pub fn selected_capture(
 }
 
 pub fn selected_reads(selected: &crate::file_workflow::Selected) -> usize {
-    use yamaa_engine::build::Prepared;
+    use yamaa_core::build::Prepared;
     match selected {
         Prepared::Plain(owner) => owner.capture_reads(),
         Prepared::Ordinary(owner) => owner.capture_reads(),
@@ -266,7 +269,7 @@ pub fn selected_reads(selected: &crate::file_workflow::Selected) -> usize {
 pub fn selected_origins(
     selected: &crate::file_workflow::Selected,
 ) -> Result<Vec<(String, String)>, Error> {
-    use yamaa_engine::build::Prepared;
+    use yamaa_core::build::Prepared;
     let run: &dyn RunView = match selected {
         Prepared::Plain(owner) => owner.run(),
         Prepared::Ordinary(owner) => owner.run(),
@@ -341,7 +344,7 @@ pub fn rejected_origins(
     else {
         return Ok(Vec::new());
     };
-    let origins = yamaa_engine::inheritance_preparation::diagnostic_origins(error);
+    let origins = yamaa_core::inheritance_preparation::diagnostic_origins(error);
     if origins.is_empty() {
         return Ok(Vec::new());
     }
@@ -358,7 +361,7 @@ pub fn rejected_origins(
 }
 
 pub fn selected_issues(selected: &crate::file_workflow::Selected) -> Result<Vec<Issue>, Error> {
-    use yamaa_engine::build::Prepared;
+    use yamaa_core::build::Prepared;
     match selected {
         Prepared::Plain(owner) => {
             crate::specification_check::issue_rows(owner.run()).map_err(|_| Error::Projection)

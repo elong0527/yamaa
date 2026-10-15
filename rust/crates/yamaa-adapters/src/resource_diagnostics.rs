@@ -1,9 +1,9 @@
 //! Typed resource policies retain their applied bounds and authored owners.
 use crate::{csv_source::TextTableError, specification_run::Error};
 use serde_json::Value;
-use yamaa_engine::{
-    dataset::{ExecutionError, Resource},
-    specification::SourceDeclaration,
+use {
+    yamaa_core::dataset::ExecutionError, yamaa_core::dataset::Resource,
+    yamaa_core::specification::SourceDeclaration,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -126,15 +126,15 @@ pub(crate) fn execution<E>(
             *required,
             spec_paths.clone(),
         ),
-        ExecutionError::Grouping(yamaa_engine::table_grouping::GroupingError::RowLimit {
+        ExecutionError::Grouping(yamaa_core::table_grouping::GroupingError::RowLimit {
             limit,
             required,
         }) => ("rows", *limit, Some(*required), Vec::new()),
-        ExecutionError::Grouping(yamaa_engine::table_grouping::GroupingError::KeyCellLimit {
+        ExecutionError::Grouping(yamaa_core::table_grouping::GroupingError::KeyCellLimit {
             limit,
         })
         | ExecutionError::OutputGrouping(
-            yamaa_engine::table_grouping::GroupingError::KeyCellLimit { limit },
+            yamaa_core::table_grouping::GroupingError::KeyCellLimit { limit },
         ) => ("key_cells", *limit, None, Vec::new()),
         _ => return None,
     };
@@ -232,10 +232,10 @@ fn source_findings_at(
         .map(|finding| vec![finding]))
 }
 pub(crate) fn run_limit<E>(
-    error: &yamaa_engine::specification_run::RunError<E>,
+    error: &yamaa_core::specification_run::RunError<E>,
     sources: &[SourceDeclaration],
 ) -> Option<Refusal> {
-    use yamaa_engine::specification_run::RunError;
+    use yamaa_core::specification_run::RunError;
     let (resource, limit, actual, source) = match error {
         RunError::SourceBytes {
             limit,

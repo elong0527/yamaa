@@ -17,7 +17,9 @@ use yamaa_core::{
     temporal::{Date, DatePrecision as DP, DateTime, DateTimePrecision as TP},
     value::ColumnType as CT,
 };
-use yamaa_engine::table_reduction::{reduce_column, TableReductionError};
+use {
+    yamaa_core::table_reduction::reduce_column, yamaa_core::table_reduction::TableReductionError,
+};
 
 /// Build a closed schema without changing supplied declaration order.
 /// Tests use an explicit small policy; production callers must choose their own.

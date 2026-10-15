@@ -124,7 +124,7 @@ pub(crate) fn encode_rows<T: TableAccess>(
     let mut writer = RowWriter {
         bytes: Vec::new(),
         budget,
-        limit: yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+        limit: yamaa_core::capacity::REPORT_ENCODED_BYTES,
         refused: false,
     };
     writer.write_all(b"[").map_err(|_| Error::OutputLimit)?;
@@ -403,7 +403,7 @@ mod tests {
     #[test]
     fn row_buffer_equality_and_one_over_admit_before_any_owned_bytes() {
         use std::io::Write;
-        let minimum = 48usize.div_ceil(yamaa_engine::capacity::REPORT_RETAINED_FACTOR);
+        let minimum = 48usize.div_ceil(yamaa_core::capacity::REPORT_RETAINED_FACTOR);
         for (allowance, accepted) in [(minimum, true), (minimum - 1, false)] {
             let mut budget = crate::report_projection::Budget::new(allowance);
             let mut writer = RowWriter {

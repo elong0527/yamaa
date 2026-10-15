@@ -71,10 +71,11 @@ fn environment(value: &Robj) -> std::result::Result<Option<Raw>, String> {
 }
 #[cfg(not(any(unix, windows)))]
 fn unavailable() -> Vec<Issue> {
-    vec![
-        Issue::from_core(yamaa_engine::host_values::unavailable_file_transport())
-            .expect("application issue"),
-    ]
+    vec![Issue::from_core(yamaa_core::application_issue::unsupported(
+        "native_file_transport",
+        None,
+    ))
+    .expect("application issue")]
 }
 #[extendr]
 fn domain_file(
@@ -92,18 +93,18 @@ fn domain_file(
         {
             let runtime = crate::file_domain::Runtime::new(specification, version, capabilities)?;
             let mut ports = yamaa_adapters::file_application::Application {
-                host: yamaa_engine::host_values::Language::R,
+                host: yamaa_core::project_function::Language::R,
                 runtime,
             };
             let measurements =
                 std::sync::Arc::new(yamaa_adapters::application_measurements::Measurements::new());
-            let mut state = match yamaa_engine::domain_entry::domain_with_observer(
-                yamaa_engine::domain_entry::Request {
+            let mut state = match yamaa_core::domain_entry::domain_with_observer(
+                yamaa_core::domain_entry::Request {
                     specification,
                     environment,
                 },
                 &mut ports,
-                yamaa_engine::application_observer::Scope::new(measurements.as_ref()),
+                yamaa_core::application_observer::Scope::new(measurements.as_ref()),
             ) {
                 Ok(state) => state,
                 Err(yamaa_adapters::file_application::ApplicationError::Runtime(error)) => {
@@ -155,14 +156,14 @@ fn check_file(specification: Raw, environment_path: Robj, version: Raw) -> List 
         #[cfg(any(unix, windows))]
         {
             let issues = yamaa_adapters::file_application::check(
-                yamaa_engine::domain_entry::Request {
+                yamaa_core::domain_entry::Request {
                     specification,
                     environment,
                 },
                 yamaa_adapters::specification_report::Identity {
                     runtime: "r",
                     runtime_version: version,
-                    engine_version: yamaa_engine::host_values::VERSION,
+                    engine_version: yamaa_core::VERSION,
                     example: "check",
                     specification,
                     base_directory: ".",

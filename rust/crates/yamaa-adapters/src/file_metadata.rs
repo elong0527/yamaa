@@ -5,7 +5,7 @@ use crate::{
     project_source::{CapturePort, Kind, Reply, Request},
     specification_source::{Limits, Source},
 };
-use yamaa_engine::inheritance::{Source as Identity, SourceError};
+use {yamaa_core::inheritance::Source as Identity, yamaa_core::inheritance::SourceError};
 
 pub(crate) struct Reader<'a> {
     pub(crate) resources: &'a mut Resources,
@@ -39,7 +39,7 @@ fn available(error: ResourceError) -> SourceError<ResourceError> {
         error => SourceError::Raised(error),
     }
 }
-impl yamaa_engine::file_preparation::NativePort for Reader<'_> {
+impl yamaa_core::file_preparation::NativePort for Reader<'_> {
     type Error = ResourceError;
     fn resolve_entry(
         &mut self,
@@ -241,7 +241,7 @@ impl CapturePort for Reader<'_> {
     }
 }
 
-impl yamaa_engine::build::MetadataAdmissionPort for Reader<'_> {
+impl yamaa_core::build::MetadataAdmissionPort for Reader<'_> {
     type Error = ResourceError;
     fn charge_work(&mut self, work: usize) -> Result<(), Self::Error> {
         self.resources.charge_work(work)

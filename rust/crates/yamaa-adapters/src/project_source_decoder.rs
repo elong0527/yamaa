@@ -3,11 +3,11 @@
 //! callback boundary. This grants no host access or activation authority.
 use crate::{arrow_table::ArrowTable, specification_run::Error};
 use std::marker::PhantomData;
+use yamaa_core::specification_run::SourceDecoder;
 use yamaa_core::{
     specification::SourceDeclaration,
     table::{CellError, TableAccess, TableSchema, ValueRef},
 };
-use yamaa_engine::specification_run::SourceDecoder;
 
 pub struct Snapshot<E> {
     table: ArrowTable,
@@ -79,11 +79,11 @@ impl<E> SourceDecoder for Decoder<E> {
     }
 }
 
-impl<E> yamaa_engine::producer_build::DecodePort for Decoder<E> {
-    fn usage(&self) -> Option<yamaa_engine::producer_build::DecodeUsage> {
+impl<E> yamaa_core::producer_build::DecodePort for Decoder<E> {
+    fn usage(&self) -> Option<yamaa_core::producer_build::DecodeUsage> {
         self.usage
             .complete
-            .then_some(yamaa_engine::producer_build::DecodeUsage {
+            .then_some(yamaa_core::producer_build::DecodeUsage {
                 storage_bytes: self.usage.storage_bytes,
                 work_bytes: self.usage.work_bytes,
             })
@@ -93,9 +93,9 @@ impl<E> yamaa_engine::producer_build::DecodePort for Decoder<E> {
         source: &SourceDeclaration,
         bytes: &[u8],
         contract: Option<&yamaa_core::producer_contract::Contract>,
-        limits: yamaa_engine::producer_build::DecodeLimits,
+        limits: yamaa_core::producer_build::DecodeLimits,
         interpretation: yamaa_core::specification::SourceInterpretation,
-    ) -> Result<Snapshot<E>, yamaa_engine::producer_build::DecodeError<Error>> {
+    ) -> Result<Snapshot<E>, yamaa_core::producer_build::DecodeError<Error>> {
         if interpretation == yamaa_core::specification::SourceInterpretation::Ordinary {
             return self.decode_bounded(source, bytes, contract, limits);
         }
@@ -111,16 +111,16 @@ impl<E> yamaa_engine::producer_build::DecodePort for Decoder<E> {
             table,
             error: PhantomData,
         })
-        .map_err(yamaa_engine::producer_build::DecodeError::Codec)
+        .map_err(yamaa_core::producer_build::DecodeError::Codec)
     }
     fn decode_bounded(
         &mut self,
         source: &SourceDeclaration,
         bytes: &[u8],
         contract: Option<&yamaa_core::producer_contract::Contract>,
-        limits: yamaa_engine::producer_build::DecodeLimits,
-    ) -> Result<Snapshot<E>, yamaa_engine::producer_build::DecodeError<Error>> {
-        use yamaa_engine::producer_build::DecodeError;
+        limits: yamaa_core::producer_build::DecodeLimits,
+    ) -> Result<Snapshot<E>, yamaa_core::producer_build::DecodeError<Error>> {
+        use yamaa_core::producer_build::DecodeError;
         self.usage = Default::default();
         self.usage.complete();
         let table = if let Some(contract) =
@@ -147,7 +147,7 @@ impl<E> yamaa_engine::producer_build::DecodePort for Decoder<E> {
                 return Err(DecodeError::Limit("producer_source_fields"));
             }
             let header = parsed.names.iter().map(String::as_str).collect::<Vec<_>>();
-            if let Some(diagnostic) = yamaa_engine::source_header::validate_header(
+            if let Some(diagnostic) = yamaa_core::source_header::validate_header(
                 contract,
                 &source.name,
                 &header,
@@ -171,10 +171,10 @@ impl<E> yamaa_engine::producer_build::DecodePort for Decoder<E> {
                 parsed,
                 types,
                 crate::arrow_table::TableLimits {
-                    max_rows: limits.rows.min(yamaa_engine::capacity::SOURCE_ROWS),
+                    max_rows: limits.rows.min(yamaa_core::capacity::SOURCE_ROWS),
                     max_columns: yamaa_core::specification::DEFAULT_MAX_COLUMNS,
                     max_batches: 1,
-                    max_cells: limits.cells.min(yamaa_engine::capacity::SOURCE_CELLS),
+                    max_cells: limits.cells.min(yamaa_core::capacity::SOURCE_CELLS),
                 },
             )
             .map_err(|e| DecodeError::Codec(crate::specification_run::typed_source_error(e)))?;
@@ -182,10 +182,10 @@ impl<E> yamaa_engine::producer_build::DecodePort for Decoder<E> {
                 source,
                 table,
                 crate::arrow_table::TableLimits {
-                    max_rows: limits.rows.min(yamaa_engine::capacity::SOURCE_ROWS),
+                    max_rows: limits.rows.min(yamaa_core::capacity::SOURCE_ROWS),
                     max_columns: yamaa_core::specification::DEFAULT_MAX_COLUMNS,
                     max_batches: 1,
-                    max_cells: limits.cells.min(yamaa_engine::capacity::SOURCE_CELLS),
+                    max_cells: limits.cells.min(yamaa_core::capacity::SOURCE_CELLS),
                 },
                 limits.storage_bytes,
                 &mut self.usage,
@@ -213,7 +213,10 @@ mod tests {
     use super::*;
     use crate::{csv_source::TextTableError, specification_source::Source};
     use yamaa_core::{specification::SourceProfile, value::ColumnType};
-    use yamaa_engine::producer_build::{DecodeError, DecodeLimits, DecodePort};
+    use {
+        yamaa_core::producer_build::DecodeError, yamaa_core::producer_build::DecodeLimits,
+        yamaa_core::producer_build::DecodePort,
+    };
 
     fn csv_source() -> SourceDeclaration {
         SourceDeclaration {

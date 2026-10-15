@@ -9,9 +9,12 @@ use yamaa_core::{
     project_function::{Case, Definition, Function, Language},
     value::{ColumnType, FiniteFloat, Value},
 };
-use yamaa_engine::{
-    function_invocation::{Argument, FailureKind, HostError, InvocationFailure},
-    project_activation::{self, ActivationPort, BindingFailure, Failure, TestFailure},
+use {
+    yamaa_core::function_invocation::Argument, yamaa_core::function_invocation::FailureKind,
+    yamaa_core::function_invocation::HostError, yamaa_core::function_invocation::InvocationFailure,
+    yamaa_core::project_activation, yamaa_core::project_activation::ActivationPort,
+    yamaa_core::project_activation::BindingFailure, yamaa_core::project_activation::Failure,
+    yamaa_core::project_activation::TestFailure,
 };
 
 struct Port {

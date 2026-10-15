@@ -12,8 +12,8 @@ use yamaa_core::{
     table::{TableAccess, TableSchema},
     value::Value,
 };
-use yamaa_engine::dataset::DatasetExecution;
-use yamaa_engine::dataset::{self, DatasetPlan};
+
+use {yamaa_core::dataset, yamaa_core::dataset::DatasetPlan};
 
 /// Rows of a converted readable JSON fixture (formerly hex-encoded TSV).
 fn fixture_rows(truth: &str) -> Vec<serde_json::Value> {
@@ -35,7 +35,7 @@ fn fixture_bytes(value: &serde_json::Value) -> Vec<u8> {
 
 fn spec_findings(
     error: &yamaa_adapters::specification_run::Error,
-    source: Option<&yamaa_engine::specification::SourceDeclaration>,
+    source: Option<&yamaa_core::specification::SourceDeclaration>,
 ) -> Option<Vec<serde_json::Value>> {
     yamaa_adapters::specification_diagnostics::findings_with_limit(
         error,
@@ -96,7 +96,7 @@ fn prepare(schema: &Arc<CapturedSchema>, source: &[u8]) -> PreparedDocument {
         .unwrap()
 }
 fn lower(spec: &SpecificationDocument, source: &TableSchema) -> DatasetPlan {
-    yamaa_engine::specification::PreparedSpecification::prepare(spec)
+    yamaa_core::specification::PreparedSpecification::prepare(spec)
         .unwrap()
         .bind(source)
         .unwrap()
@@ -129,10 +129,10 @@ fn parquet_input_policy_and_owned_source_observations_use_the_shared_build_path(
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
@@ -393,7 +393,9 @@ fn inheritance_presence_and_capture_budgets_cannot_silently_fall_through() {
 
 #[test]
 fn unsupported_operations_handlers_and_metadata_are_refused_before_binding() {
-    use yamaa_engine::specification::{PrepareError, PreparedSpecification};
+    use {
+        yamaa_core::specification::PrepareError, yamaa_core::specification::PreparedSpecification,
+    };
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let schema = schema(&root.join("yaml"));
     let raw =
@@ -413,14 +415,17 @@ fn unsupported_operations_handlers_and_metadata_are_refused_before_binding() {
     let schema = TableSchema::new(vec![]).unwrap();
     assert!(matches!(
         prepared.bind(&schema),
-        Err(yamaa_engine::specification::BindError::Invalid(_))
+        Err(yamaa_core::specification::BindError::Invalid(_))
     ));
 }
 
 #[test]
 fn binding_uses_shared_reference_and_dependency_findings() {
     use yamaa_core::reference_binding::Diagnostic;
-    use yamaa_engine::specification::{BindError, BindFinding, PreparedSpecification};
+    use {
+        yamaa_core::specification::BindError, yamaa_core::specification::BindFinding,
+        yamaa_core::specification::PreparedSpecification,
+    };
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let schema = schema(&root.join("yaml"));
     let raw =
@@ -522,7 +527,7 @@ fn original_yaml_run_returns_complete_independent_portable_failures() {
 #[test]
 fn source_ingestion_failure_precedes_deferred_formula_diagnostics() {
     use yamaa_adapters::specification_run::{Error, PreparedRun};
-    use yamaa_engine::specification::{BindError, BindFinding};
+    use {yamaa_core::specification::BindError, yamaa_core::specification::BindFinding};
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let schema = schema(&root.join("yaml"));
     let case = root.join("benchmarks/negative-zero-division");
@@ -777,10 +782,10 @@ fn independent_failed_reports(
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
@@ -869,7 +874,7 @@ fn independent_failed_reports(
         for _ in 0..2 {
             assert!(matches!(
                 result.save(&mut port),
-                Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+                Err(yamaa_core::specification_output::SaveError::FailedBuild)
             ));
             assert_eq!(result.observations(), *expected);
         }
@@ -922,7 +927,10 @@ fn binding_collects_ordered_findings_before_dependency_diagnostics() {
 #[test]
 fn compiler_budgets_precede_owned_planning_and_preserve_policy_boundary() {
     use yamaa_adapters::{specification_diagnostics, specification_run};
-    use yamaa_engine::specification::{CompilationLimits, PrepareError, PreparedSpecification};
+    use {
+        yamaa_core::specification::CompilationLimits, yamaa_core::specification::PrepareError,
+        yamaa_core::specification::PreparedSpecification,
+    };
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let schema = schema(&root.join("yaml"));
     let raw =
@@ -1015,7 +1023,7 @@ fn compiler_budgets_precede_owned_planning_and_preserve_policy_boundary() {
 #[test]
 fn actual_capture_observations_survive_errors_and_distinguish_cached_reads() {
     use yamaa_adapters::specification_run::{Error, PortError, PreparedRun, SourcePort};
-    use yamaa_engine::specification::SourceDeclaration;
+    use yamaa_core::specification::SourceDeclaration;
     struct Port {
         content: Arc<[u8]>,
         reads: usize,
@@ -1027,10 +1035,10 @@ fn actual_capture_observations_survive_errors_and_distinguish_cached_reads() {
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
@@ -1053,7 +1061,7 @@ fn actual_capture_observations_survive_errors_and_distinguish_cached_reads() {
             assert_eq!((&*source.name, &*source.path), ("LB", "input/lb.csv"));
             // This attempt starts with the central cumulative source allowance;
             // capture retains the same physical bytes for later owned decoding.
-            assert_eq!(limit, yamaa_engine::capacity::SOURCE_BYTES);
+            assert_eq!(limit, yamaa_core::capacity::SOURCE_BYTES);
             self.requests += 1;
             if self.fail {
                 return Err("resource_path_missing");
@@ -1123,7 +1131,7 @@ fn whole_failure_reports_match_reference_observations_from_actual_capture() {
         specification_report::{self, Identity},
         specification_run::{PreparedRun, SourcePort},
     };
-    use yamaa_engine::specification::SourceDeclaration;
+    use yamaa_core::specification::SourceDeclaration;
     struct Files {
         base: std::path::PathBuf,
         reads: usize,
@@ -1133,10 +1141,10 @@ fn whole_failure_reports_match_reference_observations_from_actual_capture() {
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
@@ -1271,7 +1279,7 @@ fn original_ordered_sum_yaml_executes_all_seventeen_rows_with_exact_float_bits()
     let case = root.join("benchmarks/adam-adlb-ordered-sum");
     let document = prepare(&schema, &std::fs::read(case.join("spec.yaml")).unwrap());
     let compiled =
-        yamaa_engine::specification::PreparedSpecification::prepare(document.model()).unwrap();
+        yamaa_core::specification::PreparedSpecification::prepare(document.model()).unwrap();
     let table_limits = TableLimits {
         max_rows: 100,
         max_columns: 64,
@@ -1434,7 +1442,10 @@ fn aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path() 
 
 #[test]
 fn declared_field_and_total_row_expression_budgets_precede_compiler_ownership() {
-    use yamaa_engine::specification::{CompilationLimits, PrepareError, PreparedSpecification};
+    use {
+        yamaa_core::specification::CompilationLimits, yamaa_core::specification::PrepareError,
+        yamaa_core::specification::PreparedSpecification,
+    };
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let schema = schema(&root.join("yaml"));
     let raw = std::fs::read(root.join("benchmarks/adam-adlb-ordered-sum/spec.yaml")).unwrap();
@@ -1478,7 +1489,7 @@ fn original_success_report_follows_actual_atomic_publication_and_output_failures
         specification_report::{self, ArtifactPort, CompleteError, Identity},
         specification_run::{PreparedRun, SourcePort},
     };
-    use yamaa_engine::specification::SourceDeclaration;
+    use yamaa_core::specification::SourceDeclaration;
     struct Captured {
         bytes: Arc<[u8]>,
         reads: usize,
@@ -1488,10 +1499,10 @@ fn original_success_report_follows_actual_atomic_publication_and_output_failures
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
@@ -1671,7 +1682,7 @@ fn verification_declarations_preserve_completed_prefix_and_phase_precedence() {
         specification_report::{self, ArtifactPort, Identity},
         specification_run::{PreparedRun, SourcePort},
     };
-    use yamaa_engine::specification::SourceDeclaration;
+    use yamaa_core::specification::SourceDeclaration;
     struct Host {
         bytes: Arc<[u8]>,
         reads: usize,
@@ -1681,10 +1692,10 @@ fn verification_declarations_preserve_completed_prefix_and_phase_precedence() {
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
@@ -1836,7 +1847,7 @@ fn verification_declarations_preserve_completed_prefix_and_phase_precedence() {
     assert!(matches!(
         PreparedRun::prepare(prepare(&schema, missing_log.as_bytes())),
         Err(yamaa_adapters::specification_run::Error::Prepare(
-            yamaa_engine::specification::PrepareError::Invalid(findings)
+            yamaa_core::specification::PrepareError::Invalid(findings)
         )) if findings.iter().any(|finding| finding.diagnostic().definition().condition == "missing_warning_log")
     ));
 }
@@ -1927,7 +1938,7 @@ fn original_sum_reports_nonnumeric_values_but_publishes_all_missing_groups() {
         specification_report::{self, ArtifactPort, Identity},
         specification_run::{PreparedRun, SourcePort},
     };
-    use yamaa_engine::specification::SourceDeclaration;
+    use yamaa_core::specification::SourceDeclaration;
     struct Host {
         bytes: Arc<[u8]>,
         reads: usize,
@@ -1938,10 +1949,10 @@ fn original_sum_reports_nonnumeric_values_but_publishes_all_missing_groups() {
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
@@ -2058,7 +2069,7 @@ fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
         specification_report::{self, ArtifactPort, Identity},
         specification_run::{PreparedRun, SourcePort},
     };
-    use yamaa_engine::specification::SourceDeclaration;
+    use yamaa_core::specification::SourceDeclaration;
     struct Host {
         bytes: Arc<[u8]>,
         reads: usize,
@@ -2069,10 +2080,10 @@ fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
@@ -2302,10 +2313,10 @@ fn original_lookup_complete_report_uses_all_captured_sources_and_actual_handlers
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
@@ -2409,10 +2420,10 @@ fn original_lookup_failures_match_independent_diagnostics_and_completed_observat
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
@@ -2621,10 +2632,10 @@ fn original_window_yaml_compiles_and_publishes_complete_independent_report() {
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
@@ -2719,10 +2730,10 @@ fn original_window_failures_match_independent_diagnostics_and_completed_observat
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
@@ -2814,7 +2825,7 @@ fn original_window_failures_match_independent_diagnostics_and_completed_observat
 #[test]
 fn inherited_original_preparation_prunes_before_source_binding() {
     use yamaa_core::schema::{NormalizationBudget, SchemaSource};
-    use yamaa_engine::{inheritance as graph, inheritance_preparation as lifecycle};
+    use {yamaa_core::inheritance as graph, yamaa_core::inheritance_preparation as lifecycle};
     struct Host {
         root: std::path::PathBuf,
         reads: Vec<String>,
@@ -3067,10 +3078,10 @@ fn inherited_original_preparation_prunes_before_source_binding() {
             &mut self,
             source: &yamaa_core::specification::SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn inspect(
             &mut self,
@@ -3174,7 +3185,7 @@ fn classified_capture_failures_retain_complete_reports_without_publication() {
         specification_run::{PortError, PreparedRun, SourcePort},
     };
     use yamaa_core::resource::ResourceFailure;
-    use yamaa_engine::specification::SourceDeclaration;
+    use yamaa_core::specification::SourceDeclaration;
     struct Payload {
         cause: Option<ResourceFailure>,
         identity: Arc<()>,
@@ -3193,10 +3204,10 @@ fn classified_capture_failures_retain_complete_reports_without_publication() {
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
@@ -3329,7 +3340,7 @@ fn classified_capture_failures_retain_complete_reports_without_publication() {
                 assert!(result.output().is_none());
                 assert!(matches!(
                     result.save(&mut NoPublication),
-                    Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+                    Err(yamaa_core::specification_output::SaveError::FailedBuild)
                 ));
                 // Failed accounting and opaque host errors cannot borrow a known
                 // finding left in the source ledger to become semantic failures.
@@ -3368,9 +3379,9 @@ fn resource_findings_use_written_inherited_paths_not_rebased_locations() {
         specification_source::{InheritancePort, Source},
     };
     use yamaa_core::resource::ResourceFailure;
-    use yamaa_engine::{
-        inheritance::{Source as FileIdentity, SourceError},
-        specification::SourceDeclaration,
+    use {
+        yamaa_core::inheritance::Source as FileIdentity, yamaa_core::inheritance::SourceError,
+        yamaa_core::specification::SourceDeclaration,
     };
     struct Files {
         parent: Vec<u8>,
@@ -3411,10 +3422,10 @@ fn resource_findings_use_written_inherited_paths_not_rebased_locations() {
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
@@ -3523,10 +3534,10 @@ fn independent_scalar_reports(fixture: &str, prefix: &str, expected_cases: usize
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
@@ -3600,7 +3611,7 @@ fn independent_scalar_reports(fixture: &str, prefix: &str, expected_cases: usize
             for _ in 0..2 {
                 assert!(matches!(
                     result.save(&mut port),
-                    Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+                    Err(yamaa_core::specification_output::SaveError::FailedBuild)
                 ));
             }
             assert_eq!(port.saves, 0);
@@ -3628,7 +3639,7 @@ fn metadata_inspection_reports_all_known_failures_before_any_study_read() {
         specification_run::{PortError, PreparedRun, SourcePort},
     };
     use yamaa_core::resource::ResourceFailure;
-    use yamaa_engine::specification::SourceDeclaration;
+    use yamaa_core::specification::SourceDeclaration;
     struct Port {
         failures: serde_json::Value,
         inspected: Vec<String>,
@@ -3638,10 +3649,10 @@ fn metadata_inspection_reports_all_known_failures_before_any_study_read() {
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         type Error = ResourceFailure;
         fn resource_failure(&self, error: &ResourceFailure) -> Option<ResourceFailure> {
@@ -3707,7 +3718,7 @@ fn metadata_inspection_reports_all_known_failures_before_any_study_read() {
         assert!(result.output().is_none());
         assert!(matches!(
             result.save(&mut Publisher),
-            Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+            Err(yamaa_core::specification_output::SaveError::FailedBuild)
         ));
         let Err(PortError::Inspect(ref mut failures)) = attempt.result else {
             panic!("inspection findings");
@@ -3795,7 +3806,7 @@ fn exact_wide_count_bounds_preserve_empty_counts_and_completed_check_prefix() {
         specification_report::{self, ArtifactPort, Identity},
         specification_run::{PreparedRun, SourcePort},
     };
-    use yamaa_engine::specification::SourceDeclaration;
+    use yamaa_core::specification::SourceDeclaration;
     struct Host {
         bytes: Arc<[u8]>,
         reads: usize,
@@ -3805,10 +3816,10 @@ fn exact_wide_count_bounds_preserve_empty_counts_and_completed_check_prefix() {
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
@@ -4034,7 +4045,7 @@ fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
         specification_report::{self, Identity},
         specification_run::{PreparedRun, SourcePort},
     };
-    use yamaa_engine::specification::SourceDeclaration;
+    use yamaa_core::specification::SourceDeclaration;
     struct Port {
         content: Arc<[u8]>,
         reads: usize,
@@ -4046,10 +4057,10 @@ fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
@@ -4154,7 +4165,7 @@ fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
             assert!(result.output().is_none());
             assert!(matches!(
                 result.save(&mut port),
-                Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+                Err(yamaa_core::specification_output::SaveError::FailedBuild)
             ));
         } else {
             assert!(result.output().is_some());
@@ -4179,7 +4190,7 @@ fn original_source_bindings_match_complete_reports_and_exact_repeated_csv() {
         specification_report::{self, Identity},
         specification_run::{PreparedRun, SourcePort},
     };
-    use yamaa_engine::specification::SourceDeclaration;
+    use yamaa_core::specification::SourceDeclaration;
     struct Port {
         inputs: BTreeMap<String, Arc<[u8]>>,
         calls: Vec<String>,
@@ -4191,10 +4202,10 @@ fn original_source_bindings_match_complete_reports_and_exact_repeated_csv() {
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
@@ -4268,7 +4279,7 @@ fn original_source_bindings_match_complete_reports_and_exact_repeated_csv() {
                 assert!(result.output().is_none());
                 assert!(matches!(
                     result.save(&mut port),
-                    Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+                    Err(yamaa_core::specification_output::SaveError::FailedBuild)
                 ));
             } else {
                 for _ in 0..2 {
@@ -4302,7 +4313,7 @@ fn original_mapping_cut_match_complete_reports_and_exact_repeated_csv() {
         specification_report::{self, Identity},
         specification_run::{PreparedRun, SourcePort},
     };
-    use yamaa_engine::specification::SourceDeclaration;
+    use yamaa_core::specification::SourceDeclaration;
     struct Port {
         inputs: BTreeMap<String, Arc<[u8]>>,
         calls: Vec<String>,
@@ -4314,10 +4325,10 @@ fn original_mapping_cut_match_complete_reports_and_exact_repeated_csv() {
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
@@ -4396,7 +4407,7 @@ fn original_mapping_cut_match_complete_reports_and_exact_repeated_csv() {
                 assert!(result.output().is_none());
                 assert!(matches!(
                     result.save(&mut port),
-                    Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+                    Err(yamaa_core::specification_output::SaveError::FailedBuild)
                 ));
             } else {
                 for _ in 0..2 {

@@ -47,7 +47,7 @@ impl Drop for Study {
 #[test]
 fn public_check_and_build_validate_written_paths_before_source_profiles() {
     use yamaa_adapters::{file_application, specification_report::Identity};
-    use yamaa_engine::domain_entry::Request;
+    use yamaa_core::domain_entry::Request;
     let study = Study::new();
     for (written, requirement) in [
         ("input\\x.csv", "REQ-0776"),
@@ -104,7 +104,7 @@ fn public_check_and_build_validate_written_paths_before_source_profiles() {
 #[test]
 fn public_uri_and_symlink_sources_keep_their_normative_cause_and_authored_path() {
     use yamaa_adapters::{file_application, specification_report::Identity};
-    use yamaa_engine::domain_entry::Request;
+    use yamaa_core::domain_entry::Request;
     let study = Study::new();
     fs::write(study.0.join("shared/data.csv"), b"ID\n7\n").unwrap();
     #[cfg(unix)]

@@ -3,7 +3,7 @@ use crate::{csv_source::TextTableError, specification_run::Error};
 use yamaa_core::diagnostic::{
     admit_source_diagnostics, Diagnostic, ProjectionError, SourceFinding,
 };
-use yamaa_engine::specification::SourceDeclaration;
+use yamaa_core::specification::SourceDeclaration;
 
 /// Structural admission is separate from the caller's semantic-context quota.
 /// Traversal holds at most this many active borrowed child iterators, never a
@@ -123,11 +123,11 @@ fn append<'a>(
 /// Preserve authored input order across codec findings and engine-owned required
 /// identifier findings. The whole report is admitted before any context is copied.
 pub fn admitted_findings(
-    errors: &[(usize, yamaa_engine::specification_run::SourceIssue<Error>)],
+    errors: &[(usize, yamaa_core::specification_run::SourceIssue<Error>)],
     sources: &[SourceDeclaration],
     maximum: usize,
 ) -> Result<Option<Vec<Diagnostic>>, SourceProjectionError> {
-    use yamaa_engine::specification_run::SourceIssue;
+    use yamaa_core::specification_run::SourceIssue;
     let mut entries = 0usize;
     let mut missing_source = false;
     for (index, issue) in errors {

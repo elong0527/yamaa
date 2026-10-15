@@ -194,7 +194,7 @@ impl FileSpecification {
     }
     pub fn build_with_observer(
         &mut self,
-        scope: yamaa_engine::application_observer::Scope<'_>,
+        scope: yamaa_core::application_observer::Scope<'_>,
     ) -> CapturedAttempt<ResourceError> {
         self.run.execute_with_observer(&mut self.resources, scope)
     }
@@ -218,7 +218,9 @@ pub(crate) fn prepare_document_from(
     written: &str,
     schema: Option<Arc<crate::specification_source::CapturedSchema>>,
 ) -> Result<crate::specification_source::PreparedDocument, Error> {
-    use yamaa_engine::file_preparation::{self as application, Error as Failure};
+    use {
+        yamaa_core::file_preparation as application, yamaa_core::file_preparation::Error as Failure,
+    };
     application::prepare(
         &mut Native { resources },
         &mut Documents { schema },
@@ -381,10 +383,10 @@ mod profile_inspection_tests {
 struct Documents {
     schema: Option<Arc<crate::specification_source::CapturedSchema>>,
 }
-impl yamaa_engine::file_preparation::DocumentPort<ResourceError> for Documents {
+impl yamaa_core::file_preparation::DocumentPort<ResourceError> for Documents {
     type Prepared = crate::specification_source::PreparedDocument;
     type Error = InheritanceError<ResourceError>;
-    fn prepare<P: yamaa_engine::inheritance_capture::CapturePort<Error = ResourceError>>(
+    fn prepare<P: yamaa_core::inheritance_capture::CapturePort<Error = ResourceError>>(
         &mut self,
         source: Source,
         display: String,
@@ -617,8 +619,8 @@ mod dispatch_policy_tests {
             panic!("changed parent capture retains original preparation");
         };
         assert!(matches!(error, InheritanceError::Preparation { error, .. }
-        if matches!(*error, yamaa_engine::inheritance_preparation::Error::Traversal(
-            yamaa_engine::inheritance::Error::Host(crate::specification_source::SourceFailure::Host(ResourceError::Changed))
+        if matches!(*error, yamaa_core::inheritance_preparation::Error::Traversal(
+            yamaa_core::inheritance::Error::Host(crate::specification_source::SourceFailure::Host(ResourceError::Changed))
         ))));
         assert_content_change(&diagnostic, "parents", "../parent/base.yaml");
         assert_eq!(original.as_ref(), PARENT.as_bytes());
@@ -657,8 +659,8 @@ mod dispatch_policy_tests {
         };
         assert!(matches!(
             error.cause,
-            yamaa_engine::dictionary_preparation::Cause::Capture {
-                error: yamaa_engine::inheritance::SourceError::Raised(ResourceError::Changed),
+            yamaa_core::dictionary_preparation::Cause::Capture {
+                error: yamaa_core::inheritance::SourceError::Raised(ResourceError::Changed),
                 ..
             }
         ));
@@ -667,10 +669,10 @@ mod dispatch_policy_tests {
         assert!(!study.0.join("entry/never-read.csv").exists());
         assert!(!study.0.join("entry/never-written.csv").exists());
     }
-    impl yamaa_engine::file_preparation::DocumentPort<ResourceError> for ChangeAfterSuccess {
+    impl yamaa_core::file_preparation::DocumentPort<ResourceError> for ChangeAfterSuccess {
         type Prepared = crate::specification_source::PreparedDocument;
         type Error = InheritanceError<ResourceError>;
-        fn prepare<P: yamaa_engine::inheritance_capture::CapturePort<Error = ResourceError>>(
+        fn prepare<P: yamaa_core::inheritance_capture::CapturePort<Error = ResourceError>>(
             &mut self,
             source: Source,
             display: String,
@@ -690,7 +692,7 @@ mod dispatch_policy_tests {
         fs::write(study.0.join("entry/dict.yaml"), b"A: answer\n").unwrap();
         let mut resources = study.resources();
         let original = resources.resolve("root.yaml").unwrap();
-        let result = yamaa_engine::file_preparation::prepare(
+        let result = yamaa_core::file_preparation::prepare(
             &mut Native {
                 resources: &mut resources,
             },
@@ -701,7 +703,7 @@ mod dispatch_policy_tests {
             "entry/root.yaml",
             Limits::default().captured_bytes,
         );
-        let Err(yamaa_engine::file_preparation::Error::ResourceFinding { error, diagnostic }) =
+        let Err(yamaa_core::file_preparation::Error::ResourceFinding { error, diagnostic }) =
             result
         else {
             panic!("original changed dictionary with authored diagnostic");
@@ -735,7 +737,7 @@ mod dispatch_policy_tests {
         let study = Study::new(ROOT);
         let mut resources = study.resources();
         let original = resources.resolve("root.yaml").unwrap();
-        let result = yamaa_engine::file_preparation::prepare(
+        let result = yamaa_core::file_preparation::prepare(
             &mut Native {
                 resources: &mut resources,
             },
@@ -746,7 +748,7 @@ mod dispatch_policy_tests {
             "entry/root.yaml",
             Limits::default().captured_bytes,
         );
-        let Err(yamaa_engine::file_preparation::Error::ResourceFinding { error, diagnostic }) =
+        let Err(yamaa_core::file_preparation::Error::ResourceFinding { error, diagnostic }) =
             result
         else {
             panic!("original changed parent with authored diagnostic");

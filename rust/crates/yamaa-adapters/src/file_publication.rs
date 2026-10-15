@@ -9,7 +9,7 @@ use std::{
 };
 
 const MAX_PATH_BYTES: usize = 65_536;
-const MAX_OUTPUT_BYTES: usize = yamaa_engine::capacity::SOURCE_BYTES;
+const MAX_OUTPUT_BYTES: usize = yamaa_core::capacity::SOURCE_BYTES;
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug)]
@@ -468,7 +468,7 @@ impl Drop for DirectoryLock<'_> {
         let _ = fs::flock(self.0, fs::FlockOperation::Unlock);
     }
 }
-impl yamaa_engine::specification_output::ArtifactPort for Publisher {
+impl yamaa_core::specification_output::ArtifactPort for Publisher {
     type Error = Error;
     fn publish(&mut self, path: &str, content: &[u8]) -> Result<(), Error> {
         Publisher::publish(self, path, content)

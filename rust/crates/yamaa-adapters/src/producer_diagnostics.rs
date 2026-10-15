@@ -12,11 +12,11 @@ use crate::{
 use serde_json::Value;
 use std::collections::BTreeMap;
 use yamaa_core::function_signature::ProjectFunctionIdentity;
-use yamaa_engine::{
-    dataset::RowIdentity,
-    function_invocation::{FailureKind, InvocationFailure},
-    producer_build::Failure as BuildFailure,
-    project_activation::{Failure, TestFailure},
+use {
+    yamaa_core::dataset::RowIdentity, yamaa_core::function_invocation::FailureKind,
+    yamaa_core::function_invocation::InvocationFailure,
+    yamaa_core::producer_build::Failure as BuildFailure, yamaa_core::project_activation::Failure,
+    yamaa_core::project_activation::TestFailure,
 };
 
 pub(crate) struct Facts<'a, 'f, E>(BTreeMap<*const E, &'f Classified<'a, E>>);

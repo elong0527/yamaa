@@ -9,12 +9,14 @@ use yamaa_core::{
     table::{CellError, TableAccess, ValueRef},
     value::{ColumnType, Value},
 };
-use yamaa_engine::{
-    dataset::{self, ExecutionError},
-    function_invocation::{Argument, FailureKind, HostError},
-    project_activation::{ActivationPort, Failure},
-    project_domain,
-    specification_run::{CapturedAttempt, Limits, PortError, SourceDecoder, SourcePort},
+use {
+    yamaa_core::dataset, yamaa_core::dataset::ExecutionError,
+    yamaa_core::function_invocation::Argument, yamaa_core::function_invocation::FailureKind,
+    yamaa_core::function_invocation::HostError, yamaa_core::project_activation::ActivationPort,
+    yamaa_core::project_activation::Failure, yamaa_core::project_domain,
+    yamaa_core::specification_run::CapturedAttempt, yamaa_core::specification_run::Limits,
+    yamaa_core::specification_run::PortError, yamaa_core::specification_run::SourceDecoder,
+    yamaa_core::specification_run::SourcePort,
 };
 
 #[derive(Debug, PartialEq)]
@@ -22,7 +24,10 @@ struct Payload(Rc<()>);
 
 #[test]
 fn wide_producer_contract_decodes_1024_and_refuses_1025_actual_fields() {
-    use yamaa_engine::producer_build::{DecodeError, DecodeLimits, DecodePort};
+    use {
+        yamaa_core::producer_build::DecodeError, yamaa_core::producer_build::DecodeLimits,
+        yamaa_core::producer_build::DecodePort,
+    };
     let names = (0..1_024)
         .map(|column| format!("F{column:04}"))
         .collect::<Vec<_>>();
@@ -82,7 +87,10 @@ fn wide_producer_contract_decodes_1024_and_refuses_1025_actual_fields() {
 
 #[test]
 fn bounded_producer_csv_admits_original_header_before_typing_and_owns_portable_mismatch() {
-    use yamaa_engine::producer_build::{DecodeError, DecodeLimits, DecodePort};
+    use {
+        yamaa_core::producer_build::DecodeError, yamaa_core::producer_build::DecodeLimits,
+        yamaa_core::producer_build::DecodePort,
+    };
     let document = yamaa_adapters::shipped_schema::capture().unwrap().prepare_standalone(
         yamaa_adapters::specification_source::Source {
             identity: "held-producer.yaml".into(),
@@ -202,7 +210,10 @@ fn bounded_producer_csv_admits_original_header_before_typing_and_owns_portable_m
 
 #[test]
 fn decoded_profiles_keep_exact_cells_bounds_and_ingestion_failure_categories() {
-    use yamaa_engine::producer_build::{DecodeError, DecodeLimits, DecodePort};
+    use {
+        yamaa_core::producer_build::DecodeError, yamaa_core::producer_build::DecodeLimits,
+        yamaa_core::producer_build::DecodePort,
+    };
     let mut decoder = Decoder::<Payload>::default();
     let source = SourceDeclaration {
         name: "SRC".into(),
@@ -377,10 +388,10 @@ impl SourcePort for Source {
         &mut self,
         source: &SourceDeclaration,
         byte_limit: usize,
-        origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
     ) -> Result<Arc<[u8]>, Self::Error> {
-        *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-        <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+        <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
     }
     fn resource_failure(
         &self,

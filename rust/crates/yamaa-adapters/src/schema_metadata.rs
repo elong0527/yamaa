@@ -59,7 +59,7 @@ pub fn includes(bytes: &[u8], identity: &str) -> Result<Vec<String>, String> {
             },
         )
     })?;
-    Ok(yamaa_engine::schema_capture::include_names(&input.document)
+    Ok(yamaa_core::schema_capture::include_names(&input.document)
         .into_iter()
         .map(str::to_owned)
         .collect())
@@ -223,7 +223,7 @@ impl Schema {
     pub fn defaults(&self) -> Result<Vec<Issue>, String> {
         let schema = self.0.structure();
         let defaults =
-            yamaa_engine::schema_capture::default_findings(schema).map_err(|_| refused())?;
+            yamaa_core::schema_capture::default_findings(schema).map_err(|_| refused())?;
         let mut result = Vec::new();
         let mut remaining = crate::specification_check::MAX_ISSUE_BYTES.saturating_sub(2);
         for default in defaults {
@@ -261,7 +261,7 @@ impl Schema {
         admit_queries(types)?;
         let input =
             crate::yaml_decode::decode_yaml(source, Default::default()).map_err(|_| refused())?;
-        let findings = yamaa_engine::schema_capture::validate_query(
+        let findings = yamaa_core::schema_capture::validate_query(
             self.0.structure(),
             &input.document,
             types,
@@ -282,7 +282,7 @@ impl Schema {
         admit_queries(types)?;
         let input =
             crate::yaml_decode::decode_yaml(source, Default::default()).map_err(|_| refused())?;
-        let normalized = yamaa_engine::schema_capture::normalize_query(
+        let normalized = yamaa_core::schema_capture::normalize_query(
             self.0.structure(),
             &input.document,
             types,
@@ -295,13 +295,13 @@ impl Schema {
 
 /// Entry selection has already admitted the held document and its provenance.
 pub fn selected_document(selected: &crate::file_workflow::Selected) -> Result<String, String> {
-    use yamaa_engine::build::Prepared;
+    use yamaa_core::build::Prepared;
     let prepared = match selected {
         Prepared::Plain(owner) => owner.run().document(),
         Prepared::Ordinary(owner) => owner.run().document(),
         Prepared::Producer(owner) => {
             let graph = owner.graph();
-            &graph.nodes()[graph.checked().metadata().root()].document
+            &graph.nodes()[graph.metadata().root()].document
         }
     };
     document(prepared.model().document())

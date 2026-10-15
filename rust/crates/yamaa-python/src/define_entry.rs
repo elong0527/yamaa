@@ -103,7 +103,7 @@ pub fn _define_file(
                 standard,
                 created,
                 installed_version,
-                yamaa_engine::host_values::Language::Python,
+                yamaa_core::project_function::Language::Python,
             )),
         }
     }

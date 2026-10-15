@@ -9,15 +9,15 @@ use crate::{
 use serde::Serialize;
 use std::fmt;
 use yamaa_core::reduction::ReductionError;
-use yamaa_engine::{
-    dataset::{self, CheckRecord, ExecutionError, RowIdentity},
-    table_grouping::GroupingError,
-    table_reduction::TableReductionError,
+use {
+    yamaa_core::dataset, yamaa_core::dataset::CheckRecord, yamaa_core::dataset::ExecutionError,
+    yamaa_core::dataset::RowIdentity, yamaa_core::table_grouping::GroupingError,
+    yamaa_core::table_reduction::TableReductionError,
 };
 pub(crate) const MAX_SOURCE_CELLS: usize =
     dataset::ExecutionBudget::longitudinal().max_decoded_cells;
 pub(crate) const LIMITS: dataset::Limits = dataset::ExecutionBudget::longitudinal().execution;
-const MAX_OUTPUT_BYTES: usize = yamaa_engine::capacity::REPORT_ENCODED_BYTES;
+const MAX_OUTPUT_BYTES: usize = yamaa_core::capacity::REPORT_ENCODED_BYTES;
 /// Typed result and boundary failures are not language diagnostics.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DatasetError {

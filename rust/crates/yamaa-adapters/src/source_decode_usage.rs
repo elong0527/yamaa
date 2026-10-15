@@ -43,7 +43,7 @@ pub(crate) fn charge(
 pub(crate) fn parse_csv(
     bytes: &[u8],
     csv_limits: crate::csv_source::Limits,
-    limits: yamaa_engine::producer_build::DecodeLimits,
+    limits: yamaa_core::producer_build::DecodeLimits,
     usage: &mut Usage,
 ) -> Result<crate::csv_source::CsvSource, crate::specification_run::Error> {
     use crate::{csv_source::TextTableError, specification_run::Error};
@@ -63,24 +63,21 @@ pub(crate) fn parse_csv(
     }
     let mut used = 0;
     let mut refusal = None;
-    let result =
-        yamaa_engine::source_decode::parse_with_admission(
-            bytes,
-            csv_limits,
-            |amount| match charge(&mut used, amount, limits.storage_bytes, "storage_bytes") {
-                Ok(()) => {
-                    usage.storage(used);
-                    Ok(())
-                }
-                Err(error) => {
-                    refusal = Some(error);
-                    Err(crate::csv_source::Error::Limit {
-                        resource: "storage_bytes",
-                        limit: limits.storage_bytes,
-                    })
-                }
-            },
-        );
+    let result = yamaa_core::csv_source::parse_with_admission(bytes, csv_limits, |amount| {
+        match charge(&mut used, amount, limits.storage_bytes, "storage_bytes") {
+            Ok(()) => {
+                usage.storage(used);
+                Ok(())
+            }
+            Err(error) => {
+                refusal = Some(error);
+                Err(crate::csv_source::Error::Limit {
+                    resource: "storage_bytes",
+                    limit: limits.storage_bytes,
+                })
+            }
+        }
+    });
     match (result, refusal) {
         (_, Some(error)) => Err(Error::Source(TextTableError::Table(error))),
         (result, None) => result.map_err(|error| Error::Source(TextTableError::Csv(error))),

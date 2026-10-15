@@ -9,8 +9,10 @@ use serde_json::{json, Value as Json};
 use yamaa_core::{
     project_environment::ExecutionEnvironment, project_function::Function, value::Value,
 };
-use yamaa_engine::project_activation::{
-    BindingOutcome, LockObservation, Observations, TestOutcome,
+use {
+    yamaa_core::project_activation::BindingOutcome,
+    yamaa_core::project_activation::LockObservation, yamaa_core::project_activation::Observations,
+    yamaa_core::project_activation::TestOutcome,
 };
 
 mod sealed {

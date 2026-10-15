@@ -10,7 +10,7 @@ pub fn same_value(before: &[u8], after: &[u8]) -> bool {
         return decode_yaml(before, limits).is_ok();
     }
     match (decode_yaml(before, limits), decode_yaml(after, limits)) {
-        (Ok(before), Ok(after)) => yamaa_engine::style_values::same_value(
+        (Ok(before), Ok(after)) => yamaa_core::style_values::same_value(
             &before.document,
             &after.document,
             limits.document.edges,

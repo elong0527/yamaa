@@ -5,8 +5,10 @@ use yamaa_core::{
     table::{Column, TableAccess, TableSchema},
     value::{ColumnType as T, Value},
 };
-use yamaa_engine::dataset::{
-    Assignment, DatasetExecution, DatasetPlan, Expression, RowMode, RowTemplate,
+use {
+    yamaa_core::dataset::Assignment, yamaa_core::dataset::DatasetPlan,
+    yamaa_core::dataset::Expression, yamaa_core::dataset::RowMode,
+    yamaa_core::dataset::RowTemplate,
 };
 #[test]
 fn grouped_reduction_preserves_authored_identifier_missingness_and_fresh_attempts() {
@@ -67,7 +69,7 @@ fn grouped_reduction_preserves_authored_identifier_missingness_and_fresh_attempt
             for _ in 0..2 {
                 match plan.execute(
                     &source,
-                    yamaa_engine::dataset::Limits {
+                    yamaa_core::dataset::Limits {
                         source_rows: 10,
                         output_rows: 10,
                         output_cells: 20,

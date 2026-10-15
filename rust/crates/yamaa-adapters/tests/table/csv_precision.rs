@@ -9,7 +9,7 @@ use yamaa_core::{
     schema::DocumentNode,
     specification::{CompilationLimits, PrepareError, PreparedSpecification, SourceDeclaration},
 };
-use yamaa_engine::{specification_output::SaveError, specification_run::SourcePort};
+use {yamaa_core::specification_output::SaveError, yamaa_core::specification_run::SourcePort};
 
 const SPEC: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: output.csv, columns: [ID, VALUE, DOUBLE], decimals: PRECISION}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: DOUBLE, type: float, derivation: {compute: {expr: 'VALUE + VALUE'}}}\n";
 fn prepared(precision: &str, path: &str, expression: &str) -> PreparedRun {
@@ -32,10 +32,10 @@ impl SourcePort for Study {
         &mut self,
         source: &SourceDeclaration,
         byte_limit: usize,
-        origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
     ) -> Result<Arc<[u8]>, Self::Error> {
-        *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-        <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+        <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
     }
     fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
         Ok(())

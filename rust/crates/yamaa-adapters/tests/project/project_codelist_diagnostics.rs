@@ -6,8 +6,9 @@ use yamaa_adapters::project_codelist_diagnostics::{
 };
 use yamaa_core::table::{CellError, TableAccess, TableSchema, ValueRef};
 use yamaa_core::{specification::PreparedSpecification, value::Value};
-use yamaa_engine::dataset::{
-    CheckRecord, CodelistObservation, DatasetExecution, ExecutionError, RowIdentity,
+use {
+    yamaa_core::dataset::CheckRecord, yamaa_core::dataset::CodelistObservation,
+    yamaa_core::dataset::ExecutionError, yamaa_core::dataset::RowIdentity,
 };
 struct Source {
     schema: TableSchema,
@@ -66,7 +67,7 @@ fn complete_retained_values_and_full_width_keys_are_projected_without_output_or_
         reads: Cell::new(0),
     };
     let plan = compiled.bind(&source.schema).unwrap();
-    let limits = yamaa_engine::dataset::Limits {
+    let limits = yamaa_core::dataset::Limits {
         source_rows: 10,
         output_rows: 10,
         output_cells: 100,

@@ -9,12 +9,15 @@ use yamaa_adapters::{
     callback::CallbackError,
     project_lock::{Finding, Reason},
 };
-use yamaa_engine::host_values::{
-    Language, LockKind, LockReference, LogicalSignature, ProjectFunctionIdentity, Value,
+use {
+    yamaa_core::function_invocation::Argument, yamaa_core::function_invocation::HostError,
+    yamaa_core::project_activation::ActivationPort,
 };
-use yamaa_engine::{
-    function_invocation::{Argument, HostError},
-    project_activation::ActivationPort,
+use {
+    yamaa_core::function_signature::LogicalSignature,
+    yamaa_core::function_signature::ProjectFunctionIdentity,
+    yamaa_core::project_environment::LockKind, yamaa_core::project_environment::LockReference,
+    yamaa_core::project_function::Language, yamaa_core::value::Value,
 };
 
 #[derive(Debug)]

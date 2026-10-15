@@ -401,19 +401,19 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-engine/tests/fixtures/function_invocation.tsv",
+      "path": "rust/crates/yamaa-core/tests/fixtures/function_invocation.tsv",
       "family": "functions",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-engine/tests/project/function_invocation.rs"
+        "rust/crates/yamaa-core/tests/project/function_invocation.rs"
       ]
     },
     {
-      "path": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+      "path": "rust/crates/yamaa-core/tests/fixtures/numeric_lifecycle.tsv",
       "family": "numeric",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-engine/tests/execution/numeric_lifecycle.rs"
+        "rust/crates/yamaa-core/tests/execution/numeric_lifecycle.rs"
       ]
     },
     {

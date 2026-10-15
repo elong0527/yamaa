@@ -18,10 +18,10 @@ use yamaa_core::{
     table::{TableAccess, ValueRef},
     value::Value,
 };
-use yamaa_engine::{
-    function_invocation::{Argument, HostError},
-    project_activation::{ActivationPort, Failure, LockObservation},
-    specification_run::PortError,
+use {
+    yamaa_core::function_invocation::Argument, yamaa_core::function_invocation::HostError,
+    yamaa_core::project_activation::ActivationPort, yamaa_core::project_activation::Failure,
+    yamaa_core::project_activation::LockObservation, yamaa_core::specification_run::PortError,
 };
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);

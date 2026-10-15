@@ -6,7 +6,10 @@ use yamaa_adapters::{
     file_application::{self, RuntimePort},
     specification_report::Identity,
 };
-use yamaa_engine::application_observer::{Noop, Outcome, Phase, Scope};
+use {
+    yamaa_core::application_observer::Noop, yamaa_core::application_observer::Outcome,
+    yamaa_core::application_observer::Phase, yamaa_core::application_observer::Scope,
+};
 pub(crate) struct Runtime<'request> {
     specification: &'request str,
     version: &'request str,
@@ -50,7 +53,7 @@ impl<'request> Runtime<'request> {
         Identity {
             runtime: "r",
             runtime_version: self.version,
-            engine_version: yamaa_engine::host_values::VERSION,
+            engine_version: yamaa_core::VERSION,
             example: "domain",
             specification: self.specification,
             base_directory: ".",
@@ -82,7 +85,7 @@ impl<'request> Runtime<'request> {
     fn fields(&self) -> [&str; 5] {
         [
             self.version,
-            yamaa_engine::host_values::VERSION,
+            yamaa_core::VERSION,
             "domain",
             self.specification,
             ".",

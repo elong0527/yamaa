@@ -13,11 +13,12 @@ use yamaa_core::{
     table::{TableAccess, ValueRef},
     value::Value,
 };
-use yamaa_engine::{
-    dataset::ExecutionError,
-    function_invocation::{Argument, FailureKind, HostError},
-    project_activation::{ActivationPort, Failure, LockObservation, TestOutcome},
-    specification_run::{PortError, SourcePort},
+use {
+    yamaa_core::dataset::ExecutionError, yamaa_core::function_invocation::Argument,
+    yamaa_core::function_invocation::FailureKind, yamaa_core::function_invocation::HostError,
+    yamaa_core::project_activation::ActivationPort, yamaa_core::project_activation::Failure,
+    yamaa_core::project_activation::LockObservation, yamaa_core::project_activation::TestOutcome,
+    yamaa_core::specification_run::PortError, yamaa_core::specification_run::SourcePort,
 };
 
 fn source(identity: &str, bytes: &[u8]) -> Source {
@@ -189,10 +190,10 @@ impl SourcePort for Study {
         &mut self,
         source: &SourceDeclaration,
         byte_limit: usize,
-        origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
     ) -> Result<Arc<[u8]>, Self::Error> {
-        *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-        <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+        <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
     }
     fn resource_failure(
         &self,
@@ -505,7 +506,7 @@ fn rejected_activation_preserves_original_payloads_and_has_zero_study_authority(
             Failure::Lock(payload) => payload,
             Failure::Bindings(failures) => &failures[0].error,
             Failure::Tests(failures) => {
-                let yamaa_engine::project_activation::TestFailure::Invocation { error, .. } =
+                let yamaa_core::project_activation::TestFailure::Invocation { error, .. } =
                     &failures[0]
                 else {
                     panic!("invocation failure")
@@ -695,7 +696,7 @@ fn activation_count_refusals_retain_the_applied_cap_in_project_reports() {
         } else {
             attempt.activation.bindings = bindings.clone();
             attempt.activation.tests.resize_with(actual, || {
-                yamaa_engine::project_activation::TestObservation {
+                yamaa_core::project_activation::TestObservation {
                     function: 0,
                     case: 0,
                     outcome: TestOutcome::Passed,
@@ -741,7 +742,7 @@ struct Publication {
     calls: Vec<(String, Vec<u8>)>,
     reject: bool,
 }
-impl yamaa_engine::specification_output::ArtifactPort for Publication {
+impl yamaa_core::specification_output::ArtifactPort for Publication {
     type Error = Rc<()>;
     fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), Self::Error> {
         self.calls.push((path.into(), bytes.into()));
@@ -796,7 +797,7 @@ fn complete_project_output_and_save_borrow_the_exact_attempt_without_reactivatio
     };
     assert!(matches!(
         result.save(&mut publisher),
-        Err(yamaa_engine::specification_output::SaveError::Publish(_))
+        Err(yamaa_core::specification_output::SaveError::Publish(_))
     ));
     publisher.reject = false;
     let saved = result.save(&mut publisher).unwrap();
@@ -889,7 +890,7 @@ fn project_reports_keep_opaque_failures_and_interrupts_original_and_failed_saves
             let mut publisher = Publication::default();
             assert!(matches!(
                 result.save(&mut publisher),
-                Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+                Err(yamaa_core::specification_output::SaveError::FailedBuild)
             ));
             assert!(publisher.calls.is_empty());
             assert!(Rc::ptr_eq(&held.original, &activation.original));
@@ -955,7 +956,7 @@ fn report_classifications_cannot_target_a_different_failure_or_supply_duplicates
 #[test]
 fn complete_reports_refuse_missing_or_contradictory_activation_success() {
     use yamaa_adapters::{project_report::Error, specification_report};
-    use yamaa_engine::project_activation::BindingOutcome;
+    use yamaa_core::project_activation::BindingOutcome;
     let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
     for change in 0..5 {
         let (mut activation, mut study) = ports();
@@ -1059,7 +1060,7 @@ fn lock_and_actual_conformance_mismatches_keep_complete_zero_read_reports() {
     let mut publisher = Publication::default();
     assert!(matches!(
         result.save(&mut publisher),
-        Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+        Err(yamaa_core::specification_output::SaveError::FailedBuild)
     ));
     assert!(publisher.calls.is_empty());
     assert_eq!(study.capture_reads(), 0);
@@ -1154,10 +1155,10 @@ fn row_callbacks_join_primary_or_secondary_records_by_completed_keys() {
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         fn resource_failure(
             &self,
@@ -1316,7 +1317,7 @@ fn callback_derived_fields_are_not_exposed_as_inferred_row_driver_types() {
     study.bytes = Arc::from(b"ID\n1\n".as_slice());
     let attempt = run.execute_with_ports(&mut activation, &mut study);
     let error = attempt.dataset.result.unwrap_err();
-    let PortError::Run(yamaa_engine::specification_run::RunError::Bind(
+    let PortError::Run(yamaa_core::specification_run::RunError::Bind(
         yamaa_core::specification::BindError::Invalid(findings),
     )) = error
     else {

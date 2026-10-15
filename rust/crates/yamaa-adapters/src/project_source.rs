@@ -4,10 +4,10 @@ pub use application::{
     CapturePort, DecodeTarget, Kind, Limits, LockCapture, Origin, Reply, Request, SourceOrigins,
 };
 use std::sync::Arc;
+use yamaa_core::project_preparation as application;
 use yamaa_core::{
     project_environment::Environment, project_function::Language, project_function_document,
 };
-use yamaa_engine::project_preparation as application;
 pub type CaptureFailure<E> = application::CaptureFailure<E, CapturedDocument, Error>;
 pub type SourceFailure<E> = application::SourceFailure<E, CapturedDocument, Error>;
 pub type DocumentCapture = application::DocumentCapture<CapturedDocument>;
@@ -97,7 +97,7 @@ impl OwnedEnvironment {
             root: None,
             captures: Vec::new(),
             lock: None,
-            environment: yamaa_engine::build::without_environment(host),
+            environment: yamaa_core::build::without_environment(host),
             inventory_documents: Vec::new(),
             inventory_captured: false,
         }
@@ -107,7 +107,7 @@ impl OwnedEnvironment {
     }
     pub(crate) fn attach_inventory(
         &mut self,
-        captured: yamaa_engine::submission_inventory::Captured<
+        captured: yamaa_core::submission_inventory::Captured<
             crate::specification_source::PreparedDocument,
         >,
     ) {

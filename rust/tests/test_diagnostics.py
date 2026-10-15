@@ -166,7 +166,7 @@ class DiagnosticGuardTests(unittest.TestCase):
         )
 
     def test_unknown_requirement_is_rejected_in_every_crate(self):
-        for crate in ("yamaa-core", "yamaa-engine", *sorted(guard.HOST_CRATES)):
+        for crate in ("yamaa-core", *sorted(guard.HOST_CRATES)):
             with self.subTest(crate=crate):
                 path = self.write(
                     f"rust/crates/{crate}/src/unknown.rs",
@@ -295,7 +295,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         path.write_text("conditions! {\n    malformed => (),\n}\n")
         self.assertTrue(any("unrecognized cause" in e for e in self.errors()))
         path.unlink()
-        self.write("rust/crates/yamaa-engine/src/marker.rs", "// engine source\n")
+        self.write("rust/crates/yamaa-core/src/marker.rs", "// engine source\n")
         self.assertTrue(any("unavailable core registry" in e for e in self.errors()))
         (self.root / "yaml/conditions.yaml").unlink()
         self.assertTrue(any("unavailable vocabulary" in e for e in self.errors()))
@@ -332,7 +332,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         )
         self.assertEqual(self.errors(), [])
         self.write(
-            "rust/crates/yamaa-engine/src/diagnostic.rs",
+            "rust/crates/yamaa-core/src/diagnostic.rs",
             'const REQ: &str = "REQ-0001";\n',
         )
         self.write(

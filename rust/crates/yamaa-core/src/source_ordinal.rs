@@ -107,3 +107,17 @@ impl Ordinal {
             .flatten()
     }
 }
+
+/// Decide generated-field policy once; adapters only encode the admitted positions.
+pub fn prepare(
+    source: &crate::specification::SourceDeclaration,
+    schema: &crate::table::TableSchema,
+    rows: usize,
+    limits: Limits,
+) -> Result<Option<Ordinal>, Error> {
+    source
+        .ordinal
+        .as_deref()
+        .map(|name| Ordinal::admit(schema, rows, name, limits))
+        .transpose()
+}

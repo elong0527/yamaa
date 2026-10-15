@@ -8,11 +8,11 @@ use crate::{
     specification_report::{self as report, BuildResult, Identity},
 };
 use serde_json::{json, Value};
-use yamaa_engine::{
-    dataset::{CheckRecord, ExecutionError},
-    function_invocation::FailureKind,
-    project_activation::{Failure, TestFailure},
-    specification_run::{PortError, RunError},
+use {
+    yamaa_core::dataset::CheckRecord, yamaa_core::dataset::ExecutionError,
+    yamaa_core::function_invocation::FailureKind, yamaa_core::project_activation::Failure,
+    yamaa_core::project_activation::TestFailure, yamaa_core::specification_run::PortError,
+    yamaa_core::specification_run::RunError,
 };
 
 /// Facts refer to the exact payload in this attempt, never to an error string or
@@ -121,10 +121,14 @@ pub(crate) enum ActivationBoundary<'a, E> {
 }
 pub(crate) fn validate_activation<E>(
     run: &dyn crate::project_activation_observations::ActivationView,
-    observed: &yamaa_engine::project_activation::Observations,
+    observed: &yamaa_core::project_activation::Observations,
     boundary: ActivationBoundary<'_, E>,
 ) -> Result<(), report::Error> {
-    use yamaa_engine::project_activation::{BindingOutcome, LockObservation, TestOutcome};
+    use {
+        yamaa_core::project_activation::BindingOutcome,
+        yamaa_core::project_activation::LockObservation,
+        yamaa_core::project_activation::TestOutcome,
+    };
     let selected = run.called_functions();
     let total = selected
         .iter()
