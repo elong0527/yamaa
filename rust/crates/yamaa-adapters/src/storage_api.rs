@@ -13,8 +13,13 @@ pub(crate) fn ipc_schema(
     arrow_ipc::convert::try_fb_to_schema(schema)
 }
 
-pub(crate) fn timestamp(utc: bool, unit: TimeUnit) -> LogicalType {
-    LogicalType::timestamp(utc, unit)
+pub(crate) fn timestamp_micros(utc: bool) -> LogicalType {
+    LogicalType::timestamp(utc, TimeUnit::MICROS)
+}
+
+#[cfg(test)]
+pub(crate) fn timestamp_millis(utc: bool) -> LogicalType {
+    LogicalType::timestamp(utc, TimeUnit::MILLIS)
 }
 
 #[cfg(test)]

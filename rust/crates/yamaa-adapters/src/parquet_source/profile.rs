@@ -92,7 +92,7 @@ pub(super) fn columns(arrow: &Schema, stored: &SchemaDescriptor) -> Result<Table
 #[cfg(test)]
 mod tests {
     use super::*;
-    use parquet::basic::{LogicalType, TimeUnit};
+    use parquet::basic::LogicalType;
     use parquet::{basic::Repetition, schema::types::Type};
     use std::sync::Arc;
     fn descriptor(
@@ -162,7 +162,7 @@ mod tests {
             ),
             (
                 Physical::INT64,
-                Some(crate::storage_api::timestamp(false, TimeUnit::MICROS)),
+                Some(crate::storage_api::timestamp_micros(false)),
                 ConvertedType::NONE,
                 DataType::Timestamp(ArrowUnit::Microsecond, None),
                 ColumnType::DateTime,
@@ -180,13 +180,13 @@ mod tests {
             ),
             (
                 Physical::INT64,
-                Some(crate::storage_api::timestamp(true, TimeUnit::MICROS)),
+                Some(crate::storage_api::timestamp_micros(true)),
                 ConvertedType::TIMESTAMP_MICROS,
                 DataType::Timestamp(ArrowUnit::Microsecond, None),
             ),
             (
                 Physical::INT64,
-                Some(crate::storage_api::timestamp(false, TimeUnit::MILLIS)),
+                Some(crate::storage_api::timestamp_millis(false)),
                 ConvertedType::NONE,
                 DataType::Timestamp(ArrowUnit::Millisecond, None),
             ),
