@@ -204,6 +204,7 @@ pub(super) fn validate(
     sources: &[SecondarySource],
     primary: &TableSchema,
     output: &TableSchema,
+    templates: &[RowTemplate],
 ) -> Result<(), PlanError> {
     for (index, item) in items.iter().enumerate() {
         if item.pending_schema.is_some()
@@ -221,14 +222,19 @@ pub(super) fn validate(
         if matches!(&item.source,IntermediateSource::SelfRows {columns,..} if columns.is_empty()) {
             return Err(PlanError::InvalidIntermediate);
         }
-        match_values::validate_declaration(
-            &item.keys,
-            primary,
-            sources,
-            donor,
-            output,
-            &vec![true; output.columns().len()],
-        )?;
+        let driver = templates.iter().any(|template| {
+            matches!(template.mode, RowMode::IntermediateDriver { index: driver, .. } if driver == index)
+        });
+        if !item.keys.is_empty() || !driver {
+            match_values::validate_declaration(
+                &item.keys,
+                primary,
+                sources,
+                donor,
+                output,
+                &vec![true; output.columns().len()],
+            )?;
+        }
         let width = item
             .source_schema(sources)
             .ok_or(PlanError::InvalidIntermediate)?

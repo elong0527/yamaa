@@ -906,6 +906,176 @@
           "csv": null,
           "no_match_count": 0
         }
+      ],
+      "intermediate_row_drivers": [
+        {
+          "name": "original_no_applicable_key",
+          "specification": "schema_version: '1.0'\ndomain: ADLBC\ninput:\n  LB:\n    path: input/lb.csv\n    types:\n      STUDYID: str\n      USUBJID: str\n      LBTESTCD: str\n      LBSEQ: int\n      VISITNUM: int\n      LBSTRESN: float\nkeys:\n- K\noutput:\n  path: out.csv\n  columns:\n  - K\n  - STUDYID\n  - USUBJID\n  - LBTESTCD\n  - LBSEQ\n  - AVAL\ncolumns:\n- name: K\n  type: int\n- name: STUDYID\n  type: str\n- name: USUBJID\n  type: str\n- name: LBTESTCD\n  type: str\n- name: LBSEQ\n  type: int\n- name: AVAL\n  type: float\nintermediates:\n- id: EOTFB\n  dataset: LB\n  derivations:\n    _EOT_AWARE:\n      case:\n      - when: LB.VISITNUM = 9\n        then:\n          literal: 99\n      - otherwise:\n          source: LB.VISITNUM\n    _RN:\n      row_number:\n        window:\n          group_by:\n          - STUDYID\n          - USUBJID\n          - LBTESTCD\n          order_by:\n          - variable: _EOT_AWARE\n            direction: desc\n          - variable: LBSEQ\n  filter: LB._RN = 1 AND LB._EOT_AWARE <> 99\n  columns:\n  - STUDYID\n  - USUBJID\n  - LBTESTCD\n  - LBSEQ\n  - VISITNUM\n  - LBSTRESN\nrows:\n- id: eot2\n  dataset: EOTFB\n  filter: EOTFB.VISITNUM <> 12\n  derivations:\n    K:\n      source: EOTFB.LBSEQ\n    STUDYID:\n      source: EOTFB.STUDYID\n    USUBJID:\n      source: EOTFB.USUBJID\n    LBTESTCD:\n      source: EOTFB.LBTESTCD\n    LBSEQ:\n      source: EOTFB.LBSEQ\n    AVAL:\n      source: EOTFB.LBSTRESN\n",
+          "inputs": {
+            "input/lb.csv": "STUDYID,USUBJID,LBTESTCD,LBSEQ,VISITNUM,LBSTRESN\nS,01,CHOL,1,1,10.0\nS,01,GLUC,2,2,20.0\nS,01,GLUC,3,3,30.0\nS,02,CHOL,4,4,40.0\nS,01,CHOL,5,9,90.0\nS,03,CHOL,6,12,60.0\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "K,STUDYID,USUBJID,LBTESTCD,LBSEQ,AVAL\n3,S,01,GLUC,3,30\n4,S,02,CHOL,4,40\n"
+        },
+        {
+          "name": "source_order",
+          "specification": "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: src.csv, types: {V: int, G: int}}}\nkeys: [K]\noutput: {path: out.csv, columns: [K]}\ncolumns: [{name: K, type: int}]\nintermediates:\n  - id: P\n    dataset: SRC\n    filter: SRC.V > 1\nrows:\n  - id: driver\n    dataset: P\n    derivations: {K: {source: P.V}}\n",
+          "inputs": {
+            "src.csv": "V,G\n4,4\n1,1\n3,3\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "K\n4\n3\n"
+        },
+        {
+          "name": "grouped_driver",
+          "specification": "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: src.csv, types: {V: int, G: int}}}\nkeys: [K]\noutput: {path: out.csv, columns: [K]}\ncolumns: [{name: K, type: int}]\nintermediates:\n  - id: P\n    dataset: SRC\n    filter: SRC.V > 1\nrows:\n  - id: driver\n    dataset: P\n    group_by: [P.G]\n    derivations: {K: {source: P.G}}\n",
+          "inputs": {
+            "src.csv": "V,G\n3,3\n2,3\n4,4\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "K\n3\n4\n"
+        },
+        {
+          "name": "unrelated_output_key_type",
+          "specification": "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: src.csv, types: {V: int, G: int, K: str}}}\nkeys: [K]\noutput: {path: out.csv, columns: [K]}\ncolumns: [{name: K, type: int}]\nintermediates:\n  - id: P\n    dataset: SRC\n    filter: SRC.V > 1\nrows:\n  - id: driver\n    dataset: P\n    derivations: {K: {source: P.V}}\n",
+          "inputs": {
+            "src.csv": "V,G,K\n3,3,a\n4,4,b\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "K\n3\n4\n"
+        },
+        {
+          "name": "ordinary_lookup_without_keys",
+          "specification": "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: src.csv, types: {V: int, G: int}}}\nkeys: [K]\noutput: {path: out.csv, columns: [K]}\ncolumns: [{name: K, type: int}]\nintermediates:\n  - id: P\n    dataset: SRC\n    filter: SRC.V > 1\nrows:\n  - id: driver\n    dataset: SRC\n    derivations: {K: {source: SRC.V}}\n",
+          "inputs": {
+            "src.csv": "V,G\n3,3\n4,4\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "no_applicable_keys",
+              "requirement": "REQ-0153",
+              "spec_paths": [
+                "intermediates[0]"
+              ],
+              "context": {
+                "dataset": "SRC",
+                "keys": [
+                  "K"
+                ],
+                "hint": "declare the `key` explicitly"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "mixed_driver_lookup_without_keys",
+          "specification": "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: src.csv, types: {V: int, G: int}}}\nkeys: [K]\noutput: {path: out.csv, columns: [K]}\ncolumns: [{name: K, type: int}]\nintermediates:\n  - id: P\n    dataset: SRC\n    filter: SRC.V > 1\nrows:\n  - id: driver\n    dataset: P\n    derivations: {K: {source: P.V}}\n  - id: lookup\n    dataset: SRC\n    derivations: {K: {source: P.V}}\n",
+          "inputs": {
+            "src.csv": "V,G\n3,3\n4,4\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "no_applicable_keys",
+              "requirement": "REQ-0153",
+              "spec_paths": [
+                "intermediates[0]"
+              ],
+              "context": {
+                "dataset": "SRC",
+                "keys": [
+                  "K"
+                ],
+                "hint": "declare the `key` explicitly"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "donor_lookup_without_root_key",
+          "specification": "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: src.csv, types: {V: int, G: int}}}\nkeys: [K]\noutput: {path: out.csv, columns: [K]}\ncolumns: [{name: K, type: int}]\nintermediates:\n  - id: P\n    dataset: SRC\n    filter: SRC.V > 1\n  - id: Q\n    dataset: SRC\n    key: {V: {literal: 3}}\n    derivations: {COPY: {source: P.V}}\nrows:\n  - id: driver\n    dataset: P\n    derivations: {K: {source: P.V}}\n",
+          "inputs": {
+            "src.csv": "V,G\n3,3\n4,4\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "no_applicable_keys",
+              "requirement": "REQ-0153",
+              "spec_paths": [
+                "intermediates[0]"
+              ],
+              "context": {
+                "dataset": "SRC",
+                "keys": [
+                  "K"
+                ],
+                "hint": "declare the `key` explicitly"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "mixed_driver_compatible_lookup",
+          "specification": "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: src.csv, types: {K: int, V: int}}}\nkeys: [K]\noutput: {path: out.csv, columns: [K, A]}\ncolumns: [{name: K, type: int}, {name: A, type: int}]\nintermediates: [{id: P, dataset: SRC, filter: SRC.V > 0}]\nrows:\n  - id: driver\n    dataset: P\n    filter: P.V = 3\n    derivations: {K: {source: P.K}, A: {source: P.V}}\n  - id: lookup\n    dataset: SRC\n    filter: SRC.V = 4\n    derivations: {K: {source: SRC.K}, A: {source: P.V}}\n",
+          "inputs": {
+            "src.csv": "K,V\n3,3\n4,4\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "K,A\n3,3\n4,4\n"
+        },
+        {
+          "name": "explicit_driver_key_stays_prohibited",
+          "specification": "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: src.csv, types: {V: int, G: int}}}\nkeys: [K]\noutput: {path: out.csv, columns: [K]}\ncolumns: [{name: K, type: int}]\nintermediates:\n  - id: P\n    dataset: SRC\n    key: [V]\n    filter: SRC.V > 1\nrows:\n  - id: driver\n    dataset: P\n    derivations: {K: {source: P.V}}\n",
+          "inputs": {
+            "src.csv": "V,G\n3,3\n"
+          },
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "invalid_intermediate_driver",
+              "requirement": "REQ-1262",
+              "spec_paths": [
+                "rows[0].dataset"
+              ],
+              "context": {
+                "intermediate": "P",
+                "fields": [
+                  "key"
+                ]
+              }
+            }
+          ],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "invalid_intermediate_driver",
+              "requirement": "REQ-1262",
+              "spec_paths": [
+                "rows[0].dataset"
+              ],
+              "context": {
+                "intermediate": "P",
+                "fields": [
+                  "key"
+                ]
+              }
+            }
+          ],
+          "csv": null
+        }
       ]
     },
     "file-resources": {

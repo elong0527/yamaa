@@ -1524,7 +1524,7 @@ impl DatasetPlan {
             primary: source,
             secondary,
         } = sources;
-        intermediates::validate(&intermediates, &secondary, &source, &output)?;
+        intermediates::validate(&intermediates, &secondary, &source, &output, &templates)?;
         for (index, relation) in secondary.iter().enumerate() {
             if relation.name.is_empty()
                 || secondary[..index]
