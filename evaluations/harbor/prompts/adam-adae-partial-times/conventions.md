@@ -1,0 +1,12 @@
+Following CDISC ADaM standards, use the provided AE dataset to create an
+ADAE dataset with one record per adverse event.
+
+The output dataset should contain the following columns in this order:
+STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, ASTDTM, ASTTMF, AEENDTC, AENDTM,
+AENTMF
+
+ASTTMF and AENTMF are H, M or S, or have no value. ASTDTM and AENDTM are
+written as YYYY-MM-DDThh:mm:ss.
+
+Read the source datasets from /app/input and save the completed dataset as
+/app/output/adae.csv.

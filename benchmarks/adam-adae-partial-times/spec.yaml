@@ -1,0 +1,129 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: input/ae.csv
+base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, ASTDTM, ASTTMF,
+            AEENDTC, AENDTM, AENTMF]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE.AETERM
+
+  - name: AESTDTC
+    type: str
+    label: Start Date/Time of Adverse Event
+    derivation: AE.AESTDTC
+
+  - name: AEENDTC
+    type: str
+    label: End Date/Time of Adverse Event
+    derivation: AE.AEENDTC
+
+  # Time parts the start did not collect take their earliest value. A start
+  # cut off before its day, or never collected, gives no analysis start.
+  - name: ASTDTM
+    type: datetime
+    label: Analysis Start Date/Time
+    derivation:
+      datetime_impute:
+        source: AESTDTC
+        time: first
+        missing: null   # handlers are explicit: an omitted one is fatal
+        invalid: null
+
+  - name: ASTDTPR
+    type: str
+    label: Analysis Start Date/Time Collected Precision
+    derivation:
+      datetime_precision:
+        source: ASTDTM
+        missing: null
+
+  # The flag names the coarsest supplied part, one level finer than the last
+  # collected one: a date alone supplied the hour, an hour supplied the
+  # minutes, a minute supplied only the seconds.
+  - name: ASTTMF
+    type: str
+    label: Analysis Start Time Imputation Flag
+    derivation:
+      case:
+        - when: "ASTDTPR = 'D'"
+          then: {literal: H}
+        - when: "ASTDTPR = 'H'"
+          then: {literal: M}
+        - when: "ASTDTPR = 'M'"
+          then: {literal: S}
+    verifications:
+      allowed_values:
+        values: [H, M, S]
+
+  # The end is completed the same way with the latest value of each part.
+  - name: AENDTM
+    type: datetime
+    label: Analysis End Date/Time
+    derivation:
+      datetime_impute:
+        source: AEENDTC
+        time: last
+        missing: null
+        invalid: null
+
+  - name: AENDTPR
+    type: str
+    label: Analysis End Date/Time Collected Precision
+    derivation:
+      datetime_precision:
+        source: AENDTM
+        missing: null
+
+  - name: AENTMF
+    type: str
+    label: Analysis End Time Imputation Flag
+    derivation:
+      case:
+        - when: "AENDTPR = 'D'"
+          then: {literal: H}
+        - when: "AENDTPR = 'H'"
+          then: {literal: M}
+        - when: "AENDTPR = 'M'"
+          then: {literal: S}
+    verifications:
+      allowed_values:
+        values: [H, M, S]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 9
+      max: 9
+  - assert:
+      id: start-flag-requires-an-analysis-start
+      when: "ASTTMF IS NOT NULL"
+      require: "ASTDTM IS NOT NULL"
+  - assert:
+      id: end-flag-requires-an-analysis-end
+      when: "AENTMF IS NOT NULL"
+      require: "AENDTM IS NOT NULL"
