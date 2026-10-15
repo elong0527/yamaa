@@ -230,7 +230,7 @@ fn decode_issues(
     let message = crate::specification_diagnostics::capture_failure(error);
     let mut rows = crate::file_application::preparation_failure(message);
     for row in &mut rows {
-        let mut context: serde_json::Value =
+        let mut context: yamaa_core::json::Value =
             serde_json::from_str(&row.context).map_err(|_| Error::Projection)?;
         for (key, value) in [
             ("entry", entry),

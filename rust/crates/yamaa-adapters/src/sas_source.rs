@@ -92,8 +92,8 @@ mod tests {
                 Some(&source),
             );
             assert_eq!(
-                serde_json::from_str::<serde_json::Value>(&reply).unwrap()["outcome"],
-                serde_json::json!({"status":"rejected", "stage":"ingest", "code":"sas_reader_unavailable"})
+                serde_json::from_str::<yamaa_core::json::Value>(&reply).unwrap()["outcome"],
+                yamaa_core::json::json!({"status":"rejected", "stage":"ingest", "code":"sas_reader_unavailable"})
             );
         }
     }

@@ -1666,7 +1666,8 @@ mod file {
             );
             assert_eq!(environment.len(), 1);
             assert_eq!(environment[0].condition, "invalid_yaml");
-            let context: serde_json::Value = serde_json::from_str(&environment[0].context).unwrap();
+            let context: yamaa_core::json::Value =
+                serde_json::from_str(&environment[0].context).unwrap();
             assert_eq!(context["path"], study.path("environment.yaml"));
             assert_eq!(context["environment_path"], "$");
             assert!(context["line"].as_u64().is_some());
@@ -1705,7 +1706,7 @@ mod file {
             for (row, (declaration, path)) in rows.iter().zip(expected) {
                 assert_eq!(row.condition, "project_environment_invalid");
                 assert_eq!(row.spec_paths, [declaration]);
-                let context: serde_json::Value = serde_json::from_str(&row.context).unwrap();
+                let context: yamaa_core::json::Value = serde_json::from_str(&row.context).unwrap();
                 assert_eq!(context["path"], path);
                 assert_eq!(context["cause"], "missing");
                 assert_eq!(context["environment_path"], declaration);
@@ -1726,14 +1727,14 @@ mod file {
             let rows =
                 yamaa_adapters::project_application::check(&entry, &environment, Language::Python);
             assert_eq!(rows.len(), 3);
-            let context: serde_json::Value = serde_json::from_str(&rows[0].context).unwrap();
+            let context: yamaa_core::json::Value = serde_json::from_str(&rows[0].context).unwrap();
             assert_eq!(context["cause"], "invalid_packaging_lock");
             for (row, path) in rows[1..]
                 .iter()
                 .zip(["absent-function.yaml", "absent-codelists.yaml"])
             {
                 assert_eq!(row.condition, "invalid_yaml");
-                let context: serde_json::Value = serde_json::from_str(&row.context).unwrap();
+                let context: yamaa_core::json::Value = serde_json::from_str(&row.context).unwrap();
                 assert_eq!(context["path"], path);
                 assert!(context["reason"].as_str().is_some());
                 assert!(context["line"].as_u64().is_some());
@@ -1851,8 +1852,8 @@ mod file {
                     assert_eq!(rows[0].requirement, None);
                     assert!(rows[0].spec_paths.is_empty());
                     assert_eq!(
-                        serde_json::from_str::<serde_json::Value>(&rows[0].context).unwrap(),
-                        serde_json::json!({
+                        serde_json::from_str::<yamaa_core::json::Value>(&rows[0].context).unwrap(),
+                        yamaa_core::json::json!({
                             "stage": "environment", "code": "resource_limit",
                             "resource": expected.resource, "limit": expected.limit,
                             "actual": expected.actual,
@@ -1893,7 +1894,7 @@ mod file {
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].condition, "project_environment_invalid");
             assert_eq!(rows[0].spec_paths, ["environment"]);
-            let context: serde_json::Value = serde_json::from_str(&rows[0].context).unwrap();
+            let context: yamaa_core::json::Value = serde_json::from_str(&rows[0].context).unwrap();
             assert_eq!(context["path"], path);
             assert_eq!(context["cause"], "not_regular_file");
         }
@@ -2098,7 +2099,7 @@ mod file {
             let rows = producer_check::rejected(&error, Language::Python).unwrap();
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].condition, "invalid_yaml");
-            let context: serde_json::Value = serde_json::from_str(&rows[0].context).unwrap();
+            let context: yamaa_core::json::Value = serde_json::from_str(&rows[0].context).unwrap();
             assert_eq!(context["path"], "environment.yaml");
             fs::remove_dir_all(&study.0).unwrap();
             assert_eq!(
@@ -2276,7 +2277,8 @@ mod file {
             let failures = producer_check::rejected(&failure, Language::Python).unwrap();
             assert_eq!(failures.len(), 1);
             assert_eq!(failures[0].condition, "invalid_yaml");
-            let context: serde_json::Value = serde_json::from_str(&failures[0].context).unwrap();
+            let context: yamaa_core::json::Value =
+                serde_json::from_str(&failures[0].context).unwrap();
             assert_eq!(context["path"], "broken.yaml");
             assert_eq!(context["environment_path"], "functions.id");
             fs::remove_dir_all(&study.0).unwrap();
