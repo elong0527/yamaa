@@ -1,7 +1,7 @@
 //! Independently authored normalized metadata; no generator supplies expectations.
 use yamaa_core::{
     project_terminology::Catalogue,
-    schema::{Document, DocumentLimits, DocumentNode as N},
+    schema::{Document, DocumentNode as N},
     specification_submission_document as declarations,
     submission_composition::{self, Input, Study},
     submission_document, submission_xml,
@@ -201,8 +201,7 @@ fn specification(case: &str) -> Document {
 }
 fn compose(document: &Document) -> Result<Study, Vec<submission_composition::Finding>> {
     let environment = environment();
-    let declared =
-        submission_document::decode(&environment, environment.root(), Default::default()).unwrap();
+    let declared = submission_document::decode(&environment, environment.root()).unwrap();
     submission_composition::compose(
         declared.study().unwrap(),
         &declared.sections()[0],
@@ -221,7 +220,7 @@ fn compose(document: &Document) -> Result<Study, Vec<submission_composition::Fin
 #[test]
 fn overrides_inherit_complete_metadata_and_preserve_written_occurrences() {
     let document = specification("valid");
-    let declared = declarations::decode(&document, document.root(), Default::default()).unwrap();
+    let declared = declarations::decode(&document, document.root()).unwrap();
     assert_eq!(declared.value_rows().len(), 2);
     let row = &declared.value_rows()[0];
     assert_eq!(row.id.value, "glucose");
@@ -252,25 +251,10 @@ fn overrides_inherit_complete_metadata_and_preserve_written_occurrences() {
     );
 }
 #[test]
-fn complete_row_metadata_is_counted_before_ownership_or_findings() {
+fn complete_row_metadata_keeps_all_admitted_overrides() {
     let document = specification("valid");
-    let limits = declarations::Limits {
-        declarations: 4,
-        ..Default::default()
-    };
-    let error = declarations::decode(&document, document.root(), limits).unwrap_err();
-    assert!(std::ptr::eq(error.input, &document));
     assert_eq!(
-        error.cause,
-        declarations::Cause::Limit(declarations::Resource::Declarations)
-    );
-    // Dataset + two columns + two row overrides are all admitted at once.
-    let limits = declarations::Limits {
-        declarations: 5,
-        ..Default::default()
-    };
-    assert_eq!(
-        declarations::decode(&document, document.root(), limits)
+        declarations::decode(&document, document.root())
             .unwrap()
             .value_rows()
             .len(),
@@ -281,8 +265,7 @@ fn complete_row_metadata_is_counted_before_ownership_or_findings() {
 fn arbitrary_row_labels_and_normalized_literal_handlers_retain_their_meaning() {
     for case in ["arbitrary row ID", "normalized discriminator"] {
         let document = specification(case);
-        let declared =
-            declarations::decode(&document, document.root(), Default::default()).unwrap();
+        let declared = declarations::decode(&document, document.root()).unwrap();
         let study = compose(&document).unwrap();
         let value = &study.datasets()[0].columns()[1].values()[0];
         assert_eq!(value.test_code(), "GLUC");
@@ -303,7 +286,7 @@ fn arbitrary_row_labels_and_normalized_literal_handlers_retain_their_meaning() {
 #[test]
 fn an_empty_row_label_is_a_text_refusal_with_its_original_field_occurrence() {
     let document = specification("empty row ID");
-    let error = declarations::decode(&document, document.root(), Default::default()).unwrap_err();
+    let error = declarations::decode(&document, document.root()).unwrap_err();
     assert!(std::ptr::eq(error.input, &document));
     let declarations::Cause::Findings(findings) = error.cause else {
         panic!("expected a structural text refusal");
@@ -398,7 +381,7 @@ fn each_independent_value_admission_control_has_the_required_condition_and_row_p
 #[test]
 fn identical_declarations_at_distinct_nodes_share_one_value_definition() {
     let document = specification("identical");
-    let declared = declarations::decode(&document, document.root(), Default::default()).unwrap();
+    let declared = declarations::decode(&document, document.root()).unwrap();
     let a = &declared.value_rows()[0].overrides[0].submission;
     let b = &declared.value_rows()[1].overrides[0].submission;
     assert_ne!(a, b, "distinct occurrence facts are retained");

@@ -5,7 +5,7 @@ use yamaa_core::{
     define_diagnostics::{self, TargetRelation},
     diagnostic::ConditionCode,
     project_terminology as ct,
-    schema::{Document, DocumentLimits, DocumentNode as N},
+    schema::{Document, DocumentNode as N},
     submission_composition::{self as composition, Finding, Input, Study},
     submission_document, submission_json, submission_xml,
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
@@ -93,15 +93,7 @@ impl Tree {
     fn document(self) -> Document {
         let mut nodes = vec![];
         let root = self.append(&mut nodes);
-        Document::new(
-            nodes,
-            root,
-            DocumentLimits {
-                text_bytes: 16_777_216,
-                ..DocumentLimits::default()
-            },
-        )
-        .unwrap()
+        Document::new(nodes, root).unwrap()
     }
 }
 fn metadata() -> Tree {
@@ -220,7 +212,7 @@ fn compose(
     created: &str,
 ) -> Result<Study, Vec<Finding>> {
     let env = env.document();
-    let declared = submission_document::decode(&env, env.root(), Default::default()).unwrap();
+    let declared = submission_document::decode(&env, env.root()).unwrap();
     let docs: Vec<_> = docs.into_iter().map(Tree::document).collect();
     let inputs: Vec<_> = docs
         .iter()
@@ -958,9 +950,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     reached
 }
 #[test]
-fn actual_binding_quota_keeps_its_path_detail_and_complete_implementation_report() {
-    // Each independently owned input fits admission; their combined binding exceeds
-    // the checked 16MiB text quota. This reaches BindingFinding::Limit itself.
+fn large_binding_values_are_retained_and_real_unequal_sets_keep_their_language_owner() {
+    // Held semantic metadata has no cumulative copy allowance. File loaders
+    // enforce their own per-file boundary before producing these arenas.
     let long = "X".repeat(8_388_609);
     let lists = catalogue(false, Value::Str(long.clone()));
     let mut spec = specification();
@@ -975,25 +967,11 @@ fn actual_binding_quota_keeps_its_path_detail_and_complete_implementation_report
             Tree::map(vec![("values", Tree::list(vec![Tree::text(&long)]))]),
         )])]),
     );
-    let findings = one(environment(), spec, &lists).unwrap_err();
-    assert_eq!(findings.len(), 1);
-    let finding = &findings[0];
-    assert_eq!(finding.code, ConditionCode::ApplicationRejected);
+    let study = one(environment(), spec, &lists).unwrap();
+    assert_eq!(study.codelists().len(), 1);
     assert_eq!(
-        (
-            finding.definition().phase,
-            finding.definition().condition,
-            finding.definition().requirement
-        ),
-        ("engine", "engine_rejected", None)
-    );
-    assert_eq!(
-        finding.path,
-        "sdtm.specs[0].columns.VALUE.submission.codelist"
-    );
-    assert_eq!(
-        finding.context,
-        [("detail".into(), JsonValue::String("LIST".into()))].into()
+        study.codelists()[0].declaration.items.as_ref().unwrap()[0].value,
+        Value::Str(long)
     );
     // Ordinary finite unequal sets retain their language conflict classification.
     let mut spec = specification();
@@ -1020,4 +998,38 @@ fn actual_binding_quota_keeps_its_path_detail_and_complete_implementation_report
         ConditionCode::CodelistBindingValuesConflict
     );
     assert_eq!(findings[0].definition().requirement, Some("REQ-0955"));
+}
+
+#[test]
+fn dataset_json_refuses_oversized_geometry_before_reading_cells() {
+    use yamaa_core::limits::Limits;
+    struct Oversized(TableSchema);
+    impl TableAccess for Oversized {
+        type Error = Infallible;
+        fn schema(&self) -> &TableSchema {
+            &self.0
+        }
+        fn row_count(&self) -> usize {
+            Limits::TABLE_ROWS + 1
+        }
+        fn cell(&self, _: usize, _: usize) -> Result<ValueRef<'_>, CellError<Infallible>> {
+            panic!("geometry must be admitted before table access")
+        }
+    }
+    let lists = ct::Catalogue::admit(vec![]).unwrap();
+    let study = one(environment(), specification(), &lists).unwrap();
+    let table = Oversized(
+        TableSchema::new(vec![Column {
+            name: "VALUE".into(),
+            kind: ColumnType::Str,
+        }])
+        .unwrap(),
+    );
+    let finding =
+        submission_json::render(&study, &study.datasets()[0], &table, "define.xml").unwrap_err();
+    assert_eq!(finding.code, ConditionCode::ApplicationRejected);
+    assert_eq!(finding.path, "datasets.D0.dataset_json");
+    let detail = finding.context["detail"].as_str().unwrap();
+    assert!(detail.contains("table_rows"));
+    assert!(detail.contains("10000001"));
 }

@@ -65,7 +65,7 @@ fn document(tree: Tree) -> Document {
     }
     let mut nodes = Vec::new();
     let root = enter(tree, &mut nodes);
-    Document::new(nodes, root, Default::default()).unwrap()
+    Document::new(nodes, root).unwrap()
 }
 fn environment(with_study: bool) -> Environment {
     let mut fields = vec![(
@@ -141,13 +141,8 @@ impl Ports for Spy {
         self.clock_calls.set(self.clock_calls.get() + 1);
         self.seconds
     }
-    fn capture_environment(
-        &mut self,
-        written: &str,
-        limits: define::MetadataLimits,
-    ) -> Result<Environment, Opaque> {
+    fn capture_environment(&mut self, written: &str) -> Result<Environment, Opaque> {
         assert_eq!(written, "environment.yaml");
-        assert_eq!(limits, define::METADATA_LIMITS);
         self.events.push("capture_environment");
         if let Some(error) = self.environment_error.take() {
             return Err(error);
@@ -161,7 +156,7 @@ impl Ports for Spy {
             source: "/project/environment.yaml",
         }
     }
-    fn capture_specification(&mut self, _: &str, _: &str) -> Result<Document, Opaque> {
+    fn capture_specification(&mut self, _: &str, _: &str, _: &str) -> Result<Document, Opaque> {
         panic!("no spec selected")
     }
     fn specification(_: &Document) -> define::SpecificationView<'_> {
@@ -197,13 +192,7 @@ impl Ports for Spy {
     fn finish_metadata(&mut self) {
         self.events.push("finish_metadata");
     }
-    fn capture_published(
-        &mut self,
-        _: &str,
-        _: &str,
-        _: &str,
-        _: usize,
-    ) -> Result<Vec<u8>, Opaque> {
+    fn capture_published(&mut self, _: &str, _: &str, _: &str) -> Result<Vec<u8>, Opaque> {
         panic!("no dataset selected")
     }
     fn decode_parquet(&mut self, _: &[u8]) -> Result<EmptyTable, ()> {

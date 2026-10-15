@@ -4,7 +4,7 @@ use crate::{
     limits::{LimitExceeded, Limits},
     submission_composition::{Dataset, Finding, Study},
     table::{TableAccess, ValueRef},
-    value::{ColumnType, Value},
+    value::Value,
 };
 use serde_json::Value as JsonValue;
 use std::{
@@ -434,6 +434,33 @@ fn list(values: &[String]) -> String {
 mod tests {
     use super::*;
     use crate::value::FiniteFloat;
+
+    #[test]
+    fn streamed_cells_preserve_exact_json_and_full_width_scalar_spelling() {
+        let values = [
+            (Value::Missing, "null"),
+            (
+                Value::Str("\0\u{e9}\u{1f642}\"\\\n\t".into()),
+                "\"\\u0000\u{e9}\u{1f642}\\\"\\\\\\n\\t\"",
+            ),
+            (Value::Int(i64::MIN), "-9223372036854775808"),
+            (Value::Int(i64::MAX), "9223372036854775807"),
+            (Value::float(-0.0), "-0"),
+            (Value::Date("2024-02".parse().unwrap()), "\"2024-02-01\""),
+            (
+                Value::DateTime("2024-02-29T03:04".parse().unwrap()),
+                "\"2024-02-29T03:04:00\"",
+            ),
+        ];
+        for (value, expected) in values {
+            let mut writer = Writer {
+                output: Vec::new(),
+                path: "dataset_json".into(),
+            };
+            writer.cell(ValueRef::from(&value)).unwrap();
+            assert_eq!(writer.output, expected.as_bytes());
+        }
+    }
     #[test]
     fn codelist_numeric_equality_preserves_integer_precision() {
         assert!(equal_value(

@@ -4,7 +4,7 @@ use yamaa_core::{
     dataset::VerificationSeverity,
     table::{TableAccess, ValueRef},
     value::Value,
-    verification_logs::{self, Error, Failure, Limits, Record},
+    verification_logs::{self, Error, Failure, Record},
 };
 
 fn held() -> Record {
@@ -43,15 +43,7 @@ fn warning() -> Record {
 }
 #[test]
 fn complete_ordered_logs_preserve_missing_metadata_ascii_details_and_all_keys() {
-    let logs = verification_logs::build(
-        &[held(), warning()],
-        "out.csv",
-        true,
-        true,
-        true,
-        Limits::default(),
-    )
-    .unwrap();
+    let logs = verification_logs::build(&[held(), warning()], "out.csv", true, true, true).unwrap();
     let verification = logs.verification.unwrap();
     assert_eq!(verification.row_count(), 2);
     assert_eq!(
@@ -99,47 +91,15 @@ fn complete_ordered_logs_preserve_missing_metadata_ascii_details_and_all_keys() 
 }
 #[test]
 fn failures_expose_only_verification_prefix_and_empty_declarations_retain_schema() {
-    let logs = verification_logs::build(
-        &[warning()],
-        "out.csv",
-        true,
-        true,
-        false,
-        Limits::default(),
-    )
-    .unwrap();
+    let logs = verification_logs::build(&[warning()], "out.csv", true, true, false).unwrap();
     assert_eq!(logs.verification.unwrap().row_count(), 1);
     assert!(logs.warning.is_none());
-    let logs =
-        verification_logs::build(&[], "out.csv", true, true, true, Limits::default()).unwrap();
+    let logs = verification_logs::build(&[], "out.csv", true, true, true).unwrap();
     assert_eq!(logs.verification.unwrap().schema().columns().len(), 13);
     assert_eq!(logs.warning.unwrap().schema().columns().len(), 10);
 }
 #[test]
-fn malformed_records_and_exhausted_ownership_budgets_refuse_before_rows_are_returned() {
-    for limits in [
-        Limits {
-            records: 0,
-            ..Limits::default()
-        },
-        Limits {
-            cells: 22,
-            ..Limits::default()
-        },
-        Limits {
-            text: 20,
-            ..Limits::default()
-        },
-        Limits {
-            json_nodes: 1,
-            ..Limits::default()
-        },
-    ] {
-        assert!(matches!(
-            verification_logs::build(&[warning()], "out.csv", true, true, true, limits),
-            Err(Error::Limit)
-        ));
-    }
+fn malformed_records_refuse_before_rows_are_returned() {
     for malformed in [
         {
             let mut record = warning();
@@ -175,19 +135,12 @@ fn malformed_records_and_exhausted_ownership_budgets_refuse_before_rows_are_retu
         },
     ] {
         assert!(matches!(
-            verification_logs::build(&[malformed], "out.csv", true, true, true, Limits::default()),
+            verification_logs::build(&[malformed], "out.csv", true, true, true),
             Err(Error::InvalidRecord)
         ));
     }
     assert!(matches!(
-        verification_logs::build(
-            &[held(), held()],
-            "out.csv",
-            true,
-            true,
-            true,
-            Limits::default()
-        ),
+        verification_logs::build(&[held(), held()], "out.csv", true, true, true),
         Err(Error::InvalidRecord)
     ));
 }
@@ -217,8 +170,7 @@ fn canonical_json_numbers_and_temporal_values_preserve_governed_log_bytes() {
             ),
         ),
     ]);
-    let logs = verification_logs::build(&[record], "out.csv", true, true, true, Limits::default())
-        .unwrap();
+    let logs = verification_logs::build(&[record], "out.csv", true, true, true).unwrap();
     let expected = r#"{"date":"2025-01-02","datetime":"2025-01-02T03:04:00","integer_float":1,"large":100000000000000000000,"negzero":-0,"tiny":0.0000001,"wide":12345678901234567890123456789012345678901234567890}"#;
     assert_eq!(
         logs.verification.unwrap().cell(0, 12).unwrap(),
@@ -228,4 +180,64 @@ fn canonical_json_numbers_and_temporal_values_preserve_governed_log_bytes() {
         logs.warning.unwrap().cell(0, 9).unwrap(),
         ValueRef::Str(expected)
     );
+}
+
+#[test]
+fn complete_record_sets_keep_all_rows_and_metadata_without_copy_allowances() {
+    let records: Vec<_> = (0..6_000)
+        .map(|index| {
+            let mut record = held();
+            record.path = format!("columns.AGE.verifications[{index}].not_missing");
+            record.id = Some(format!("check {index}"));
+            record
+        })
+        .collect();
+    let logs = verification_logs::build(&records, "out.csv", true, true, true).unwrap();
+    let verification = logs.verification.unwrap();
+    assert_eq!(verification.row_count(), records.len());
+    for (index, record) in records.iter().enumerate() {
+        assert_eq!(
+            verification.cell(index, 2).unwrap(),
+            ValueRef::Str(&record.path)
+        );
+        assert_eq!(
+            verification.cell(index, 3).unwrap(),
+            ValueRef::Str(record.id.as_deref().unwrap())
+        );
+        assert_eq!(verification.cell(index, 10).unwrap(), ValueRef::Int(8));
+    }
+    assert_eq!(logs.warning.unwrap().row_count(), 0);
+}
+
+#[test]
+fn recursive_json_details_use_the_shared_semantic_depth_boundary() {
+    use yamaa_core::limits::Limits;
+    for depth in [
+        Limits::SEMANTIC_DEPTH - 1,
+        Limits::SEMANTIC_DEPTH,
+        Limits::SEMANTIC_DEPTH + 1,
+    ] {
+        let mut detail = Json::Null;
+        for _ in 0..depth {
+            detail = Json::Array(vec![detail]);
+        }
+        let mut record = held();
+        record.failure = Some(Failure {
+            condition: "missing_value".into(),
+            count: 1,
+            keys: vec![],
+            details: BTreeMap::from([("nested".into(), detail)]),
+        });
+        let result = verification_logs::build(&[record], "out.csv", true, false, false);
+        if depth <= Limits::SEMANTIC_DEPTH {
+            assert!(result.is_ok());
+        } else {
+            let Err(Error::Limit(error)) = result else {
+                panic!("deep details must refuse before encoding")
+            };
+            assert_eq!(error.resource, "semantic_depth");
+            assert_eq!(error.limit, Limits::SEMANTIC_DEPTH);
+            assert_eq!(error.actual, Some(depth));
+        }
+    }
 }

@@ -84,7 +84,7 @@ pub fn bind(
         let input = match &item.input {
             Input::Literal(value) => Some(FunctionInput::Literal(value.clone())),
             Input::Reference(name) => {
-                if let Some(read) = catalog.selected_read(name).map_err(Error::Reference)? {
+                if let Some(read) = catalog.selected_read(name) {
                     match read {
                         Err(finding) => findings.push(Finding {
                             argument,
@@ -152,19 +152,13 @@ pub fn bind(
                 let start = findings.len();
                 if name.contains('.') {
                     findings.extend(
-                        reference_scope::validate(
-                            catalog,
-                            name,
-                            None,
-                            context.scope,
-                            Default::default(),
-                        )
-                        .map_err(Error::Reference)?
-                        .into_iter()
-                        .map(|finding| Finding {
-                            argument,
-                            kind: Kind::Scope(finding),
-                        }),
+                        reference_scope::validate(catalog, name, None, context.scope)
+                            .map_err(Error::Reference)?
+                            .into_iter()
+                            .map(|finding| Finding {
+                                argument,
+                                kind: Kind::Scope(finding),
+                            }),
                     );
                 } else if let Some(finding) = catalog
                     .validate_output(
@@ -180,7 +174,7 @@ pub fn bind(
                         kind: Kind::Output(finding),
                     });
                 }
-                let binding = catalog.bind(name).map_err(Error::Reference)?;
+                let binding = catalog.bind(name);
                 // Driver/existence/output-phase failures retain their established
                 // precedence; grouping failures still admit a separate type fault.
                 let terminal = findings[start..].iter().any(|f| {
