@@ -26,8 +26,10 @@ Layer composition and null handling follow the
 
 The adapter's default `readstat` feature builds the bundled read-only C backend
 for `.sas7bdat` and `.xpt` input. Rust embedders that use only CSV and Parquet can
-build `yamaa-adapters` with `default-features = false`; this omits both the
-ReadStat build and its `cc` build dependency. SAS input then returns
+build `yamaa-adapters` with `default-features = false`; this omits the
+ReadStat build and the adapter's direct `cc` build dependency. Parquet's Zstd
+backend still builds its native library through a transitive `cc` dependency.
+SAS input then returns
 `sas_source::Error::Unavailable` (`sas_reader_unavailable` in boundary replies).
 Python and R packages retain the default backend and all supported input formats.
 
