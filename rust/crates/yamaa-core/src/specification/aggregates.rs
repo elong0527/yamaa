@@ -408,16 +408,6 @@ pub(super) fn prepare(
     };
     if derive.is_some() {
         if let Some((_, Ok(filter))) = &filter {
-            derive_references.extend(
-                filter
-                    .identifiers()
-                    .into_iter()
-                    .filter(|name| {
-                        name.split_once('.')
-                            .is_some_and(|(relation, _)| !named.contains(relation))
-                    })
-                    .map(String::from),
-            );
             derive_relations.extend(
                 filter
                     .identifiers()
@@ -675,6 +665,14 @@ pub(super) fn bind(
                 .derive_references
                 .iter()
                 .map(String::as_str)
+                .chain(
+                    declaration
+                        .filter
+                        .iter()
+                        .filter(|_| declaration.derive.is_some())
+                        .filter_map(|(_, plan)| plan.as_ref().ok())
+                        .flat_map(|plan| plan.identifiers()),
+                )
                 .chain(compiled.identifiers())
                 .find(|name| {
                     name.split_once('.')
@@ -947,6 +945,29 @@ pub(super) fn bind(
         },
         Phase::Column { .. } => {
             let relation = relation.expect("qualified context");
+            // A fieldless reduction uses an existing donor-filter reference
+            // for its join. Keep that authored owner; a payload field in the
+            // expression still owns its own pairing.
+            let key_path = if compiled.identifiers().any(|name| name.contains('.'))
+                || !declaration.derive_references.is_empty()
+                || !declaration.groups.is_empty()
+            {
+                declaration.expression_path.as_str()
+            } else {
+                declaration
+                    .filter
+                    .as_ref()
+                    .and_then(|(_, plan)| plan.as_ref().ok())
+                    .filter(|plan| {
+                        plan.identifiers().into_iter().any(|name| {
+                            name.split_once('.')
+                                .is_some_and(|(owner, _)| owner == relation)
+                        })
+                    })
+                    .map_or(declaration.expression_path.as_str(), |plan| {
+                        plan.spec_path()
+                    })
+            };
             let inferred = declaration.keys.is_none();
             let defaults = declaration
                 .output_keys
@@ -1018,7 +1039,7 @@ pub(super) fn bind(
                 let Some((source_column, actual)) = donor_field else {
                     finding(
                         Finding::KeyReference {
-                            path: &declaration.expression_path,
+                            path: key_path,
                             identifier: &written,
                         },
                         findings,
@@ -1029,7 +1050,7 @@ pub(super) fn bind(
                     if !crate::key_relation::comparable(expected, actual.into()) {
                         finding(
                             Finding::KeyType {
-                                path: &declaration.expression_path,
+                                path: key_path,
                                 source: &value.display_name(field),
                                 expected,
                                 actual,
@@ -1048,7 +1069,7 @@ pub(super) fn bind(
                     {
                         finding(
                             Finding::KeyReference {
-                                path: &declaration.expression_path,
+                                path: key_path,
                                 identifier: reference,
                             },
                             findings,
