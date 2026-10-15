@@ -36,13 +36,8 @@ pub(super) fn convert(decoded: Decoded) -> Result<ArrowTable, Error> {
         })?;
         for array in batch.columns() {
             if let Some(strings) = array.as_any().downcast_ref::<LargeStringArray>() {
-                let bytes = strings
-                    .iter()
-                    .flatten()
-                    .try_fold(0usize, |sum, value| sum.checked_add(value.len()))
-                    .ok_or(Error::Representation)?;
                 // The canonical representation uses signed 32-bit offsets.
-                if bytes > i32::MAX as usize {
+                if !super::fits_utf8_offsets(strings.iter().flatten().map(|text| text.len())) {
                     return Err(Error::Representation);
                 }
             }

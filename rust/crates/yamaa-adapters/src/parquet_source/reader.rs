@@ -16,6 +16,7 @@ use yamaa_core::{table::TableSchema, value::ColumnType};
 #[derive(Debug, PartialEq)]
 pub(super) enum Error {
     Malformed,
+    Representation,
     ResourceLimit {
         resource: &'static str,
         limit: usize,
@@ -194,6 +195,9 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
                             .transpose()
                     })
                     .collect::<Result<Vec<_>, _>>()?;
+                if !super::fits_utf8_offsets(strings.iter().flatten().map(|text| text.len())) {
+                    return Err(Error::Representation);
+                }
                 if matches!(arrow_schema.field(index).data_type(), DataType::LargeUtf8) {
                     Arc::new(LargeStringArray::from(strings))
                 } else {
@@ -272,6 +276,9 @@ fn odm_decoded(
             .collect::<Result<Vec<_>, _>>()?;
         if strings.len() != row_count {
             return Err(Error::Malformed);
+        }
+        if !super::fits_utf8_offsets(strings.iter().flatten().map(|text| text.len())) {
+            return Err(Error::Representation);
         }
         arrays.push(Arc::new(StringArray::from(strings)));
     }
