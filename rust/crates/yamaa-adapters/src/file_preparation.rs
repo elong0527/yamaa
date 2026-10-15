@@ -3,7 +3,7 @@ use crate::{
     file_metadata::Reader as Native,
     file_resources::{Error as ResourceError, Resources},
     specification_run::{CapturedAttempt, PreparedRun},
-    specification_source::{InheritanceError, Limits, Source},
+    specification_source::{InheritanceError, Source},
 };
 use std::sync::Arc;
 
@@ -100,12 +100,7 @@ impl RejectedPlain {
     pub fn capture_reads(&self) -> usize {
         self.resources.capture_reads()
     }
-    pub fn retained_sources(
-        &self,
-        aliases: usize,
-        text: usize,
-    ) -> Result<crate::file_resources::RetainedSources, crate::file_resources::RetentionFailure>
-    {
+    pub fn retained_sources(&self) -> crate::file_resources::RetainedSources {
         self.resources.retain_sources(aliases, text)
     }
 }
@@ -144,10 +139,7 @@ impl FileSpecification {
                 }
             });
         match result {
-            Ok(run) => {
-                resources.finish_metadata_budget();
-                Ok(Self { run, resources })
-            }
+            Ok(run) => Ok(Self { run, resources }),
             Err(error) => Err(Box::new(RejectedPlain {
                 error: Error::Compile(error),
                 entry,
@@ -164,12 +156,11 @@ impl FileSpecification {
     pub fn capture_input_metadata(
         &mut self,
         index: usize,
-        maximum: usize,
     ) -> Result<Arc<[u8]>, Vec<crate::issue_rows::Issue>> {
         let descriptors = crate::source_metadata::inputs(self.run()).map_err(|_| {
             crate::file_application::rejected("source_metadata", "descriptor_admission")
         })?;
-        crate::source_metadata::capture(&mut self.resources, &descriptors, index, maximum)
+        crate::source_metadata::capture(&mut self.resources, &descriptors, index)
     }
     pub(crate) fn publication_target(
         &self,
@@ -223,7 +214,6 @@ pub(crate) fn prepare_document_from(
         &mut Documents { schema },
         declaring,
         written,
-        Limits::default().captured_bytes,
     )
     .map_err(|error| match error {
         Failure::Resource(error) => Error::Resource(error),

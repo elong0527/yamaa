@@ -191,7 +191,7 @@ pub fn admit_schema_diagnostics<'a>(
     Ok(SchemaDiagnosticReport {
         schema,
         document,
-        findings: &findings[..findings.len().min(crate::limits::Limits::FINDINGS)],
+        findings,
         source_context,
     })
 }

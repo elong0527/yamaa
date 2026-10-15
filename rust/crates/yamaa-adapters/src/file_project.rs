@@ -40,12 +40,7 @@ impl RejectedOrdinary {
     pub fn capture_reads(&self) -> usize {
         self.resources.capture_reads()
     }
-    pub fn retained_sources(
-        &self,
-        aliases: usize,
-        text: usize,
-    ) -> Result<crate::file_resources::RetainedSources, crate::file_resources::RetentionFailure>
-    {
+    pub fn retained_sources(&self) -> crate::file_resources::RetainedSources {
         self.resources.retain_sources(aliases, text)
     }
 }
@@ -83,7 +78,6 @@ impl FileProject {
             Ok(run) => {
                 // All capture, selection and compilation has completed. Study
                 // authority uses ordinary build admission, never metadata quota.
-                resources.finish_metadata_budget();
                 Ok(Self {
                     run: Arc::new(run),
                     resources,
@@ -156,12 +150,11 @@ impl FileProject {
     pub fn capture_input_metadata(
         &mut self,
         index: usize,
-        maximum: usize,
     ) -> Result<std::sync::Arc<[u8]>, Vec<crate::issue_rows::Issue>> {
         let descriptors = crate::source_metadata::inputs(self.run()).map_err(|_| {
             crate::file_application::rejected("source_metadata", "descriptor_admission")
         })?;
-        crate::source_metadata::capture(&mut self.resources, &descriptors, index, maximum)
+        crate::source_metadata::capture(&mut self.resources, &descriptors, index)
     }
 
     pub(crate) fn publication_target(

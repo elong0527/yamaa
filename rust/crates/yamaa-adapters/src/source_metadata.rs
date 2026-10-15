@@ -1,7 +1,6 @@
 //! Closed name/type carriers for retained repository fixture binding checks.
 use crate::{issue_rows::Issue, specification_run_view::RunView};
 use yamaa_core::source_metadata::{self as application, Kind, SourceSchema};
-pub use yamaa_core::source_metadata::{Budget, Limits};
 pub use yamaa_core::source_metadata::{InputMetadata, Profile};
 
 pub fn inputs(run: &dyn RunView) -> Result<Vec<InputMetadata>, Error> {
@@ -21,13 +20,8 @@ pub fn inputs(run: &dyn RunView) -> Result<Vec<InputMetadata>, Error> {
             })
         })
         .collect::<Result<Vec<_>, Error>>()?;
-    application::inputs(
-        &run.document().source().identity,
-        run.compiled(),
-        &origins,
-        Limits::default(),
-    )
-    .map_err(Error::Application)
+    application::inputs(&run.document().source().identity, run.compiled(), &origins)
+        .map_err(Error::Application)
 }
 
 pub struct Source {
@@ -45,7 +39,6 @@ impl Error {
     pub fn message(&self) -> &'static str {
         match self {
             Self::Carrier => "invalid source metadata type carrier",
-            Self::Application(application::Error::Limit) => "source metadata limit",
             Self::Application(application::Error::SourceIdentity) => {
                 "source metadata does not match its retained specification"
             }
@@ -65,31 +58,17 @@ pub fn check(run: &dyn RunView, sources: &[Source]) -> Result<Vec<Issue>, Error>
         return Err(Error::Application(application::Error::SourceIdentity));
     }
     let sources = admit(sources)?;
-    let findings = application::check(run.compiled(), &sources, Limits::default())
-        .map_err(Error::Application)?;
+    let findings = application::check(run.compiled(), &sources).map_err(Error::Application)?;
     project(findings)
 }
 
 fn admit(sources: &[Source]) -> Result<Vec<SourceSchema>, Error> {
-    let limits = Limits::default();
-    let mut budget = Budget::new(sources.len(), limits).map_err(Error::Application)?;
-    for source in sources {
-        if let Some(owner) = &source.owner {
-            budget.text(owner.len()).map_err(Error::Application)?;
-        }
-        budget
-            .text(source.dataset.len())
-            .map_err(Error::Application)?;
-        budget
-            .columns(source.columns.len())
-            .map_err(Error::Application)?;
-        for (name, kind) in &source.columns {
-            budget.text(name.len()).map_err(Error::Application)?;
-            budget.text(kind.len()).map_err(Error::Application)?;
-            if !matches!(kind.as_str(), "str" | "int" | "float" | "date" | "datetime") {
-                return Err(Error::Carrier);
-            }
-        }
+    if sources.iter().any(|source| {
+        source.columns.iter().any(|(_, kind)| {
+            !matches!(kind.as_str(), "str" | "int" | "float" | "date" | "datetime")
+        })
+    }) {
+        return Err(Error::Carrier);
     }
     let sources = sources
         .iter()
@@ -120,9 +99,6 @@ fn project(findings: Vec<yamaa_core::diagnostic::Diagnostic>) -> Result<Vec<Issu
         .into_iter()
         .map(|finding| Issue::from_core(finding).map_err(|_| Error::Projection))
         .collect::<Result<Vec<_>, _>>()?;
-    if !crate::issue_rows::within_limit(&issues, crate::specification_check::MAX_ISSUE_BYTES) {
-        return Err(Error::Projection);
-    }
     Ok(issues)
 }
 
@@ -148,7 +124,7 @@ pub fn graph_inputs(graph: &crate::file_graph::FileGraph) -> Result<Vec<InputMet
             });
         }
     }
-    application::graph_inputs(prepared, &origins, Limits::default()).map_err(Error::Application)
+    application::graph_inputs(prepared, &origins).map_err(Error::Application)
 }
 
 pub fn graph_check(
@@ -172,8 +148,7 @@ pub fn graph_check(
         })
         .collect::<Vec<_>>();
     let metadata = graph.graph().metadata();
-    let findings = application::graph_check(metadata, &external, Limits::default())
-        .map_err(Error::Application)?;
+    let findings = application::graph_check(metadata, &external).map_err(Error::Application)?;
     let findings = findings
         .into_iter()
         .map(|(index, mut finding)| {
@@ -217,13 +192,12 @@ pub(crate) fn capture(
     resources: &mut crate::file_resources::Resources,
     descriptors: &[InputMetadata],
     index: usize,
-    maximum: usize,
 ) -> Result<std::sync::Arc<[u8]>, Vec<Issue>> {
-    application::admit_capture(index, descriptors.len(), maximum)
+    application::admit_capture(index, descriptors.len())
         .map_err(|_| crate::file_application::rejected("source_metadata", "capture_admission"))?;
     let descriptor = &descriptors[index];
     resources
-        .capture_from(&descriptor.declaring_source, &descriptor.written, maximum)
+        .capture_from(&descriptor.declaring_source, &descriptor.written)
         .map(|(bytes, _)| bytes)
         .map_err(|error| {
             use yamaa_core::specification_run::SourcePort;
@@ -240,13 +214,12 @@ pub(crate) fn capture(
 pub fn selected_capture(
     selected: &mut crate::file_workflow::Selected,
     index: usize,
-    maximum: usize,
 ) -> Result<std::sync::Arc<[u8]>, Vec<Issue>> {
     use yamaa_core::build::Prepared;
     match selected {
-        Prepared::Plain(owner) => owner.capture_input_metadata(index, maximum),
-        Prepared::Ordinary(owner) => owner.capture_input_metadata(index, maximum),
-        Prepared::Producer(owner) => owner.capture_input_metadata(index, maximum),
+        Prepared::Plain(owner) => owner.capture_input_metadata(index),
+        Prepared::Ordinary(owner) => owner.capture_input_metadata(index),
+        Prepared::Producer(owner) => owner.capture_input_metadata(index),
     }
 }
 
@@ -288,12 +261,6 @@ pub fn selected_origins(
     if borrowed.is_empty() {
         return Ok(Vec::new());
     }
-    let mut budget = Budget::new(1, Limits::default()).map_err(Error::Application)?;
-    budget.columns(borrowed.len()).map_err(Error::Application)?;
-    for (path, source) in &borrowed {
-        budget.text(path.len()).map_err(Error::Application)?;
-        budget.text(source.len()).map_err(Error::Application)?;
-    }
     Ok(borrowed
         .into_iter()
         .map(|(path, source)| (path.into(), source.into()))
@@ -307,16 +274,6 @@ pub fn rejected_origins(
 ) -> Result<Vec<(String, String)>, Error> {
     use crate::{file_graph, file_preparation, file_workflow};
     let preparation = match error {
-        file_workflow::SelectionError::Preparation(file_workflow::Error::Admission(error)) => {
-            match error.error() {
-                file_graph::Error::Document(file_preparation::Error::Preparation(error))
-                | file_graph::Error::Document(file_preparation::Error::PreparationFinding {
-                    error,
-                    ..
-                }) => Some(error),
-                _ => None,
-            }
-        }
         file_workflow::SelectionError::Preparation(file_workflow::Error::Graph(error)) => {
             match error.error() {
                 file_graph::Error::Document(file_preparation::Error::Preparation(error))
@@ -342,12 +299,6 @@ pub fn rejected_origins(
     let origins = yamaa_core::inheritance_preparation::diagnostic_origins(error);
     if origins.is_empty() {
         return Ok(Vec::new());
-    }
-    let limits = Limits::default();
-    let mut budget = Budget::new(origins.len(), limits).map_err(Error::Application)?;
-    for (path, source) in &origins {
-        budget.text(path.len()).map_err(Error::Application)?;
-        budget.text(source.len()).map_err(Error::Application)?;
     }
     Ok(origins
         .into_iter()
