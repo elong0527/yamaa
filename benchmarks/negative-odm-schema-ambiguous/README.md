@@ -1,8 +1,5 @@
 # Reject Two Fields That Name One Value
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-odm-schema-ambiguous.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive `AGE` for one record per subject from the subject's
 collected answer.
 
@@ -16,8 +13,6 @@ as `VALUE`, and field names match whatever their case.
 
 Both fields name the stored value, and nothing says which one holds it, so
 the input is rejected before any record is read.
-
-**Standard:** SDTM | **Domain:** DM
 
 ## How to fix
 

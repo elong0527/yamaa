@@ -1,0 +1,6 @@
+lifecycle: reviewed
+standard: ADaM
+domain: ADSL
+validation:
+  rule: R017
+  validator: inheritance

@@ -1,0 +1,8 @@
+lifecycle: draft
+standard: ADaM
+domain: ADAE
+validation:
+  rule: R004
+  validator: predicate
+covers:
+- str_contains

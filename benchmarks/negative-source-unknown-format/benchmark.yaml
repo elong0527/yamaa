@@ -1,0 +1,6 @@
+lifecycle: reviewed
+standard: ADaM
+domain: ADSL
+validation:
+  rule: R023
+  validator: dataset_source

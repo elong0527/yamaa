@@ -1,8 +1,5 @@
 # Reject Strata Mismatch
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-strata-mismatch.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build `STRAT1R` from the values recorded at
 randomization and `STRAT1` from the matching values collected
 independently at entry, and require the two combined values to
@@ -39,8 +36,6 @@ disagreement rejects the run, and no artifact is accepted.
 
 **Note:** the expected file records the completed rows as
 presented to the check; the disagreement still rejects the run.
-
-**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

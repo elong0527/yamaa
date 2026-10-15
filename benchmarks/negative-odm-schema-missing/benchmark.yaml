@@ -1,0 +1,8 @@
+lifecycle: draft
+standard: SDTM
+domain: DM
+validation:
+  rule: R002
+  validator: odm_contract
+covers:
+- odm

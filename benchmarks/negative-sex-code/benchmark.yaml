@@ -1,0 +1,5 @@
+lifecycle: reviewed
+standard: ADaM
+domain: ADSL
+covers:
+- verify:matches

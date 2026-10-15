@@ -1,8 +1,5 @@
 # Reject Date Arithmetic in a Condition
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-review-arithmetic.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** flag adverse events (AE) whose onset falls inside a 30-day
 post-treatment review window in `REVIEWFL`.
 
@@ -17,8 +14,6 @@ end of treatment (`TRTEDT`).
 **Note:** the condition adds 30 days to the treatment end date instead
 of comparing named values, so the run is rejected before any data is
 read and no artifact is accepted.
-
-**Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 

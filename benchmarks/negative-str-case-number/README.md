@@ -1,8 +1,5 @@
 # Reject Numeric Lowercase
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-str-case-number.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive the site name (`SITE`) for analysis use, in lower case.
 
 **Input:** collected demographics with study and subject identifiers
@@ -15,8 +12,6 @@ and the numeric site number (`SITENUM`).
 
 The request is rejected before any data is read, and no artifact is
 accepted.
-
-**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

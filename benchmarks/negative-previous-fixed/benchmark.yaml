@@ -1,0 +1,8 @@
+lifecycle: reviewed
+standard: ADaM
+domain: ADVS
+validation:
+  rule: R006
+  validator: schema
+covers:
+- previous_non_missing

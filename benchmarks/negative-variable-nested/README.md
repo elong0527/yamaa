@@ -1,8 +1,5 @@
 # Reject Nested Expression
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-variable-nested.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** carry `COUNTRY` on one record per subject, holding the
 subject's collected country in capitals, or the site country when
 the subject's own entry is blank.
@@ -20,8 +17,6 @@ two entries, but it can only read one named value. Choosing the
 entry is a step of its own whose result must be named first, so the
 run is rejected before any data is read and no artifact is
 accepted.
-
-**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

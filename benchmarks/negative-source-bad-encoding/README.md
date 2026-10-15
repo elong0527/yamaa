@@ -1,8 +1,5 @@
 # Reject Bad Encoding
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-source-bad-encoding.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** carry the site name (`SITENM`) onto a subject listing.
 
 **Input:** collected demographics carrying `SITENM`.
@@ -17,8 +14,6 @@ which is not valid UTF-8 text. Replacing the byte with a
 substitute character would store a name the study never recorded,
 and dropping it would store a different name again, so the run is
 rejected while the file is read and no artifact is accepted.
-
-**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

@@ -1,8 +1,5 @@
 # Reject a Laboratory Result Without a Unit Conversion
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-sdtm-lb-unit-conversion.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** convert hemoglobin results and reference limits to `g/dL`,
 and reject a result whose reported unit has no conversion factor.
 
@@ -26,8 +23,6 @@ When a reported unit is absent from the conversion table, the standard
 unit remains known but its result and reference limits are missing.
 Those standardized values must be present together, so the completed
 dataset is rejected and not accepted.
-
-**Standard:** SDTM | **Domain:** LB
 
 ## How to fix
 
