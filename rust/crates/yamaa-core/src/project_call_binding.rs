@@ -198,7 +198,7 @@ pub fn bind(
                                 Some(FunctionInput::Read(Read::Column(column)))
                             }
                             Binding::Dataset { dataset, field, .. } => {
-                                let input = if dataset != context.source_dataset {
+                                if dataset != context.source_dataset {
                                     findings.push(Finding {
                                         argument,
                                         kind: Kind::UnsupportedRelation { dataset },
@@ -214,8 +214,7 @@ pub fn bind(
                                             identifier: name.clone(),
                                         },
                                     })
-                                };
-                                input
+                                }
                             }
                         };
                         let parameter = plan
