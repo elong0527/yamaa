@@ -32,7 +32,7 @@ fn fixed_coordinates_ignore_untyped_vendor_fields_and_fold_only_ascii() {
             },
         })
         .collect::<Vec<_>>();
-    let binding = odm_source::bind_fields(&fields).unwrap().unwrap();
+    let binding = odm_source::bind_fields(&fields).unwrap();
     assert_eq!(binding.stored(), &[11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
     assert_eq!(odm_source::canonical("İtemOID"), None);
     assert_eq!(odm_source::canonical("ItemOID.extra"), None);
@@ -71,7 +71,7 @@ fn metadata_findings_keep_missing_schema_order_and_stored_ambiguity_type_order()
         },
     ];
     assert_eq!(
-        odm_source::bind_fields(&fields).unwrap(),
+        odm_source::bind_fields(&fields),
         Err(vec![
             SchemaError::Missing {
                 fields: vec![
@@ -107,39 +107,28 @@ fn metadata_findings_keep_missing_schema_order_and_stored_ambiguity_type_order()
 }
 
 #[test]
-fn whole_metadata_admission_precedes_owned_findings() {
+fn vendor_metadata_does_not_change_the_eleven_exposed_coordinates() {
     let large = "v".repeat(1_048_577);
-    let fields = [StoredField {
+    let mut fields = odm_source::FIELDS
+        .iter()
+        .map(|name| StoredField {
+            name,
+            kind: Some(ColumnType::Str),
+        })
+        .collect::<Vec<_>>();
+    fields.push(StoredField {
         name: &large,
         kind: None,
-    }];
-    assert_eq!(
-        odm_source::bind_fields(&fields),
-        Err(odm_source::AdmissionError::MetadataLimit {
-            resource: "odm_metadata_bytes",
-            limit: 1_048_576,
-            actual: Some(1_048_577)
-        })
-    );
-}
-
-#[test]
-fn odm_field_count_refusal_keeps_its_field_quota_instead_of_claiming_a_byte_limit() {
-    let fields = vec![
+    });
+    fields.extend(std::iter::repeat_n(
         StoredField {
             name: "vendor",
-            kind: None
-        };
-        4097
-    ];
-    assert_eq!(
-        odm_source::bind_fields(&fields),
-        Err(odm_source::AdmissionError::MetadataLimit {
-            resource: "odm_fields",
-            limit: 4096,
-            actual: Some(4097)
-        })
-    );
+            kind: None,
+        },
+        4097,
+    ));
+    let binding = odm_source::bind_fields(&fields).unwrap();
+    assert_eq!(binding.stored(), &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 }
 
 struct Records {

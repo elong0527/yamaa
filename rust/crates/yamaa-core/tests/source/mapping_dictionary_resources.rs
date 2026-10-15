@@ -1,8 +1,6 @@
 use yamaa_core::schema::{
-    admit_schema_diagnostics, BundleLimits, ConstraintError, Document, DocumentLimits,
-    DocumentNode as N, NormalizationBudget, NormalizationError, NormalizationLimits,
-    SchemaDiagnosticBudget, SchemaModule, SchemaStructure, SpecificationDocument, ValidationBudget,
-    ValidationError, ValidationLimits,
+    admit_schema_diagnostics, Document, DocumentNode as N, NormalizationError, SchemaModule,
+    SchemaStructure, SpecificationDocument,
 };
 
 #[derive(Clone)]
@@ -34,7 +32,7 @@ fn document(value: V) -> Document {
     }
     let mut nodes = Vec::new();
     let root = push(value, &mut nodes);
-    Document::new(nodes, root, DocumentLimits::default()).unwrap()
+    Document::new(nodes, root).unwrap()
 }
 fn field(name: &'static str, kind: &'static str) -> V {
     Map(vec![(name, Map(vec![("type", Text(kind))]))])
@@ -126,13 +124,10 @@ fn schema() -> SchemaStructure {
         }],
         0,
         "root_class",
-        BundleLimits::default(),
     )
     .unwrap()
 }
-fn budget() -> NormalizationBudget {
-    NormalizationBudget::new(NormalizationLimits::default())
-}
+
 fn mapping(dictionary: V) -> V {
     Map(vec![(
         "mapping",
@@ -210,9 +205,7 @@ fn schema_requests_cover_nested_rows_in_schema_order_and_ignore_inline_and_metad
     ));
     let raw = document(authored);
     let original = raw.clone();
-    let refs = schema()
-        .mapping_dictionary_references(&raw, &mut budget())
-        .unwrap();
+    let refs = schema().mapping_dictionary_references(&raw).unwrap();
     assert_eq!(
         refs.iter()
             .map(|r| (r.path(), r.written()))
@@ -243,7 +236,7 @@ fn dictionary_admission_retains_use_site_and_original_input_arena_for_schema_fin
     let schema = schema();
     let spec = document(input(vec![column("X", mapping(Text("dict.yaml")))], vec![]));
     let reference = schema
-        .mapping_dictionary_references(&spec, &mut budget())
+        .mapping_dictionary_references(&spec)
         .unwrap()
         .remove(0);
     let invalid = Document::new(
@@ -253,23 +246,15 @@ fn dictionary_admission_retains_use_site_and_original_input_arena_for_schema_fin
             N::Mapping(vec![(0, 1)]),
         ],
         2,
-        DocumentLimits::default(),
     )
     .unwrap();
     let NormalizationError::Invalid(findings) = schema
-        .admit_mapping_dictionary(reference.clone(), &invalid, &mut budget())
+        .admit_mapping_dictionary(reference.clone(), &invalid)
         .unwrap_err()
     else {
         panic!()
     };
-    let report = admit_schema_diagnostics(
-        &schema,
-        Some(&invalid),
-        &findings,
-        &[],
-        &mut SchemaDiagnosticBudget::new(),
-    )
-    .unwrap();
+    let report = admit_schema_diagnostics(&schema, Some(&invalid), &findings, &[]).unwrap();
     assert!(std::ptr::eq(report.document().unwrap(), &invalid));
     assert_eq!(
         report
@@ -287,19 +272,12 @@ fn dictionary_admission_retains_use_site_and_original_input_arena_for_schema_fin
         document(Map(vec![("A", List(vec![Text("not literal")]))])),
     ] {
         let NormalizationError::Invalid(findings) = schema
-            .admit_mapping_dictionary(reference.clone(), &raw, &mut budget())
+            .admit_mapping_dictionary(reference.clone(), &raw)
             .unwrap_err()
         else {
             panic!()
         };
-        let report = admit_schema_diagnostics(
-            &schema,
-            Some(&raw),
-            &findings,
-            &[],
-            &mut SchemaDiagnosticBudget::new(),
-        )
-        .unwrap();
+        let report = admit_schema_diagnostics(&schema, Some(&raw), &findings, &[]).unwrap();
         assert!(report
             .iter()
             .all(|r| r.path.starts_with("columns.X.derivation.mapping.dict")));
@@ -316,14 +294,11 @@ fn compiler_materialization_copies_typed_held_content_and_keeps_original_model_i
         ],
         vec![],
     ));
-    let model = SpecificationDocument::admit(
-        original.clone(),
-        &mut ValidationBudget::new(ValidationLimits::default()),
-    )
-    .unwrap()
-    .unwrap();
+    let model = SpecificationDocument::admit(original.clone())
+        .unwrap()
+        .unwrap();
     let references = schema
-        .mapping_dictionary_references(model.document(), &mut budget())
+        .mapping_dictionary_references(model.document())
         .unwrap();
     let dictionary = document(Map(vec![("A", Text("mapped")), ("B", Bool(false))]));
     let admitted = references
@@ -331,12 +306,12 @@ fn compiler_materialization_copies_typed_held_content_and_keeps_original_model_i
         .cloned()
         .map(|reference| {
             schema
-                .admit_mapping_dictionary(reference, &dictionary, &mut budget())
+                .admit_mapping_dictionary(reference, &dictionary)
                 .unwrap()
         })
         .collect::<Vec<_>>();
     let compiled = schema
-        .materialize_mapping_dictionaries(&model, &admitted, &mut budget())
+        .materialize_mapping_dictionaries(&model, &admitted)
         .unwrap();
     assert_eq!(
         compiled.document(),
@@ -356,67 +331,13 @@ fn compiler_materialization_copies_typed_held_content_and_keeps_original_model_i
     );
     assert_eq!(model.document(), &original);
     assert!(schema
-        .mapping_dictionary_references(compiled.document(), &mut budget())
+        .mapping_dictionary_references(compiled.document())
         .unwrap()
         .is_empty());
     assert!(schema
-        .materialize_mapping_dictionaries(&model, &admitted[..1], &mut budget())
+        .materialize_mapping_dictionaries(&model, &admitted[..1])
         .is_err());
     assert!(schema
-        .materialize_mapping_dictionaries(
-            &model,
-            &[admitted[0].clone(), admitted[0].clone()],
-            &mut budget()
-        )
-        .is_err());
-}
-
-#[test]
-fn resource_request_and_materialization_limits_refuse_before_owned_copies() {
-    let schema = schema();
-    let model = SpecificationDocument::admit(
-        document(input(vec![column("X", mapping(Text("dict.yaml")))], vec![])),
-        &mut ValidationBudget::new(ValidationLimits::default()),
-    )
-    .unwrap()
-    .unwrap();
-    let limits = NormalizationLimits {
-        validation: ValidationLimits {
-            work: 1,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    assert!(matches!(
-        schema
-            .mapping_dictionary_references(model.document(), &mut NormalizationBudget::new(limits)),
-        Err(NormalizationError::Validation(ValidationError::Constraint(
-            ConstraintError::Work { limit: 1 }
-        )))
-    ));
-    let reference = schema
-        .mapping_dictionary_references(model.document(), &mut budget())
-        .unwrap()
-        .remove(0);
-    let admitted = schema
-        .admit_mapping_dictionary(
-            reference,
-            &document(Map(vec![("A", Text("mapped"))])),
-            &mut budget(),
-        )
-        .unwrap();
-    let limits = NormalizationLimits {
-        storage: DocumentLimits {
-            text_bytes: 1,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    assert!(schema
-        .materialize_mapping_dictionaries(
-            &model,
-            &[admitted],
-            &mut NormalizationBudget::new(limits)
-        )
+        .materialize_mapping_dictionaries(&model, &[admitted[0].clone(), admitted[0].clone()])
         .is_err());
 }

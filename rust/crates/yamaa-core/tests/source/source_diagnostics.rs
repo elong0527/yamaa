@@ -350,8 +350,9 @@ fn diagnostic_positions_stay_mathematical_and_boundary_errors_have_no_condition(
     assert_eq!(actual.context["row"], V::from(usize::MAX));
     assert_eq!(actual.context["value"], V::from(i64::MIN));
     assert!(csv_source::Error::Limit {
-        resource: "bytes",
-        limit: 0
+        resource: "source_bytes",
+        limit: 0,
+        actual: Some(1)
     }
     .finding("SRC", "s.csv")
     .is_none());

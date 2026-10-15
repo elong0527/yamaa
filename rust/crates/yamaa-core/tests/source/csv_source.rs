@@ -1,12 +1,10 @@
-use yamaa_core::csv_source::{parse, CsvSource, Error, Field, Limits, ProfileCause};
+use yamaa_core::csv_source::{parse, CsvSource, Error, Field, ProfileCause};
 
 #[test]
 fn collected_text_and_missing_remain_lossless() {
-    let actual = parse(
-        b"ID,N,T,Q\r\nS,9007199254740993,NA,\"\"\r\nT,,x\0y,\"line\n\"\"quoted\"\"\"",
-        Limits::default(),
-    )
-    .unwrap();
+    let actual =
+        parse(b"ID,N,T,Q\r\nS,9007199254740993,NA,\"\"\r\nT,,x\0y,\"line\n\"\"quoted\"\"\"")
+            .unwrap();
     assert_eq!(
         actual,
         CsvSource {
@@ -28,17 +26,12 @@ fn collected_text_and_missing_remain_lossless() {
         }
     );
     assert_eq!(
-        parse("λ\n € ".as_bytes(), Limits::default())
-            .unwrap()
-            .records,
+        parse("λ\n € ".as_bytes()).unwrap().records,
         vec![vec![Some(" € ".into())]]
     );
-    assert!(parse(b"A,B\n", Limits::default())
-        .unwrap()
-        .records
-        .is_empty());
+    assert!(parse(b"A,B\n").unwrap().records.is_empty());
     assert_eq!(
-        parse(b"A,B\nx,", Limits::default()).unwrap().records,
+        parse(b"A,B\nx,").unwrap().records,
         vec![vec![Some("x".into()), None]]
     );
 }
@@ -62,7 +55,7 @@ fn defects_have_exact_priority_and_coordinates() {
         (&b"A,A\nx\n\"z"[..], "source_quote_unterminated", 3, 1),
     ] {
         assert_eq!(
-            parse(input, Limits::default()),
+            parse(input),
             Err(Error::Profile {
                 cause: cause(condition),
                 record,
@@ -71,7 +64,7 @@ fn defects_have_exact_priority_and_coordinates() {
         );
     }
     assert_eq!(
-        parse(b"A,A\nx,y", Limits::default()),
+        parse(b"A,A\nx,y"),
         Err(Error::Profile {
             cause: ProfileCause::FieldNameDuplicate,
             record: 1,
@@ -86,7 +79,6 @@ fn defects_have_exact_priority_and_coordinates() {
 fn retired_python_quoted_and_bare_empty_records_keep_order() {
     let source = parse(
         b"ID,EMPTY,COMMENT,SPACE\r\n007,,\"line one\nline two, still one field\", kept \r\n008,\"\",\"said \"\"hello\"\"\",next",
-        Limits::default(),
     )
     .unwrap();
     assert_eq!(source.names, ["ID", "EMPTY", "COMMENT", "SPACE"]);
@@ -219,7 +211,7 @@ fn retired_python_nonconforming_csv_has_exact_coordinates() {
         ),
     ] {
         assert_eq!(
-            parse(input, Limits::default()),
+            parse(input),
             Err(Error::Profile {
                 cause: cause(condition),
                 record,
@@ -233,11 +225,11 @@ fn retired_python_nonconforming_csv_has_exact_coordinates() {
 #[test]
 fn retired_python_admitted_terminators_and_header_only_schema_are_exact() {
     for input in [&b"A,B\n1,2\n"[..], &b"A,B\r\n1,2\r\n"[..], &b"A,B\n1,2"[..]] {
-        let source = parse(input, Limits::default()).unwrap();
+        let source = parse(input).unwrap();
         assert_eq!(source.names, ["A", "B"]);
         assert_eq!(source.records, [vec![Some("1".into()), Some("2".into())]]);
     }
-    let header = parse(b"A,B\n", Limits::default()).unwrap();
+    let header = parse(b"A,B\n").unwrap();
     assert_eq!(header.names, ["A", "B"]);
     assert!(header.records.is_empty());
 }
@@ -260,7 +252,7 @@ fn retired_python_prefix_coordinates_do_not_count_quoted_delimiters() {
         // helper: invalid UTF-8 at the standing position owns its coordinate.
         let input = [prefix.as_bytes(), &[0xff]].concat();
         assert_eq!(
-            parse(&input, Limits::default()),
+            parse(&input),
             Err(Error::Profile {
                 cause: ProfileCause::InvalidText,
                 record,
@@ -274,7 +266,7 @@ fn retired_python_prefix_coordinates_do_not_count_quoted_delimiters() {
 #[test]
 fn retired_python_bare_control_character_is_field_content() {
     assert_eq!(
-        parse(b"A\n\x0b\n", Limits::default()).unwrap().records,
+        parse(b"A\n\x0b\n").unwrap().records,
         [vec![Some("\u{b}".into())]],
     );
 }
@@ -284,12 +276,12 @@ fn retired_python_long_fields_keep_final_records_and_unterminated_quote_failure(
     let field = "x".repeat(300);
     for input in [format!("A\n{field}\n"), format!("A\n{field}")] {
         assert_eq!(
-            parse(input.as_bytes(), Limits::default()).unwrap().records,
+            parse(input.as_bytes()).unwrap().records,
             [vec![Some(field.clone())]],
         );
     }
     assert_eq!(
-        parse(format!("A\n\"{field}").as_bytes(), Limits::default()),
+        parse(format!("A\n\"{field}").as_bytes()),
         Err(Error::Profile {
             cause: ProfileCause::QuoteUnterminated,
             record: 2,
@@ -299,33 +291,28 @@ fn retired_python_long_fields_keep_final_records_and_unterminated_quote_failure(
 }
 
 #[test]
-fn policy_limits_do_not_publish_partial_rows() {
-    for (limits, resource) in [
-        (
-            Limits {
-                bytes: 2,
-                ..Limits::default()
-            },
-            "bytes",
-        ),
-        (
-            Limits {
-                fields: 2,
-                ..Limits::default()
-            },
-            "fields",
-        ),
-        (
-            Limits {
-                records: 1,
-                ..Limits::default()
-            },
-            "records",
-        ),
-    ] {
-        assert!(
-            matches!(parse(b"A,B\nx,y",limits),Err(Error::Limit {resource: actual,..}) if actual==resource)
-        );
+fn fixed_column_boundary_preserves_every_admitted_name() {
+    let maximum = yamaa_core::limits::Limits::COLUMNS;
+    for columns in [maximum - 1, maximum, maximum + 1] {
+        let names = (0..columns)
+            .map(|index| format!("C{index}"))
+            .collect::<Vec<_>>();
+        let input = names.join(",") + "\n";
+        let result = parse(input.as_bytes());
+        if columns <= maximum {
+            let source = result.unwrap();
+            assert_eq!(source.names, names);
+            assert!(source.records.is_empty());
+        } else {
+            assert_eq!(
+                result,
+                Err(Error::Limit {
+                    resource: "columns",
+                    limit: maximum,
+                    actual: Some(columns),
+                })
+            );
+        }
     }
 }
 
