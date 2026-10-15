@@ -26,6 +26,8 @@ tracker, one work item per root cause.
         input/*.csv
         expected/<domain>.csv
         expected/define.xml                         # when the entry generates a document
+        expected/resolved[_<variant>].yaml          # single-entry inheritance
+        expected/spec_resolved.yaml                 # multi-level inheritance: resolution of the entry chain
         environment.yaml                            # when the entry calls a project function
         <language>/                                 # a second project root, for another runtime:
                                                     # environment.yaml, the shared contracts and
@@ -165,14 +167,21 @@ An expected failure before a dataset is completed replaces the CSV with
 contract. A failure over a completed dataset carries both the expected CSV and
 `expected/error.yaml`.
 
-No resolved specification is committed under `expected/`: inheritance is
-exercised through the authored spec files themselves and their expected
-output or error, not through a resolved-YAML fixture.
+A positive inherited benchmark also carries the exact resolved YAML data tree.
+Use `expected/resolved.yaml` with `spec.yaml`, or
+`expected/resolved_<variant>.yaml` with `spec_<variant>.yaml`. This fixture
+must be complete, canonical, minimal, and free of `parents`; the repository
+validator requires it and compares it with the resolved specification. Only
+the retained historical benchmarks named in `HISTORICAL_RESOLVED_FIXTURES`
+(`../.github/scripts/yaml-validation/repository_artifacts.py`) are exempt;
+every new positive inherited benchmark needs one.
 
 A multi-level benchmark keeps each inheritance level beside the entry as
 `spec_<level>.yaml` and carries no top-level `spec.yaml`. The level no other
-file names in `parents` is the entry: it declares the complete `output`.
-Reserve this layout for benchmarks whose point is the layering itself;
+file names in `parents` is the entry: it declares the complete `output`, and
+the chain resolves to `expected/spec_resolved.yaml`, which the dashboard shows
+in its specification dropdown (the default view) rather than as an expected
+dataset. Reserve this layout for benchmarks whose point is the layering itself;
 a single specification with shared parents keeps `spec.yaml`.
 
 Name the directory for what it derives, not for the construct it uses:
@@ -436,6 +445,7 @@ check reports is a variable the README does not explain.
 1. Write `spec.yaml`, or the applicable `spec_<variant>.yaml` files, the input
    data, and either the expected output or the expected error. Add an expected
    CSV beside an error when it makes a blocked or rejected result concrete.
+   For a positive inherited benchmark, also write its expected resolved YAML.
 2. Write the README to the contract above. A negative benchmark must include its
    `## How to fix` section.
 3. Add a row to the index table in `README.md`. Its `Derives` column copies

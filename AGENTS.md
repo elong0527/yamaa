@@ -62,7 +62,8 @@ Each recipe names the command that proves the change. Run the recipe
 for every area a change touches.
 
 - **Rule or schema change** (`rules/`, `yaml/`): follow the terminology
-  and requirement-allocation rules in `rules/README.md`, then run
+  and requirement-allocation rules in `rules/README.md` and the
+  maintenance rules in `yaml/README.md`, then run
   `python .github/scripts/commands/repository.py rules` and
   `python .github/scripts/commands/repository.py rule-references`.
 - **Rust change** (`rust/`): from `rust/`, run
@@ -73,10 +74,11 @@ for every area a change touches.
 - **Python host change** (`python/`): run
   `uv run --project python --no-sync pytest python/tests`.
 - **New or changed benchmark** (`benchmarks/`): follow
-  `benchmarks/AGENTS.md`. Run one benchmark from its own directory --
-  after `make sync-python` once, `cd benchmarks/<name>` and
+  `benchmarks/AGENTS.md`. Run one positive benchmark from its own
+  directory -- after `make sync-python` once, `cd benchmarks/<name>` and
   `uv run --project ../../python --no-sync python run.py` -- then run
-  the repository validator from the root:
+  the repository validator from the root, which also checks negative
+  benchmarks:
   `python .github/scripts/commands/repository.py validator`.
 - **Docs change** (`docs/`, `README.md`, `rules/README.md`): run
   `make docs-test docs`.
