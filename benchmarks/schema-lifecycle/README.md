@@ -1,8 +1,5 @@
 # Execution Lifecycle
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-lifecycle.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** show the order a specification runs in: rows are built first,
 then columns are added on top of the finished rows, and rows discarded
 along the way never reach the final checks.
@@ -27,5 +24,3 @@ and a result that arrives as text.
 
 **Note:** building rows may change the row count while adding columns may
 not: each finished row gets exactly one `DOUBLE` and one `FLAG`.
-
-**Standard:** ADaM | **Domain:** ADLB

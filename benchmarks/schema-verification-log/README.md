@@ -1,8 +1,5 @@
 # What Was Checked
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-verification-log.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** record every check a run evaluates, held or violated: one row
 per check, in the order the run evaluated it.
 
@@ -34,5 +31,3 @@ subject can be investigated without stopping the run.
 **Note:** the warning log says what broke and for whom; the check log
 says what was checked and what happened. The two join on `SPEC_PATH`,
 and only the warning log lists the offending subjects.
-
-**Standard:** ADaM | **Domain:** ADSL

@@ -1,8 +1,5 @@
 # Expression Forms
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-expressions.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** pin how each column's value is written and read: fixed
 values, values copied by naming their source column, age bands, a
 population flag chosen by a condition, first-available country
@@ -33,5 +30,3 @@ weights, any of which may be blank.
   blank one; with both blank it stays blank.
 - `WTMIN` carries the smaller of the two collected weights, skipping a
   blank one; with both blank it stays blank.
-
-**Standard:** ADaM | **Domain:** ADSL

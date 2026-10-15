@@ -1,8 +1,5 @@
 # Fatal Event Join
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-lookup.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive each subject's death study day and cause of death by
 joining their adverse events, and code the cause against a medical
 dictionary.
@@ -30,5 +27,3 @@ each lowest-level term beside its preferred term.
 exactly one row, and every read of the same lookup sees the one
 selected record. When no record is selected, each read answers with a
 blank rather than failing.
-
-**Standard:** ADaM | **Domain:** ADSL

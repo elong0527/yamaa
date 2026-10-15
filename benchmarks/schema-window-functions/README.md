@@ -1,8 +1,5 @@
 # Visit-Level Window Functions
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-window-functions.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** compute visit-level measures with every window expression over
 one shared ordering: sequence numbering with a filter, competition and
 dense ranking, reading a neighboring row with and without a filter, the
@@ -51,5 +48,3 @@ carried through unchanged.
 evaluable. Every other measure sees every visit, so a visit that is not
 evaluable is still ranked, read as a neighbor, and can be the baseline
 visit.
-
-**Standard:** ADaM | **Domain:** ADVS

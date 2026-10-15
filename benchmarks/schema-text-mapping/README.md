@@ -1,8 +1,5 @@
 # Text Mapping
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-text-mapping.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** pin the text lookup contract: inline dictionaries, an external
 dictionary file, case-insensitive reads, and a regular-expression
 search with capture groups.
@@ -29,5 +26,3 @@ beside the input.
   group, the digits after the prefix, as text, so leading zeros stay.
   An identifier of any other shape gives `NONE`, and a missing
   identifier gives `MISSING`.
-
-**Standard:** CDISC | **Domain:** ADSL

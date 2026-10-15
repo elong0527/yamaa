@@ -1,8 +1,5 @@
 # Spec Inheritance
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-inheritance.html)
-[![Lifecycle: finalized](https://img.shields.io/badge/Lifecycle-finalized-brightgreen)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** show how a study spec inherits from its organization and
 compound parents: shared levels carry the common mapping once, and
 the deepest study level wins on final wording.
@@ -23,5 +20,3 @@ subject per laboratory parameter.
 Parents resolve depth-first, left to right, with later levels
 winning; the chain resolves to `expected/spec_resolved.yaml`, the
 default view in the specification dropdown.
-
-**Standard:** ADaM | **Domain:** ADLB

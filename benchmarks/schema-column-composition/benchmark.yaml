@@ -1,0 +1,10 @@
+lifecycle: draft
+standard: ADaM
+domain: ADLB
+entries:
+  python:
+  - specification: spec_study.yaml
+    environment: null
+  r:
+  - specification: spec_study.yaml
+    environment: null

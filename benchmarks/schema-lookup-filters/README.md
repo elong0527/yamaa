@@ -1,8 +1,5 @@
 # Lookup Filters
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-lookup-filters.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** pin the lookup filter machinery: a filter that reads the
 current planned visit and so changes which donor record a lookup
 resolves to, with qualified donor fields, an ordering, and keep-last
@@ -28,5 +25,3 @@ missing.
 **Columns:** `VISIT` names the planned visit at visit number
 `VISITN`; the carried-forward lab result and day land in `AVAL` and
 `LBDY`.
-
-**Standard:** CDISC | **Domain:** ADLB
