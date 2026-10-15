@@ -255,6 +255,30 @@ class TestTextSourceBoundary(unittest.TestCase):
             ['ERROR: reference.csv:2:1: non_ascii_source byte 0xC3'],
         )
 
+    def test_preserves_rust_json_fixture_data_and_checks_neighboring_source(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            for relative in (
+                'rust/crates/yamaa-core/tests/fixtures/cases.json',
+                'rust/crates/yamaa-adapters/tests/fixtures/nested/cases.json',
+                'rust/crates/yamaa-core/tests/fixtures/notes.md',
+                'rust/crates/yamaa-core/tests/fixtures/helper.py',
+                'rust/crates/yamaa-core/tests/metadata.json',
+                'cases.json',
+            ):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(chr(0x00E9), encoding='utf-8')
+
+            errors = OWNER_EDITORIAL.validate_ascii_sources(root)
+
+        self.assertEqual(errors, [
+            'ERROR: cases.json:1:1: non_ascii_source byte 0xC3',
+            'ERROR: rust/crates/yamaa-core/tests/fixtures/helper.py:1:1: non_ascii_source byte 0xC3',
+            'ERROR: rust/crates/yamaa-core/tests/fixtures/notes.md:1:1: non_ascii_source byte 0xC3',
+            'ERROR: rust/crates/yamaa-core/tests/metadata.json:1:1: non_ascii_source byte 0xC3',
+        ])
+
     def test_rejects_a_decoded_surrogate(self):
         document = {'value': chr(0xD800)}
 

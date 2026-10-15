@@ -306,14 +306,21 @@ ASCII_SOURCE_IGNORED_PARTS = {
 }
 
 
-def is_unicode_fixture_csv(relative: Path):
+def is_unicode_fixture_data(relative: Path):
     parts = relative.parts
-    return (
+    benchmark_csv = (
         relative.suffix.lower() == ".csv"
         and len(parts) >= 4
         and parts[0] == "benchmarks"
         and parts[2] in {"input", "expected"}
     )
+    rust_contract_json = (
+        relative.suffix.lower() == ".json"
+        and len(parts) >= 6
+        and parts[:2] == ("rust", "crates")
+        and parts[3:5] == ("tests", "fixtures")
+    )
+    return benchmark_csv or rust_contract_json
 
 
 def validate_ascii_sources(root: Path):
@@ -325,7 +332,7 @@ def validate_ascii_sources(root: Path):
         relative = path.relative_to(root)
         if any(part in ASCII_SOURCE_IGNORED_PARTS for part in relative.parts):
             continue
-        if is_unicode_fixture_csv(relative):
+        if is_unicode_fixture_data(relative):
             continue
         if relative.as_posix() in UNICODE_DATA_AND_NOTICES:
             continue
