@@ -490,6 +490,30 @@ def iter_odm_records(
                             f"ItemData {item_oid!r} Value child is in an "
                             "unsupported namespace"
                         )
+                    # A namespaced `Value` attribute names the item's value
+                    # the same way: the plain attribute lookup below cannot
+                    # see it, so dropping it would silently present a
+                    # supplied value as absent for the same reason.
+                    if any(
+                        key != "Value" and etree.QName(key).localname == "Value"
+                        for key in element.attrib
+                    ):
+                        raise ODMError(
+                            f"ItemData {item_oid!r} Value attribute is in an "
+                            "unsupported namespace"
+                        )
+                    # Character data written directly in ItemData, before
+                    # or after a `Value` child, is not a value form in
+                    # either ODM version: the value is the `Value`
+                    # attribute (1.3) or the text of a `Value` child (2.0).
+                    # Dropping it would silently present a supplied value
+                    # as absent. Only XML's space, tab, CR and LF are layout.
+                    if (element.text and element.text.strip(" \t\r\n")) or any(
+                        child.tail and child.tail.strip(" \t\r\n") for child in element
+                    ):
+                        raise ODMError(
+                            f"ItemData {item_oid!r} contains text outside its value"
+                        )
                     if "Value" in element.attrib and value_children:
                         raise ODMError(
                             f"ItemData {item_oid!r} has attribute and child values"
