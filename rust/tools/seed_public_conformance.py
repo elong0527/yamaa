@@ -1,8 +1,9 @@
 """Seed the public ratchet from complete, replayed evidence for one full run.
 
-Download the public-conformance-* artifacts from a successful native main or
-dispatched run, and retain its REST run metadata with them. Each saved report is
-recompared with independent truth before its pass can enter the intersection.
+Download the public-conformance-* artifacts from a successful native main,
+qualification push or dispatched run, and retain its REST run metadata with them.
+Each saved report is recompared with independent truth before its pass can enter
+the intersection.
 """
 
 from __future__ import annotations
@@ -29,6 +30,26 @@ def lanes():
         yield f"public-conformance-r-{platform}", ("r", platform, "4.6.1", "source")
 
 
+def qualification_push(run):
+    repository, head_repository = run.get("repository"), run.get("head_repository")
+    return (
+        run.get("event") == "push"
+        and isinstance(run.get("head_branch"), str)
+        and re.fullmatch(
+            r"qualification/issue-[A-Za-z0-9][A-Za-z0-9._-]*", run["head_branch"]
+        )
+        is not None
+        and isinstance(repository, dict)
+        and isinstance(repository.get("full_name"), str)
+        and re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository["full_name"])
+        is not None
+        and isinstance(head_repository, dict)
+        and head_repository.get("full_name") == repository["full_name"]
+        and run.get("html_url")
+        == f"https://github.com/{repository['full_name']}/actions/runs/{run.get('id')}"
+    )
+
+
 def seed(fixtures, artifacts, run_file, output, previous=None):
     require(not output.exists(), "ratchet output must be a fresh file")
     run = read(run_file)
@@ -36,9 +57,13 @@ def seed(fixtures, artifacts, run_file, output, previous=None):
         run.get("status") == "completed"
         and run.get("conclusion") == "success"
         and run.get("event") in {"push", "schedule", "workflow_dispatch"}
-        and (run["event"] == "workflow_dispatch" or run.get("head_branch") == "main")
+        and (
+            run["event"] == "workflow_dispatch"
+            or run.get("head_branch") == "main"
+            or qualification_push(run)
+        )
         and run.get("path", "").split("@", 1)[0] == ".github/workflows/native.yml",
-        "ratchet requires a successful completed full native main or dispatched run",
+        "ratchet requires a successful completed full native main, qualification push or dispatched run",
     )
     revision, evidence = run.get("head_sha"), run.get("html_url")
     require(
@@ -108,6 +133,12 @@ def seed(fixtures, artifacts, run_file, output, previous=None):
             passed[runtime] &= {r["example"] for r in rows if r["verdict"] == "pass"}
             retained.append({"artifact": name, "summary": replay["summary"]})
     require(len(versions) == 1, "installed package/core versions differ between lanes")
+    if qualification_push(run):
+        active = {row["name"] for row in planned if not row["excluded"]}
+        require(
+            all(required == active for required in passed.values()),
+            "qualification push requires every active benchmark to pass in every lane",
+        )
     if previous is not None:
         old = read(previous)
         for runtime, required in passed.items():

@@ -64,8 +64,11 @@ stops occurring fails the run as stale, and an unlisted difference fails it as
 a mismatch.
 
 `tools/seed_public_conformance.py` derives passing observations from successful full
-matrix runs. It replays saved observations against expected files, requires
-every platform/interpreter/package tuple from the same revision and refuses
+matrix runs on main, dispatched branches, or same-repository
+`qualification/issue-*` pushes. A qualification push requires the original REST
+run metadata, including both repository identities, and every active case must
+pass in all 21 installed lanes. It replays saved observations against expected
+files, requires every platform/interpreter/package tuple from the same revision and refuses
 reductions when given `--previous`. The comparison commands above use
 `--ratchet rust/qualification/public-conformance.json` to require
 every current active case to pass on that host, including a newly added directory
