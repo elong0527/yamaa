@@ -105,6 +105,40 @@ class ColumnCeilings(unittest.TestCase):
         for operation in (yamaa.check, yamaa.domain):
             self.assert_refusal(operation(spec), compiler=True)
 
+    def test_refusal_marks_unassessed_checks_and_retry_exposes_the_remaining_error(
+        self,
+    ):
+        spec = self.write_case("incomplete-checks", columns=1025, selected=["ID"])
+        document = json.loads(spec.read_text())
+        document["columns"][1].update(type="int", derivation={"literal": 1})
+        document["columns"][2]["derivation"] = {
+            "str_case": {"source": "C0001", "to": "upper"}
+        }
+        environment = spec.with_name("environment.yaml")
+        environment.write_text("schema_version: '1.0'\nlanguage: python\n")
+        for route in (None, environment):
+            spec.write_text(json.dumps(document))
+            for operation in (yamaa.check, yamaa.domain):
+                refused = operation(spec, environment=route)
+                self.assert_refusal(refused, compiler=True)
+                rows = refused.issues.to_dicts()
+                self.assertEqual(len(rows), 1)
+                context = json.loads(rows[0]["context"])
+                self.assertEqual(context["incomplete_checks_from"], "specification")
+                self.assertEqual((context["limit"], context["actual"]), (1024, 1025))
+                self.assertIsNone(rows[0]["requirement"])
+            repaired_capacity = {**document, "columns": document["columns"][:-1]}
+            spec.write_text(json.dumps(repaired_capacity))
+            for operation in (yamaa.check, yamaa.domain):
+                rows = operation(spec, environment=route).issues.to_dicts()
+                self.assertEqual(len(rows), 1)
+                self.assertEqual(rows[0]["condition"], "incompatible_input_type")
+                self.assertEqual(rows[0]["requirement"], "REQ-0308")
+                self.assertNotIn(
+                    "incomplete_checks_from", json.loads(rows[0]["context"])
+                )
+            self.assertFalse(spec.with_name("out.csv").exists())
+
     def test_empty_inheritance_preserves_wide_case_columns_and_saved_bytes(self):
         for width in (40, 64, 1024):
             with self.subTest(width=width):
