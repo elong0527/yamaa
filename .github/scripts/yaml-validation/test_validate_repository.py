@@ -6481,21 +6481,26 @@ class TestValidatorCLI(unittest.TestCase):
         index.write_text(row.replace('description', 'wrong description'))
         self.assertTrue(OWNER_EDITORIAL.validate_examples_index(self.root_dir))
 
-    def test_example_index_missing(self):
+    def test_example_index_is_derived_not_committed(self):
+        # The committed README carries no index table; the index is derived
+        # from the case directories, so a case absent from the committed
+        # README is still indexed and validation passes.
         ex_dir = self.root_dir / 'benchmarks'
         ex_dir.mkdir(parents=True, exist_ok=True)
-        (ex_dir / 'README.md').write_text('# Index\n')
+        (ex_dir / 'README.md').write_text('# Index\n\n## Benchmarks\n')
         good_ex = ex_dir / 'good'
         good_ex.mkdir()
-        (good_ex / 'README.md').write_text('# Good: description')
+        (good_ex / 'README.md').write_text(
+            '# Good: description\n'
+            '[![Lifecycle: draft](https://example.com/badge)](https://example.com/lifecycle)\n')
         (good_ex / 'spec.yaml').write_text('{}')
         (good_ex / 'input').mkdir()
         (good_ex / 'expected').mkdir()
         (good_ex / 'expected' / 'out.csv').write_text('h1')
 
         result = subprocess.run([sys.executable, str(self.doc_tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('not in index', result.stdout)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn('not in index', result.stdout)
 
     def test_csv_header_uses_output_columns(self):
         ex_dir = self.root_dir / 'benchmarks' / 'csv-output'
