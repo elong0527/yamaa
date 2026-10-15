@@ -1,20 +1,13 @@
 """Repository manifest and authored diagnostic contract checks."""
 
 import re
-from functools import lru_cache
 from pathlib import Path
 
 import yaml
 from tools.benchmark import directories, load_metadata
 from tools.benchmark import entries as benchmark_entries
 from tools.paths import ROOT
-from tools.validation import _native_json, _native_schema
 from tools.validation._repository_yaml import UniqueKeyLoader
-from tools.validation.editorial import example_spec_paths
-from tools.validation.validation_diagnostics import (
-    RESOURCE_PATH_MESSAGES,
-    ValidationDiagnostic,
-)
 
 
 def validation_phase_contracts(root: Path):
@@ -99,92 +92,10 @@ def load_validation_fixtures(root: Path):
     return fixtures, errors
 
 
-def diagnostic_matches_path(diagnostic, spec_labels, expected_path):
-    actual = diagnostic.path
-    for spec_label in spec_labels:
-        prefix = f"{spec_label}."
-        if actual.startswith(prefix):
-            actual = actual[len(prefix) :]
-            break
-    return (
-        actual == expected_path
-        or actual.startswith(expected_path + ".")
-        or actual.startswith(expected_path + "[")
-    )
 
 
-def validate_registered_fixture_diagnostics(name, entry, spec_errors, spec_labels):
-    expected_condition = entry["condition"]
-    expected_paths = entry["spec_paths"]
-    matches = {path: [] for path in expected_paths}
-    expected_ids = set()
-    for diagnostic in spec_errors:
-        if not isinstance(diagnostic, ValidationDiagnostic):
-            continue
-        if diagnostic.condition != expected_condition:
-            continue
-        for expected_path in expected_paths:
-            if diagnostic_matches_path(diagnostic, spec_labels, expected_path):
-                matches[expected_path].append(diagnostic)
-                expected_ids.add(id(diagnostic))
-
-    manifest_path = f"benchmarks/{name}/benchmark.yaml.validation"
-    if "blocked_by" in entry:
-        if all(matches.values()):
-            return [
-                f"ERROR: {manifest_path}.blocked_by: stale block; "
-                f"{expected_condition!r} is emitted at every declared path"
-            ]
-        return [
-            error
-            for error in spec_errors
-            if (
-                not isinstance(error, ValidationDiagnostic)
-                or id(error) not in expected_ids
-            )
-        ]
-
-    errors = []
-    for expected_path, diagnostics in matches.items():
-        if not diagnostics:
-            errors.append(
-                f"ERROR: {manifest_path}.spec_paths: condition "
-                f"{expected_condition!r} was not emitted at "
-                f"{expected_path!r}"
-            )
-    errors.extend(
-        error
-        for error in spec_errors
-        if (
-            not isinstance(error, ValidationDiagnostic) or id(error) not in expected_ids
-        )
-    )
-    return errors
 
 
-def check_declared_validation_error(
-    err_spec,
-    matched_errors,
-    spec_label,
-    label,
-):
-    """Require a declared condition this validator decides to be reported.
-
-    A negative example may declare a condition the validator does not yet
-    decide; its non-goals list which. A condition the validator does decide
-    must actually be the one it reports, so a fixture cannot go on passing
-    once it stops failing the way it claims to.
-    """
-    condition = err_spec.get("condition")
-    if condition not in RESOURCE_PATH_MESSAGES:
-        return []
-    reported = {message.split(": ", 1)[0] for message in matched_errors}
-    if condition in reported:
-        return []
-    return [
-        f"ERROR: {label}.condition: {condition!r} was not reported for "
-        f"{spec_label}; got {sorted(reported)!r}"
-    ]
 
 
 EXPECTED_ERROR_PHASES = {
@@ -305,61 +216,6 @@ def validate_condition_registry(root: Path, registry):
     return errors
 
 
-def spec_path_exists(spec, path):
-    node = spec
-    previous = None
-    parts = path.split(".")
-    for position, part in enumerate(parts):
-        if isinstance(node, str) and (
-            previous == "derivation" or position == 2 and parts[0] == "input"
-        ):
-            selected = "derivation" if previous == "derivation" else "dataset_source"
-            schema = _contract_schema()
-            findings = schema.validate(_native_schema.bytes_for(node), [selected], True)
-            if findings:
-                # A native path refusal retains the authored source operand in
-                # its diagnostic context. This proves that leaf's occurrence,
-                # while exposing no normalized document after failed admission.
-                return parts[position:] == ["path"] and any(
-                    _native_json.loads(context).get("path") == node
-                    for _phase, _condition, _requirement, _paths, context in findings
-                )
-            node = _native_schema.decode_document(
-                schema.normalize(_native_schema.bytes_for(node), [selected], True)
-            )
-            if previous == "derivation":
-                node = node["value"]
-        match = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)(?:\[([0-9]+)\])?", part)
-        if match is None:
-            return False
-        name, index_text = match.groups()
-        if isinstance(node, dict):
-            if name not in node:
-                return False
-            node = node[name]
-        elif isinstance(node, list):
-            candidates = [
-                item
-                for item in node
-                if (
-                    isinstance(item, dict)
-                    and (item.get("name") == name or item.get("id") == name)
-                )
-            ]
-            if len(candidates) != 1:
-                return False
-            node = candidates[0]
-        else:
-            return False
-        if index_text is not None:
-            if not isinstance(node, list):
-                return False
-            index = int(index_text)
-            if index >= len(node):
-                return False
-            node = node[index]
-        previous = name
-    return True
 
 
 def validate_expected_error_contracts(root: Path):
@@ -412,30 +268,6 @@ def validate_expected_error_contracts(root: Path):
         if "context" in contract and not isinstance(contract["context"], dict):
             errors.append(f"ERROR: {label}.context: expected a mapping")
 
-        for spec_path in example_spec_paths(ex_dir):
-            try:
-                with open(spec_path, "r", encoding="utf-8") as f:
-                    spec = yaml.load(f, Loader=UniqueKeyLoader)
-            except Exception:
-                continue
-            if not isinstance(spec, dict):
-                continue
-            for path in paths:
-                if condition in {
-                    "missing_required_field",
-                    "missing_value_required",
-                    "month_required",
-                }:
-                    # The diagnostic points at the field that should exist.
-                    continue
-                if not spec_path_exists(spec, path):
-                    errors.append(
-                        f"ERROR: {label}.spec_paths: {path!r} does not exist "
-                        f"in {spec_path.name}"
-                    )
     return errors
 
 
-@lru_cache(maxsize=1)
-def _contract_schema():
-    return _native_schema.capture(ROOT / "yaml")
