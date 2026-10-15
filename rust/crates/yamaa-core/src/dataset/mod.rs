@@ -11,17 +11,15 @@ use std::{collections::BTreeMap, vec};
 mod compiler;
 pub use compiler::{
     compile_dataset, validate_window_form, AssignmentDeclaration, CompiledDataset,
-    DatasetCompileError, DatasetCompileLimits, DatasetCompiler, DatasetDeclaration,
-    DatasetMetadata, ExpressionDeclaration, TemplateDeclaration, WindowDeclarationKind,
+    DatasetCompileError, DatasetCompiler, DatasetDeclaration, DatasetMetadata,
+    ExpressionDeclaration, TemplateDeclaration, WindowDeclarationKind,
 };
 mod conversion;
 pub use conversion::ConversionHandler;
 mod count;
-pub use count::{CountBoundError, RowCount, RowCountBound, MAX_COUNT_BOUND_BYTES};
+pub use count::{CountBoundError, RowCount, RowCountBound};
 mod flags;
-pub use flags::{
-    flag_condition_diagnostic, Flag, FlagBinding, FlagError, FlagRead, MAX_FLAG_METADATA_BYTES,
-};
+pub use flags::{flag_condition_diagnostic, Flag, FlagBinding, FlagError, FlagRead};
 mod functions;
 pub use functions::{BoundFunction, BoundProjectFunction, FunctionArgument, FunctionInput};
 mod aggregate;
@@ -39,9 +37,7 @@ pub use intermediates::{
 pub(crate) mod relation_predicates;
 pub use relation_predicates::{CurrentField, CurrentRead, RelationPredicate};
 mod relation_shape;
-pub use relation_shape::{
-    RelationField, RelationFieldOrigin, RelationShape, RelationShapeError, RelationShapeLimits,
-};
+pub use relation_shape::{RelationField, RelationFieldOrigin, RelationShape, RelationShapeError};
 mod relation_range;
 pub use relation_range::{
     RelationRange, RelationRangeBound, RelationRangeError, RelationRangeFailure, RelationRangeTypes,
@@ -61,7 +57,7 @@ mod imputation;
 pub(crate) use imputation::date_policy_findings;
 pub use imputation::{
     date_policy, DatePolicyError, DayDeclaration, DayRule, Imputation, ImputationKind,
-    ImputationStep, PartialDate, TimeRule, MAX_IMPUTATION_POLICY_BYTES,
+    ImputationStep, PartialDate, TimeRule,
 };
 mod duration;
 mod temporal;
@@ -2152,7 +2148,6 @@ mod verification_predicates;
 
 mod execution;
 pub use execution::{
-    CheckRecord, CodelistObservation, Dataset, Execution, ExecutionAttempt, ExecutionBudget,
-    ExecutionError, ExecutionEvent, ExecutionPhase, Limits, Resource, RowCountObservation,
-    RowIdentity,
+    CheckRecord, CodelistObservation, Dataset, Execution, ExecutionAttempt, ExecutionError,
+    ExecutionEvent, ExecutionPhase, Resource, RowCountObservation, RowIdentity,
 };

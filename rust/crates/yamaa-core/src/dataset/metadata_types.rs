@@ -3,39 +3,26 @@ use super::*;
 use crate::{
     aggregate_compiler::AggregateOperand,
     aggregate_parser::Reducer,
-    diagnostic::{Diagnostic, ProjectionBudget, ProjectionError},
+    diagnostic::{Diagnostic, ProjectionError},
     value::{ColumnType, ValueType},
 };
 
+#[derive(Default)]
 struct Findings {
     diagnostics: Vec<Diagnostic>,
-    maximum: usize,
-    bytes: ProjectionBudget,
 }
 impl Findings {
-    fn admit(&mut self, path: &str, expression: &str, source: &str) -> Result<(), ProjectionError> {
-        if self.diagnostics.len() >= self.maximum {
-            return Err(ProjectionError::Limit);
+    fn push(&mut self, diagnostic: Diagnostic) {
+        if self.diagnostics.len() < crate::limits::Limits::FINDINGS {
+            self.diagnostics.push(diagnostic);
         }
-        self.bytes.charge(1024)?;
-        for text in [path, expression, source] {
-            self.bytes.text(text)?;
-        }
-        Ok(())
     }
 }
 impl DatasetPlan {
     /// Only operand kinds are observed. Zero findings grants no value admission,
     /// function invocation, evaluation, verification or publication authority.
-    pub fn metadata_type_findings(
-        &self,
-        maximum: usize,
-    ) -> Result<Vec<Diagnostic>, ProjectionError> {
-        let mut findings = Findings {
-            diagnostics: Vec::new(),
-            maximum,
-            bytes: ProjectionBudget::new(crate::diagnostic::MAX_PROJECTION_BYTES)?,
-        };
+    pub fn metadata_type_findings(&self) -> Result<Vec<Diagnostic>, ProjectionError> {
+        let mut findings = Findings::default();
         self.metadata_types(&mut findings)?;
         Ok(findings.diagnostics)
     }
@@ -105,8 +92,7 @@ impl DatasetPlan {
                     }
                 });
                 for (condition, route) in conditions {
-                    findings.admit(flag.condition().spec_path(), "", "")?;
-                    findings.diagnostics.push(flags::type_condition_diagnostic(
+                    findings.push(flags::type_condition_diagnostic(
                         flag.condition().spec_path(),
                         &condition,
                         &route,
@@ -145,8 +131,7 @@ impl DatasetPlan {
                     };
                     let actual = schema.columns()[binding.column].kind;
                     if !matches!(actual, ColumnType::Int | ColumnType::Float) {
-                        findings.admit(compiled.spec_path(), compiled.expression(), name)?;
-                        findings.diagnostics.push(
+                        findings.push(
                             crate::diagnostic::DatasetFinding::ReductionInputType {
                                 path: compiled.spec_path(),
                                 expression: compiled.expression(),
@@ -205,8 +190,8 @@ impl DatasetPlan {
                 let source = &primary.columns()[*column];
                 if !matches!(source.kind, ColumnType::Int | ColumnType::Float) {
                     let name = identifier.as_deref().unwrap_or(&source.name);
-                    findings.admit(path, text, name)?;
-                    findings.diagnostics.push(
+
+                    findings.push(
                         crate::diagnostic::DatasetFinding::ReductionInputType {
                             path,
                             expression: text,

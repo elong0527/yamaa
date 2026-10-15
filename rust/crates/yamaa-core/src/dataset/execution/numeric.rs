@@ -18,7 +18,6 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     assignment: &Assignment,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
-    state.budget.work(1, bound.expression().node_count())?;
     let result = bound.expression().evaluate(&mut Resolver {
         bound,
         table,
@@ -28,7 +27,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
         row,
         assignment,
     });
-    project_result(result, candidate, plan, row, state.budget)
+    project_result(result, candidate, plan, row)
 }
 
 /// Keep scalar and aggregate arithmetic failures on the same typed route.
@@ -37,7 +36,6 @@ pub(super) fn project_result<E>(
     candidate: &Candidate,
     plan: &DatasetPlan,
     row: usize,
-    budget: &mut Budget,
 ) -> Result<Value, Box<ExecutionError<E>>> {
     match result {
         Ok(value) => Ok(Value::from(value)),
@@ -51,7 +49,7 @@ pub(super) fn project_result<E>(
                 EvaluationErrorKind::Resolution { error, .. } => Err(error),
                 EvaluationErrorKind::Numeric(condition) => {
                     let identity = if condition.phase() == "derivation" {
-                        failure_identity(candidate, plan.keys(), row, budget)?
+                        failure_identity(candidate, plan.keys(), row)?
                     } else {
                         None
                     };
@@ -86,7 +84,6 @@ impl<T: TableAccess + ?Sized> NumericResolver for Resolver<'_, '_, T> {
 
     /// Charge every occurrence and scalar copy, including repeated identifiers.
     fn resolve(&mut self, identifier: &str) -> Result<Selection, Self::Error> {
-        self.state.budget.work(1, 1)?;
         let index = self
             .bound
             .bindings()
@@ -130,9 +127,6 @@ impl<T: TableAccess + ?Sized> NumericResolver for Resolver<'_, '_, T> {
                 })?
             }
         };
-        if let ValueRef::Str(text) = value {
-            self.state.budget.scalar_text(text.len())?;
-        }
         Ok(Selection::Present(own(value)))
     }
 }

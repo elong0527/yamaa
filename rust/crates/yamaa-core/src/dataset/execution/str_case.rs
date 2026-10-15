@@ -43,22 +43,13 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     candidate: &Candidate,
     plan: &DatasetPlan,
     row: usize,
-    limits: Limits,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
-    state.budget.work(1, 1)?;
-    let source = evaluate_raw(table, source, candidate, plan, row, limits, state)?;
-    if let Value::Str(text) = &source {
-        state.budget.work(1, text.len())?;
-        state.budget.scalar_text(text.len())?;
-    }
-    match operation.apply(ValueRef::from(&source), limits.scalar_text_bytes) {
+    let source = evaluate_raw(table, source, candidate, plan, row, state)?;
+    match operation.apply(ValueRef::from(&source)) {
         Ok(Step::Value(value)) => Ok(value),
         Ok(Step::Recovered) => {
             let value = operation.missing().expect("declared missing handler");
-            if let Value::Str(text) = value {
-                state.budget.scalar_text(text.len())?;
-            }
             state
                 .handlers
                 .record(
@@ -76,13 +67,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
                 candidate,
                 plan,
                 row,
-                state.budget,
             ))
         }
-        Err(Error::Limit(limit)) => Err(Box::new(ExecutionError::Limit {
-            resource: Resource::ScalarTextBytes,
-            limit: limits.scalar_text_bytes,
-            required: Some(limit.required),
-        })),
     }
 }

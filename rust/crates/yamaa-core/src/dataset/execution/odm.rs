@@ -10,9 +10,7 @@ fn cell<'a, T: TableAccess + ?Sized>(
     bound: &BoundOdm,
     row: usize,
     column: usize,
-    budget: &mut Budget,
 ) -> Result<ValueRef<'a>, Box<ExecutionError<T::Error>>> {
-    budget.work(1, 1)?;
     table.cell(row, column).map_err(|error| {
         Box::new(ExecutionError::Cell {
             path: bound.read().path.clone(),
@@ -60,9 +58,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
         OdmScope::Keys => {
             for &column in plan.keys() {
                 let value = &candidate.values[column];
-                state
-                    .budget
-                    .identity_refs(std::iter::once(ValueRef::from(value)))?;
+
                 scope.push((plan.output().columns()[column].name.clone(), value.clone()));
             }
             &[]
@@ -77,10 +73,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
             .first()
             .ok_or_else(|| Box::new(ExecutionError::SchemaMismatch))?;
         for &column in fields {
-            let value = cell(table, bound, representative, column, state.budget)?;
-            if let ValueRef::Str(text) = value {
-                state.budget.scalar_text(text.len())?;
-            }
+            let value = cell(table, bound, representative, column)?;
             scope.push((FIELDS[column].into(), own(value)));
         }
     }
@@ -89,7 +82,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     } else {
         table.row_count()
     };
-    state.budget.work(capacity, 1)?;
+
     let mut selected = Vec::with_capacity(capacity);
     for position in 0..capacity {
         let source_row = if matches!(read.scope, OdmScope::Keys) {
@@ -99,19 +92,17 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
         };
         let mut matching = true;
         for (&column, (_, expected)) in fields.iter().zip(&scope) {
-            if cell(table, bound, source_row, column, state.budget)? != ValueRef::from(expected) {
+            if cell(table, bound, source_row, column)? != ValueRef::from(expected) {
                 matching = false;
                 break;
             }
         }
-        if !matching
-            || cell(table, bound, source_row, 9, state.budget)? != ValueRef::Str(&read.item_oid)
-        {
+        if !matching || cell(table, bound, source_row, 9)? != ValueRef::Str(&read.item_oid) {
             continue;
         }
         for (column, wanted) in [3, 5, 7].into_iter().zip(&read.selectors) {
             if let Some(wanted) = wanted {
-                let value = cell(table, bound, source_row, column, state.budget)?;
+                let value = cell(table, bound, source_row, column)?;
                 if !wanted.iter().any(|wanted| value == ValueRef::Str(wanted)) {
                     matching = false;
                     break;
@@ -122,17 +113,12 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
             continue;
         }
         if let Some(filter) = &read.filter {
-            let truth = crate::dataset::execution::predicates::evaluate(
-                filter,
-                table,
-                source_row,
-                &[],
-                state.budget.predicate(),
-            )
-            .map_err(|error| match error.kind {
-                crate::predicate::ErrorKind::Limit(limit) => Box::new(predicate_limit(limit)),
-                _ => Box::new(ExecutionError::Predicate { source_row, error }),
-            })?;
+            let truth =
+                crate::dataset::execution::predicates::evaluate(filter, table, source_row, &[])
+                    .map_err(|error| match error.kind {
+                        crate::predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
+                        _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                    })?;
             if truth != crate::predicate::Truth::True {
                 continue;
             }
@@ -142,26 +128,19 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     match selected.as_slice() {
         [] => Ok(Value::Missing),
         [source_row] => {
-            let value = cell(table, bound, *source_row, 10, state.budget)?;
-            if let ValueRef::Str(text) = value {
-                state.budget.scalar_text(text.len())?;
-            }
+            let value = cell(table, bound, *source_row, 10)?;
             Ok(own(value))
         }
         _ => {
-            state.budget.work(selected.len(), IDENTIFYING.len())?;
             let mut differ = Vec::new();
             for column in IDENTIFYING {
                 let mut values = Vec::new();
                 for &source_row in &selected {
-                    let value = cell(table, bound, source_row, column, state.budget)?;
+                    let value = cell(table, bound, source_row, column)?;
                     if !values
                         .iter()
                         .any(|existing| value == ValueRef::from(existing))
                     {
-                        if let ValueRef::Str(text) = value {
-                            state.budget.scalar_text(text.len())?;
-                        }
                         values.push(own(value));
                     }
                 }
@@ -184,7 +163,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
             .diagnostic()
             .map_err(|_| Box::new(ExecutionError::Capacity))?;
             let identity = if read.phase == AggregatePhase::Derivation {
-                failure_identity(candidate, plan.keys(), row, state.budget)?
+                failure_identity(candidate, plan.keys(), row)?
             } else {
                 None
             };

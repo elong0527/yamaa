@@ -7,42 +7,27 @@ use std::collections::BTreeSet;
 pub(super) fn construct<T: TableAccess + ?Sized>(
     plan: &DatasetPlan,
     table: &T,
-    limits: Limits,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Vec<Candidate>, Box<ExecutionError<T::Error>>> {
     let rows = table.row_count();
-    if rows
-        .checked_mul(plan.keys().len())
-        .is_none_or(|cells| cells > limits.key_cells)
-    {
-        return Err(Box::new(ExecutionError::Grouping(
-            GroupingError::KeyCellLimit {
-                limit: limits.key_cells,
-            },
-        )));
-    }
+    Limits::table(rows, plan.keys().len())
+        .map_err(|error| Box::new(ExecutionError::Grouping(GroupingError::Limit(error))))?;
     // Finish the entire source filter before any key conversion can fail.
     let mut retained = Vec::new();
     retained
         .try_reserve_exact(rows)
         .map_err(|_| Box::new(ExecutionError::Allocation))?;
-    state.budget.work(rows, 1)?;
+
     for row in 0..rows {
         if let Some(filter) = &plan.templates()[0].filter {
-            let truth = crate::dataset::execution::predicates::evaluate(
-                filter,
-                table,
-                row,
-                &[],
-                state.budget.predicate(),
-            )
-            .map_err(|error| match error.kind {
-                crate::predicate::ErrorKind::Limit(limit) => Box::new(predicate_limit(limit)),
-                _ => Box::new(ExecutionError::Predicate {
-                    source_row: row,
-                    error,
-                }),
-            })?;
+            let truth = crate::dataset::execution::predicates::evaluate(filter, table, row, &[])
+                .map_err(|error| match error.kind {
+                    crate::predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
+                    _ => Box::new(ExecutionError::Predicate {
+                        source_row: row,
+                        error,
+                    }),
+                })?;
             if truth != crate::predicate::Truth::True {
                 continue;
             }
@@ -74,7 +59,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
         };
         for assignment in &plan.templates()[0].assignments {
             probe.values[assignment.column] =
-                evaluate(table, assignment, &probe, plan, row, limits, state)?;
+                evaluate(table, assignment, &probe, plan, row, state)?;
             probe.completed[assignment.column] = true;
         }
         key_table.rows.push(
@@ -85,16 +70,10 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
         );
     }
     let key_columns: Vec<_> = (0..plan.keys().len()).collect();
-    state.budget.work(rows, plan.keys().len())?;
-    let partitions = partition(
-        &key_table,
-        &key_columns,
-        limits.source_rows,
-        limits.key_cells,
-    )
-    .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
-    state.budget.work(partitions.len(), plan.keys().len())?;
-    state.budget.work(rows, 1)?;
+
+    let partitions = partition(&key_table, &key_columns)
+        .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
+
     let mut groups = Vec::new();
     groups
         .try_reserve_exact(rows)
@@ -112,7 +91,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
         }
     }
     groups.sort_unstable_by_key(|members| members[0]);
-    plan.check_capacity(0, groups.len(), limits)?;
+    plan.check_capacity(0, groups.len())?;
     let mut candidates = Vec::new();
     candidates
         .try_reserve_exact(groups.len())
@@ -120,7 +99,6 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
     for members in groups {
         let keys = std::mem::take(&mut key_table.rows[members[0]]);
         for &duplicate in &members[1..] {
-            state.budget.discard_candidate(&key_table.rows[duplicate]);
             key_table.rows[duplicate].clear();
         }
         let mut candidate = Candidate {
@@ -146,7 +124,6 @@ pub(super) fn collect<T: TableAccess + ?Sized>(
     candidate: &Candidate,
     plan: &DatasetPlan,
     row: usize,
-    budget: &mut Budget,
     handlers: &mut HandlerCounter,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
     let Expression::Collect {
@@ -172,7 +149,6 @@ pub(super) fn collect<T: TableAccess + ?Sized>(
             plan,
             row,
         },
-        budget,
         handlers,
     )
 }
@@ -199,7 +175,6 @@ pub(super) fn collect_bound<T: TableAccess + ?Sized>(
     table: &T,
     read: Collection<'_>,
     context: CollectionContext<'_>,
-    budget: &mut Budget,
     handlers: &mut HandlerCounter,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
     let Collection {
@@ -220,19 +195,14 @@ pub(super) fn collect_bound<T: TableAccess + ?Sized>(
         retained
             .try_reserve_exact(candidate.members.len())
             .map_err(|_| Box::new(ExecutionError::Allocation))?;
-        budget.work(candidate.members.len(), 1)?;
+
         for &source_row in &candidate.members {
-            let truth = crate::dataset::execution::predicates::evaluate(
-                filter,
-                table,
-                source_row,
-                &[],
-                budget.predicate(),
-            )
-            .map_err(|error| match error.kind {
-                crate::predicate::ErrorKind::Limit(limit) => Box::new(predicate_limit(limit)),
-                _ => Box::new(ExecutionError::Predicate { source_row, error }),
-            })?;
+            let truth =
+                crate::dataset::execution::predicates::evaluate(filter, table, source_row, &[])
+                    .map_err(|error| match error.kind {
+                        crate::predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
+                        _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                    })?;
             if truth == crate::predicate::Truth::True {
                 retained.push(source_row);
             }
@@ -260,20 +230,16 @@ pub(super) fn collect_bound<T: TableAccess + ?Sized>(
         if matches!(value, ValueRef::Missing) {
             continue;
         }
-        if let ValueRef::Str(text) = value {
-            budget.scalar_text(text.len())?;
-        }
         distinct.insert(Key::from(value));
         first.get_or_insert(value);
         if selection.is_some() {
-            budget.work(1, 1)?;
             carrying.push(source_row);
         }
     }
     if distinct.len() > 1 {
         if let Some(selection) = selection {
-            let chosen = select(table, path, &carrying, selection, budget)?;
-            budget.work(1, 1)?;
+            let chosen = select(table, path, &carrying, selection)?;
+
             let value = table.cell(chosen, column).map_err(|error| {
                 Box::new(ExecutionError::Cell {
                     path: path.into(),
@@ -281,9 +247,6 @@ pub(super) fn collect_bound<T: TableAccess + ?Sized>(
                     error,
                 })
             })?;
-            if let ValueRef::Str(text) = value {
-                budget.scalar_text(text.len())?;
-            }
             handlers
                 .record(
                     &std::format!("{}.multiple_matches", path),
@@ -296,7 +259,7 @@ pub(super) fn collect_bound<T: TableAccess + ?Sized>(
             path: path.into(),
             identifier: identifier.into(),
             value_count: distinct.len(),
-            identity: failure_identity(candidate, plan.keys(), row, budget)?,
+            identity: failure_identity(candidate, plan.keys(), row)?,
         }));
     }
     Ok(first.map_or(Value::Missing, own))
@@ -308,14 +271,12 @@ fn select<T: TableAccess + ?Sized>(
     path: &str,
     carrying: &[usize],
     selection: &SourceSelection,
-    budget: &mut Budget,
 ) -> Result<usize, Box<ExecutionError<T::Error>>> {
     use std::cmp::Ordering;
     let mut best = carrying[0];
     for &row in &carrying[1..] {
         let mut order = Ordering::Equal;
         for term in &selection.order_by {
-            budget.work(1, 2)?;
             let mut read = |source_row| -> Result<ValueRef<'_>, Box<ExecutionError<T::Error>>> {
                 let value = table.cell(source_row, term.column).map_err(|error| {
                     Box::new(ExecutionError::Cell {
@@ -324,9 +285,6 @@ fn select<T: TableAccess + ?Sized>(
                         error,
                     })
                 })?;
-                if let ValueRef::Str(text) = value {
-                    budget.scalar_text(text.len())?;
-                }
                 Ok(value)
             };
             let left = read(row)?;
