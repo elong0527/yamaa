@@ -1,8 +1,8 @@
-"""Require authored failure coverage beside benchmark and shared fixtures.
+"""Enforce benchmarks/vocabulary-coverage.yaml in CI.
 
 Every expression registered in yaml/schema_expression_*.yaml and every
 verification registered in yaml/schema_verification.yaml must name negative
-examples or shared installed refusal cases.
+examples, shared installed refusal cases, or the open issue tracking the gap.
 A benchmark entry must point at real negative examples:
 each directory exists, carries expected/error.yaml, and either the error
 spec_paths or the spec itself names the operation.
@@ -11,14 +11,16 @@ and R; successful cases cannot satisfy failure coverage.
 """
 
 import json
+import re
 import sys
 
 import yaml
-from tools.benchmark import directories, load_metadata
 from tools.paths import ROOT
 
 REPO = ROOT
 EXAMPLES = REPO / "benchmarks"
+COVERAGE = EXAMPLES / "vocabulary-coverage.yaml"
+GAP = re.compile(r"#[1-9][0-9]*$")
 SHARED = REPO / "rust/tests/host-fixtures/cases.json"
 
 
@@ -78,10 +80,26 @@ def registered_operations():
     return operations
 
 
-def check(operation, names):
+def check(operation, entry):
     errors = []
-    if not isinstance(names, list) or not names:
-        return [f"ERROR: coverage.{operation}: no negative example"]
+    if isinstance(entry, list):
+        names = entry
+        gap = None
+    elif isinstance(entry, dict) and set(entry) == {"gap"}:
+        names = []
+        gap = entry["gap"]
+    elif isinstance(entry, dict) and set(entry) == {"shared_cases"}:
+        return check_shared(operation, entry["shared_cases"])
+    else:
+        return [
+            f"ERROR: coverage.{operation}: expected a list, shared_cases, or {{gap: '#N'}}"
+        ]
+    if gap is not None:
+        if not isinstance(gap, str) or GAP.fullmatch(gap) is None:
+            errors.append(f"ERROR: coverage.{operation}.gap: expected '#N'")
+        return errors
+    if not names:
+        return [f"ERROR: coverage.{operation}: no negative example and no gap"]
     plain = operation.split(":", 1)[-1]
     for name in names:
         directory = EXAMPLES / name
@@ -101,51 +119,15 @@ def check(operation, names):
     return errors
 
 
-def declared_coverage():
-    """Collect declarations without maintaining a second list of case names."""
-    coverage = {}
-
-    def add(operation, owner, name):
-        row = coverage.setdefault(operation, {"benchmarks": [], "shared_cases": []})
-        row[owner].append(name)
-
-    for case in directories(EXAMPLES):
-        for operation in load_metadata(case).get("covers", []):
-            add(operation, "benchmarks", case.name)
-    document = json.loads(SHARED.read_text(encoding="utf-8"))
-    cases = document["families"]["original-specifications"]["temporal_arithmetic"]
-    for case in cases:
-        operations = case.get("covers", [])
-        if not (
-            isinstance(operations, list)
-            and all(
-                isinstance(operation, str) and operation for operation in operations
-            )
-            and len(set(operations)) == len(operations)
-        ):
-            raise ValueError(f"shared case {case.get('name')}: invalid covers")
-        for operation in operations:
-            add(operation, "shared_cases", case["name"])
-    return coverage
-
-
 def main():
-    try:
-        coverage = declared_coverage()
-    except (OSError, ValueError, KeyError, TypeError, yaml.YAMLError) as error:
-        print(f"ERROR: cannot read vocabulary coverage metadata: {error}")
-        return 1
+    coverage = yaml.safe_load(COVERAGE.read_text(encoding="utf-8"))["coverage"]
     operations = registered_operations()
     errors = []
     for operation in sorted(operations):
         if operation not in coverage:
             errors.append(f"ERROR: coverage.{operation}: unmapped operation")
-            continue
-        entry = coverage[operation]
-        if entry["benchmarks"]:
-            errors.extend(check(operation, entry["benchmarks"]))
-        if entry["shared_cases"]:
-            errors.extend(check_shared(operation, entry["shared_cases"]))
+        else:
+            errors.extend(check(operation, coverage[operation]))
     for operation in sorted(set(coverage) - set(operations)):
         errors.append(f"ERROR: coverage.{operation}: unknown operation")
     for error in errors:

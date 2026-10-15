@@ -9,8 +9,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from tools.benchmark import load_metadata
 from tools.conformance.public_conformance import (
+    EXCLUDED,
     PROTOCOL,
     benchmark_directories,
     plan,
@@ -34,9 +34,11 @@ def check_inventory(payload, actual_examples):
         errors.append(f"missing case: {name}")
     for name in sorted(set(names) - actual):
         errors.append(f"unexpected case: {name}")
+    for name in sorted(set(EXCLUDED) - actual):
+        errors.append(f"exclusion has no authored case: {name}")
     for entry in entries:
         name = entry["name"]
-        if entry.get("excluded") != actual_examples.get(name):
+        if entry.get("excluded") != EXCLUDED.get(name):
             errors.append(f"exclusion reason differs: {name}")
         hosts = entry.get("entries", {})
         if set(hosts) != {"python", "r"} or not all(hosts.values()):
@@ -53,10 +55,7 @@ def main():
         payload = plan(fixtures)
         errors = check_inventory(
             payload,
-            {
-                p.name: load_metadata(p).get("conformance", {}).get("excluded")
-                for p in benchmark_directories(fixtures)
-            },
+            [p.name for p in benchmark_directories(fixtures)],
         )
     except (OSError, ValueError, KeyError, TypeError) as exc:
         errors = [str(exc)]
@@ -66,7 +65,7 @@ def main():
         return 1
     active = sum(not entry["excluded"] for entry in payload["examples"])
     print(
-        f"benchmark inventory ok: {len(payload['examples'])} authored, {active} active on Python and R, {len(payload['examples']) - active} explicitly excluded"
+        f"benchmark inventory ok: {len(payload['examples'])} authored, {active} active on Python and R, {len(EXCLUDED)} explicitly excluded"
     )
     return 0
 

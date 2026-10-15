@@ -112,6 +112,33 @@ README_KEY_COLUMNS = {
     "IDVAR",
     "QNAM",
 }
+README_FOOTER_PATTERN = re.compile(
+    r"\[!\[Dashboard\]\(https://img\.shields\.io/badge/Dashboard-view-1f3a5c\)\]"
+    r"\(https://elong0527\.github\.io/yamaa/benchmark/"
+    r"[a-z0-9]+(?:-[a-z0-9]+)*\.html\)",
+)
+LIFECYCLE_BADGE_PATTERN = re.compile(
+    r"\[!\[Lifecycle: (draft|reviewed|finalized)\]"
+    r"\(https://img\.shields\.io/badge/Lifecycle-[^)]+\)\]"
+    r"\([^)]*\)"
+)
+
+
+def is_readme_badge_line(text: str) -> bool:
+    """Accept a Dashboard badge alone, a lifecycle badge alone,
+    or the Dashboard badge followed by one lifecycle badge."""
+    stripped = text.strip()
+    if README_FOOTER_PATTERN.fullmatch(stripped):
+        return True
+    if LIFECYCLE_BADGE_PATTERN.fullmatch(stripped):
+        return True
+    match = README_FOOTER_PATTERN.match(stripped)
+    if not match:
+        return False
+    rest = stripped[match.end() :]
+    if not rest.startswith(" "):
+        return False
+    return bool(LIFECYCLE_BADGE_PATTERN.fullmatch(rest[1:]))
 
 
 def validate_example_readmes(root: Path):
@@ -128,7 +155,7 @@ def validate_example_readmes(root: Path):
         label = readme_path.relative_to(root)
         text = readme_path.read_text(encoding="utf-8")
         for line_number, line in enumerate(text.splitlines(), 1):
-            if len(line) > 79:
+            if len(line) > 79 and not is_readme_badge_line(line):
                 errors.append(
                     f"ERROR: {label}:{line_number}: line has {len(line)} "
                     "characters; maximum is 79"
@@ -137,6 +164,8 @@ def validate_example_readmes(root: Path):
         marker = "\n## How to fix\n"
         contract = text.split(marker, 1)[0]
         for line_number, line in enumerate(contract.splitlines(), 1):
+            if is_readme_badge_line(line):
+                continue
             if README_FORBIDDEN_PATTERN.search(line):
                 errors.append(
                     f"ERROR: {label}:{line_number}: schema vocabulary is "
@@ -441,6 +470,47 @@ def validate_examples_index(root: Path):
                     errors.append(
                         f"ERROR: {dname} title description '{title_desc}' does not match index '{indexed_entries[dname]}'"
                     )
+
+    return errors
+
+
+def validate_examples_badges(root: Path):
+    errors = []
+    examples_dir = root / "benchmarks"
+    if not examples_dir.exists():
+        return errors
+
+    for ex_dir in sorted(examples_dir.iterdir()):
+        if not ex_dir.is_dir() or ex_dir.name.startswith("."):
+            continue
+
+        rel = ex_dir.relative_to(root)
+        readme = ex_dir / "README.md"
+        if readme.exists():
+            lines = readme.read_text(encoding="utf-8").splitlines()
+            expected_badge = (
+                "[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)]"
+                f"(https://elong0527.github.io/yamaa/benchmark/{ex_dir.name}.html)"
+            )
+            badge_ok = False
+            if len(lines) >= 3:
+                stripped = lines[2].strip()
+                if stripped.startswith(expected_badge):
+                    # Same line: Dashboard badge + lifecycle badge,
+                    # or one badge per line: lifecycle badge on the next line.
+                    rest = stripped[len(expected_badge) :]
+                    if rest.startswith(" "):
+                        badge_ok = bool(LIFECYCLE_BADGE_PATTERN.fullmatch(rest[1:]))
+                    elif not rest and len(lines) >= 4:
+                        badge_ok = bool(
+                            LIFECYCLE_BADGE_PATTERN.fullmatch(lines[3].strip())
+                        )
+            if not badge_ok:
+                errors.append(
+                    f"ERROR: {rel}/README.md must place '{expected_badge}' "
+                    "followed by a lifecycle badge (draft, reviewed, or "
+                    "finalized) right after the title"
+                )
 
     return errors
 

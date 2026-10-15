@@ -1,0 +1,412 @@
+version: "1.0"
+
+# Every negative example whose expected phase is validation appears exactly
+# once. Implemented entries name the validator family that must emit the
+# registered condition at every declared path. Blocked entries name the open
+# issue that owns the missing diagnostic.
+fixtures:
+  negative-source-ordinal-collision:
+    rule: R014
+    condition: ordinal_field_collision
+    spec_paths: [input.SOURCE.ordinal]
+    validator: source_contract
+  negative-unknown-window:
+    rule: R007
+    condition: unknown_window
+    spec_paths: ['columns.VISITSEQ.derivation.row_number.window']
+    validator: window_contract
+  negative-output-transport:
+    rule: R020
+    condition: unknown_artifact_profile
+    spec_paths: ["output.path"]
+    validator: artifact_profile
+  negative-review-arithmetic:
+    rule: R004
+    condition: invalid_predicate
+    spec_paths: ["columns.REVIEWFL.derivation.flag.condition"]
+    validator: predicate
+  negative-review-date-text:
+    rule: R004
+    condition: incompatible_input_type
+    spec_paths: ["columns.REVIEWFL.derivation.flag.condition"]
+    validator: predicate
+  negative-review-unknown-date:
+    rule: R004
+    condition: unknown_field
+    spec_paths: ["columns.REVIEWFL.derivation.flag.condition"]
+    validator: predicate
+  negative-flag-payload:
+    rule: R006
+    condition: invalid_field_type
+    spec_paths: ["columns.ELDFL.derivation.flag"]
+    validator: schema
+  negative-flag-condition:
+    rule: R004
+    condition: invalid_predicate
+    spec_paths: ["columns.ELDFL.derivation.flag.condition"]
+    validator: predicate
+  negative-flag-missing-value:
+    rule: R007
+    condition: missing_value_required
+    spec_paths: ["columns.ELDFL.derivation.flag.missing"]
+    validator: static_semantics
+  negative-dose-intensity:
+    rule: R013
+    condition: aggregate_identifier_not_grouped
+    spec_paths: [columns.RDI.derivation.aggregate.expr]
+    validator: aggregate_expression
+  negative-adlb-computed-param:
+    rule: R001
+    condition: dependency_cycle
+    spec_paths:
+      - columns.ALTVAL.derivation.aggregate
+      - columns.AVAL.derivation.case
+    validator: dependency_graph
+  negative-cyclic-parent:
+    rule: R017
+    condition: inheritance_cycle
+    spec_paths: [parents]
+    validator: inheritance
+  negative-property-clear:
+    rule: R017
+    condition: invalid_clear
+    spec_paths: [columns.USUBJID.type]
+    validator: inheritance
+  negative-version-mismatch:
+    rule: R017
+    condition: schema_version_mismatch
+    spec_paths: [parents]
+    validator: inheritance
+  negative-redefined-date:
+    rule: R014
+    condition: redundant_field_type
+    spec_paths: [input.DM.types.RANDDT]
+    validator: source_contract
+  negative-remote-parent:
+    rule: R017
+    condition: invalid_parent_path
+    spec_paths: [parents]
+    validator: inheritance
+  negative-subject-reference:
+    rule: R012
+    condition: invalid_string_template
+    spec_paths: [columns.SUBJREF.derivation.str_template]
+    validator: string_template
+  negative-ambiguous-type:
+    rule: R011
+    condition: value_not_permitted
+    spec_paths: [columns.AVAL.type]
+    validator: schema
+  negative-first-available-self:
+    rule: R001
+    condition: dependency_cycle
+    spec_paths: [columns.SEVAL.derivation.first_available]
+    validator: dependency_graph
+  negative-forward-reference:
+    rule: R001
+    condition: forward_reference
+    spec_paths: [columns.AVALDOUBLED.derivation.compute]
+    validator: dependency_graph
+  negative-row-aggregate:
+    rule: R010
+    condition: prohibited_function
+    spec_paths: [columns.AVALTOT.derivation.compute.expr]
+    validator: numeric_expression
+  negative-row-aggregate-keys:
+    rule: R013
+    condition: invalid_aggregate_context
+    spec_paths: ["rows[0].derivations.RACECOUNT.aggregate.key"]
+    validator: aggregate_expression
+  negative-formula-flag:
+    rule: R010
+    condition: prohibited_construct
+    spec_paths: [columns.HIFL.derivation.compute.expr]
+    validator: numeric_expression
+  negative-direct-dose-read:
+    rule: R010
+    condition: qualified_identifier
+    spec_paths: [columns.DOSEDBL.derivation.compute.expr]
+    validator: numeric_expression
+  negative-cut-coded:
+    rule: R007
+    condition: incompatible_input_type
+    spec_paths: [columns.AGEGRP.derivation.cut.source]
+    validator: expression_contract
+  negative-path-absolute:
+    rule: R021
+    condition: resource_path_not_relative
+    spec_paths: [input.LBREF.path]
+    validator: resource_path
+  negative-path-directory:
+    rule: R021
+    condition: resource_path_not_regular_file
+    spec_paths: [input.LBREF.path]
+    validator: resource_path
+  negative-path-missing:
+    rule: R021
+    condition: resource_path_missing
+    spec_paths: [input.LBREF.path]
+    validator: resource_path
+  negative-path-parent-escape:
+    rule: R021
+    condition: resource_path_outside_project
+    spec_paths: [input.LBREF.path]
+    validator: resource_path
+  negative-path-symlink:
+    rule: R021
+    condition: resource_path_symlink
+    spec_paths: [input.LBREF.path]
+    validator: resource_path
+  negative-path-url:
+    rule: R021
+    condition: resource_path_uri_scheme
+    spec_paths: [input.LBREF.path]
+    validator: resource_path
+  negative-impute-bad-month:
+    rule: R016
+    condition: month_out_of_range
+    spec_paths: [columns.ASTDT.derivation.date_impute.month]
+    validator: temporal_contract
+  negative-impute-missing-month:
+    rule: R016
+    condition: month_required
+    spec_paths: [columns.ASTDT.derivation.date_impute.month]
+    validator: temporal_contract
+  negative-impute-unreachable-month:
+    rule: R016
+    condition: month_not_permitted
+    spec_paths: [columns.ASTDT.derivation.date_impute.month]
+    validator: temporal_contract
+  negative-impute-day-rule:
+    rule: R016
+    condition: value_not_permitted
+    spec_paths: [columns.ASTDT.derivation.date_impute.day]
+    validator: schema
+  negative-date-diff-units:
+    rule: R016
+    condition: value_not_permitted
+    spec_paths: [columns.TRTDURM.derivation.date_diff.bounds]
+    validator: temporal_contract
+  negative-date-diff-endpoints:
+    rule: R016
+    condition: incompatible_input_type
+    spec_paths: [columns.SURVDD.derivation.date_diff.start]
+    validator: temporal_contract
+  negative-function-contract:
+    rule: R018
+    condition: invalid_function_argument
+    spec_paths:
+      - columns.RESULT.derivation.function.args
+    validator: project_function
+  negative-greatest-mixed:
+    rule: R007
+    condition: incomparable_sources
+    spec_paths: [columns.LSTALVDT.derivation.greatest]
+    validator: expression_contract
+  negative-least-mixed:
+    rule: R007
+    condition: incomparable_sources
+    spec_paths: [columns.FSTALVDT.derivation.least]
+    validator: expression_contract
+  negative-literal-structure:
+    rule: R006
+    condition: invalid_field_type
+    spec_paths: ["columns.AGEGRP.derivation.case[0].then.literal"]
+    validator: schema
+  negative-keys-internal:
+    rule: R005
+    condition: internal_column_in_keys
+    spec_paths: ["keys[2]"]
+    validator: name_contract
+  negative-keys-missing:
+    rule: R001
+    condition: key_dependency
+    spec_paths: ["columns.AVISIT.derivation"]
+    validator: dependency_graph
+  negative-mapping-case-collision:
+    rule: R019
+    condition: ambiguous_dictionary
+    spec_paths: [columns.SMOKEFL.derivation.mapping.dict]
+    validator: mapping_contract
+  negative-matches-bad-pattern:
+    rule: R022
+    condition: invalid_regex
+    spec_paths: ["columns.SEX.verifications[0].matches.pattern"]
+    validator: regex
+  negative-order-repeated:
+    rule: R005
+    condition: duplicate_order_term
+    spec_paths: ["output.order_by[2]"]
+    validator: name_contract
+  negative-order-unknown-column:
+    rule: R005
+    condition: undeclared_column
+    spec_paths: ["output.order_by[1]"]
+    validator: name_contract
+  negative-lookup-id-collision:
+    rule: R003
+    condition: duplicate_identifier
+    spec_paths: ["intermediates[0].id", input.EX]
+    validator: name_contract
+  negative-lookup-bad-range:
+    rule: R003
+    condition: incomparable_range_types
+    spec_paths: ["intermediates[0].between"]
+    validator: lookup_contract
+  negative-lookup-unordered:
+    rule: R003
+    condition: unpaired_fields
+    spec_paths: ["intermediates[0]"]
+    validator: spec_contract
+  negative-lookup-mismatched:
+    rule: R003
+    condition: unknown_field
+    spec_paths: ["intermediates[0].key"]
+    validator: lookup_contract
+  negative-lookup-unknown-key:
+    rule: R003
+    condition: no_applicable_keys
+    spec_paths: ["intermediates[0]"]
+    validator: spec_contract
+  negative-lookup-rename-intermediate:
+    rule: R003
+    condition: rename_only_intermediate
+    spec_paths: ["intermediates[0]"]
+    validator: spec_contract
+  negative-previous-fixed:
+    rule: R006
+    condition: invalid_field_type
+    spec_paths: [columns.PRIORBP.derivation.previous_non_missing.source]
+    validator: schema
+  negative-rank-bad-method:
+    rule: R006
+    condition: invalid_field_type
+    spec_paths: [columns.SEVRANK.derivation.rank.method]
+    validator: schema
+  negative-round-half-away-from-zero-non-numeric-source:
+    rule: R007
+    condition: incompatible_input_type
+    spec_paths: [columns.RNDVAL.derivation.round_half_away_from_zero.source]
+    validator: expression_contract
+  negative-row-number-filter:
+    rule: R006
+    condition: invalid_field_type
+    spec_paths: [columns.VISITSEQ.derivation.row_number.window.filter]
+    validator: schema
+  negative-row-value-self:
+    rule: R001
+    condition: dependency_cycle
+    spec_paths:
+      - columns.AVALF.derivation.first_available
+      - columns.PRIORF.derivation.row_value
+    validator: dependency_graph
+  negative-row-no-prior:
+    rule: R007
+    condition: zero_offset
+    spec_paths: [columns.PREVAL.derivation.row_value.offset]
+    validator: window_contract
+  negative-source-self-reference:
+    rule: R002
+    condition: duplicate_identifier
+    spec_paths: [input.ADLB, domain]
+    validator: name_contract
+  negative-source-missing-field:
+    rule: R003
+    condition: unknown_field
+    spec_paths: [columns.AGE.derivation.source.filter]
+    validator: predicate
+  negative-source-trivial-filter:
+    rule: R003
+    condition: prohibited_construct
+    spec_paths: [columns.ACTARM.derivation.source.filter]
+    validator: source_contract
+  negative-source-undeclared-field:
+    rule: R002
+    condition: unknown_field
+    spec_paths: [columns.AGE.derivation.source]
+    validator: name_contract
+  negative-source-unknown-format:
+    rule: R023
+    condition: source_profile_unknown
+    spec_paths: [input.DM.path]
+    validator: dataset_source
+  negative-str-uncaptured-group:
+    rule: R022
+    condition: regex_group_out_of_range
+    spec_paths: ["columns.SITEID.derivation.str_extract.group"]
+    validator: regex
+  negative-str-contains-invalid-regex:
+    rule: R004
+    condition: invalid_predicate
+    spec_paths: ["columns.AESEV.derivation.case[0].when"]
+    validator: predicate
+  negative-str-case-number:
+    rule: R007
+    condition: incompatible_input_type
+    spec_paths: [columns.SITE.derivation.str_case.source]
+    validator: expression_contract
+  negative-str-case-unknown:
+    rule: R006
+    condition: value_not_permitted
+    spec_paths: [columns.SITE.derivation.str_case.to]
+    validator: schema
+  negative-str-pad-width:
+    rule: R006
+    condition: invalid_field_type
+    spec_paths: [columns.IDVARVAL.derivation.str_pad.width]
+    validator: schema
+  negative-study-day-datetime:
+    rule: R016
+    condition: incompatible_input_type
+    spec_paths: [columns.DTHDY.derivation.study_day.date]
+    validator: temporal_contract
+  negative-sum-non-numeric:
+    rule: R013
+    condition: incompatible_input_type
+    spec_paths: [columns.SEVTOT.derivation.aggregate.expr]
+    validator: aggregate_expression
+  negative-date-conversion:
+    rule: R016
+    condition: incompatible_input_type
+    spec_paths: [columns.ASTDT2.derivation.to_date.source]
+    validator: temporal_contract
+  negative-epoch-day-non-date:
+    rule: R016
+    condition: incompatible_input_type
+    spec_paths: [columns.EXSTDY.derivation.to_epoch_day.source]
+    validator: temporal_contract
+  negative-types-unknown-field:
+    rule: R014
+    condition: unknown_field
+    spec_paths: [input.EX.types.EXDOSEN]
+    validator: source_contract
+  negative-variable-nested:
+    rule: R006
+    condition: invalid_field_type
+    spec_paths: [columns.COUNTRY.derivation.str_case.source]
+    validator: schema
+  negative-locf-no-order:
+    rule: R007
+    condition: window_order_by_required
+    spec_paths: [columns.AVAL.derivation.locf.window]
+    validator: static_semantics
+  negative-odm-context:
+    rule: R002
+    condition: invalid_odm_context
+    spec_paths: [columns.SEX.derivation.odm]
+    validator: odm_contract
+  negative-odm-schema-ambiguous:
+    rule: R002
+    condition: odm_schema_field_ambiguous
+    spec_paths: [input.ODM.path]
+    validator: odm_contract
+  negative-odm-schema-missing:
+    rule: R002
+    condition: odm_schema_field_missing
+    spec_paths: [input.ODM.path]
+    validator: odm_contract
+  negative-odm-schema-type:
+    rule: R002
+    condition: odm_schema_field_type
+    spec_paths: [input.ODM.types]
+    validator: odm_contract

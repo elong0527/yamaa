@@ -21,7 +21,7 @@ separate qualification workflow.
 | Sources and YAML | ASCII repository source, valid Unicode data, YAML 1.2 core resolution, duplicate-key/tag/anchor/alias refusal. `.github/` YAML is outside the repository YAML scan. |
 | Schemas | Included files stay within `yaml/`, types/registries/constraints resolve and entry points validate. |
 | Specifications | Native admission, inherited declarations, static bindings, original declaring-file paths, closed source metadata and producer contracts. Metadata capture does not grant project activation, derivation execution or Save authority. |
-| Fixture diagnostics | `benchmarks/*/benchmark.yaml` owns case declarations; independent `expected/error.yaml` owns conditions and paths. Installed public conformance verifies actual engine findings. |
+| Fixture diagnostics | `benchmarks/validation-manifest.yaml` declares negative cases, conditions, paths and blockers. Every implemented expected validation condition must appear at its declared paths; unrelated findings fail. |
 | Benchmark inventory | Benchmark directories and the public-conformance configuration derive case membership, both host entries and explicit exclusions. `check_execution_manifest.py` checks that inventory; passing is gated by the native run, and no execution manifest or observation registry is maintained. |
 | Sources and artifacts | Native source-profile checks, CSV quoting/missingness/header/field contracts, expected output names/types/representation and key order. Expected golden values are authored truth, not regenerated results. |
 | Layout and prose | Required example files, negative remediation sections, variant layout, benchmark index, badges, line width, described columns and rule metadata. |

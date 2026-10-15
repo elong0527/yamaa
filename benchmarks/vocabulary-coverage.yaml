@@ -1,0 +1,74 @@
+version: "1.0"
+
+# Vocabulary coverage for the admission policy in AGENTS.md: an expression
+# enters the vocabulary when an example needs it, a negative example fixes
+# its failure behavior, and R and Python can implement it the same way.
+# Every registered expression and verification names either the negative
+# examples or shared installed conformance cases that fix its failure behavior,
+# or the open issue tracking the
+# gap. check_vocabulary_coverage.py enforces this file in CI.
+coverage:
+  aggregate: [negative-sum-non-numeric]
+  baseline_flag: [negative-tied-baseline]
+  case: [negative-literal-structure]
+  first_available: [negative-first-available-self]
+  flag: [negative-flag-condition, negative-flag-missing-value,
+         negative-flag-payload]
+  compute: [negative-formula-flag]
+  cut: [negative-cut-coded]
+  date_diff: [negative-date-diff-endpoints,
+    negative-date-diff-units]
+  date_impute: [negative-impute-bad-month,
+    negative-impute-missing-month, negative-impute-unreachable-month]
+  date_precision: [negative-precision-bad-source]
+  date_shift:
+    shared_cases: [date_shift_datetime_source, date_shift_float_days,
+      date_shift_upper_overflow, date_shift_lower_overflow]
+  datetime_diff:
+    shared_cases: [datetime_diff_date_source]
+  datetime_impute: [negative-datetime-impute-bad-source]
+  datetime_precision: [negative-datetime-precision-bad-source]
+  datetime_shift:
+    shared_cases: [datetime_shift_date_source, datetime_shift_text_amount,
+      datetime_shift_fractional_seconds, datetime_shift_upper_overflow,
+      datetime_shift_lower_overflow]
+  duration_value:
+    shared_cases: [duration_value_numeric_source, duration_invalid_without_handler]
+  duration_text:
+    shared_cases: [duration_text_temporal_source, duration_text_overflow]
+  greatest: [negative-greatest-mixed]
+  least: [negative-least-mixed]
+  literal: [negative-literal-structure]
+  mapping: [negative-mapping-case-collision]
+  locf: [negative-locf-no-order]
+  odm: [negative-odm-context, negative-odm-not-unique,
+    negative-odm-repeated-record, negative-odm-schema-ambiguous,
+    negative-odm-schema-missing, negative-odm-schema-type,
+    negative-odm-schema-value]
+  previous_non_missing: [negative-previous-fixed]
+  rank: [negative-rank-bad-method]
+  round_half_away_from_zero: [negative-round-half-away-from-zero-non-numeric-source]
+  row_number: [negative-row-number-filter]
+  row_value: [negative-row-no-prior]
+  source: [negative-source-undeclared-field]
+  str_case: [negative-str-case-number, negative-str-case-unknown,
+    negative-variable-nested]
+  str_concat: [negative-usubjid-length]
+  str_contains: [negative-str-contains-invalid-regex,
+    negative-str-contains-bool-result]
+  str_extract: [negative-str-uncaptured-group]
+  str_pad: [negative-str-pad-width]
+  str_template: [negative-subject-reference]
+  study_day: [negative-study-day-datetime]
+  to_date: [negative-date-conversion]
+  to_epoch_day: [negative-epoch-day-non-date]
+  verify:all_or_none: [negative-paired-dates]
+  verify:allowed_values: [negative-invalid-sex]
+  verify:assert: [negative-adeg-rrr, negative-strata-mismatch]
+  verify:matches: [negative-matches-bad-pattern,
+    negative-sex-code]
+  verify:max_length: [negative-usubjid-length]
+  verify:not_missing: [negative-not-missing-age]
+  verify:range: [negative-implausible-age]
+  verify:row_count: [negative-count-unnamed]
+  verify:unique: [negative-unique-duplicate]

@@ -17,7 +17,7 @@ Start with [`sdtm-dm-basic`](sdtm-dm-basic/) for direct mapping,
 
 ## Lifecycle
 
-Each `benchmark.yaml` declares the review state; dashboards render its badge:
+Each example carries a lifecycle badge showing its review state:
 
 - `draft`: first commit.
 - `reviewed`: has discussion comments or GitHub issues.

@@ -6,6 +6,9 @@ without masking (or being masked by) a spec verdict:
 
 - validate_examples_readme_presence: every example has a README and every
   negative README carries its '## How to fix' section;
+- validate_examples_badges: every example README places its Dashboard
+  badge line right after the title, with its lifecycle badge on the same
+  line or on the line immediately below;
 - validate_example_readmes: line width, schema-vocabulary-free data
   contracts, heading structure, described expected columns;
 - validate_examples_index: the derived examples index matches directories;
@@ -19,6 +22,7 @@ from pathlib import Path
 from tools.paths import ROOT
 from tools.validation.editorial import (
     validate_example_readmes,
+    validate_examples_badges,
     validate_examples_index,
     validate_examples_readme_presence,
     validate_rule_metadata,
@@ -37,6 +41,7 @@ def main():
 
     errors = []
     errors.extend(validate_examples_readme_presence(args.root))
+    errors.extend(validate_examples_badges(args.root))
     errors.extend(validate_example_readmes(args.root))
     errors.extend(validate_examples_index(args.root))
     errors.extend(validate_rule_metadata(args.root))

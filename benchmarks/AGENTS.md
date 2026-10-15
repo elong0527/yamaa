@@ -16,75 +16,96 @@ tracker, one work item per root cause.
 ## Benchmark layout
 
     <standard>-<domain>-<subject>/
-        benchmark.yaml             # lifecycle, standard, domain and entries
-        README.md                  # the data contract
-        spec.yaml                  # one entry specification
-        spec_<name>.yaml ...       # alternatives, parents or producers
-        define.yaml                # when the entry generates a document
-        input/                     # independently authored source files
-        expected/                  # exact output, logs, documents or error
-        python/environment.yaml    # when Python calls a project function
-        r/environment.yaml         # when R calls a project function
+        README.md
+        spec.yaml                                   # one specification
+        spec_<variant>.yaml ...                     # alternative specifications, never mixed with spec.yaml
+        spec_<level>.yaml ...                       # multi-level specifications only: no spec.yaml;
+                                                    # the file no other file parents is the entry
+        spec_<domain>.yaml ...                      # domains built together: no spec.yaml; the entry
+                                                    # reads the others through input schema
+        define.yaml                                 # when the entry generates a document
+        input/*.csv
+        expected/<domain>.csv
+        expected/define.xml                         # when the entry generates a document
+        expected/resolved[_<variant>].yaml          # single-entry inheritance
+        expected/spec_resolved.yaml                 # multi-level inheritance: resolution of the entry chain
+        environment.yaml                            # when the entry calls a project function
+        <language>/                                 # a second project root, for another runtime:
+                                                    # environment.yaml, the shared contracts and
+                                                    # vectors, and the runtime it resolves in
+        run.py                                      # run the entry spec
+        run.R                                       # the R runner for the entry spec
 
-Every case has one `benchmark.yaml`; README prose supplies no configuration.
-Start a case with:
+The agent evaluation prompts of the `sdtm-*` and `adam-*` benchmarks live with
+the evaluation, in `../evaluations/harbor/prompts/<name>/`
+(`../automation/benchmark_prompt.md`), not in the benchmark folder.
 
-```yaml
-lifecycle: draft
-standard: SDTM
-domain: DM
-```
+Every positive benchmark carries `run.py`, the three-line snippet that runs
+its entry specification:
 
-A case with one `spec*.yaml` runs that file in both hosts. When present,
-`python/environment.yaml` and `r/environment.yaml` supply their respective host
-function environments. A root `environment.yaml` is not selected implicitly.
-Project function definitions, parameters and tests stay in their existing
-explicit environment files.
+    import yamaa
 
-A case with several specifications declares the public calls in order. Both
-hosts must be present; each call names its specification and may override its
-host environment, including an explicit `null` to call without one:
+    <domain> = yamaa.domain("<entry spec>").output
+    <domain>
 
-```yaml
-entries:
-  python:
-    - specification: spec_dm.yaml
-      environment: null
-    - specification: spec_suppdm.yaml
-      environment: null
-  r:
-    - specification: spec_dm.yaml
-      environment: null
-    - specification: spec_suppdm.yaml
-      environment: null
-```
+Pass the host function environment explicitly, as
+`environment="python/environment.yaml"`, when the benchmark calls project
+functions. The example tests compare public outputs and logs with independent truth and
+check exact saved CSV bytes in an isolated study directory.
 
-`sdtm-dm-race-ethnicity` is the worked producer/consumer example. Each producer
-commits its own expected artifact beside the entry's. Multi-level inheritance
-and alternative specifications also declare their entries; source files are
-not guessed from a parent graph. The metadata is the shared owner for native
-conformance and the dashboard's generated Python and R usage snippets. Do not
-add per-case runner scripts. Approved exclusions and metamorphic differences
-also belong to their case's `conformance` metadata, with their reviewed reason;
-they have no separate registry. A permanent difference states its by-design
-reason, and a temporary difference must be pruned when it becomes stale.
+Every positive benchmark also carries `run.R`, the same snippet in R. It
+targets the `yamaa` R package and mirrors `run.py` line for
+line:
 
-Inspect the complete plan from the repository root:
+    library(yamaa)
 
-```sh
-python -m tools.conformance.public_conformance plan \
-  --fixtures benchmarks --output /tmp/yamaa-benchmark-plan.json
-```
+    <domain> <- yamaa_domain("<entry spec>")$output
+    <domain>
 
-Function implementations are ordinary installed packages under
-`rust/tests/project-programs/`. Qualification stages studies outside the
-checkout, copies the existing Python packaging lock and retains the R
-environment's hash-free lock. The subdirectories organize fixtures; they do not
-select an implicit project root.
+A benchmark whose entry calls a project function supplies its environment file
+explicitly. The qualification stager copies the existing Python packaging lock
+into each isolated study; each R study carries a hash-free renv lock. Functions
+are ordinary installed packages under `program/`.
 
-The `sdtm-*` and `adam-*` evaluation prompts and independent solutions live
-beside the Harbor harness in `../evaluations/harbor/`. Its prompt recipe is
-`../automation/benchmark_prompt.md`.
+    import yamaa
+
+    <domain> = yamaa.domain("<entry spec>", environment="python/environment.yaml").output
+    <domain>
+
+The R twin passes `environment = "r/environment.yaml"` to `yamaa_domain`.
+
+The variable is the domain in lowercase (for example `adsl`), and the entry
+spec is `spec.yaml`, or the file no other file parents for multi-level
+benchmarks. Negative benchmarks carry no `run.py` and no `run.R`: the entry
+is expected to fail, so there is no artifact to bind.
+
+A positive benchmark without a runner is a benchmark that stopped executing,
+not one nobody wrote a runner for, and
+`test_every_positive_example_carries_a_runner` fails on it. Whatever broke --
+an unimplemented operation, a validation error, a stale spec, a drifted
+golden -- is what gets fixed; the runner stays.
+
+Use `spec.yaml` for one specification. Use one or more `spec_<variant>.yaml`
+files when the benchmark intentionally demonstrates a runtime or design variant
+over shared inputs and an expected artifact. Do not mix the base filename with
+variants.
+
+Domains that are only meaningful together, such as DM and its SUPPDM, share
+one benchmark as `spec_<domain>.yaml` files. The entry reads each other one
+through `input.<id>.schema`, so the run builds the producer first and the
+entry consumes its artifact; the file no other file names as a parent or a
+producer is the entry. Each producer commits its own `expected/<domain>.csv`
+beside the entry's, and the runner binds every domain, the entry last:
+
+    import yamaa
+
+    dm = yamaa.domain("spec_dm.yaml").output
+    suppdm = yamaa.domain("spec_suppdm.yaml").output
+    dm, suppdm
+
+`sdtm-dm-race-ethnicity` is the worked example. A producer kept under
+`input/` instead only records where an input came from, and its artifact is
+not a golden.
 
 ## Input staging
 
@@ -138,7 +159,7 @@ packages live in `rust/tests/project-programs/`; no vendored runtime artifact,
 contract fingerprint or activation cache is used. The original function
 studies are copied outside the checkout by `tools/staging/stage_project_inputs.py`.
 It copies the sole existing `python/uv.lock` beside each Python environment;
-committed R locks contain versions without hashes. Each host entry selects its
+committed R locks contain versions without hashes. Each runner names its
 `python/environment.yaml` or `r/environment.yaml` explicitly. The subdirectories
 are fixture organization, not implicit project-root selection.
 
@@ -179,7 +200,11 @@ tooling detail: expand abbreviations on first use and state effects in
 study-data words. Write:
 
 - a short title of the form `# <what the benchmark does>` (no
-  `<STANDARD> <DOMAIN>` prefix in the title);
+  `<STANDARD> <DOMAIN>` prefix in the title), followed by a `Dashboard` badge
+  linking to the rendered page:
+  `[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/<directory>.html)`.
+  It is navigation, not data description: the validator exempts it from the
+  prose rules below, and the dashboard hides it on the page itself;
 - a `Goal:` line naming the variables derived;
 - an `Input:` line naming the source shape in plain words;
 - a `Variables:` list with one bullet per output variable, in output order,
@@ -187,6 +212,7 @@ study-data words. Write:
   support it;
 - at most one closing `Note:` paragraph, for a rule that governs several
   variables at once;
+- a final tags line of the form `Standard: <STANDARD> | Domain: <DOMAIN>`;
 - for every negative benchmark, a final `## How to fix` section that recommends
   the safest correction first and uses a short YAML snippet when it clarifies
   the change.
@@ -197,9 +223,8 @@ behavior rule. It may include a `Variables:` list when output values make the
 behavior concrete. It still names every non-key golden column somewhere in the
 contract so the coverage check below stays silent.
 
-Lifecycle, standard and domain belong in `benchmark.yaml`. Dashboards render
-that metadata; README files contain only the data contract. New benchmarks
-start at `draft`, as defined in `README.md`.
+Every benchmark README also carries a lifecycle badge (`draft`, `reviewed`,
+or `finalized` as defined in `README.md`); new benchmarks start at `draft`.
 
 Keep bullets to the variables a reader must understand. Direct key copies and
 fixed values need no bullet.
@@ -318,13 +343,10 @@ a scalar and a one-field class interchangeable shorthand, the
 path names the operation: it is the narrowest authored unit shared by both
 spellings, and normalization must not invent a deeper location.
 
-Every validation-phase negative case declares `validation` in `benchmark.yaml`:
-`rule` plus exactly one `validator` family or open `blocked_by: "#N"` issue.
-The primary condition and specification paths stay solely in the independent
-`expected/error.yaml`. Implemented validators must emit that condition at every
-expected path. Add `covers: [operation, "verify:operation"]` to the metadata for
-vocabulary failure coverage; shared installed refusals declare `covers` beside
-their existing cases in the shared host fixture owner.
+Register every validation-phase negative fixture exactly once in
+`validation-manifest.yaml`. An implemented entry must match its primary
+condition at every declared specification path; an unimplemented entry must
+name its open blocking issue.
 
 `phase` comes from the two closed tables below, so two benchmarks that stop at
 the same point say so the same way. Whole-run evaluation failures use:
@@ -373,27 +395,55 @@ check merely to make the sample pass.
 
 ## Checks to run before finishing
 
-Use the supported setup and repository checks in [CONTRIBUTING.md](../CONTRIBUTING.md).
-From the repository root, run a positive case through its declared Python
-entries without publishing any output files:
+    # every declared benchmark column has a non-empty, human-readable label
+    # (validate_column_labels in validate_repository.py; the full prose gate
+    # is check_documentation.py)
+    uv run --project ../python --no-sync \
+        python ../tools/validation/validate_repository.py
 
-```sh
-uv run --project python --no-sync python -m tools.benchmark benchmarks/<name>
-uv run --project python --no-sync python -m tools.validation.validate_repository
-uv run --project python --no-sync python -m yamaa.style benchmarks/<name>/
-```
+    # every specification follows the style contract
+    # (../rules/specification/style.md); --fix applies the proved layout fixes
+    uv run --project ../python --no-sync python -m yamaa.style */spec*.yaml
 
-Conformance qualification compares both hosts with the authored expected data.
-When prompts or independent solutions change, also run the Harbor controls:
+    # no schema vocabulary reached the data-contract portion of a README,
+    # and every negative benchmark has exactly one remediation section
+    python3 - <<'PY'
+    import glob, re
+    pattern = re.compile(r"R0[0-9][0-9]|output\.columns|handler|verification")
+    for f in sorted(glob.glob("*/README.md")):
+        text = open(f).read()
+        contract = text.split("\n## How to fix\n", 1)[0]
+        for line_no, line in enumerate(contract.splitlines(), 1):
+            if pattern.search(line):
+                print(f, line_no, line)
+    for f in sorted(glob.glob("negative-*/README.md")):
+        count = open(f).read().count("\n## How to fix\n")
+        if count != 1:
+            print(f, "->", count, "How to fix sections")
+    PY
 
-```sh
-uv run --project python --no-sync pytest evaluations/harbor/tests
-```
+    # every column in the golden file is described
+    python3 - <<'PY'
+    import glob, os
+    KEYS = {"STUDYID", "USUBJID", "DOMAIN", "SUBJID", "AESEQ", "VSSEQ",
+            "LBSEQ", "RSSEQ", "ASEQ", "PARAMCD", "PARAM", "AVISIT", "VISIT",
+            "RDOMAIN", "IDVAR", "QNAM"}
+    for f in sorted(glob.glob("*/expected/*.csv")):
+        d = os.path.dirname(os.path.dirname(f))
+        rd = open(f"{d}/README.md").read()
+        cols = open(f).readline().strip().split(",")
+        missing = [c for c in cols if c not in rd and c not in KEYS]
+        if missing:
+            print(d, "->", missing)
+    PY
+
+Both scripts print nothing when the suite is clean. Key columns and fixed
+domain values are skipped because they carry no logic; anything the second
+check reports is a variable the README does not explain.
 
 ## Adding a benchmark
 
-1. Write `benchmark.yaml`, `spec.yaml` or the applicable `spec_<variant>.yaml`
-   files, the input
+1. Write `spec.yaml`, or the applicable `spec_<variant>.yaml` files, the input
    data, and either the expected output or the expected error. Add an expected
    CSV beside an error when it makes a blocked or rejected result concrete.
    For a positive inherited benchmark, also write its expected resolved YAML.
@@ -402,8 +452,9 @@ uv run --project python --no-sync pytest evaluations/harbor/tests
 3. Once the README of a positive `sdtm-*` or `adam-*` benchmark is
    `reviewed`, write its full prompt,
    `../evaluations/harbor/prompts/<name>/full.md`, to the
-   [benchmark prompt recipe](../automation/benchmark_prompt.md), and its
-   `conventions.md`. The harness derives the brief prompt.
+   [benchmark prompt recipe](../automation/benchmark_prompt.md), its
+   `conventions.md` from it, and its `brief.md` with
+   `evaluations/harbor/brief.py`.
 4. Record any finding it exposes as a gap on the matching work item in the
    issue tracker, or add the benchmark's name to the gap that already states it.
 

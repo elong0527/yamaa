@@ -5,16 +5,39 @@ from functools import lru_cache
 from pathlib import Path
 
 import yaml
-from tools.benchmark import directories, load_metadata
-from tools.benchmark import entries as benchmark_entries
 from tools.paths import ROOT
 from tools.validation import _native_json, _native_schema
 from tools.validation._repository_yaml import UniqueKeyLoader
 from tools.validation.editorial import example_spec_paths
 from tools.validation.validation_diagnostics import (
     RESOURCE_PATH_MESSAGES,
+    VALIDATION_CONTEXT_FIELDS,
     ValidationDiagnostic,
 )
+
+VALIDATION_CONDITION_REGISTRY = {
+    key: {
+        "allowed_phases": {"validation"},
+        "required_context": required_context,
+    }
+    for key, required_context in VALIDATION_CONTEXT_FIELDS.items()
+}
+
+
+def load_validation_manifest(root: Path):
+    path = root / "benchmarks" / "validation-manifest.yaml"
+    if not path.is_file():
+        if not validation_phase_contracts(root):
+            return {"version": "1.0", "fixtures": {}}, []
+        return None, [
+            f"ERROR: {path.relative_to(root)}: validation manifest is missing"
+        ]
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            manifest = yaml.load(handle, Loader=UniqueKeyLoader)
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        return None, [f"ERROR: {path.relative_to(root)}: {exc}"]
+    return manifest, []
 
 
 def validation_phase_contracts(root: Path):
@@ -36,67 +59,101 @@ def validation_phase_contracts(root: Path):
     return contracts
 
 
-def load_validation_fixtures(root: Path):
-    """Join each case's metadata with its independently authored error truth."""
-    fixtures = {}
+def validate_validation_manifest(root: Path, manifest):
     errors = []
-    directory = root / "benchmarks"
-    if not directory.is_dir():
-        return fixtures, errors
+    label = "benchmarks/validation-manifest.yaml"
+    if not isinstance(manifest, dict):
+        return [f"ERROR: {label}: expected a mapping"]
+    if manifest.get("version") != "1.0":
+        errors.append(f"ERROR: {label}.version: expected '1.0'")
+    unknown_root = sorted(set(manifest) - {"version", "fixtures"})
+    for field in unknown_root:
+        errors.append(f"ERROR: {label}.{field}: unknown field")
+    fixtures = manifest.get("fixtures")
+    if not isinstance(fixtures, dict):
+        errors.append(f"ERROR: {label}.fixtures: expected a mapping")
+        return errors
+
     contracts = validation_phase_contracts(root)
-    # Focused fixture tests use the checkout's normative vocabulary; a complete
-    # --root repository supplies its own conditions owner.
-    vocabulary_root = root if (root / "yaml/conditions.yaml").is_file() else ROOT
-    vocabulary, vocabulary_errors = load_condition_registry(vocabulary_root)
-    errors.extend(vocabulary_errors)
-    conditions = (
-        vocabulary.get("conditions", {}) if isinstance(vocabulary, dict) else {}
-    )
-    for case in directories(directory):
-        label = f"benchmarks/{case.name}/benchmark.yaml"
-        try:
-            metadata = load_metadata(case)
-            benchmark_entries(case, metadata)
-        except ValueError as error:
-            errors.append(f"ERROR: {label}: {error}")
+    missing = sorted(set(contracts) - set(fixtures))
+    stale = sorted(set(fixtures) - set(contracts))
+    for name in missing:
+        errors.append(f"ERROR: {label}.fixtures: missing validation fixture {name!r}")
+    for name in stale:
+        errors.append(
+            f"ERROR: {label}.fixtures.{name}: stale or non-validation fixture"
+        )
+
+    for name in sorted(set(fixtures) & set(contracts)):
+        entry = fixtures[name]
+        path = f"{label}.fixtures.{name}"
+        if not isinstance(entry, dict):
+            errors.append(f"ERROR: {path}: expected a mapping")
             continue
-        declared = metadata.get("validation")
-        contract = contracts.get(case.name)
-        if declared is None:
-            if contract is not None:
-                errors.append(
-                    f"ERROR: {label}.validation: missing validation declaration"
-                )
-            continue
-        if contract is None:
-            errors.append(f"ERROR: {label}.validation: stale or non-validation fixture")
-            continue
-        entry = {
-            **declared,
-            "condition": contract.get("condition"),
-            "spec_paths": contract.get("spec_paths"),
-        }
-        fixtures[case.name] = entry
-        condition = entry["condition"]
-        registration = conditions.get(condition) if isinstance(condition, str) else None
-        expected_label = f"benchmarks/{case.name}/expected/error.yaml"
-        if not isinstance(registration, dict) or "validation" not in registration.get(
-            "phases", []
-        ):
+        unknown = sorted(
+            set(entry) - {"rule", "condition", "spec_paths", "validator", "blocked_by"}
+        )
+        for field in unknown:
+            errors.append(f"ERROR: {path}.{field}: unknown field")
+        rule = entry.get("rule")
+        condition = entry.get("condition")
+        spec_paths = entry.get("spec_paths")
+        contract = contracts[name]
+        if not isinstance(rule, str) or re.fullmatch(r"R[0-9]{3}", rule) is None:
+            errors.append(f"ERROR: {path}.rule: expected a rule id")
+        registration = VALIDATION_CONDITION_REGISTRY.get((rule, condition))
+        if registration is None:
             errors.append(
-                f"ERROR: {expected_label}.condition: unregistered validation condition {condition!r}"
+                f"ERROR: {path}.condition: unregistered condition "
+                f"{condition!r} for {rule!r}"
             )
-        paths = entry["spec_paths"]
+        elif contract.get("phase") not in registration["allowed_phases"]:
+            errors.append(
+                f"ERROR: {path}.condition: condition {condition!r} is not "
+                f"allowed during phase {contract.get('phase')!r}"
+            )
         if not (
-            isinstance(paths, list)
-            and paths
-            and all(isinstance(path, str) and path for path in paths)
-            and len(set(paths)) == len(paths)
+            isinstance(spec_paths, list)
+            and spec_paths
+            and len(spec_paths) == len(set(spec_paths))
+            and all(isinstance(item, str) and item for item in spec_paths)
         ):
+            errors.append(f"ERROR: {path}.spec_paths: expected unique non-empty paths")
+        if condition != contract.get("condition"):
             errors.append(
-                f"ERROR: {expected_label}.spec_paths: expected unique non-empty paths"
+                f"ERROR: {path}.condition: does not match expected/error.yaml"
             )
-    return fixtures, errors
+        if spec_paths != contract.get("spec_paths"):
+            errors.append(f"ERROR: {path}.spec_paths: do not match expected/error.yaml")
+        required_context = (
+            registration["required_context"] if registration is not None else set()
+        )
+        context = contract.get("context", {})
+        if not isinstance(context, dict):
+            context = {}
+        absent = sorted(required_context - set(context))
+        if absent:
+            errors.append(
+                f"ERROR: {path}: expected/error.yaml context is missing {absent!r}"
+            )
+
+        has_validator = "validator" in entry
+        has_blocker = "blocked_by" in entry
+        if has_validator == has_blocker:
+            errors.append(
+                f"ERROR: {path}: declare exactly one of validator or blocked_by"
+            )
+        if has_validator and not (
+            isinstance(entry["validator"], str)
+            and re.fullmatch(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*", entry["validator"])
+        ):
+            errors.append(f"ERROR: {path}.validator: expected snake case")
+        if has_blocker and not (
+            isinstance(entry["blocked_by"], str)
+            and re.fullmatch(r"#[1-9][0-9]*", entry["blocked_by"])
+        ):
+            errors.append(f"ERROR: {path}.blocked_by: expected a GitHub issue '#N'")
+    return errors
 
 
 def diagnostic_matches_path(diagnostic, spec_labels, expected_path):
@@ -128,7 +185,7 @@ def validate_registered_fixture_diagnostics(name, entry, spec_errors, spec_label
                 matches[expected_path].append(diagnostic)
                 expected_ids.add(id(diagnostic))
 
-    manifest_path = f"benchmarks/{name}/benchmark.yaml.validation"
+    manifest_path = f"benchmarks/validation-manifest.yaml.fixtures.{name}"
     if "blocked_by" in entry:
         if all(matches.values()):
             return [

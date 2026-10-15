@@ -50,10 +50,10 @@ class BenchmarkIndex(unittest.TestCase):
             case = fixtures / "new-case"
             case.mkdir()
             (case / "spec.yaml").write_text("domain: TEST\n")
-            (case / "benchmark.yaml").write_text(
-                "lifecycle: draft\nstandard: TEST\ndomain: TEST\n"
+            (case / "README.md").write_text(
+                "# New | Case\n"
+                "[![Lifecycle: draft](https://example.com/badge)](https://example.com/lifecycle)\n"
             )
-            (case / "README.md").write_text("# New | Case\n")
             result = index.render_index(fixtures, "# Index\n\n## Benchmarks\n")
             self.assertIn("| [`new-case`](new-case/) | New \\| Case |", result)
             self.assertIn("1 authored cases; 1 active cases", result)
@@ -68,9 +68,6 @@ class BenchmarkIndex(unittest.TestCase):
             case = fixtures / "new-case"
             case.mkdir()
             (case / "spec.yaml").write_text("domain: TEST\n")
-            (case / "benchmark.yaml").write_text(
-                "lifecycle: draft\nstandard: TEST\ndomain: TEST\n"
-            )
             with self.assertRaises(FileNotFoundError):
                 index.render_index(fixtures, "# Index\n\n## Benchmarks\n")
 

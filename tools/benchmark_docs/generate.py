@@ -13,10 +13,8 @@ from urllib.parse import quote, urlsplit
 from markdown_it import MarkdownIt
 
 import yaml
-from tools.benchmark import LIFECYCLES, load_metadata
-from tools.benchmark import entries as benchmark_entries
 from tools.benchmark_docs import mapping_doc
-from tools.conformance.public_conformance import plan
+from tools.conformance.public_conformance import EXCLUDED, plan
 from tools.paths import ROOT
 
 HERE = Path(__file__).resolve().parent
@@ -88,6 +86,13 @@ YAML_TOKEN = re.compile(
 )
 SPEC_FILE_PATTERN = re.compile(r"^spec(?:_[a-z][a-z0-9_]*)?\.yaml$")
 SPEC_RESOLVED_NAME = "spec_resolved.yaml"
+CODE_SUFFIXES = (".py", ".R", ".qmd", ".Rmd")
+README_TAXONOMY = re.compile(
+    r"^\*\*Standard:\*\*\s*([^|]+?)\s*\|\s*\*\*Domain:\*\*\s*(\S+)\s*$"
+)
+LIFECYCLE_BADGE = re.compile(r"\[!\[Lifecycle:\s*([A-Za-z]+)\]\(([^)]+)\)\]")
+LIFECYCLE_STATES = ("draft", "reviewed", "finalized")
+LIFECYCLE_DEFAULT = ("draft", "https://img.shields.io/badge/Lifecycle-draft-lightgrey")
 
 
 def escape(value):
@@ -143,13 +148,17 @@ def sibling_producers(benchmark, spec):
 
 def benchmark_entry(benchmark):
     files = benchmark_spec_files(benchmark)
+    if (benchmark / "spec.yaml").is_file():
+        return benchmark / "spec.yaml", []
     specs = {}
     for path in files:
         try:
             specs[path.resolve()] = yaml.safe_load(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, yaml.YAMLError):
             continue
-    entry = benchmark / benchmark_entries(benchmark)["python"][-1]["specification"]
+    named = {Path(link).name for spec in specs.values() for link in linked_specs(spec)}
+    entries = [path for path in files if path.name not in named]
+    entry = entries[0] if entries else (files[0] if files else None)
     chain = []
     if entry is not None:
         seen = set()
@@ -170,7 +179,33 @@ def benchmark_entry(benchmark):
 
 
 def readme_lines(text):
-    return text.splitlines()
+    """Return dashboard prose lines without navigation or taxonomy metadata."""
+    return [
+        line
+        for line in text.splitlines()
+        if "img.shields.io/badge/Dashboard" not in line
+        and "img.shields.io/badge/Lifecycle" not in line
+        and not line.strip().startswith("**Lifecycle:**")
+        and not README_TAXONOMY.fullmatch(line)
+    ]
+
+
+def readme_lifecycle(text):
+    """Extract the lifecycle state and badge URL from raw README text."""
+    match = LIFECYCLE_BADGE.search(text)
+    if match:
+        state, badge_url = match.group(1), match.group(2)
+        if state in LIFECYCLE_STATES:
+            return state, badge_url
+    return LIFECYCLE_DEFAULT
+
+
+def readme_taxonomy(text):
+    for line in text.splitlines():
+        match = README_TAXONOMY.fullmatch(line)
+        if match:
+            return match.group(1).strip(), match.group(2).strip()
+    return None
 
 
 def readme_body_line_count(text):
@@ -434,8 +469,7 @@ def describe_benchmark(benchmark):
     spec = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
     spec = spec if isinstance(spec, dict) else {}
     category, _ = benchmark_category(benchmark.name, title, spec)
-    metadata = load_metadata(benchmark)
-    taxonomy = (metadata["standard"], metadata["domain"])
+    taxonomy = readme_taxonomy(readme_text)
     if taxonomy and category != "Specification" and sibling_producers(benchmark, spec):
         # An example that builds several domains files under the one its
         # README names, not under whichever domain its entry happens to build.
@@ -570,24 +604,12 @@ def render_spec_pane(filename, text, slug, single, edit_url=None):
     return pane, len(lines)
 
 
-def benchmark_code(benchmark):
-    """Render public calls from the same ordered metadata as conformance."""
-    if benchmark.name.startswith("negative-"):
-        return []
-    entries = benchmark_entries(benchmark)
-    result = []
-    for host, title, opening, function, output in (
-        ("r", "R", "library(yamaa)", "yamaa_domain", "$output"),
-        ("python", "Python", "import yamaa", "yamaa.domain", ".output"),
-    ):
-        calls = []
-        for entry in entries[host]:
-            arguments = json.dumps(entry["specification"])
-            if entry["environment"] is not None:
-                arguments += ", environment=" + json.dumps(entry["environment"])
-            calls.append(f"{function}({arguments}){output}")
-        result.append((title, opening + "\n\n" + "\n".join(calls) + "\n"))
-    return result
+def benchmark_code_files(benchmark):
+    return sorted(
+        path
+        for path in benchmark.iterdir()
+        if path.is_file() and path.suffix in CODE_SUFFIXES
+    )
 
 
 def slugify(text):
@@ -607,11 +629,7 @@ def render_file_document(document_id, title, line_count, body, edit_url=None):
 
 def render_code_document(path, slug, title, edit_url=None):
     """A code file with numbered lines, each one linkable as #code-<slug>-line-<n>."""
-    return render_code_text(path.read_text(encoding="utf-8"), slug, title, edit_url)
-
-
-def render_code_text(text, slug, title, edit_url=None):
-    lines = text.splitlines()
+    lines = path.read_text(encoding="utf-8").splitlines()
     code_lines = "".join(
         f'<span class="code-line" id="code-{slug}-line-{number}"><span class="line-number" aria-hidden="true">{number}</span>'
         f'<span class="code-source">{escape(line)}</span></span>'
@@ -667,7 +685,7 @@ def render_material_pane(key, title, provenance, picker_label, documents):
     )
 
 
-def render_materials(benchmark, spec, define, code_snippets, edit_base):
+def render_materials(benchmark, spec, define, code_files, edit_base):
     """Tabs and panes for the assessment materials shown beside Comments.
 
     None of them is under review: the mapping spec is generated from the YAML,
@@ -724,25 +742,25 @@ def render_materials(benchmark, spec, define, code_snippets, edit_base):
                 ],
             )
         )
-    if code_snippets:
+    if code_files:
         materials.append(
             (
                 "code",
                 "yamaa code",
-                "Public calls generated from benchmark.yaml; results must match the expected output",
+                "Runs the yamaa specification; its result must match the expected output",
                 "File",
                 [
                     (
-                        title,
-                        f"code-pane-{slugify(title)}",
-                        render_code_text(
-                            text,
-                            slugify(title),
-                            title,
-                            f"{edit_base}/benchmark.yaml" if edit_base else None,
+                        path.name,
+                        f"code-pane-{slugify(path.name)}",
+                        render_code_document(
+                            path,
+                            slugify(path.name),
+                            path.name,
+                            f"{edit_base}/{quote(path.name)}" if edit_base else None,
                         ),
                     )
-                    for title, text in code_snippets
+                    for path in code_files
                 ],
             )
         )
@@ -798,9 +816,7 @@ def render_benchmark(benchmark, previous=None, next=None):
         raise ValueError(f"benchmark has no spec file: {benchmark.name}")
     spec_edit_url = edit_base + "/" + quote(spec_path.name)
     readme_text = readme_path.read_text(encoding="utf-8")
-    metadata = load_metadata(benchmark)
-    lifecycle_state = metadata["lifecycle"]
-    lifecycle_url = f"https://img.shields.io/badge/Lifecycle-{lifecycle_state}-{LIFECYCLES[lifecycle_state]}"
+    lifecycle_state, lifecycle_url = readme_lifecycle(readme_text)
     lifecycle_href = REPOSITORY + "/blob/main/benchmarks/README.md#lifecycle"
     lifecycle_badge = (
         f'<a class="lifecycle-badge" href="{escape(lifecycle_href)}">'
@@ -858,8 +874,7 @@ def render_benchmark(benchmark, previous=None, next=None):
             f'<option value="{escape(key)}">{escape(label)}</option>'
         )
     category, heading = benchmark_category(benchmark.name, title, spec)
-    metadata = load_metadata(benchmark)
-    taxonomy = (metadata["standard"], metadata["domain"])
+    taxonomy = readme_taxonomy(readme_text)
     if taxonomy and not benchmark.name.startswith("spec-"):
         category = ".".join(taxonomy)
     heading = heading[:1].upper() + heading[1:]
@@ -1022,7 +1037,7 @@ def render_benchmark(benchmark, previous=None, next=None):
         )
         spec_code = "".join(panes)
         spec_file_header = ""
-    code_snippets = benchmark_code(benchmark)
+    code_files = benchmark_code_files(benchmark)
     define_path = benchmark / "define.yaml"
     define = (
         yaml.safe_load(define_path.read_text(encoding="utf-8"))
@@ -1030,7 +1045,7 @@ def render_benchmark(benchmark, previous=None, next=None):
         else None
     )
     material_tabs, material_panes = render_materials(
-        benchmark, spec, define, code_snippets, edit_base
+        benchmark, spec, define, code_files, edit_base
     )
     template = Template((HERE / "dashboard.html").read_text(encoding="utf-8"))
     result = template.substitute(
@@ -1041,8 +1056,8 @@ def render_benchmark(benchmark, previous=None, next=None):
         description=description,
         lifecycle_badge=lifecycle_badge,
         conformance=escape(
-            f"Public conformance excluded: {metadata['conformance']['excluded']}"
-            if metadata.get("conformance", {}).get("excluded")
+            f"Public conformance excluded: {EXCLUDED[benchmark.name]}"
+            if benchmark.name in EXCLUDED
             else "Public entries: Python and R. Passing coverage requires an installed inventory."
         ),
         failure_section=failure_section,

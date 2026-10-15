@@ -26,7 +26,7 @@ HISTORICAL_RESOURCE_FIXTURES = frozenset(
 )
 
 
-def validate_examples_structure(root: Path, env, warnings=None, fixtures=None):
+def validate_examples_structure(root: Path, env, warnings=None, manifest=None):
     errors = []
     if warnings is None:
         warnings = []
@@ -37,7 +37,9 @@ def validate_examples_structure(root: Path, env, warnings=None, fixtures=None):
     if not examples_dir.exists():
         return errors
 
-    fixtures = {} if fixtures is None else fixtures
+    manifest_fixtures = (
+        manifest.get("fixtures", {}) if isinstance(manifest, dict) else {}
+    )
     for ex_dir in sorted(examples_dir.iterdir()):
         if not ex_dir.is_dir() or ex_dir.name.startswith("."):
             continue
@@ -89,7 +91,7 @@ def validate_examples_structure(root: Path, env, warnings=None, fixtures=None):
             errors.extend(example_errors)
             continue
 
-        entry = fixtures.get(ex_dir.name)
+        entry = manifest_fixtures.get(ex_dir.name)
         if isinstance(entry, dict):
             errors.extend(
                 validate_registered_fixture_diagnostics(
@@ -98,8 +100,8 @@ def validate_examples_structure(root: Path, env, warnings=None, fixtures=None):
             )
             continue
 
-        # Focused schema checks still compare independently authored paths;
-        # repository validation requires the metadata owner before this pass.
+        # Compatibility path for focused unit tests without a repository
+        # validation manifest.
         expected_paths = err_spec.get("spec_paths", [])
         if not isinstance(expected_paths, list):
             expected_paths = [expected_paths]

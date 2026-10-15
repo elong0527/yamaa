@@ -6,7 +6,6 @@ import argparse
 import shutil
 from pathlib import Path
 
-from tools.benchmark import entries
 from tools.paths import ROOT
 
 REPOSITORY = ROOT
@@ -19,21 +18,14 @@ CASES = (
 )
 
 
-def stage_case(source: Path, destination: Path, *, ignore=None) -> None:
-    """Copy a study and supply the canonical packaging lock to Python entries."""
-    shutil.copytree(source, destination, symlinks=True, ignore=ignore)
-    for call in entries(source)["python"]:
-        if call["environment"] is not None:
-            lock = destination / Path(call["environment"]).parent / "uv.lock"
-            if not lock.exists():
-                shutil.copyfile(REPOSITORY / "python/uv.lock", lock)
-
-
 def stage(destination: Path) -> None:
     destination.mkdir(parents=True)
     for name in CASES:
         case = destination / name
-        stage_case(REPOSITORY / "benchmarks" / name, case)
+        shutil.copytree(REPOSITORY / "benchmarks" / name, case)
+        # The sole repository Python lock is packaging-tool-owned. Its exact
+        # bytes become local study metadata; no second lock is committed.
+        shutil.copyfile(REPOSITORY / "python/uv.lock", case / "python/uv.lock")
     producer = destination / "shared-producer-parquet"
     producer.mkdir()
     for name in ("seed.csv", "producer.yaml", "spec.yaml"):

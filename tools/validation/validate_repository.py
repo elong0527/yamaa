@@ -22,9 +22,10 @@ from tools.validation.repository_artifacts import (
 )
 from tools.validation.repository_manifests import (
     load_condition_registry,
-    load_validation_fixtures,
+    load_validation_manifest,
     validate_condition_registry,
     validate_expected_error_contracts,
+    validate_validation_manifest,
 )
 from tools.validation.repository_schema import build_schema_env
 from tools.validation.repository_structure import (
@@ -68,13 +69,15 @@ def check_yaml_files(root: Path):
         errors.extend(environment_schema_errors)
         if environment_schema_errors:
             environment_schema = None
-    validation_fixtures, fixture_errors = load_validation_fixtures(root)
-    errors.extend(fixture_errors)
+    validation_manifest, manifest_load_errors = load_validation_manifest(root)
+    errors.extend(manifest_load_errors)
+    if validation_manifest is not None:
+        errors.extend(validate_validation_manifest(root, validation_manifest))
     condition_registry, condition_registry_load_errors = load_condition_registry(root)
     errors.extend(condition_registry_load_errors)
     if condition_registry is not None:
         errors.extend(validate_condition_registry(root, condition_registry))
-    errors.extend(validate_examples_structure(root, env, warnings, validation_fixtures))
+    errors.extend(validate_examples_structure(root, env, warnings, validation_manifest))
     errors.extend(validate_examples_layout(root))
     if environment_schema is not None:
         errors.extend(validate_examples_environment_documents(root, environment_schema))

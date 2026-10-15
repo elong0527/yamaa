@@ -57,11 +57,10 @@ a copy with the key columns moved to the front in reverse key order must agree
 (REQ-0060, REQ-0062, REQ-0220). Positive variants must report no issues with
 equal output and log tables; negative variants must report the same first
 issue (phase, condition, requirement and spec paths). Known differences are
-declared in the case's `benchmark.yaml` under `conformance.metamorphic`,
-linked to a tracking issue or marked permanent with a by-design reason. A
-temporary difference that stops occurring fails the run as stale; an
-unlisted difference fails it as a mismatch. Approved exclusions also belong
-to their case's `conformance` metadata.
+listed in `public-conformance-metamorphic.json`, each linked to its tracking
+issue or marked permanent with a by-design reason; a listed difference that
+stops occurring fails the run as stale, and an unlisted difference fails it as
+a mismatch.
 
 The comparison commands above gate on the current directories alone: every
 active case must pass on that host, including a newly added directory. No

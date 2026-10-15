@@ -5,7 +5,6 @@ import re
 import sys
 from pathlib import Path
 
-from tools.benchmark import LIFECYCLES, load_metadata
 from tools.conformance.public_conformance import plan
 from tools.paths import ROOT
 
@@ -35,16 +34,16 @@ def render_index(fixtures, current):
         name = row["name"]
         readme = (fixtures / name / "README.md").read_text(encoding="utf-8")
         title = re.search(r"^# (.+)$", readme, re.MULTILINE)
-        lifecycle = load_metadata(fixtures / name)["lifecycle"]
-        if title is None:
-            raise ValueError(f"missing title: {name}")
-        badge = (
-            f"[![Lifecycle: {lifecycle}](https://img.shields.io/badge/Lifecycle-{lifecycle}-{LIFECYCLES[lifecycle]})]"
-            "(https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)"
+        lifecycle = re.search(
+            r"\[!\[Lifecycle: [^\]\n]+\]\([^\)\n]+\)\]\([^\)\n]+\)", readme
         )
+        if title is None or lifecycle is None:
+            raise ValueError(f"missing title/lifecycle: {name}")
         description = title.group(1).replace("|", "\\|")
         coverage = f"Excluded: {row['excluded']}" if row["excluded"] else "Python, R"
-        lines.append(f"| [`{name}`]({name}/) | {description} | {badge} | {coverage} |")
+        lines.append(
+            f"| [`{name}`]({name}/) | {description} | {lifecycle.group()} | {coverage} |"
+        )
     return prefix + "\n".join(lines) + "\n"
 
 

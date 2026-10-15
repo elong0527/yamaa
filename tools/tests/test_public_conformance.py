@@ -22,8 +22,6 @@ columns:
   - {name: VALUE, type: str, derivation: SRC.VALUE}
 """
 
-METADATA = "lifecycle: draft\nstandard: TEST\ndomain: TEST\n"
-
 
 class PublicConformance(unittest.TestCase):
     def setUp(self):
@@ -34,7 +32,10 @@ class PublicConformance(unittest.TestCase):
         self.case = self.fixtures / "simple"
         (self.case / "expected").mkdir(parents=True)
         (self.case / "spec.yaml").write_text(SPEC)
-        (self.case / "benchmark.yaml").write_text(METADATA)
+        (self.case / "run.py").write_text(
+            'import yamaa\nx = yamaa.yamaa_domain("spec.yaml").output\n'
+        )
+        (self.case / "run.R").write_text('x <- yamaa_domain("spec.yaml")$output\n')
         (self.case / "expected/result.csv").write_bytes(
             b'ID,VALUE\n9223372036854775807,""\n2,\n3,"a,b"\n'
         )
@@ -139,7 +140,6 @@ class PublicConformance(unittest.TestCase):
                 self.assertEqual(os.readlink(tree / "input" / name), target)
             self.assertEqual((tree / "input/target.csv").read_bytes(), b"ID\n1\n")
             self.assertFalse((tree / "expected").exists())
-            self.assertFalse((tree / "benchmark.yaml").exists())
             self.assertFalse((tree / "run.py").exists())
             self.assertFalse((tree / "run.R").exists())
             self.assertEqual(
@@ -497,47 +497,29 @@ class PublicConformance(unittest.TestCase):
             {"columns": [["N", "float"]], "rows": [["0000000000000000"]]},
         )
 
-    def test_metadata_entries_and_host_environments_are_preserved(self):
-        for name in ("spec_one.yaml", "spec_two.yaml"):
-            (self.case / name).write_text(SPEC)
-        for host in ("python", "r"):
-            (self.case / host).mkdir()
-            (self.case / host / "environment.yaml").write_text("host fixture")
-        judge.write_json(
-            self.case / "benchmark.yaml",
-            {
-                "lifecycle": "draft",
-                "standard": "TEST",
-                "domain": "TEST",
-                "entries": {
-                    host: [
-                        {
-                            "specification": "spec_one.yaml",
-                            "environment": f"{host}/environment.yaml",
-                        },
-                        {"specification": "spec_two.yaml", "environment": None},
-                    ]
-                    for host in ("python", "r")
-                },
-            },
+    def test_literal_entries_and_host_environments_are_preserved(self):
+        (self.case / "run.py").write_text(
+            'a = yamaa.domain("one.yaml", environment="python/environment.yaml").output\nb = yamaa.domain("two.yaml").output\n'
+        )
+        (self.case / "run.R").write_text(
+            'a <- yamaa_domain("one.yaml", environment="r/environment.yaml")$output\nb <- yamaa_domain("two.yaml")$output\n'
         )
         entries = judge.plan(self.fixtures)["examples"][0]["entries"]
         self.assertEqual(
             entries["python"],
             [
-                {
-                    "specification": "spec_one.yaml",
-                    "environment": "python/environment.yaml",
-                },
-                {"specification": "spec_two.yaml", "environment": None},
+                {"specification": "one.yaml", "environment": "python/environment.yaml"},
+                {"specification": "two.yaml", "environment": None},
             ],
         )
         self.assertEqual(entries["r"][0]["environment"], "r/environment.yaml")
-        (self.case / "benchmark.yaml").write_text(METADATA)
-        with self.assertRaisesRegex(ValueError, "explicit entries"):
+        (self.case / "run.py").write_text("a = yamaa.domain(variable).output")
+        with self.assertRaises(ValueError):
             judge.plan(self.fixtures)
 
     def test_negative_host_environment_and_no_automatic_root_environment(self):
+        (self.case / "run.py").unlink()
+        (self.case / "run.R").unlink()
         (self.case / "environment.yaml").write_text("define fixture")
         (self.case / "python").mkdir()
         (self.case / "python/environment.yaml").write_text("host fixture")
@@ -585,19 +567,20 @@ class PublicConformance(unittest.TestCase):
         self.assertEqual(self.verdict()["verdict"], "pass")
 
     def test_metamorphic_expected_failure_is_listed_and_goes_stale(self):
+        path = (
+            self.root / "rust" / "qualification" / "public-conformance-metamorphic.json"
+        )
         judge.write_json(
-            self.case / "benchmark.yaml",
+            path,
             {
-                "lifecycle": "draft",
-                "standard": "TEST",
-                "domain": "TEST",
-                "conformance": {
-                    "metamorphic": {
-                        "empty_child": {
-                            "issue": "https://github.com/elong0527/yamaa/issues/2190",
-                        }
+                "protocol": judge.METAMORPHIC_PROTOCOL,
+                "expected_failures": [
+                    {
+                        "benchmark": "simple",
+                        "check": "empty_child",
+                        "issue": "https://github.com/elong0527/yamaa/issues/2190",
                     }
-                },
+                ],
             },
         )
         failing = self.child_variant(
@@ -657,7 +640,10 @@ class PublicConformance(unittest.TestCase):
         case = fixtures / "ordered"
         (case / "expected").mkdir(parents=True)
         (case / "spec.yaml").write_text(SPEC.replace("keys: [ID]", "keys: [ID, VALUE]"))
-        (case / "benchmark.yaml").write_text(METADATA)
+        (case / "run.py").write_text(
+            'import yamaa\nx = yamaa.yamaa_domain("spec.yaml").output\n'
+        )
+        (case / "run.R").write_text('x <- yamaa_domain("spec.yaml")$output\n')
         (case / "expected/result.csv").write_bytes(
             b'ID,VALUE\n9223372036854775807,""\n2,\n3,"a,b"\n'
         )
@@ -716,8 +702,7 @@ class PublicConformance(unittest.TestCase):
         )
         self.assertIsNone(names["schema-inheritance-project-root"]["excluded"])
         self.assertEqual(
-            {n for n, e in names.items() if e["excluded"]},
-            {"negative-path-absolute", "negative-path-parent-escape"},
+            {n for n, e in names.items() if e["excluded"]}, set(judge.EXCLUDED)
         )
 
     def test_corpus_metamorphic_plan_and_expectations_follow_each_entry(self):
