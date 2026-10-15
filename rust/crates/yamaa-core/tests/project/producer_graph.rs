@@ -1,7 +1,7 @@
 use crate::support::producer_graph as support;
 use support::{candidate, document, environment, node};
 use yamaa_core::{
-    producer_graph::{prepare, Error, Limits},
+    producer_graph::{prepare, Error},
     specification::PrepareError,
 };
 
@@ -34,7 +34,6 @@ fn diamond_and_shared_aliases_retain_authored_order_but_compile_each_identity_on
             node("/right", &right, &r),
         ],
         environment(&[]),
-        Limits::default(),
     )
     .unwrap();
     assert_eq!(graph.root(), 0);
@@ -70,7 +69,6 @@ fn local_slots_project_into_unique_graph_selection_in_environment_order() {
             node("/producer", &producer, &[]),
         ],
         env,
-        Limits::default(),
     )
     .unwrap();
     assert_eq!(graph.order(), [1, 0]);
@@ -114,7 +112,6 @@ fn recursive_and_self_cycles_retain_closed_identity_route_without_compiling_call
             node("/c", &c, &cc),
         ],
         environment(&[]),
-        Limits::default(),
     )
     else {
         panic!("cycle before unknown call")
@@ -139,12 +136,7 @@ fn recursive_and_self_cycles_retain_closed_identity_route_without_compiling_call
     let own = document(&[("SELF", Some("/self"))], None);
     let links = [candidate("/self", "SELF", "/self", &own)];
     assert!(matches!(
-        prepare(
-            "/self",
-            &[node("/self", &own, &links)],
-            environment(&[]),
-            Limits::default()
-        ),
+        prepare("/self", &[node("/self", &own, &links)], environment(&[])),
         Err(Error::Cycle { .. })
     ));
 }
@@ -179,16 +171,11 @@ fn closure_rejects_missing_duplicate_unreachable_or_replaced_node() {
         ),
     ] {
         assert!(
-            matches!(prepare("/root", &nodes, environment(&[]), Limits::default()), Err(Error::Boundary { reason: actual, .. }) if actual == reason)
+            matches!(prepare("/root", &nodes, environment(&[])), Err(Error::Boundary { reason: actual, .. }) if actual == reason)
         );
     }
     assert!(matches!(
-        prepare(
-            "/missing",
-            &[node("/p", &p, &[])],
-            environment(&[]),
-            Limits::default()
-        ),
+        prepare("/missing", &[node("/p", &p, &[])], environment(&[])),
         Err(Error::Boundary {
             reason: "missing_root",
             ..
@@ -215,7 +202,6 @@ fn invalid_producer_and_consumer_calls_cannot_be_hidden_by_successful_graph_meta
             "/root",
             &[node("/root", &root, &links), node("/p", &p, &[])],
             environment(&["id"]),
-            Limits::default(),
         )
         else {
             panic!("complete static call checking")
@@ -224,76 +210,6 @@ fn invalid_producer_and_consumer_calls_cannot_be_hidden_by_successful_graph_meta
         assert_eq!(
             findings[0].diagnostic().definition().condition,
             "unknown_project_function"
-        );
-    }
-}
-
-#[test]
-fn aggregate_graph_quotas_refuse_before_metadata_capability() {
-    let root = document(&[("P", Some("/p"))], Some("id"));
-    let p = document(&[("RAW", None)], Some("id"));
-    let links = [candidate("/root", "P", "/p", &p)];
-    let nodes = [node("/root", &root, &links), node("/p", &p, &[])];
-    for (limits, resource) in [
-        (
-            Limits {
-                nodes: 1,
-                ..Default::default()
-            },
-            "producer_graph_nodes",
-        ),
-        (
-            Limits {
-                edges: 0,
-                ..Default::default()
-            },
-            "producer_graph_edges",
-        ),
-        (
-            Limits {
-                document_nodes: 0,
-                ..Default::default()
-            },
-            "producer_graph_document_nodes",
-        ),
-        (
-            Limits {
-                text_bytes: 0,
-                ..Default::default()
-            },
-            "producer_graph_text_bytes",
-        ),
-        (
-            Limits {
-                work: 0,
-                ..Default::default()
-            },
-            "producer_graph_work",
-        ),
-        (
-            Limits {
-                slots: 1,
-                ..Default::default()
-            },
-            "producer_graph_slots",
-        ),
-        (
-            Limits {
-                functions: 0,
-                ..Default::default()
-            },
-            "producer_graph_functions",
-        ),
-        (
-            Limits {
-                parameters: 1,
-                ..Default::default()
-            },
-            "producer_graph_parameters",
-        ),
-    ] {
-        assert!(
-            matches!(prepare("/root", &nodes, environment(&["id"]), limits), Err(Error::Limit(name)) if name == resource)
         );
     }
 }
@@ -322,7 +238,6 @@ fn shared_function_has_one_graph_slot_and_shared_output_metadata_cannot_diverge(
             node("/leaf", &leaf, &[]),
         ],
         environment(&["unused", "id"]),
-        Limits::default(),
     )
     .unwrap();
     assert_eq!(graph.called_functions(), [1]);
@@ -340,8 +255,7 @@ fn shared_function_has_one_graph_slot_and_shared_output_metadata_cannot_diverge(
                 node("/right", &right, &r),
                 node("/leaf", &leaf, &[])
             ],
-            environment(&["id"]),
-            Limits::default()
+            environment(&["id"])
         ),
         Err(Error::Boundary {
             reason: "contradictory_producer_metadata",
@@ -351,7 +265,7 @@ fn shared_function_has_one_graph_slot_and_shared_output_metadata_cannot_diverge(
 }
 
 #[test]
-fn callable_metadata_text_is_charged_even_when_absent_from_specification_trees() {
+fn long_callable_metadata_is_retained_without_an_accounting_pool() {
     use yamaa_core::{
         project_environment::{Draft, Environment},
         project_function::Language,
@@ -374,16 +288,14 @@ fn callable_metadata_text_is_charged_even_when_absent_from_specification_trees()
     let root = document(&[("P", Some("/p"))], Some("id"));
     let p = document(&[("RAW", None)], None);
     let links = [candidate("/root", "P", "/p", &p)];
-    assert!(matches!(
-        prepare(
-            "/root",
-            &[node("/root", &root, &links), node("/p", &p, &[])],
-            env,
-            Limits {
-                text_bytes: 4000,
-                ..Default::default()
-            }
-        ),
-        Err(Error::Limit("producer_graph_text_bytes"))
-    ));
+    let checked = prepare(
+        "/root",
+        &[node("/root", &root, &links), node("/p", &p, &[])],
+        env,
+    )
+    .unwrap();
+    assert_eq!(
+        checked.environment().functions()[0].definition().function,
+        format!("project.{}", "a".repeat(8000))
+    );
 }

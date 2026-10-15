@@ -1,8 +1,6 @@
 use yamaa_core::{
-    producer_contract::{prepare, Cause, Error, Limits},
-    schema::{
-        Document, DocumentLimits, DocumentNode as N, SpecificationDocument, ValidationBudget,
-    },
+    producer_contract::{prepare, Cause, Error},
+    schema::{Document, DocumentNode as N, SpecificationDocument},
     value::ColumnType,
 };
 
@@ -72,12 +70,9 @@ fn document(columns: &[(&str, &str, Option<&str>)], output: &[&str]) -> Specific
     ]);
     let mut nodes = Vec::new();
     let root = tree.append(&mut nodes);
-    SpecificationDocument::admit(
-        Document::new(nodes, root, DocumentLimits::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap()
+    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap()
 }
 const FIELDS: &[(&str, &str, Option<&str>)] = &[
     ("VALUE", "float", Some("Reported value")),
@@ -86,33 +81,39 @@ const FIELDS: &[(&str, &str, Option<&str>)] = &[
 ];
 
 #[test]
-fn producer_width_admits_1024_and_refuses_each_1025_boundary() {
+fn producer_width_admits_1023_and_1024_and_refuses_each_1025_boundary() {
     let names: Vec<_> = (0..1_025).map(|i| format!("C{i:04}")).collect();
     let selected: Vec<_> = names.iter().map(String::as_str).collect();
     let columns: Vec<_> = selected
         .iter()
         .map(|&name| (name, "str", Some(name)))
         .collect();
-    let contract = prepare(
-        &document(&columns[..1_024], &selected[..1_024]),
-        Limits::default(),
-    )
-    .unwrap();
-    assert_eq!(contract.fields().len(), 1_024);
-    assert!(contract.matches_header(&selected[..1_024]));
+    for width in [1_023, 1_024] {
+        let contract = prepare(&document(&columns[..width], &selected[..width])).unwrap();
+        assert_eq!(contract.fields().len(), width);
+        assert!(contract.matches_header(&selected[..width]));
+    }
     assert_eq!(
-        prepare(&document(&columns, &selected[..1_024]), Limits::default()),
-        Err(Error::Limit("producer_declarations"))
+        prepare(&document(&columns, &selected[..1_024])),
+        Err(Error::Limit(yamaa_core::limits::LimitExceeded {
+            resource: "columns",
+            limit: 1024,
+            actual: Some(1025)
+        }))
     );
     assert_eq!(
-        prepare(&document(&columns[..1_024], &selected), Limits::default()),
-        Err(Error::Limit("producer_fields"))
+        prepare(&document(&columns[..1_024], &selected)),
+        Err(Error::Limit(yamaa_core::limits::LimitExceeded {
+            resource: "columns",
+            limit: 1024,
+            actual: Some(1025)
+        }))
     );
 }
 
 #[test]
 fn producer_projection_is_the_stored_order_and_internal_columns_are_excluded() {
-    let contract = prepare(&document(FIELDS, &["ID", "VALUE"]), Limits::default()).unwrap();
+    let contract = prepare(&document(FIELDS, &["ID", "VALUE"])).unwrap();
     assert_eq!(contract.path(), "produced.csv");
     assert_eq!(
         contract
@@ -145,11 +146,11 @@ fn producer_projection_is_the_stored_order_and_internal_columns_are_excluded() {
 #[test]
 fn producer_projection_rejects_empty_duplicate_and_undeclared_fields_in_order() {
     assert_eq!(
-        prepare(&document(FIELDS, &[]), Limits::default()),
+        prepare(&document(FIELDS, &[])),
         Err(Error::Invalid(vec![Cause::Empty]))
     );
     assert_eq!(
-        prepare(&document(FIELDS, &["ID", "ID", "OTHER"]), Limits::default()),
+        prepare(&document(FIELDS, &["ID", "ID", "OTHER"])),
         Err(Error::Invalid(vec![
             Cause::Duplicate {
                 position: 1,
@@ -171,7 +172,7 @@ fn producer_requires_one_typed_declaration_and_a_nonblank_label_per_stored_field
         ("ID", "str", Some("Other")),
     ];
     assert_eq!(
-        prepare(&document(&duplicates, &["ID"]), Limits::default()),
+        prepare(&document(&duplicates, &["ID"])),
         Err(Error::Invalid(vec![Cause::Declaration {
             position: 0,
             field: "ID".into(),
@@ -180,10 +181,7 @@ fn producer_requires_one_typed_declaration_and_a_nonblank_label_per_stored_field
     );
     for label in [None, Some(""), Some(" \t\n")] {
         assert_eq!(
-            prepare(
-                &document(&[("ID", "int", label)], &["ID"]),
-                Limits::default()
-            ),
+            prepare(&document(&[("ID", "int", label)], &["ID"])),
             Err(Error::Invalid(vec![Cause::Label { field: "ID".into() }]))
         );
     }
@@ -199,7 +197,7 @@ fn every_declared_logical_type_survives_without_value_inference() {
         ("TIME", "datetime", Some("Time")),
     ];
     let names = ["TIME", "DATE", "VALUE", "TEXT", "ID"];
-    let contract = prepare(&document(&fields, &names), Limits::default()).unwrap();
+    let contract = prepare(&document(&fields, &names)).unwrap();
     assert_eq!(
         contract.fields().iter().map(|f| f.kind).collect::<Vec<_>>(),
         vec![
@@ -210,56 +208,4 @@ fn every_declared_logical_type_survives_without_value_inference() {
             ColumnType::Int
         ]
     );
-}
-
-#[test]
-fn producer_aggregate_budgets_refuse_before_a_partial_contract_escapes() {
-    let spec = document(FIELDS, &["ID", "VALUE"]);
-    assert_eq!(
-        prepare(
-            &spec,
-            Limits {
-                declarations: 2,
-                ..Limits::default()
-            }
-        ),
-        Err(Error::Limit("producer_declarations"))
-    );
-    assert_eq!(
-        prepare(
-            &spec,
-            Limits {
-                fields: 1,
-                ..Limits::default()
-            }
-        ),
-        Err(Error::Limit("producer_fields"))
-    );
-    let bytes = spec
-        .document()
-        .nodes()
-        .iter()
-        .map(|n| match n {
-            N::Text(s) | N::Integer(s) => s.len(),
-            _ => 0,
-        })
-        .sum::<usize>();
-    assert_eq!(
-        prepare(
-            &spec,
-            Limits {
-                text_bytes: bytes - 1,
-                ..Limits::default()
-            }
-        ),
-        Err(Error::Limit("producer_text_bytes"))
-    );
-    assert!(prepare(
-        &spec,
-        Limits {
-            text_bytes: bytes,
-            ..Limits::default()
-        }
-    )
-    .is_ok());
 }

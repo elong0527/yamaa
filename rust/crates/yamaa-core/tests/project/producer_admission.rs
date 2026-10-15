@@ -3,7 +3,7 @@ use serde_json::Value as V;
 use support::{candidate, consumer, document, producer, Tree};
 use yamaa_core::{
     diagnostic::Diagnostic,
-    producer_admission::{prepare, Error, Input, Limits},
+    producer_admission::{prepare, Error, Input},
     producer_contract,
     specification::{PrepareError, PreparedSpecification},
     value::ColumnType,
@@ -21,14 +21,7 @@ fn text(s: &str) -> V {
 fn sealed_compiler_preserves_distinct_producer_identity_fields_and_authored_origins() {
     let source = producer();
     let consumer = consumer(None);
-    let metadata = prepare(
-        "/consumer.yaml",
-        &consumer,
-        &[candidate(&source)],
-        None,
-        Limits::default(),
-    )
-    .unwrap();
+    let metadata = prepare("/consumer.yaml", &consumer, &[candidate(&source)], None).unwrap();
     let inputs = metadata.inputs().collect::<Vec<_>>();
     let [Input::Producer(declaration)] = inputs.as_slice() else {
         panic!("producer kind")
@@ -91,14 +84,7 @@ fn input_declaration_order_is_independent_of_supplied_metadata_order() {
     a.schema_path = "a.yaml";
     b.dataset = "B";
     b.schema_path = "b.yaml";
-    let metadata = prepare(
-        "/consumer.yaml",
-        &consumer,
-        &[a, b],
-        None,
-        Limits::default(),
-    )
-    .unwrap();
+    let metadata = prepare("/consumer.yaml", &consumer, &[a, b], None).unwrap();
     assert_eq!(
         metadata
             .inputs()
@@ -128,7 +114,6 @@ fn inline_types_are_redundant_even_when_equal_empty_or_null() {
             &consumer(Some(types)),
             &[candidate(&source)],
             None,
-            Limits::default(),
         ));
         assert_eq!(findings.len(), 1);
         assert_eq!(
@@ -146,20 +131,13 @@ fn inline_types_are_redundant_even_when_equal_empty_or_null() {
 fn missing_duplicate_and_undeclared_metadata_are_never_external_file_reads() {
     let source = producer();
     let consumer = consumer(None);
-    let findings = invalid(prepare(
-        "/consumer.yaml",
-        &consumer,
-        &[],
-        None,
-        Limits::default(),
-    ));
+    let findings = invalid(prepare("/consumer.yaml", &consumer, &[], None));
     assert_eq!(findings[0].context["reason"], text("missing_metadata"));
     let findings = invalid(prepare(
         "/consumer.yaml",
         &consumer,
         &[candidate(&source), candidate(&source)],
         None,
-        Limits::default(),
     ));
     assert_eq!(findings[0].context["reason"], text("duplicate_metadata"));
     let mut extra = candidate(&source);
@@ -169,7 +147,6 @@ fn missing_duplicate_and_undeclared_metadata_are_never_external_file_reads() {
         &consumer,
         &[candidate(&source), extra],
         None,
-        Limits::default(),
     ));
     assert_eq!(findings[0].context["reason"], text("undeclared_metadata"));
 }
@@ -188,13 +165,7 @@ fn contradictory_identities_and_self_dependency_fail_at_metadata_admission() {
                 c.producer_identity = "/consumer.yaml";
             }
         }
-        let findings = invalid(prepare(
-            "/consumer.yaml",
-            &consumer,
-            &[c],
-            None,
-            Limits::default(),
-        ));
+        let findings = invalid(prepare("/consumer.yaml", &consumer, &[c], None));
         assert_eq!(
             findings[0].context["reason"],
             text(if variation == 3 {
@@ -224,13 +195,7 @@ fn canonical_artifact_mismatch_keeps_written_geometry_and_normative_mapping() {
     let consumer = consumer(None);
     let mut c = candidate(&source);
     c.output_identity = "/other.csv";
-    let findings = invalid(prepare(
-        "/consumer.yaml",
-        &consumer,
-        &[c],
-        None,
-        Limits::default(),
-    ));
+    let findings = invalid(prepare("/consumer.yaml", &consumer, &[c], None));
     let f = &findings[0];
     assert_eq!(
         (
@@ -262,7 +227,6 @@ fn producer_contract_findings_retain_selected_field_order() {
         &consumer(None),
         &[candidate(&source)],
         None,
-        Limits::default(),
     ));
     assert_eq!(
         findings
@@ -283,48 +247,7 @@ fn producer_contract_findings_retain_selected_field_order() {
         V::Number(("0").parse().expect("canonical integer"))
     );
 }
-#[test]
-fn aggregate_metadata_quotas_and_source_field_limits_precede_compiled_result() {
-    let source = producer();
-    let consumer = consumer(None);
-    for (limits, name) in [
-        (
-            Limits {
-                candidates: 0,
-                ..Default::default()
-            },
-            "producer_candidates",
-        ),
-        (
-            Limits {
-                document_nodes: 0,
-                ..Default::default()
-            },
-            "producer_document_nodes",
-        ),
-        (
-            Limits {
-                text_bytes: 0,
-                ..Default::default()
-            },
-            "producer_metadata_text_bytes",
-        ),
-        (
-            Limits {
-                compilation: yamaa_core::specification::CompilationLimits {
-                    source_fields: 1,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            "source_fields",
-        ),
-    ] {
-        assert!(
-            matches!(prepare("/consumer.yaml",&consumer,&[candidate(&source)],None,limits),Err(Error::Limit(actual)) if actual==name)
-        );
-    }
-}
+
 #[test]
 fn unrelated_unsupported_consumer_vocabulary_is_not_stripped() {
     use Tree::*;
@@ -342,14 +265,14 @@ fn unrelated_unsupported_consumer_vocabulary_is_not_stripped() {
         true,
     );
     assert!(
-        matches!(prepare("/consumer.yaml",&consumer,&[candidate(&source)],None,Limits::default()),Err(Error::Compilation(PrepareError::Unsupported(features))) if features.iter().any(|f| f.path=="parents" && f.operation == "parents"))
+        matches!(prepare("/consumer.yaml",&consumer,&[candidate(&source)],None),Err(Error::Compilation(PrepareError::Unsupported(features))) if features.iter().any(|f| f.path=="parents" && f.operation == "parents"))
     );
 }
 #[test]
 fn actual_metadata_comparison_is_ordered_typed_bounded_and_portable() {
-    let contract = producer_contract::prepare(&producer(), Default::default()).unwrap();
+    let contract = producer_contract::prepare(&producer()).unwrap();
     assert!(contract
-        .validate_header("SRC", &["ID", "VALUE"], Default::default())
+        .validate_header("SRC", &["ID", "VALUE"])
         .unwrap()
         .is_none());
     for actual in [
@@ -358,10 +281,7 @@ fn actual_metadata_comparison_is_ordered_typed_bounded_and_portable() {
         vec!["ID", "VALUE", "OTHER"],
         vec!["ID", "ID"],
     ] {
-        let finding = contract
-            .validate_header("SRC", &actual, Default::default())
-            .unwrap()
-            .unwrap();
+        let finding = contract.validate_header("SRC", &actual).unwrap().unwrap();
         assert_eq!(
             (
                 finding.definition().condition,
@@ -375,7 +295,6 @@ fn actual_metadata_comparison_is_ordered_typed_bounded_and_portable() {
         .validate_typed_fields(
             "SRC",
             &[("ID", ColumnType::Int), ("VALUE", ColumnType::Str)],
-            Default::default(),
         )
         .unwrap()
         .unwrap();
@@ -388,19 +307,10 @@ fn actual_metadata_comparison_is_ordered_typed_bounded_and_portable() {
         V::Array(vec![text("int"), text("str")])
     );
     assert_eq!(finding.context["reordered"], V::Bool(false));
-    assert!(matches!(
-        contract.validate_header(
-            "SRC",
-            &["ID", "VALUE"],
-            producer_contract::Limits {
-                text_bytes: 0,
-                ..Default::default()
-            }
-        ),
-        Err(producer_contract::Error::Limit(
-            "producer_actual_text_bytes"
-        ))
-    ));
+    assert!(contract
+        .validate_header("SRC", &["ID", "VALUE"])
+        .unwrap()
+        .is_none());
 }
 #[test]
 fn one_producer_identity_cannot_describe_two_different_output_contracts() {
@@ -438,13 +348,7 @@ fn one_producer_identity_cannot_describe_two_different_output_contracts() {
     let mut b = candidate(&other);
     b.dataset = "B";
     b.schema_path = "b.yaml";
-    let findings = invalid(prepare(
-        "/consumer.yaml",
-        &consumer,
-        &[a, b],
-        None,
-        Limits::default(),
-    ));
+    let findings = invalid(prepare("/consumer.yaml", &consumer, &[a, b], None));
     assert_eq!(findings[0].spec_paths, ["input.B.schema"]);
     assert_eq!(
         findings[0].context["reason"],
