@@ -19,6 +19,7 @@ pending there until all evidence gates pass.
 | --- | --- |
 | Implemented and merged | Shared language execution; Python/R domain/check/define; runner conversion; legacy evaluator/API/probe and R/cdiscbuilder removal; coordinated Python/R/Cargo 0.4.0 source versions. The performance harness is merged through PR #2137; subsequent native dependency/guard, portable-math control and performance admission repairs are merged through PRs #2164-#2168. |
 | Implemented candidate | Longitudinal defaults and actual native usage pools in PRs [#2365](https://github.com/elong0527/yamaa/pull/2365) and [#2367](https://github.com/elong0527/yamaa/pull/2367). Paired capacity controls passed in local installed Python and hosted Linux R runs at `983e9c96`; the scope is recorded in the [handoff](release-handoff.md#candidate-implementation-and-scoped-installed-controls). |
+| Qualified candidate | Source `46ee4dcb0f7ffe5cd8a95b477d242cfadcf0c689`, [native run 38657181937](https://github.com/elong0527/yamaa/actions/runs/38657181937), attempt 1: all 31 required jobs passed, all 21 installed tuples passed, and all 97 independent audit lanes passed with byte-identical original-input replay. This is `reviewed-branch` evidence; final combined-main acceptance remains pending. |
 | Qualified at earlier revisions | Retained public-conformance ratchet: run 38416920074, attempt 1, source `2ba10418607933f92597f7c00ac363a3113a49db`; earlier rollback rehearsals below. Their results do not qualify current main or its 0.4.0 composition. |
 | Pending evidence | Final combined-main installed/numerical qualification and independent audit/replay, renewed capacity controls at that source, the Linux performance measurements below, remaining assertion migration under #2289, and exact package/tag selection and artifact handoff. |
 | Published | [Python source release 0.3.0](https://github.com/elong0527/yamaa/releases/tag/yamaa-py-0.3.0), source `845a91ff`, published 2026-10-11, with no package assets. No shared 0.4.0 release is listed. Prior source-built Python rollback packages and the pre-cutover R 0.3.0 candidate remain unpublished drafts. |
@@ -204,6 +205,27 @@ run, a dispatch on main or an explicit qualification push. Main's audit is
 nonblocking: inspect its verdict and replay the original inputs. Branch
 qualification stays `reviewed-branch`; only genuine postmerge evidence is
 `combined-main`.
+
+Candidate source
+[`46ee4dcb0f7ffe5cd8a95b477d242cfadcf0c689`](https://github.com/elong0527/yamaa/commit/46ee4dcb0f7ffe5cd8a95b477d242cfadcf0c689)
+passed [native run 38657181937](https://github.com/elong0527/yamaa/actions/runs/38657181937),
+attempt 1. All 18 Python tuples passed 319 active conformance cases and 18
+supplemental suites each; all three R 4.6.1 source tuples passed the same 319
+active cases, 17 supplemental suites and strict `R CMD check` **Status: OK**.
+Each tuple retains the two explicit historical exclusions. The three shared
+Rust checks, nine numerical assessments and exact comparison passed. All 18
+public/producer cohort tuple directories retain 468 passing comparison records.
+The independent native audit passed all 97 lanes; its original network-isolated
+replay and the independent replay of reconstituted original inputs both reproduce
+the original verdict bytes. Exact artifact references and replay scope are in the
+[handoff](release-handoff.md#candidate-implementation-and-scoped-installed-controls).
+
+The Linux performance campaign
+[38657181920](https://github.com/elong0527/yamaa/actions/runs/38657181920)
+is still collecting at the same frozen source `46ee4dcb`; no measured results are
+recorded here. Later documentation commits must retain that measured source.
+Final postmerge main qualification, assertion migration under #2289 and release
+package/tag selection and publication remain pending under #2288.
 
 Benchmark directories and the public-conformance configuration determine the
 current authored inventory and explicit exclusions. The generated

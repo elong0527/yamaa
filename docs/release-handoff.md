@@ -77,14 +77,48 @@ Both hosts passed the paired 100-column, 50,000-record Build/Save controls.
 These suite counts are scoped checks at that
 source, not the required 18-tuple Python and three-tuple R release matrix.
 
-The strict R package check at that source still reports one NOTE. The packaging
+The strict R package check at that earlier source reported one NOTE. The packaging
 repair at
 [`7c04a026`](https://github.com/elong0527/yamaa/commit/7c04a026996e062ec3949bb6e71fcec14c85bbe8)
-is queued for renewed checking; it does not change the source identity of the
-installed results above. Final postmerge main/native qualification, numerical
-assessments/comparison, independent audit/replay, Linux measurements and exact
-package/tag selection remain pending. This scoped installed evidence does not establish
-final release qualification or item-11 acceptance.
+was queued for renewed checking at that stage; it does not change the source
+identity of those installed results. The later `7c04a026` native run stalled in
+the cohort job and is not a passing qualification run.
+
+The 2026-10-15 candidate qualification uses source
+[`46ee4dcb0f7ffe5cd8a95b477d242cfadcf0c689`](https://github.com/elong0527/yamaa/commit/46ee4dcb0f7ffe5cd8a95b477d242cfadcf0c689),
+[native run 38657181937](https://github.com/elong0527/yamaa/actions/runs/38657181937),
+attempt 1. All 31 required jobs passed; one optional job was skipped. This is
+`reviewed-branch` qualification, with the following installed and independent
+evidence:
+
+| Candidate gate | Passing evidence at `46ee4dcb` |
+| --- | --- |
+| Python installed matrix | All 18 CPython 3.12/3.13/3.14 wheel/source tuples across Linux x86_64, macOS arm64 and Windows x64; each passed 319 active conformance cases and all 18 supplemental suites, retaining two explicit historical exclusions. |
+| R installed matrix | All three R 4.6.1 source tuples on the same hosts; each passed 319 active conformance cases and all 17 supplemental suites, retaining the same two exclusions. All three strict package checks report `Status: OK`. The earlier `983e9c96` NOTE remains a prior observation. |
+| Shared Rust and numerical behavior | All three shared Rust checks, all nine numerical assessments and their exact comparison passed. The numerical evidence establishes the assessed sample's portability, not universal correct rounding or historical bit parity. |
+| Complete public and producer cohorts | All 18 tuple directories passed, retaining 468 case/host comparison records against committed truth and original held Save bytes. |
+| Independent native audit | All 97 lanes passed with `complete: true`. The original hosted network-isolated replay reproduced the verdict byte for byte. |
+
+The original audit is owned by
+[job 116178061111](https://github.com/elong0527/yamaa/actions/runs/38657181937/job/116178061111).
+Its small original record
+[artifact 11938143736](https://github.com/elong0527/yamaa/actions/runs/38657181937/artifacts/11938143736)
+retains both the verdict and its byte-identical hosted replay. Independent local
+`--input`/`--check` replay of authenticated reconstituted original inputs also
+passed all 97 lanes and reproduced those verdict bytes. That reconstruction
+retained all 86 original advertised artifacts and 19 exact Git source files;
+it did not download the full audit ZIP. The original small metadata and source,
+run, attempt and producing-job identities remain unchanged.
+
+Linux performance
+[run 38657181920](https://github.com/elong0527/yamaa/actions/runs/38657181920)
+is still collecting at frozen source `46ee4dcb`; no measured results are asserted
+here. A later documentation commit must retain that measured revision.
+Final postmerge main/native qualification and its independent audit/replay,
+remaining assertion migration under #2289, Linux measurements, exact release
+package/tag selection and publication remain pending. Candidate qualification
+does not establish final release qualification or item-11 acceptance and does
+not close #2288.
 
 ### Source differences and evidence renewal
 
@@ -188,6 +222,24 @@ currently declare Python, R and embedded Cargo workspace 0.4.0. Record actual
 filenames, lengths and original artifact IDs from that run; preserve and compare
 the tested bytes when preparing publication. Rebuilding creates new artifacts
 and requires renewed admission.
+
+The qualified candidate's six original Actions artifacts belong to source
+`46ee4dcb0f7ffe5cd8a95b477d242cfadcf0c689`, native run `38657181937`, attempt 1.
+The table records the actual package filenames and lengths inside those
+artifacts. Each platform's source archive keeps its own tested bytes; these
+candidate references are not a final release selection or published assets.
+
+| Candidate package | Exact original package reference | Package bytes | Original Actions artifact |
+| --- | --- | ---: | --- |
+| Linux x86_64 Python wheel | `github-actions:38657181937/attempt-1/native-python-ubuntu-24.04-3.14/yamaa-0.4.0-cp312-abi3-manylinux_2_34_x86_64.whl` | 8,372,695 | [11936644695](https://github.com/elong0527/yamaa/actions/runs/38657181937/artifacts/11936644695) |
+| Linux Python source | `github-actions:38657181937/attempt-1/native-python-ubuntu-24.04-3.14/yamaa-0.4.0.tar.gz` | 2,319,729 | [11936644695](https://github.com/elong0527/yamaa/actions/runs/38657181937/artifacts/11936644695) |
+| macOS arm64 Python wheel | `github-actions:38657181937/attempt-1/native-python-macos-15-3.14/yamaa-0.4.0-cp312-abi3-macosx_11_0_arm64.whl` | 7,369,996 | [11937203956](https://github.com/elong0527/yamaa/actions/runs/38657181937/artifacts/11937203956) |
+| macOS Python source | `github-actions:38657181937/attempt-1/native-python-macos-15-3.14/yamaa-0.4.0.tar.gz` | 2,320,515 | [11937203956](https://github.com/elong0527/yamaa/actions/runs/38657181937/artifacts/11937203956) |
+| Windows x64 Python wheel | `github-actions:38657181937/attempt-1/native-python-windows-latest-3.14/yamaa-0.4.0-cp312-abi3-win_amd64.whl` | 7,534,978 | [11937900083](https://github.com/elong0527/yamaa/actions/runs/38657181937/artifacts/11937900083) |
+| Windows Python source | `github-actions:38657181937/attempt-1/native-python-windows-latest-3.14/yamaa-0.4.0.tar.gz` | 2,320,174 | [11937900083](https://github.com/elong0527/yamaa/actions/runs/38657181937/artifacts/11937900083) |
+| Linux x86_64 R source | `github-actions:38657181937/attempt-1/native-r-ubuntu-24.04/yamaa_0.4.0.tar.gz` | 3,591,231 | [11937604220](https://github.com/elong0527/yamaa/actions/runs/38657181937/artifacts/11937604220) |
+| macOS arm64 R source | `github-actions:38657181937/attempt-1/native-r-macos-15/yamaa_0.4.0.tar.gz` | 3,590,120 | [11937463740](https://github.com/elong0527/yamaa/actions/runs/38657181937/artifacts/11937463740) |
+| Windows x64 R source | `github-actions:38657181937/attempt-1/native-r-windows-latest/yamaa_0.4.0.tar.gz` | 3,590,728 | [11937549706](https://github.com/elong0527/yamaa/actions/runs/38657181937/artifacts/11937549706) |
 
 | Selection | Required final record |
 | --- | --- |
