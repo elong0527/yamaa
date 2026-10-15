@@ -1,0 +1,88 @@
+schema_version: "1.0"
+domain: ADLB
+keys: [STUDYID, USUBJID, LBSEQ]
+input:
+  LB: input/lb.csv
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, LBSEQ, PARAMCD, AVALC, AVAL, AVALU, DTYPE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: LBSEQ
+    type: int
+    label: Laboratory Sequence Number
+    derivation: LB.LBSEQ
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: LB.LBTESTCD
+
+  - name: AVALC
+    type: str
+    label: Analysis Value (C)
+    derivation: LB.LBSTRESC
+
+  # Extract just the numeric boundary. Conversion then gives a float;
+  # the original text stays in AVALC. Missing is explicit, while a reported
+  # value outside the authored grammar fails rather than losing its text.
+  - name: LIMITVAL
+    type: float
+    label: Numeric Result or Limit
+    derivation:
+      str_extract:
+        source: AVALC
+        pattern: '^(?:[<>]=?|=)?([0-9]+(?:\.[0-9]+)?)$'
+        group: 1
+        missing: null
+
+  # admiral v1.5.0 compute_qual_imputation, imputation_type=1, factor=1:
+  # only a strict inequality receives the authored one-unit offset.
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation:
+      case:
+        - when: "AVALC LIKE '<%' AND AVALC NOT LIKE '<=%'"
+          then:
+            compute:
+              expr: "LIMITVAL - 1"
+        - when: "AVALC LIKE '>%' AND AVALC NOT LIKE '>=%'"
+          then:
+            compute:
+              expr: "LIMITVAL + 1"
+        - otherwise: LIMITVAL
+
+  - name: AVALU
+    type: str
+    label: Analysis Value Unit
+    derivation: LB.LBSTRESU
+
+  - name: DTYPE
+    type: str
+    label: Derivation Type
+    derivation:
+      case:
+        - when: "AVALC LIKE '<%' OR AVALC LIKE '>%'"
+          then: {literal: IMPUTATION}
+
+verifications:
+  - row_count:
+      min: 11
+      max: 11
+  - assert:
+      id: numeric-and-character-results-have-the-same-missingness
+      require: >-
+        (AVALC IS NULL AND AVAL IS NULL) OR
+        (AVALC IS NOT NULL AND AVAL IS NOT NULL)
