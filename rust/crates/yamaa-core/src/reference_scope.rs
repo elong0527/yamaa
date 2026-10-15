@@ -45,66 +45,6 @@ pub enum Finding {
     },
 }
 
-/// Trusted scope policies; installed transports use these defaults without caller overrides.
-#[derive(Clone, Copy, Debug)]
-pub struct Limits {
-    pub drivers: usize,
-    pub groups: usize,
-    pub group_fields: usize,
-    pub context_bytes: usize,
-}
-
-impl Default for Limits {
-    /// Bound every supplied context, including entries that later rules do not reach.
-    fn default() -> Self {
-        Self {
-            drivers: 256,
-            groups: 4096,
-            group_fields: 65_536,
-            context_bytes: 1_048_576,
-        }
-    }
-}
-
-/// Keep resource policy outcomes separate from language diagnostics.
-fn limit(resource: &'static str, required: usize, allowed: usize) -> Result<(), Error> {
-    if required > allowed {
-        Err(Error::Limit {
-            resource,
-            limit: allowed,
-            required,
-        })
-    } else {
-        Ok(())
-    }
-}
-
-/// Admit written counts and UTF-8 bytes without allocating a context index.
-fn admit(scope: Scope<'_>, limits: Limits) -> Result<(), Error> {
-    limit("scope_drivers", scope.drivers.len(), limits.drivers)?;
-    let row_groups;
-    let groups = match scope.phase {
-        Phase::Row { group_by } => {
-            row_groups = group_by.map(|group| [group]);
-            row_groups.as_ref().map_or(&[][..], |groups| &groups[..])
-        }
-        Phase::Column { groups } => groups,
-    };
-    limit("scope_groups", groups.len(), limits.groups)?;
-    let fields = groups.iter().try_fold(0usize, |n, group| {
-        n.checked_add(group.len()).ok_or(Error::SizeOverflow)
-    })?;
-    limit("scope_group_fields", fields, limits.group_fields)?;
-    let bytes = scope
-        .drivers
-        .iter()
-        .chain(groups.iter().flat_map(|group| group.iter()))
-        .try_fold(0usize, |n, name| {
-            n.checked_add(name.len()).ok_or(Error::SizeOverflow)
-        })?;
-    limit("scope_context_bytes", bytes, limits.context_bytes)
-}
-
 /// Preserve driver/existence priority, join suppression, and grouping-before-type findings.
 /// Scope failures do not suppress a subsequent type finding; unresolved names do.
 pub fn validate(
@@ -112,15 +52,13 @@ pub fn validate(
     name: &str,
     expected: Option<ColumnType>,
     scope: Scope<'_>,
-    limits: Limits,
 ) -> Result<Vec<Finding>, Error> {
     let Some((qualifier, _)) = name.split_once('.') else {
         return Err(Error::BareQualifiedQuery);
     };
-    // Binding also admits the catalog's reference byte policy. No data or host
-    // effects occur here; the result is consumed only after driver priority.
-    let bound = catalog.bind(name)?;
-    admit(scope, limits)?;
+    // No data or host effects occur here; the result is consumed only after
+    // driver priority.
+    let bound = catalog.bind(name);
     let mut findings = Vec::new();
     if scope.current_driver
         && (scope.drivers.is_empty() || scope.drivers.iter().any(|driver| *driver != qualifier))
@@ -128,11 +66,7 @@ pub fn validate(
         findings.push(Finding::DriverMismatch);
         return Ok(findings);
     }
-    let Some(Binding::Dataset {
-        column_type: actual,
-        ..
-    }) = bound
-    else {
+    let Some(Binding::Dataset { .. }) = bound else {
         findings.push(Finding::UnknownField);
         return Ok(findings);
     };
@@ -166,7 +100,10 @@ pub fn validate(
             }
         }
     }
-    if let Some(expected) = expected.filter(|expected| *expected != actual) {
+    if let Some((expected, actual)) = expected
+        .zip(catalog.type_of(name))
+        .filter(|(expected, actual)| expected != actual)
+    {
         findings.push(Finding::IncompatibleInputType { expected, actual });
     }
     Ok(findings)

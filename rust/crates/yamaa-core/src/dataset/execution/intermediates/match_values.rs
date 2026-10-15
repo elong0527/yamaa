@@ -46,9 +46,6 @@ fn resolve_one<T: TableAccess + ?Sized>(
     match read {
         MatchRead::Output { column, .. } => {
             let value = &candidate.values[*column];
-            if let Value::Str(text) = value {
-                state.budget.scalar_text(text.len())?;
-            }
             Ok(value.clone())
         }
         MatchRead::Record { column, identifier }
@@ -73,7 +70,7 @@ fn resolve_one<T: TableAccess + ?Sized>(
                 ),
                 _ => row_drivers::Driver::Primary(primary),
             };
-            state.budget.work(candidate.members.len(), 1)?;
+
             key_grain::collect_bound(
                 &current,
                 key_grain::Collection {
@@ -88,7 +85,6 @@ fn resolve_one<T: TableAccess + ?Sized>(
                     plan,
                     row,
                 },
-                state.budget,
                 state.handlers,
             )
         }
@@ -106,7 +102,7 @@ pub(crate) fn resolve<'a, T: TableAccess + ?Sized>(
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Current<'a>, Box<ExecutionError<T::Error>>> {
     let item = item.into();
-    state.budget.work(1, item.keys.len())?;
+
     let operands = item
         .keys
         .iter()
@@ -114,7 +110,7 @@ pub(crate) fn resolve<'a, T: TableAccess + ?Sized>(
             count.checked_add(key.value.reads().count())
         })
         .ok_or_else(|| Box::new(ExecutionError::Capacity))?;
-    state.budget.work(1, operands)?;
+
     let mut values: Vec<(&MatchRead, Value)> = Vec::new();
     values
         .try_reserve_exact(operands)
@@ -131,7 +127,7 @@ pub(crate) fn resolve<'a, T: TableAccess + ?Sized>(
                 {
                     continue;
                 }
-                state.budget.work(1, 1)?;
+
                 values.push((
                     read,
                     resolve_one(read, &item, candidate, plan, row, primary, state)?,
@@ -153,7 +149,7 @@ pub(crate) fn ordinary<'a, T: TableAccess + ?Sized>(
     state: &mut EvaluationState<'_, T::Error>,
 ) -> KeyValues<T::Error> {
     let item = item.into();
-    state.budget.work(1, item.keys.len())?;
+
     let mut keys = Vec::new();
     keys.try_reserve_exact(item.keys.len())
         .map_err(|_| Box::new(ExecutionError::Allocation))?;
@@ -186,40 +182,30 @@ pub(crate) fn evaluate<'a, T: TableAccess + ?Sized>(
     plan: &DatasetPlan,
     row: usize,
     primary: &T,
-    limits: Limits,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> KeyValues<T::Error> {
     let item = item.into();
-    state.budget.work(1, item.keys.len())?;
+
     let mut keys = Vec::new();
     keys.try_reserve_exact(item.keys.len())
         .map_err(|_| Box::new(ExecutionError::Allocation))?;
     for key in item.keys {
-        state.budget.work(1, 1)?;
         let value = match &key.value {
             MatchValue::Expression(expression) => {
                 if expression.windowed {
-                    evaluate_raw(
-                        primary,
-                        &expression.assignment,
-                        candidate,
-                        plan,
-                        row,
-                        limits,
-                        state,
-                    )?
+                    evaluate_raw(primary, &expression.assignment, candidate, plan, row, state)?
                 } else {
                     // All authored current references were resolved with their
                     // actual source membership. The scalar evaluator now sees
                     // one current record, without reusing any physical driver
                     // coordinate as an operand-table coordinate.
-                    state.budget.work(candidate.values.len(), 2)?;
+
                     let mut values = Vec::new();
                     values
                         .try_reserve_exact(candidate.values.len())
                         .map_err(|_| Box::new(ExecutionError::Allocation))?;
                     for value in &candidate.values {
-                        values.push(clone_value(value, state.budget)?);
+                        values.push(clone_value(value)?);
                     }
                     let mut completed = Vec::new();
                     completed
@@ -238,22 +224,14 @@ pub(crate) fn evaluate<'a, T: TableAccess + ?Sized>(
                         current,
                         marker: std::marker::PhantomData,
                     };
-                    evaluate_raw(
-                        &snapshot,
-                        &expression.assignment,
-                        &scalar,
-                        plan,
-                        row,
-                        limits,
-                        state,
-                    )?
+                    evaluate_raw(&snapshot, &expression.assignment, &scalar, plan, row, state)?
                 }
             }
             MatchValue::Contextual(_) => return Err(Box::new(ExecutionError::SchemaMismatch)),
             MatchValue::Variable(read) | MatchValue::Source(read) => {
-                clone_value(current.value(read), state.budget)?
+                clone_value(current.value(read))?
             }
-            MatchValue::Literal(value) => clone_value(value, state.budget)?,
+            MatchValue::Literal(value) => clone_value(value)?,
             MatchValue::StrPad { read, operation } => str_pad::render(
                 current.value(read),
                 operation.as_ref().expect("padding declaration admitted"),
@@ -261,7 +239,6 @@ pub(crate) fn evaluate<'a, T: TableAccess + ?Sized>(
                 candidate,
                 plan,
                 row,
-                state.budget,
             )?,
         };
         keys.push((key.source_column, value));
@@ -269,10 +246,7 @@ pub(crate) fn evaluate<'a, T: TableAccess + ?Sized>(
     Ok(keys)
 }
 
-fn clone_value<E>(value: &Value, budget: &mut Budget) -> Result<Value, Box<ExecutionError<E>>> {
-    if let Value::Str(text) = value {
-        budget.scalar_text(text.len())?;
-    }
+fn clone_value<E>(value: &Value) -> Result<Value, Box<ExecutionError<E>>> {
     Ok(value.clone())
 }
 
