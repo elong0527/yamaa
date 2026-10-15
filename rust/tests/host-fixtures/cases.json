@@ -1515,6 +1515,133 @@
           ],
           "csv": null
         }
+      ],
+      "diagnostic_sites": [
+        {
+          "name": "original_odm_vendor_filter",
+          "specification": "schema_version: '1.0'\ndomain: VS\nkeys:\n- STUDYID\n- USUBJID\n- VISIT\ninput:\n  ODM:\n    path: input/odm.csv\n  DM:\n    path: input/dm.csv\nbase: ODM\noutput:\n  path: vs.csv\n  columns:\n  - STUDYID\n  - USUBJID\n  - VISIT\n  - VSDTC\nrows:\n- id: VISITS\n  dataset: ODM\n  group_by:\n  - ODM.StudyOID\n  - ODM.SubjectKey\n  - ODM.StudyEventOID\n  derivations:\n    STUDYID: ODM.StudyOID\n    USUBJID: ODM.SubjectKey\n    VISIT: ODM.StudyEventOID\ncolumns:\n- name: STUDYID\n  type: str\n  label: Study Identifier\n- name: USUBJID\n  type: str\n  label: Subject\n- name: VISIT\n  type: str\n  label: Visit\n- name: VSDTC\n  type: str\n  label: Date\n  derivation:\n    odm:\n      item: ODM.IT.VS.DATE\n      filter: ODM.SITEID = '9'\n",
+          "inputs": {
+            "input/dm.csv": "STUDYID,USUBJID\nS1,001\n",
+            "input/odm.csv": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS1,M1,001,SCREENING,1,FO.VS,1,IG.VS,1,IT.VS.DATE,2025-01-02\nS1,M1,001,SCREENING,1,FO.VS,1,IG.VS,1,IT.VS.WEIGHT,61\nS1,M1,001,WEEK2,1,FO.VS,1,IG.VS,1,IT.VS.DATE,2025-01-16\nS1,M1,001,WEEK2,1,FO.VS,1,IG.VS,1,IT.VS.WEIGHT,60\nS1,M1,001,SCREENING,1,FO.LB,1,IG.LB,1,IT.LB.DATE,2025-01-03\nS1,M1,001,SCREENING,1,FO.LB,1,IG.LB,2,IT.LB.DATE,2025-01-04\n"
+          },
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0103",
+              "spec_paths": [
+                "columns.VSDTC.derivation.odm.filter"
+              ],
+              "context": {
+                "dataset": "ODM",
+                "identifier": "ODM.SITEID"
+              }
+            }
+          ],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0103",
+              "spec_paths": [
+                "columns.VSDTC.derivation.odm.filter"
+              ],
+              "context": {
+                "dataset": "ODM",
+                "identifier": "ODM.SITEID"
+              }
+            }
+          ],
+          "output": "vs.csv"
+        },
+        {
+          "name": "original_derive_unknown_qualifier",
+          "specification": "schema_version: '1.0'\ndomain: ADQS\ninput:\n  QS:\n    path: input/qs.csv\n    types:\n      STUDYID: str\n      USUBJID: str\n      QSTESTCD: str\n      QSCAT: str\n      QSORRES: str\noutput:\n  path: adqs.csv\n  columns:\n  - STUDYID\n  - USUBJID\n  - AVAL\nkeys:\n- STUDYID\n- USUBJID\ncolumns:\n- name: STUDYID\n  type: str\n  derivation:\n    source: QS.STUDYID\n- name: USUBJID\n  type: str\n  derivation:\n    source: QS.USUBJID\n- name: AVAL\n  type: float\n  derivation:\n    aggregate:\n      key:\n      - STUDYID\n      - USUBJID\n      derive:\n      - name: A\n        type: float\n        derivation: XX.YY\n      expr: SUM(A)\nrows:\n- id: subscale\n  filter: QS.QSCAT = 'SCALE' AND QS.QSTESTCD = 'PF01'\n  derivations: {}\n",
+          "inputs": {
+            "input/qs.csv": "STUDYID,USUBJID,QSTESTCD,QSCAT,QSORRES\nS1,001,PF01,SCALE,1\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0103",
+              "spec_paths": [
+                "columns.AVAL.derivation.aggregate.expr"
+              ],
+              "context": {
+                "identifier": "XX.YY"
+              }
+            }
+          ],
+          "output": "adqs.csv"
+        },
+        {
+          "name": "direct_aggregate_unknown_field",
+          "specification": "schema_version: '1.0'\ndomain: ADQS\ninput:\n  QS:\n    path: input/qs.csv\n    types:\n      STUDYID: str\n      USUBJID: str\n      QSTESTCD: str\n      QSCAT: str\n      QSORRES: str\noutput:\n  path: adqs.csv\n  columns:\n  - STUDYID\n  - USUBJID\n  - AVAL\nkeys:\n- STUDYID\n- USUBJID\ncolumns:\n- name: STUDYID\n  type: str\n  derivation:\n    source: QS.STUDYID\n- name: USUBJID\n  type: str\n  derivation:\n    source: QS.USUBJID\n- name: AVAL\n  type: float\n  derivation:\n    aggregate:\n      key:\n      - STUDYID\n      - USUBJID\n      expr: SUM(XX.YY)\nrows:\n- id: subscale\n  filter: QS.QSCAT = 'SCALE' AND QS.QSTESTCD = 'PF01'\n  derivations: {}\n",
+          "inputs": {
+            "input/qs.csv": "STUDYID,USUBJID,QSTESTCD,QSCAT,QSORRES\nS1,001,PF01,SCALE,1\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0103",
+              "spec_paths": [
+                "columns.AVAL.derivation.aggregate.expr"
+              ],
+              "context": {
+                "identifier": "XX.YY"
+              }
+            }
+          ],
+          "output": "adqs.csv"
+        },
+        {
+          "name": "direct_aggregate_unknown_record",
+          "specification": "schema_version: '1.0'\ndomain: ADQS\ninput:\n  QS:\n    path: input/qs.csv\n    types:\n      STUDYID: str\n      USUBJID: str\n      QSTESTCD: str\n      QSCAT: str\n      QSORRES: str\noutput:\n  path: adqs.csv\n  columns:\n  - STUDYID\n  - USUBJID\n  - AVAL\nkeys:\n- STUDYID\n- USUBJID\ncolumns:\n- name: STUDYID\n  type: str\n  derivation:\n    source: QS.STUDYID\n- name: USUBJID\n  type: str\n  derivation:\n    source: QS.USUBJID\n- name: AVAL\n  type: float\n  derivation:\n    aggregate:\n      key:\n      - STUDYID\n      - USUBJID\n      expr: COUNT(XX.*)\nrows:\n- id: subscale\n  filter: QS.QSCAT = 'SCALE' AND QS.QSTESTCD = 'PF01'\n  derivations: {}\n",
+          "inputs": {
+            "input/qs.csv": "STUDYID,USUBJID,QSTESTCD,QSCAT,QSORRES\nS1,001,PF01,SCALE,1\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0103",
+              "spec_paths": [
+                "columns.AVAL.derivation.aggregate.expr"
+              ],
+              "context": {
+                "identifier": "XX.*"
+              }
+            }
+          ],
+          "output": "adqs.csv"
+        },
+        {
+          "name": "derive_filter_unknown_qualifier",
+          "specification": "schema_version: '1.0'\ndomain: ADQS\ninput:\n  QS:\n    path: input/qs.csv\n    types:\n      STUDYID: str\n      USUBJID: str\n      QSTESTCD: str\n      QSCAT: str\n      QSORRES: str\noutput:\n  path: adqs.csv\n  columns:\n  - STUDYID\n  - USUBJID\n  - AVAL\nkeys:\n- STUDYID\n- USUBJID\ncolumns:\n- name: STUDYID\n  type: str\n  derivation:\n    source: QS.STUDYID\n- name: USUBJID\n  type: str\n  derivation:\n    source: QS.USUBJID\n- name: AVAL\n  type: float\n  derivation:\n    aggregate:\n      key:\n      - STUDYID\n      - USUBJID\n      derive:\n      - name: A\n        type: float\n        derivation: {literal: 1}\n      filter: XX.ZZ = 1\n      expr: SUM(A)\nrows:\n- id: subscale\n  filter: QS.QSCAT = 'SCALE' AND QS.QSTESTCD = 'PF01'\n  derivations: {}\n",
+          "inputs": {
+            "input/qs.csv": "STUDYID,USUBJID,QSTESTCD,QSCAT,QSORRES\nS1,001,PF01,SCALE,1\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0103",
+              "spec_paths": [
+                "columns.AVAL.derivation.aggregate.expr"
+              ],
+              "context": {
+                "identifier": "XX.ZZ"
+              }
+            }
+          ],
+          "output": "adqs.csv"
+        }
       ]
     },
     "file-resources": {
