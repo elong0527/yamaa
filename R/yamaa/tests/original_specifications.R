@@ -2283,6 +2283,36 @@ local({
   cat("shared temporal arithmetic conformance preserves civil values and duration handlers without Python\n")
 })
 
+local({
+  for (truth in host_truth[["namespace_admission"]]) {
+    directory <- tempfile("namespace-admission-"); dir.create(directory)
+    entry <- file.path(directory,"spec.yaml")
+    writeBin(charToRaw(truth$specification),entry)
+    original <- rawfile(entry)
+    # No input file exists: declaration admission must precede source access.
+    for (attempt in 1:2) {
+      checked <- yamaa_check(entry)
+      result <- yamaa_domain(entry)
+      for (frame in list(checked$issues,result$issues)) {
+        stopifnot(nrow(frame)==length(truth$issues))
+        for (index in seq_along(truth$issues)) {
+          expected <- truth$issues[[index]]
+          stopifnot(identical(frame$phase[[index]],expected$phase),
+            identical(frame$condition[[index]],expected$condition),
+            identical(frame$requirement[[index]],expected$requirement),
+            identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
+            identical(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
+        }
+      }
+      stopifnot(is.null(result$output),
+        inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        !file.exists(file.path(directory,"out.csv")),identical(rawfile(entry),original))
+    }
+    unlink(directory,recursive=TRUE)
+  }
+  cat("original namespace declarations preserve complete paired public refusals before source reads\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

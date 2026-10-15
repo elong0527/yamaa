@@ -2789,5 +2789,31 @@ columns:
                             result.save()
                         self.assertFalse((destination / "result.csv").exists())
 
+class NamespaceAdmission(unittest.TestCase):
+    def test_original_namespace_obligations_through_both_public_routes(self):
+        import yamaa
+
+        for case in TRUTH["namespace_admission"]:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                entry = root / "spec.yaml"
+                entry.write_text(case["specification"], encoding="ascii")
+                original = entry.read_bytes()
+                # The absent source also proves these are declaration refusals.
+                for _ in range(2):
+                    checked = yamaa.check(entry)
+                    result = yamaa.domain(entry)
+                    for frame in (checked.issues, result.issues):
+                        rows = frame.to_dicts()
+                        for row in rows:
+                            row["context"] = json.loads(row["context"])
+                        self.assertEqual(rows, case["issues"])
+                    self.assertIsNone(result.output)
+                    with self.assertRaises(yamaa.DomainError):
+                        result.save()
+                    self.assertFalse((root / "out.csv").exists())
+                    self.assertEqual(entry.read_bytes(), original)
+
+
 if __name__ == "__main__":
     unittest.main()

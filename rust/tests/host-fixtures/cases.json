@@ -906,6 +906,116 @@
           "csv": null,
           "no_match_count": 0
         }
+      ],
+      "namespace_admission": [
+        {
+          "name": "duplicate_row",
+          "specification": "schema_version: '1.0'\ndomain: OUT\ninput: {SRC: input.csv}\nbase: SRC\nkeys: [ID]\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\nrows:\n  - {id: repeated, dataset: SRC, derivations: {}}\n  - {id: repeated, dataset: SRC, derivations: {}}\n",
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "duplicate_identifier",
+              "requirement": "REQ-1056",
+              "spec_paths": [
+                "rows[1].id",
+                "rows[0].id"
+              ],
+              "context": {
+                "identifier": "repeated"
+              }
+            }
+          ]
+        },
+        {
+          "name": "lookup_domain_collision",
+          "specification": "schema_version: '1.0'\ndomain: OUT\ninput: {SRC: input.csv}\nbase: SRC\nkeys: [ID]\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\nintermediates: [{id: OUT, dataset: SRC}]\n",
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "duplicate_identifier",
+              "requirement": "REQ-0113",
+              "spec_paths": [
+                "intermediates[0].id",
+                "domain"
+              ],
+              "context": {
+                "identifier": "OUT"
+              }
+            }
+          ]
+        },
+        {
+          "name": "unknown_lookup_dataset",
+          "specification": "schema_version: '1.0'\ndomain: OUT\ninput: {SRC: input.csv}\nbase: SRC\nkeys: [ID]\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\nintermediates: [{id: LOOK, dataset: MISSING}]\n",
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0079",
+              "spec_paths": [
+                "intermediates[0].dataset"
+              ],
+              "context": {
+                "identifier": "MISSING",
+                "intermediate": "LOOK"
+              }
+            }
+          ]
+        },
+        {
+          "name": "duplicate_lookup",
+          "specification": "schema_version: '1.0'\ndomain: OUT\ninput: {SRC: input.csv}\nbase: SRC\nkeys: [ID]\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\nintermediates: [{id: LOOK, dataset: SRC}, {id: LOOK, dataset: SRC}]\n",
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "duplicate_identifier",
+              "requirement": "REQ-0113",
+              "spec_paths": [
+                "intermediates[1].id",
+                "intermediates[0].id"
+              ],
+              "context": {
+                "identifier": "LOOK"
+              }
+            }
+          ]
+        },
+        {
+          "name": "lookup_input_collision",
+          "specification": "schema_version: '1.0'\ndomain: OUT\ninput: {SRC: input.csv}\nbase: SRC\nkeys: [ID]\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\nintermediates: [{id: SRC, dataset: SRC}]\n",
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "duplicate_identifier",
+              "requirement": "REQ-0113",
+              "spec_paths": [
+                "intermediates[0].id",
+                "input.SRC"
+              ],
+              "context": {
+                "identifier": "SRC"
+              }
+            }
+          ]
+        },
+        {
+          "name": "dataset_domain_collision",
+          "specification": "schema_version: '1.0'\ndomain: SRC\ninput: {SRC: input.csv}\nbase: SRC\nkeys: [ID]\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n",
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "duplicate_identifier",
+              "requirement": "REQ-0080",
+              "spec_paths": [
+                "input.SRC",
+                "domain"
+              ],
+              "context": {
+                "identifier": "SRC"
+              }
+            }
+          ]
+        }
       ]
     },
     "file-resources": {

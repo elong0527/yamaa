@@ -677,6 +677,22 @@ fn preflight(spec: &SpecificationDocument) -> Result<Vec<PreflightFinding>, Prep
         .unwrap_or_default();
     for (index, &row) in rows.iter().enumerate() {
         let identity = text(d, field(d, row, "id")?)?;
+        if let Some(previous) = rows[..index].iter().position(|&row| {
+            d.field(row, "id")
+                .is_some_and(|id| text(d, id).is_ok_and(|name| name == identity))
+        }) {
+            let mut finding = LookupFinding::new(
+                &format!("rows[{index}].id"),
+                crate::diagnostic::ConditionCode::PreflightDuplicateRow,
+            )
+            .diagnostic();
+            finding.spec_paths.push(format!("rows[{previous}].id"));
+            finding.context.insert(
+                "identifier".into(),
+                crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(identity.into())),
+            );
+            findings.push(PreflightFinding::Scalar(finding));
+        }
         let driver = d
             .field(row, "dataset")
             .filter(|&id| !matches!(d.nodes()[id], N::Null))
