@@ -345,7 +345,12 @@ mod resource_tests {
                 let rows = failure(&error, host);
                 assert_eq!(rows.len(), 1);
                 assert_eq!(rows[0].phase, "engine");
-                assert_eq!(rows[0].condition, "engine_rejected");
+                assert_eq!(
+                    rows[0].condition,
+                    yamaa_core::diagnostic::ConditionCode::ApplicationRejected
+                        .definition()
+                        .condition
+                );
                 assert_eq!(rows[0].requirement, None);
                 assert_eq!(rows[0].spec_paths, ["$"]);
                 assert_eq!(rows[0].context, context.to_string());
