@@ -19,23 +19,32 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     state
         .budget
         .work(operation.comparison_work(ValueRef::from(&value)), 1)?;
-    // Admit every possible copied diagnostic before selection can allocate it.
-    state.budget.scalar_text(
-        operation
-            .source()
-            .len()
-            .saturating_add(operation.path().len())
-            .saturating_add(match &value {
-                Value::Str(text) => text.len(),
-                _ => 0,
-            })
-            .saturating_add(1024),
-    )?;
-    let selected = operation
-        .select(ValueRef::from(&value))
-        .map_err(|diagnostic| {
-            retained_diagnostic(diagnostic, true, candidate, plan, row, state.budget)
-        })?;
+    // Estimate a copied diagnostic without charging it: only the branches
+    // that can actually allocate one (selection error, conversion failure)
+    // pay this charge, so successfully selected rows do not consume it.
+    let diagnostic_text_bytes = operation
+        .source()
+        .len()
+        .saturating_add(operation.path().len())
+        .saturating_add(match &value {
+            Value::Str(text) => text.len(),
+            _ => 0,
+        })
+        .saturating_add(1024);
+    let selected = match operation.select(ValueRef::from(&value)) {
+        Ok(selected) => selected,
+        Err(diagnostic) => {
+            state.budget.scalar_text(diagnostic_text_bytes)?;
+            return Err(retained_diagnostic(
+                diagnostic,
+                true,
+                candidate,
+                plan,
+                row,
+                state.budget,
+            ));
+        }
+    };
     let result = match selected.value {
         SelectedValue::Literal(value) => {
             if let Value::Str(text) = value {
@@ -62,6 +71,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
         // retain its original handler alongside a fatal conversion context.
         if retained && plan.conversion_handler(&assignment.path).is_none() {
             if let Err(error) = convert(&result, plan.output().columns()[assignment.column].kind) {
+                state.budget.scalar_text(diagnostic_text_bytes)?;
                 let path = alloc::format!(
                     "columns.{}",
                     plan.output().columns()[assignment.column].name
