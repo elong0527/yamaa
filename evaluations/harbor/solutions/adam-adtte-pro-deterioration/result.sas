@@ -24,7 +24,7 @@ run;
    carries dated, scored rows only: a scoreless row cannot be the baseline
    (its missing score would leave no later row able to meet the
    deterioration cutoff) and is not an evaluable last assessment. */
-proc sort data=qs(where=(ADT ne '' and AVAL ne .)) out=ordered; by STUDYID USUBJID ADT QSSEQ; run;
+proc sort data=qs(where=(ADT ne '' and not missing(AVAL))) out=ordered; by STUDYID USUBJID ADT QSSEQ; run;
 data deteriorations;
   length BASEDT $10;
   retain BASEDT BASEVAL;
