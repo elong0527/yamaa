@@ -575,7 +575,7 @@ fn unclassified_failures_and_contradictory_cycles_have_no_semantic_projection() 
     let error = Error::Host(Opaque(payload));
     assert!(error.diagnostic().is_none());
     let yamaa_core::inheritance_outcome::Outcome::Original(Error::Host(Opaque(payload))) =
-        yamaa_core::inheritance_outcome::traversal_outcome(error, 16_777_216).unwrap()
+        yamaa_core::inheritance_outcome::traversal_outcome(error).unwrap()
     else {
         panic!("original host failure replaced")
     };
