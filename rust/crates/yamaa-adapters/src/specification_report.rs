@@ -244,22 +244,40 @@ pub fn failure<E>(
             vec![specification_diagnostics::portable_diagnostic(diagnostic)
                 .ok_or(Error::InvalidObservation)?]
         }
-        Err(PortError::Inspect(_)) => inspected_failures(run, attempt)?
-            .iter()
-            .map(|failure| {
-                let written = run
-                    .document()
-                    .written_source_path(&failure.source.name)
-                    .ok_or(Error::InvalidObservation)?;
-                specification_diagnostics::portable_diagnostic(
-                    failure
-                        .failure
-                        .ok_or(Error::InvalidObservation)?
-                        .diagnostic(&failure.source.name, written),
+        Err(PortError::Inspect(_)) => {
+            let failures = inspected_failures(run, attempt)?;
+            let known_filter_types =
+                yamaa_engine::specification_run::inspection_declaration_diagnostics(
+                    run.compiled(),
+                    failures,
                 )
-                .ok_or(Error::InvalidObservation)
-            })
-            .collect::<Result<Vec<_>, Error>>()?,
+                .cloned()
+                .map(|diagnostic| {
+                    specification_diagnostics::portable_diagnostic(diagnostic)
+                        .ok_or(Error::InvalidObservation)
+                })
+                .collect::<Result<Vec<_>, Error>>()?;
+            if !known_filter_types.is_empty() {
+                known_filter_types
+            } else {
+                failures
+                    .iter()
+                    .map(|failure| {
+                        let written = run
+                            .document()
+                            .written_source_path(&failure.source.name)
+                            .ok_or(Error::InvalidObservation)?;
+                        specification_diagnostics::portable_diagnostic(
+                            failure
+                                .failure
+                                .ok_or(Error::InvalidObservation)?
+                                .diagnostic(&failure.source.name, written),
+                        )
+                        .ok_or(Error::InvalidObservation)
+                    })
+                    .collect::<Result<Vec<_>, Error>>()?
+            }
+        }
         _ => return Err(Error::UnsupportedOutcome),
     };
     let mut report = envelope(run, attempt, &id)?;
