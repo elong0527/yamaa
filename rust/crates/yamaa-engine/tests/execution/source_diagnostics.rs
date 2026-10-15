@@ -133,21 +133,6 @@ struct Port {
     fail_at: Option<&'static str>,
 }
 impl SourcePort for Port {
-    fn capture_observed(
-        &mut self,
-        source: &SourceDeclaration,
-        byte_limit: usize,
-        origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
-    ) -> Result<Arc<[u8]>, Self::Error> {
-        *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-        <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
-    }
-    fn resource_failure(
-        &self,
-        _error: &Self::Error,
-    ) -> Option<yamaa_core::resource::ResourceFailure> {
-        None
-    }
     type Error = Opaque;
     fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), Opaque> {
         self.trace

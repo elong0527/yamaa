@@ -139,18 +139,6 @@ impl<E> ScriptedSource<E> {
 }
 impl<E> SourcePort for ScriptedSource<E> {
     type Error = E;
-    fn resource_failure(&self, _error: &E) -> Option<yamaa_core::resource::ResourceFailure> {
-        None
-    }
-    fn capture_observed(
-        &mut self,
-        source: &SourceDeclaration,
-        byte_limit: usize,
-        origin: &mut Option<crate::specification_run::SourceOrigin>,
-    ) -> Result<Arc<[u8]>, E> {
-        *origin = Some(crate::specification_run::SourceOrigin::Resource);
-        self.capture(source, byte_limit)
-    }
     fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), E> {
         self.log.record(Event::Inspect(source.clone()));
         let step = self

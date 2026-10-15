@@ -14,7 +14,9 @@ pub trait SourcePort {
     type Error;
     /// Opt in only for known resource causes. Opaque host errors retain their
     /// identity and are not converted by inspecting their text or class name.
-    fn resource_failure(&self, error: &Self::Error) -> Option<ResourceFailure>;
+    fn resource_failure(&self, _error: &Self::Error) -> Option<ResourceFailure> {
+        None
+    }
     /// Inspect location and file kind without reading study bytes or creating a
     /// snapshot.
     fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), Self::Error>;
@@ -32,7 +34,10 @@ pub trait SourcePort {
         source: &SourceDeclaration,
         byte_limit: usize,
         origin: &mut Option<SourceOrigin>,
-    ) -> Result<Arc<[u8]>, Self::Error>;
+    ) -> Result<Arc<[u8]>, Self::Error> {
+        *origin = Some(SourceOrigin::Resource);
+        self.capture(source, byte_limit)
+    }
 }
 
 /// Decode one captured source with its declared logical types. The returned table
@@ -42,7 +47,9 @@ pub trait SourceDecoder {
     type Table: TableAccess;
     /// Semantic ingestion findings can be collected across the remaining declared
     /// sources. Resource, transport and opaque boundary failures must abort.
-    fn continue_after(&self, error: &Self::Error) -> bool;
+    fn continue_after(&self, _error: &Self::Error) -> bool {
+        false
+    }
     fn decode(
         &mut self,
         source: &SourceDeclaration,

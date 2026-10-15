@@ -147,15 +147,6 @@ impl SourcePort for Port {
         }
         Ok(())
     }
-    fn capture_observed(
-        &mut self,
-        source: &yamaa_engine::specification::SourceDeclaration,
-        byte_limit: usize,
-        origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
-    ) -> Result<Arc<[u8]>, CaptureError> {
-        *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-        self.capture(source, byte_limit)
-    }
     fn capture_reads(&self) -> usize {
         self.reads
     }

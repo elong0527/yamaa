@@ -20,7 +20,9 @@ use yamaa_core::{
 /// producer sources never reach this port, even for location inspection.
 pub trait StudyPort {
     type Error;
-    fn resource_failure(&self, error: &Self::Error) -> Option<ResourceFailure>;
+    fn resource_failure(&self, _error: &Self::Error) -> Option<ResourceFailure> {
+        None
+    }
     fn inspect(&mut self, node: &Node, source: &SourceDeclaration) -> Result<(), Self::Error>;
     fn capture_reads(&self) -> usize;
     fn capture(
@@ -370,9 +372,6 @@ impl PreparedBuild {
                 return Err("producer_build_failed");
             }
         };
-        // Every declared source, including aliases, reserves a codec share. This
-        // conservative reservation bounds all retained/staged decoded ownership
-        // without deriving an identity or trusting post-allocation size checks.
         let environment = graph.environment();
         let selected = graph
             .called_functions()
@@ -423,6 +422,10 @@ impl PreparedBuild {
         let routing_left = Cell::new(limits.routing_work);
         let e = limits.execution;
         let execution_work = crate::execution_work::WorkBudget::pooled(e);
+        // Every decode, including aliases, reserves the whole remaining graph
+        // pool and gets back only what the port's usage receipt proves unused.
+        // This bounds all retained/staged decoded ownership without deriving
+        // an identity or trusting post-allocation size checks.
         let mut decode_pools = DecodePools {
             rows_limit: e.source_rows,
             rows_left: e.source_rows,

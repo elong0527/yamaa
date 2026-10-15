@@ -120,12 +120,6 @@ struct Study {
     unwind: Option<Arc<()>>,
 }
 impl StudyPort for Study {
-    fn resource_failure(
-        &self,
-        _error: &Self::Error,
-    ) -> Option<yamaa_core::resource::ResourceFailure> {
-        None
-    }
     type Error = &'static str;
     fn inspect(&mut self, node: &Node, source: &SourceDeclaration) -> Result<(), Self::Error> {
         assert_eq!((node.identity(), source.name.as_str()), ("/p", "RAW"));
@@ -186,9 +180,6 @@ struct Decoder {
     used: Option<build::DecodeUsage>,
 }
 impl SourceDecoder for Decoder {
-    fn continue_after(&self, _error: &Self::Error) -> bool {
-        false
-    }
     fn decode_with_interpretation(
         &mut self,
         source: &SourceDeclaration,
@@ -2313,9 +2304,6 @@ struct PoolDecoder {
     admitted: Vec<build::DecodeLimits>,
 }
 impl SourceDecoder for PoolDecoder {
-    fn continue_after(&self, _error: &Self::Error) -> bool {
-        false
-    }
     fn decode_with_interpretation(
         &mut self,
         source: &SourceDeclaration,
@@ -2483,12 +2471,6 @@ fn native_uneven_graph_uses_actual_row_and_decoder_pools_without_grant_multiplic
 
 struct PrefixStudy(usize);
 impl StudyPort for PrefixStudy {
-    fn resource_failure(
-        &self,
-        _error: &Self::Error,
-    ) -> Option<yamaa_core::resource::ResourceFailure> {
-        None
-    }
     type Error = &'static str;
     fn capture_reads(&self) -> usize {
         self.0

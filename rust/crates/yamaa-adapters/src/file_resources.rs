@@ -1073,15 +1073,6 @@ impl yamaa_engine::specification_run::SourcePort for Resources {
     ) -> Result<(), Error> {
         Resources::inspect(self, &source.path)
     }
-    fn capture_observed(
-        &mut self,
-        source: &yamaa_core::specification::SourceDeclaration,
-        byte_limit: usize,
-        origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
-    ) -> Result<std::sync::Arc<[u8]>, Error> {
-        *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-        <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
-    }
     fn capture_reads(&self) -> usize {
         self.reads
     }

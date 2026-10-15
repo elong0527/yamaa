@@ -118,23 +118,8 @@ struct Port {
     payload: Rc<()>,
 }
 impl SourcePort for Port {
-    fn resource_failure(
-        &self,
-        _error: &Self::Error,
-    ) -> Option<yamaa_core::resource::ResourceFailure> {
-        None
-    }
     fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
         Ok(())
-    }
-    fn capture_observed(
-        &mut self,
-        source: &SourceDeclaration,
-        byte_limit: usize,
-        origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
-    ) -> Result<Arc<[u8]>, Self::Error> {
-        *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-        self.capture(source, byte_limit)
     }
     type Error = Payload;
     fn capture_reads(&self) -> usize {
@@ -190,9 +175,6 @@ struct Decoder {
     payload: Rc<()>,
 }
 impl SourceDecoder for Decoder {
-    fn continue_after(&self, _error: &Self::Error) -> bool {
-        false
-    }
     fn decode_with_interpretation(
         &mut self,
         source: &SourceDeclaration,
@@ -737,23 +719,8 @@ mod source_collection {
         payload: Rc<()>,
     }
     impl SourcePort for Capture {
-        fn resource_failure(
-            &self,
-            _error: &Self::Error,
-        ) -> Option<yamaa_core::resource::ResourceFailure> {
-            None
-        }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
-        }
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            self.capture(source, byte_limit)
         }
         type Error = Payload;
         fn capture_reads(&self) -> usize {
@@ -863,15 +830,6 @@ mod source_collection {
         panic_at: Option<String>,
     }
     impl SourcePort for Inspection {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            self.capture(source, byte_limit)
-        }
         type Error = InspectError;
         fn resource_failure(
             &self,

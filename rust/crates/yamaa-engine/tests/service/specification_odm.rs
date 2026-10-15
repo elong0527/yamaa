@@ -125,23 +125,8 @@ struct Port {
     reads: usize,
 }
 impl SourcePort for Port {
-    fn resource_failure(
-        &self,
-        _error: &Self::Error,
-    ) -> Option<yamaa_core::resource::ResourceFailure> {
-        None
-    }
     fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
         Ok(())
-    }
-    fn capture_observed(
-        &mut self,
-        source: &SourceDeclaration,
-        byte_limit: usize,
-        origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
-    ) -> Result<Arc<[u8]>, Self::Error> {
-        *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-        self.capture(source, byte_limit)
     }
     type Error = Original;
     fn capture_reads(&self) -> usize {
@@ -162,9 +147,6 @@ struct Decoder {
     fail: Option<(usize, usize)>,
 }
 impl SourceDecoder for Decoder {
-    fn continue_after(&self, _error: &Self::Error) -> bool {
-        false
-    }
     type Error = Original;
     type Table = Table;
     fn decode(&mut self, _: &SourceDeclaration, _: &[u8]) -> Result<Table, Original> {
