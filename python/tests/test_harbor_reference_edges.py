@@ -211,7 +211,11 @@ def test_missing_pretreatment_dimension_cannot_establish_worsening(
         ):
             row["FASTRESC"] = ""
     rows = _worsening_rows(tmp_path, worsening_track, fa=fa)
-    assert all(row["TRTEMFL"] == "" for row in _event_rows(rows, subject))
+    event_rows = _event_rows(rows, subject)
+    # Without this the assertion below passes vacuously when the track
+    # emits no rows for the subject's first event.
+    assert event_rows
+    assert all(row["TRTEMFL"] == "" for row in event_rows)
 
 
 def test_worsening_uses_the_last_pretreatment_state(tmp_path, worsening_track):
@@ -224,6 +228,8 @@ def test_worsening_uses_the_last_pretreatment_state(tmp_path, worsening_track):
         elif row["FADTC"] == "2025-03-04T13:00:00":
             row["FASTRESC"] = "MODERATE"
     rows = _event_rows(_worsening_rows(tmp_path, worsening_track, fa=fa))
+    # Without this the assertion below passes vacuously on an empty output.
+    assert rows
     assert all(row["TRTEMFL"] == "" for row in rows)
 
 
@@ -280,6 +286,10 @@ def test_temperature_never_becomes_fa(tmp_path, language, only_temperature):
     assert all(r["FAOBJ"] != "TEMPERATURE" for r in rows)
     if only_temperature:
         assert rows == []
+    else:
+        # The full diary yields FA rows for its other reactions; without
+        # this the assertion above passes vacuously on an empty output.
+        assert rows
 
 
 def test_blank_completion_is_a_missed_day(tmp_path, language):
