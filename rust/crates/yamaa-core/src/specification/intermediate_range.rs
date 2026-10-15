@@ -70,6 +70,7 @@ pub(super) fn bind(
     declaration: &Declaration,
     intermediate: &str,
     donor: &TableSchema,
+    donor_kind: &impl Fn(usize) -> Option<ColumnType>,
     admits: &impl Fn(usize) -> bool,
     catalog: &Catalog,
     sources: &[SourceDeclaration],
@@ -91,7 +92,7 @@ pub(super) fn bind(
                 Some(RelationRangeBound {
                     column,
                     identifier: field.name.clone(),
-                    kind: Some(field.kind.into()),
+                    kind: donor_kind(column).map(Into::into),
                 })
             } else {
                 reference(
@@ -113,7 +114,7 @@ pub(super) fn bind(
         return Ok(None);
     }
     let name = &declaration.value;
-    let current = match catalog.bind(name).map_err(BindError::Catalog)? {
+    let current = match catalog.bind(name) {
         Some(reference_binding::Binding::Output {
             column,
             column_type,
@@ -157,8 +158,8 @@ pub(super) fn bind(
                             return None;
                         }
                         let column = item.source_column(secondary, field)?;
-                        let kind = item.source_schema(secondary)?.columns()[column].kind.into();
-                        Some((CurrentRead::Intermediate { index, column }, Some(kind)))
+                        let kind = item.source_kind(secondary, column).map(Into::into);
+                        Some((CurrentRead::Intermediate { index, column }, kind))
                     })
                 }
             } else {
@@ -185,17 +186,6 @@ pub(super) fn bind(
         );
         return Ok(None);
     };
-    let initial = declaration
-        .path
-        .len()
-        .checked_add(name.len())
-        .and_then(|n| n.checked_add(std::mem::size_of::<RelationRange>()))
-        .ok_or(BindError::Catalog(reference_binding::Error::SizeOverflow))?;
-    let required = [lower.as_ref(), upper.as_ref()]
-        .into_iter()
-        .flatten()
-        .try_fold(initial, |n, bound| n.checked_add(bound.identifier.len()));
-    let required = required.ok_or(BindError::Catalog(reference_binding::Error::SizeOverflow))?;
     match RelationRange::new(
         declaration.path.clone(),
         CurrentField {
@@ -205,7 +195,6 @@ pub(super) fn bind(
         kind,
         lower,
         upper,
-        16_777_216,
     ) {
         Ok(range) => Ok(Some(range)),
         Err(RelationRangeError::Incomparable(types)) => {
@@ -214,29 +203,21 @@ pub(super) fn bind(
             )));
             Ok(None)
         }
-        Err(RelationRangeError::Limit) => {
-            Err(BindError::Catalog(reference_binding::Error::Limit {
-                resource: "intermediate_range_metadata",
-                limit: 16_777_216,
-                required,
-            }))
-        }
         Err(_) => Err(BindError::Internal),
     }
 }
 pub(super) fn prepare_columns(
     d: &Document,
     item: usize,
-    limits: CompilationLimits,
 ) -> Result<Option<Vec<String>>, PrepareError> {
     d.field(item, "columns")
         .filter(|&node| !matches!(d.nodes()[node], N::Null))
         .map(|node| {
             let fields = sequence(d, node)?;
-            if fields.len() > limits.source_fields {
+            if fields.len() > crate::limits::Limits::COLUMNS {
                 return Err(PrepareError::limit(
                     "intermediate_columns",
-                    limits.source_fields,
+                    crate::limits::Limits::COLUMNS,
                     Some(fields.len()),
                     None,
                 ));

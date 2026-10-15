@@ -30,3 +30,10 @@ build `yamaa-adapters` with `default-features = false`; this omits both the
 ReadStat build and its `cc` build dependency. SAS input then returns
 `sas_source::Error::Unavailable` (`sas_reader_unavailable` in boundary replies).
 Python and R packages retain the default backend and all supported input formats.
+
+Arrow/Parquet release-specific operations live in the adapter's
+`storage_api` module: fallible IPC schema conversion, logical timestamp/integer
+construction, and logical-type inspection. The canonical lock and manifests
+continue to select 60; using 57 requires adapting this boundary and qualifying
+that dependency graph. Keep malformed-schema rejection and the closed output
+profile when adapting the boundary.

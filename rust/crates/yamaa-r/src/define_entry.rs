@@ -40,9 +40,6 @@ fn resolve(handle: &Robj) -> std::result::Result<Rc<RefCell<State>>, String> {
         .ok_or_else(|| "unknown Define result handle".into())
 }
 fn text(value: &Raw) -> std::result::Result<&str, String> {
-    if value.len() > 65537 * 4 {
-        return Err("Define argument byte limit".into());
-    }
     std::str::from_utf8(value.as_slice()).map_err(|_| "invalid Define argument UTF-8".into())
 }
 #[extendr]

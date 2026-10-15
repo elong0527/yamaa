@@ -1,9 +1,9 @@
 //! Closed Parquet output profile over an admitted, immutable typed table.
-//! The sink, schema, table shape and per-column row-group staging are bounded.
+//! The file writer enforces fixed output bytes and table geometry.
 //! No filesystem authority, Arrow metadata, compression or numeric rounding.
 use crate::arrow_temporal::{date_days, datetime_seconds};
 use parquet::{
-    basic::{Compression, LogicalType, Repetition, TimeUnit, Type as Physical},
+    basic::{Compression, LogicalType, Repetition, Type as Physical},
     data_type::{ByteArray, ByteArrayType, DataType, DoubleType, Int32Type, Int64Type},
     errors::ParquetError,
     file::{
@@ -14,20 +14,12 @@ use parquet::{
 };
 use std::{io::Write, sync::Arc};
 use yamaa_core::{
+    limits::Limits,
     table::{CellError, TableAccess, ValueRef},
     value::ColumnType,
 };
 
 const ROW_GROUP_ROWS: usize = 1024;
-
-/// Trusted resource policy, separate from the format's semantic requirements.
-#[derive(Clone, Copy, Debug)]
-pub struct Limits {
-    pub output_bytes: usize,
-    pub staged_bytes: usize,
-    pub cells: usize,
-    pub columns: usize,
-}
 
 #[derive(Debug)]
 pub enum Error<E> {
@@ -44,7 +36,6 @@ pub enum Error<E> {
 
 struct Sink {
     bytes: Vec<u8>,
-    maximum: usize,
     exceeded: bool,
     actual: Option<usize>,
 }
@@ -54,7 +45,7 @@ impl Write for Sink {
             .bytes
             .len()
             .checked_add(bytes.len())
-            .is_none_or(|n| n > self.maximum)
+            .is_none_or(|n| n > Limits::OUTPUT_BYTES)
         {
             self.exceeded = true;
             self.actual = self.bytes.len().checked_add(bytes.len());
@@ -68,21 +59,6 @@ impl Write for Sink {
     }
 }
 
-fn charge<E>(
-    used: &mut usize,
-    amount: Option<usize>,
-    maximum: usize,
-    resource: &'static str,
-) -> Result<(), Error<E>> {
-    let actual = amount.and_then(|amount| used.checked_add(amount));
-    *used = actual.filter(|n| *n <= maximum).ok_or(Error::Limit {
-        resource,
-        limit: maximum,
-        actual,
-    })?;
-    Ok(())
-}
-
 fn field<E>(name: &str, kind: ColumnType) -> Result<Arc<Type>, Error<E>> {
     let (physical, logical) = match kind {
         ColumnType::Str => (Physical::BYTE_ARRAY, Some(LogicalType::String)),
@@ -91,7 +67,7 @@ fn field<E>(name: &str, kind: ColumnType) -> Result<Arc<Type>, Error<E>> {
         ColumnType::Date => (Physical::INT32, Some(LogicalType::Date)),
         ColumnType::DateTime => (
             Physical::INT64,
-            Some(LogicalType::timestamp(false, TimeUnit::MICROS)),
+            Some(crate::storage_api::timestamp_micros(false)),
         ),
     };
     Type::primitive_type_builder(name, physical)
@@ -106,17 +82,9 @@ fn column<T: TableAccess, D: DataType>(
     table: &T,
     index: usize,
     rows: std::ops::Range<usize>,
-    maximum: usize,
     writer: &mut SerializedColumnWriter<'_>,
     convert: impl Fn(ValueRef<'_>) -> Option<D::T>,
 ) -> Result<(), Error<T::Error>> {
-    let mut charged = 0;
-    charge(
-        &mut charged,
-        rows.len().checked_mul(2),
-        maximum,
-        "staged_bytes",
-    )?;
     let mut levels = Vec::with_capacity(rows.len());
     let mut values = Vec::new();
     for row in rows {
@@ -124,18 +92,6 @@ fn column<T: TableAccess, D: DataType>(
         if matches!(value, ValueRef::Missing) {
             levels.push(0);
         } else {
-            // Charge before copying text. Fixed overhead covers value slots and
-            // geometric Vec growth; the codec buffers at most this row group.
-            let payload = match value {
-                ValueRef::Str(text) => text.len(),
-                _ => 8,
-            };
-            charge(
-                &mut charged,
-                payload.checked_add(64),
-                maximum,
-                "staged_bytes",
-            )?;
             values.push(convert(value).ok_or(Error::ValueType)?);
             levels.push(1);
         }
@@ -150,25 +106,13 @@ fn column<T: TableAccess, D: DataType>(
 fn encode<T: TableAccess>(
     table: &T,
     projection: &[usize],
-    limits: Limits,
     sink: &mut Sink,
 ) -> Result<(), Error<T::Error>> {
-    for (resource, actual, limit) in [
-        ("output_columns", Some(projection.len()), limits.columns),
-        (
-            "output_cells",
-            table.row_count().checked_mul(projection.len()),
-            limits.cells,
-        ),
-    ] {
-        if actual.is_none_or(|actual| actual > limit) {
-            return Err(Error::Limit {
-                resource,
-                limit,
-                actual,
-            });
-        }
-    }
+    Limits::table(table.row_count(), projection.len()).map_err(|error| Error::Limit {
+        resource: error.resource,
+        limit: error.limit,
+        actual: error.actual,
+    })?;
     if projection.is_empty()
         || projection
             .iter()
@@ -177,16 +121,9 @@ fn encode<T: TableAccess>(
     {
         return Err(Error::Projection);
     }
-    let mut schema_bytes = 0;
     let mut fields = Vec::new();
     for &index in projection {
         let selected = &table.schema().columns()[index];
-        charge(
-            &mut schema_bytes,
-            selected.name.len().checked_add(256),
-            limits.staged_bytes,
-            "staged_bytes",
-        )?;
         fields.push(field(&selected.name, selected.kind)?);
     }
     let schema = Arc::new(
@@ -220,57 +157,36 @@ fn encode<T: TableAccess>(
                     table,
                     index,
                     rows,
-                    limits.staged_bytes,
                     &mut output,
                     |value| match value {
                         ValueRef::Str(value) => Some(ByteArray::from(value)),
                         _ => None,
                     },
                 )?,
-                ColumnType::Int => column::<T, Int64Type>(
-                    table,
-                    index,
-                    rows,
-                    limits.staged_bytes,
-                    &mut output,
-                    |value| match value {
+                ColumnType::Int => {
+                    column::<T, Int64Type>(table, index, rows, &mut output, |value| match value {
                         ValueRef::Int(value) => Some(value),
                         _ => None,
-                    },
-                )?,
-                ColumnType::Float => column::<T, DoubleType>(
-                    table,
-                    index,
-                    rows,
-                    limits.staged_bytes,
-                    &mut output,
-                    |value| match value {
+                    })?
+                }
+                ColumnType::Float => {
+                    column::<T, DoubleType>(table, index, rows, &mut output, |value| match value {
                         ValueRef::Float(value) => Some(value.get()),
                         _ => None,
-                    },
-                )?,
-                ColumnType::Date => column::<T, Int32Type>(
-                    table,
-                    index,
-                    rows,
-                    limits.staged_bytes,
-                    &mut output,
-                    |value| match value {
+                    })?
+                }
+                ColumnType::Date => {
+                    column::<T, Int32Type>(table, index, rows, &mut output, |value| match value {
                         ValueRef::Date(value) => Some(date_days(value)),
                         _ => None,
-                    },
-                )?,
-                ColumnType::DateTime => column::<T, Int64Type>(
-                    table,
-                    index,
-                    rows,
-                    limits.staged_bytes,
-                    &mut output,
-                    |value| match value {
+                    })?
+                }
+                ColumnType::DateTime => {
+                    column::<T, Int64Type>(table, index, rows, &mut output, |value| match value {
                         ValueRef::DateTime(value) => datetime_seconds(value).checked_mul(1_000_000),
                         _ => None,
-                    },
-                )?,
+                    })?
+                }
             }
             output.close().map_err(Error::Codec)?;
         }
@@ -282,22 +198,17 @@ fn encode<T: TableAccess>(
 
 /// Retain only a complete file. Codec errors or any limit discard all bytes.
 /// Zero records still produce a readable schema with every projected field.
-pub fn render<T: TableAccess>(
-    table: &T,
-    projection: &[usize],
-    limits: Limits,
-) -> Result<Vec<u8>, Error<T::Error>> {
+pub fn render<T: TableAccess>(table: &T, projection: &[usize]) -> Result<Vec<u8>, Error<T::Error>> {
     let mut sink = Sink {
         bytes: Vec::new(),
-        maximum: limits.output_bytes,
         exceeded: false,
         actual: None,
     };
-    let result = encode(table, projection, limits, &mut sink);
+    let result = encode(table, projection, &mut sink);
     if sink.exceeded {
         return Err(Error::Limit {
             resource: "output_bytes",
-            limit: limits.output_bytes,
+            limit: Limits::OUTPUT_BYTES,
             actual: sink.actual,
         });
     }
@@ -307,35 +218,26 @@ pub fn render<T: TableAccess>(
 
 struct RecordText {
     current: String,
-    used: usize,
-    maximum: usize,
 }
 impl RecordText {
-    fn append<E>(&mut self, text: &str) -> Result<(), Error<E>> {
-        charge(
-            &mut self.used,
-            Some(text.len()),
-            self.maximum,
-            "report_record_bytes",
-        )?;
+    fn append(&mut self, text: &str) {
         self.current.push_str(text);
-        Ok(())
     }
-    fn quoted<E>(&mut self, text: &str) -> Result<(), Error<E>> {
-        self.append("\"")?;
+    fn quoted(&mut self, text: &str) {
+        self.append("\"");
         for ch in text.chars() {
             match ch {
-                '"' => self.append("\\\"")?,
-                '\\' => self.append("\\\\")?,
-                '\n' => self.append("\\n")?,
-                '\r' => self.append("\\r")?,
-                '\t' => self.append("\\t")?,
-                '\u{8}' => self.append("\\b")?,
-                '\u{c}' => self.append("\\f")?,
-                ' '..='~' => self.append(ch.encode_utf8(&mut [0; 4]))?,
+                '"' => self.append("\\\""),
+                '\\' => self.append("\\\\"),
+                '\n' => self.append("\\n"),
+                '\r' => self.append("\\r"),
+                '\t' => self.append("\\t"),
+                '\u{8}' => self.append("\\b"),
+                '\u{c}' => self.append("\\f"),
+                ' '..='~' => self.append(ch.encode_utf8(&mut [0; 4])),
                 _ => {
                     for value in ch.encode_utf16(&mut [0; 2]) {
-                        self.append(&format!("\\u{value:04x}"))?;
+                        self.append(&format!("\\u{value:04x}"));
                     }
                 }
             }
@@ -349,7 +251,6 @@ impl RecordText {
 pub fn records<T: TableAccess>(
     table: &T,
     projection: &[usize],
-    maximum: usize,
 ) -> Result<Vec<String>, Error<T::Error>> {
     if projection.is_empty()
         || projection
@@ -358,52 +259,55 @@ pub fn records<T: TableAccess>(
     {
         return Err(Error::Projection);
     }
+    Limits::table(table.row_count(), projection.len()).map_err(|error| Error::Limit {
+        resource: error.resource,
+        limit: error.limit,
+        actual: error.actual,
+    })?;
     let mut text = RecordText {
         current: String::new(),
-        used: 0,
-        maximum,
     };
-    text.append("[")?;
+    text.append("[");
     for (i, &column) in projection.iter().enumerate() {
         if i != 0 {
-            text.append(", ")?;
+            text.append(", ");
         }
-        text.quoted(&table.schema().columns()[column].name)?;
+        text.quoted(&table.schema().columns()[column].name);
     }
-    text.append("]")?;
+    text.append("]");
     let mut records = vec![std::mem::take(&mut text.current)];
     for row in 0..table.row_count() {
-        text.append("[")?;
+        text.append("[");
         for (i, &column) in projection.iter().enumerate() {
             if i != 0 {
-                text.append(", ")?;
+                text.append(", ");
             }
             match table.cell(row, column).map_err(Error::Cell)? {
-                ValueRef::Missing => text.append("null")?,
-                ValueRef::Str(value) => text.quoted(value)?,
-                ValueRef::Int(value) => text.append(&value.to_string())?,
+                ValueRef::Missing => text.append("null"),
+                ValueRef::Str(value) => text.quoted(value),
+                ValueRef::Int(value) => text.append(&value.to_string()),
                 ValueRef::Float(value) => {
                     // The shared finite-scalar renderer already pins Python
                     // shortest-round-trip spelling, exponent padding and -0.0.
                     let node = yamaa_core::schema::DocumentNode::Float(value.get());
                     let scalar = yamaa_core::schema::scalar_diagnostic_label(&node)
                         .ok_or(Error::ValueType)?;
-                    text.append(&scalar)?;
+                    text.append(&scalar);
                 }
                 ValueRef::Date(value) => {
                     let (year, month, day) = value.fields();
-                    text.quoted(&format!("{year:04}-{month:02}-{day:02}"))?;
+                    text.quoted(&format!("{year:04}-{month:02}-{day:02}"));
                 }
                 ValueRef::DateTime(value) => {
                     let (year, month, day, hour, minute, second) = value.fields();
                     text.quoted(&format!(
                         "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}"
-                    ))?;
+                    ));
                 }
                 ValueRef::Bool(_) => return Err(Error::ValueType),
             }
         }
-        text.append("]")?;
+        text.append("]");
         records.push(std::mem::take(&mut text.current));
     }
     Ok(records)

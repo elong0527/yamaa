@@ -1,5 +1,5 @@
 //! Portable producer causes retain authored geometry without study data.
-use super::{Cause, Contract, Error, Limits};
+use super::{Cause, Contract, Error};
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     value::ColumnType,
@@ -58,53 +58,30 @@ impl Cause {
     }
 }
 impl Contract {
-    /// Compare caller-held artifact metadata only. Quotas precede diagnostic
-    /// allocation; values, source capture and type inference are unavailable.
+    /// Compare caller-held artifact metadata without reading values or sources.
     pub fn validate_header(
         &self,
         dataset: &str,
         actual: &[&str],
-        limits: Limits,
     ) -> Result<Option<Diagnostic>, Error> {
-        self.validate_metadata(dataset, actual, None, limits)
+        self.validate_metadata(dataset, actual, None)
     }
     pub fn validate_typed_fields(
         &self,
         dataset: &str,
         actual: &[(&str, ColumnType)],
-        limits: Limits,
     ) -> Result<Option<Diagnostic>, Error> {
-        if actual.len() > limits.fields {
-            return Err(Error::Limit("producer_actual_fields"));
-        }
+        crate::limits::Limits::columns(actual.len()).map_err(Error::Limit)?;
         let names = actual.iter().map(|(name, _)| *name).collect::<Vec<_>>();
-        self.validate_metadata(dataset, &names, Some(actual), limits)
+        self.validate_metadata(dataset, &names, Some(actual))
     }
     fn validate_metadata(
         &self,
         dataset: &str,
         actual: &[&str],
         typed: Option<&[(&str, ColumnType)]>,
-        limits: Limits,
     ) -> Result<Option<Diagnostic>, Error> {
-        if actual.len() > limits.fields || self.fields.len() > limits.fields {
-            return Err(Error::Limit("producer_actual_fields"));
-        }
-        let mut bytes = dataset.len();
-        for value in self
-            .fields
-            .iter()
-            .map(|f| f.name.as_str())
-            .chain(actual.iter().copied())
-        {
-            bytes = bytes
-                .checked_add(value.len())
-                .filter(|&n| n <= limits.text_bytes)
-                .ok_or(Error::Limit("producer_actual_text_bytes"))?;
-        }
-        if bytes > limits.text_bytes {
-            return Err(Error::Limit("producer_actual_text_bytes"));
-        }
+        crate::limits::Limits::columns(actual.len()).map_err(Error::Limit)?;
         if self.matches_header(actual) && typed.is_none_or(|typed| self.matches_typed_fields(typed))
         {
             return Ok(None);

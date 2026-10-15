@@ -20,19 +20,16 @@ pub trait NativePort {
         &mut self,
         declaring: Option<&str>,
         written: &str,
-        maximum: usize,
     ) -> Result<Vec<u8>, Self::Error>;
     fn canonicalize(
         &mut self,
         declaring: &str,
         written: &str,
     ) -> Result<Identity, SourceError<Self::Error>>;
-    fn admit_alias_text(&mut self, bytes: usize) -> Result<(), SourceError<Self::Error>>;
     fn capture_parent(
         &mut self,
         declaring: &str,
         written: &str,
-        maximum: usize,
     ) -> Result<Vec<u8>, SourceError<Self::Error>>;
     fn canonicalize_resource(
         &mut self,
@@ -45,9 +42,8 @@ pub trait NativePort {
         &mut self,
         declaring: &str,
         written: &str,
-        maximum: usize,
     ) -> Result<Vec<u8>, SourceError<Self::Error>> {
-        self.capture_parent(declaring, written, maximum)
+        self.capture_parent(declaring, written)
     }
     fn resource_failure(&self, _error: &Self::Error) -> Option<crate::resource::ResourceFailure> {
         None
@@ -57,15 +53,9 @@ pub trait NativePort {
         layer: &Identity,
         entry: &Identity,
         written: &str,
-        maximum: usize,
     ) -> Result<String, Self::Error>;
     /// Verify the spelling against held bytes; this performs no preparation copy.
-    fn accept_alias(
-        &mut self,
-        declaring: &str,
-        written: &str,
-        maximum: usize,
-    ) -> Result<(), Self::Error>;
+    fn accept_alias(&mut self, declaring: &str, written: &str) -> Result<(), Self::Error>;
     fn select_entry_base(&mut self, identity: &str) -> Result<(), Self::Error>;
     fn missing_alias() -> Self::Error;
 }
@@ -133,36 +123,17 @@ impl<P: NativePort> AliasCache<'_, P> {
         }
         None
     }
-    fn remember(
-        &mut self,
-        source: &Identity,
-        declaring: &str,
-        written: &str,
-    ) -> Result<(), SourceError<P::Error>> {
-        self.port.admit_alias_text(
-            source
-                .identity
-                .len()
-                .saturating_add(source.display_path.len()),
-        )?;
+    fn remember(&mut self, source: &Identity, declaring: &str, written: &str) {
         let present = self
             .paths
             .get(&source.identity)
             .is_some_and(|paths| paths.iter().any(|(d, w)| d == declaring && w == written));
         if !present {
-            self.port.admit_alias_text(
-                declaring
-                    .len()
-                    .saturating_add(written.len())
-                    .saturating_add(source.identity.len()),
-            )?;
-            // All owned ledger facts are copied only after their complete admission.
             self.paths
                 .entry(source.identity.clone())
                 .or_default()
                 .push((declaring.into(), written.into()));
         }
-        Ok(())
     }
 }
 impl<P: NativePort> CapturePort for AliasCache<'_, P> {
@@ -178,20 +149,16 @@ impl<P: NativePort> CapturePort for AliasCache<'_, P> {
             .inspect_err(|error| {
                 self.parent_failure = Self::parent_error(self.port, written, error);
             })?;
-        self.remember(&source, declaring, written)?;
+        self.remember(&source, declaring, written);
         Ok(source)
     }
-    fn capture(
-        &mut self,
-        source: &Identity,
-        maximum: usize,
-    ) -> Result<Vec<u8>, SourceError<Self::Error>> {
+    fn capture(&mut self, source: &Identity) -> Result<Vec<u8>, SourceError<Self::Error>> {
         let (declaring, written) = self
             .paths
             .get(&source.identity)
             .and_then(|paths| paths.first())
             .ok_or_else(|| SourceError::Raised(P::missing_alias()))?;
-        let result = self.port.capture_parent(declaring, written, maximum);
+        let result = self.port.capture_parent(declaring, written);
         if let Err(error) = &result {
             self.parent_failure = Self::parent_error(self.port, written, error);
         }
@@ -203,20 +170,16 @@ impl<P: NativePort> CapturePort for AliasCache<'_, P> {
         written: &str,
     ) -> Result<Identity, SourceError<P::Error>> {
         let source = self.port.canonicalize_resource(declaring, written)?;
-        self.remember(&source, declaring, written)?;
+        self.remember(&source, declaring, written);
         Ok(source)
     }
-    fn capture_resource(
-        &mut self,
-        source: &Identity,
-        maximum: usize,
-    ) -> Result<Vec<u8>, SourceError<P::Error>> {
+    fn capture_resource(&mut self, source: &Identity) -> Result<Vec<u8>, SourceError<P::Error>> {
         let (declaring, written) = self
             .paths
             .get(&source.identity)
             .and_then(|paths| paths.first())
             .ok_or_else(|| SourceError::Raised(P::missing_alias()))?;
-        self.port.capture_resource(declaring, written, maximum)
+        self.port.capture_resource(declaring, written)
     }
     fn resource_failure(&self, error: &P::Error) -> Option<crate::resource::ResourceFailure> {
         self.port.resource_failure(error)
@@ -226,9 +189,8 @@ impl<P: NativePort> CapturePort for AliasCache<'_, P> {
         layer: &Identity,
         entry: &Identity,
         written: &str,
-        maximum: usize,
     ) -> Result<String, Self::Error> {
-        self.port.rebase(layer, entry, written, maximum)
+        self.port.rebase(layer, entry, written)
     }
 }
 pub type PreparationResult<P, D> = Result<
@@ -244,7 +206,6 @@ pub fn prepare<P: NativePort, D: DocumentPort<P::Error>>(
     documents: &mut D,
     declaring: Option<&str>,
     written: &str,
-    maximum: usize,
 ) -> PreparationResult<P, D> {
     let entry_error = |port: &P, error| {
         if port.resource_failure(&error) == Some(ResourceFailure::ContentChanged) {
@@ -262,7 +223,7 @@ pub fn prepare<P: NativePort, D: DocumentPort<P::Error>>(
         .resolve_entry(declaring, written)
         .map_err(|error| entry_error(port, error))?;
     let bytes = port
-        .capture_entry(declaring, written, maximum)
+        .capture_entry(declaring, written)
         .map_err(|error| entry_error(port, error))?;
     let source = Source {
         identity: identity.clone(),
@@ -296,9 +257,7 @@ pub fn prepare<P: NativePort, D: DocumentPort<P::Error>>(
             .get(&source.identity)
             .ok_or_else(|| Error::Resource(P::missing_alias()))?;
         for (declaring, written) in paths {
-            let result = aliases
-                .port
-                .accept_alias(declaring, written, source.bytes.len());
+            let result = aliases.port.accept_alias(declaring, written);
             if let Err(error) = result {
                 if let Some(diagnostic) = aliases
                     .port

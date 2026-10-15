@@ -13,24 +13,11 @@ enum Choice {
     Absent,
 }
 
-fn choice_search_work<E>(entries: usize, bounded: bool) -> Result<usize, Box<ExecutionError<E>>> {
-    if bounded {
-        // The typed tuple's comparison can visit its identity tag, identity value
-        // and intermediate index. The tree itself admits no source value/text.
-        Ok(key_index::search_work(entries) * 3)
-    } else {
-        entries
-            .checked_add(1)
-            .ok_or_else(|| Box::new(ExecutionError::Capacity))
-    }
-}
-
 /// Fresh for every attempt, with no entries for unused intermediate declarations.
 #[derive(Default)]
 pub(super) struct Run {
     eligible: BTreeMap<usize, Vec<usize>>,
     string_indexes: BTreeMap<usize, key_index::StringIndex>,
-    indexed_cells: usize,
     choices: BTreeMap<(SelectionIdentity, usize), Choice>,
     materialized: BTreeMap<(usize, Option<SelectionIdentity>), Rc<Dataset>>,
 }
@@ -42,14 +29,13 @@ impl Run {
     pub(super) fn begin_columns<E>(
         &mut self,
         plan: &DatasetPlan,
-        budget: &mut Budget,
     ) -> Result<(), Box<ExecutionError<E>>> {
         if !plan.intermediates().iter().flat_map(|item| &item.keys).any(
             |key| matches!(&key.value, MatchValue::Expression(expression) if expression.windowed),
         ) {
             return Ok(());
         }
-        budget.work(plan.intermediates().len(), 1)?;
+
         let mut affected = Vec::new();
         affected
             .try_reserve_exact(plan.intermediates().len())
@@ -59,20 +45,12 @@ impl Run {
                 |key| matches!(&key.value, MatchValue::Expression(expression) if expression.windowed),
             );
             for field in item.current_fields() {
-                budget.work(1, 1)?;
                 if let CurrentRead::Intermediate { index, .. } = field.read {
                     windowed |= affected.get(index).copied().unwrap_or(true);
                 }
             }
             affected.push(windowed);
         }
-        let entries = self
-            .eligible
-            .len()
-            .checked_add(self.choices.len())
-            .and_then(|count| count.checked_add(self.materialized.len()))
-            .ok_or_else(|| Box::new(ExecutionError::Capacity))?;
-        budget.work(entries, 1)?;
         self.eligible.retain(|index, _| !affected[*index]);
         self.choices.retain(|(_, index), _| !affected[*index]);
         self.materialized.retain(|(index, _), _| !affected[*index]);
@@ -82,7 +60,6 @@ impl Run {
     pub(super) fn publish_self<E>(
         &mut self,
         plan: &DatasetPlan,
-        budget: &mut Budget,
     ) -> Result<(), Box<ExecutionError<E>>> {
         if !plan
             .intermediates()
@@ -91,13 +68,7 @@ impl Run {
         {
             return Ok(());
         }
-        budget.work(
-            self.eligible
-                .len()
-                .checked_add(self.choices.len())
-                .ok_or_else(|| Box::new(ExecutionError::Capacity))?,
-            1,
-        )?;
+
         self.eligible
             .retain(|index, _| !plan.intermediates()[*index].source.is_self());
         self.choices
@@ -112,7 +83,6 @@ impl Run {
 pub(super) fn verify<E>(
     plan: &DatasetPlan,
     self_only: bool,
-    limits: Limits,
     state: &mut EvaluationState<'_, E>,
 ) -> Result<(), Box<ExecutionError<E>>> {
     let donors = self_relations::Donors::<E>::new(state.self_rows, plan.output());
@@ -133,7 +103,7 @@ pub(super) fn verify<E>(
         if item.source.is_self() != self_only || item.unique.is_empty() {
             continue;
         }
-        let prepared = materialize(index, &assignment, &context, plan, 0, limits, state)?;
+        let prepared = materialize(index, &assignment, &context, plan, 0, state)?;
         let materialized = prepared.as_ref().map(|data| Data::<E>::new(data));
         let table: &dyn TableAccess<Error = E> = if let Some(data) = &materialized {
             data
@@ -145,20 +115,19 @@ pub(super) fn verify<E>(
             }
         };
         let name = source_name(item, plan);
-        let eligible = eligibility(table, item, state.budget)?;
+        let eligible = eligibility(table, item)?;
         let filtered = Filtered {
             table,
             rows: &eligible,
         };
         for check in &item.unique {
-            state.budget.work(eligible.len(), check.columns.len())?;
             let mut columns = Vec::new();
             for &column in &check.columns {
                 if !columns.contains(&column) {
                     columns.push(column);
                 }
             }
-            let groups = partition(&filtered, &columns, limits.output_rows, limits.key_cells)
+            let groups = partition(&filtered, &columns)
                 .map_err(|error| Box::new(ExecutionError::Grouping(error)))?;
             let count = groups.iter().filter(|group| group.len() > 1).count();
             if count != 0 {
@@ -234,7 +203,6 @@ fn materialize<E>(
     context: &Candidate,
     plan: &DatasetPlan,
     row: usize,
-    limits: Limits,
     state: &mut EvaluationState<'_, E>,
 ) -> Result<Option<Rc<Dataset>>, Box<ExecutionError<E>>> {
     let item = &plan.intermediates()[index];
@@ -272,14 +240,8 @@ fn materialize<E>(
     let nested = &derived.plan;
     let width = nested.source().columns().len();
     let output_width = nested.output().columns().len();
-    if table
-        .row_count()
-        .checked_mul(width)
-        .is_none_or(|cells| cells > limits.output_cells)
-    {
-        return Err(Box::new(ExecutionError::Capacity));
-    }
-    state.budget.work(table.row_count(), width)?;
+    Limits::table(table.row_count(), width)
+        .map_err(|error| scoped_table_boundary(error, &item.path))?;
     let mut input = Dataset {
         schema: nested.source().clone(),
         rows: Vec::new(),
@@ -295,20 +257,12 @@ fn materialize<E>(
     for source_row in 0..table.row_count() {
         let mut values = vec![Value::Missing; width];
         for (column, target) in values.iter_mut().enumerate().take(derived.stored_columns) {
-            *target = own(cell(table, item, source_row, column, state.budget)?);
-            state.budget.value(target)?;
+            *target = own(cell(table, item, source_row, column)?);
         }
         for (index, value) in current.iter().enumerate() {
-            if let Value::Str(text) = value {
-                state.budget.scalar_text(text.len())?;
-            }
             values[output_width + index] = value.clone();
-            state.budget.value(value)?;
         }
         let output = values[..output_width].to_vec();
-        for value in &output {
-            state.budget.value(value)?;
-        }
         candidates.push(Candidate {
             template: Some(0),
             selection_identity: SelectionIdentity::Candidate(source_row),
@@ -335,20 +289,13 @@ fn materialize<E>(
     let mut donor_handlers = HandlerCounter::default();
     for assignment in nested.columns() {
         let table = Data::<E>::new(&input);
-        let mut numbers = windows::Evaluation::new(
-            assignment,
-            &candidates,
-            nested,
-            &table,
-            limits,
-            state.budget,
-            &mut donor_handlers,
-        )?;
+        let mut numbers =
+            windows::Evaluation::new(assignment, &candidates, nested, &table, &mut donor_handlers)?;
         let mut nested_windows = windows::Cache::default();
         for row in 0..candidates.len() {
             let table = Data::<E>::new(&input);
             let evaluated = if let Some(run) = &mut numbers {
-                run.value(row, &candidates, &table, state.budget, assignment, nested)
+                run.value(row, &candidates, &table, assignment, nested)
             } else {
                 evaluate_raw_retained(
                     &table,
@@ -356,13 +303,11 @@ fn materialize<E>(
                     &candidates[row],
                     nested,
                     row,
-                    limits,
                     &mut EvaluationState {
                         primary: &table,
                         functions: state.functions,
                         secondary: &nested_secondary,
                         self_rows: &[],
-                        budget: state.budget,
                         handlers: &mut donor_handlers,
                         intermediates: &mut intermediate_run,
                         output_rows: &candidates,
@@ -387,22 +332,17 @@ fn materialize<E>(
                     &candidates[row],
                     nested,
                     row,
-                    state.budget,
                     state.handlers,
                 )
                 .map_err(|error| donor_failure(error, item, plan, nested))?
             } else {
                 value
             };
-            state.budget.value(&value)?;
-            state.budget.value(&value)?;
+
             input.rows[row][assignment.column] = value.clone();
             candidates[row].values[assignment.column] = value;
             candidates[row].completed[assignment.column] = true;
         }
-    }
-    for row in &input.rows {
-        state.budget.discard_candidate(row);
     }
     let data = Rc::new(Dataset {
         schema: nested.output().clone(),
@@ -486,7 +426,6 @@ pub(super) struct DriverRelation {
 pub(super) fn driver<E>(
     index: usize,
     plan: &DatasetPlan,
-    limits: Limits,
     state: &mut EvaluationState<'_, E>,
 ) -> Result<DriverRelation, Box<ExecutionError<E>>> {
     let context = Candidate {
@@ -501,7 +440,7 @@ pub(super) fn driver<E>(
         path: plan.intermediates()[index].path.clone(),
         expression: Expression::Literal(Value::Missing),
     };
-    let prepared = materialize(index, &assignment, &context, plan, 0, limits, state)?;
+    let prepared = materialize(index, &assignment, &context, plan, 0, state)?;
     let data = prepared.as_ref().map(|data| Data::<E>::new(data));
     let item = &plan.intermediates()[index];
     let table: &dyn TableAccess<Error = E> = if let Some(data) = &data {
@@ -513,7 +452,7 @@ pub(super) fn driver<E>(
             _ => return Err(Box::new(ExecutionError::SchemaMismatch)),
         }
     };
-    let eligible = eligibility(table, item, state.budget)?;
+    let eligible = eligibility(table, item)?;
     Ok(DriverRelation {
         materialized: prepared,
         eligible,
@@ -524,13 +463,12 @@ pub(super) fn driver_groups<E>(
     table: &dyn TableAccess<Error = E>,
     eligible: &[usize],
     keys: &[usize],
-    limits: Limits,
 ) -> Result<Vec<Vec<usize>>, Box<ExecutionError<E>>> {
     let filtered = Filtered {
         table,
         rows: eligible,
     };
-    partition(&filtered, keys, limits.source_rows, limits.key_cells)
+    partition(&filtered, keys)
         .map(|groups| {
             groups
                 .into_iter()
@@ -558,10 +496,9 @@ impl<E> TableAccess for Filtered<'_, E> {
 fn eligibility<E>(
     table: &dyn TableAccess<Error = E>,
     item: &Intermediate,
-    budget: &mut Budget,
 ) -> Result<Vec<usize>, Box<ExecutionError<E>>> {
     check_deferred_filter_types(item)?;
-    budget.work(table.row_count(), 1)?;
+
     let mut eligible = Vec::new();
     eligible
         .try_reserve_exact(table.row_count())
@@ -573,10 +510,9 @@ fn eligibility<E>(
                 table,
                 source_row,
                 &[],
-                budget.predicate(),
             )
             .map_err(|error| match error.kind {
-                crate::predicate::ErrorKind::Limit(limit) => Box::new(predicate_limit(limit)),
+                crate::predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
                 _ => Box::new(ExecutionError::Predicate { source_row, error }),
             })?;
             if truth != crate::predicate::Truth::True {
@@ -657,23 +593,8 @@ fn read_with_observations<T: TableAccess + ?Sized>(
         return Err(Box::new(ExecutionError::SchemaMismatch));
     }
     let item = &plan.intermediates()[index];
-    // Materialized and expression contexts retain their existing admission
-    // until aggregate retained-schema/text bounds are separately qualified.
-    let bounded_choice = item.derivations.is_none() && !item.has_expression_keys();
-    state.budget.work(
-        choice_search_work(state.intermediates.choices.len(), bounded_choice)?,
-        1,
-    )?;
     let cache_key = (candidate.selection_identity, index);
-    let prepared = materialize(
-        index,
-        assignment,
-        candidate,
-        plan,
-        row,
-        state.budget.limits(),
-        state,
-    )?;
+    let prepared = materialize(index, assignment, candidate, plan, row, state)?;
     let materialized = prepared.as_ref().map(|data| Data::<T::Error>::new(data));
     let donors = self_relations::Donors::<T::Error>::new(state.self_rows, plan.output());
     let table: &dyn TableAccess<Error = T::Error> = if let Some(data) = &materialized {
@@ -703,46 +624,23 @@ fn read_with_observations<T: TableAccess + ?Sized>(
             None
         };
         check_deferred_filter_types(item)?;
-        state.budget.work(
-            state
-                .intermediates
-                .eligible
-                .len()
-                .checked_add(1)
-                .ok_or_else(|| Box::new(ExecutionError::Capacity))?,
-            1,
-        )?;
+
         if !state.intermediates.eligible.contains_key(&index)
             || item
                 .derivations
                 .as_ref()
                 .is_some_and(|derived| !derived.current.is_empty())
         {
-            let eligible = eligibility(table, item, state.budget)?;
-            state.budget.work(
-                state
-                    .intermediates
-                    .eligible
-                    .len()
-                    .checked_add(1)
-                    .ok_or_else(|| Box::new(ExecutionError::Capacity))?,
-                1,
-            )?;
+            let eligible = eligibility(table, item)?;
+
             state.intermediates.eligible.insert(index, eligible);
         }
         let mut count = 0;
         let mut selected = None;
         let keys = match current {
-            Some(current) => match_values::evaluate(
-                item,
-                &current,
-                candidate,
-                plan,
-                row,
-                primary,
-                state.budget.limits(),
-                state,
-            )?,
+            Some(current) => {
+                match_values::evaluate(item, &current, candidate, plan, row, primary, state)?
+            }
             None => match_values::ordinary(item, candidate, plan, row, primary, state)?,
         };
         let range_value = item
@@ -762,15 +660,7 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                 )
             })
             .transpose()?;
-        state.budget.work(
-            state
-                .intermediates
-                .eligible
-                .len()
-                .checked_add(1)
-                .ok_or_else(|| Box::new(ExecutionError::Capacity))?,
-            1,
-        )?;
+
         let eligible_len = state.intermediates.eligible[&index].len();
         if range_value
             .as_ref()
@@ -792,12 +682,6 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                     .filter
                     .as_ref()
                     .is_none_or(|filter| !filter.correlated())
-                && (state.intermediates.string_indexes.contains_key(&index)
-                    || state
-                        .intermediates
-                        .indexed_cells
-                        .checked_add(eligible_len)
-                        .is_some_and(|cells| cells <= state.budget.limits().key_cells))
             {
                 match &keys[0].1 {
                     Value::Str(key) => Some(key.as_str()),
@@ -813,16 +697,15 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                         item,
                         &state.intermediates.eligible[&index],
                         keys[0].0,
-                        state.budget,
                     )?;
-                    state.intermediates.indexed_cells += eligible_len;
+
                     state.intermediates.string_indexes.insert(index, indexed);
                 }
-                state.intermediates.string_indexes[&index].matching(key, state.budget)?
+                state.intermediates.string_indexes[&index].matching(key)?
             } else {
                 // First count every matching record without reading order or donor fields.
                 let matching = &mut scanned;
-                state.budget.work(eligible_len, 1)?;
+
                 matching
                     .try_reserve_exact(eligible_len)
                     .map_err(|_| Box::new(ExecutionError::Allocation))?;
@@ -830,12 +713,53 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                     let source_row = state.intermediates.eligible[&index][position];
                     let mut matches = true;
                     for (column, expected) in &keys {
-                        let value = cell(table, item, source_row, *column, state.budget)?;
-                        if crate::value::compare_present_refs(value, ValueRef::from(expected))
-                            != Ok(std::cmp::Ordering::Equal)
+                        // A false equality cannot hide a later dynamic type refusal.
+                        // Known compatible pairs need no further reads once this row differs.
+                        if !matches
+                            && item
+                                .source_kind(plan.secondary(), *column)
+                                .is_some_and(|kind| {
+                                    expected.value_type().is_some_and(|expected| {
+                                        crate::value::comparable_types(expected, kind.into())
+                                    })
+                                })
                         {
-                            matches = false;
-                            break;
+                            continue;
+                        }
+                        let value = cell(table, item, source_row, *column)?;
+                        if let (ValueRef::Bool(left), Value::Bool(right)) = (value, expected) {
+                            matches &= left == *right;
+                            continue;
+                        }
+                        match crate::value::compare_present_refs(value, ValueRef::from(expected)) {
+                            Ok(std::cmp::Ordering::Equal) => (),
+                            Err(crate::value::ComparisonError::IncompatibleTypes) => {
+                                let key = item
+                                    .keys
+                                    .iter()
+                                    .find(|key| key.source_column == *column)
+                                    .expect("resolved key belongs to the admitted selector");
+                                let field = &table.schema().columns()[*column].name;
+                                let source = if key.value.is_expression() {
+                                    format!("key[{field}]")
+                                } else {
+                                    key.value
+                                        .read()
+                                        .map_or(field.clone(), |read| read.identifier().into())
+                                };
+                                return Err(Box::new(ExecutionError::ScalarDiagnostic(
+                                    crate::diagnostic::lookup_key_type(
+                                        &key.path,
+                                        &item.identifier,
+                                        &source,
+                                        expected.value_type().expect("present key"),
+                                        value.value_type().expect("present donor key"),
+                                    ),
+                                )));
+                            }
+                            _ => {
+                                matches = false;
+                            }
                         }
                     }
                     if matches {
@@ -872,10 +796,9 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                             }
                         }
                         if let (Some(range), Some(value)) = (&item.range, &range_value) {
-                            state.budget.work(1, 2)?;
                             let allowed = range
                                 .allows(ValueRef::from(value), |column| {
-                                    cell(table, item, source_row, column, state.budget)
+                                    cell(table, item, source_row, column)
                                 })
                                 .map_err(|failure| match failure {
                                     RelationRangeFailure::Access(error) => error,
@@ -898,15 +821,15 @@ fn read_with_observations<T: TableAccess + ?Sized>(
             selected = matching.first().copied();
             if count > 1 {
                 if let Some(selection) = &item.selection {
-                    selected = Some(select(table, item, matching, selection, state.budget)?);
+                    selected = Some(select(table, item, matching, selection)?);
                 } else {
                     return Err(Box::new(ExecutionError::MultipleMatches {
                         path: item.path.clone(),
                         dataset: source_name.into(),
                         intermediate: item.identifier.clone(),
                         match_count: count,
-                        matched_key: matched_key(table, &keys, state.budget)?,
-                        identity: failure_identity(candidate, plan.keys(), row, state.budget)?,
+                        matched_key: matched_key(table, &keys)?,
+                        identity: failure_identity(candidate, plan.keys(), row)?,
                     }));
                 }
             }
@@ -923,25 +846,17 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                 path: item.path.clone(),
                 dataset: source_name.into(),
                 intermediate: item.identifier.clone(),
-                matched_key: matched_key(table, &keys, state.budget)?,
-                identity: failure_identity(candidate, plan.keys(), row, state.budget)?,
+                matched_key: matched_key(table, &keys)?,
+                identity: failure_identity(candidate, plan.keys(), row)?,
             }));
         };
-        state.budget.work(
-            choice_search_work(state.intermediates.choices.len(), bounded_choice)?,
-            1,
-        )?;
-        if bounded_choice {
-            // One fixed typed identity, item index and selected choice are retained.
-            // Existing entries and source key/value text are never copied here.
-            state.budget.work(1, 3)?;
-        }
+
         state.intermediates.choices.insert(cache_key, choice);
         choice
     };
     let (value, handler) = match choice {
         Choice::Record { row, multiple } => (
-            own(cell(table, item, row, column, state.budget)?),
+            own(cell(table, item, row, column)?),
             multiple.then_some(HandlerKind::MultipleMatches),
         ),
         Choice::Absent => {
@@ -949,9 +864,6 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                 .no_match
                 .as_ref()
                 .expect("absence handler was admitted before caching");
-            if let Value::Str(text) = value {
-                state.budget.scalar_text(text.len())?;
-            }
             (value.clone(), Some(HandlerKind::NoMatch))
         }
     };
@@ -984,9 +896,7 @@ fn check_deferred_filter_types<E>(item: &Intermediate) -> Result<(), Box<Executi
 
 pub(super) fn check_unobserved_filter_types<E>(
     plan: &DatasetPlan,
-    budget: &mut Budget,
 ) -> Result<(), Box<ExecutionError<E>>> {
-    budget.work(plan.intermediates().len(), 1)?;
     for item in plan.intermediates() {
         // Keep the first failing selector's complete bounded projection rather
         // than allocate an aggregate copy of every unused selector's findings.
@@ -999,10 +909,7 @@ pub(super) fn check_unobserved_filter_types<E>(
 fn matched_key<E>(
     table: &dyn TableAccess<Error = E>,
     keys: &[(usize, Value)],
-    budget: &mut Budget,
 ) -> Result<Vec<(String, Value)>, Box<ExecutionError<E>>> {
-    budget.work(1, keys.len())?;
-    budget.identity(keys.iter().map(|(_, value)| value))?;
     Ok(keys
         .iter()
         .map(|(column, value)| {
@@ -1014,15 +921,13 @@ fn matched_key<E>(
         .collect())
 }
 
-/// Charge every opaque secondary read and preserve its source coordinates.
+/// Preserve each opaque secondary read and its source coordinates.
 fn cell<'a, E>(
     table: &'a dyn TableAccess<Error = E>,
     item: &Intermediate,
     row: usize,
     column: usize,
-    budget: &mut Budget,
 ) -> Result<ValueRef<'a>, Box<ExecutionError<E>>> {
-    budget.work(1, 1)?;
     let value = table.cell(row, column).map_err(|error| {
         Box::new(match item.source.input_index() {
             Some(source) => ExecutionError::SecondaryCell {
@@ -1041,9 +946,6 @@ fn cell<'a, E>(
             None => ExecutionError::SchemaMismatch,
         })
     })?;
-    if let ValueRef::Str(text) = value {
-        budget.scalar_text(text.len())?;
-    }
     Ok(value)
 }
 
@@ -1053,7 +955,6 @@ fn select<E>(
     item: &Intermediate,
     matching: &[usize],
     selection: &SourceSelection,
-    budget: &mut Budget,
 ) -> Result<usize, Box<ExecutionError<E>>> {
     use std::cmp::Ordering;
     let mut best = matching[0];
@@ -1061,8 +962,8 @@ fn select<E>(
         let mut order = Ordering::Equal;
         for term in &selection.order_by {
             order = windows::compare(
-                cell(table, item, row, term.column, budget)?,
-                cell(table, item, best, term.column, budget)?,
+                cell(table, item, row, term.column)?,
+                cell(table, item, best, term.column)?,
                 term,
             );
             if order != Ordering::Equal {

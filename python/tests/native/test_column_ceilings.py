@@ -168,7 +168,6 @@ def test_compiler_refusal_details_on_check_and_domain(
         assert json.loads(issue["context"]) == {
             "code": "compiler_limit",
             "stage": "prepare",
-            "incomplete_checks_from": "specification",
             "resource": resource,
             "limit": limit,
             "actual": actual,
@@ -176,28 +175,32 @@ def test_compiler_refusal_details_on_check_and_domain(
 
 
 @pytest.mark.parametrize("environment", [False, True])
-@pytest.mark.parametrize("resource", ["depth", "numeric_digits"])
-def test_preparation_and_yaml_resource_refusals_preserve_bound_and_phase(
-    tmp_path, environment, resource
+def test_inheritance_depth_admits_original_chain_and_parent_occurrences_keep_fixed_bound(
+    tmp_path, environment
 ):
     spec = write_case(tmp_path, columns=1)
-    if resource == "depth":
-        (tmp_path / "base.yaml").write_text(spec.read_text())
-        for index in range(65):
-            parent = f"layer-{index + 1}.yaml" if index < 64 else "base.yaml"
-            (tmp_path / f"layer-{index}.yaml").write_text(
-                f"schema_version: '1.0'\nparents: [{parent}]\n"
-            )
-        spec.write_text("schema_version: '1.0'\nparents: [layer-0.yaml]\n")
-        limit, phase, stage = 64, "inheritance", "prepare"
-    else:
-        spec.write_text("value: " + "9" * 4097 + "\n")
-        limit, phase, stage = 4096, "yaml_decode", "capture"
+    (tmp_path / "base.yaml").write_text(spec.read_text())
+    for index in range(65):
+        parent = f"layer-{index + 1}.yaml" if index < 64 else "base.yaml"
+        (tmp_path / f"layer-{index}.yaml").write_text(
+            f"schema_version: '1.0'\nparents: [{parent}]\n"
+        )
+    spec.write_text("schema_version: '1.0'\nparents: [layer-0.yaml]\n")
     kwargs = {}
     if environment:
         env = tmp_path / "environment.yaml"
         env.write_text("schema_version: '1.0'\nlanguage: python\n")
         kwargs["environment"] = env
+    assert yamaa.check(spec, **kwargs).issues.height == 0
+    built = yamaa.domain(spec, **kwargs)
+    assert built.issues.height == 0
+    assert built.output.to_dict(as_series=False) == {"ID": ["S-001"]}
+    assert built.save()
+    assert (tmp_path / "out.csv").read_bytes() == b"ID\nS-001\n"
+
+    spec.write_text(
+        json.dumps({"schema_version": "1.0", "parents": ["base.yaml"] * 8193})
+    )
     for operation in (yamaa.check, yamaa.domain):
         result = operation(spec, **kwargs)
         assert result.issues.height == 1
@@ -205,13 +208,39 @@ def test_preparation_and_yaml_resource_refusals_preserve_bound_and_phase(
         assert issue["phase"] == "engine"
         assert issue["condition"] == "engine_rejected"
         assert issue["requirement"] is None
-        context = json.loads(issue["context"])
-        assert context == {
+        assert issue["spec_paths"] == []
+        assert json.loads(issue["context"]) == {
             "code": "resource_limit",
-            "stage": stage,
-            "incomplete_checks_from": "specification",
-            "phase": phase,
-            "resource": resource,
-            "limit": limit,
-            **({"actual": 4097} if resource == "numeric_digits" else {}),
+            "stage": "prepare",
+            "phase": "inheritance",
+            "resource": "parent_occurrences",
+            "limit": 8192,
+            "actual": 8193,
         }
+    assert (tmp_path / "out.csv").read_bytes() == b"ID\nS-001\n"
+
+
+@pytest.mark.parametrize("environment", [False, True])
+def test_wide_yaml_integer_reaches_its_complete_language_finding(tmp_path, environment):
+    spec = write_case(tmp_path, columns=1)
+    digits = "9" * 4097
+    kwargs = {}
+    if environment:
+        env = tmp_path / "environment.yaml"
+        env.write_text("schema_version: '1.0'\nlanguage: python\n")
+        kwargs["environment"] = env
+    for text, actual in (
+        ("value: " + digits + "\n", None),
+        ("schema_version: " + digits + "\n", int(digits)),
+    ):
+        spec.write_text(text)
+        for operation in (yamaa.check, yamaa.domain):
+            result = operation(spec, **kwargs)
+            assert result.issues.height == 1
+            issue = result.issues.row(0, named=True)
+            assert issue["phase"] == "validation"
+            assert issue["condition"] == "schema_version_mismatch"
+            assert issue["requirement"] == "REQ-0281"
+            assert issue["spec_paths"] == ["schema_version"]
+            assert json.loads(issue["context"]) == {"expected": "1.0", "actual": actual}
+    assert not (tmp_path / "out.csv").exists()

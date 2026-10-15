@@ -1,10 +1,10 @@
-//! Assess the opt-in portable math policy without changing default compilation.
+//! Assess the canonical portable math implementation.
 //! Outputs are observations, never expected fixture values or backend qualification.
 
 use std::convert::Infallible;
 use yamaa_core::evaluation::NumericResolver;
 use yamaa_core::numeric::Number;
-use yamaa_core::numeric_compiler::{compile_numeric, CompileLimits};
+use yamaa_core::numeric_compiler::compile_numeric;
 use yamaa_core::value::{Selection, Value};
 
 /// Supply normalized values through the same compiled evaluator used by callers.
@@ -21,14 +21,14 @@ impl NumericResolver for Inputs {
     }
 }
 
-/// Emit exact bits from the opt-in compiled policy, before assessment normalization.
+/// Emit exact bits from the compiled evaluator, before assessment normalization.
 fn sample(id: &str, x: f64, y: f64) {
     for (name, a, b, source) in [
         ("EXP", x, 0.0, "EXP(A)"),
         ("LN", y, 0.0, "LN(A)"),
         ("POWER", y, x / 100.0, "POWER(A, B)"),
     ] {
-        let plan = compile_numeric(source, "assessment", CompileLimits::default()).unwrap();
+        let plan = compile_numeric(source, "assessment").unwrap();
         let result = match plan.evaluate(&mut Inputs(a, b)).unwrap() {
             Number::Float(value) => value.get(),
             Number::Missing => f64::NAN,

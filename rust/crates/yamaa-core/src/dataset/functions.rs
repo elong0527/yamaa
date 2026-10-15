@@ -34,7 +34,7 @@ pub struct BoundFunction<S = InvocationPlan> {
 
 impl BoundFunction {
     /// Reject duplicate/unknown names and absent required declarations before execution.
-    /// Metadata and literal admission budgets belong to the compiler, as for InvocationPlan.
+    /// Metadata and literal admission belong to the compiler, as for InvocationPlan.
     pub fn new(
         slot: usize,
         signature: InvocationPlan,

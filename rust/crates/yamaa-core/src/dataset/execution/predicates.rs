@@ -12,17 +12,13 @@ pub(crate) fn evaluate<T: TableAccess + ?Sized>(
     table: &T,
     source_row: usize,
     columns: &[Value],
-    budget: &mut predicate::Budget,
 ) -> Result<predicate::Truth, predicate::EvaluationError<CellError<T::Error>>> {
-    predicate.plan().evaluate_with_budget(
-        &mut RowResolver {
-            table,
-            source_row,
-            columns,
-            bindings: predicate.bindings(),
-        },
-        budget,
-    )
+    predicate.plan().evaluate(&mut RowResolver {
+        table,
+        source_row,
+        columns,
+        bindings: predicate.bindings(),
+    })
 }
 
 struct RowResolver<'a, T: TableAccess + ?Sized> {

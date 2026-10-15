@@ -5,10 +5,7 @@ use arrow_array::{
 };
 use arrow_ipc::writer::StreamWriter;
 use arrow_schema::{DataType, Field, Schema, TimeUnit};
-use std::{
-    io::{self, Write},
-    sync::Arc,
-};
+use std::sync::Arc;
 use yamaa_core::{
     table::{TableAccess, ValueRef},
     value::ColumnType,
@@ -35,11 +32,7 @@ impl PublicTable {
         self.rows
     }
     pub fn decode(input: &[u8]) -> Result<Self, Error> {
-        let budget = yamaa_core::dataset::ExecutionBudget {
-            max_ipc_bytes: yamaa_core::capacity::OUTPUT_STORAGE_BYTES,
-            ..Default::default()
-        };
-        let table = ipc_table::decode_snapshot_with_budget(input, budget)?;
+        let table = ipc_table::decode_snapshot(input)?;
         let mut columns = Vec::new();
         for (index, column) in table.schema().columns().iter().enumerate() {
             macro_rules! collect {
@@ -97,26 +90,11 @@ impl PublicTable {
         let options = arrow_array::RecordBatchOptions::new().with_row_count(Some(self.rows));
         let batch = RecordBatch::try_new_with_options(schema.clone(), arrays, &options)
             .map_err(|_| Error::InvalidTable)?;
-        struct Bytes(Vec<u8>);
-        impl Write for Bytes {
-            fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-                if self.0.len().saturating_add(bytes.len())
-                    > yamaa_core::capacity::OUTPUT_STORAGE_BYTES
-                {
-                    return Err(io::Error::other("public table byte limit"));
-                }
-                self.0.extend_from_slice(bytes);
-                Ok(bytes.len())
-            }
-            fn flush(&mut self) -> io::Result<()> {
-                Ok(())
-            }
-        }
-        let mut bytes = Bytes(Vec::new());
+        let mut bytes = Vec::new();
         let mut writer = StreamWriter::try_new(&mut bytes, &schema).map_err(|_| Error::Internal)?;
         writer.write(&batch).map_err(|_| Error::Internal)?;
         writer.finish().map_err(|_| Error::Internal)?;
         drop(writer);
-        Ok(bytes.0)
+        Ok(bytes)
     }
 }
