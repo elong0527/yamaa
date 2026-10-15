@@ -69,7 +69,7 @@ canonical source file. Build and test commands live in
 
 `docs/development.md` describes the crate boundaries and local verification
 commands; `rust/README.md` is the Rust entry point. `docs/release.md` owns current
-API/math/platform/rollback decisions and pending migration gates.
+API/math/platform decisions and migration notes.
 Language contracts live in `rules/`, and host usage lives in `python/README.md`
 and `R/yamaa/README.md`. The declared API inventory is
 `rust/qualification/release-api.json`; check it from the repository root with
@@ -78,7 +78,7 @@ and `R/yamaa/README.md`. The declared API inventory is
 Current REQ owners and generated references derive from `rules/` and `yaml/`.
 The independent schema-owner fixture is
 `.github/scripts/yaml-validation/fixtures/schema-navigation.tsv`; preserve its
-363 expectations when changing checkers. Run the rule/reference commands in
+expectations when changing checkers. Run the rule/reference commands in
 `docs/development.md` with the repository Python environment.
 
 Portable math golden values live in
