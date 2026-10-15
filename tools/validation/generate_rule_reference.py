@@ -33,8 +33,17 @@ def descriptors(node, parts=(), classes=None, active=()):
                 yield from descriptors(value, parts, classes, active)
 
 
+def code_span(text):
+    # A code span's fence must be longer than any backtick run inside it,
+    # or the first embedded backtick ends the span and corrupts the table.
+    fence = "`"
+    while fence in text:
+        fence += "`"
+    return fence + text + fence
+
+
 def cell(value):
-    return "`" + json.dumps(value, ensure_ascii=True).replace("|", "\\|") + "`"
+    return code_span(json.dumps(value, ensure_ascii=True).replace("|", "\\|"))
 
 
 def generated(root):
@@ -94,7 +103,7 @@ def generated(root):
                 cell(descriptor["default"]) if "default" in descriptor else "Absent"
             )
             fields.append(
-                f"| `{name}` | {cell(descriptor['type'])} | {cell(descriptor.get('required', False))} | {default} | {cell(constraints) if constraints else '--'} | {contract} |"
+                f"| {code_span(name)} | {cell(descriptor['type'])} | {cell(descriptor.get('required', False))} | {default} | {cell(constraints) if constraints else '--'} | {contract} |"
             )
         fields.append("")
     index = [
