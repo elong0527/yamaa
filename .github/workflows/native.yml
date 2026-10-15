@@ -65,7 +65,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install build tools
         run: |
-          (cd rust && rustup show active-toolchain)
+          python -m tools.ci.toolchain --install
       - name: Test shared workspace
         id: shared_crates
         run: |
@@ -168,7 +168,7 @@ jobs:
         run: python -m tools.packaging.check_benchmark_sdk_versions
       - name: Install build tools
         run: |
-          (cd rust && rustup show active-toolchain)
+          python -m tools.ci.toolchain --install
           python -m pip install maturin==1.9.6 hatchling==1.27.0
       - name: Generate Python caches before packaging
         run: |
@@ -255,7 +255,7 @@ jobs:
         run: |
           python -m pip install py-yaml12==0.2.0
           if [ "${{ matrix.form }}" = source ]; then
-            (cd rust && rustup show active-toolchain)
+            python -m tools.ci.toolchain --install
           fi
       # Qualify the uploaded bytes, so the artifact names recorded in each
       # report identify exactly what was installed.
@@ -403,7 +403,7 @@ jobs:
         run: python -m tools.packaging.check_benchmark_sdk_versions
       - name: Install Rust
         run: |
-          (cd rust && rustup show active-toolchain)
+          python -m tools.ci.toolchain --install
           if [ "${{ runner.os }}" = Windows ]; then
             rustup target add x86_64-pc-windows-gnu
           fi

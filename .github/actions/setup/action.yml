@@ -17,8 +17,7 @@ runs:
       run: python -m tools.ci.toolchain
     - name: Activate the workspace toolchain
       shell: bash
-      working-directory: rust
-      run: rustup show active-toolchain
+      run: python -m tools.ci.toolchain --install
     - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       with:
         workspaces: rust
