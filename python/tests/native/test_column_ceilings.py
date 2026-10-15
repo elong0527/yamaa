@@ -5,6 +5,8 @@ typed source fields, and refuses 1,025. These controls exercise the
 installed public host API, so they need the compiled native extension.
 """
 
+import json
+
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
@@ -124,3 +126,92 @@ def test_wide_producer_contract_and_decoder_build(tmp_path):
     built = yamaa.domain(spec)
     assert built.issues.height == 0
     assert built.output.to_dict(as_series=False) == {"ID": ["S-001"]}
+
+
+@pytest.mark.parametrize("environment", [False, True])
+@pytest.mark.parametrize(
+    ("resource", "limit", "actual", "path"),
+    [
+        ("columns", 1024, 1025, "columns"),
+        ("inputs", 16, 17, "input"),
+        ("source_fields", 1024, 1025, "input.SRC.types"),
+        ("projected_columns", 1024, 1025, "output.columns"),
+    ],
+)
+def test_compiler_refusal_details_on_check_and_domain(
+    tmp_path, environment, resource, limit, actual, path
+):
+    spec = write_case(
+        tmp_path,
+        columns=actual if resource == "columns" else 1,
+        typed_fields=actual if resource == "source_fields" else 0,
+    )
+    document = yaml.safe_load(spec.read_text())
+    if resource == "inputs":
+        document["input"] = {f"S{index}": "input.csv" for index in range(actual)}
+    if resource == "projected_columns":
+        document["output"]["columns"] = ["ID"] * actual
+    spec.write_text(yaml.safe_dump(document))
+    kwargs = {}
+    if environment:
+        env = tmp_path / "environment.yaml"
+        env.write_text("schema_version: '1.0'\nlanguage: python\n")
+        kwargs["environment"] = env
+    for operation in (yamaa.check, yamaa.domain):
+        result = operation(spec, **kwargs)
+        assert result.issues.height == 1
+        issue = result.issues.row(0, named=True)
+        assert issue["phase"] == "engine"
+        assert issue["condition"] == "engine_rejected"
+        assert issue["requirement"] is None
+        assert issue["spec_paths"] == [path]
+        assert json.loads(issue["context"]) == {
+            "code": "compiler_limit",
+            "stage": "prepare",
+            "incomplete_checks_from": "specification",
+            "resource": resource,
+            "limit": limit,
+            "actual": actual,
+        }
+
+
+@pytest.mark.parametrize("environment", [False, True])
+@pytest.mark.parametrize("resource", ["depth", "numeric_digits"])
+def test_preparation_and_yaml_resource_refusals_preserve_bound_and_phase(
+    tmp_path, environment, resource
+):
+    spec = write_case(tmp_path, columns=1)
+    if resource == "depth":
+        (tmp_path / "base.yaml").write_text(spec.read_text())
+        for index in range(65):
+            parent = f"layer-{index + 1}.yaml" if index < 64 else "base.yaml"
+            (tmp_path / f"layer-{index}.yaml").write_text(
+                f"schema_version: '1.0'\nparents: [{parent}]\n"
+            )
+        spec.write_text("schema_version: '1.0'\nparents: [layer-0.yaml]\n")
+        limit, phase, stage = 64, "inheritance", "prepare"
+    else:
+        spec.write_text("value: " + "9" * 4097 + "\n")
+        limit, phase, stage = 4096, "yaml_decode", "capture"
+    kwargs = {}
+    if environment:
+        env = tmp_path / "environment.yaml"
+        env.write_text("schema_version: '1.0'\nlanguage: python\n")
+        kwargs["environment"] = env
+    for operation in (yamaa.check, yamaa.domain):
+        result = operation(spec, **kwargs)
+        assert result.issues.height == 1
+        issue = result.issues.row(0, named=True)
+        assert issue["phase"] == "engine"
+        assert issue["condition"] == "engine_rejected"
+        assert issue["requirement"] is None
+        context = json.loads(issue["context"])
+        assert context == {
+            "code": "resource_limit",
+            "stage": stage,
+            "incomplete_checks_from": "specification",
+            "phase": phase,
+            "resource": resource,
+            "limit": limit,
+            **({"actual": 4097} if resource == "numeric_digits" else {}),
+        }

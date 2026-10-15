@@ -1,6 +1,19 @@
 //! Capacities admitted before report ownership grows. These are explicit
 //! projection/work policies, not allocator or process-memory guarantees.
-use crate::specification_report::Error;
+use crate::{resource_diagnostics::Refusal, specification_report::Error};
+
+fn charge(
+    remaining: &mut usize,
+    initial: usize,
+    count: Option<usize>,
+    resource: &'static str,
+) -> Result<(), Error> {
+    let actual = count.and_then(|count| (initial - *remaining).checked_add(count));
+    *remaining = count
+        .and_then(|count| remaining.checked_sub(count))
+        .ok_or_else(|| Error::ResourceLimit(Refusal::new(resource, initial, actual, Vec::new())))?;
+    Ok(())
+}
 use serde_json::Value;
 use yamaa_core::{table::ValueRef, value::Value as Scalar};
 
@@ -9,6 +22,7 @@ pub(crate) struct Budget {
     cells: usize,
     work: usize,
     initial_bytes: usize,
+    initial_cells: usize,
     initial_work: usize,
 }
 impl Budget {
@@ -22,32 +36,62 @@ impl Budget {
             cells: yamaa_engine::capacity::REPORT_CELLS,
             work: yamaa_engine::capacity::REPORT_WORK,
             initial_bytes: bytes,
+            initial_cells: yamaa_engine::capacity::REPORT_CELLS,
             initial_work: yamaa_engine::capacity::REPORT_WORK,
+        }
+    }
+    #[cfg(test)]
+    pub(crate) fn selected_projection_limits(bytes: usize, cells: usize, work: usize) -> Self {
+        Self {
+            bytes,
+            cells,
+            work,
+            initial_bytes: bytes,
+            initial_cells: cells,
+            initial_work: work,
         }
     }
     pub(crate) fn remaining_bytes(&self) -> usize {
         self.bytes / yamaa_engine::capacity::REPORT_RETAINED_FACTOR
     }
+    fn work_amount(&mut self, count: Option<usize>) -> Result<(), Error> {
+        charge(&mut self.work, self.initial_work, count, "report_work")
+    }
     pub(crate) fn work(&mut self, count: usize) -> Result<(), Error> {
-        self.work = self.work.checked_sub(count).ok_or(Error::OutputLimit)?;
-        Ok(())
+        self.work_amount(Some(count))
     }
     pub(crate) fn entries(&mut self, count: usize) -> Result<(), Error> {
         self.work(count)?;
-        self.bytes = self
-            .bytes
-            .checked_sub(count.checked_mul(128).ok_or(Error::OutputLimit)?)
-            .ok_or(Error::OutputLimit)?;
-        Ok(())
+        charge(
+            &mut self.bytes,
+            self.initial_bytes,
+            count.checked_mul(128),
+            "report_retained_bytes",
+        )
+    }
+    fn retained_amount(&mut self, count: Option<usize>) -> Result<(), Error> {
+        charge(
+            &mut self.bytes,
+            self.initial_bytes,
+            count,
+            "report_retained_bytes",
+        )
     }
     pub(crate) fn retained_bytes(&mut self, count: usize) -> Result<(), Error> {
-        self.bytes = self.bytes.checked_sub(count).ok_or(Error::OutputLimit)?;
-        Ok(())
+        self.retained_amount(Some(count))
     }
     pub(crate) fn row_shape(&mut self, rows: usize, columns: usize) -> Result<(), Error> {
-        let cells = rows.checked_mul(columns).ok_or(Error::OutputLimit)?;
-        self.cells = self.cells.checked_sub(cells).ok_or(Error::OutputLimit)?;
-        self.entries(columns.checked_add(1).ok_or(Error::OutputLimit)?)?;
+        let cells = rows.checked_mul(columns);
+        charge(&mut self.cells, self.initial_cells, cells, "report_cells")?;
+        let cells = cells.expect("admitted cell multiplication");
+        self.entries(columns.checked_add(1).ok_or_else(|| {
+            Error::ResourceLimit(Refusal::new(
+                "report_work",
+                self.initial_work,
+                None,
+                Vec::new(),
+            ))
+        })?)?;
         self.work(cells)
     }
     pub(crate) fn shared_report(
@@ -58,21 +102,19 @@ impl Budget {
         self.entries(report.row_blocks())
     }
     pub(crate) fn text(&mut self, text: &str) -> Result<(), Error> {
-        self.work(text.len().checked_mul(2).ok_or(Error::OutputLimit)?)?;
-        self.bytes = self
-            .bytes
-            .checked_sub(
-                text.len()
-                    .checked_mul(12)
-                    .and_then(|n| n.checked_add(128))
-                    .ok_or(Error::OutputLimit)?,
-            )
-            .ok_or(Error::OutputLimit)?;
+        self.work_amount(text.len().checked_mul(2))?;
+        charge(
+            &mut self.bytes,
+            self.initial_bytes,
+            text.len().checked_mul(12).and_then(|n| n.checked_add(128)),
+            "report_retained_bytes",
+        )?;
         Ok(())
     }
     pub(crate) fn shape(&mut self, rows: usize, columns: usize) -> Result<(), Error> {
-        let cells = rows.checked_mul(columns).ok_or(Error::OutputLimit)?;
-        self.cells = self.cells.checked_sub(cells).ok_or(Error::OutputLimit)?;
+        let cells = rows.checked_mul(columns);
+        charge(&mut self.cells, self.initial_cells, cells, "report_cells")?;
+        let cells = cells.expect("admitted cell multiplication");
         self.entries(rows)?;
         self.entries(columns)?;
         self.entries(cells)?;
@@ -85,19 +127,20 @@ impl Budget {
     /// buffers and bounded IPC capacity. Per-column admission covers minimum
     /// UTF-8 builder capacity and schema/array owners. No JSON map is allocated.
     pub(crate) fn typed_shape(&mut self, rows: usize, columns: usize) -> Result<(), Error> {
-        let cells = rows.checked_mul(columns).ok_or(Error::OutputLimit)?;
-        self.cells = self.cells.checked_sub(cells).ok_or(Error::OutputLimit)?;
+        let cells = rows.checked_mul(columns);
+        charge(&mut self.cells, self.initial_cells, cells, "report_cells")?;
+        let cells = cells.expect("admitted cell multiplication");
         self.work(cells)?;
-        self.retained_bytes(cells.checked_mul(64).ok_or(Error::OutputLimit)?)?;
-        self.retained_bytes(columns.checked_mul(2048).ok_or(Error::OutputLimit)?)
+        self.retained_amount(cells.checked_mul(64))?;
+        self.retained_amount(columns.checked_mul(2048))
     }
     /// Borrowed string payloads can coexist in an exact owned string, grown
     /// Arrow data and grown IPC byte vector. The three admitted passes retain
     /// twelve bytes per input UTF-8 byte in total; other scalars own no text.
     pub(crate) fn typed_cell(&mut self, value: &ValueRef<'_>) -> Result<(), Error> {
         if let ValueRef::Str(text) = value {
-            self.work(text.len().checked_mul(2).ok_or(Error::OutputLimit)?)?;
-            self.retained_bytes(text.len().checked_mul(4).ok_or(Error::OutputLimit)?)?;
+            self.work_amount(text.len().checked_mul(2))?;
+            self.retained_amount(text.len().checked_mul(4))?;
         }
         Ok(())
     }
@@ -177,7 +220,12 @@ impl Budget {
     ) -> Result<(), Error> {
         use yamaa_core::diagnostic::ContextValue;
         if depth > 64 {
-            return Err(Error::OutputLimit);
+            return Err(Error::ResourceLimit(Refusal::new(
+                "report_depth",
+                64,
+                Some(depth),
+                Vec::new(),
+            )));
         }
         self.entries(1)?;
         match value {
@@ -226,7 +274,12 @@ impl Budget {
     }
     fn json_at(&mut self, value: &Value, depth: usize) -> Result<(), Error> {
         if depth > 64 {
-            return Err(Error::OutputLimit);
+            return Err(Error::ResourceLimit(Refusal::new(
+                "report_depth",
+                64,
+                Some(depth),
+                Vec::new(),
+            )));
         }
         self.entries(1)?;
         match value {
@@ -300,7 +353,12 @@ pub(crate) fn encoded_length_within_limit(
     };
     match serde_json::to_writer(&mut counter, value) {
         Ok(()) => Ok(maximum - counter.remaining),
-        Err(_) if counter.exceeded => Err(Error::OutputLimit),
+        Err(_) if counter.exceeded => Err(Error::ResourceLimit(Refusal::new(
+            "report_encoded_bytes",
+            maximum,
+            None,
+            Vec::new(),
+        ))),
         Err(_) => Err(Error::InvalidObservation),
     }
 }
@@ -316,7 +374,7 @@ mod tests {
         assert!(encoded_within_limit(&value, exact).is_ok());
         assert!(matches!(
             encoded_within_limit(&value, exact - 1),
-            Err(Error::OutputLimit)
+            Err(Error::ResourceLimit(_))
         ));
     }
 
@@ -325,7 +383,7 @@ mod tests {
         let value = Value::Array(vec![Value::String("x".repeat(4096)); 100]);
         assert!(matches!(
             encoded_within_limit(&value, 4096),
-            Err(Error::OutputLimit)
+            Err(Error::ResourceLimit(_))
         ));
     }
 }
@@ -341,6 +399,54 @@ pub(crate) fn encoded_within_limit(
 #[cfg(test)]
 mod typed_copy_tests {
     use super::*;
+    #[test]
+    fn longitudinal_reports_admit_source_artifact_derived_and_three_typed_passes() {
+        use yamaa_engine::capacity;
+        // Charge full logical geometry without allocating or reading its cells.
+        let mut report = Budget::new(capacity::REPORT_ENCODED_BYTES);
+        report.row_shape(10_000_000, 64).unwrap();
+        report.shape(10_000_000, 64).unwrap();
+        report.row_shape(10_000_000, 64).unwrap();
+
+        let mut typed = Budget::new(capacity::REPORT_ENCODED_BYTES);
+        for _ in 0..3 {
+            typed.typed_shape(10_000_000, 64).unwrap();
+        }
+        let mut exact = Budget::new(capacity::REPORT_ENCODED_BYTES);
+        exact.row_shape(capacity::REPORT_CELLS, 1).unwrap();
+        assert!(matches!(
+            exact.row_shape(1, 1),
+            Err(Error::ResourceLimit(Refusal {
+                resource: "report_cells",
+                limit,
+                actual: Some(actual),
+                ..
+            })) if limit == capacity::REPORT_CELLS && actual == limit + 1
+        ));
+        assert!(matches!(
+            Budget::new(1).typed_shape(1, 1),
+            Err(Error::ResourceLimit(Refusal {
+                resource: "report_retained_bytes",
+                limit,
+                actual: Some(64),
+                ..
+            })) if limit == capacity::REPORT_RETAINED_FACTOR
+        ));
+        let mut broad = Budget::new(usize::MAX);
+        broad
+            .retained_bytes(capacity::REPORT_RETAINED_BYTES)
+            .unwrap();
+        assert!(matches!(
+            broad.retained_bytes(1),
+            Err(Error::ResourceLimit(Refusal {
+                resource: "report_retained_bytes",
+                limit,
+                actual: Some(actual),
+                ..
+            })) if limit == capacity::REPORT_RETAINED_BYTES && actual == limit + 1
+        ));
+    }
+
     #[test]
     fn typed_copy_admission_counts_actual_slots_utf8_and_exact_byte_boundaries() {
         assert!(std::mem::size_of::<Option<String>>() <= 24);
@@ -374,7 +480,7 @@ mod typed_copy_tests {
         assert_eq!(encoded_length_within_limit(&value, actual).unwrap(), actual);
         assert!(matches!(
             encoded_length_within_limit(&value, actual - 1),
-            Err(Error::OutputLimit)
+            Err(Error::ResourceLimit(_))
         ));
     }
 }

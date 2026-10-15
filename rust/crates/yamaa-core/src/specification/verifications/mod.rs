@@ -61,7 +61,9 @@ fn predicate(
         })) => {
             return Ok(Err(failure
                 .original_diagnostic(&path, expression, position.character)
-                .map_err(|_| PrepareError::Limit("predicate_diagnostic_bytes"))?));
+                .map_err(|_| {
+                    PrepareError::limit("predicate_diagnostic_bytes", 16_777_216, None, None)
+                })?));
         }
         Err(predicate_compiler::Error::Parse(
             crate::predicate_parser::ParseError::UnsupportedRegex { .. },
@@ -72,7 +74,7 @@ fn predicate(
             }]));
         }
         Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
-        Err(_) => return Err(PrepareError::Limit("predicate_compilation")),
+        Err(error) => return Err(PrepareError::predicate(error.clone(), Some(&path))),
     };
     if let Some(name) = plan
         .identifiers()
@@ -201,7 +203,12 @@ impl Verifications {
     ) -> Result<Self, PrepareError> {
         let mut result = Self::default();
         if entries.len() > 16 {
-            return Err(PrepareError::Limit("verifications"));
+            return Err(PrepareError::limit(
+                "verifications",
+                16,
+                Some(entries.len()),
+                Some(prefix),
+            ));
         }
         let mut extra = Vec::new();
         for (index, &id) in entries.iter().enumerate() {
@@ -271,7 +278,7 @@ impl Verifications {
             if op == "row_count" {
                 for name in ["min", "max"] {
                     if d.field(payload, name).is_some_and(|id| matches!(&d.nodes()[id], N::Integer(value) if value.len() > crate::dataset::MAX_COUNT_BOUND_BYTES)) {
-                        return Err(PrepareError::Limit("verification_bound_bytes"));
+                        return Err(PrepareError::limit("verification_bound_bytes", crate::dataset::MAX_COUNT_BOUND_BYTES, None, None));
                     }
                 }
             }
@@ -293,7 +300,7 @@ impl Verifications {
         let mut quote_budget = crate::schema::ValidationBudget::new(Default::default());
         let mut quote = |value: &str| {
             crate::schema::quoted_diagnostic_text(value, &mut quote_budget)
-                .map_err(|_| PrepareError::Limit("verification_diagnostic"))
+                .map_err(|_| PrepareError::limit("verification_diagnostic", 16_777_216, None, None))
         };
         let mut ids = BTreeMap::<String, String>::new();
         for (index, &id) in entries.iter().enumerate() {
@@ -431,9 +438,12 @@ impl Verifications {
                             };
                             RowCountBound::new(value).map_err(|error| match error {
                                 CountBoundError::Invalid => PrepareError::Internal,
-                                CountBoundError::Limit => {
-                                    PrepareError::Limit("verification_bound_bytes")
-                                }
+                                CountBoundError::Limit => PrepareError::limit(
+                                    "verification_bound_bytes",
+                                    crate::dataset::MAX_COUNT_BOUND_BYTES,
+                                    None,
+                                    None,
+                                ),
                             })
                         })
                         .transpose()

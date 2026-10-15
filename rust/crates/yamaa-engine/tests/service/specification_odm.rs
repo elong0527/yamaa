@@ -294,7 +294,7 @@ fn complete_source_cell_admission_precedes_required_identifier_reads() {
     run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits, &mut attempt);
     assert!(matches!(
         attempt.result,
-        Err(PortError::Run(RunError::SourceCells))
+        Err(PortError::Run(RunError::SourceCells { .. }))
     ));
     assert_eq!(*decoder.trace.borrow(), ["capture:SRC", "decode:SRC"]);
     assert!(attempt.sources[0].table.is_some());

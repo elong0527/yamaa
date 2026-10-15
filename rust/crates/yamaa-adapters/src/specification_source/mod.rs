@@ -312,7 +312,7 @@ impl CapturedSchema {
             document,
             locations,
         } = raw;
-        let mut budget = NormalizationBudget::new(self.limits.normalization);
+        let mut budget = NormalizationBudget::for_application(self.limits.normalization);
         let prepared = match standalone_preparation::prepare(&self.structure, document, &mut budget)
         {
             Ok(prepared) => prepared,

@@ -36,6 +36,25 @@ describe public usage and installation. The
 describes crate checks. [Release guidance](release.md) owns migration decisions
 and pending acceptance.
 
+## Resource refusal diagnostics
+
+Typed resource refusals retain `engine_rejected`, the null requirement, the resource,
+its bound, known usage and authored paths. Their context also contains
+`incomplete_checks_from`: the earliest lifecycle scope for which complete check
+results are unavailable. `specification` covers capture and preparation;
+`source_binding` covers input admission and binding; `data` covers execution and
+data verification; `output` covers serialization, reports and publication.
+`build` is retained when a build/report boundary cannot establish a narrower
+scope. Other boundaries retain their stage name.
+
+The field means that remaining checks in that scope and later checks applicable
+to the requested operation have no complete result. Earlier checks may already
+have run, and an output refusal does not invalidate completed data checks. It
+does not claim individual requirements were checked or skipped, or run extra
+work after a resource refusal. Static `check` still does not request data
+execution. Reduce the exhausted resource and rerun to obtain the remaining
+findings.
+
 ## Local checks
 
 Read [AGENTS.md](https://github.com/elong0527/yamaa/blob/main/AGENTS.md) before
@@ -47,7 +66,15 @@ later are sufficient to read the help inventory; individual checks need the
 tools listed there.
 
 Use Rust 1.90.0 and the canonical `rust/Cargo.lock`. Python and R source archives
-stage the unchanged workspace and lock. From the repository root:
+stage the unchanged workspace and lock.
+
+The local crates.io patch in `rust/vendor/saphyr-parser` retains the released
+0.2.1 library with a narrow compact flow pair scanner fix. Its provenance,
+source diff, regression controls and both authors' licenses travel with Python
+and R source packages; archive guards compare the original bytes. Python wheels
+and installed R packages retain both MIT notices in `LICENSE-YAML.txt`.
+
+From the repository root:
 
 ```sh
 make help
@@ -186,3 +213,19 @@ PR feedback does not establish complete installed or release qualification. [Rel
 separates merged implementation, qualified revisions, pending decisions and
 publication. Keep current guidance here and there; retain historical plans in
 Git and put new evidence in the relevant PR/issue and qualification records.
+
+## SAS reader packaging
+
+SAS and Transport source decoding belongs to the shared Rust adapter. It uses
+a vendored read-only subset of MIT-licensed ReadStat 1.1.9 compiled statically
+by pinned `cc`, with a C bridge for ReadStat unions/bitfields and memory IO over
+the captured source snapshot. Both Python and R source builds include the same
+vendor sources and license under `yamaa-adapters/vendor/readstat`. No host
+reader fallback or dynamic ReadStat installation is used. The
+[vendor inventory](https://github.com/elong0527/yamaa/blob/main/rust/crates/yamaa-adapters/vendor/readstat/README.md) owns
+the upstream commit, local admission patches, portable ABI and encoding choice.
+[SAS source profiles](articles/rules.md#storage) fixes the declared encoding,
+physical type defaults, narrowing, missing, padding, and epoch contracts.
+Native release qualification must exercise this static bridge on Linux, macOS
+and Windows and compare both installed hosts against the independently authored
+binary fixtures and exact saved bytes.

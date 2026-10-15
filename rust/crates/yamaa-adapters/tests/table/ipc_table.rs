@@ -77,8 +77,15 @@ fn every_truncation_and_bad_frame_is_rejected_before_use() {
     trailing.push(0);
     assert_eq!(table_snapshot(&trailing), Err(E::InvalidStream));
     assert_eq!(
-        table_snapshot(&vec![0; MAX_INPUT_BYTES + 1]),
-        Err(E::InputLimit)
+        yamaa_adapters::ipc_table::decode_snapshot_with_budget(
+            input,
+            yamaa_engine::dataset::ExecutionBudget {
+                max_ipc_bytes: input.len() - 1,
+                ..Default::default()
+            },
+        )
+        .unwrap_err(),
+        E::InputLimit
     );
     assert!(table_snapshot(input).is_ok());
 }
@@ -196,7 +203,7 @@ fn shape_and_schema_policy_are_enforced() {
     let batch = RecordBatch::try_new_with_options(
         empty,
         vec![],
-        &RecordBatchOptions::new().with_row_count(Some(524_289)),
+        &RecordBatchOptions::new().with_row_count(Some(10_000_001)),
     )
     .unwrap();
     assert_eq!(table_snapshot(&stream(&batch)), Err(E::ShapeLimit));
@@ -415,15 +422,18 @@ fn aliased_text_and_json_expansion_are_bounded() {
         .flat_map(|_| [B::new(0, 0), B::new(0, 8), B::new(8, i64::from(length))])
         .collect::<Vec<_>>();
     assert_eq!(
-        table_round_trip(&declared_stream(
-            &schema,
-            1,
-            &nodes,
-            &buffers,
-            &body,
-            body.len() as i64,
-            false
-        )),
+        yamaa_adapters::ipc_table::table_round_trip_with_budget(
+            &declared_stream(
+                &schema,
+                1,
+                &nodes,
+                &buffers,
+                &body,
+                body.len() as i64,
+                false,
+            ),
+            yamaa_engine::dataset::ExecutionBudget::bounded(),
+        ),
         Err(E::ShapeLimit)
     );
     let schema = Arc::new(Schema::new(vec![Field::new("S", DataType::Utf8, true)]));

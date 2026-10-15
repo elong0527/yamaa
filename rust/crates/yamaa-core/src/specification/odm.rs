@@ -74,7 +74,12 @@ pub(super) fn prepare(
                 Err(crate::predicate_compiler::Error::Internal) => {
                     return Err(PrepareError::Internal)
                 }
-                Err(_) => return Err(PrepareError::Limit("predicate_compilation")),
+                Err(error) => {
+                    return Err(PrepareError::predicate(
+                        error.clone(),
+                        Some(&format!("{path}.filter")),
+                    ))
+                }
             }
             Ok((expression.into(), compiled))
         })
@@ -248,7 +253,12 @@ pub(super) fn bind(
 
 pub(super) fn contains(d: &Document, node: usize, depth: usize) -> Result<bool, PrepareError> {
     if depth > 64 {
-        return Err(PrepareError::Limit("odm_expression_depth"));
+        return Err(PrepareError::limit(
+            "odm_expression_depth",
+            64,
+            Some(depth),
+            None,
+        ));
     }
     match &d.nodes()[node] {
         N::Mapping(fields) => {
@@ -303,13 +313,26 @@ pub(super) fn context_findings(
         bytes: &mut usize,
         sites: &mut Vec<Site<'a>>,
     ) -> Result<(), PrepareError> {
-        if depth > 64 || path.len() > 65_536 {
-            return Err(PrepareError::Limit("odm_expression_depth"));
+        if depth > 64 {
+            return Err(PrepareError::limit(
+                "odm_expression_depth",
+                64,
+                Some(depth),
+                Some(path),
+            ));
+        }
+        if path.len() > 65_536 {
+            return Err(PrepareError::limit(
+                "path_bytes",
+                65_536,
+                Some(path.len()),
+                Some(path),
+            ));
         }
         *bytes = bytes
             .checked_add(path.len())
             .filter(|&n| n <= 16_777_216)
-            .ok_or(PrepareError::Limit("odm_site_metadata"))?;
+            .ok_or_else(|| PrepareError::limit("odm_site_metadata", 16_777_216, None, None))?;
         match &d.nodes()[node] {
             N::Mapping(fields) => {
                 if let Some(value) = d.field(node, "value").filter(|_| {
@@ -342,15 +365,20 @@ pub(super) fn context_findings(
                     };
                     let (dataset, _) = item.split_once('.').ok_or(PrepareError::Internal)?;
                     *bytes = bytes
-                        .checked_add(
-                            item.len()
-                                .checked_mul(4)
-                                .ok_or(PrepareError::Limit("odm_site_metadata"))?,
-                        )
+                        .checked_add(item.len().checked_mul(4).ok_or_else(|| {
+                            PrepareError::limit("odm_site_metadata", 16_777_216, None, None)
+                        })?)
                         .filter(|&n| n <= 16_777_216)
-                        .ok_or(PrepareError::Limit("odm_site_metadata"))?;
+                        .ok_or_else(|| {
+                            PrepareError::limit("odm_site_metadata", 16_777_216, None, None)
+                        })?;
                     if sites.len() >= 128 {
-                        return Err(PrepareError::Limit("odm_sites"));
+                        return Err(PrepareError::limit(
+                            "odm_sites",
+                            128,
+                            Some(sites.len()),
+                            None,
+                        ));
                     }
                     sites.push(Site {
                         payload,
@@ -518,7 +546,7 @@ pub(super) fn context_findings(
                     location: site.location,
                 }
                 .diagnostic()
-                .map_err(|_| PrepareError::Limit("odm_diagnostic"))?,
+                .map_err(|_| PrepareError::limit("odm_diagnostic", 16_777_216, None, None))?,
             ));
         }
         if let Some(filter) = d
@@ -565,7 +593,9 @@ pub(super) fn context_findings(
                     findings.push(PreflightFinding::Odm(
                         failure
                             .original_diagnostic(&path, expression, position.character)
-                            .map_err(|_| PrepareError::Limit("odm_diagnostic"))?,
+                            .map_err(|_| {
+                                PrepareError::limit("odm_diagnostic", 16_777_216, None, None)
+                            })?,
                     ));
                 }
                 Err(_) => (), // Existing expression preparation retains unsupported/policy failures.
@@ -583,7 +613,7 @@ pub(super) fn inputs(d: &Document) -> Result<BTreeSet<&str>, PrepareError> {
         found: &mut BTreeSet<&'a str>,
     ) -> Result<(), PrepareError> {
         if depth > 64 {
-            return Err(PrepareError::Limit("odm_expression_depth"));
+            return Err(PrepareError::limit("odm_expression_depth", 64, None, None));
         }
         match &d.nodes()[node] {
             N::Mapping(fields) => {

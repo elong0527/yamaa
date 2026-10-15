@@ -546,7 +546,16 @@ fn activation_prefix<E>(attempt: &NativeAttempt<E>, budget: &mut Budget) -> Resu
     let value =
         activation::activation_with_limit(held, observed, maximum).map_err(
             |error| match error {
-                activation::Error::Limit => Error::OutputLimit,
+                activation::Error::Limit {
+                    resource,
+                    limit,
+                    actual,
+                } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                    resource,
+                    limit,
+                    actual,
+                    Vec::new(),
+                )),
                 _ => Error::InvalidObservation,
             },
         )?;
@@ -622,9 +631,36 @@ fn decoded_finding(
         push_diagnostic(budget, findings, diagnostic)?;
         return Ok(true);
     }
+    if let DecodeError::ResourceLimit {
+        resource,
+        limit,
+        actual,
+    } = error
+    {
+        let refusal = crate::resource_diagnostics::Refusal::new(
+            resource,
+            *limit,
+            *actual,
+            vec![format!("input.{}", source.name)],
+        );
+        push_diagnostic(
+            budget,
+            findings,
+            &refusal.diagnostic("ingest", "source_limit"),
+        )?;
+        return Ok(true);
+    }
     let DecodeError::Codec(error) = error else {
         return Ok(false);
     };
+    if let Some(refusal) = crate::resource_diagnostics::source(error, source) {
+        push_diagnostic(
+            budget,
+            findings,
+            &refusal.diagnostic("ingest", "source_limit"),
+        )?;
+        return Ok(true);
+    }
     if matches!(
         error,
         crate::specification_run::Error::OdmFields(_)
@@ -693,6 +729,30 @@ fn decoded_finding(
                     for _ in 0..4 {
                         budget.text(field)?;
                         budget.text(stored_type)?;
+                    }
+                }
+                _ => return Ok(false),
+            }
+        }
+        crate::specification_run::Error::SasSource(error) => {
+            use crate::sas_source::Error;
+            match error {
+                Error::Invalid(cause) => {
+                    for _ in 0..4 {
+                        budget.text(cause)?;
+                    }
+                }
+                Error::Typing(yamaa_core::typed_csv::Error::UnknownField { field }) => {
+                    for _ in 0..4 {
+                        budget.text(field)?;
+                    }
+                }
+                Error::Typing(yamaa_core::typed_csv::Error::FieldParse {
+                    field, value, ..
+                }) => {
+                    for _ in 0..4 {
+                        budget.text(field)?;
+                        budget.text(value)?;
                     }
                 }
                 _ => return Ok(false),
@@ -799,8 +859,20 @@ fn failed_observations<'a, E>(
                         }
                         &[]
                     }
-                    _ => {
-                        portable = false;
+                    other => {
+                        if let Some(refusal) = crate::resource_diagnostics::execution(
+                            other,
+                            view.compiled().sources(),
+                            view.compiled().driver_index(),
+                        ) {
+                            push_diagnostic(
+                                budget,
+                                &mut diagnostics,
+                                &refusal.diagnostic("execute", "execution_limit"),
+                            )?;
+                        } else {
+                            portable = false;
+                        }
                         &[]
                     }
                 },
@@ -899,9 +971,78 @@ fn failed_observations<'a, E>(
                 }
             }
         }
+        Err(PortError::Run(error)) => {
+            if let Some(refusal) =
+                crate::resource_diagnostics::run_limit(error, view.compiled().sources())
+            {
+                push_diagnostic(
+                    budget,
+                    &mut diagnostics,
+                    &refusal.diagnostic("ingest", "source_limit"),
+                )?;
+            } else {
+                portable = false;
+            }
+        }
         _ => portable = false,
     }
     match &node.output {
+        Err(yamaa_engine::specification_output::CompleteError::Report(Error::ResourceLimit(
+            refusal,
+        ))) => {
+            budget.entries(16)?;
+            value["error"] = json!({"stage":"report","code":"output_limit"});
+            push_diagnostic(
+                budget,
+                &mut diagnostics,
+                &refusal.diagnostic("output", "output_limit"),
+            )?;
+        }
+        Err(yamaa_engine::specification_output::CompleteError::Encode(
+            crate::file_producer_build::CodecError::Csv(crate::csv_artifact::Error::Limit {
+                limit,
+                actual,
+                decimal_formatting,
+            }),
+        )) => {
+            let refusal = crate::resource_diagnostics::Refusal::new(
+                "output_bytes",
+                *limit,
+                *actual,
+                vec![if *decimal_formatting {
+                    "output.decimals"
+                } else {
+                    "output.path"
+                }
+                .into()],
+            );
+            push_diagnostic(
+                budget,
+                &mut diagnostics,
+                &refusal.diagnostic("output", "output_limit"),
+            )?;
+        }
+        Err(yamaa_engine::specification_output::CompleteError::Encode(
+            crate::file_producer_build::CodecError::Parquet(
+                crate::parquet_artifact::Error::Limit {
+                    resource,
+                    limit,
+                    actual,
+                },
+            ),
+        )) => {
+            let refusal = crate::resource_diagnostics::Refusal::new(
+                resource,
+                *limit,
+                *actual,
+                vec!["output.path".into()],
+            );
+            push_diagnostic(
+                budget,
+                &mut diagnostics,
+                &refusal.diagnostic("output", "output_limit"),
+            )?;
+        }
         Err(yamaa_engine::specification_output::CompleteError::Report(error)) => {
             budget.entries(16)?;
             value["error"] = json!({"stage":"report","code":match error { Error::OutputLimit => "output_limit", _ => "projection_refused" }});
@@ -1154,6 +1295,7 @@ mod tests {
                 ("VALUE".into(), ColumnType::Int),
             ],
             profile: SourceProfile::Csv,
+            encoding: None,
             empty_string_present: false,
             ordinal: None,
         };
@@ -1164,6 +1306,7 @@ mod tests {
                 bytes,
                 Some(&contract),
                 DecodeLimits {
+                    rows: 100,
                     cells: 100,
                     storage_bytes: 4096,
                     work_bytes: 4096,
@@ -1174,7 +1317,7 @@ mod tests {
         let mut findings = vec![];
         assert!(matches!(
             decoded_finding(&mut Budget::new(1), &mut findings, &source, &error),
-            Err(Error::OutputLimit)
+            Err(Error::ResourceLimit(refusal)) if refusal.resource == "report_retained_bytes" && refusal.limit == 6
         ));
         assert!(findings.is_empty());
         assert!(decoded_finding(&mut Budget::new(65536), &mut findings, &source, &error).unwrap());
@@ -1185,5 +1328,44 @@ mod tests {
         assert!(
             matches!(&error, yamaa_engine::producer_build::DecodeError::Metadata(held) if held.spec_paths == ["input.P.schema", "input.P.path"])
         );
+    }
+
+    #[test]
+    fn pooled_source_refusal_keeps_global_bound_actual_and_owner() {
+        let source = yamaa_core::specification::SourceDeclaration {
+            name: "XW".into(),
+            path: "raw.csv".into(),
+            types: vec![],
+            profile: yamaa_core::specification::SourceProfile::Csv,
+            encoding: None,
+            empty_string_present: false,
+            ordinal: None,
+        };
+        for (resource, limit, actual) in [("rows", 8, Some(9)), ("cells", 15, Some(16))] {
+            let error = yamaa_engine::producer_build::DecodeError::ResourceLimit {
+                resource,
+                limit,
+                actual,
+            };
+            let mut findings = Vec::new();
+            assert!(matches!(
+                decoded_finding(&mut Budget::new(1), &mut findings, &source, &error),
+                Err(Error::ResourceLimit(refusal)) if refusal.resource == "report_retained_bytes"
+                    && refusal.limit == yamaa_engine::capacity::REPORT_RETAINED_FACTOR
+                    && refusal.actual.is_some_and(|actual| actual > refusal.limit)
+            ));
+            assert!(findings.is_empty());
+            assert!(
+                decoded_finding(&mut Budget::new(65_536), &mut findings, &source, &error).unwrap()
+            );
+            assert_eq!(findings.len(), 1);
+            assert_eq!(findings[0]["context"]["resource"], resource);
+            assert_eq!(findings[0]["context"]["limit"], serde_json::json!(limit));
+            assert_eq!(
+                findings[0]["context"]["actual"],
+                serde_json::json!(actual.unwrap())
+            );
+            assert_eq!(findings[0]["spec_paths"], serde_json::json!(["input.XW"]));
+        }
     }
 }

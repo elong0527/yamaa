@@ -48,9 +48,14 @@ pub(super) fn prepare(
                         pattern.into(),
                     ),
                 )),
-                Err(crate::regex::CompileError::Limit { .. }) => {
-                    Err(PrepareError::Limit("verification_pattern"))
-                }
+                Err(crate::regex::CompileError::Limit {
+                    resource, limit, ..
+                }) => Err(PrepareError::limit(
+                    compiler_limits::regex_resource(resource),
+                    limit,
+                    None,
+                    Some(&format!("{path}.pattern")),
+                )),
                 Err(crate::regex::CompileError::Unsupported { .. }) => {
                     Err(PrepareError::Unsupported(vec![UnsupportedFeature {
                         operation: "verification_pattern".into(),
@@ -62,7 +67,12 @@ pub(super) fn prepare(
         "allowed_values" => {
             let entries = sequence(d, field(d, payload, "values")?)?;
             if entries.len() > 64 {
-                return Err(PrepareError::Limit("verification_values"));
+                return Err(PrepareError::limit(
+                    "verification_values",
+                    64,
+                    Some(entries.len()),
+                    Some(&format!("{path}.values")),
+                ));
             }
             if entries.is_empty() {
                 return Ok(invalid(
@@ -82,7 +92,14 @@ pub(super) fn prepare(
                         let label = match &d.nodes()[id] {
                             N::Text(text) => {
                                 crate::schema::quoted_diagnostic_text(text, &mut quote_budget)
-                                    .map_err(|_| PrepareError::Limit("verification_diagnostic"))?
+                                    .map_err(|_| {
+                                        PrepareError::limit(
+                                            "verification_diagnostic",
+                                            16_777_216,
+                                            None,
+                                            None,
+                                        )
+                                    })?
                             }
                             node => {
                                 // Admitted documents contain finite scalar leaves.
@@ -159,9 +176,9 @@ pub(super) fn prepare(
                     "max_length max is at least one".into(),
                 ));
             }
-            Ok(Check::MaxLength(
-                usize::try_from(max).map_err(|_| PrepareError::Limit("verification_length"))?,
-            ))
+            Ok(Check::MaxLength(usize::try_from(max).map_err(|_| {
+                PrepareError::limit("verification_length", usize::MAX, None, None)
+            })?))
         }
         _ => Err(PrepareError::Internal),
     }

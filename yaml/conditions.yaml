@@ -159,6 +159,7 @@ conditions:
   schema_version_mismatch: {phases: [validation]}
   source_byte_order_mark: {phases: [ingest]}
   source_carriage_return: {phases: [ingest]}
+  source_encoding_required: {phases: [validation]}
   source_field_name_duplicate: {phases: [ingest]}
   source_field_name_empty: {phases: [ingest]}
   source_field_type_unsupported: {phases: [ingest]}
@@ -169,6 +170,7 @@ conditions:
   source_quote_in_bare_field: {phases: [ingest]}
   source_quote_unterminated: {phases: [ingest]}
   source_record_width: {phases: [ingest]}
+  source_sas_invalid: {phases: [ingest]}
   source_system_incomplete: {phases: [validation]}
   source_text_after_quote: {phases: [ingest]}
   sqrt_of_negative: {phases: [derivation]}

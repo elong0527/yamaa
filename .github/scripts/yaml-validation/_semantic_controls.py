@@ -19,13 +19,11 @@ from validation_diagnostics import ValidationDiagnostic
 class Finding(ValidationDiagnostic):
     def __new__(cls, row, label):
         path = label + ('.' + row['spec_paths'][0] if row['spec_paths'][0] else '')
-        value = str.__new__(cls, f"ERROR: {path}: {row['condition']}: "
-            + _native_json.dumps(row['context'], sort_keys=True))
-        value.path, value.condition = path, row['condition']
-        value.context, value.requirement = row['context'], row['requirement']
+        message = row['condition'] + ': ' + _native_json.dumps(row['context'], sort_keys=True)
+        value = super().__new__(cls, path, row['condition'], message,
+            context=row['context'], span=row.get('span'), rendered=f"ERROR: {path}: {message}")
+        value.requirement = row['requirement']
         value.phase = row['phase']
-        value.span = tuple(row['span']) if row.get('span') is not None else None
-        value.message = str(value)
         return value
 
 

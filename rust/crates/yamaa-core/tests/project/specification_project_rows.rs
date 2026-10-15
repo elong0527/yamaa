@@ -347,7 +347,12 @@ fn grouped_nonlocal_default_context_is_bounded_before_owned_row_labels_are_copie
     let spec = specification_with_rows(columns, vec![row(&id, overrides, None)]);
     assert!(matches!(
         PreparedSpecification::prepare_with_project(&spec, &[function("id")]),
-        Err(PrepareError::Limit("row_default_context"))
+        Err(PrepareError::Limit(
+            yamaa_core::specification::CompilerLimit {
+                resource: "row_default_context",
+                ..
+            }
+        ))
     ));
 }
 
@@ -621,7 +626,12 @@ fn cumulative_row_context_is_bounded_before_binding_or_activation() {
     let spec = specification_with_rows(columns, vec![row(&id, derivations, Some(vec!["SRC.ID"]))]);
     assert!(matches!(
         PreparedSpecification::prepare_with_project(&spec, &[function]),
-        Err(PrepareError::Limit("function_row_context"))
+        Err(PrepareError::Limit(
+            yamaa_core::specification::CompilerLimit {
+                resource: "function_row_context",
+                ..
+            }
+        ))
     ));
 }
 

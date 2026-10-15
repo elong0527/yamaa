@@ -283,13 +283,26 @@ impl<'a> Run<'a, '_> {
         }
         // REQ-0638: an intermediate carrying its own verification is a
         // declared assertion, so it is a reachability root even when no
-        // column reads it; an absent or empty list keeps ordinary pruning.
+        // column reads it. Other valid declarations keep ordinary pruning.
         for i in 0..self.intermediates.len() {
             let intermediate = self.intermediates[i];
             let has_assertion = self.field(intermediate.node, "verifications")?.is_some_and(
                 |node| matches!(&self.input.nodes()[node], N::Sequence(items) if !items.is_empty()),
             );
-            if has_assertion {
+            // A complete rename-only declaration must reach its existing
+            // source-independent refusal, including when nothing reads it.
+            // Pruning it would let an empty child bypass the parent's REQ-1248.
+            self.budget.work(
+                self.input.nodes()[intermediate.node]
+                    .length()
+                    .unwrap_or(0)
+                    .saturating_mul(128),
+            )?;
+            let rename_only = crate::specification::is_rename_only(self.input, intermediate.node)
+                && self
+                    .field(intermediate.node, "dataset")?
+                    .is_some_and(|node| matches!(self.input.nodes()[node], N::Text(_)));
+            if has_assertion || rename_only {
                 add(&mut self.live_intermediates, intermediate.name, self.budget)?;
             }
         }

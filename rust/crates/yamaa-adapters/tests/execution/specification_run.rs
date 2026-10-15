@@ -894,18 +894,26 @@ fn compiler_budgets_precede_owned_planning_and_preserve_policy_boundary() {
     ] {
         let error = PreparedSpecification::prepare_with_limits(doc.model(), limits).unwrap_err();
         assert!(
-            matches!(error, PrepareError::Limit(actual) if actual == resource),
+            matches!(&error, PrepareError::Limit(actual) if actual .resource == resource),
             "{error:?}"
         );
         let error = specification_run::Error::Prepare(error);
         assert!(specification_diagnostics::findings(&error, None).is_none());
-        assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&specification_diagnostics::failure(
-                &error, None
-            ))
-            .unwrap(),
-            serde_json::json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"prepare","code":"compiler_limit"}})
-        );
+        let envelope = serde_json::from_str::<serde_json::Value>(
+            &specification_diagnostics::failure(&error, None),
+        )
+        .unwrap();
+        let outcome = &envelope["outcome"];
+        assert_eq!(outcome["status"], "rejected");
+        assert_eq!(outcome["stage"], "prepare");
+        assert_eq!(outcome["code"], "compiler_limit");
+        assert_eq!(outcome["resource"], resource);
+        let specification_run::Error::Prepare(PrepareError::Limit(facts)) = &error else {
+            unreachable!()
+        };
+        assert_eq!(outcome["limit"], facts.limit);
+        assert_eq!(outcome["actual"].as_u64(), facts.actual.map(|v| v as u64));
+        assert_eq!(outcome["spec_paths"], serde_json::json!(facts.spec_paths));
     }
     PreparedSpecification::prepare_with_limits(
         doc.model(),
@@ -938,9 +946,9 @@ fn actual_capture_observations_survive_errors_and_distinguish_cached_reads() {
             limit: usize,
         ) -> Result<Arc<[u8]>, Self::Error> {
             assert_eq!((&*source.name, &*source.path), ("LB", "input/lb.csv"));
-            // The cumulative source owner has 16 MiB; the CSV decoder keeps
-            // its independent 8 MiB per-file admission after capture.
-            assert_eq!(limit, 16_777_216);
+            // This attempt starts with the central cumulative source allowance;
+            // capture retains the same physical bytes for later owned decoding.
+            assert_eq!(limit, yamaa_engine::capacity::SOURCE_BYTES);
             self.requests += 1;
             if self.fail {
                 return Err("resource_path_missing");
@@ -1316,7 +1324,12 @@ fn declared_field_and_total_row_expression_budgets_precede_compiler_ownership() 
                 ..Default::default()
             }
         ),
-        Err(PrepareError::Limit("source_fields"))
+        Err(PrepareError::Limit(
+            yamaa_core::specification::CompilerLimit {
+                resource: "source_fields",
+                ..
+            }
+        ))
     ));
     assert!(matches!(
         PreparedSpecification::prepare_with_limits(
@@ -1326,7 +1339,12 @@ fn declared_field_and_total_row_expression_budgets_precede_compiler_ownership() 
                 ..Default::default()
             }
         ),
-        Err(PrepareError::Limit("numeric_bytes"))
+        Err(PrepareError::Limit(
+            yamaa_core::specification::CompilerLimit {
+                resource: "numeric_bytes",
+                ..
+            }
+        ))
     ));
 }
 
@@ -1744,7 +1762,7 @@ fn row_group_declarations_and_shared_scope_keep_authored_diagnostics() {
 }
 
 #[test]
-fn sum_rejects_declared_text_even_when_all_values_are_missing() {
+fn original_sum_reports_nonnumeric_values_but_publishes_all_missing_groups() {
     use serde_json::{json, Value as Json};
     use yamaa_adapters::{
         specification_report::{self, ArtifactPort, Identity},
@@ -1818,15 +1836,39 @@ fn sum_rejects_declared_text_even_when_all_values_are_missing() {
         let run = PreparedRun::prepare(prepare(&schema, raw.as_bytes())).unwrap();
         let attempt = run.execute_with_port(&mut host);
         let actual = specification_report::complete(&run, &attempt, id(), &mut host).unwrap();
-        // REQ-0510 admits the declared operand type before inspecting cells.
-        expected["outcome"] = json!("failure");
-        expected["artifacts"] = json!([]);
-        expected["verifications"] = json!([]);
-        expected["tables"].as_array_mut().unwrap().pop();
-        expected["diagnostics"] = json!([{"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0510","spec_paths":["rows[1].derivations.AVAL.aggregate"],"context":{"expr":"SUM(LB.LBSTRESN)","reducer":"SUM","source":"LB.LBSTRESN","expected":"numeric","actual":"str"}}]);
-        expected["nodes"][0]["outcome"] = json!("failure");
-        expected["nodes"][0]["diagnostics"] = expected["diagnostics"].clone();
-        assert!(host.published.is_empty());
+        if all_missing {
+            for row in expected["tables"][1]["rows"].as_array_mut().unwrap() {
+                row[5] = json!({"type":"missing","value":null});
+            }
+            let original = std::fs::read_to_string(case.join("expected/adlb.csv")).unwrap();
+            let records = original
+                .lines()
+                .enumerate()
+                .map(|(i, line)| {
+                    if i == 0 {
+                        line.to_owned()
+                    } else {
+                        let mut cells = line.split(',').collect::<Vec<_>>();
+                        cells[5] = "";
+                        cells.join(",")
+                    }
+                })
+                .collect::<Vec<_>>();
+            let content = format!("{}\n", records.join("\n"));
+            expected["artifacts"][0]["records"] = json!(records);
+            expected["artifacts"][0]["content"] = json!(content);
+            expected["artifacts"][0]["byte_length"] = json!(content.len());
+            assert_eq!(host.published, vec![content.into_bytes()]);
+        } else {
+            expected["outcome"] = json!("failure");
+            expected["artifacts"] = json!([]);
+            expected["verifications"] = json!([]);
+            expected["tables"].as_array_mut().unwrap().pop();
+            expected["diagnostics"] = json!([{"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0510","spec_paths":["rows[1].derivations.AVAL.aggregate"],"context":{"expr":"SUM(LB.LBSTRESN)","reducer":"SUM","source":"LB.LBSTRESN","expected":"numeric","actual":"str"}}]);
+            expected["nodes"][0]["outcome"] = json!("failure");
+            expected["nodes"][0]["diagnostics"] = expected["diagnostics"].clone();
+            assert!(host.published.is_empty());
+        }
         assert_eq!(host.reads, 1);
         assert_eq!(actual, expected);
     }
@@ -4057,6 +4099,61 @@ fn original_mapping_cut_admission_has_complete_findings_before_study_ports() {
                 .clone(),
             "{}",
             fields[0]
+        );
+    }
+}
+
+#[test]
+fn numeric_policy_reply_preserves_the_applicable_parser_and_resolution_bounds() {
+    use yamaa_adapters::{specification_diagnostics, specification_run::Error};
+    use yamaa_core::{
+        numeric_compiler::CompileError,
+        numeric_parser::{ParseError, ParseResource, SourcePosition},
+        specification::PrepareError,
+    };
+    for (error, resource, bound, actual) in [
+        (
+            CompileError::ResolutionLimit {
+                limit: 7,
+                required: 8,
+            },
+            "resolutions",
+            7,
+            Some(8),
+        ),
+        (
+            CompileError::Parse(ParseError::Limit {
+                position: SourcePosition {
+                    byte: 1,
+                    character: 1,
+                },
+                resource: ParseResource::Nodes,
+                limit: 3,
+            }),
+            "nodes",
+            3,
+            None,
+        ),
+    ] {
+        let error = Error::Prepare(PrepareError::Numeric {
+            path: "columns.VALUE.derivation.compute.expr".into(),
+            error,
+        });
+        let value: serde_json::Value =
+            serde_json::from_str(&specification_diagnostics::failure(&error, None)).unwrap();
+        let outcome = &value["outcome"];
+        assert_eq!(outcome["code"], "numeric_policy");
+        assert_eq!(outcome["stage"], "prepare");
+        assert_eq!(outcome["resource"], resource);
+        assert_eq!(outcome["limit"], bound);
+        assert_eq!(outcome["actual"].as_u64(), actual);
+        assert_eq!(
+            outcome["spec_paths"],
+            serde_json::json!(["columns.VALUE.derivation.compute.expr"])
+        );
+        assert_eq!(
+            outcome.as_object().unwrap().contains_key("actual"),
+            actual.is_some()
         );
     }
 }

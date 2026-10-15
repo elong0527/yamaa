@@ -80,6 +80,224 @@ fn defects_have_exact_priority_and_coordinates() {
     );
 }
 
+// Independent operands and expected results from python/tests/io/test_csv.py
+// at c7b88a4f. Keep the original edge cases after retiring the Python parser.
+#[test]
+fn retired_python_quoted_and_bare_empty_records_keep_order() {
+    let source = parse(
+        b"ID,EMPTY,COMMENT,SPACE\r\n007,,\"line one\nline two, still one field\", kept \r\n008,\"\",\"said \"\"hello\"\"\",next",
+        Limits::default(),
+    )
+    .unwrap();
+    assert_eq!(source.names, ["ID", "EMPTY", "COMMENT", "SPACE"]);
+    assert_eq!(
+        source.records,
+        vec![
+            vec![
+                Some("007".into()),
+                None,
+                Some("line one\nline two, still one field".into()),
+                Some(" kept ".into()),
+            ],
+            vec![
+                Some("008".into()),
+                None,
+                Some("said \"hello\"".into()),
+                Some("next".into()),
+            ],
+        ]
+    );
+}
+
+#[test]
+fn retired_python_nonconforming_csv_has_exact_coordinates() {
+    for (input, condition, record, field) in [
+        (&b""[..], "source_header_absent", 1, Field::Index(1)),
+        (
+            &b"\xef\xbb\xbfID\n1\n"[..],
+            "source_byte_order_mark",
+            1,
+            Field::Index(1),
+        ),
+        (
+            &b"ID,\n1,2\n"[..],
+            "source_field_name_empty",
+            1,
+            Field::Index(2),
+        ),
+        (
+            &b"ID,ID\n1,2\n"[..],
+            "source_field_name_duplicate",
+            1,
+            Field::Name("ID".into()),
+        ),
+        (
+            &b"A,B\n1,2,3\n"[..],
+            "source_record_width",
+            2,
+            Field::Index(3),
+        ),
+        (
+            &b"A,B,C\n1,2\n"[..],
+            "source_record_width",
+            2,
+            Field::Index(3),
+        ),
+        (
+            &b"A,B\n1,\"x\n"[..],
+            "source_quote_unterminated",
+            2,
+            Field::Index(2),
+        ),
+        (
+            &b"A,B\n1,x\"y\n"[..],
+            "source_quote_in_bare_field",
+            2,
+            Field::Index(2),
+        ),
+        (
+            &b"A,B\n1,\"x\"y\n"[..],
+            "source_text_after_quote",
+            2,
+            Field::Index(2),
+        ),
+        (
+            &b"A,B\n1,x\ry\n"[..],
+            "source_carriage_return",
+            2,
+            Field::Index(2),
+        ),
+        (
+            &b"A,B\n1,\"x\ry\"\n"[..],
+            "source_carriage_return",
+            2,
+            Field::Index(2),
+        ),
+        (
+            &b"A,B\n1,x\r"[..],
+            "source_carriage_return",
+            2,
+            Field::Index(2),
+        ),
+        (
+            &b"A,B\n1,ok\n2,\xf4bad\n"[..],
+            "invalid_text",
+            3,
+            Field::Index(2),
+        ),
+        (&b"\xff"[..], "invalid_text", 1, Field::Index(1)),
+        (&b"A,\xff"[..], "invalid_text", 1, Field::Index(2)),
+        (
+            &b"\"abc"[..],
+            "source_quote_unterminated",
+            1,
+            Field::Index(1),
+        ),
+        (
+            &b"a\"b"[..],
+            "source_quote_in_bare_field",
+            1,
+            Field::Index(1),
+        ),
+        (
+            &b"A,B,C\n1\n"[..],
+            "source_record_width",
+            2,
+            Field::Index(2),
+        ),
+        (
+            &b"A,B,C\n1,2,3,4,5\n"[..],
+            "source_record_width",
+            2,
+            Field::Index(4),
+        ),
+        (
+            &b"A\n1,2,3\n"[..],
+            "source_record_width",
+            2,
+            Field::Index(2),
+        ),
+    ] {
+        assert_eq!(
+            parse(input, Limits::default()),
+            Err(Error::Profile {
+                cause: cause(condition),
+                record,
+                field
+            }),
+            "{input:?}",
+        );
+    }
+}
+
+#[test]
+fn retired_python_admitted_terminators_and_header_only_schema_are_exact() {
+    for input in [&b"A,B\n1,2\n"[..], &b"A,B\r\n1,2\r\n"[..], &b"A,B\n1,2"[..]] {
+        let source = parse(input, Limits::default()).unwrap();
+        assert_eq!(source.names, ["A", "B"]);
+        assert_eq!(source.records, [vec![Some("1".into()), Some("2".into())]]);
+    }
+    let header = parse(b"A,B\n", Limits::default()).unwrap();
+    assert_eq!(header.names, ["A", "B"]);
+    assert!(header.records.is_empty());
+}
+
+#[test]
+fn retired_python_prefix_coordinates_do_not_count_quoted_delimiters() {
+    for (prefix, record, field) in [
+        ("", 1, 1),
+        ("A,", 1, 2),
+        ("A,B\n1,", 2, 2),
+        ("A\nB\n", 3, 1),
+        ("A,\"x,y\",", 1, 3),
+        ("A,\"x\"\"y\",", 1, 3),
+        ("A,\"x\ny\",", 1, 3),
+        ("A,\"x", 1, 2),
+        ("\"\",x\n", 2, 1),
+        ("A\tB", 1, 1),
+    ] {
+        // Exercise the actual decoder diagnostic instead of a private prefix
+        // helper: invalid UTF-8 at the standing position owns its coordinate.
+        let input = [prefix.as_bytes(), &[0xff]].concat();
+        assert_eq!(
+            parse(&input, Limits::default()),
+            Err(Error::Profile {
+                cause: ProfileCause::InvalidText,
+                record,
+                field: Field::Index(field),
+            }),
+            "{prefix:?}",
+        );
+    }
+}
+
+#[test]
+fn retired_python_bare_control_character_is_field_content() {
+    assert_eq!(
+        parse(b"A\n\x0b\n", Limits::default()).unwrap().records,
+        [vec![Some("\u{b}".into())]],
+    );
+}
+
+#[test]
+fn retired_python_long_fields_keep_final_records_and_unterminated_quote_failure() {
+    let field = "x".repeat(300);
+    for input in [format!("A\n{field}\n"), format!("A\n{field}")] {
+        assert_eq!(
+            parse(input.as_bytes(), Limits::default()).unwrap().records,
+            [vec![Some(field.clone())]],
+        );
+    }
+    assert_eq!(
+        parse(format!("A\n\"{field}").as_bytes(), Limits::default()),
+        Err(Error::Profile {
+            cause: ProfileCause::QuoteUnterminated,
+            record: 2,
+            field: Field::Index(1),
+        }),
+    );
+}
+
 #[test]
 fn policy_limits_do_not_publish_partial_rows() {
     for (limits, resource) in [

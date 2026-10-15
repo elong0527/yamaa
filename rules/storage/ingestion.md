@@ -32,7 +32,7 @@ alter an order-sensitive result.
 <a id="req-1291"></a>
 
 **REQ-1291.** `dataset_class.ordinal` optionally names a generated `int`
-field of a CSV or Parquet input dataset. The name is an `identifier`. When
+field of a CSV, Parquet, SAS, or Transport input dataset. The name is an `identifier`. When
 the declaration is absent, ingestion adds no field. The generated field is
 appended after the stored fields, whose names, order, and types are unchanged.
 
@@ -79,6 +79,8 @@ Two extracts of the same dataset bind the same field to the same type.
 
 **REQ-0517.** Where the type comes from depends on the container:
 
+- A **SAS or Transport source** supplies character/numeric storage, with
+  defaults and explicit numeric narrowing under [SAS source profiles](sas.md).
 - A **self-describing source** supplies it. An ODM `ItemDef` data type, a
   Parquet schema, and an artifact's producing specification are each the
   field's type authority. The consuming specification never restates the type.
@@ -269,13 +271,17 @@ same container as one that stores `dm.csv`.
 |---|---|---|---|
 | `.csv` | `csv` | delimited text | this contract |
 | `.parquet` | `parquet` | Apache Parquet | [Parquet profile](parquet.md) |
+| `.sas7bdat` | `sas7bdat` | SAS dataset (read-only) | [SAS source profiles](sas.md) |
+| `.xpt` | `xpt` | SAS Transport v5/v8 (read-only) | [SAS source profiles](sas.md) |
 
 <a id="req-0831"></a>
 
 **REQ-0831.** A source profile follows the artifact profile: a file [Artifact publication](publication.md) writes
 and this contract reads has one profile name in both directions. A second field
 could disagree with the source path, misname the contents, and leave the
-reader unable to check the claim.
+reader unable to check the claim. The read-only SAS and Transport profiles
+under [REQ-1310](sas.md#req-1310) are explicit exceptions: no corresponding
+artifact publication profile exists.
 
 <a id="req-0832"></a>
 
@@ -316,7 +322,8 @@ including the generated ordinal:
 
 <a id="req-0533"></a>
 
-**REQ-0533.** A `types` entry for a field whose container or producing
+**REQ-0533.** Except for explicit SAS numeric narrowing under
+[REQ-1312](sas.md#req-1312), a `types` entry for a field whose container or producing
   specification already supplies a type: fail, rather than override the
   source contract. This includes every field of a Parquet source.
 

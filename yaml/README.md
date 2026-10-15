@@ -97,7 +97,7 @@ and [lookup contract](../rules/operations/lookup.md).
 
 ## Explicit source record order
 
-Declare `ordinal` on a CSV or Parquet input to expose its original one-based
+Declare `ordinal` on a CSV, Parquet, SAS, or Transport input to expose its original one-based
 data record position as an `int` field:
 
 ```yaml

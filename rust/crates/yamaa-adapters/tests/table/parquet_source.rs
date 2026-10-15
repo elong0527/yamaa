@@ -319,19 +319,30 @@ fn source_and_expansion_policies_are_separate_from_language_findings() {
     small.framing.source_bytes = bytes.len() - 1;
     assert!(matches!(
         parse(&bytes, small, table_limits()),
-        Err(Error::Limit)
+        Err(Error::ResourceLimit {
+            resource: "bytes",
+            ..
+        })
     ));
     small = limits();
     small.expanded_bytes = 1;
     assert!(matches!(
         parse(&bytes, small, table_limits()),
-        Err(Error::Limit)
+        Err(Error::ResourceLimit {
+            resource: "expanded_bytes",
+            limit: 1,
+            ..
+        })
     ));
     small = limits();
     small.retained_bytes = 1;
     assert!(matches!(
         parse(&bytes, small, table_limits()),
-        Err(Error::Limit)
+        Err(Error::ResourceLimit {
+            resource: "retained_bytes",
+            limit: 1,
+            ..
+        })
     ));
     assert!(matches!(
         parse(
@@ -342,7 +353,13 @@ fn source_and_expansion_policies_are_separate_from_language_findings() {
                 ..table_limits()
             }
         ),
-        Err(Error::Limit)
+        Err(Error::Table(
+            yamaa_adapters::arrow_table::TableError::Limit {
+                resource: "cells",
+                limit: 14,
+                required: Some(15)
+            }
+        ))
     ));
     assert!(matches!(
         parse(
@@ -353,6 +370,12 @@ fn source_and_expansion_policies_are_separate_from_language_findings() {
                 ..table_limits()
             }
         ),
-        Err(Error::Limit)
+        Err(Error::Table(
+            yamaa_adapters::arrow_table::TableError::Limit {
+                resource: "rows",
+                limit: 2,
+                required: Some(3)
+            }
+        ))
     ));
 }

@@ -1582,6 +1582,38 @@ class ParquetOriginalOutput(unittest.TestCase):
 
 
 class PublicDomains(unittest.TestCase):
+    def test_public_inheritance_introducing_nulls_and_inherited_clears(self):
+        import yamaa
+
+        for case in TRUTH["inheritance_nulls"]:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                entry = root / "spec.yaml"
+                entry.write_text(case["spec"], encoding="utf-8")
+                for name, content in case["parents"].items():
+                    (root / name).write_text(content, encoding="utf-8")
+                checked = yamaa.check(entry)
+                conditions = checked.issues["condition"].to_list()
+                if case["check_condition"] is None:
+                    self.assertEqual(conditions, [])
+                else:
+                    self.assertEqual(conditions[0], case["check_condition"])
+                for name, content in case["inputs"].items():
+                    (root / name).write_text(content, encoding="utf-8")
+                result = yamaa.domain(entry)
+                conditions = result.issues["condition"].to_list()
+                if case["run_condition"] is None:
+                    self.assertEqual(conditions, [])
+                    self.assertTrue(result.save())
+                    self.assertEqual((root / "result.csv").read_bytes(), case["csv"].encode("utf-8"))
+                else:
+                    self.assertEqual(conditions[0], case["run_condition"])
+                    self.assertIsNone(result.output)
+                observations = result._native.observations()
+                if observations is not None:
+                    counts = json.loads(observations)["handler_counts"]
+                    self.assertEqual(sum(item["count"] for item in counts if item["handler"] == "no_match"), case["no_match_count"])
+
     def test_public_temporal_arithmetic_conformance(self):
         import yamaa
 
@@ -2104,7 +2136,7 @@ columns:
                                 self.assertEqual(path.read_bytes(), original)
 
 
-    def test_public_intermediate_keys_complete_nineteen_captures_with_static_admission(self):
+    def test_public_intermediate_keys_preserve_complete_nineteen_captures(self):
         import shutil
         import yamaa
         reference = json.loads((ROOT / "key-reference.json").read_text(encoding="utf-8"))
@@ -2112,18 +2144,6 @@ columns:
         with tempfile.TemporaryDirectory() as directory:
             for name, case in reference.items():
                 with self.subTest(case=name):
-                    # REQ-0190 admits predicate types before cell-dependent key
-                    # reads. Keep the historical capture and state today's
-                    # finding explicitly, as the Rust and R controls do.
-                    expected_findings = case.get("findings", [])
-                    if name == "dependency_before_bad_filter":
-                        expected_findings = [{
-                            "phase": "validation",
-                            "condition": "incompatible_input_type",
-                            "requirement": "REQ-0190",
-                            "spec_paths": ["intermediates[0].filter"],
-                            "context": {"left_type": "int", "right_type": "str"},
-                        }]
                     work = Path(directory) / name
                     shutil.copytree(ROOT / "keys" / name, work)
                     entry = work / "spec.yaml"
@@ -2137,7 +2157,7 @@ columns:
                             findings = result.issues.to_dicts()
                             for finding in findings:
                                 finding["context"] = json.loads(finding["context"])
-                            self.assertEqual(findings, expected_findings)
+                            self.assertEqual(findings, case.get("findings", []))
                             wire = result._native.observations()
                             if wire is None:
                                 self.assertEqual(case["handlers"], [])
@@ -2768,6 +2788,32 @@ columns:
                         with self.assertRaises(yamaa.DomainError):
                             result.save()
                         self.assertFalse((destination / "result.csv").exists())
+
+class NamespaceAdmission(unittest.TestCase):
+    def test_original_namespace_obligations_through_both_public_routes(self):
+        import yamaa
+
+        for case in TRUTH["namespace_admission"]:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                entry = root / "spec.yaml"
+                entry.write_text(case["specification"], encoding="ascii")
+                original = entry.read_bytes()
+                # The absent source also proves these are declaration refusals.
+                for _ in range(2):
+                    checked = yamaa.check(entry)
+                    result = yamaa.domain(entry)
+                    for frame in (checked.issues, result.issues):
+                        rows = frame.to_dicts()
+                        for row in rows:
+                            row["context"] = json.loads(row["context"])
+                        self.assertEqual(rows, case["issues"])
+                    self.assertIsNone(result.output)
+                    with self.assertRaises(yamaa.DomainError):
+                        result.save()
+                    self.assertFalse((root / "out.csv").exists())
+                    self.assertEqual(entry.read_bytes(), original)
+
 
 if __name__ == "__main__":
     unittest.main()

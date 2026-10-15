@@ -3,6 +3,26 @@ use super::*;
 use crate::value::Value;
 use crate::{diagnostic::ConditionCode as C, key_relation::Inference, value::ColumnType};
 
+/// A missing handler alone leaves the input relation unchanged (REQ-1248).
+/// The inheritance resolver also uses this predicate before pruning declarations.
+pub(crate) fn is_rename_only(d: &Document, item: usize) -> bool {
+    let changes_relation = [
+        "key",
+        "between",
+        "filter",
+        "order_by",
+        "keep",
+        "columns",
+        "derivations",
+        "verifications",
+    ]
+    .iter()
+    .any(|field| present(d, item, field));
+    !changes_relation
+        && d.field(item, "no_match")
+            .is_some_and(|node| matches!(d.nodes()[node], N::Null))
+}
+
 /// Declaration failures precede source access and key-type binding.
 pub(super) fn declaration_findings(
     d: &Document,
@@ -12,6 +32,7 @@ pub(super) fn declaration_findings(
     let mut findings = Vec::new();
     let mut bytes = 0usize;
     let mut identifiers = BTreeMap::<&str, String>::new();
+    let domain = text(d, field(d, d.root(), "domain")?)?;
     for (index, &item) in items.iter().enumerate() {
         let path = format!("intermediates[{index}]");
         let name = text(d, field(d, item, "id")?)?;
@@ -23,7 +44,9 @@ pub(super) fn declaration_findings(
                 .and_then(|n| n.checked_add(dataset.len()))
                 .and_then(|n| n.checked_add(256))
                 .filter(|&n| n <= 16_777_216)
-                .ok_or(PrepareError::Limit("intermediate_findings"))?;
+                .ok_or_else(|| {
+                    PrepareError::limit("intermediate_findings", 16_777_216, None, None)
+                })?;
             Ok(())
         };
         if let Some(previous) = identifiers.get(name).cloned().or_else(|| {
@@ -31,6 +54,7 @@ pub(super) fn declaration_findings(
                 .iter()
                 .find(|source| source.name == name)
                 .map(|_| format!("input.{name}"))
+                .or_else(|| (name == domain).then(|| "domain".into()))
         }) {
             admit_finding()?;
             findings.push(PreflightFinding::Scalar(crate::diagnostic::Diagnostic {
@@ -47,22 +71,17 @@ pub(super) fn declaration_findings(
         } else {
             identifiers.insert(name, format!("{path}.id"));
         }
-        let changes_relation = [
-            "key",
-            "between",
-            "filter",
-            "order_by",
-            "keep",
-            "columns",
-            "derivations",
-            "verifications",
-        ]
-        .iter()
-        .any(|field| present(d, item, field));
-        if !changes_relation
-            && d.field(item, "no_match")
-                .is_some_and(|node| matches!(d.nodes()[node], N::Null))
+        if !(sources.iter().any(|source| source.name == dataset)
+            || dataset == "SELF" && present(d, d.root(), "rows"))
         {
+            admit_finding()?;
+            let mut finding =
+                LookupFinding::new(&format!("{path}.dataset"), C::IntermediateDatasetReference);
+            finding.text("identifier", dataset);
+            finding.text("intermediate", name);
+            findings.push(PreflightFinding::Scalar(finding.diagnostic()));
+        }
+        if is_rename_only(d, item) {
             admit_finding()?;
             let mut finding = LookupFinding::new(&path, C::IntermediateRenameOnly);
             finding.text("intermediate", name);

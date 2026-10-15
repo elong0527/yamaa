@@ -224,12 +224,20 @@ kinds: replacing one with the other replaces the complete `window` value.
 **REQ-0632.** YAML null at an immediate composition boundary clears an inherited
 optional field. The marker is consumed and the field is absent from the
 accumulated object. Clearing a required field, an identity field,
-`schema_version`, or a field that has no inherited value is an error.
+or `schema_version` is an error. When the accumulated object has no value for
+an optional field, its first written null is a declared value and retains its
+schema meaning. A field whose schema does not accept null still fails its
+ordinary value constraint; introducing null does not make that field nullable.
 
 <a id="req-0633"></a>
 
 **REQ-0633.** The marker applies only to an immediate root field or keyed-member
-field, and composing a `columns` member does not move that boundary. Below it a
+field that overrides an inherited value, and composing a `columns` member does
+not move that boundary. A first declaration such as an intermediate's
+`no_match: null` answers with missing, including in a layer with `parents: []`
+or a parent inherited by an empty child. A later layer's `no_match: null` over
+an inherited `no_match` clears the handler, even if its inherited value is null.
+Below the immediate boundary a
 null keeps its [Schema language](../reference/schema-language.md) meaning at every depth composition reaches. In particular,
 `derivation: {literal: null}` replaces the derivation with a literal missing
 value; the replacement does not clear `derivation`. Likewise
@@ -430,9 +438,11 @@ identifier within one layer fails with `duplicate_identifier`.
 
 <a id="req-0660"></a>
 
-**REQ-0660.** An
-invalid null clearing marker fails with `invalid_clear` and reports the field
-and contributing file.
+**REQ-0660.** A null clearing marker on a required field, identity field, or
+`schema_version` fails with `invalid_clear` and reports the field and
+contributing file. A null first declaring an optional field is a value under
+[REQ-0632](composition.md#req-0632), and an invalid value fails under its owning
+schema rule.
 
 <a id="req-0661"></a>
 

@@ -157,6 +157,49 @@ fn references_and_explicit_literals_retain_exact_kinds_order_and_origins() {
 }
 
 #[test]
+fn original_tagged_temporal_literals_keep_kind_and_calendar_admission() {
+    // These are the six original validator operands, now observed directly
+    // through the shared tagged function-argument decoder instead of a retired
+    // Python function_value_type helper or a CSV scalar conversion.
+    for (tag, text, expected_kind) in [
+        ("date", "2025-01-15", Some(ValueType::Date)),
+        ("date", "2025-02-30", None),
+        ("datetime", "2025-01-15T03:04", Some(ValueType::DateTime)),
+        ("datetime", "2025-01-15T03:04:05", Some(ValueType::DateTime)),
+        ("datetime", "2025-01-15T03:04:60", None),
+        ("datetime", "2025-02-30T03:04", None),
+    ] {
+        let d = document(call_tree(
+            "id",
+            vec![("x", Tree::map(vec![(tag, Tree::text(text))]))],
+        ));
+        let actual = decode(&d, d.root(), "call", Limits::default());
+        if let Some(expected_kind) = expected_kind {
+            let call = actual.unwrap();
+            let Input::Literal(value) = &call.arguments[0].input else {
+                panic!("{tag}: {text}: tagged literal became a reference");
+            };
+            assert_eq!(value.value_type(), Some(expected_kind), "{tag}: {text}");
+        } else {
+            let argument = d.field(d.field(d.root(), "args").unwrap(), "x").unwrap();
+            assert_eq!(
+                actual,
+                Err(Error::Findings(vec![Finding {
+                    path: "call.args.x".into(),
+                    node: argument,
+                    kind: if tag == "date" {
+                        Kind::InvalidDate
+                    } else {
+                        Kind::InvalidDateTime
+                    },
+                }])),
+                "{tag}: {text}"
+            );
+        }
+    }
+}
+
+#[test]
 fn independent_invalid_scalars_keep_all_authored_nodes_without_partial_calls() {
     let d = document(call_tree(
         "id",

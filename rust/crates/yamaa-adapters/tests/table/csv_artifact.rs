@@ -65,7 +65,7 @@ fn exact_quoting_preserves_empty_missing_whitespace_unicode_and_line_characters(
     );
     assert!(matches!(
         csv_artifact::render(&table, &[0, 1, 2, 3], expected.len() - 1),
-        Err(Error::Limit)
+        Err(Error::Limit { .. })
     ));
 }
 #[test]
@@ -139,7 +139,7 @@ fn precision_serializes_float_projection_only_and_preserves_missing_and_empty_te
     );
     assert!(matches!(
         csv_artifact::render_with_decimals(&table, &[2, 1, 0], Some("2"), expected.len() - 1),
-        Err(Error::Limit)
+        Err(Error::Limit { .. })
     ));
     assert_eq!(table.rows[0][1], Value::float(0.125));
     assert_eq!(
@@ -182,10 +182,14 @@ fn excessive_precision_refuses_before_the_first_projected_cell_read() {
         ])
         .unwrap(),
     );
-    for precision in ["10000", "999999999999999999999999999999"] {
+    for (precision, maximum) in [
+        ("18", 10),
+        ("10000", 100),
+        ("999999999999999999999999999999", 100),
+    ] {
         assert!(matches!(
-            csv_artifact::render_with_decimals(&table, &[0, 1], Some(precision), 100),
-            Err(Error::Limit)
+            csv_artifact::render_with_decimals(&table, &[0, 1], Some(precision), maximum),
+            Err(Error::Limit { limit, actual: None, decimal_formatting: true }) if limit == maximum
         ));
     }
     struct FirstCellOnly(TableSchema);
@@ -214,6 +218,26 @@ fn excessive_precision_refuses_before_the_first_projected_cell_read() {
     // F\n1.00\n exhausts seven bytes; the second record's cell is never read.
     assert!(matches!(
         csv_artifact::render_with_decimals(&table, &[0], Some("2"), 7),
-        Err(Error::Limit)
+        Err(Error::Limit { .. })
+    ));
+}
+
+#[test]
+fn unused_decimal_option_cannot_own_an_integer_output_byte_refusal() {
+    let table = Table {
+        schema: TableSchema::new(vec![Column {
+            name: "I".into(),
+            kind: ColumnType::Int,
+        }])
+        .unwrap(),
+        rows: vec![vec![Value::Int(12345)]],
+    };
+    assert!(matches!(
+        csv_artifact::render_with_decimals(&table, &[0], Some("1"), 3),
+        Err(Error::Limit {
+            limit: 3,
+            actual: Some(7),
+            decimal_formatting: false
+        })
     ));
 }

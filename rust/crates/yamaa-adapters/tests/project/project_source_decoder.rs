@@ -48,10 +48,12 @@ fn wide_producer_contract_decodes_1024_and_refuses_1025_actual_fields() {
             .map(|name| (name.clone(), ColumnType::Str))
             .collect(),
         profile: SourceProfile::Csv,
+        encoding: None,
         empty_string_present: false,
         ordinal: None,
     };
     let limits = DecodeLimits {
+        rows: 100,
         cells: 2_048,
         storage_bytes: 1_000_000,
         work_bytes: 1_000_000,
@@ -97,10 +99,12 @@ fn bounded_producer_csv_admits_original_header_before_typing_and_owns_portable_m
             ("VALUE".into(), ColumnType::Int),
         ],
         profile: SourceProfile::Csv,
+        encoding: None,
         empty_string_present: false,
         ordinal: None,
     };
     let limits = DecodeLimits {
+        rows: 100,
         cells: 100,
         storage_bytes: 4096,
         work_bytes: 4096,
@@ -198,6 +202,7 @@ fn bounded_producer_csv_admits_original_header_before_typing_and_owns_portable_m
 
 #[test]
 fn decoded_profiles_keep_exact_cells_bounds_and_ingestion_failure_categories() {
+    use yamaa_engine::producer_build::{DecodeError, DecodeLimits, DecodePort};
     let mut decoder = Decoder::<Payload>::default();
     let source = SourceDeclaration {
         name: "SRC".into(),
@@ -210,6 +215,7 @@ fn decoded_profiles_keep_exact_cells_bounds_and_ingestion_failure_categories() {
             ("T".into(), ColumnType::DateTime),
         ],
         profile: SourceProfile::Csv,
+        encoding: None,
         empty_string_present: true,
         ordinal: None,
     };
@@ -260,9 +266,22 @@ fn decoded_profiles_keep_exact_cells_bounds_and_ingestion_failure_categories() {
         .unwrap();
     assert!(decoder.continue_after(&error));
     let error = decoder
-        .decode(&source, &vec![b'x'; 16_777_217])
+        .decode_bounded(
+            &source,
+            b"I,S,F,D,T\nx,x,x,x,x\n",
+            None,
+            DecodeLimits {
+                rows: 1,
+                cells: 5,
+                storage_bytes: 4096,
+                work_bytes: 1,
+            },
+        )
         .err()
         .unwrap();
+    let DecodeError::Codec(error) = error else {
+        panic!("native work admission refusal")
+    };
     assert!(!decoder.continue_after(&error));
 
     let bytes = include_bytes!("../fixtures/pq/text.parquet");
@@ -272,6 +291,7 @@ fn decoded_profiles_keep_exact_cells_bounds_and_ingestion_failure_categories() {
             path: "text.parquet".into(),
             types: vec![("I".into(), ColumnType::Int), ("S".into(), ColumnType::Str)],
             profile: SourceProfile::Parquet,
+            encoding: None,
             empty_string_present: present,
             ordinal: None,
         };

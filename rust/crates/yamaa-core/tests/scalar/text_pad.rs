@@ -205,7 +205,13 @@ fn compiler_admits_every_occurrence_before_owning_first_bad_width_or_any_input()
     )
     .unwrap_err();
     assert!(
-        matches!(error, PrepareError::Limit("str_pad_metadata")),
+        matches!(
+            error,
+            PrepareError::Limit(yamaa_core::specification::CompilerLimit {
+                resource: "str_pad_metadata",
+                ..
+            })
+        ),
         "{error:?}"
     );
 }

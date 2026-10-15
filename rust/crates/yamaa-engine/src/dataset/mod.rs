@@ -58,7 +58,7 @@ use crate::{
     table_grouping::{partition, GroupingError},
     table_reduction::{count_selected, reduce_column, TableReductionError},
 };
-use alloc::{boxed::Box, collections::BTreeMap, string::String, vec, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeMap, format, string::String, vec, vec::Vec};
 use core::convert::Infallible;
 use yamaa_core::{
     bound_expression::BoundPredicate,
@@ -127,60 +127,69 @@ pub struct ExecutionBudget {
 }
 
 impl ExecutionBudget {
-    /// Existing capacity policy for callers that do not select a larger budget.
+    /// Original smaller profile for callers that explicitly select this policy.
     pub const fn bounded() -> Self {
         Self {
             max_sources: 8,
             max_ipc_bytes: 8 * 1024 * 1024,
-            max_decoded_cells: crate::capacity::SOURCE_CELLS,
+            max_decoded_cells: 2_097_152,
             max_columns: yamaa_core::specification::DEFAULT_MAX_COLUMNS,
             max_batches: 256,
             max_output_bytes: 8 * 1024 * 1024,
             batch_rows: None,
             execution: Limits {
-                source_rows: crate::capacity::SOURCE_ROWS,
-                output_rows: crate::capacity::OUTPUT_ROWS,
-                output_cells: crate::capacity::OUTPUT_CELLS,
-                key_cells: crate::capacity::KEY_CELLS,
-                work_cells: crate::capacity::EXECUTION_WORK,
+                source_rows: 524_288,
+                output_rows: 131_072,
+                output_cells: 1_048_576,
+                key_cells: 524_288,
+                work_cells: 128 * 1024 * 1024,
                 scalar_text_bytes: 16 * 1024 * 1024,
-                output_text_bytes: crate::capacity::OUTPUT_TEXT_BYTES,
-                identity_cells: crate::capacity::IDENTITY_CELLS,
-                identity_text_bytes: crate::capacity::IDENTITY_TEXT_BYTES,
+                output_text_bytes: 2 * 1024 * 1024,
+                identity_cells: 65_536,
+                identity_text_bytes: 1024 * 1024,
             },
         }
     }
 
-    /// Opt-in profile for ten million combined source and output records.
+    /// Public default profile for ten million combined source and output records.
     /// Wider/text-heavy domains or more expensive plans can adjust each field.
     pub const fn longitudinal() -> Self {
         let mut budget = Self::bounded();
         budget.max_sources = 64;
-        budget.max_ipc_bytes = 1024 * 1024 * 1024;
-        budget.max_decoded_cells = 640_000_000;
+        budget.max_ipc_bytes = crate::capacity::SOURCE_BYTES;
+        budget.max_decoded_cells = crate::capacity::SOURCE_CELLS;
         budget.max_batches = 65_536;
-        budget.max_output_bytes = 1024 * 1024 * 1024;
+        budget.max_output_bytes = crate::capacity::SOURCE_BYTES;
         budget.batch_rows = core::num::NonZeroUsize::new(65_536);
-        budget.execution.source_rows = 10_000_000;
-        budget.execution.output_rows = 10_000_000;
-        budget.execution.output_cells = 640_000_000;
-        budget.execution.key_cells = 640_000_000;
-        budget.execution.work_cells = 2_000_000_000;
-        budget.execution.scalar_text_bytes = 1024 * 1024 * 1024;
-        budget.execution.output_text_bytes = 512 * 1024 * 1024;
+        budget.execution.source_rows = crate::capacity::SOURCE_ROWS;
+        budget.execution.output_rows = crate::capacity::OUTPUT_ROWS;
+        budget.execution.output_cells = crate::capacity::OUTPUT_CELLS;
+        budget.execution.key_cells = crate::capacity::KEY_CELLS;
+        budget.execution.work_cells = crate::capacity::EXECUTION_WORK;
+        budget.execution.scalar_text_bytes = crate::capacity::SOURCE_BYTES;
+        budget.execution.output_text_bytes = crate::capacity::OUTPUT_TEXT_BYTES;
+        budget.execution.identity_cells = crate::capacity::IDENTITY_CELLS;
+        budget.execution.identity_text_bytes = crate::capacity::IDENTITY_TEXT_BYTES;
         budget
     }
 }
 
 impl Default for ExecutionBudget {
     fn default() -> Self {
-        Self::bounded()
+        Self::longitudinal()
     }
 }
 
 /// Cumulative resource failures are distinct from normative language conditions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Resource {
+    SourceRows,
+    SourceCells,
+    SourceColumns,
+    SourceCount,
+    OutputRows,
+    OutputCells,
+    OutputColumns,
     WorkCells,
     ScalarTextBytes,
     OutputTextBytes,
@@ -379,6 +388,20 @@ pub enum ExecutionError<E> {
         resource: Resource,
         limit: usize,
         required: Option<usize>,
+    },
+    /// Zero names the primary table; positive indices name the secondary ports.
+    SourceLimit {
+        resource: Resource,
+        limit: usize,
+        required: Option<usize>,
+        source_index: usize,
+    },
+    /// Resource facts with an authored owner, such as a verification pattern.
+    ScopedLimit {
+        resource: Resource,
+        limit: usize,
+        required: Option<usize>,
+        spec_paths: Vec<String>,
     },
     SchemaMismatch,
     Capacity,
@@ -1391,6 +1414,19 @@ impl Executor<'_> {
         work: Option<&crate::execution_work::WorkBudget>,
         execution_budget: Option<ExecutionBudget>,
     ) -> ExecutionAttempt<T::Error> {
+        let limits = work
+            .and_then(crate::execution_work::WorkBudget::node_limits)
+            .map_or(limits, |pool| Limits {
+                source_rows: limits.source_rows.min(pool.source_rows),
+                output_rows: limits.output_rows.min(pool.output_rows),
+                output_cells: limits.output_cells.min(pool.output_cells),
+                key_cells: limits.key_cells.min(pool.key_cells),
+                work_cells: limits.work_cells.min(pool.work_cells),
+                scalar_text_bytes: limits.scalar_text_bytes.min(pool.scalar_text_bytes),
+                output_text_bytes: limits.output_text_bytes.min(pool.output_text_bytes),
+                identity_cells: limits.identity_cells.min(pool.identity_cells),
+                identity_text_bytes: limits.identity_text_bytes.min(pool.identity_text_bytes),
+            });
         let active = core::cell::Cell::new(ExecutionPhase::Admission);
         let mut observer = |event| {
             if let ExecutionEvent::Phase(phase) = event {
@@ -1444,6 +1480,18 @@ impl Executor<'_> {
                 resource,
                 limit,
                 required,
+            }
+            | ExecutionError::ScopedLimit {
+                resource,
+                limit,
+                required,
+                ..
+            }
+            | ExecutionError::SourceLimit {
+                resource,
+                limit,
+                required,
+                ..
             } = error.as_ref()
             {
                 observer(ExecutionEvent::Refusal {
@@ -1482,6 +1530,9 @@ impl Executor<'_> {
         work: Option<&crate::execution_work::WorkBudget>,
         execution_budget: Option<ExecutionBudget>,
     ) -> Result<Execution, Box<ExecutionError<T::Error>>> {
+        if work.is_some_and(crate::execution_work::WorkBudget::unknown_prefix) {
+            return Err(Box::new(ExecutionError::Capacity));
+        }
         functions::admit_plan(self.plan, functions)?;
         if table.schema() != self.plan.source()
             || secondary.len() != self.plan.secondary().len()
@@ -1505,18 +1556,50 @@ impl Executor<'_> {
                         )
                     })
                 });
-            if secondary
-                .len()
-                .checked_add(1)
-                .is_none_or(|count| count > budget.max_sources)
-                || table.schema().columns().len() > budget.max_columns
-                || self.plan.output().columns().len() > budget.max_columns
-                || secondary
-                    .iter()
-                    .any(|source| source.schema().columns().len() > budget.max_columns)
-                || cells.is_none_or(|cells| cells > budget.max_decoded_cells)
+            let sources = secondary.len().checked_add(1);
+            if sources.is_none_or(|count| count > budget.max_sources) {
+                return Err(Box::new(ExecutionError::Limit {
+                    resource: Resource::SourceCount,
+                    limit: budget.max_sources,
+                    required: sources,
+                }));
+            }
+            let primary_columns = table.schema().columns().len();
+            if primary_columns > budget.max_columns {
+                return Err(Box::new(ExecutionError::SourceLimit {
+                    resource: Resource::SourceColumns,
+                    limit: budget.max_columns,
+                    required: Some(primary_columns),
+                    source_index: 0,
+                }));
+            }
+            let output_columns = self.plan.output().columns().len();
+            if output_columns > budget.max_columns {
+                return Err(Box::new(ExecutionError::ScopedLimit {
+                    resource: Resource::OutputColumns,
+                    limit: budget.max_columns,
+                    required: Some(output_columns),
+                    spec_paths: vec!["output.columns".into()],
+                }));
+            }
+            if let Some((index, source)) = secondary
+                .iter()
+                .enumerate()
+                .find(|(_, source)| source.schema().columns().len() > budget.max_columns)
             {
-                return Err(Box::new(ExecutionError::Capacity));
+                return Err(Box::new(ExecutionError::SourceLimit {
+                    resource: Resource::SourceColumns,
+                    limit: budget.max_columns,
+                    required: Some(source.schema().columns().len()),
+                    source_index: index + 1,
+                }));
+            }
+            if cells.is_none_or(|cells| cells > budget.max_decoded_cells) {
+                return Err(Box::new(ExecutionError::Limit {
+                    resource: Resource::SourceCells,
+                    limit: budget.max_decoded_cells,
+                    required: cells,
+                }));
             }
         }
         let rows = secondary
@@ -1525,7 +1608,14 @@ impl Executor<'_> {
                 total.checked_add(source.row_count())
             });
         if rows.is_none_or(|rows| rows > limits.source_rows) {
-            return Err(Box::new(ExecutionError::Capacity));
+            return Err(Box::new(ExecutionError::Limit {
+                resource: Resource::SourceRows,
+                limit: limits.source_rows,
+                required: rows,
+            }));
+        }
+        if let Some(prior) = work.and_then(crate::execution_work::WorkBudget::usage) {
+            Budget::admit_prefix(limits, prior)?;
         }
         observer(ExecutionEvent::Exit {
             phase: ExecutionPhase::Admission,
@@ -1533,6 +1623,9 @@ impl Executor<'_> {
         });
         let reservation = work.map(crate::execution_work::WorkBudget::enter);
         let mut budget = match &reservation {
+            Some(reservation) if reservation.usage().is_some() => {
+                Budget::pooled(limits, reservation.usage().expect("pooled prefix"))
+            }
             Some(reservation) => {
                 Budget::with_work(limits, reservation.limit(), reservation.prior())
             }
@@ -1549,7 +1642,14 @@ impl Executor<'_> {
             &mut budget,
         );
         if let Some(reservation) = reservation {
-            reservation.complete(budget.used_work());
+            let shape = result.as_ref().ok().map(|execution| {
+                let rows = execution.dataset.row_count();
+                let cells = rows
+                    .checked_mul(execution.dataset.schema().columns().len())
+                    .expect("admitted output cells");
+                (rows, cells)
+            });
+            reservation.complete(budget.used_work(), budget.usage(), shape);
         }
         result
     }
@@ -2398,7 +2498,25 @@ impl Executor<'_> {
                                         Default::default(),
                                         budget.predicate(),
                                     )
-                                    .map_err(|error| Box::new(predicate_limit(error)))?
+                                    .map_err(|error| {
+                                        let ExecutionError::Limit {
+                                            resource,
+                                            limit,
+                                            required,
+                                        } = predicate_limit::<E>(error)
+                                        else {
+                                            unreachable!("predicate resource limit")
+                                        };
+                                        Box::new(ExecutionError::ScopedLimit {
+                                            resource,
+                                            limit,
+                                            required,
+                                            spec_paths: vec![format!(
+                                                "{}.pattern",
+                                                verification.path
+                                            )],
+                                        })
+                                    })?
                                 } else {
                                     yamaa_core::dataset_checks::column_offenders(
                                         &verification.check,
@@ -2503,15 +2621,22 @@ impl Executor<'_> {
         additional: usize,
         limits: Limits,
     ) -> Result<(), Box<ExecutionError<E>>> {
-        let required = current
-            .checked_add(additional)
-            .ok_or_else(|| Box::new(ExecutionError::Capacity))?;
-        if required > limits.output_rows
-            || required
-                .checked_mul(self.plan.output().columns().len())
-                .is_none_or(|cells| cells > limits.output_cells)
-        {
-            return Err(Box::new(ExecutionError::Capacity));
+        let rows = current.checked_add(additional);
+        for (resource, required, limit) in [
+            (Resource::OutputRows, rows, limits.output_rows),
+            (
+                Resource::OutputCells,
+                rows.and_then(|rows| rows.checked_mul(self.plan.output().columns().len())),
+                limits.output_cells,
+            ),
+        ] {
+            if required.is_none_or(|required| required > limit) {
+                return Err(Box::new(ExecutionError::Limit {
+                    resource,
+                    limit,
+                    required,
+                }));
+            }
         }
         Ok(())
     }

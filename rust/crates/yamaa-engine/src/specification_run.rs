@@ -82,8 +82,16 @@ pub enum RunError<E> {
     Sources(Vec<(usize, E)>),
     AdmittedSources(Vec<(usize, SourceIssue<E>)>),
     Bind(BindError),
-    SourceBytes { limit: usize },
-    SourceCells,
+    SourceBytes {
+        limit: usize,
+        actual: Option<usize>,
+        source: usize,
+    },
+    SourceCells {
+        limit: usize,
+        actual: Option<usize>,
+        source: Option<usize>,
+    },
 }
 
 #[derive(Debug)]
@@ -251,6 +259,8 @@ fn decode_and_execute<D: SourceDecoder>(
     if bytes.len() > limits.source_bytes {
         return Err(RunError::SourceBytes {
             limit: limits.source_bytes,
+            actual: Some(bytes.len()),
+            source: prepared.driver_index(),
         });
     }
     *captured_table = Some(
@@ -273,7 +283,13 @@ fn decode_and_execute<D: SourceDecoder>(
             .checked_mul(table.schema().columns().len())
             .is_none_or(|cells| cells > limits.source_cells)
         {
-            return Err(RunError::SourceCells);
+            return Err(RunError::SourceCells {
+                limit: limits.source_cells,
+                actual: table
+                    .row_count()
+                    .checked_mul(table.schema().columns().len()),
+                source: Some(prepared.driver_index()),
+            });
         }
         match odm_records(
             table,
@@ -296,7 +312,11 @@ fn decode_and_execute<D: SourceDecoder>(
         .row_count()
         .checked_mul(table.schema().columns().len());
     if cells.is_none_or(|cells| cells > limits.source_cells) {
-        return Err(RunError::SourceCells);
+        return Err(RunError::SourceCells {
+            limit: limits.source_cells,
+            actual: cells,
+            source: Some(prepared.driver_index()),
+        });
     }
     Ok(plan.execute_observed(table, limits.execution))
 }
@@ -515,6 +535,8 @@ fn execute_inner_with_observer_into<P: SourcePort, D: SourceDecoder>(
         let Some(remaining) = bytes_left.checked_sub(bytes.len()) else {
             attempt.result = Err(PortError::Run(RunError::SourceBytes {
                 limit: limits.source_bytes,
+                actual: (limits.source_bytes - bytes_left).checked_add(bytes.len()),
+                source: index,
             }));
             return;
         };
@@ -542,7 +564,11 @@ fn execute_inner_with_observer_into<P: SourcePort, D: SourceDecoder>(
                             )
                         });
                     if cells.is_none_or(|cells| cells > limits.source_cells) {
-                        attempt.result = Err(PortError::Run(RunError::SourceCells));
+                        attempt.result = Err(PortError::Run(RunError::SourceCells {
+                            limit: limits.source_cells,
+                            actual: cells,
+                            source: Some(index),
+                        }));
                         return;
                     }
                     let table = attempt.sources[index]
@@ -598,7 +624,11 @@ fn execute_inner_with_observer_into<P: SourcePort, D: SourceDecoder>(
         )
     });
     if cells.is_none_or(|cells| cells > limits.source_cells) {
-        attempt.result = Err(PortError::Run(RunError::SourceCells));
+        attempt.result = Err(PortError::Run(RunError::SourceCells {
+            limit: limits.source_cells,
+            actual: cells,
+            source: (attempt.sources.len() == 1).then_some(prepared.driver_index()),
+        }));
         return;
     }
     let primary = attempt.sources[prepared.driver_index()]

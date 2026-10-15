@@ -1,0 +1,153 @@
+schema_version: '1.0'
+domain: RESULTS
+keys:
+- STUDYID
+- ANALYSISID
+- GROUPORDER
+- OPERATIONID
+input:
+  SUBJECT:
+    path: input/subjects.csv
+    schema: input/subjects.schema.yaml
+
+output:
+  path: results.csv
+  columns:
+  - STUDYID
+  - ANALYSISID
+  - ANALYSISSETID
+  - DATASET
+  - VARIABLE
+  - ANALYSISSET
+  - DATASUBSET
+  - GROUPINGID
+  - GROUPORDER
+  - GROUPLEVEL
+  - METHODID
+  - OPERATIONID
+  - RESULT
+  order_by:
+  - STUDYID
+  - GROUPORDER
+  - OPERATIONID
+
+columns:
+- name: STUDYID
+  type: str
+  label: Study Identifier
+  derivation: SUBJECT.STUDYID
+
+- name: ANALYSISID
+  type: str
+  label: Analysis Identifier
+  derivation: {literal: AEINC}
+
+- name: ANALYSISSETID
+  type: str
+  label: Analysis Set Identifier
+  derivation: {literal: SAFETY}
+
+- name: DATASET
+  type: str
+  label: Analysis Dataset
+  derivation: {literal: ADAE}
+
+- name: VARIABLE
+  type: str
+  label: Analysis Variable
+  derivation: {literal: USUBJID}
+
+- name: ANALYSISSET
+  type: str
+  label: Analysis Set Condition
+  derivation: {literal: SAFFL = 'Y'}
+
+- name: DATASUBSET
+  type: str
+  label: Data Subset Condition
+  derivation: {literal: TRTEMFL = 'Y'}
+
+- name: GROUPINGID
+  type: str
+  label: Grouping Factor Identifier
+  derivation: {literal: TRT01P}
+
+- name: METHODID
+  type: str
+  label: Analysis Method Identifier
+  derivation: {literal: AEINCIDENCE}
+
+- name: GROUPORDER
+  type: int
+  label: Grouping Level Order
+  derivation: SUBJECT.TRT01PN
+
+- name: GROUPLEVEL
+  type: str
+  label: Grouping Level
+  derivation: SUBJECT.TRT01P
+
+- name: OPERATIONID
+  type: str
+  label: Analysis Operation Identifier
+
+- name: NSUBJ
+  type: int
+  label: Subjects with a Qualifying Event
+
+- name: DENOM
+  type: int
+  label: Subjects in the Analysis Set
+
+- name: RESULT
+  type: float
+  label: Analysis Operation Result
+  derivation:
+    case:
+    - when: OPERATIONID = 'COUNT'
+      then: NSUBJ
+    - otherwise:
+        compute:
+          expr: 100 * NSUBJ / DENOM
+
+rows:
+- id: count
+  dataset: SUBJECT
+  group_by:
+  - SUBJECT.STUDYID
+  - SUBJECT.TRT01P
+  - SUBJECT.TRT01PN
+  derivations:
+    OPERATIONID: {literal: COUNT}
+    NSUBJ:
+      aggregate:
+        expr: SUM(SUBJECT.EVENTN)
+    DENOM:
+      aggregate:
+        expr: COUNT(SUBJECT.USUBJID)
+
+- id: percent
+  dataset: SUBJECT
+  group_by:
+  - SUBJECT.STUDYID
+  - SUBJECT.TRT01P
+  - SUBJECT.TRT01PN
+  derivations:
+    OPERATIONID: {literal: PERCENT}
+    NSUBJ:
+      aggregate:
+        expr: SUM(SUBJECT.EVENTN)
+    DENOM:
+      aggregate:
+        expr: COUNT(SUBJECT.USUBJID)
+
+verifications:
+- unique:
+    columns:
+    - STUDYID
+    - ANALYSISID
+    - GROUPORDER
+    - OPERATIONID
+- assert:
+    id: incidence-count-and-denominator
+    require: DENOM > 0 AND NSUBJ >= 0 AND NSUBJ <= DENOM

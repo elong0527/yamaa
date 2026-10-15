@@ -26,7 +26,11 @@ pub(super) fn admit(
         return Ok(None);
     };
     if value.len() > limits.bytes {
-        return Err(Error::Limit);
+        return Err(Error::ResourceLimit {
+            resource: "arrow_schema_bytes",
+            limit: limits.bytes,
+            actual: Some(value.len()),
+        });
     }
     let bytes = BASE64_STANDARD
         .decode(value)
@@ -44,9 +48,21 @@ pub(super) fn admit(
     };
     let message =
         arrow_ipc::root_as_message_with_opts(&options, message).map_err(|error| match error {
-            flatbuffers::InvalidFlatbuffer::TooManyTables
-            | flatbuffers::InvalidFlatbuffer::ApparentSizeTooLarge
-            | flatbuffers::InvalidFlatbuffer::DepthLimitReached => Error::Limit,
+            flatbuffers::InvalidFlatbuffer::TooManyTables => Error::ResourceLimit {
+                resource: "arrow_schema_tables",
+                limit: limits.tables,
+                actual: None,
+            },
+            flatbuffers::InvalidFlatbuffer::ApparentSizeTooLarge => Error::ResourceLimit {
+                resource: "arrow_schema_bytes",
+                limit: limits.bytes,
+                actual: None,
+            },
+            flatbuffers::InvalidFlatbuffer::DepthLimitReached => Error::ResourceLimit {
+                resource: "arrow_schema_depth",
+                limit: limits.depth,
+                actual: None,
+            },
             _ => Error::Malformed,
         })?;
     let schema = message.header_as_schema().ok_or(Error::Malformed)?;
@@ -81,7 +97,11 @@ mod tests {
                     ..limits()
                 }
             ),
-            Err(Error::Limit)
+            Err(Error::ResourceLimit {
+                resource: "arrow_schema_bytes",
+                limit: 0,
+                actual: Some(1),
+            })
         );
         let data = vec![KeyValue {
             key: "ARROW:schema".into(),

@@ -353,7 +353,7 @@ fn zero_row_whole_metadata_and_effective_row_default_copies_precede_parser_findi
             })
             .unwrap();
         assert!(
-            matches!(yamaa_adapters::specification_run::PreparedRun::prepare(document),Err(yamaa_adapters::specification_run::Error::Prepare(yamaa_core::specification::PrepareError::Limit(resource))) if resource==expected)
+            matches!(yamaa_adapters::specification_run::PreparedRun::prepare(document),Err(yamaa_adapters::specification_run::Error::Prepare(yamaa_core::specification::PrepareError::Limit(resource))) if resource.resource ==expected)
         );
         let fixture = bespoke(&spec.to_string(), b"ID,A,B,N\n");
         let Err(issues) = attempt(&fixture) else {
@@ -362,10 +362,13 @@ fn zero_row_whole_metadata_and_effective_row_default_copies_precede_parser_findi
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].phase, "engine");
         assert_eq!(issues[0].condition, "engine_rejected");
-        assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&issues[0].context).unwrap(),
-            serde_json::json!({"code":"compiler_limit","stage":"prepare"})
-        );
+        let context = serde_json::from_str::<serde_json::Value>(&issues[0].context).unwrap();
+        assert_eq!(context["code"], "compiler_limit");
+        assert_eq!(context["stage"], "prepare");
+        assert_eq!(context["resource"], expected);
+        assert_eq!(context["limit"], 16_777_216);
+        assert_eq!(issues[0].spec_paths.len(), 1);
+        assert!(issues[0].spec_paths[0].ends_with(".derivation.str_template"));
         assert!(!fixture.0.join("output.csv").exists());
     }
     let mut spec = reference()["literal-only"]["specification"].clone();
@@ -407,10 +410,16 @@ fn cumulative_template_query_work_is_admitted_before_all_parser_arenas() {
             bytes: spec.to_string().into_bytes(),
         })
         .unwrap();
-    assert!(matches!(
-        yamaa_adapters::specification_run::PreparedRun::prepare(document),
-        Err(yamaa_adapters::specification_run::Error::Prepare(
-            yamaa_core::specification::PrepareError::Limit("str_template_work")
-        ))
-    ));
+    let Err(yamaa_adapters::specification_run::Error::Prepare(
+        yamaa_core::specification::PrepareError::Limit(refusal),
+    )) = yamaa_adapters::specification_run::PreparedRun::prepare(document)
+    else {
+        panic!("template query work must be refused before allocation")
+    };
+    assert_eq!(refusal.resource, "str_template_work");
+    assert_eq!(refusal.limit, 100_000_000);
+    assert!(refusal.actual.unwrap() > refusal.limit);
+    assert_eq!(refusal.spec_paths.len(), 1);
+    assert!(refusal.spec_paths[0].starts_with("columns.X"));
+    assert!(refusal.spec_paths[0].ends_with(".derivation.str_template"));
 }

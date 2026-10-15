@@ -55,7 +55,15 @@ EVIDENCE_ERRORS = (
 )
 
 
-def tuples():
+def tuples(collection_scope=collector.FULL_MATRIX):
+    require(
+        collection_scope in collector.COLLECTION_SCOPES, "unsupported collection scope"
+    )
+    if collection_scope == collector.LINUX_INSTALLED:
+        return [
+            {"host": "python", "os": "ubuntu-24.04", "python": "3.12", "form": "wheel"},
+            {"host": "r", "os": "ubuntu-24.04", "python": None, "form": "source"},
+        ]
     return [
         {"host": "python", "os": os, "python": version, "form": form}
         for os in SYSTEMS
@@ -1707,7 +1715,7 @@ def entry_root(root, entry, scratch, entry_provider, expected_size=None):
         yield scratch / "evidence"
 
 
-def input_context(input_path):
+def input_context(input_path, collection_scope=collector.FULL_MATRIX):
     """Re-admit original immutable metadata before any replay or fragment use."""
     root = input_path.resolve().parent
     payload = read(input_path)
@@ -1724,10 +1732,20 @@ def input_context(input_path):
                 "native_jobs",
                 "native_artifacts",
                 "completion_run",
+                "collection_scope",
             )
             if key in payload
         ),
         "audit input",
+    )
+    require(
+        collection_scope in collector.COLLECTION_SCOPES
+        and payload.get("collection_scope", collector.FULL_MATRIX) == collection_scope,
+        "audit collection scope differs from explicit selection",
+    )
+    require(
+        collection_scope == collector.FULL_MATRIX or len(case_names()) == 27,
+        "linux-installed requires the approved 27-case inventory",
     )
     nonempty(payload["repository"], "repository identity")
     require(
@@ -1751,9 +1769,20 @@ def input_context(input_path):
 
 
 def audit(
-    input_path, repository, budgets_path=None, entry_provider=None, unit_selector=None
+    input_path,
+    repository,
+    budgets_path=None,
+    entry_provider=None,
+    unit_selector=None,
+    collection_scope=collector.FULL_MATRIX,
 ):
-    root, payload, run, artifacts, jobs, native, completion = input_context(input_path)
+    require(
+        collection_scope == collector.FULL_MATRIX or budgets_path is None,
+        "linux-installed forbids numeric budgets",
+    )
+    root, payload, run, artifacts, jobs, native, completion = input_context(
+        input_path, collection_scope
+    )
     errors, accepted = [], {}
     budget_error = None
     try:
@@ -1784,7 +1813,9 @@ def audit(
         for number, entry in enumerate(payload["entries"]):
             try:
                 lane = entry["tuple"]
-                require(lane in tuples(), "unexpected performance tuple")
+                require(
+                    lane in tuples(collection_scope), "unexpected performance tuple"
+                )
                 key = json.dumps(lane, sort_keys=True)
                 require(key not in seen, "duplicate performance tuple")
                 seen.add(key)
@@ -1853,6 +1884,14 @@ def audit(
                         for collection in entry["collections"]:
                             exact(collection, ("role", "path"), "collection entry")
                             directory = relative(evidence_root, collection["path"])
+                            if collection["role"] == "candidate":
+                                require(
+                                    read(directory / "collection.json").get(
+                                        "collection_scope", collector.FULL_MATRIX
+                                    )
+                                    == collection_scope,
+                                    "candidate collection scope differs from audit",
+                                )
                             require(
                                 directory.parent.name == entry["artifact_name"],
                                 "collection artifact association differs",
@@ -1915,16 +1954,38 @@ def audit(
                     }
                 )
     return report_from_values(
-        payload, run, completion, native, accepted, errors, budgets, budget_error
+        payload,
+        run,
+        completion,
+        native,
+        accepted,
+        errors,
+        budgets,
+        budget_error,
+        collection_scope=collection_scope,
     )
 
 
 def report_from_values(
-    payload, run, completion, native, accepted, errors, budgets=None, budget_error=None
+    payload,
+    run,
+    completion,
+    native,
+    accepted,
+    errors,
+    budgets=None,
+    budget_error=None,
+    collection_scope=collector.FULL_MATRIX,
 ):
     """Shared final gates; neither missing cases nor comparators are deduplicated."""
+    require(
+        collection_scope == collector.FULL_MATRIX
+        or (budgets is None and budget_error is None),
+        "linux-installed forbids numeric budgets",
+    )
     cells = []
-    for lane in tuples():
+    required = 567 if collection_scope == collector.FULL_MATRIX else 54
+    for lane in tuples(collection_scope):
         key = json.dumps(lane, sort_keys=True)
         for case in case_names():
             cell = {"tuple": lane, "case": case}
@@ -1941,6 +2002,7 @@ def report_from_values(
             cell[role.replace("-", "_")]["status"]
             for cell in cells
             if cell["case"] in role_case_names(role)
+            and collection_scope == collector.FULL_MATRIX
         ]
         comparator_roles[role] = {
             "required": len(statuses),
@@ -1976,11 +2038,11 @@ def report_from_values(
             }
         ),
         "coverage": {
-            "status": "pass" if passed == 567 and not errors else "incomplete",
-            "required": 567,
+            "status": "pass" if passed == required and not errors else "incomplete",
+            "required": required,
             "passed": passed,
             "failed": failed,
-            "missing": 567 - passed - failed,
+            "missing": required - passed - failed,
         },
         "comparator_coverage": {
             "status": "fail"
@@ -2005,6 +2067,17 @@ def report_from_values(
         + "; one actual warm-child peak, never 30 invented per-repetition peaks",
         "measurement_scopes": measurement_scopes(),
     }
+    if collection_scope == collector.LINUX_INSTALLED:
+        report["collection_scope"] = collection_scope
+        report["baseline_gaps"] = (
+            "The #2288 Linux installed scope requires 54 candidate cells and no prior-release comparators. Any separately recorded comparators retain their original validation and scope. Numeric budgets are not evaluated."
+        )
+        report["comparator_coverage"]["recorded"] = {
+            role: sum(
+                cell[role.replace("-", "_")]["status"] != "missing" for cell in cells
+            )
+            for role in ROLES[1:]
+        }
     collection_statuses = {
         report[key]["status"]
         for key in (
@@ -2015,14 +2088,16 @@ def report_from_values(
         )
     }
     report["collection_gate"] = {
-        "scope": "collection-only",
+        "scope": "collection-only"
+        if collection_scope == collector.FULL_MATRIX
+        else "linux-installed-collection-only",
         "status": "fail"
         if "fail" in collection_statuses
         else "pass"
         if collection_statuses == {"pass"}
         else "incomplete",
     }
-    report["accepted"] = all(
+    report["accepted"] = collection_scope == collector.FULL_MATRIX and all(
         report[key]["status"] == "pass"
         for key in ("collection_gate", "run_completion", "budgets")
     )
@@ -2031,6 +2106,11 @@ def report_from_values(
 
 def markdown(report):
     scopes = report["measurement_scopes"]
+    acceptance = (
+        "Numeric acceptance: not evaluated for the approved no-budget scope."
+        if report.get("collection_scope") == collector.LINUX_INSTALLED
+        else f"Acceptance: {'pass' if report['accepted'] else 'incomplete or failed'}."
+    )
     boundary_table = (
         "| Boundary | Actual retained timing scope |\n| --- | --- |\n"
         + "".join(
@@ -2041,13 +2121,13 @@ def markdown(report):
     return (
         f"# public performance replay\n\nSource: `{report['source_revision']}`; original run {report['run_id']}, attempt {report['run_attempt']}.\n\n"
         f"| Gate | Verdict |\n| --- | --- |\n| Harness correctness | {report['harness_correctness']['status']} |\n"
-        f"| Coverage | {report['coverage']['status']} ({report['coverage']['passed']}/567) |\n"
-        f"| Required comparator coverage | {report['comparator_coverage']['status']} ({report['comparator_coverage']['passed']}/504) |\n"
+        f"| Coverage | {report['coverage']['status']} ({report['coverage']['passed']}/{report['coverage']['required']}) |\n"
+        f"| Required comparator coverage | {report['comparator_coverage']['status']} ({report['comparator_coverage']['passed']}/{report['comparator_coverage']['required']}) |\n"
         f"| Native source admission | {report['native_source_admission']['status']} |\n"
         f"| Collection-only gate | {report['collection_gate']['status']} |\n"
         f"| Original run completion | {report['run_completion']['status']} |\n"
         f"| Numeric budgets | {report['budgets']['status']} |\n\n{report['baseline_gaps']}\n\n"
-        f"Warm RSS: {report['warm_rss_scope']}.\n\nAcceptance: {'pass' if report['accepted'] else 'incomplete or failed'}.\n"
+        f"Warm RSS: {report['warm_rss_scope']}.\n\n{acceptance}\n"
         f"\n{boundary_table}\n{scopes['phase_durations']}\n\n{scopes['owner_held_save_intervals']}\n\n"
         f"{scopes['child_peak_rss']}\n\n{scopes['outside_outer_timers']}\n\n{scopes['baseline_ratios']}\n"
     )
@@ -2294,6 +2374,11 @@ def main(argv=None, entry_provider=None):
         "--repository", type=Path, default=Path(__file__).resolve().parents[2]
     )
     parser.add_argument("--budgets", type=Path)
+    parser.add_argument(
+        "--collection-scope",
+        choices=collector.COLLECTION_SCOPES,
+        default=collector.FULL_MATRIX,
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--unit",
@@ -2311,9 +2396,15 @@ def main(argv=None, entry_provider=None):
     checks.add_argument(
         "--check-collection",
         action="store_true",
-        help="require correctness, native source admission, 567 candidate and 504 comparator cells; no numeric acceptance",
+        help="require correctness/native source admission and exact selected-scope coverage; full-matrix retains 567 candidate and 504 comparator cells; no numeric acceptance",
     )
     args = parser.parse_args(argv)
+    if args.collection_scope != collector.FULL_MATRIX and (
+        args.check or args.budgets or args.catalog or args.unit or args.check_unit
+    ):
+        parser.error(
+            "linux-installed is collection-only and forbids budgets/final checks/reader fragments"
+        )
     if args.catalog and (
         args.unit
         or args.check
@@ -2365,16 +2456,30 @@ def main(argv=None, entry_provider=None):
             else 0
         )
     try:
-        report = audit(args.input, args.repository, args.budgets, entry_provider)
+        report = audit(
+            args.input,
+            args.repository,
+            args.budgets,
+            entry_provider,
+            collection_scope=args.collection_scope,
+        )
     except EVIDENCE_ERRORS as error:
         report = {
             "protocol": "public-performance-audit/1",
             "accepted": False,
             "harness_correctness": {"status": "fail", "errors": [str(error)]},
-            "coverage": {"status": "incomplete", "required": 567, "passed": 0},
+            "coverage": {
+                "status": "incomplete",
+                "required": 567
+                if args.collection_scope == collector.FULL_MATRIX
+                else 54,
+                "passed": 0,
+            },
             "comparator_coverage": {
                 "status": "incomplete",
-                "required": 504,
+                "required": 504
+                if args.collection_scope == collector.FULL_MATRIX
+                else 0,
                 "passed": 0,
             },
             "budgets": {"status": "not_evaluated"},
@@ -2382,6 +2487,9 @@ def main(argv=None, entry_provider=None):
             "run_completion": {"status": "incomplete"},
             "measurement_scopes": measurement_scopes(),
         }
+        if args.collection_scope != collector.FULL_MATRIX:
+            report["collection_scope"] = args.collection_scope
+            report["collection_gate"]["scope"] = "linux-installed-collection-only"
     lifecycle.write_json(args.output / "performance-audit.json", report)
     text = (
         markdown(report)
