@@ -1,12 +1,11 @@
 use serde_json::{json, Value};
 use yamaa_adapters::{
     specification_diagnostics::capture_failure,
-    specification_source::{CapturedSchema, Error, Limits, Source},
+    specification_source::{CapturedSchema, Error, Source},
     yaml_decode::SourcePosition,
 };
 use yamaa_core::schema::{
-    BundleError, BundleIssue, BundleIssueKind, BundleLimits, DocumentNode as N, NormalizationError,
-    SchemaSource,
+    BundleError, BundleIssue, BundleIssueKind, DocumentNode as N, NormalizationError, SchemaSource,
 };
 const SHARED:&str="version: '1.0'\nincludes: []\nshared:\n  - id: {type: str, required: true}\n  - label: {type: str, default: untitled}\n";
 const ROOT:&str="version: '1.0'\nincludes: [schema_s.yaml]\nroot_class:\n  - fields_from: shared\n  - schema_version: {type: str}\n";
@@ -29,7 +28,7 @@ fn original_sources_locations_reused_defaults_and_fresh_normalization_are_retain
             .iter()
             .map(|s| s.identity.as_ptr())
             .collect::<Vec<_>>();
-        let schema = CapturedSchema::admit(sources, 1, Limits::default()).unwrap();
+        let schema = CapturedSchema::admit(sources, 1).unwrap();
         assert_eq!(schema.sources().as_ptr(), arena);
         assert_eq!(
             schema
@@ -80,104 +79,7 @@ fn original_sources_locations_reused_defaults_and_fresh_normalization_are_retain
         assert_eq!(prepared.normalized().origins[label].node, node);
     }
 }
-#[test]
-fn default_and_named_root_keep_their_distinct_original_text_gate() {
-    let simple = || {
-        vec![source(
-            "r",
-            "version: '1.0'\nincludes: []\nroot_class: [{schema_version: {type: str}}]\n",
-        )]
-    };
-    let limits = Limits {
-        identity_bytes: 1,
-        ..Default::default()
-    };
-    assert!(CapturedSchema::admit(simple(), 0, limits).is_ok());
-    assert!(matches!(
-        CapturedSchema::admit_root(simple(), 0, "root_class", limits),
-        Err(Error::Limit("root_class"))
-    ));
-    assert!(CapturedSchema::admit_root(
-        simple(),
-        0,
-        "root_class",
-        Limits {
-            identity_bytes: 10,
-            ..Default::default()
-        }
-    )
-    .is_ok());
-    let limits = Limits {
-        captured_bytes: 0,
-        identity_bytes: 0,
-        bundle: BundleLimits {
-            modules: 0,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    assert!(matches!(
-        CapturedSchema::admit_root(closure(), 1, "root_class", limits),
-        Err(Error::Limit("root_class"))
-    ));
-    assert!(matches!(
-        CapturedSchema::admit(closure(), 1, limits),
-        Err(Error::Limit("schema_modules"))
-    ));
-}
-#[test]
-fn whole_closure_late_limits_and_byte_before_identity_keep_existing_categories() {
-    let bytes = SHARED.len() + ROOT.len();
-    assert!(CapturedSchema::admit(
-        closure(),
-        1,
-        Limits {
-            captured_bytes: bytes,
-            identity_bytes: 14,
-            ..Default::default()
-        }
-    )
-    .is_ok());
-    for (limits, expected) in [
-        (
-            Limits {
-                captured_bytes: bytes - 1,
-                identity_bytes: 14,
-                ..Default::default()
-            },
-            "captured_bytes",
-        ),
-        (
-            Limits {
-                captured_bytes: bytes,
-                identity_bytes: 13,
-                ..Default::default()
-            },
-            "identity_bytes",
-        ),
-        (
-            Limits {
-                captured_bytes: 0,
-                identity_bytes: 0,
-                ..Default::default()
-            },
-            "captured_bytes",
-        ),
-    ] {
-        let mut sources = closure();
-        sources[0].bytes = b"[unclosed".to_vec();
-        if expected == "captured_bytes" {
-            sources[1].bytes = vec![b'x'; bytes];
-        }
-        let error = CapturedSchema::admit(sources, 1, limits).unwrap_err();
-        assert!(matches!(error,Error::Limit(actual) if actual==expected));
-        let actual: Value = serde_json::from_str(&capture_failure(&error)).unwrap();
-        assert_eq!(
-            actual,
-            json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"capture","code":"capture_limit"}})
-        );
-    }
-}
+
 #[test]
 fn physical_decode_precedes_invalid_entry_and_earlier_bundle_semantics() {
     for entry in [0, usize::MAX] {
@@ -188,12 +90,11 @@ fn physical_decode_precedes_invalid_entry_and_earlier_bundle_semantics() {
                 source("late", "[later unclosed"),
             ],
             entry,
-            Limits::default(),
         )
         .unwrap_err();
         assert!(matches!(error,Error::Decode{ref identity,..} if identity=="same"));
     }
-    let error = CapturedSchema::admit(closure(), usize::MAX, Limits::default()).unwrap_err();
+    let error = CapturedSchema::admit(closure(), usize::MAX).unwrap_err();
     assert!(
         matches!(error,Error::Bundle(BundleError::Invalid(ref issues)) if issues==&[BundleIssue{module:usize::MAX,path:"$".into(),kind:BundleIssueKind::ModuleName}])
     );
@@ -237,7 +138,6 @@ fn complete_original_codec_reports_survive_schema_closure_admission() {
                 bytes,
             }],
             usize::MAX,
-            Limits::default(),
         )
         .unwrap_err();
         let actual: Value = serde_json::from_str(&capture_failure(&error)).unwrap();
@@ -248,7 +148,7 @@ fn complete_original_codec_reports_survive_schema_closure_admission() {
 }
 #[test]
 fn complete_bundle_issue_order_and_later_invalid_default_gate_are_unchanged() {
-    let error=CapturedSchema::admit(vec![source("r","version: '1.0'\nincludes: []\nroot_class:\n  - first: {type: unknown_one}\n  - second: {type: unknown_two}\n")],0,Limits::default()).unwrap_err();
+    let error=CapturedSchema::admit(vec![source("r","version: '1.0'\nincludes: []\nroot_class:\n  - first: {type: unknown_one}\n  - second: {type: unknown_two}\n")],0).unwrap_err();
     let Error::Bundle(ref bundle) = error else {
         panic!("full typed bundle failure expected")
     };
@@ -272,9 +172,42 @@ fn complete_bundle_issue_order_and_later_invalid_default_gate_are_unchanged() {
         actual,
         json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"capture","code":"schema_bundle"}})
     );
-    let schema=CapturedSchema::admit(vec![source("r","version: '1.0'\nincludes: []\nroot_class:\n  - schema_version: {type: str}\n  - value: {type: int, default: invalid}\n")],0,Limits::default()).unwrap();
+    let schema=CapturedSchema::admit(vec![source("r","version: '1.0'\nincludes: []\nroot_class:\n  - schema_version: {type: str}\n  - value: {type: int, default: invalid}\n")],0).unwrap();
     assert!(matches!(
         schema.prepare_structural(source("root.yaml", "schema_version: '1.0'\n")),
         Err(Error::Normalize(NormalizationError::Defaults(_)))
     ));
+}
+
+#[test]
+fn fixed_yaml_file_size_boundary_precedes_physical_decoding() {
+    use yamaa_adapters::yaml_decode::DecodeFailure;
+    use yamaa_core::limits::{LimitExceeded, Limits};
+    let prefix = "version: '1.0'\nincludes: []\nroot_class: [{schema_version: {type: str}}]\n#";
+    for size in [
+        Limits::SPEC_BYTES - 1,
+        Limits::SPEC_BYTES,
+        Limits::SPEC_BYTES + 1,
+    ] {
+        let mut bytes = prefix.as_bytes().to_vec();
+        bytes.resize(size, b'x');
+        let result = CapturedSchema::admit(
+            vec![Source {
+                identity: "authored-schema.yaml".into(),
+                bytes,
+            }],
+            0,
+        );
+        if size <= Limits::SPEC_BYTES {
+            let schema = result.unwrap();
+            assert_eq!(schema.sources()[0].bytes.len(), size);
+            assert_eq!(schema.structure().root_class().name, "root_class");
+        } else {
+            assert!(
+                matches!(result, Err(Error::Decode { identity, error: DecodeFailure::Limit(LimitExceeded {
+                resource: "spec_bytes", limit: Limits::SPEC_BYTES, actual: Some(actual)
+            }) }) if identity == "authored-schema.yaml" && actual == size)
+            );
+        }
+    }
 }
