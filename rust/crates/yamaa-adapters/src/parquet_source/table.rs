@@ -1,9 +1,7 @@
 //! Convert admitted storage arrays into the engine's precision-bearing snapshot.
 use super::reader::Decoded;
 use crate::{
-    arrow_table::{
-        date_array, datetime_array, physical_schema, ArrowTable, TableError, TableLimits,
-    },
+    arrow_table::{date_array, datetime_array, physical_schema, ArrowTable, TableError},
     arrow_temporal::{date_from_days, datetime_from_seconds},
 };
 use arrow_array::{
@@ -19,109 +17,33 @@ use yamaa_core::{
 #[derive(Debug)]
 pub(super) enum Error {
     Invalid,
+    Representation,
     Table(TableError),
 }
 
-fn retain(remaining: &mut usize, initial: usize, amount: Option<usize>) -> Result<(), Error> {
-    let required = amount.and_then(|amount| (initial - *remaining).checked_add(amount));
-    *remaining = amount
-        .and_then(|amount| remaining.checked_sub(amount))
-        .ok_or(Error::Table(TableError::Limit {
-            resource: "retained_bytes",
-            limit: initial,
-            required,
-        }))?;
-    Ok(())
-}
-/// The staging charge bounds admitted cells and copied string payloads. It is
-/// not an allocator/RSS limit; the caller also bounds source and decoded arrays.
-pub(super) fn convert(
-    decoded: Decoded,
-    staged_bytes: usize,
-    limits: TableLimits,
-) -> Result<ArrowTable, Error> {
-    convert_with_usage(decoded, staged_bytes, limits, None)
-}
-
-pub(super) fn convert_with_usage(
-    decoded: Decoded,
-    staged_bytes: usize,
-    limits: TableLimits,
-    mut usage: Option<&mut crate::source_decode_usage::Usage>,
-) -> Result<ArrowTable, Error> {
-    let mut rows = 0usize;
+/// Preserve canonical scalar values at the decoded table boundary.
+pub(super) fn convert(decoded: Decoded) -> Result<ArrowTable, Error> {
     let columns = decoded.schema.columns().len();
-    for (resource, required, limit) in [
-        ("columns", Some(columns), limits.max_columns),
-        ("batches", Some(decoded.batches.len()), limits.max_batches),
-    ] {
-        if required.is_none_or(|n| n > limit) {
-            return Err(Error::Table(TableError::Limit {
-                resource,
-                limit,
-                required,
-            }));
-        }
-    }
-    let mut remaining = staged_bytes;
-    // Admit the complete shape before constructing any converted column.
+    let mut rows = 0usize;
     for batch in &decoded.batches {
-        let required = rows.checked_add(batch.num_rows());
-        rows = required
-            .filter(|n| *n <= limits.max_rows)
-            .ok_or(Error::Table(TableError::Limit {
-                resource: "rows",
-                limit: limits.max_rows,
-                required,
-            }))?;
-        retain(
-            &mut remaining,
-            staged_bytes,
-            batch
-                .num_rows()
-                .checked_mul(columns)
-                .and_then(|cells| cells.checked_mul(32)),
-        )?;
-        if let Some(usage) = usage.as_deref_mut() {
-            usage.storage(staged_bytes - remaining);
-        }
+        rows = rows.checked_add(batch.num_rows()).ok_or(Error::Invalid)?;
+        yamaa_core::limits::Limits::table(rows, columns).map_err(|error| {
+            Error::Table(TableError::Limit {
+                resource: error.resource,
+                limit: error.limit,
+                required: error.actual,
+            })
+        })?;
         for array in batch.columns() {
             if let Some(strings) = array.as_any().downcast_ref::<LargeStringArray>() {
-                let mut bytes = 0usize;
-                for value in strings.iter().flatten() {
-                    bytes =
-                        bytes
-                            .checked_add(value.len())
-                            .ok_or(Error::Table(TableError::Limit {
-                                resource: "offset_bytes",
-                                limit: i32::MAX as usize,
-                                required: None,
-                            }))?;
-                }
                 // The canonical representation uses signed 32-bit offsets.
-                if bytes > i32::MAX as usize {
-                    return Err(Error::Table(TableError::Limit {
-                        resource: "offset_bytes",
-                        limit: i32::MAX as usize,
-                        required: Some(bytes),
-                    }));
-                }
-                retain(&mut remaining, staged_bytes, Some(bytes))?;
-                if let Some(usage) = usage.as_deref_mut() {
-                    usage.storage(staged_bytes - remaining);
+                if !crate::arrow_table::fits_utf8_offsets(
+                    strings.iter().flatten().map(|text| text.len()),
+                ) {
+                    return Err(Error::Representation);
                 }
             }
         }
-    }
-    if rows
-        .checked_mul(columns)
-        .is_none_or(|n| n > limits.max_cells)
-    {
-        return Err(Error::Table(TableError::Limit {
-            resource: "cells",
-            limit: limits.max_cells,
-            required: rows.checked_mul(columns),
-        }));
     }
     let physical = physical_schema(&decoded.schema);
     let mut batches = Vec::with_capacity(decoded.batches.len());
@@ -183,7 +105,7 @@ pub(super) fn convert_with_usage(
         }
         batches.push(RecordBatch::try_new(physical.clone(), arrays).map_err(|_| Error::Invalid)?);
     }
-    ArrowTable::try_new(decoded.schema, batches, limits).map_err(Error::Table)
+    ArrowTable::try_new(decoded.schema, batches).map_err(Error::Table)
 }
 
 #[cfg(test)]
@@ -245,18 +167,10 @@ mod tests {
             batches: vec![RecordBatch::try_new(stored, arrays).unwrap()],
         }
     }
-    fn limits() -> TableLimits {
-        TableLimits {
-            max_rows: 3,
-            max_columns: 5,
-            max_batches: 1,
-            max_cells: 15,
-        }
-    }
 
     #[test]
     fn canonical_snapshot_keeps_empty_null_exact_bits_and_complete_civil_precision() {
-        let table = convert(source(), 482, limits()).unwrap();
+        let table = convert(source()).unwrap();
         assert_eq!(table.row_count(), 3);
         assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Str(""));
         assert_eq!(table.cell(2, 0).unwrap(), ValueRef::Str("β"));
@@ -287,37 +201,6 @@ mod tests {
             };
             assert_eq!(value.fields(), fields);
             assert_eq!(value.collected_precision(), DateTimePrecision::Second);
-        }
-    }
-
-    #[test]
-    fn shape_and_string_copy_charges_are_enforced_before_conversion() {
-        assert!(matches!(
-            convert(source(), 481, limits()),
-            Err(Error::Table(TableError::Limit { .. }))
-        ));
-        for limits in [
-            TableLimits {
-                max_rows: 2,
-                ..limits()
-            },
-            TableLimits {
-                max_columns: 4,
-                ..limits()
-            },
-            TableLimits {
-                max_cells: 14,
-                ..limits()
-            },
-            TableLimits {
-                max_batches: 0,
-                ..limits()
-            },
-        ] {
-            assert!(matches!(
-                convert(source(), 482, limits),
-                Err(Error::Table(TableError::Limit { .. }))
-            ));
         }
     }
 }

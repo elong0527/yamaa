@@ -1,7 +1,7 @@
 //! Read-only SAS source decoding over the already captured immutable snapshot.
 //! ReadStat supplies physical values; authored types and strict text decoding are
 //! shared by both hosts. Display formats are never semantic type authorities.
-use crate::arrow_table::{ArrowTable, TableLimits};
+use crate::arrow_table::ArrowTable;
 use std::{
     collections::BTreeSet,
     ffi::{c_char, c_int, c_void, CStr},
@@ -9,6 +9,7 @@ use std::{
 };
 use yamaa_core::{
     diagnostic::SourceFinding,
+    limits::Limits,
     specification::{SourceDeclaration, SourceProfile},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     temporal::{DatePrecision, DateTimePrecision},
@@ -40,11 +41,14 @@ impl Error {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct Limits {
-    pub source_bytes: usize,
-    pub work_bytes: usize,
-    pub retained_bytes: usize,
+impl From<yamaa_core::limits::LimitExceeded> for Error {
+    fn from(error: yamaa_core::limits::LimitExceeded) -> Self {
+        Self::Limit {
+            resource: error.resource,
+            limit: error.limit,
+            actual: error.actual,
+        }
+    }
 }
 unsafe extern "C" {
     fn yamaa_readstat_parse(
@@ -54,9 +58,6 @@ unsafe extern "C" {
         rows: usize,
         columns: usize,
         cells: usize,
-        work: usize,
-        measured: c_int,
-        work_used: *mut usize,
         metadata: unsafe extern "C" fn(i64, c_int, c_int, *const c_char, *mut c_void) -> c_int,
         variable: unsafe extern "C" fn(c_int, *const c_char, usize, c_int, *mut c_void) -> c_int,
         value: unsafe extern "C" fn(
@@ -98,38 +99,13 @@ impl TableAccess for Rows {
 }
 struct Context<'a> {
     source: &'a SourceDeclaration,
-    table_limits: TableLimits,
-    budget: usize,
-    work_limit: usize,
-    budget_resource: &'static str,
-    remaining: usize,
     columns: Vec<Column>,
     rows: Vec<Vec<Value>>,
     declared_rows: Option<usize>,
     declared_columns: usize,
-    row_width: usize,
     error: Option<Error>,
 }
 impl Context<'_> {
-    fn overflow(&self) -> Error {
-        Error::Limit {
-            resource: self.budget_resource,
-            limit: self.budget,
-            actual: None,
-        }
-    }
-    fn charge(&mut self, bytes: usize) -> Result<(), Error> {
-        let actual = self
-            .budget
-            .checked_sub(self.remaining)
-            .and_then(|used| used.checked_add(bytes));
-        self.remaining = self.remaining.checked_sub(bytes).ok_or(Error::Limit {
-            resource: self.budget_resource,
-            limit: self.budget,
-            actual,
-        })?;
-        Ok(())
-    }
     fn declarations(&self) -> Result<(), Error> {
         if self.columns.len() != self.declared_columns {
             return Err(Error::Invalid("header"));
@@ -143,9 +119,7 @@ impl Context<'_> {
         }
         Ok(())
     }
-    fn text(&mut self, bytes: &[u8]) -> Result<String, Error> {
-        let expanded = bytes.len().checked_mul(3).ok_or_else(|| self.overflow())?;
-        self.charge(expanded)?;
+    fn text(&self, bytes: &[u8]) -> Result<String, Error> {
         decode_text(
             bytes,
             self.source
@@ -190,48 +164,20 @@ unsafe extern "C" fn metadata(
         if columns == 0 {
             return Err(Error::Invalid("header"));
         }
-        if columns > context.table_limits.max_columns {
-            return Err(Error::Limit {
-                resource: "columns",
-                limit: context.table_limits.max_columns,
-                actual: Some(columns),
-            });
-        }
+        Limits::columns(columns)?;
         context.declared_columns = columns;
         if rows >= 0 {
-            let rows = usize::try_from(rows).map_err(|_| Error::Limit {
-                resource: "rows",
-                limit: context.table_limits.max_rows,
-                actual: None,
-            })?;
-            if rows > context.table_limits.max_rows {
-                return Err(Error::Limit {
-                    resource: "rows",
-                    limit: context.table_limits.max_rows,
-                    actual: Some(rows),
-                });
-            }
-            let cells = rows.checked_mul(columns);
-            if cells.is_none_or(|cells| cells > context.table_limits.max_cells) {
-                return Err(Error::Limit {
-                    resource: "cells",
-                    limit: context.table_limits.max_cells,
-                    actual: cells,
-                });
-            }
+            let rows = usize::try_from(rows).map_err(|_| Error::Invalid("header"))?;
+            Limits::table(rows, columns)?;
             context.declared_rows = Some(rows);
         }
-        context.charge(
-            columns
-                .checked_mul(std::mem::size_of::<Column>())
-                .ok_or_else(|| context.overflow())?,
-        )
+        Ok(())
     })
 }
 unsafe extern "C" fn variable(
     column: c_int,
     name: *const c_char,
-    width: usize,
+    _width: usize,
     text: c_int,
     opaque: *mut c_void,
 ) -> c_int {
@@ -241,17 +187,6 @@ unsafe extern "C" fn variable(
             || name.is_null()
         {
             return Err(Error::Invalid("header"));
-        }
-        context.row_width = context
-            .row_width
-            .checked_add(width)
-            .ok_or_else(|| context.overflow())?;
-        if context.row_width > context.work_limit {
-            return Err(Error::Limit {
-                resource: "work_bytes",
-                limit: context.work_limit,
-                actual: Some(context.row_width),
-            });
         }
         let name = context.text(CStr::from_ptr(name).to_bytes())?;
         if name.is_empty() || context.columns.iter().any(|column| column.name == name) {
@@ -294,37 +229,14 @@ unsafe extern "C" fn value(
         }
         let row = usize::try_from(row).map_err(|_| Error::Invalid("record_order"))?;
         let column = usize::try_from(column).map_err(|_| Error::Invalid("record_order"))?;
-        if row >= context.table_limits.max_rows {
-            return Err(Error::Limit {
-                resource: "rows",
-                limit: context.table_limits.max_rows,
-                actual: row.checked_add(1),
-            });
-        }
-        let cells = row
-            .checked_add(1)
-            .and_then(|rows| rows.checked_mul(context.columns.len()));
-        if cells.is_none_or(|cells| cells > context.table_limits.max_cells) {
-            return Err(Error::Limit {
-                resource: "cells",
-                limit: context.table_limits.max_cells,
-                actual: cells,
-            });
-        }
+        Limits::table(
+            row.checked_add(1).ok_or(Error::Invalid("record_order"))?,
+            context.columns.len(),
+        )?;
         if column == 0 {
             if row != context.rows.len() {
                 return Err(Error::Invalid("record_order"));
             }
-            let size = std::mem::size_of::<Vec<Value>>()
-                .checked_add(
-                    context
-                        .columns
-                        .len()
-                        .checked_mul(std::mem::size_of::<Value>())
-                        .ok_or_else(|| context.overflow())?,
-                )
-                .ok_or_else(|| context.overflow())?;
-            context.charge(size)?;
             context.rows.push(Vec::with_capacity(context.columns.len()));
         }
         if row + 1 != context.rows.len() || context.rows[row].len() != column {
@@ -474,56 +386,14 @@ fn admit_xport(bytes: &[u8]) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn parse(
-    bytes: &[u8],
-    source: &SourceDeclaration,
-    limits: Limits,
-    table_limits: TableLimits,
-) -> Result<ArrowTable, Error> {
-    parse_inner(bytes, source, limits, table_limits, None)
-}
-
-/// Record admitted logical quota charges for the shared native decoder route.
-/// C buffers/header work and cumulative snapshot reads reuse the work allowance;
-/// Rust retention reuses both allowances. Their receipt therefore takes maxima,
-/// rather than describing allocated memory or CPU usage.
-pub(crate) fn parse_with_usage(
-    bytes: &[u8],
-    source: &SourceDeclaration,
-    limits: Limits,
-    table_limits: TableLimits,
-    usage: &mut crate::source_decode_usage::Usage,
-) -> Result<ArrowTable, Error> {
-    usage.complete();
-    let result = parse_inner(bytes, source, limits, table_limits, Some(usage));
-    // An internal failure can include a caught panic or an Arrow allocation
-    // failure outside the modeled admissions. Preserve conservative reservation.
-    if matches!(result, Err(Error::Internal)) {
-        usage.complete = false;
-    }
-    result
-}
-
-fn parse_inner(
-    bytes: &[u8],
-    source: &SourceDeclaration,
-    limits: Limits,
-    table_limits: TableLimits,
-    mut usage: Option<&mut crate::source_decode_usage::Usage>,
-) -> Result<ArrowTable, Error> {
+pub fn parse(bytes: &[u8], source: &SourceDeclaration) -> Result<ArrowTable, Error> {
     if !matches!(
         source.encoding.as_deref(),
         Some("utf-8" | "windows-1252" | "iso-8859-1" | "ascii")
     ) {
         return Err(Error::Invalid("encoding"));
     }
-    if bytes.len() > limits.source_bytes {
-        return Err(Error::Limit {
-            resource: "source_bytes",
-            limit: limits.source_bytes,
-            actual: Some(bytes.len()),
-        });
-    }
+    Limits::source_bytes(bytes.len())?;
     if !matches!(
         source.profile,
         SourceProfile::Xport | SourceProfile::Sas7bdat
@@ -540,39 +410,24 @@ fn parse_inner(
             return Err(Error::Internal);
         }
     }
-    let budget = limits.work_bytes.min(limits.retained_bytes);
     let mut context = Context {
         source,
-        table_limits,
-        budget,
-        work_limit: limits.work_bytes,
-        budget_resource: if limits.retained_bytes <= limits.work_bytes {
-            "retained_bytes"
-        } else {
-            "work_bytes"
-        },
-        remaining: budget,
         columns: Vec::new(),
         rows: Vec::new(),
         declared_rows: None,
         declared_columns: 0,
-        row_width: 0,
         error: None,
     };
     let (mut refusal_resource, mut refusal_limit, mut refusal_actual, mut refusal_known) =
         (0, 0, 0, 0);
-    let mut c_work_used = 0;
     let status = unsafe {
         yamaa_readstat_parse(
             bytes.as_ptr(),
             bytes.len(),
             c_int::from(source.profile == SourceProfile::Xport),
-            table_limits.max_rows,
-            table_limits.max_columns,
-            table_limits.max_cells,
-            limits.work_bytes,
-            c_int::from(usage.is_some()),
-            &mut c_work_used,
+            Limits::TABLE_ROWS,
+            Limits::COLUMNS,
+            Limits::TABLE_CELLS,
             metadata,
             variable,
             value,
@@ -583,23 +438,15 @@ fn parse_inner(
             &mut refusal_known,
         )
     };
-    if let Some(usage) = usage.as_mut() {
-        let retained = context.budget - context.remaining;
-        usage.storage(retained);
-        usage.work(retained.max(c_work_used));
-    }
+
     if let Some(error) = context.error {
         return Err(error);
     }
     if status == -2 {
         let resource = match refusal_resource {
-            1 => "rows",
+            1 => "table_rows",
             2 => "columns",
-            3 => "cells",
-            4 => "work_bytes",
-            5 => "source_io_operations",
-            6 => "source_read_bytes",
-            7 => "allocation_bytes",
+            3 => "table_cells",
             _ => return Err(Error::Internal),
         };
         return Err(Error::Limit {
@@ -640,15 +487,14 @@ fn parse_inner(
     };
     let batch = crate::ipc_table::sanitized_batch(&rows, 0, rows.row_count())
         .map_err(|_| Error::Internal)?;
-    ArrowTable::try_new(rows.schema, vec![batch], table_limits).map_err(|_| Error::Internal)
+    ArrowTable::try_new(rows.schema, vec![batch]).map_err(|_| Error::Internal)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source_decode_usage::Usage;
 
-    fn receipt_source() -> SourceDeclaration {
+    fn source() -> SourceDeclaration {
         SourceDeclaration {
             name: "SRC".into(),
             path: "fractional.xpt".into(),
@@ -659,29 +505,57 @@ mod tests {
             ordinal: None,
         }
     }
-    fn receipt_limits() -> Limits {
-        Limits {
-            source_bytes: 1_048_576,
-            work_bytes: 4_194_304,
-            retained_bytes: 4_194_304,
+
+    #[test]
+    fn fixed_header_geometry_is_checked_before_retaining_any_columns_or_rows() {
+        let source = source();
+        for (rows, columns, expected) in [
+            (9_999_999, 1, None),
+            (10_000_001, 1, Some(("table_rows", 10_000_001))),
+            (1, 1023, None),
+            (1, 1025, Some(("columns", 1025))),
+            (3_575_418, 179, None),
+            (3_575_419, 179, Some(("table_cells", 640_000_001))),
+        ] {
+            let mut context = Context {
+                source: &source,
+                columns: Vec::new(),
+                rows: Vec::new(),
+                declared_rows: None,
+                declared_columns: 0,
+                error: None,
+            };
+            let status = unsafe {
+                metadata(
+                    rows,
+                    columns,
+                    5,
+                    std::ptr::null(),
+                    (&mut context as *mut Context<'_>).cast(),
+                )
+            };
+            match (context.error, expected) {
+                (None, None) => assert_eq!(status, 0),
+                (
+                    Some(Error::Limit {
+                        resource,
+                        actual: Some(actual),
+                        ..
+                    }),
+                    Some(expected),
+                ) => {
+                    assert_eq!(status, 1);
+                    assert_eq!((resource, actual), expected);
+                }
+                (other, _) => panic!("unexpected source header admission: {other:?}"),
+            }
+            assert!(context.columns.is_empty());
+            assert!(context.rows.is_empty());
         }
-    }
-    fn receipt_table_limits() -> TableLimits {
-        TableLimits {
-            max_rows: 1000,
-            max_columns: 200,
-            max_batches: 1,
-            max_cells: 100_000,
-        }
-    }
-    fn padded_xport() -> Vec<u8> {
-        let mut bytes = include_bytes!("../tests/fixtures/sas/fractional.xpt").to_vec();
-        bytes.extend_from_slice(&[b' '; 5120]);
-        bytes
     }
 
     #[test]
-    fn native_xport_operations_admit_more_than_a_million_small_records() {
+    fn native_xport_decodes_more_than_a_million_small_records() {
         // Independently authored v5 layout: 880 header/descriptor bytes then
         // repeated exact IBM cells for 1.5. Counting callbacks exercise the
         // real memory transport without allocating a million Rust table rows.
@@ -734,18 +608,15 @@ mod tests {
             rows: 0,
             invalid: false,
         };
-        let (mut resource, mut limit, mut actual, mut known, mut work_used) = (0, 0, 0, 0, 0);
+        let (mut resource, mut limit, mut actual, mut known) = (0, 0, 0, 0);
         let status = unsafe {
             yamaa_readstat_parse(
                 bytes.as_ptr(),
                 bytes.len(),
                 1,
-                10_000_000,
-                1024,
-                640_000_000,
-                64 * 1024 * 1024,
-                1,
-                &mut work_used,
+                Limits::TABLE_ROWS,
+                Limits::COLUMNS,
+                Limits::TABLE_CELLS,
                 meta,
                 field,
                 cell,
@@ -759,11 +630,10 @@ mod tests {
         assert_eq!(status, 0);
         assert_eq!(seen.rows, RECORDS);
         assert!(!seen.invalid);
-        assert_eq!(work_used, bytes.len() - 100);
     }
 
     #[test]
-    fn wide_xport_observation_uses_caller_work_cap_instead_of_fixed_allocator_cap() {
+    fn wide_xport_observation_preserves_all_fields_and_exact_text() {
         // The existing independent MEMBER-text fixture supplies v5 framing and
         // one character NAMESTR. Author 513 unique width32767 fields directly:
         // their one observation is 32767 bytes larger than 512 such fields and
@@ -788,53 +658,12 @@ mod tests {
         bytes.resize(observation + COLUMNS * WIDTH, b' ');
         bytes[observation + (COLUMNS - 1) * WIDTH] = b'!';
         bytes.resize(bytes.len().div_ceil(80) * 80, b' ');
-        let source = receipt_source();
-        let limits = Limits {
-            source_bytes: 64 * 1024 * 1024,
-            work_bytes: 64 * 1024 * 1024,
-            retained_bytes: 4 * 1024 * 1024,
-        };
-        let table_limits = TableLimits {
-            max_columns: 1024,
-            ..receipt_table_limits()
-        };
-        let mut usage = Usage::default();
-        let table = parse_with_usage(&bytes, &source, limits, table_limits, &mut usage).unwrap();
+        let source = source();
+        let table = parse(&bytes, &source).unwrap();
         assert_eq!(table.row_count(), 1);
         assert_eq!(table.schema().columns().len(), COLUMNS);
         assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Missing);
         assert_eq!(table.cell(0, COLUMNS - 1).unwrap(), ValueRef::Str("!"));
-        assert!(usage.complete);
-        assert!(usage.work_bytes > 16 * 1024 * 1024);
-        assert!(usage.storage_bytes < limits.retained_bytes);
-        let mut exact = Usage::default();
-        assert!(parse_with_usage(
-            &bytes,
-            &source,
-            Limits {
-                work_bytes: usage.work_bytes,
-                retained_bytes: usage.storage_bytes,
-                ..limits
-            },
-            table_limits,
-            &mut exact,
-        )
-        .is_ok());
-        assert_eq!(exact.storage_bytes, usage.storage_bytes);
-        assert_eq!(exact.work_bytes, usage.work_bytes);
-        assert!(exact.complete);
-        let small = Limits {
-            work_bytes: 16 * 1024 * 1024,
-            ..limits
-        };
-        assert!(matches!(
-            parse(&bytes, &source, small, table_limits),
-            Err(Error::Limit {
-                resource: "work_bytes",
-                limit: 16_777_216,
-                actual: Some(actual),
-            }) if actual > 16_777_216
-        ));
     }
 
     #[test]
@@ -846,14 +675,9 @@ mod tests {
         assert_eq!(&fixture[196..204], &[0, 4, 0, 0, 0, 16, 0, 0]);
         assert_eq!(&fixture[4660..4664], &40u32.to_le_bytes());
         assert_eq!(&fixture[4100..4104], &8u32.to_le_bytes());
-        let mut source = receipt_source();
+        let mut source = source();
         source.profile = SourceProfile::Sas7bdat;
         source.path = "datetime.sas7bdat".into();
-        let limits = Limits {
-            work_bytes: 128 * 1024 * 1024,
-            retained_bytes: 0,
-            ..receipt_limits()
-        };
         let mut bad_row = fixture.to_vec();
         bad_row[4660..4664].copy_from_slice(&(64u32 * 1024 * 1024).to_le_bytes());
         bad_row[4100..4104].copy_from_slice(&32768u32.to_le_bytes());
@@ -862,7 +686,7 @@ mod tests {
         bad_page[200..204].copy_from_slice(&(8u32 * 1024 * 1024).to_le_bytes());
         for bytes in [bad_row, bad_page] {
             assert!(matches!(
-                parse(&bytes, &source, limits, receipt_table_limits()),
+                parse(&bytes, &source),
                 Err(Error::Invalid("malformed"))
             ));
         }
@@ -879,22 +703,10 @@ mod tests {
         let mut bytes = fixture.to_vec();
         bytes[200..204].copy_from_slice(&(page_size as u32).to_le_bytes());
         bytes.resize(1024 + page_size, 0);
-        let mut source = receipt_source();
+        let mut source = source();
         source.profile = SourceProfile::Sas7bdat;
         source.path = "datetime.sas7bdat".into();
-        let mut usage = Usage::default();
-        let table = parse_with_usage(
-            &bytes,
-            &source,
-            Limits {
-                source_bytes: 64 * 1024 * 1024,
-                work_bytes: 128 * 1024 * 1024,
-                ..receipt_limits()
-            },
-            receipt_table_limits(),
-            &mut usage,
-        )
-        .unwrap();
+        let table = parse(&bytes, &source).unwrap();
         // Literal physical binary64 truth, read independently from the fixture
         // slots (not obtained from the candidate parser or its display formats).
         let expected = [
@@ -913,31 +725,6 @@ mod tests {
                 );
             }
         }
-        assert!(usage.complete);
-        assert!(usage.work_bytes >= 2 * page_size);
-        assert!(usage.storage_bytes < page_size);
-        let mut small = Usage::default();
-        assert!(matches!(
-            parse_with_usage(
-                &bytes,
-                &source,
-                Limits {
-                    source_bytes: 64 * 1024 * 1024,
-                    work_bytes: 16 * 1024 * 1024,
-                    ..receipt_limits()
-                },
-                receipt_table_limits(),
-                &mut small,
-            ),
-            Err(Error::Limit {
-                resource: "work_bytes",
-                limit: 16_777_216,
-                actual: Some(33_554_432),
-            })
-        ));
-        assert!(small.complete);
-        assert_eq!(small.storage_bytes, 0);
-        assert!(small.work_bytes < 16_777_216);
     }
 
     #[test]
@@ -986,18 +773,10 @@ mod tests {
         bytes[200..204].copy_from_slice(&(PAGE as u32).to_le_bytes());
         bytes.extend_from_slice(&page);
         assert_eq!(bytes.len(), 525312);
-        let mut source = receipt_source();
+        let mut source = source();
         source.profile = SourceProfile::Sas7bdat;
         source.path = "datetime.sas7bdat".into();
-        let mut usage = Usage::default();
-        let table = parse_with_usage(
-            &bytes,
-            &source,
-            receipt_limits(),
-            receipt_table_limits(),
-            &mut usage,
-        )
-        .unwrap();
+        let table = parse(&bytes, &source).unwrap();
         let expected = [
             [1_738_507_332.0, 20_121.0, 20_121.0, 20_121.0, 52_932.0],
             [1_704_190_463.0, 19_724.0, 19_724.0, 19_724.0, 36_863.0],
@@ -1014,187 +793,27 @@ mod tests {
                 );
             }
         }
-        assert!(usage.complete);
-        assert!(usage.work_bytes <= receipt_limits().work_bytes);
-        assert!(matches!(
-            parse(
-                &bytes,
-                &source,
-                Limits {
-                    work_bytes: PAGE - 1,
-                    ..receipt_limits()
-                },
-                receipt_table_limits(),
-            ),
-            Err(Error::Limit {
-                resource: "work_bytes",
-                limit: 524287,
-                actual: Some(524288),
-            })
-        ));
     }
 
     #[test]
-    fn measured_work_uses_actual_snapshot_reads_and_exact_small_quota() {
-        let bytes = padded_xport();
-        let source = receipt_source();
-        let mut usage = Usage::default();
-        let table = parse_with_usage(
-            &bytes,
-            &source,
-            receipt_limits(),
-            receipt_table_limits(),
-            &mut usage,
-        )
-        .unwrap();
-        assert_eq!(table.row_count(), 1);
-        assert_eq!(
-            table.cell(0, 0).unwrap(),
-            ValueRef::Float(yamaa_core::value::FiniteFloat::new(1.5).unwrap())
-        );
-        assert!(usage.complete);
-        // Independent v5 framing: the source's 80-byte library record and
-        // 20-byte NAMESTR padding are skipped, not read. All observation
-        // padding is read. This also exceeds the native buffer highwater.
-        assert_eq!(usage.work_bytes, bytes.len() - 100);
-        assert!(usage.storage_bytes > 0);
-        assert!(usage.storage_bytes < usage.work_bytes);
-
-        let mut limits = receipt_limits();
-        limits.work_bytes = usage.work_bytes;
-        limits.retained_bytes = usage.storage_bytes;
-        let mut exact = Usage::default();
-        assert!(
-            parse_with_usage(&bytes, &source, limits, receipt_table_limits(), &mut exact,).is_ok()
-        );
-        assert!(exact.complete);
-        assert_eq!(exact.storage_bytes, usage.storage_bytes);
-        assert_eq!(exact.work_bytes, usage.work_bytes);
-
-        limits.work_bytes -= 1;
-        // The public route preserves its historical per-buffer work policy.
-        assert!(parse(&bytes, &source, limits, receipt_table_limits()).is_ok());
-        let mut refused = Usage::default();
-        assert!(matches!(
-            parse_with_usage(&bytes, &source, limits, receipt_table_limits(), &mut refused),
-            Err(Error::Limit {
-                resource: "work_bytes",
-                limit,
-                actual: Some(actual),
-            }) if limit == usage.work_bytes - 1 && actual == usage.work_bytes
-        ));
-        assert!(refused.complete);
-        assert_eq!(refused.storage_bytes, usage.storage_bytes);
-        assert_eq!(refused.work_bytes, usage.work_bytes - 8);
-    }
-
-    #[test]
-    fn retention_and_semantic_refusals_report_only_the_admitted_prefix() {
+    fn semantic_and_encoding_refusals_keep_their_exact_causes() {
         let bytes = include_bytes!("../tests/fixtures/sas/fractional.xpt");
-        let mut source = receipt_source();
-        let mut success = Usage::default();
-        parse_with_usage(
-            bytes,
-            &source,
-            receipt_limits(),
-            receipt_table_limits(),
-            &mut success,
-        )
-        .unwrap();
-        let mut limits = receipt_limits();
-        limits.retained_bytes = success.storage_bytes - 1;
-        let mut refused = Usage::default();
-        assert!(matches!(
-            parse_with_usage(bytes, &source, limits, receipt_table_limits(), &mut refused),
-            Err(Error::Limit {
-                resource: "retained_bytes",
-                limit,
-                actual: Some(actual),
-            }) if limit == success.storage_bytes - 1 && actual == success.storage_bytes
-        ));
-        assert!(refused.complete);
-        assert!(refused.storage_bytes < limits.retained_bytes);
-        assert!(refused.work_bytes <= limits.work_bytes);
-
+        let mut source = source();
         source.types = vec![("NUM".into(), ColumnType::Int)];
-        let mut semantic = Usage::default();
         assert!(matches!(
-            parse_with_usage(
-                bytes,
-                &source,
-                receipt_limits(),
-                receipt_table_limits(),
-                &mut semantic
-            ),
+            parse(bytes, &source),
             Err(Error::Typing(
                 yamaa_core::typed_csv::Error::FieldParse { .. }
             ))
         ));
-        assert!(semantic.complete);
-        assert_eq!(semantic.storage_bytes, success.storage_bytes);
-        assert_eq!(semantic.work_bytes, success.work_bytes);
-
         source.encoding = None;
-        let mut static_refusal = Usage::default();
         assert!(matches!(
-            parse_with_usage(
-                bytes,
-                &source,
-                receipt_limits(),
-                receipt_table_limits(),
-                &mut static_refusal
-            ),
+            parse(bytes, &source),
             Err(Error::Invalid("encoding"))
         ));
-        assert!(static_refusal.complete);
-        assert_eq!(static_refusal.storage_bytes, 0);
-        assert_eq!(static_refusal.work_bytes, 0);
-
         source.encoding = Some("windows-1252".into());
         source.profile = SourceProfile::Csv;
-        let mut internal = Usage::default();
-        assert!(matches!(
-            parse_with_usage(
-                bytes,
-                &source,
-                receipt_limits(),
-                receipt_table_limits(),
-                &mut internal,
-            ),
-            Err(Error::Internal)
-        ));
-        assert!(!internal.complete);
-    }
-
-    #[test]
-    fn sas_dataset_receipts_are_stable_with_exact_remaining_allowances() {
-        let bytes = include_bytes!("../tests/fixtures/sas/datetime.sas7bdat");
-        let mut source = receipt_source();
-        source.path = "datetime.sas7bdat".into();
-        source.profile = SourceProfile::Sas7bdat;
-        let mut usage = Usage::default();
-        let table = parse_with_usage(
-            bytes,
-            &source,
-            receipt_limits(),
-            receipt_table_limits(),
-            &mut usage,
-        )
-        .unwrap();
-        assert_eq!(table.schema().columns().len(), 5);
-        assert!(usage.complete);
-        assert!(usage.storage_bytes > 0);
-        assert!(usage.work_bytes > 0);
-        let mut limits = receipt_limits();
-        limits.retained_bytes = usage.storage_bytes;
-        limits.work_bytes = usage.work_bytes;
-        let mut exact = Usage::default();
-        let exact_table =
-            parse_with_usage(bytes, &source, limits, receipt_table_limits(), &mut exact).unwrap();
-        assert_eq!(exact_table.row_count(), table.row_count());
-        assert_eq!(exact.storage_bytes, usage.storage_bytes);
-        assert_eq!(exact.work_bytes, usage.work_bytes);
-        assert!(exact.complete);
+        assert!(matches!(parse(bytes, &source), Err(Error::Internal)));
     }
 
     #[test]
