@@ -5,6 +5,47 @@ use std::{
 };
 static NEXT: AtomicU64 = AtomicU64::new(0);
 #[test]
+fn public_define_issue_prefix_keeps_complete_raw_metadata_and_diagnostics_in_both_hosts() {
+    use yamaa_core::{application_issue, limits::Limits};
+    for host in [Language::Python, Language::R] {
+        for length in [Limits::FINDINGS, Limits::FINDINGS + 1] {
+            let diagnostics = (0..length)
+                .map(|index| {
+                    let mut finding = application_issue::rejected("define", "authored_failure");
+                    finding.spec_paths = vec![format!("datasets.D{index}.artifact")];
+                    finding
+                })
+                .collect::<Vec<_>>();
+            let metadata = diagnostics
+                .iter()
+                .map(|finding| Finding {
+                    code: finding.code,
+                    path: finding.spec_paths[0].clone(),
+                    context: finding.context.clone(),
+                })
+                .collect();
+            for failure in [
+                Failure::Metadata(metadata),
+                Failure::Diagnostic(diagnostics),
+            ] {
+                let mut result = Define::prepare("", "sdtm", None, "0.4.0", host);
+                result.refuse(failure);
+                assert_eq!(result.issues().len(), Limits::FINDINGS);
+                for (index, issue) in result.issues().iter().enumerate() {
+                    assert_eq!(issue.spec_paths, [format!("datasets.D{index}.artifact")]);
+                }
+                let held = match result.failure().unwrap() {
+                    Failure::Metadata(findings) => findings.len(),
+                    Failure::Diagnostic(findings) => findings.len(),
+                    _ => panic!("original metadata or diagnostic owner must remain held"),
+                };
+                assert_eq!(held, length);
+            }
+        }
+    }
+}
+
+#[test]
 fn actual_changed_define_resource_keeps_authored_cause_path_and_snapshot_in_both_hosts() {
     let directory = std::env::temp_dir().join(format!(
         "yamaa-define-resource-change-{}-{}",
@@ -16,12 +57,12 @@ fn actual_changed_define_resource_keeps_authored_cause_path_and_snapshot_in_both
     fs::write(directory.join("dm.csv"), b"ID\n1\n").unwrap();
     let text = file_resources::caller_path(&directory).unwrap();
     let mut resources = Resources::new(&text, &text, &[]).unwrap();
-    let original = resources.capture("dm.csv", 16).unwrap().0;
+    let original = resources.capture("dm.csv").unwrap().0;
     fs::write(directory.join("dm.csv"), b"ID\n2\n").unwrap();
-    let error = resources.capture("dm.csv", 16).unwrap_err();
+    let error = resources.capture("dm.csv").unwrap_err();
     assert_eq!(error, file_resources::Error::Changed);
     for host in [Language::Python, Language::R] {
-        let error = resources.capture("dm.csv", 16).unwrap_err();
+        let error = resources.capture("dm.csv").unwrap_err();
         let findings = issues(&resource("datasets.DM.artifact", "dm.csv", error), host);
         assert_eq!(findings.len(), 1);
         let finding = &findings[0];
@@ -30,8 +71,8 @@ fn actual_changed_define_resource_keeps_authored_cause_path_and_snapshot_in_both
         assert_eq!(finding.requirement.as_deref(), Some("REQ-0788"));
         assert_eq!(finding.spec_paths, ["datasets.DM.artifact"]);
         assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&finding.context).unwrap(),
-            serde_json::json!({"path":"dm.csv"})
+            serde_json::from_str::<yamaa_core::json::Value>(&finding.context).unwrap(),
+            yamaa_core::json::json!({"path":"dm.csv"})
         );
     }
     assert_eq!(resources.capture_reads(), 1);
@@ -73,17 +114,16 @@ fn changed_define_metadata_uses_original_root_spec_parent_and_dictionary_occurre
         let environment_written =
             file_resources::caller_path(&directory.join("environment.yaml")).unwrap();
         let mut ports = NativePorts {
+            after_publish: None,
             resources: None,
             host: Language::Python,
             environment: None,
             environment_written: String::new(),
             specifications: Vec::new(),
         };
-        let environment = ports
-            .capture_environment(&environment_written, service::METADATA_LIMITS)
-            .unwrap();
+        let environment = ports.capture_environment(&environment_written).unwrap();
         let specification = ports
-            .capture_specification_at(
+            .capture_specification(
                 "sdtm.specs[0]",
                 &environment.root().source().identity,
                 "spec.yaml",
@@ -117,8 +157,8 @@ fn changed_define_metadata_uses_original_root_spec_parent_and_dictionary_occurre
             assert_eq!(findings[0].requirement.as_deref(), Some("REQ-0788"));
             assert_eq!(findings[0].spec_paths, [field]);
             assert_eq!(
-                serde_json::from_str::<serde_json::Value>(&findings[0].context).unwrap(),
-                serde_json::json!({"path":written})
+                serde_json::from_str::<yamaa_core::json::Value>(&findings[0].context).unwrap(),
+                yamaa_core::json::json!({"path":written})
             );
         }
         assert_eq!(ports.resources().capture_reads(), reads);
@@ -167,13 +207,13 @@ fn later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_re
     assert!(result.issues().is_empty(), "{:?}", result.issues());
     let held = result.artifacts().next().unwrap().1.to_vec();
     let reads = result.capture_reads();
-    assert!(result
-        .save_with_checkpoint(|index| {
-            if index == 0 {
-                fs::create_dir(directory.join("second.json")).unwrap();
-            }
-        })
-        .is_err());
+    let later_target = directory.join("second.json");
+    result.ports.after_publish = Some(Box::new(move |written| {
+        if written == "dm.json" {
+            fs::create_dir(&later_target).unwrap();
+        }
+    }));
+    assert!(result.save().is_err());
     assert_eq!(fs::read(directory.join("dm.json")).unwrap(), held);
     assert_eq!(
         fs::read(directory.join("define.xml")).unwrap(),
@@ -200,8 +240,8 @@ fn later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_re
     assert_eq!(result.issues()[0].requirement.as_deref(), Some("REQ-0764"));
     assert_eq!(result.issues()[0].spec_paths, ["define"]);
     assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&result.issues()[0].context).unwrap(),
-        serde_json::json!({"artifact":1,"cause":error.message()})
+        serde_json::from_str::<yamaa_core::json::Value>(&result.issues()[0].context).unwrap(),
+        yamaa_core::json::json!({"artifact":1,"cause":error.message()})
     );
     assert_eq!(result.capture_reads(), reads);
     assert!(result.save().is_err());
@@ -218,4 +258,61 @@ fn later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_re
         0
     );
     fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn define_caps_only_the_public_issue_prefix_and_retains_every_original_finding() {
+    use yamaa_core::diagnostic::ConditionCode;
+    for host in [Language::Python, Language::R] {
+        for diagnostic in [false, true] {
+            let missing = std::env::temp_dir().join(format!(
+                "yamaa-missing-define-environment-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed),
+            ));
+            let missing = file_resources::caller_path(&missing).unwrap();
+            let mut result = Define::prepare(&missing, "sdtm", None, "0.4.0", host);
+            let failure = if diagnostic {
+                Failure::Diagnostic(
+                    (0..10_001)
+                        .map(|index| {
+                            service::resource_diagnostic(
+                                &format!("findings[{index}]"),
+                                "missing.csv",
+                                service::ResourceObservation::Missing,
+                            )
+                        })
+                        .collect(),
+                )
+            } else {
+                Failure::Metadata(
+                    (0..10_001)
+                        .map(|index| {
+                            Finding::cause(
+                                ConditionCode::ApplicationRejected,
+                                &format!("findings[{index}]"),
+                                "authored metadata refusal",
+                            )
+                        })
+                        .collect(),
+                )
+            };
+            result.refuse(failure);
+            assert_eq!(result.issues().len(), 10_000);
+            for (index, issue) in result.issues().iter().enumerate() {
+                assert_eq!(issue.spec_paths, [format!("findings[{index}]")]);
+            }
+            match result.failure().unwrap() {
+                Failure::Metadata(findings) => {
+                    assert_eq!(findings.len(), 10_001);
+                    assert_eq!(findings.last().unwrap().path, "findings[10000]");
+                }
+                Failure::Diagnostic(findings) => {
+                    assert_eq!(findings.len(), 10_001);
+                    assert_eq!(findings.last().unwrap().spec_paths, ["findings[10000]"]);
+                }
+                other => panic!("original finding owner was replaced: {other:?}"),
+            }
+        }
+    }
 }

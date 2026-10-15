@@ -1,6 +1,6 @@
 //! Read-only SAS binary input, enabled by the default `readstat` feature.
 #[cfg(not(feature = "readstat"))]
-use crate::arrow_table::{ArrowTable, TableLimits};
+use crate::arrow_table::ArrowTable;
 use yamaa_core::diagnostic::SourceFinding;
 #[cfg(not(feature = "readstat"))]
 use yamaa_core::specification::SourceDeclaration;
@@ -32,48 +32,32 @@ impl Error {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct Limits {
-    pub source_bytes: usize,
-    pub work_bytes: usize,
-    pub retained_bytes: usize,
+impl From<yamaa_core::limits::LimitExceeded> for Error {
+    fn from(error: yamaa_core::limits::LimitExceeded) -> Self {
+        Self::Limit {
+            resource: error.resource,
+            limit: error.limit,
+            actual: error.actual,
+        }
+    }
 }
-
 #[cfg(feature = "readstat")]
 #[allow(unsafe_code)] // Reviewed ReadStat memory transport and callback ABI.
 mod native;
 #[cfg(feature = "readstat")]
 pub use native::parse;
-#[cfg(feature = "readstat")]
-pub(crate) use native::parse_with_usage;
 
 /// SAS binary input is unavailable when the `readstat` feature is disabled.
 #[cfg(not(feature = "readstat"))]
-pub fn parse(
-    _bytes: &[u8],
-    _source: &SourceDeclaration,
-    _limits: Limits,
-    _table_limits: TableLimits,
-) -> Result<ArrowTable, Error> {
+pub fn parse(_bytes: &[u8], _source: &SourceDeclaration) -> Result<ArrowTable, Error> {
     Err(Error::Unavailable)
-}
-
-#[cfg(not(feature = "readstat"))]
-pub(crate) fn parse_with_usage(
-    bytes: &[u8],
-    source: &SourceDeclaration,
-    limits: Limits,
-    table_limits: TableLimits,
-    usage: &mut crate::source_decode_usage::Usage,
-) -> Result<ArrowTable, Error> {
-    usage.complete();
-    parse(bytes, source, limits, table_limits)
 }
 
 #[cfg(all(test, not(feature = "readstat")))]
 mod tests {
     use super::*;
     use yamaa_core::specification::SourceProfile;
+    use yamaa_core::specification_run::SourceDecoder as _;
 
     #[test]
     fn omitted_reader_rejects_both_profiles_with_explicit_boundary_code() {
@@ -90,22 +74,17 @@ mod tests {
                 empty_string_present: false,
                 ordinal: None,
             };
-            let error = parse(
-                b"unused",
+            let failure = crate::specification_run::decode_source(
                 &source,
-                Limits {
-                    source_bytes: 100,
-                    work_bytes: 100,
-                    retained_bytes: 100,
-                },
-                TableLimits {
-                    max_rows: 10,
-                    max_columns: 10,
-                    max_batches: 1,
-                    max_cells: 100,
-                },
+                b"unused",
+                yamaa_core::specification::SourceInterpretation::Ordinary,
+                None,
             )
             .unwrap_err();
+            assert!(!crate::specification_run::SourceDecoder.continue_after(&failure));
+            let crate::specification_run::Error::SasSource(error) = failure else {
+                panic!("SAS capability refusal must keep its source boundary");
+            };
             assert!(matches!(error, Error::Unavailable));
             assert!(error.finding("RAW", path).is_none());
             let reply = crate::specification_diagnostics::failure(
@@ -113,8 +92,8 @@ mod tests {
                 Some(&source),
             );
             assert_eq!(
-                serde_json::from_str::<serde_json::Value>(&reply).unwrap()["outcome"],
-                serde_json::json!({"status":"rejected", "stage":"ingest", "code":"sas_reader_unavailable"})
+                serde_json::from_str::<yamaa_core::json::Value>(&reply).unwrap()["outcome"],
+                yamaa_core::json::json!({"status":"rejected", "stage":"ingest", "code":"sas_reader_unavailable"})
             );
         }
     }

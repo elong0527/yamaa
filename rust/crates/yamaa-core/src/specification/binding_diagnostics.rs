@@ -1,14 +1,13 @@
 //! Project retained source-dependent binding findings without rebinding or IO.
 use super::{BindFinding, SourceDeclaration};
+use crate::json::Value as V;
 use crate::{
     column_dependencies,
     diagnostic::{ConditionCode as C, Context, Diagnostic},
-    numeric_compiler::CompileError,
     numeric_parser::ParseError,
     reference_binding, reference_scope,
-    schema::{quoted_diagnostic_text, ValidationBudget},
+    schema::quoted_diagnostic_text,
 };
-use serde_json::Value as V;
 use std::vec;
 
 fn text(value: &str) -> V {
@@ -166,7 +165,7 @@ impl BindFinding {
             Self::Numeric {
                 path,
                 expression,
-                error: CompileError::Parse(ParseError::Grammar { failure, .. }),
+                error: ParseError::Grammar { failure, .. },
             } => return Some(vec![failure.diagnostic(path, expression)?]),
             Self::AggregateScope {
                 path,
@@ -177,9 +176,8 @@ impl BindFinding {
                 let reason = match relation {
                     None => "a grouped row aggregate reads its row driver".into(),
                     Some(relation) => {
-                        let mut budget = ValidationBudget::new(Default::default());
-                        let driver = quoted_diagnostic_text(driver, &mut budget).ok()?;
-                        let relation = quoted_diagnostic_text(relation, &mut budget).ok()?;
+                        let driver = quoted_diagnostic_text(driver);
+                        let relation = quoted_diagnostic_text(relation);
                         format!("a grouped row aggregate reads {driver}, not {relation}")
                     }
                 };
@@ -194,8 +192,7 @@ impl BindFinding {
                 expression,
                 relation,
             } => {
-                let mut budget = ValidationBudget::new(Default::default());
-                let relation = quoted_diagnostic_text(relation, &mut budget).ok()?;
+                let relation = quoted_diagnostic_text(relation);
                 (
                     C::AggregateDriverScope,
                     path,

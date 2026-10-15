@@ -42,13 +42,9 @@ impl<'py, 'lock> Port<'py, 'lock> {
         self.py.import("yamaa._locked_functions")
     }
 }
-fn text(value: &Bound<'_, PyAny>, remaining: &mut usize) -> Result<String, Error> {
+fn text(value: &Bound<'_, PyAny>) -> Result<String, Error> {
     let value = value.cast::<PyString>().map_err(|_| Error::Protocol)?;
     let value = value.to_str().map_err(Error::Host)?;
-    if value.len() > 2048 {
-        return Err(Error::Protocol);
-    }
-    *remaining = remaining.checked_sub(value.len()).ok_or(Error::Protocol)?;
     Ok(value.to_owned())
 }
 impl ActivationPort for Port<'_, '_> {
@@ -60,11 +56,7 @@ impl ActivationPort for Port<'_, '_> {
         lock: &LockReference,
         functions: &[ProjectFunctionIdentity],
     ) -> Result<(), Error> {
-        if language != Language::Python
-            || lock.kind != LockKind::Uv
-            || self.lock.len() > yamaa_adapters::host_limits::REPLY_BYTES
-            || functions.len() > yamaa_adapters::host_limits::FUNCTIONS
-        {
+        if language != Language::Python || lock.kind != LockKind::Uv {
             return Err(Error::Protocol);
         }
         let calls = PyList::new(self.py, functions.iter().map(|f| &f.call)).map_err(Error::Host)?;
@@ -76,38 +68,24 @@ impl ActivationPort for Port<'_, '_> {
             .call1((PyBytes::new(self.py, self.lock), calls))
             .map_err(Error::Host)?;
         let rows = reply.cast::<PyTuple>().map_err(|_| Error::Protocol)?;
-        if rows.len() > yamaa_adapters::host_limits::VERSION_FINDINGS {
-            return Err(Error::Protocol);
-        }
         let mut findings = Vec::with_capacity(rows.len());
-        let mut remaining_text = yamaa_adapters::host_limits::REPLY_BYTES;
-        let mut remaining_versions: usize = yamaa_adapters::host_limits::RECORDS;
         for row in rows {
             let expected = row.getattr("expected").map_err(Error::Host)?;
             let expected = expected.cast::<PyTuple>().map_err(|_| Error::Protocol)?;
-            remaining_versions = remaining_versions
-                .checked_sub(expected.len())
-                .ok_or(Error::Protocol)?;
             let expected = expected
                 .iter()
-                .map(|value| text(&value, &mut remaining_text))
+                .map(|value| text(&value))
                 .collect::<Result<Vec<_>, _>>()?;
             let actual = row.getattr("actual").map_err(Error::Host)?;
             let finding = Finding {
-                package: text(
-                    &row.getattr("package").map_err(Error::Host)?,
-                    &mut remaining_text,
-                )?,
-                reason: Reason::parse(&text(
-                    &row.getattr("reason").map_err(Error::Host)?,
-                    &mut remaining_text,
-                )?)
-                .ok_or(Error::Protocol)?,
+                package: text(&row.getattr("package").map_err(Error::Host)?)?,
+                reason: Reason::parse(&text(&row.getattr("reason").map_err(Error::Host)?)?)
+                    .ok_or(Error::Protocol)?,
                 expected,
                 actual: if actual.is_none() {
                     None
                 } else {
-                    Some(text(&actual, &mut remaining_text)?)
+                    Some(text(&actual)?)
                 },
             };
             findings.push(finding);

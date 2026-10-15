@@ -114,7 +114,7 @@ pub(super) fn bind(
                 _ => None,
             })
         } else {
-            match catalog.bind(name).map_err(BindError::Catalog)? {
+            match catalog.bind(name) {
                 Some(reference_binding::Binding::Output { column, .. }) => {
                     edges.push(column);
                     Some(Read::Column(column))
@@ -136,10 +136,7 @@ pub(super) fn bind(
             });
         } else {
             if !name.contains('.') {
-                if let Some(owner) = catalog
-                    .unique_field_owner(name)
-                    .map_err(BindError::Catalog)?
-                {
+                if let Some(owner) = catalog.unique_field_owner(name) {
                     let mut finding = LookupFinding::new(
                         plan.spec_path(),
                         crate::diagnostic::ConditionCode::PredicateUnresolvableName,
@@ -162,7 +159,7 @@ pub(super) fn bind(
         })
         .collect::<Result<BTreeMap<_, _>, _>>()?;
     findings.extend(
-        static_types::predicate_kinds(plan, |name| kinds.get(name).copied().flatten())?
+        static_types::predicate_kinds(plan, |name| kinds.get(name).copied().flatten())
             .into_iter()
             .map(BindFinding::Predicate),
     );

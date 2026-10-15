@@ -1,63 +1,9 @@
-//! Authored YAML findings and bounded retained report encoding.
+//! Authored YAML findings and complete retained report encoding.
 use crate::yaml_decode::DecodeFailure;
-use serde_json::{json, Value};
-use std::{fmt, io};
+use yamaa_core::json::{json, Value};
 
-/// Host transport failures; authored YAML failures are returned as data.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Error {
-    ResponseLimit,
-    Internal,
-}
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Self::ResponseLimit => "YAML response exceeds byte limit",
-            Self::Internal => "internal YAML decoder failure",
-        })
-    }
-}
-impl std::error::Error for Error {}
-
-struct Response {
-    bytes: Vec<u8>,
-    limit: usize,
-}
-impl io::Write for Response {
-    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        if self.bytes.len().saturating_add(bytes.len()) > self.limit {
-            return Err(io::Error::other("response limit"));
-        }
-        self.bytes.extend_from_slice(bytes);
-        Ok(bytes.len())
-    }
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-/// Bound the complete encoded envelope without publishing a partial prefix.
-pub(crate) fn encode_outcome(
-    protocol: &str,
-    outcome: Value,
-    limit: usize,
-) -> Result<String, Error> {
-    let mut response = Response {
-        bytes: Vec::new(),
-        limit,
-    };
-    serde_json::to_writer(
-        &mut response,
-        &json!({"protocol":protocol,"outcome":outcome}),
-    )
-    .map_err(|error| {
-        if error.is_io() {
-            Error::ResponseLimit
-        } else {
-            Error::Internal
-        }
-    })?;
-    String::from_utf8(response.bytes).map_err(|_| Error::Internal)
+pub(crate) fn encode_outcome(protocol: &str, outcome: Value) -> String {
+    json!({"protocol":protocol,"outcome":outcome}).to_string()
 }
 
 /// Semantic source findings are shared by byte probes and document preparation.

@@ -1,12 +1,13 @@
 //! Typed three-valued predicates, independent of syntax, tables and host runtimes.
 //!
-//! The immutable arena admits structure and expanded work before resolution.
+//! The immutable arena validates structure before resolution.
 //! Evaluation preserves written operand occurrences, including BETWEEN's repeated
 //! subject. A future compiler owns grammar, binding and literal validation.
 
 use std::cmp::Ordering;
 use std::vec;
 
+use crate::limits::{LimitExceeded, Limits};
 use crate::regex;
 use crate::table::ValueRef;
 use crate::value::{compare_present, Selection, Value, ValueType};
@@ -114,55 +115,6 @@ pub enum Node {
     },
 }
 
-/// Caller-selected policies, not restrictions on the language itself.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Limits {
-    pub nodes: usize,
-    pub depth: usize,
-    pub work: usize,
-    pub resolutions: usize,
-    pub text_bytes: usize,
-    pub like_work: usize,
-    /// Cumulative matching across every Contains occurrence in this evaluation.
-    pub regex: regex::MatchLimits,
-}
-
-impl Default for Limits {
-    /// Bound expansion and dynamic text work independently of input row counts.
-    fn default() -> Self {
-        Self {
-            nodes: 4096,
-            depth: 64,
-            work: 16384,
-            resolutions: 4096,
-            text_bytes: 1_048_576,
-            like_work: 1_048_576,
-            regex: regex::MatchLimits::default(),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Resource {
-    Nodes,
-    Depth,
-    Work,
-    Resolutions,
-    TextBytes,
-    LikeWork,
-    RegexSubjectBytes,
-    RegexWork,
-    RegexStateCells,
-}
-
-/// Resource refusal is never predicate false, unknown or a language diagnostic.
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-#[error("predicate: resource={resource:?}, limit={limit:?}")]
-pub struct LimitError {
-    pub resource: Resource,
-    pub limit: usize,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum PlanError {
     #[error("predicate invalid root")]
@@ -179,7 +131,7 @@ pub enum PlanError {
         error: regex::CompileError,
     },
     #[error("predicate limit: {0:?}")]
-    Limit(LimitError),
+    Limit(LimitExceeded),
 }
 
 /// The owning scope resolves names; its failures remain opaque and move intact.
@@ -188,66 +140,12 @@ pub trait Resolver {
     /// Resolve this occurrence once, preserving absence versus present missing.
     fn resolve(&mut self, identifier: &str) -> Result<Selection, Self::Error>;
 
-    /// Optionally lend a normalized cell so text is charged before copying it.
+    /// Optionally lend a normalized cell until this operand is copied.
     /// Existing owning ports retain their original one-call behavior by default.
     fn resolve_value(&mut self, identifier: &str) -> Result<Resolved<'_>, Self::Error> {
         self.resolve(identifier).map(|selection| match selection {
             Selection::Absent => Resolved::Absent,
             Selection::Present(value) => Resolved::Owned(value),
-        })
-    }
-}
-
-/// An application context owns lazy resolution and its cumulative counters.
-/// Complex resolutions may evaluate joins/filters against the same budget.
-/// `resolve` admits operand text against both counters before returning ownership.
-pub trait EvaluationContext {
-    type Error;
-    fn budget(&mut self) -> &mut Budget;
-    fn resolve(
-        &mut self,
-        identifier: &str,
-        local: &mut Budget,
-    ) -> Result<Selection, ContextError<Self::Error>>;
-}
-
-/// A context keeps resource refusals separate from opaque resolution failures.
-#[derive(Debug)]
-pub enum ContextError<E> {
-    Resolution(E),
-    Limit(LimitError),
-}
-
-struct ResolverContext<'a, R> {
-    resolver: &'a mut R,
-    shared: &'a mut Budget,
-}
-impl<R: Resolver> EvaluationContext for ResolverContext<'_, R> {
-    type Error = R::Error;
-    fn budget(&mut self) -> &mut Budget {
-        self.shared
-    }
-    fn resolve(
-        &mut self,
-        identifier: &str,
-        local: &mut Budget,
-    ) -> Result<Selection, ContextError<Self::Error>> {
-        let value = self
-            .resolver
-            .resolve_value(identifier)
-            .map_err(ContextError::Resolution)?;
-        let bytes = match &value {
-            Resolved::Owned(Value::Str(value)) => value.len(),
-            Resolved::Borrowed(ValueRef::Str(value)) => value.len(),
-            _ => 0,
-        };
-        self.shared
-            .operand_text(local, bytes)
-            .map_err(ContextError::Limit)?;
-        Ok(match value {
-            Resolved::Absent => Selection::Absent,
-            Resolved::Owned(value) => Selection::Present(value),
-            Resolved::Borrowed(value) => Selection::Present(own(value)),
         })
     }
 }
@@ -269,172 +167,6 @@ pub enum Resolved<'a> {
     Absent,
     Owned(Value),
     Borrowed(ValueRef<'a>),
-}
-
-/// Runtime counters or quotas; structural arena limits remain plan-local.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Usage {
-    pub work: usize,
-    pub resolutions: usize,
-    pub text_bytes: usize,
-    pub like_work: usize,
-    pub regex: regex::MatchUsage,
-}
-
-impl From<Limits> for Usage {
-    /// Select only limits that apply to actual evaluation occurrences.
-    fn from(limits: Limits) -> Self {
-        Self {
-            work: limits.work,
-            resolutions: limits.resolutions,
-            text_bytes: limits.text_bytes,
-            like_work: limits.like_work,
-            regex: regex::MatchUsage {
-                subject_bytes: limits.regex.subject_bytes,
-                work: limits.regex.work,
-                state_cells: limits.regex.state_cells,
-            },
-        }
-    }
-}
-
-/// An application-owned cumulative budget shared across predicates and rows.
-/// Failed charges retain the already consumed prefix; no evaluation resets it.
-#[derive(Debug)]
-pub struct Budget {
-    limits: Usage,
-    used: Usage,
-    regex: regex::MatchBudget,
-}
-
-impl Budget {
-    /// Resume one application's already admitted counters without replaying effects.
-    pub fn with_usage(limits: Usage, used: Usage) -> Self {
-        assert!(used.work <= limits.work);
-        assert!(used.resolutions <= limits.resolutions);
-        assert!(used.text_bytes <= limits.text_bytes);
-        assert!(used.like_work <= limits.like_work);
-        Self {
-            limits,
-            used,
-            regex: regex::MatchBudget::with_usage(
-                regex::MatchLimits {
-                    subject_bytes: limits.regex.subject_bytes,
-                    work: limits.regex.work,
-                    state_cells: limits.regex.state_cells,
-                },
-                used.regex,
-            ),
-        }
-    }
-    /// Start an explicit accounting scope; callers own its lifetime.
-    pub fn new(limits: Usage) -> Self {
-        Self {
-            limits,
-            used: Usage::default(),
-            regex: regex::MatchBudget::new(regex::MatchLimits {
-                subject_bytes: limits.regex.subject_bytes,
-                work: limits.regex.work,
-                state_cells: limits.regex.state_cells,
-            }),
-        }
-    }
-
-    /// Observe consumed work even after a language, resolver or resource failure.
-    pub fn used(&self) -> Usage {
-        Usage {
-            regex: self.regex.used(),
-            ..self.used
-        }
-    }
-
-    /// Column checks and predicates share regex work within one application attempt.
-    pub fn search_pattern<'s>(
-        &mut self,
-        pattern: &regex::Pattern,
-        subject: &'s str,
-        limits: regex::MatchLimits,
-    ) -> Result<Option<regex::Match<'s>>, LimitError> {
-        pattern
-            .search_with_budget(subject, limits, &mut self.regex)
-            .map_err(|error| LimitError {
-                resource: match error.resource {
-                    regex::Resource::SubjectBytes => Resource::RegexSubjectBytes,
-                    regex::Resource::Work => Resource::RegexWork,
-                    regex::Resource::StateCells => Resource::RegexStateCells,
-                    _ => unreachable!("search cannot consume compilation resources"),
-                },
-                limit: error.limit,
-            })
-    }
-
-    /// Share ordinary application visits with predicate node/scalar visits.
-    pub fn work(&mut self, amount: usize) -> Result<(), LimitError> {
-        charge(
-            &mut self.used.work,
-            amount,
-            self.limits.work,
-            Resource::Work,
-        )
-    }
-
-    /// Share application scalar copying with predicate text processing.
-    pub fn text(&mut self, amount: usize) -> Result<(), LimitError> {
-        charge(
-            &mut self.used.text_bytes,
-            amount,
-            self.limits.text_bytes,
-            Resource::TextBytes,
-        )
-    }
-
-    /// Admit one resolved operand's bytes before the context copies or retains it.
-    /// Local refusal preserves the shared prefix, as the ordinary resolver entry point does.
-    pub fn operand_text(&mut self, local: &mut Budget, bytes: usize) -> Result<(), LimitError> {
-        local.text(bytes)?;
-        self.text(bytes)
-    }
-
-    /// Charge one evaluation resource without accepting structural-limit variants.
-    fn consume(&mut self, resource: Resource, amount: usize) -> Result<(), LimitError> {
-        match resource {
-            Resource::Work => self.work(amount),
-            Resource::TextBytes => self.text(amount),
-            Resource::Resolutions => charge(
-                &mut self.used.resolutions,
-                amount,
-                self.limits.resolutions,
-                resource,
-            ),
-            Resource::LikeWork => charge(
-                &mut self.used.like_work,
-                amount,
-                self.limits.like_work,
-                resource,
-            ),
-            Resource::Nodes | Resource::Depth => unreachable!("structural admission is separate"),
-            Resource::RegexSubjectBytes | Resource::RegexWork | Resource::RegexStateCells => {
-                unreachable!("matching charges both regex budgets directly")
-            }
-        }
-    }
-}
-
-struct RunBudget {
-    local: Budget,
-}
-
-impl RunBudget {
-    /// Enforce both the plan's per-evaluation policy and the application's total.
-    fn consume<C: EvaluationContext>(
-        &mut self,
-        context: &mut C,
-        resource: Resource,
-        amount: usize,
-    ) -> Result<(), LimitError> {
-        self.local.consume(resource, amount)?;
-        context.budget().consume(resource, amount)
-    }
 }
 
 /// Structural occurrence, including the second BETWEEN subject read.
@@ -482,7 +214,7 @@ impl Condition {
 pub enum ErrorKind<E> {
     Condition(Condition),
     Resolution { identifier: String, error: E },
-    Limit(LimitError),
+    Regex(regex::MatchError),
 }
 
 /// Original source context and structural route, without fabricating a source span.
@@ -497,14 +229,7 @@ pub struct EvaluationError<E> {
     pub kind: ErrorKind<E>,
 }
 
-#[derive(Clone, Copy)]
-struct Cost {
-    depth: usize,
-    work: usize,
-    resolutions: usize,
-}
-
-/// Own all admitted nodes so later caller mutations cannot bypass static limits.
+/// Own the validated arena and its compiled literal patterns.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Plan {
     nodes: Vec<Node>,
@@ -512,22 +237,6 @@ pub struct Plan {
     root: usize,
     spec_path: String,
     expression: String,
-    limits: Limits,
-}
-
-/// Checked accounting avoids both counter wrapping and saturating a successful run.
-fn charge(
-    used: &mut usize,
-    amount: usize,
-    limit: usize,
-    resource: Resource,
-) -> Result<(), LimitError> {
-    let next = used
-        .checked_add(amount)
-        .filter(|&next| next <= limit)
-        .ok_or(LimitError { resource, limit })?;
-    *used = next;
-    Ok(())
 }
 
 impl Plan {
@@ -546,54 +255,24 @@ impl Plan {
         root: usize,
         spec_path: String,
         expression: String,
-        limits: Limits,
     ) -> Result<Self, PlanError> {
         if root >= nodes.len() {
             return Err(PlanError::InvalidRoot);
         }
-        let mut count = 0;
-        charge(&mut count, nodes.len(), limits.nodes, Resource::Nodes).map_err(PlanError::Limit)?;
-        let mut text = 0;
-        for value in [&spec_path, &expression] {
-            charge(
-                &mut text,
-                value.len(),
-                limits.text_bytes,
-                Resource::TextBytes,
-            )
-            .map_err(PlanError::Limit)?;
-        }
-        let mut costs: Vec<Cost> = Vec::with_capacity(nodes.len());
+        let mut depths: Vec<usize> = Vec::with_capacity(nodes.len());
         let mut compiled_patterns = Vec::with_capacity(nodes.len());
-        let compile_limits = regex::CompileLimits::default();
-        let mut compile_budget = regex::CompileBudget::new(compile_limits);
         for (index, node) in nodes.iter().enumerate() {
             let mut compiled_pattern = None;
-            let mut cost = Cost {
-                depth: 1,
-                work: 1,
-                resolutions: 0,
-            };
+            let mut depth = 1;
             let mut children = Vec::new();
             let mut scalars = Vec::new();
             let mut membership: &[Scalar] = &[];
             match node {
                 Node::Contains { value, pattern } => {
                     scalars.push(value);
-                    charge(
-                        &mut text,
-                        pattern.len(),
-                        limits.text_bytes,
-                        Resource::TextBytes,
-                    )
-                    .map_err(PlanError::Limit)?;
                     compiled_pattern = Some(
-                        regex::Pattern::compile_with_budget(
-                            pattern,
-                            compile_limits,
-                            &mut compile_budget,
-                        )
-                        .map_err(|error| PlanError::Regex { node: index, error })?,
+                        regex::Pattern::compile(pattern)
+                            .map_err(|error| PlanError::Regex { node: index, error })?,
                     );
                 }
                 Node::Boolean(_) => {}
@@ -617,54 +296,18 @@ impl Plan {
                 Node::Like { value, pattern, .. } => scalars.extend([value, pattern]),
             }
             for child in children {
-                let child = costs.get(child).ok_or(PlanError::InvalidChild)?;
-                cost.depth = cost.depth.max(child.depth + 1);
-                charge(&mut cost.work, child.work, limits.work, Resource::Work)
-                    .map_err(PlanError::Limit)?;
-                charge(
-                    &mut cost.resolutions,
-                    child.resolutions,
-                    limits.resolutions,
-                    Resource::Resolutions,
-                )
-                .map_err(PlanError::Limit)?;
+                let child = depths.get(child).ok_or(PlanError::InvalidChild)?;
+                depth = depth.max(child + 1);
             }
             for scalar in scalars.into_iter().chain(membership) {
-                charge(&mut cost.work, 1, limits.work, Resource::Work).map_err(PlanError::Limit)?;
-                let bytes = match scalar {
-                    Scalar::Identifier(name) => {
-                        if name.is_empty() {
-                            return Err(PlanError::EmptyIdentifier);
-                        }
-                        charge(
-                            &mut cost.resolutions,
-                            1,
-                            limits.resolutions,
-                            Resource::Resolutions,
-                        )
-                        .map_err(PlanError::Limit)?;
-                        name.len()
+                if let Scalar::Identifier(name) = scalar {
+                    if name.is_empty() {
+                        return Err(PlanError::EmptyIdentifier);
                     }
-                    Scalar::Literal(Value::Str(value)) => value.len(),
-                    _ => 0,
-                };
-                charge(&mut text, bytes, limits.text_bytes, Resource::TextBytes)
-                    .map_err(PlanError::Limit)?;
+                }
             }
-            let depth_limit = limits.depth.min(64);
-            if cost.depth > depth_limit {
-                return Err(PlanError::Limit(LimitError {
-                    resource: Resource::Depth,
-                    limit: depth_limit,
-                }));
-            }
-            if cost.work > limits.work {
-                return Err(PlanError::Limit(LimitError {
-                    resource: Resource::Work,
-                    limit: limits.work,
-                }));
-            }
-            costs.push(cost);
+            Limits::semantic_depth(depth).map_err(PlanError::Limit)?;
+            depths.push(depth);
             compiled_patterns.push(compiled_pattern);
         }
         Ok(Self {
@@ -673,7 +316,6 @@ impl Plan {
             root,
             spec_path,
             expression,
-            limits,
         })
     }
 
@@ -682,33 +324,7 @@ impl Plan {
         &self,
         resolver: &mut R,
     ) -> Result<Truth, EvaluationError<R::Error>> {
-        self.evaluate_with_budget(resolver, &mut Budget::new(self.limits.into()))
-    }
-
-    /// Evaluate against cumulative application quotas while retaining plan-local limits.
-    /// Borrowed resolver text is charged before cloning; a failure retains consumed work.
-    pub fn evaluate_with_budget<R: Resolver>(
-        &self,
-        resolver: &mut R,
-        shared: &mut Budget,
-    ) -> Result<Truth, EvaluationError<R::Error>> {
-        self.evaluate_in_context(&mut ResolverContext { resolver, shared })
-    }
-
-    /// Reuse this evaluator with lazy application-owned resolution and counters.
-    /// No shared-counter borrow spans a resolver effect; local limits still apply.
-    pub fn evaluate_in_context<C: EvaluationContext>(
-        &self,
-        context: &mut C,
-    ) -> Result<Truth, EvaluationError<C::Error>> {
-        self.node(
-            self.root,
-            context,
-            &mut Vec::new(),
-            &mut RunBudget {
-                local: Budget::new(self.limits.into()),
-            },
-        )
+        self.node(self.root, resolver, &mut Vec::new())
     }
 
     /// Enumerate all admitted identifier occurrences for whole-plan scope binding.
@@ -765,86 +381,61 @@ impl Plan {
     }
 
     /// Visit a Boolean child and restore its sibling's structural location.
-    fn child<R: EvaluationContext>(
+    fn child<R: Resolver>(
         &self,
         index: usize,
         position: Route,
         resolver: &mut R,
         route: &mut Vec<Route>,
-        budget: &mut RunBudget,
     ) -> Result<Truth, EvaluationError<R::Error>> {
         route.push(position);
-        let result = self.node(index, resolver, route, budget);
+        let result = self.node(index, resolver, route);
         route.pop();
         result
     }
 
     /// Resolve each scalar occurrence and bound text before local cloning/processing.
-    fn scalar<R: EvaluationContext>(
+    fn scalar<R: Resolver>(
         &self,
         scalar: &Scalar,
         position: Route,
         resolver: &mut R,
         route: &[Route],
-        budget: &mut RunBudget,
     ) -> Result<Value, EvaluationError<R::Error>> {
         let mut location = route.to_vec();
         location.push(position);
-        budget
-            .consume(resolver, Resource::Work, 1)
-            .map_err(|e| self.error(ErrorKind::Limit(e), &location))?;
         match scalar {
-            Scalar::Literal(value) => {
-                let bytes = match value {
-                    Value::Str(text) => text.len(),
-                    _ => 0,
-                };
-                budget
-                    .consume(resolver, Resource::TextBytes, bytes)
-                    .map_err(|e| self.error(ErrorKind::Limit(e), &location))?;
-                Ok(value.clone())
-            }
-            Scalar::Identifier(identifier) => {
-                budget
-                    .consume(resolver, Resource::Resolutions, 1)
-                    .map_err(|e| self.error(ErrorKind::Limit(e), &location))?;
-                match resolver.resolve(identifier, &mut budget.local) {
-                    Ok(Selection::Present(value)) => Ok(value),
-                    Ok(Selection::Absent) => Err(self.error(
-                        ErrorKind::Condition(Condition::UnknownField {
-                            identifier: identifier.clone(),
-                        }),
-                        &location,
-                    )),
-                    Err(ContextError::Limit(error)) => {
-                        Err(self.error(ErrorKind::Limit(error), &location))
-                    }
-                    Err(ContextError::Resolution(error)) => Err(self.error(
-                        ErrorKind::Resolution {
-                            identifier: identifier.clone(),
-                            error,
-                        },
-                        &location,
-                    )),
-                }
-            }
+            Scalar::Literal(value) => Ok(value.clone()),
+            Scalar::Identifier(identifier) => match resolver.resolve_value(identifier) {
+                Ok(Resolved::Owned(value)) => Ok(value),
+                Ok(Resolved::Borrowed(value)) => Ok(own(value)),
+                Ok(Resolved::Absent) => Err(self.error(
+                    ErrorKind::Condition(Condition::UnknownField {
+                        identifier: identifier.clone(),
+                    }),
+                    &location,
+                )),
+                Err(error) => Err(self.error(
+                    ErrorKind::Resolution {
+                        identifier: identifier.clone(),
+                        error,
+                    },
+                    &location,
+                )),
+            },
         }
     }
 
     /// Keep eager written order; errors stop execution but truth values do not.
-    fn node<R: EvaluationContext>(
+    fn node<R: Resolver>(
         &self,
         index: usize,
         resolver: &mut R,
         route: &mut Vec<Route>,
-        budget: &mut RunBudget,
     ) -> Result<Truth, EvaluationError<R::Error>> {
-        budget
-            .consume(resolver, Resource::Work, 1)
-            .map_err(|e| self.error(ErrorKind::Limit(e), route))?;
         let result = match &self.nodes[index] {
             Node::Contains { value, .. } => {
-                let value = self.scalar(value, Route::Value, resolver, route, budget)?;
+                let value = self.scalar(value, Route::Value, resolver, route)?;
                 match value {
                     Value::Missing => Ok(Truth::Unknown),
                     Value::Str(value) => {
@@ -852,29 +443,8 @@ impl Plan {
                             .as_ref()
                             .expect("admitted pattern");
                         let matched = pattern
-                            .search_in_budgets(
-                                &value,
-                                &mut budget.local.regex,
-                                &mut resolver.budget().regex,
-                            )
-                            .map_err(|error| {
-                                self.error(
-                                    ErrorKind::Limit(LimitError {
-                                        resource: match error.resource {
-                                            regex::Resource::SubjectBytes => {
-                                                Resource::RegexSubjectBytes
-                                            }
-                                            regex::Resource::Work => Resource::RegexWork,
-                                            regex::Resource::StateCells => {
-                                                Resource::RegexStateCells
-                                            }
-                                            _ => unreachable!("pattern was compiled at admission"),
-                                        },
-                                        limit: error.limit,
-                                    }),
-                                    route,
-                                )
-                            })?;
+                            .search(&value)
+                            .map_err(|error| self.error(ErrorKind::Regex(error), route))?;
                         Ok(Truth::from_bool(matched.is_some()))
                     }
                     other => Err(Condition::ContainsExpectedText {
@@ -885,12 +455,12 @@ impl Plan {
             Node::Boolean(value) => return Ok(Truth::from_bool(*value)),
             Node::Not(child) => {
                 return self
-                    .child(*child, Route::Child, resolver, route, budget)
+                    .child(*child, Route::Child, resolver, route)
                     .map(Truth::negate)
             }
             Node::And(left, right) | Node::Or(left, right) => {
-                let left = self.child(*left, Route::Left, resolver, route, budget)?;
-                let right = self.child(*right, Route::Right, resolver, route, budget)?;
+                let left = self.child(*left, Route::Left, resolver, route)?;
+                let right = self.child(*right, Route::Right, resolver, route)?;
                 return Ok(if matches!(self.nodes[index], Node::And(..)) {
                     left.and(right)
                 } else {
@@ -902,12 +472,12 @@ impl Plan {
                 left,
                 right,
             } => {
-                let left = self.scalar(left, Route::Left, resolver, route, budget)?;
-                let right = self.scalar(right, Route::Right, resolver, route, budget)?;
+                let left = self.scalar(left, Route::Left, resolver, route)?;
+                let right = self.scalar(right, Route::Right, resolver, route)?;
                 compare(*operator, &left, &right)
             }
             Node::IsNull { value, negated } => {
-                let value = self.scalar(value, Route::Value, resolver, route, budget)?;
+                let value = self.scalar(value, Route::Value, resolver, route)?;
                 Ok(Truth::from_bool(
                     matches!(value, Value::Missing) != *negated,
                 ))
@@ -917,10 +487,10 @@ impl Plan {
                 items,
                 negated,
             } => {
-                let value = self.scalar(value, Route::Value, resolver, route, budget)?;
+                let value = self.scalar(value, Route::Value, resolver, route)?;
                 let mut truth = Truth::False;
                 for (index, item) in items.iter().enumerate() {
-                    let item = self.scalar(item, Route::Item(index), resolver, route, budget)?;
+                    let item = self.scalar(item, Route::Item(index), resolver, route)?;
                     truth = truth.or(compare(Comparison::Equal, &value, &item)
                         .map_err(|e| self.error(ErrorKind::Condition(e), route))?);
                 }
@@ -932,10 +502,10 @@ impl Plan {
                 upper,
                 negated,
             } => {
-                let first = self.scalar(value, Route::Value, resolver, route, budget)?;
-                let lower = self.scalar(lower, Route::Lower, resolver, route, budget)?;
-                let second = self.scalar(value, Route::RepeatedValue, resolver, route, budget)?;
-                let upper = self.scalar(upper, Route::Upper, resolver, route, budget)?;
+                let first = self.scalar(value, Route::Value, resolver, route)?;
+                let lower = self.scalar(lower, Route::Lower, resolver, route)?;
+                let second = self.scalar(value, Route::RepeatedValue, resolver, route)?;
+                let upper = self.scalar(upper, Route::Upper, resolver, route)?;
                 // Resolve all four occurrences before either comparison. A failure
                 // resolving the upper endpoint outranks an incompatible lower pair.
                 let truth = compare(Comparison::GreaterEqual, &first, &lower).and_then(|left| {
@@ -949,14 +519,14 @@ impl Plan {
                 escape,
                 negated,
             } => {
-                let value = self.scalar(value, Route::Value, resolver, route, budget)?;
-                let pattern = self.scalar(pattern, Route::Pattern, resolver, route, budget)?;
+                let value = self.scalar(value, Route::Value, resolver, route)?;
+                let pattern = self.scalar(pattern, Route::Pattern, resolver, route)?;
                 let truth = if matches!(value, Value::Missing) || matches!(pattern, Value::Missing)
                 {
                     Truth::Unknown
                 } else if let (Value::Str(value), Value::Str(pattern)) = (&value, &pattern) {
-                    like(value, pattern, *escape, resolver, budget)
-                        .map_err(|e| self.error(e, route))?
+                    like(value, pattern, *escape)
+                        .map_err(|e| self.error(ErrorKind::Condition(e), route))?
                 } else {
                     let actual = if !matches!(value, Value::Str(_)) {
                         value.value_type()
@@ -1011,21 +581,13 @@ enum Pattern {
     Literal(char),
 }
 
-/// Unicode scalar full matching with O(pattern) storage and explicit work policy.
+/// Unicode scalar full matching with O(pattern) storage.
 /// All tokens are checked before matching, including a trailing escaped character.
-fn like<R: EvaluationContext>(
-    value: &str,
-    pattern: &str,
-    escape: Option<char>,
-    resolver: &mut R,
-    budget: &mut RunBudget,
-) -> Result<Truth, ErrorKind<R::Error>> {
+fn like(value: &str, pattern: &str, escape: Option<char>) -> Result<Truth, Condition> {
+    // The per-match step boundary belongs to regex; LIKE has no separate work quota.
     let mut tokens = Vec::new();
     let mut escaped = false;
     for character in pattern.chars() {
-        budget
-            .consume(resolver, Resource::LikeWork, 1)
-            .map_err(ErrorKind::Limit)?;
         if escaped {
             tokens.push(Pattern::Literal(character));
             escaped = false;
@@ -1040,12 +602,8 @@ fn like<R: EvaluationContext>(
         }
     }
     if escaped {
-        return Err(ErrorKind::Condition(Condition::DanglingEscape));
+        return Err(Condition::DanglingEscape);
     }
-    // Charge row initialization as well as every source scalar and DP cell.
-    budget
-        .consume(resolver, Resource::LikeWork, tokens.len() + 1)
-        .map_err(ErrorKind::Limit)?;
     let mut previous = vec![false; tokens.len() + 1];
     let mut next = vec![false; tokens.len() + 1];
     previous[0] = true;
@@ -1053,9 +611,6 @@ fn like<R: EvaluationContext>(
         previous[index + 1] = matches!(token, Pattern::Any) && previous[index];
     }
     for character in value.chars() {
-        budget
-            .consume(resolver, Resource::LikeWork, tokens.len() + 1)
-            .map_err(ErrorKind::Limit)?;
         next[0] = false;
         for (index, token) in tokens.iter().enumerate() {
             next[index + 1] = match token {
@@ -1070,10 +625,3 @@ fn like<R: EvaluationContext>(
 }
 
 mod type_facts;
-
-impl<E: std::fmt::Debug> std::fmt::Display for ContextError<E> {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "predicate: {self:?}")
-    }
-}
-impl<E: std::fmt::Debug> std::error::Error for ContextError<E> {}

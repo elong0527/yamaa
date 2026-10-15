@@ -64,6 +64,7 @@ model!(
     "DatasetSource",
     [
         required!("path", Text),
+        field!("relative_to", Enum(&["declaring", "entry"])),
         optional!("types", Dictionary(&COLUMN_TYPE)),
         optional!(
             "encoding",
@@ -88,6 +89,7 @@ model!(
     "Output",
     [
         required!("path", Text),
+        field!("relative_to", Enum(&["declaring", "entry"])),
         optional!("decimals", Integer),
         required!("columns", STRINGS),
         optional!("warning_log", Text),

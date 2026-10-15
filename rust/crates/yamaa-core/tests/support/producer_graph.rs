@@ -1,39 +1,13 @@
+use crate::support::document::Tree;
 use yamaa_core::{
     producer_admission::{Candidate, WrittenPath},
     producer_graph::SuppliedNode,
     project_environment::{Draft, Environment, ExecutionEnvironment, LockKind, LockReference},
     project_function::{Case, Definition, Language, Parameter},
-    schema::{Document, DocumentNode as N, SpecificationDocument, ValidationBudget},
+    schema::{Document, SpecificationDocument},
     value::{ColumnType, Value, ValueType},
 };
-enum Tree {
-    Text(String),
-    Map(Vec<(String, Tree)>),
-    List(Vec<Tree>),
-}
-impl Tree {
-    fn text(s: &str) -> Self {
-        Self::Text(s.into())
-    }
-    fn map(items: Vec<(&str, Self)>) -> Self {
-        Self::Map(items.into_iter().map(|(k, v)| (k.into(), v)).collect())
-    }
-    fn append(self, nodes: &mut Vec<N>) -> usize {
-        let n = match self {
-            Self::Text(s) => N::Text(s),
-            Self::Map(items) => N::Mapping(
-                items
-                    .into_iter()
-                    .map(|(k, v)| (Self::text(&k).append(nodes), v.append(nodes)))
-                    .collect(),
-            ),
-            Self::List(items) => N::Sequence(items.into_iter().map(|v| v.append(nodes)).collect()),
-        };
-        let id = nodes.len();
-        nodes.push(n);
-        id
-    }
-}
+
 pub fn environment(names: &[&str]) -> ExecutionEnvironment {
     let functions = names
         .iter()
@@ -105,13 +79,13 @@ fn document_mode(
     let first = inputs[0].0;
     let source = T::map(vec![(
         "source",
-        T::map(vec![("variable", T::text(&format!("{first}.ID")))]),
+        T::map(vec![("variable", T::text(format!("{first}.ID")))]),
     )]);
     let value = call.map_or_else(
         || {
             T::map(vec![(
                 "source",
-                T::map(vec![("variable", T::text(&format!("{first}.ID")))]),
+                T::map(vec![("variable", T::text(format!("{first}.ID")))]),
             )])
         },
         |name| {
@@ -177,17 +151,14 @@ fn document_mode(
                 ("id", T::text("one")),
                 ("dataset", T::text(first)),
                 ("derivations", T::map(Vec::new())),
-                ("group_by", T::List(vec![T::text(&format!("{first}.ID"))])),
+                ("group_by", T::List(vec![T::text(format!("{first}.ID"))])),
             ])]),
         ));
     }
     let root = T::map(fields).append(&mut nodes);
-    SpecificationDocument::admit(
-        Document::new(nodes, root, Default::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap()
+    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap()
 }
 pub fn candidate<'a>(
     consumer: &'a str,
@@ -200,14 +171,17 @@ pub fn candidate<'a>(
         schema_path: identity,
         schema_origin: WrittenPath {
             declaring_source: consumer,
+            base_source: consumer,
             written: identity,
         },
         input_origin: WrittenPath {
             declaring_source: consumer,
+            base_source: consumer,
             written: "produced.csv",
         },
         output_origin: WrittenPath {
             declaring_source: identity,
+            base_source: identity,
             written: "produced.csv",
         },
         schema_identity: identity,

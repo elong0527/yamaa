@@ -1,8 +1,10 @@
 //! Define preparation and one-shot publication over retained native snapshots.
 //! This service owns admission, composition, rendering and effect order. Ports
 //! observe file geometry and codecs without interpreting submission declarations.
+use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode, Diagnostic},
+    limits::Limits,
     producer_admission::WrittenPath,
     project_terminology::Catalogue,
     schema::Document,
@@ -10,23 +12,8 @@ use crate::{
     submission_document,
     table::TableAccess,
 };
-use serde_json::Value as JsonValue;
 use std::vec;
 
-pub(crate) const MAX_ARTIFACT_BYTES: usize = 67_108_864;
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct MetadataLimits {
-    pub bytes: usize,
-    pub snapshots: usize,
-    pub text: usize,
-    pub work: usize,
-}
-pub const METADATA_LIMITS: MetadataLimits = MetadataLimits {
-    bytes: 67_108_864,
-    snapshots: 1024,
-    text: 16_777_216,
-    work: 268_435_456,
-};
 pub struct EnvironmentView<'a> {
     pub document: &'a Document,
     pub catalogue: &'a Catalogue,
@@ -50,25 +37,14 @@ pub trait Ports {
     type Target;
     type Publisher;
     fn utc_seconds(&mut self) -> Option<u64>;
-    fn capture_environment(
-        &mut self,
-        written: &str,
-        limits: MetadataLimits,
-    ) -> Result<Self::Environment, Self::Error>;
+    fn capture_environment(&mut self, written: &str) -> Result<Self::Environment, Self::Error>;
     fn environment(environment: &Self::Environment) -> EnvironmentView<'_>;
     fn capture_specification(
         &mut self,
+        path: &str,
         declaring: &str,
         written: &str,
     ) -> Result<Self::Specification, Self::Error>;
-    fn capture_specification_at(
-        &mut self,
-        _path: &str,
-        declaring: &str,
-        written: &str,
-    ) -> Result<Self::Specification, Self::Error> {
-        self.capture_specification(declaring, written)
-    }
     fn specification(document: &Self::Specification) -> SpecificationView<'_>;
     fn location(&self, path: &str, declaring: &str, written: &str) -> Result<String, Self::Error>;
     fn json_written(&self, written: &str) -> String;
@@ -77,13 +53,11 @@ pub trait Ports {
     fn package_reference(&self, target: &str, define: &str) -> Option<String>;
     fn define_name(&self, location: &str) -> String;
     fn verify_metadata(&mut self, path: &str, source: &str) -> Result<(), Self::Error>;
-    fn finish_metadata(&mut self);
     fn capture_published(
         &mut self,
         path: &str,
         declaring: &str,
         written: &str,
-        maximum: usize,
     ) -> Result<Self::Bytes, Self::Error>;
     fn decode_parquet(&mut self, bytes: &[u8]) -> Result<Self::Parquet, Self::ParquetError>;
     fn target(
@@ -126,27 +100,68 @@ fn published_source_failure<E, PE>(
     finding: Option<crate::diagnostic::SourceFinding<'_>>,
     fallback: Finding,
 ) -> Failure<E, PE> {
-    use crate::diagnostic::{ProjectionError, MAX_PROJECTION_BYTES};
     let Some(finding) = finding else {
         return Failure::Metadata(vec![fallback]);
     };
-    let diagnostic = match finding.diagnostic_with_limit(MAX_PROJECTION_BYTES) {
-        Ok(diagnostic) => diagnostic,
-        Err(ProjectionError::Limit) => crate::application_issue::resource_rejected(
-            "output",
-            "diagnostic_context_limit",
-            "diagnostic_context_bytes",
-            MAX_PROJECTION_BYTES,
-            None,
-            vec![fallback.path],
+    Failure::Diagnostic(vec![finding.diagnostic()])
+}
+fn published_boundary_failure<E, PE>(
+    error: crate::limits::LimitExceeded,
+    dataset: &str,
+    written: &str,
+) -> Failure<E, PE> {
+    Failure::Diagnostic(vec![resource_diagnostic(
+        &format!("datasets.{dataset}.artifact"),
+        written,
+        ResourceObservation::Limit(error),
+    )])
+}
+fn published_csv_failure<E, PE>(
+    error: &crate::csv_source::Error,
+    dataset: &str,
+    written: &str,
+) -> Failure<E, PE> {
+    if let crate::csv_source::Error::Limit {
+        resource,
+        limit,
+        actual,
+    } = *error
+    {
+        return published_boundary_failure(
+            crate::limits::LimitExceeded {
+                resource,
+                limit,
+                actual,
+            },
+            dataset,
+            written,
+        );
+    }
+    published_source_failure(
+        error.finding(dataset, written),
+        Finding::cause(
+            ConditionCode::ApplicationRejected,
+            written,
+            "published CSV admission",
         ),
-        Err(ProjectionError::InvalidContext) => {
-            let mut diagnostic = crate::application_issue::rejected("output", "diagnostic_context");
-            diagnostic.spec_paths.push(fallback.path);
-            diagnostic
-        }
-    };
-    Failure::Diagnostic(vec![diagnostic])
+    )
+}
+fn published_typed_csv_failure<E, PE>(
+    error: &crate::typed_csv::Error,
+    dataset: &str,
+    written: &str,
+) -> Failure<E, PE> {
+    if let crate::typed_csv::Error::Limit(error) = error {
+        return published_boundary_failure(*error, dataset, written);
+    }
+    published_source_failure(
+        error.finding(dataset),
+        Finding::cause(
+            ConditionCode::ProducerContractMismatch,
+            written,
+            "published CSV contract",
+        ),
+    )
 }
 type PreflightResult<P> = Result<
     Vec<<P as Ports>::Publisher>,
@@ -228,19 +243,18 @@ impl<P: Ports> Application<P> {
             .map_err(|finding| Failure::Metadata(vec![finding]))?;
         self.environment = Some(
             ports
-                .capture_environment(environment, METADATA_LIMITS)
+                .capture_environment(environment)
                 .map_err(Failure::Port)?,
         );
         let environment = P::environment(self.environment.as_ref().expect("captured environment"));
         let root = environment.document;
-        let declarations = submission_document::decode(root, root.root(), Default::default())
-            .map_err(|_| {
-                Failure::Metadata(vec![Finding::cause(
-                    ConditionCode::SubmissionMetadataMissing,
-                    standard,
-                    "invalid closed environment submission declarations",
-                )])
-            })?;
+        let declarations = submission_document::decode(root, root.root()).map_err(|_| {
+            Failure::Metadata(vec![Finding::cause(
+                ConditionCode::SubmissionMetadataMissing,
+                standard,
+                "invalid closed environment submission declarations",
+            )])
+        })?;
         let study = crate::define_diagnostics::required(declarations.study(), "study", "study")
             .map_err(|finding| Failure::Metadata(vec![finding]))?;
         let section = crate::define_diagnostics::required(
@@ -267,7 +281,7 @@ impl<P: Ports> Application<P> {
         for (index, spec) in section.specs.value.iter().enumerate() {
             let path = format!("{standard}.specs[{index}]");
             let document = ports
-                .capture_specification_at(&path, identity, &spec.value)
+                .capture_specification(&path, identity, &spec.value)
                 .map_err(Failure::Port)?;
             let view = P::specification(&document);
             let origin = view.output.ok_or_else(|| {
@@ -280,7 +294,7 @@ impl<P: Ports> Application<P> {
             let artifact = ports
                 .location(
                     &format!("{path}.output.path"),
-                    origin.declaring_source,
+                    origin.base_source,
                     origin.written,
                 )
                 .map_err(Failure::Port)?;
@@ -289,7 +303,7 @@ impl<P: Ports> Application<P> {
                 ports
                     .location(
                         &format!("{path}.dataset_json"),
-                        origin.declaring_source,
+                        origin.base_source,
                         &written_json,
                     )
                     .map_err(Failure::Port)?
@@ -348,7 +362,7 @@ impl<P: Ports> Application<P> {
             locations.push(artifact);
             hrefs.push(href);
             outputs.push((
-                origin.declaring_source.to_string(),
+                origin.base_source.to_string(),
                 origin.written.to_string(),
                 written_json,
             ));
@@ -393,9 +407,7 @@ impl<P: Ports> Application<P> {
         ports
             .verify_metadata(standard, identity)
             .map_err(Failure::Port)?;
-        ports.finish_metadata();
         if section.dataset_json.value {
-            let mut rendered_bytes = xml.len();
             for ((dataset, (declaring, written, json)), location) in
                 composed.datasets().iter().zip(&outputs).zip(&locations)
             {
@@ -404,15 +416,10 @@ impl<P: Ports> Application<P> {
                         &format!("datasets.{}.artifact", dataset.id()),
                         declaring,
                         written,
-                        MAX_ARTIFACT_BYTES,
                     )
                     .map_err(Failure::Port)?;
-                if bytes.as_ref().len() > MAX_ARTIFACT_BYTES {
-                    return Err(Failure::Metadata(vec![Finding::cause(
-                        ConditionCode::ApplicationRejected,
-                        written,
-                        "published artifact byte limit",
-                    )]));
+                if let Err(error) = Limits::source_bytes(bytes.as_ref().len()) {
+                    return Err(published_boundary_failure(error, dataset.id(), written));
                 }
                 let kinds: Vec<_> = dataset
                     .columns()
@@ -425,33 +432,17 @@ impl<P: Ports> Application<P> {
                     })
                     .collect();
                 let rendered = if location.to_ascii_lowercase().ends_with(".csv") {
-                    let source = crate::csv_source::parse(bytes.as_ref(), Default::default())
-                        .map_err(|error| {
-                            published_source_failure(
-                                error.finding(dataset.id(), written),
-                                Finding::cause(
-                                    ConditionCode::ApplicationRejected,
-                                    written,
-                                    "published CSV admission",
-                                ),
-                            )
-                        })?;
+                    let source = crate::csv_source::parse(bytes.as_ref())
+                        .map_err(|error| published_csv_failure(&error, dataset.id(), written))?;
                     crate::submission_json::admit_fields(
                         dataset,
                         source.names.iter().map(String::as_str),
                     )
                     .map_err(|finding| Failure::Metadata(vec![finding]))?;
-                    let table = crate::typed_csv::PreparedTypes::new(&kinds, 16_384)
+                    let table = crate::typed_csv::PreparedTypes::new(&kinds)
                         .and_then(|types| types.convert(source))
                         .map_err(|error| {
-                            published_source_failure(
-                                error.finding(dataset.id()),
-                                Finding::cause(
-                                    ConditionCode::ProducerContractMismatch,
-                                    written,
-                                    "published CSV contract",
-                                ),
-                            )
+                            published_typed_csv_failure(&error, dataset.id(), written)
                         })?;
                     crate::submission_json::render(
                         &composed,
@@ -467,6 +458,9 @@ impl<P: Ports> Application<P> {
                             "published Parquet profile",
                         )])
                     })?;
+                    Limits::table(table.row_count(), table.schema().columns().len()).map_err(
+                        |error| published_boundary_failure(error, dataset.id(), written),
+                    )?;
                     crate::submission_json::render(
                         &composed,
                         dataset,
@@ -481,16 +475,6 @@ impl<P: Ports> Application<P> {
                     )]));
                 }
                 .map_err(|f| Failure::Metadata(vec![f]))?;
-                rendered_bytes = rendered_bytes
-                    .checked_add(rendered.len())
-                    .filter(|&n| n <= MAX_ARTIFACT_BYTES)
-                    .ok_or_else(|| {
-                        Failure::Metadata(vec![Finding::cause(
-                            ConditionCode::ApplicationRejected,
-                            standard,
-                            "complete_publication_byte_limit",
-                        )])
-                    })?;
                 let target = ports.target(json, declaring, json).map_err(Failure::Port)?;
                 self.artifacts.push(Artifact {
                     written: json.clone(),
@@ -573,22 +557,6 @@ impl<P: Ports> Application<P> {
         &mut self,
         ports: &mut P,
     ) -> Result<bool, SaveFailure<P::Error, P::PublicationError>> {
-        self.save_inner(ports, |_| {})
-    }
-    /// Test-only operational checkpoint; production hosts receive no callback.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn save_with_checkpoint(
-        &mut self,
-        ports: &mut P,
-        checkpoint: impl FnMut(usize),
-    ) -> Result<bool, SaveFailure<P::Error, P::PublicationError>> {
-        self.save_inner(ports, checkpoint)
-    }
-    fn save_inner(
-        &mut self,
-        ports: &mut P,
-        mut checkpoint: impl FnMut(usize),
-    ) -> Result<bool, SaveFailure<P::Error, P::PublicationError>> {
         if self.failed {
             return Err(SaveFailure::Refused);
         }
@@ -611,7 +579,6 @@ impl<P: Ports> Application<P> {
                 return Err(SaveFailure::Failure(failure));
             }
             artifact.state = PublicationState::Published;
-            checkpoint(index);
         }
         self.saved = true;
         Ok(true)
@@ -670,7 +637,7 @@ pub enum ResourceObservation {
     OutsideRoots,
     Symlink,
     Changed,
-    Limit,
+    Limit(crate::limits::LimitExceeded),
 }
 pub fn resource_diagnostic(
     path: &str,
@@ -678,6 +645,20 @@ pub fn resource_diagnostic(
     observation: ResourceObservation,
 ) -> Diagnostic {
     use ResourceObservation as R;
+    if let R::Limit(error) = observation {
+        let mut diagnostic = crate::application_issue::resource_rejected(
+            "define",
+            "resource_limit",
+            error.resource,
+            error.limit,
+            error.actual,
+            vec![path.into()],
+        );
+        diagnostic
+            .context
+            .insert("path".into(), JsonValue::String(written.into()));
+        return diagnostic;
+    }
     let code = match observation {
         R::Missing if path.ends_with(".artifact") => ConditionCode::ProducerContractMismatch,
         R::Missing => ConditionCode::ResourceMissing,
@@ -696,7 +677,7 @@ pub fn resource_diagnostic(
             R::InvalidLock => "invalid_packaging_lock",
             R::OutsideRoots => "resource_outside_roots",
             R::Symlink => "resource_link",
-            R::Limit => "resource_limit",
+            R::Limit(_) => unreachable!("fixed boundary projected above"),
             R::Missing | R::NotRegularFile | R::Changed => {
                 unreachable!("normative resource cause selected")
             }
@@ -762,9 +743,91 @@ mod projection_tests {
     use super::*;
 
     #[test]
-    fn published_csv_context_limit_remains_an_explicit_refusal() {
-        use crate::diagnostic::{SourceFinding, MAX_PROJECTION_BYTES};
-        let value = "x".repeat(MAX_PROJECTION_BYTES / 6);
+    fn published_boundaries_keep_structured_resource_facts_and_artifact_provenance() {
+        let source_error = Limits::source_bytes(Limits::SOURCE_BYTES + 1).unwrap_err();
+        let table_error = Limits::table(Limits::TABLE_ROWS + 1, 1).unwrap_err();
+        let declarations = (0..=Limits::COLUMNS)
+            .map(|index| (format!("C{index}"), crate::value::ColumnType::Str))
+            .collect::<Vec<_>>();
+        let typed_error = match crate::typed_csv::PreparedTypes::new(&declarations) {
+            Err(error) => error,
+            Ok(_) => panic!("oversized declarations must be refused"),
+        };
+        let failures: [Failure<(), ()>; 3] = [
+            published_boundary_failure(source_error, "DM", "published.csv"),
+            published_csv_failure(
+                &crate::csv_source::Error::Limit {
+                    resource: table_error.resource,
+                    limit: table_error.limit,
+                    actual: table_error.actual,
+                },
+                "DM",
+                "published.csv",
+            ),
+            published_typed_csv_failure(&typed_error, "DM", "published.csv"),
+        ];
+        for (failure, resource, limit) in [
+            (&failures[0], "source_bytes", Limits::SOURCE_BYTES),
+            (&failures[1], "table_rows", Limits::TABLE_ROWS),
+            (&failures[2], "columns", Limits::COLUMNS),
+        ] {
+            let Failure::Diagnostic(findings) = failure else {
+                panic!("boundary refusal must retain its diagnostic owner");
+            };
+            let diagnostic = &findings[0];
+            assert_eq!(diagnostic.code, ConditionCode::ApplicationRejected);
+            assert_eq!(diagnostic.code.definition().requirement, None);
+            assert_eq!(diagnostic.spec_paths, ["datasets.DM.artifact"]);
+            assert_eq!(diagnostic.context["stage"], "define");
+            assert_eq!(diagnostic.context["code"], "resource_limit");
+            assert_eq!(diagnostic.context["path"], "published.csv");
+            assert_eq!(diagnostic.context["resource"], resource);
+            assert_eq!(diagnostic.context["limit"], limit);
+            assert_eq!(diagnostic.context["actual"], limit + 1);
+        }
+    }
+
+    #[test]
+    fn published_resource_and_csv_limits_retain_artifact_owner_and_size_facts() {
+        let error = crate::limits::LimitExceeded {
+            resource: "columns",
+            limit: Limits::COLUMNS,
+            actual: Some(Limits::COLUMNS + 1),
+        };
+        let failures: [Failure<(), ()>; 3] = [
+            published_boundary_failure(error, "DM", "dm.csv"),
+            published_csv_failure(
+                &crate::csv_source::Error::Limit {
+                    resource: error.resource,
+                    limit: error.limit,
+                    actual: error.actual,
+                },
+                "DM",
+                "dm.csv",
+            ),
+            published_typed_csv_failure(&crate::typed_csv::Error::Limit(error), "DM", "dm.csv"),
+        ];
+        for failure in failures {
+            let Failure::Diagnostic(findings) = failure else {
+                panic!("resource boundary must retain structured facts");
+            };
+            assert_eq!(findings.len(), 1);
+            let finding = &findings[0];
+            assert_eq!(finding.code, ConditionCode::ApplicationRejected);
+            assert_eq!(finding.spec_paths, ["datasets.DM.artifact"]);
+            assert_eq!(finding.context["path"], "dm.csv");
+            assert_eq!(finding.context["stage"], "define");
+            assert_eq!(finding.context["code"], "resource_limit");
+            assert_eq!(finding.context["resource"], "columns");
+            assert_eq!(finding.context["limit"], Limits::COLUMNS);
+            assert_eq!(finding.context["actual"], Limits::COLUMNS + 1);
+        }
+    }
+
+    #[test]
+    fn published_csv_failure_preserves_the_complete_value_and_its_language_owner() {
+        use crate::diagnostic::SourceFinding;
+        let value = "x".repeat(1_048_577);
         let failure: Failure<(), ()> = published_source_failure(
             Some(SourceFinding::FieldParse {
                 dataset: "DM",
@@ -779,19 +842,14 @@ mod projection_tests {
             ),
         );
         let Failure::Diagnostic(findings) = failure else {
-            panic!("projection refusal must not become a metadata finding");
+            panic!("source failure must retain its diagnostic owner");
         };
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].code, ConditionCode::ApplicationRejected);
-        assert_eq!(findings[0].definition().requirement, None);
-        assert_eq!(findings[0].spec_paths, ["sdtm.specs[0]"]);
-        assert_eq!(
-            findings[0].context["resource"],
-            JsonValue::String("diagnostic_context_bytes".into())
-        );
-        assert_eq!(
-            findings[0].context["limit"],
-            JsonValue::from(MAX_PROJECTION_BYTES)
-        );
+        assert_eq!(findings[0].code, ConditionCode::SourceTypeFieldParse);
+        assert_eq!(findings[0].spec_paths, ["input.DM.types.AGE"]);
+        assert_eq!(findings[0].context["dataset"], "DM");
+        assert_eq!(findings[0].context["field"], "AGE");
+        assert_eq!(findings[0].context["type"], "int");
+        assert_eq!(findings[0].context["value"], value);
     }
 }

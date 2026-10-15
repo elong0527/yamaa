@@ -1,6 +1,6 @@
 //! Encode an engine-admitted generated field without copying existing payload buffers.
 use crate::{
-    arrow_table::{self, ArrowTable, TableLimits},
+    arrow_table::{self, ArrowTable},
     csv_source::TextTableError,
     specification_run::Error,
 };
@@ -9,69 +9,24 @@ use std::sync::Arc;
 use yamaa_core::table::TableAccess;
 use yamaa_core::{source_ordinal, specification::SourceDeclaration};
 
-pub(crate) fn append(
-    source: &SourceDeclaration,
-    table: ArrowTable,
-    limits: TableLimits,
-) -> Result<ArrowTable, Error> {
-    append_inner(source, table, limits, None)
-}
-
-pub(crate) fn append_with_usage(
-    source: &SourceDeclaration,
-    table: ArrowTable,
-    limits: TableLimits,
-    storage_bytes: usize,
-    usage: &mut crate::source_decode_usage::Usage,
-) -> Result<ArrowTable, Error> {
-    append_inner(source, table, limits, Some((storage_bytes, usage)))
-}
-
-fn append_inner(
-    source: &SourceDeclaration,
-    table: ArrowTable,
-    limits: TableLimits,
-    usage: Option<(usize, &mut crate::source_decode_usage::Usage)>,
-) -> Result<ArrowTable, Error> {
-    let Some(ordinal) = source_ordinal::prepare(
-        source,
-        table.schema(),
-        table.row_count(),
-        source_ordinal::Limits {
-            columns: limits.max_columns,
-            cells: limits.max_cells,
-        },
-    )
-    .map_err(|error| match error {
-        source_ordinal::Error::ResourceLimit {
-            resource,
-            limit,
-            actual,
-        } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-            resource,
-            limit,
-            actual,
-            vec![format!("input.{}", source.name)],
-        )),
-        error => Error::Ordinal(error),
-    })?
+pub(crate) fn append(source: &SourceDeclaration, table: ArrowTable) -> Result<ArrowTable, Error> {
+    let Some(ordinal) = source_ordinal::prepare(source, table.schema(), table.row_count())
+        .map_err(|error| match error {
+            source_ordinal::Error::ResourceLimit {
+                resource,
+                limit,
+                actual,
+            } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                resource,
+                limit,
+                actual,
+                vec![format!("input.{}", source.name)],
+            )),
+            error => Error::Ordinal(error),
+        })?
     else {
         return Ok(table);
     };
-    if let Some((storage_bytes, usage)) = usage {
-        let required = table.row_count().checked_mul(32);
-        let mut used = usage.storage_bytes;
-        let amount = required.ok_or_else(|| {
-            Error::Source(TextTableError::Table(arrow_table::TableError::Limit {
-                resource: "storage_bytes",
-                limit: storage_bytes,
-                required: None,
-            }))
-        })?;
-        crate::source_decode_usage::charge(&mut used, amount, storage_bytes, "storage_bytes")
-            .map_err(|error| Error::Source(TextTableError::Table(error)))?;
-        usage.storage(used);
-    }
     // Imported large/view strings retain their physical types and shared buffers.
     let physical = if let Some(batch) = table.batches().first() {
         let mut fields = batch.schema().fields().to_vec();
@@ -105,6 +60,6 @@ fn append_inner(
         );
         start = end;
     }
-    ArrowTable::try_new_with_schema(ordinal.schema().clone(), batches, limits, physical)
+    ArrowTable::try_new_with_schema(ordinal.schema().clone(), batches, physical)
         .map_err(|error| Error::Source(TextTableError::Table(error)))
 }

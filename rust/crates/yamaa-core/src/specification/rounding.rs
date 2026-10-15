@@ -17,21 +17,12 @@ pub(super) fn declaration_findings(
         output: &TableSchema,
         findings: &mut Vec<PreflightFinding>,
         depth: usize,
-        diagnostic_bytes: &mut usize,
     ) -> Result<(), PrepareError> {
-        if depth > 64 {
+        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PrepareError::limit(
-                "case_depth",
-                64,
+                "semantic_depth",
+                crate::limits::Limits::SEMANTIC_DEPTH,
                 Some(depth),
-                Some(prefix),
-            ));
-        }
-        if prefix.len() > 65_536 {
-            return Err(PrepareError::limit(
-                "path_bytes",
-                65_536,
-                Some(prefix.len()),
                 Some(prefix),
             ));
         }
@@ -46,14 +37,6 @@ pub(super) fn declaration_findings(
                         _ => unreachable!("numeric types handled above"),
                     };
                     let suffix = ".round_half_away_from_zero";
-                    *diagnostic_bytes = diagnostic_bytes
-                        .checked_add(prefix.len())
-                        .and_then(|n| n.checked_add(suffix.len()))
-                        .and_then(|n| n.checked_add(source.len()))
-                        .filter(|&n| n <= 16_777_216)
-                        .ok_or_else(|| {
-                            PrepareError::limit("rounding_diagnostics", 16_777_216, None, None)
-                        })?;
                     findings.push(PreflightFinding::RoundingInput {
                         path: format!("{prefix}{suffix}"),
                         source: source.into(),
@@ -78,7 +61,6 @@ pub(super) fn declaration_findings(
                     output,
                     findings,
                     depth + 1,
-                    diagnostic_bytes,
                 )?;
             }
         }
@@ -89,7 +71,7 @@ pub(super) fn declaration_findings(
     if present(d, d.root(), "rows") {
         return Ok(());
     }
-    let mut diagnostic_bytes = 0;
+
     for (column, &id) in columns.iter().enumerate() {
         let Some(derivation) = d.field(id, "derivation") else {
             continue;
@@ -104,11 +86,10 @@ pub(super) fn declaration_findings(
             output,
             findings,
             0,
-            &mut diagnostic_bytes,
         )?;
     }
     match_values::visit_keys(d, &mut |value, path| {
-        visit(d, value, path, output, findings, 0, &mut diagnostic_bytes)
+        visit(d, value, path, output, findings, 0)
     })?;
     Ok(())
 }
@@ -222,7 +203,7 @@ pub(super) fn bind_operand(
             return Ok(None);
         }
     } else {
-        match catalog.bind(name).map_err(BindError::Catalog)? {
+        match catalog.bind(name) {
             Some(reference_binding::Binding::Output { column, .. }) => {
                 edges.push(column);
                 Expression::Column(column)
@@ -332,7 +313,6 @@ pub(super) fn bind_row_operand(
                 joined: false,
                 phase,
             },
-            Default::default(),
         )
         .map_err(BindError::Catalog)?;
         if !scoped.is_empty() {
@@ -359,7 +339,7 @@ pub(super) fn bind_row_operand(
         });
         return Ok(None);
     }
-    let source = match catalog.bind(name).map_err(BindError::Catalog)? {
+    let source = match catalog.bind(name) {
         Some(reference_binding::Binding::Output { column, .. }) => {
             edges.push(column);
             Expression::Column(column)

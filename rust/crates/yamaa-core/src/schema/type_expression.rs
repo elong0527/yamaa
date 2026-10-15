@@ -10,30 +10,9 @@ pub enum TypeNode {
     Dictionary { key: usize, value: usize },
 }
 
-/// Explicit syntax limits, independent of subsequent document validation limits.
-#[derive(Clone, Copy, Debug)]
-pub struct TypeLimits {
-    pub bytes: usize,
-    pub nodes: usize,
-    pub depth: usize,
-}
-
-impl Default for TypeLimits {
-    /// Bound input before scanning and recursive descent before entering children.
-    fn default() -> Self {
-        Self {
-            bytes: 65_536,
-            nodes: 4_096,
-            depth: 64,
-        }
-    }
-}
-
 /// Resource refusal is distinct from malformed schema type syntax.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TypeResource {
-    Bytes,
-    Nodes,
     Depth,
 }
 
@@ -60,20 +39,12 @@ pub struct TypeExpression {
 
 impl TypeExpression {
     /// Parse a complete expression without accepting trailing tokens or union syntax.
-    pub fn parse(expression: &str, limits: TypeLimits) -> Result<Self, TypeError> {
-        if expression.len() > limits.bytes {
-            return Err(TypeError::Limit {
-                resource: TypeResource::Bytes,
-                limit: limits.bytes,
-            });
-        }
+    pub fn parse(expression: &str) -> Result<Self, TypeError> {
         let mut parser = Parser {
             expression,
             at: 0,
             nodes: Vec::new(),
             spans: Vec::new(),
-            admitted: 0,
-            limits,
         };
         let root = parser.parse(1)?;
         parser.space();
@@ -124,8 +95,6 @@ struct Parser<'a> {
     at: usize,
     nodes: Vec<TypeNode>,
     spans: Vec<Range<usize>>,
-    admitted: usize,
-    limits: TypeLimits,
 }
 
 impl Parser<'_> {
@@ -158,20 +127,13 @@ impl Parser<'_> {
 
     /// Reserve each occurrence before descending; a hard cap protects the stack.
     fn parse(&mut self, depth: usize) -> Result<usize, TypeError> {
-        let depth_limit = self.limits.depth.min(64);
+        let depth_limit = crate::limits::Limits::SEMANTIC_DEPTH;
         if depth > depth_limit {
             return Err(TypeError::Limit {
                 resource: TypeResource::Depth,
                 limit: depth_limit,
             });
         }
-        if self.admitted >= self.limits.nodes {
-            return Err(TypeError::Limit {
-                resource: TypeResource::Nodes,
-                limit: self.limits.nodes,
-            });
-        }
-        self.admitted += 1;
         self.space();
         let start = self.at;
         let bytes = self.expression.as_bytes();

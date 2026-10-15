@@ -41,50 +41,8 @@ pub trait ActivationPort {
         arguments: &[Argument<'_>],
     ) -> Result<Value, HostError<Self::Error>>;
 }
-#[derive(Clone, Copy, Debug)]
-pub struct Limits {
-    pub functions: usize,
-    pub parameters: usize,
-    pub cases: usize,
-    pub metadata_text_bytes: usize,
-    pub retained_text_bytes: usize,
-}
-impl Default for Limits {
-    fn default() -> Self {
-        Self {
-            functions: 1_024,
-            parameters: 65_536,
-            cases: 65_536,
-            metadata_text_bytes: 16_777_216,
-            retained_text_bytes: 16_777_216,
-        }
-    }
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Resource {
-    Functions,
-    Parameters,
-    Cases,
-    MetadataText,
-    RetainedText,
-}
-fn text_size(value: &Value) -> usize {
-    match value {
-        Value::Str(value) => value.len(),
-        _ => 0,
-    }
-}
-fn retain(held: &mut usize, amount: usize, maximum: usize) -> Result<(), Resource> {
-    *held = held
-        .checked_add(amount)
-        .filter(|&total| total <= maximum)
-        .ok_or(Resource::RetainedText)?;
-    Ok(())
-}
 #[derive(Debug, PartialEq, thiserror::Error)]
 pub enum Failure<E> {
-    #[error("project activation limit: {0:?}")]
-    Limit(Resource),
     #[error("project activation lock kind mismatch: language={language:?}, actual={actual:?}")]
     LockKindMismatch {
         language: Language,
@@ -310,118 +268,54 @@ pub fn activate<P: ActivationPort>(
     functions: &[Function],
     port: &mut P,
 ) -> Result<Vec<ActivatedFunction<P::Handle>>, Failure<P::Error>> {
-    activate_with_limits(language, lock, functions, port, Limits::default())
-}
-
-/// Count selected work before ports, then bound copied test observations and
-/// failure identities. Exhaustion rejects the whole activation rather than
-/// returning truncated case findings. Hosts bound their opaque error payloads.
-pub fn activate_with_limits<P: ActivationPort>(
-    language: Language,
-    lock: &LockReference,
-    functions: &[Function],
-    port: &mut P,
-    limits: Limits,
-) -> Result<Vec<ActivatedFunction<P::Handle>>, Failure<P::Error>> {
-    if functions.len() > limits.functions {
-        return Err(Failure::Limit(Resource::Functions));
-    }
     let selected = functions.iter().collect::<Vec<_>>();
-    activate_references_with_limits(language, lock, &selected, port, limits)
+    activate_references(language, Some(lock), &selected, port)
 }
 
 /// Activate compiler-selected definitions borrowed from the one owned environment.
 /// Selection order defines stable dataset slots; no test collection is recopied.
 pub fn activate_references<P: ActivationPort>(
     language: Language,
-    lock: &LockReference,
+    lock: Option<&LockReference>,
     functions: &[&Function],
     port: &mut P,
 ) -> Result<Vec<ActivatedFunction<P::Handle>>, Failure<P::Error>> {
-    activate_references_with_limits(language, lock, functions, port, Limits::default())
-}
-
-/// Apply the same cumulative activation policy to borrowed selected definitions.
-pub fn activate_references_with_limits<P: ActivationPort>(
-    language: Language,
-    lock: &LockReference,
-    functions: &[&Function],
-    port: &mut P,
-    limits: Limits,
-) -> Result<Vec<ActivatedFunction<P::Handle>>, Failure<P::Error>> {
-    activate_observed(language, lock, functions, port, limits, None)
+    activate_observed(language, lock, functions, port, None)
 }
 
 /// Retain the attempted lock, every binding and every attempted case even when
 /// later activation fails. Each call resets prior evidence before any host port.
 pub fn activate_references_observed<P: ActivationPort>(
     language: Language,
-    lock: &LockReference,
+    lock: Option<&LockReference>,
     functions: &[&Function],
     port: &mut P,
-    limits: Limits,
     observations: &mut Observations,
 ) -> Result<Vec<ActivatedFunction<P::Handle>>, Failure<P::Error>> {
     *observations = Observations::default();
-    activate_observed(language, lock, functions, port, limits, Some(observations))
+    activate_observed(language, lock, functions, port, Some(observations))
 }
 
 fn activate_observed<P: ActivationPort>(
     language: Language,
-    lock: &LockReference,
+    lock: Option<&LockReference>,
     functions: &[&Function],
     port: &mut P,
-    limits: Limits,
     mut observations: Option<&mut Observations>,
 ) -> Result<Vec<ActivatedFunction<P::Handle>>, Failure<P::Error>> {
     if functions.is_empty() {
         return Ok(Vec::new());
     }
-    if functions.len() > limits.functions {
-        return Err(Failure::Limit(Resource::Functions));
-    }
-    let mut cases = 0usize;
-    let mut parameters = 0usize;
-    let mut metadata_text = 0usize;
-    for function in functions {
-        let definition = function.definition();
-        parameters = parameters
-            .checked_add(definition.params.len())
-            .filter(|&total| total <= limits.parameters)
-            .ok_or(Failure::Limit(Resource::Parameters))?;
-        cases = cases
-            .checked_add(definition.tests.len())
-            .filter(|&total| total <= limits.cases)
-            .ok_or(Failure::Limit(Resource::Cases))?;
-        // Plans own both logical/host names and defaults; the lock port's
-        // identity collection also owns name/call copies. Bound the aggregate
-        // before constructing the first plan, independently of case results.
-        let texts = [&definition.name, &definition.function]
-            .into_iter()
-            .flat_map(|text| [text.as_str(), text.as_str()])
-            .chain(definition.params.iter().flat_map(|parameter| {
-                let default = match &parameter.default {
-                    Some(Value::Str(text)) => text.as_str(),
-                    _ => "",
-                };
-                [parameter.name.as_str(), parameter.name.as_str(), default]
-            }));
-        for text in texts {
-            metadata_text = metadata_text
-                .checked_add(text.len())
-                .filter(|&total| total <= limits.metadata_text_bytes)
-                .ok_or(Failure::Limit(Resource::MetadataText))?;
+    if let Some(lock) = lock {
+        if !matches!(
+            (language, lock.kind),
+            (Language::Python, LockKind::Uv) | (Language::R, LockKind::Renv)
+        ) {
+            return Err(Failure::LockKindMismatch {
+                language,
+                actual: lock.kind,
+            });
         }
-    }
-    let mut retained_text = 0usize;
-    if !matches!(
-        (language, lock.kind),
-        (Language::Python, LockKind::Uv) | (Language::R, LockKind::Renv)
-    ) {
-        return Err(Failure::LockKindMismatch {
-            language,
-            actual: lock.kind,
-        });
     }
     let mut names = BTreeSet::new();
     let mut plans = Vec::with_capacity(functions.len());
@@ -442,28 +336,30 @@ fn activate_observed<P: ActivationPort>(
                 .map_err(|error| Failure::Plan { function, error })?,
         );
     }
-    let identities = plans
-        .iter()
-        .map(|plan| plan.identity().clone())
-        .collect::<Vec<_>>();
-    if let Some(observations) = observations.as_deref_mut() {
-        observations.lock = LockObservation::Attempted;
-    }
-    match port.verify_lock(language, lock, &identities) {
-        Ok(()) => {
-            if let Some(observations) = observations.as_deref_mut() {
-                observations.lock = LockObservation::Verified;
-            }
+    if let Some(lock) = lock {
+        let identities = plans
+            .iter()
+            .map(|plan| plan.identity().clone())
+            .collect::<Vec<_>>();
+        if let Some(observations) = observations.as_deref_mut() {
+            observations.lock = LockObservation::Attempted;
         }
-        Err(error) => {
-            if let Some(observations) = observations.as_deref_mut() {
-                observations.lock = if port.is_interrupt(&error) {
-                    LockObservation::Interrupted
-                } else {
-                    LockObservation::Rejected
-                };
+        match port.verify_lock(language, lock, &identities) {
+            Ok(()) => {
+                if let Some(observations) = observations.as_deref_mut() {
+                    observations.lock = LockObservation::Verified;
+                }
             }
-            return Err(Failure::Lock(error));
+            Err(error) => {
+                if let Some(observations) = observations.as_deref_mut() {
+                    observations.lock = if port.is_interrupt(&error) {
+                        LockObservation::Interrupted
+                    } else {
+                        LockObservation::Rejected
+                    };
+                }
+                return Err(Failure::Lock(error));
+            }
         }
     }
     let mut activated = Vec::with_capacity(plans.len());
@@ -555,18 +451,6 @@ fn activate_observed<P: ActivationPort>(
                             error,
                         });
                     }
-                    retain(
-                        &mut retained_text,
-                        error.identity.name.len(),
-                        limits.retained_text_bytes,
-                    )
-                    .map_err(Failure::Limit)?;
-                    retain(
-                        &mut retained_text,
-                        error.identity.call.len(),
-                        limits.retained_text_bytes,
-                    )
-                    .map_err(Failure::Limit)?;
                     test_failures.push(TestFailure::Invocation {
                         function,
                         case,
@@ -590,27 +474,9 @@ fn activate_observed<P: ActivationPort>(
                 } else {
                     TestOutcome::ResultMismatch
                 };
-                retain(
-                    &mut retained_text,
-                    text_size(&actual),
-                    limits.retained_text_bytes,
-                )
-                .map_err(Failure::Limit)?;
                 observations.tests.last_mut().expect("recorded case").actual = Some(actual.clone());
             }
             if !matched {
-                retain(
-                    &mut retained_text,
-                    text_size(&actual),
-                    limits.retained_text_bytes,
-                )
-                .map_err(Failure::Limit)?;
-                retain(
-                    &mut retained_text,
-                    text_size(&test.result),
-                    limits.retained_text_bytes,
-                )
-                .map_err(Failure::Limit)?;
                 test_failures.push(TestFailure::Result {
                     function,
                     case,
@@ -619,18 +485,6 @@ fn activate_observed<P: ActivationPort>(
                 });
                 continue;
             }
-            retain(
-                &mut retained_text,
-                test.id.len(),
-                limits.retained_text_bytes,
-            )
-            .map_err(Failure::Limit)?;
-            retain(
-                &mut retained_text,
-                text_size(&actual),
-                limits.retained_text_bytes,
-            )
-            .map_err(Failure::Limit)?;
             binding.cases.push(CaseObservation {
                 id: test.id.clone(),
                 actual,

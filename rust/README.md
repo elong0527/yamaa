@@ -24,16 +24,18 @@ bytes when changing implementation or repository structure.
 Layer composition and null handling follow the
 [composition contract](../rules/specification/composition.md).
 
+The adapter's default `readstat` feature builds the bundled read-only C backend
+for `.sas7bdat` and `.xpt` input. Rust embedders that use only CSV and Parquet can
+build `yamaa-adapters` with `default-features = false`; this omits the
+ReadStat build and the adapter's direct `cc` build dependency. Parquet's Zstd
+backend still builds its native library through a transitive `cc` dependency.
+SAS input then returns
+`sas_source::Error::Unavailable` (`sas_reader_unavailable` in boundary replies).
+Python and R packages retain the default backend and all supported input formats.
+
 Arrow/Parquet release-specific operations live in the adapter's
 `storage_api` module: fallible IPC schema conversion, logical timestamp/integer
 construction, and logical-type inspection. The canonical lock and manifests
 continue to select 60; using 57 requires adapting this boundary and qualifying
 that dependency graph. Keep malformed-schema rejection and the closed output
 profile when adapting the boundary.
-
-The adapter's default `readstat` feature builds the bundled read-only C backend
-for `.sas7bdat` and `.xpt` input. Rust embedders that use only CSV and Parquet can
-build `yamaa-adapters` with `default-features = false`; this omits both the
-ReadStat build and its `cc` build dependency. SAS input then returns
-`sas_source::Error::Unavailable` (`sas_reader_unavailable` in boundary replies).
-Python and R packages retain the default backend and all supported input formats.

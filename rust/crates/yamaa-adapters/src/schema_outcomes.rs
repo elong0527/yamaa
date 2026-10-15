@@ -2,13 +2,12 @@
 #[derive(Debug)]
 pub(crate) enum Error {
     Internal,
-    ResponseLimit,
     InvalidQuery,
     InvalidDocument,
 }
 // Stable outcomes keep language findings, policy refusal and transport defects separate.
 
-use serde_json::{json, Value};
+use yamaa_core::json::{json, Value};
 use yamaa_core::{regex, schema::*};
 
 pub(crate) fn limit(phase: &str, resource: &str, limit: usize) -> Value {
@@ -17,25 +16,13 @@ pub(crate) fn limit(phase: &str, resource: &str, limit: usize) -> Value {
 fn regex_resource(resource: regex::Resource) -> &'static str {
     use regex::Resource::*;
     match resource {
-        PatternBytes => "pattern_bytes",
-        Nodes => "nodes",
-        Groups => "groups",
-        Depth => "depth",
-        Repetition => "repetition",
-        Width => "width",
-        WidthWork => "width_work",
-        WidthCells => "width_cells",
-        SubjectBytes => "subject_bytes",
-        Work => "work",
-        StateCells => "state_cells",
+        Depth => "semantic_depth",
+        Work => "regex_steps",
     }
 }
 fn document_resource(resource: DocumentResource) -> &'static str {
     match resource {
-        DocumentResource::Nodes => "nodes",
-        DocumentResource::TextBytes => "text_bytes",
-        DocumentResource::Edges => "edges",
-        DocumentResource::Depth => "depth",
+        DocumentResource::Depth => "yaml_depth",
     }
 }
 pub(crate) fn document(error: DocumentError) -> Result<Value, Error> {
@@ -60,23 +47,12 @@ pub(crate) fn validation(error: ValidationError) -> Result<Value, Error> {
         }) => limit(
             "type",
             match resource {
-                TypeResource::Bytes => "bytes",
-                TypeResource::Nodes => "nodes",
-                TypeResource::Depth => "depth",
+                TypeResource::Depth => "semantic_depth",
             },
             maximum,
         ),
         ValidationError::InvalidDescriptor => return Err(Error::InvalidQuery),
-        ValidationError::Depth { limit: maximum } => limit("validation", "depth", maximum),
-        ValidationError::Diagnostics { limit: maximum } => {
-            limit("validation", "diagnostics", maximum)
-        }
-        ValidationError::DiagnosticText { limit: maximum } => {
-            limit("validation", "diagnostic_text_bytes", maximum)
-        }
-        ValidationError::Constraint(ConstraintError::Work { limit: maximum }) => {
-            limit("validation", "work", maximum)
-        }
+        ValidationError::Depth { limit: maximum } => limit("validation", "semantic_depth", maximum),
         ValidationError::Constraint(ConstraintError::Regex(error)) => {
             limit("regex_match", regex_resource(error.resource), error.limit)
         }
@@ -94,10 +70,7 @@ pub(crate) fn normalization(error: NormalizationError) -> Result<Value, Error> {
         } => limit(
             "normalization",
             match resource {
-                NormalizationResource::Nodes => "nodes",
-                NormalizationResource::TextBytes => "text_bytes",
-                NormalizationResource::Edges => "edges",
-                NormalizationResource::Depth => "depth",
+                NormalizationResource::Depth => "semantic_depth",
             },
             maximum,
         ),
@@ -120,10 +93,7 @@ pub(crate) fn inheritance_dependencies(error: InheritanceDependencyError) -> Res
         limit(
             phase,
             match resource {
-                n::ParseResource::Bytes => "bytes",
-                n::ParseResource::Tokens => "tokens",
-                n::ParseResource::Nodes => "nodes",
-                n::ParseResource::Depth => "depth",
+                n::ParseResource::Depth => "semantic_depth",
             },
             maximum,
         )
@@ -133,13 +103,7 @@ pub(crate) fn inheritance_dependencies(error: InheritanceDependencyError) -> Res
             return normalization(error)
         }
         E::Invalid(issues) => {
-            use yamaa_core::diagnostic::{inheritance_dependency_diagnostics, ProjectionError};
-            let findings = inheritance_dependency_diagnostics(&issues, 16_777_216).map_err(
-                |error| match error {
-                    ProjectionError::Limit => Error::ResponseLimit,
-                    ProjectionError::InvalidContext => Error::Internal,
-                },
-            )?;
+            let findings = yamaa_core::diagnostic::inheritance_dependency_diagnostics(&issues);
             let translated = findings
                 .into_iter()
                 .map(crate::specification_diagnostics::portable_diagnostic)
