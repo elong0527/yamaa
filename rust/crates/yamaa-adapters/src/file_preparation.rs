@@ -101,7 +101,7 @@ impl RejectedPlain {
         self.resources.capture_reads()
     }
     pub fn retained_sources(&self) -> crate::file_resources::RetainedSources {
-        self.resources.retain_sources(aliases, text)
+        self.resources.retain_sources()
     }
 }
 impl FileSpecification {

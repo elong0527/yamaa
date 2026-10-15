@@ -72,7 +72,7 @@ impl RejectedGraph {
     }
     /// Bounded raw rejection evidence. No preparation or IO is retried.
     pub fn retained_sources(&self) -> crate::file_resources::RetainedSources {
-        self.resources.retain_sources(aliases, text)
+        self.resources.retain_sources()
     }
     pub fn capture_reads(&self) -> usize {
         self.resources.capture_reads()
@@ -393,13 +393,7 @@ fn collect_nodes(
                         schema_origin.written,
                     )));
                 }
-                own_document(
-                    prepared,
-                    resources,
-                    documents,
-                    &mut identities,
-                    &mut model_nodes,
-                )
+                own_document(prepared, documents, &mut identities)
             };
             let output = producer
                 .written_output_origin()

@@ -1,7 +1,7 @@
 //! Captured YAML codec and compatibility results for engine project preparation.
 use crate::specification_source::{CapturedDocument, CapturedSchema, Error, Source};
 pub use application::{
-    CapturePort, DecodeTarget, Kind, Limits, LockCapture, Origin, Reply, Request, SourceOrigins,
+    CapturePort, DecodeTarget, Kind, LockCapture, Origin, Reply, Request, SourceOrigins,
 };
 use std::sync::Arc;
 use yamaa_core::project_preparation as application;
@@ -195,14 +195,12 @@ pub fn prepare<P: CapturePort>(
     source: Source,
     host: Language,
     port: &mut P,
-    limits: Limits,
 ) -> Result<PreparedEnvironment, Failure<P::Error>> {
     adapt_preparation(application::prepare(
         &mut Decoder(schema),
         source,
         host,
         port,
-        limits,
     ))
 }
 

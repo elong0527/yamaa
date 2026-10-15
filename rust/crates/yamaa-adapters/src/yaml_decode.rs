@@ -324,10 +324,7 @@ pub fn decode_yaml(source: &[u8]) -> Result<DecodedYaml, DecodeFailure> {
     let document = Document::new(document_nodes, root).map_err(|error| match error {
         DocumentError::Limit { resource, limit } => DecodeFailure::Limit(LimitExceeded {
             resource: match resource {
-                DocumentResource::Nodes => "nodes",
-                DocumentResource::TextBytes => "text_bytes",
-                DocumentResource::Edges => "edges",
-                DocumentResource::Depth => "depth",
+                DocumentResource::Depth => "yaml_depth",
             },
             limit,
             actual: None,

@@ -14,6 +14,7 @@ pub use inheritance::{CapturedParent, InheritanceError, InheritancePort, SourceF
 pub use yamaa_core::project_preparation::Source;
 #[derive(Debug)]
 pub enum Error {
+    Limit(yamaa_core::limits::LimitExceeded),
     Decode {
         identity: String,
         error: DecodeFailure,
@@ -89,7 +90,7 @@ impl CapturedDocument {
     }
 }
 /// Physical schema YAML representation; closure ordering and admission belong
-/// to the engine. DecodeLimits and original occurrence locations stay here.
+/// to the engine. Original occurrence locations stay here.
 struct SchemaDecoder;
 impl capture::DecodePort for SchemaDecoder {
     type Error = DecodeFailure;

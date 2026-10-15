@@ -61,7 +61,7 @@ impl RejectedEnvironment {
     }
     /// Bounded owned aliases of held bytes; this performs no resource access.
     pub fn retained_sources(&self) -> crate::file_resources::RetainedSources {
-        self.resources.retain_sources(aliases, text)
+        self.resources.retain_sources()
     }
     pub fn capture_reads(&self) -> usize {
         self.resources.capture_reads()
