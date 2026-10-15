@@ -61,6 +61,7 @@ typedef struct sas7bdat_ctx_s {
     uint64_t        subheader_pointer_size;
 
     int            text_blob_count;
+    uint64_t       text_blob_bytes;
     size_t        *text_blob_lengths;
     char         **text_blobs;
 
@@ -171,6 +172,12 @@ static readstat_error_t sas7bdat_parse_column_text_subheader(const char *subhead
     /* A uint16 text reference addresses at most 65536 blobs. */
     if (len < signature_len + 2 || ctx->text_blob_count > UINT16_MAX)
         return READSTAT_ERROR_PARSE;
+    /* Repeated or overlapping pointers cannot authorize copies larger than
+     * the held source extent. Check subtraction before retaining any blob. */
+    uint64_t blob_bytes = len - signature_len;
+    if (ctx->file_size < 0 || blob_bytes > (uint64_t)ctx->file_size ||
+            ctx->text_blob_bytes > (uint64_t)ctx->file_size - blob_bytes)
+        return READSTAT_ERROR_PARSE;
     size_t new_blob_count = ctx->text_blob_count + 1;
     READSTAT_RESIZE_OR_RETURN(ctx->text_blobs, new_blob_count * sizeof(char *));
     ctx->text_blobs[new_blob_count-1] = NULL;
@@ -188,6 +195,7 @@ static readstat_error_t sas7bdat_parse_column_text_subheader(const char *subhead
     memcpy(blob, subheader+signature_len, len-signature_len);
     ctx->text_blob_lengths[ctx->text_blob_count-1] = len-signature_len;
     ctx->text_blobs[ctx->text_blob_count-1] = blob;
+    ctx->text_blob_bytes += blob_bytes;
 
 cleanup:
     return retval;

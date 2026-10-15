@@ -2412,13 +2412,12 @@ mod numeric {
                     limit: 128
                 })
             ));
-            // Each candidate consumes one start, one group-zero capture slot and
-            // one interpretation step, including the final end-of-subject candidate.
+            // Each literal candidate consumes one start and one interpretation step.
             let literal = pattern("z");
-            assert_eq!(literal.search(&"a".repeat(333_331)), Ok(None));
-            assert_eq!(literal.search(&"a".repeat(333_332)), Ok(None));
+            assert_eq!(literal.search(&"a".repeat(499_998)), Ok(None));
+            assert_eq!(literal.search(&"a".repeat(499_999)), Ok(None));
             assert_eq!(
-                literal.search(&"a".repeat(333_333)),
+                literal.search(&"a".repeat(500_000)),
                 Err(MatchError {
                     resource: Resource::Work,
                     limit: 1_000_000
