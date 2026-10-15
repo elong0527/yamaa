@@ -1812,6 +1812,23 @@ mod file {
                 assert_eq!(owner.capture_reads(), if structural { 2 } else { 1 });
                 let reads = owner.capture_reads();
                 let held_root = rejected.root.source().bytes.as_ptr();
+                let application_error = yamaa_adapters::project_application::prepare(
+                    &study.path("root.yaml"),
+                    &study.path("environment.yaml"),
+                    Language::Python,
+                )
+                .err()
+                .unwrap();
+                let yamaa_adapters::project_application::Error::Project(
+                    yamaa_adapters::file_project::Error::Environment(Failure::Rejected(
+                        application_owner,
+                    )),
+                ) = &application_error
+                else {
+                    panic!("public preparation retains the native environment failure")
+                };
+                assert_eq!(application_owner.sources.len(), 2);
+                let held_application_root = application_owner.root.source().bytes.as_ptr();
                 assert!(!study.0.join("root.yaml").exists());
                 fs::remove_dir_all(&study.0).unwrap();
                 for _ in 0..2 {
@@ -1837,9 +1854,24 @@ mod file {
                             "actual": expected.actual,
                         }),
                     );
+                    assert_eq!(
+                        yamaa_adapters::project_application::failure(
+                            &application_error,
+                            Language::Python,
+                        ),
+                        rows,
+                    );
                     assert_eq!(owner.capture_reads(), reads);
                     assert_eq!(rejected.root.source().bytes.as_ptr(), held_root);
                     assert_eq!(rejected.root.source().bytes, environment.as_bytes());
+                    assert_eq!(
+                        application_owner.root.source().bytes.as_ptr(),
+                        held_application_root,
+                    );
+                    assert_eq!(
+                        application_owner.root.source().bytes,
+                        environment.as_bytes(),
+                    );
                 }
             }
         }
