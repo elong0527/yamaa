@@ -97,7 +97,10 @@ def test_the_hosted_control_reuses_r_setup_and_retains_failure_evidence():
     control = next(
         s for s in steps if s.get("name") == "Reject R literal golden writers"
     )
-    assert control["if"] == "github.ref == 'refs/heads/validation/issue-2297-harbor'"
+    assert control["if"] == (
+        "github.ref == 'refs/heads/validation/issue-2297-harbor' || "
+        "github.ref == 'refs/heads/validation/issue-2297-r-rejection'"
+    )
     assert (
         "--no-sync python evaluations/harbor/check_pkqt_r_golden_copy.py"
         in control["run"]
@@ -110,3 +113,7 @@ def test_the_hosted_control_reuses_r_setup_and_retains_failure_evidence():
     artifact = next(s for s in steps if s.get("name") == "Upload R rejection controls")
     assert "always()" in artifact["if"]
     assert artifact["with"]["name"] == "pkqt-r-golden-copy"
+    # The additive acceptance renewal must leave the first Docker run alone.
+    assert "validation/issue-2297-r-rejection" in workflow[True]["push"]["branches"]
+    oracle = yaml.safe_load((ROOT / ".github/workflows/harbor-oracle.yml").read_text())
+    assert "validation/issue-2297-r-rejection" not in oracle[True]["push"]["branches"]
