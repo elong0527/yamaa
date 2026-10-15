@@ -117,8 +117,24 @@ fn brotli_window(input: &[u8]) -> Result<(), Error> {
 }
 
 fn zstd(input: &[u8], expected: usize) -> Result<Vec<u8>, Error> {
-    let decoder = zstd::stream::read::Decoder::new(input).map_err(|_| Error::Malformed)?;
-    exact_stream(decoder, expected)
+    // Every valid Raw, RLE or Compressed Zstandard block decodes to at most
+    // 128 KiB and has a three-byte stored header. Frame/skippable headers add
+    // no output, so this also holds for concatenated frames. Reject impossible
+    // expansion before allocating, without imposing a history-window policy.
+    if expected > (input.len() / 3).saturating_mul(128 * 1024) {
+        return Err(Error::Malformed);
+    }
+    let mut result = Vec::new();
+    result
+        .try_reserve_exact(expected)
+        .map_err(|_| Error::Malformed)?;
+    result.resize(expected, 0);
+    let written =
+        zstd::bulk::decompress_to_buffer(input, &mut result).map_err(|_| Error::Malformed)?;
+    if written != expected {
+        return Err(Error::Malformed);
+    }
+    Ok(result)
 }
 
 /// Validate every actual byte of expansion using the same immutable page body.
@@ -224,9 +240,12 @@ mod tests {
     #[test]
     fn malformed_compression_is_distinct_from_unavailable_codecs() {
         assert_eq!(verify(&page(&[0x91, 30], 4, 1)), Err(Error::Malformed));
-        // A valid empty Zstandard frame may declare a large history window.
-        let data = [0x28, 0xb5, 0x2f, 0xfd, 0, 0x78, 1, 0, 0];
-        assert_eq!(verify(&page(&data, 6, 0)), Ok(()));
+        // Valid empty Zstandard frames may declare 32 MiB or 2 GiB history
+        // windows without requiring any decoded bytes or history allocation.
+        for window in [0x78, 0xa8] {
+            let data = [0x28, 0xb5, 0x2f, 0xfd, 0, window, 1, 0, 0];
+            assert_eq!(verify(&page(&data, 6, 0)), Ok(()));
+        }
         assert_eq!(verify(&page(&[0], 6, 0)), Err(Error::Malformed));
         assert_eq!(verify(&page(&[], 3, 0)), Err(Error::Unavailable(3)));
     }
@@ -272,7 +291,8 @@ mod tests {
         let snappy = snap::raw::Encoder::new().compress_vec(&plain).unwrap();
         let lz4 = lz4_flex::block::compress(&plain);
         assert!(lz4.len() * 200 < plain.len());
-        for (bytes, codec) in [(&snappy, 1), (&lz4, 7), (&lz4, 5)] {
+        let zstd = zstd::stream::encode_all(&plain[..], 1).unwrap();
+        for (bytes, codec) in [(&snappy, 1), (&lz4, 7), (&lz4, 5), (&zstd, 6)] {
             assert_eq!(decode(&page(bytes, codec, plain.len())).unwrap(), plain);
         }
     }
