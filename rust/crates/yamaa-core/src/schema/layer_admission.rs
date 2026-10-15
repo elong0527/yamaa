@@ -1,9 +1,9 @@
 //! Admission of one inheritance contribution, before parent traversal or composition.
 
 use super::{
-    scalar_diagnostic_label, Document, DocumentKind, DocumentNode as N, NormalizationError,
-    NormalizationResource, NormalizedDocument, SchemaContext as C, SchemaDiagnostic, SchemaField,
-    SchemaOrigin, SchemaSource, SchemaStructure, ValidationError,
+    scalar_diagnostic_label, Document, DocumentKind, DocumentNode as N, NormalizationBudget,
+    NormalizationError, NormalizationResource, NormalizedDocument, SchemaContext as C,
+    SchemaDiagnostic, SchemaField, SchemaOrigin, SchemaSource, SchemaStructure, ValidationError,
 };
 use crate::diagnostic::ConditionCode;
 use std::{collections::BTreeMap, vec};
@@ -30,24 +30,25 @@ fn collection(name: &str) -> Option<Collection> {
     })
 }
 
-struct Run<'a> {
+struct Run<'a, 'b> {
     schema: &'a SchemaStructure,
     input: &'a Document,
+    budget: &'b mut NormalizationBudget,
     findings: Vec<SchemaDiagnostic>,
     nodes: Vec<N>,
     origins: Vec<SchemaOrigin>,
 }
 
-impl Run<'_> {
+impl Run<'_, '_> {
     fn depth(&mut self, depth: usize) -> Result<(), NormalizationError> {
-        let limit = crate::limits::Limits::SEMANTIC_DEPTH;
+        let limit = self.budget.limits.depth.min(128);
         if depth > limit {
             return Err(NormalizationError::Limit {
                 resource: NormalizationResource::Depth,
                 limit,
             });
         }
-        Ok(())
+        self.budget.work(1)
     }
 
     fn field(
@@ -59,6 +60,7 @@ impl Run<'_> {
             return Err(ValidationError::InvalidDescriptor.into());
         };
         for &(key, value) in entries {
+            self.budget.work(name.len().saturating_add(1))?;
             if matches!(&self.input.nodes()[key], N::Text(text) if text == name) {
                 return Ok(Some((key, value)));
             }
@@ -66,12 +68,25 @@ impl Run<'_> {
         Ok(None)
     }
 
+    fn label_bytes(&self, node: usize) -> usize {
+        match &self.input.nodes()[node] {
+            N::Text(text) | N::Integer(text) => text.len(),
+            _ => 64,
+        }
+    }
+
     fn label(&mut self, node: usize) -> Result<String, NormalizationError> {
+        let size = self.label_bytes(node);
+        self.budget.work(size.saturating_add(1))?;
+        self.budget.validation.text(size)?;
         scalar_diagnostic_label(&self.input.nodes()[node])
             .ok_or_else(|| ValidationError::InvalidDescriptor.into())
     }
 
     fn join(&mut self, path: &str, name: &str) -> Result<String, NormalizationError> {
+        let size = path.len().saturating_add(name.len()).saturating_add(1);
+        self.budget.work(size)?;
+        self.budget.validation.text(size)?;
         Ok(if path.is_empty() {
             name.into()
         } else {
@@ -80,6 +95,9 @@ impl Run<'_> {
     }
 
     fn indexed(&mut self, path: &str, label: &str) -> Result<String, NormalizationError> {
+        let size = path.len().saturating_add(label.len()).saturating_add(2);
+        self.budget.work(size)?;
+        self.budget.validation.text(size)?;
         Ok(format!("{path}[{label}]"))
     }
 
@@ -103,7 +121,7 @@ impl Run<'_> {
         context: Vec<(&'static str, C)>,
     ) -> Result<(), NormalizationError> {
         self.findings
-            .push(super::validation::diagnostic(path, code, context));
+            .push(self.budget.validation.diagnostic(path, code, context)?);
         Ok(())
     }
 
@@ -128,6 +146,8 @@ impl Run<'_> {
         };
         for &(key, _) in entries {
             let name = self.label(key)?;
+            self.budget
+                .work(fields.len().saturating_mul(name.len().saturating_add(1)))?;
             if !matches!(&self.input.nodes()[key], N::Text(text) if fields.iter().any(|f| f.name == *text))
             {
                 // Root unknown fields use their plain spelling; nested integer/bool
@@ -154,10 +174,14 @@ impl Run<'_> {
         path: &str,
         fragment: bool,
     ) -> Result<(), NormalizationError> {
-        self.findings.extend(
-            self.schema
-                .validate_descriptor(descriptor, self.input, value, path, fragment)?,
-        );
+        self.findings.extend(self.schema.validate_descriptor(
+            descriptor,
+            self.input,
+            value,
+            path,
+            fragment,
+            &mut self.budget.validation,
+        )?);
         Ok(())
     }
 
@@ -167,11 +191,17 @@ impl Run<'_> {
         value: usize,
         path: &str,
     ) -> Result<(), NormalizationError> {
-        let types = self.schema.parse_query_types(&[name.into()])?;
-        self.findings.extend(
-            self.schema
-                .validate_types(&types, self.input, value, path, false)?,
-        );
+        let types = self
+            .schema
+            .parse_query_types(&[name.into()], &mut self.budget.validation)?;
+        self.findings.extend(self.schema.validate_types(
+            &types,
+            self.input,
+            value,
+            path,
+            false,
+            &mut self.budget.validation,
+        )?);
         Ok(())
     }
 
@@ -239,8 +269,9 @@ impl Run<'_> {
             let N::Sequence(items) = &self.input.nodes()[node] else {
                 return self.bad_type(node, C::LayerKind(DocumentKind::Sequence), path);
             };
-            // Compare the retained identity occurrences directly.
+            // Retained input occurrences avoid uncharged identity-string copies.
             let mut seen: Vec<usize> = Vec::new();
+            self.budget.reserve(0, items.len())?;
             for (index, &member) in items.iter().enumerate() {
                 let id = if matches!(self.input.nodes()[member], N::Mapping(_)) {
                     self.field(member, identity)?.map(|(_, value)| value)
@@ -261,6 +292,7 @@ impl Run<'_> {
                 if let Some(id) = id {
                     let mut duplicate = false;
                     for &prior in &seen {
+                        self.budget.work(label.len().saturating_add(1))?;
                         if self.input.nodes()[prior] == self.input.nodes()[id] {
                             duplicate = true;
                             break;
@@ -356,16 +388,28 @@ impl Run<'_> {
     }
 
     fn scalar(&mut self, node: usize) -> Result<usize, NormalizationError> {
-        if matches!(self.input.nodes()[node], N::Sequence(_) | N::Mapping(_)) {
-            return Err(ValidationError::InvalidDescriptor.into());
-        }
-
+        let bytes = match &self.input.nodes()[node] {
+            N::Text(text) | N::Integer(text) => text.len(),
+            N::Sequence(_) | N::Mapping(_) => return Err(ValidationError::InvalidDescriptor.into()),
+            _ => 0,
+        };
+        self.budget.work(bytes.saturating_add(1))?;
+        self.budget.reserve(bytes, 0)?;
         Ok(self.push(self.input.nodes()[node].clone(), self.origin(node, false)))
     }
 
     fn import(&mut self, normalized: NormalizedDocument) -> Result<usize, NormalizationError> {
         let offset = self.nodes.len();
         for (node, origin) in normalized.document.nodes().iter().zip(normalized.origins) {
+            let (bytes, edges) = match node {
+                N::Text(text) | N::Integer(text) => (text.len(), 0),
+                N::Sequence(items) => (0, items.len()),
+                N::Mapping(entries) => (0, entries.len().saturating_mul(2)),
+                _ => (0, 0),
+            };
+            self.budget
+                .work(bytes.saturating_add(edges).saturating_add(1))?;
+            self.budget.reserve(bytes, edges)?;
             let node = match node {
                 N::Sequence(items) => N::Sequence(items.iter().map(|n| n + offset).collect()),
                 N::Mapping(entries) => N::Mapping(
@@ -388,6 +432,7 @@ impl Run<'_> {
         kind: Option<Collection>,
     ) -> Result<usize, NormalizationError> {
         self.depth(if kind.is_some() { 2 } else { 0 })?;
+        self.budget.reserve(0, fields.len().saturating_mul(2))?;
         let mut output = Vec::with_capacity(fields.len());
         for field in fields {
             let Some((key, value)) = self.field(node, &field.name)? else {
@@ -404,6 +449,7 @@ impl Run<'_> {
                     self.input,
                     value,
                     kind.is_some_and(|k| k.fragment),
+                    self.budget,
                 )?;
                 self.import(normalized)?
             };
@@ -426,6 +472,7 @@ impl Run<'_> {
             let N::Sequence(items) = &self.input.nodes()[node] else {
                 unreachable!()
             };
+            self.budget.reserve(0, items.len())?;
             let mut output = Vec::with_capacity(items.len());
             for &member in items {
                 output.push(self.normalize_fields(
@@ -444,9 +491,20 @@ impl Run<'_> {
             // and last member value. Select before copying so discarded values
             // never leave unreachable nodes in the owned output arena. Every
             // authored value has already been validated by the preceding pass.
+            self.budget.reserve(0, entries.len().saturating_mul(2))?;
             let mut selected: Vec<(usize, usize)> = Vec::with_capacity(entries.len());
             let mut positions: BTreeMap<String, usize> = BTreeMap::new();
             for &(key, member) in entries {
+                let bytes = self.label_bytes(key);
+                self.budget.reserve(bytes, 2)?;
+                // Bound string comparisons in lookup and insertion, including
+                // the number of possible entries before either allocation.
+                let comparisons = (usize::BITS - entries.len().leading_zeros()) as usize;
+                self.budget.work(
+                    bytes
+                        .saturating_add(1)
+                        .saturating_mul(comparisons.saturating_mul(32)),
+                )?;
                 let label = self.label(key)?;
                 if let Some(&position) = positions.get(&label) {
                     selected[position].1 = member;
@@ -455,15 +513,19 @@ impl Run<'_> {
                     selected.push((key, member));
                 }
             }
+            self.budget.reserve(0, entries.len().saturating_mul(2))?;
             let mut output = Vec::with_capacity(selected.len());
             for (key, member) in selected {
                 let key = if matches!(self.input.nodes()[key], N::Text(_)) {
                     self.scalar(key)?
                 } else {
                     let label = self.label(key)?;
+                    self.budget.reserve(label.len(), 0)?;
                     self.push(N::Text(label), self.origin(key, true))
                 };
                 let value = if matches!(self.input.nodes()[member], N::Text(_)) {
+                    self.budget.reserve(0, 2)?;
+                    self.budget.reserve(4, 0)?;
                     let path = self.push(N::Text("path".into()), self.origin(member, true));
                     let value = self.scalar(member)?;
                     self.push(N::Mapping(vec![(path, value)]), self.origin(member, true))
@@ -489,10 +551,12 @@ impl SchemaStructure {
     pub fn normalize_layer(
         &self,
         input: &Document,
+        budget: &mut NormalizationBudget,
     ) -> Result<NormalizedDocument, NormalizationError> {
         let mut run = Run {
             schema: self,
             input,
+            budget,
             findings: Vec::new(),
             nodes: Vec::new(),
             origins: Vec::new(),
@@ -502,7 +566,8 @@ impl SchemaStructure {
             return Err(NormalizationError::Invalid(run.findings));
         }
         let root = run.normalize_fields(input.root(), &self.root_class().fields, None)?;
-        let document = Document::new(run.nodes, root).map_err(NormalizationError::Document)?;
+        let document = Document::new(run.nodes, root, run.budget.limits.storage)
+            .map_err(NormalizationError::Document)?;
         Ok(NormalizedDocument {
             document,
             origins: run.origins,

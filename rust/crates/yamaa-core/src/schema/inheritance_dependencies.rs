@@ -2,8 +2,9 @@
 
 use super::{
     Document, DocumentNode as N, InheritanceReference, InheritanceReferenceError,
-    InheritanceReferenceKind as Kind, NormalizationError, NormalizationResource,
-    NormalizedDocument, SchemaOrigin, SchemaSource, SchemaStructure, ValidationError,
+    InheritanceReferenceKind as Kind, NormalizationBudget, NormalizationError,
+    NormalizationResource, NormalizedDocument, SchemaOrigin, SchemaSource, SchemaStructure,
+    ValidationError,
 };
 use crate::dependency_analysis;
 use std::vec;
@@ -59,9 +60,10 @@ struct Named<'a> {
     node: usize,
 }
 
-struct Run<'a> {
+struct Run<'a, 'b> {
     schema: &'a SchemaStructure,
     input: &'a Document,
+    budget: &'b mut NormalizationBudget,
     inputs: Vec<Named<'a>>,
     columns: Vec<Named<'a>>,
     intermediates: Vec<Named<'a>>,
@@ -78,22 +80,49 @@ struct Run<'a> {
     origins: Vec<SchemaOrigin>,
 }
 
-fn contains(names: &[String], name: &str) -> Result<bool, Error> {
+fn contains(names: &[String], name: &str, budget: &mut NormalizationBudget) -> Result<bool, Error> {
+    budget.work(
+        names
+            .len()
+            .saturating_add(1)
+            .saturating_mul(name.len().saturating_add(1)),
+    )?;
     Ok(names.iter().any(|n| n == name))
 }
-fn add(names: &mut Vec<String>, name: &str) -> Result<bool, Error> {
-    if contains(names, name)? {
+fn add(
+    names: &mut Vec<String>,
+    name: &str,
+    budget: &mut NormalizationBudget,
+) -> Result<bool, Error> {
+    if contains(names, name, budget)? {
         return Ok(false);
     }
+    budget.reserve(name.len(), 1)?;
     names.push(name.into());
     Ok(true)
 }
-fn lookup<'a>(items: &[Named<'a>], name: &str) -> Result<Option<Named<'a>>, Error> {
+fn lookup<'a>(
+    items: &[Named<'a>],
+    name: &str,
+    budget: &mut NormalizationBudget,
+) -> Result<Option<Named<'a>>, Error> {
+    budget.work(
+        items
+            .len()
+            .saturating_add(1)
+            .saturating_mul(name.len().saturating_add(1)),
+    )?;
     Ok(items.iter().rev().find(|n| n.name == name).copied())
 }
 
-impl<'a> Run<'a> {
+impl<'a> Run<'a, '_> {
     fn field(&mut self, node: usize, name: &str) -> Result<Option<usize>, Error> {
+        self.budget.work(
+            self.input.nodes()[node]
+                .length()
+                .unwrap_or(0)
+                .saturating_mul(name.len().saturating_add(1)),
+        )?;
         Ok(self.input.field(node, name))
     }
     fn text(&self, node: usize) -> Option<&'a str> {
@@ -115,6 +144,7 @@ impl<'a> Run<'a> {
             (N::Sequence(items), Some(identity)) => {
                 for &item in items {
                     if let Some(name) = self.field(item, identity)?.and_then(|id| self.text(id)) {
+                        self.budget.reserve(0, 2)?;
                         result.push(Named { name, node: item });
                     }
                 }
@@ -122,6 +152,7 @@ impl<'a> Run<'a> {
             (N::Mapping(items), None) => {
                 for &(key, value) in items {
                     if let Some(name) = self.text(key) {
+                        self.budget.reserve(0, 2)?;
                         result.push(Named { name, node: value });
                     }
                 }
@@ -140,10 +171,12 @@ impl<'a> Run<'a> {
         self.intermediates = self.named(self.intermediate_node, Some("id"))?;
         if let Some(rows) = self.field(root, "rows")? {
             if let N::Sequence(items) = &self.input.nodes()[rows] {
+                self.budget.reserve(0, items.len())?;
                 self.rows = items.clone();
                 for &row in items {
                     if let Some(id) = self.field(row, "derivations")? {
                         if matches!(self.input.nodes()[id], N::Mapping(_)) {
+                            self.budget.reserve(0, 1)?;
                             self.row_derivations.push(id);
                         }
                     }
@@ -165,6 +198,12 @@ impl<'a> Run<'a> {
         let Some(class_def) = self.schema.class_named(class) else {
             return Ok(Vec::new());
         };
+        self.budget.work(
+            class_def
+                .fields
+                .len()
+                .saturating_mul(name.len().saturating_add(1)),
+        )?;
         let Some(field) = class_def.fields.iter().find(|f| f.name == name) else {
             return Ok(Vec::new());
         };
@@ -175,29 +214,32 @@ impl<'a> Run<'a> {
             self.input,
             value,
             scoped.then_some((class, name)),
+            self.budget,
         )?)
     }
     fn refs_derivation(&mut self, node: usize) -> Result<Vec<InheritanceReference>, Error> {
-        let types = self.schema.parse_query_types(&["derivation".into()])?;
+        let types = self
+            .schema
+            .parse_query_types(&["derivation".into()], self.budget.validation_scope())?;
         Ok(self
             .schema
-            .inheritance_references(&types, self.input, node, None)?)
+            .inheritance_references(&types, self.input, node, None, self.budget)?)
     }
     fn mark(&mut self, reference: &InheritanceReference) -> Result<bool, Error> {
         if reference.kind == Kind::Dataset {
-            return add(&mut self.live_inputs, &reference.name);
+            return add(&mut self.live_inputs, &reference.name, self.budget);
         }
         let Some((qualifier, _)) = reference.name.split_once('.') else {
-            return add(&mut self.live_columns, &reference.name);
+            return add(&mut self.live_columns, &reference.name, self.budget);
         };
         // A qualifier shared by an input and a lookup is ambiguous. Preserve
         // both declarations so semantic naming validation can report the collision.
         let mut changed = false;
-        if lookup(&self.inputs, qualifier)?.is_some() {
-            changed |= add(&mut self.live_inputs, qualifier)?;
+        if lookup(&self.inputs, qualifier, self.budget)?.is_some() {
+            changed |= add(&mut self.live_inputs, qualifier, self.budget)?;
         }
-        if lookup(&self.intermediates, qualifier)?.is_some() {
-            changed |= add(&mut self.live_intermediates, qualifier)?;
+        if lookup(&self.intermediates, qualifier, self.budget)?.is_some() {
+            changed |= add(&mut self.live_intermediates, qualifier, self.budget)?;
         }
         Ok(changed)
     }
@@ -219,7 +261,7 @@ impl<'a> Run<'a> {
                         Some(item)
                     };
                     if let Some(name) = candidate.and_then(|id| self.text(id)) {
-                        add(&mut self.live_columns, name)?;
+                        add(&mut self.live_columns, name, self.budget)?;
                     }
                 }
             }
@@ -239,7 +281,7 @@ impl<'a> Run<'a> {
         for i in 0..self.columns.len() {
             let column = self.columns[i];
             if self.field(column.node, "verifications")?.is_some() {
-                add(&mut self.live_columns, column.name)?;
+                add(&mut self.live_columns, column.name, self.budget)?;
             }
         }
         // REQ-0638: an intermediate carrying its own verification is a
@@ -253,17 +295,23 @@ impl<'a> Run<'a> {
             // A complete rename-only declaration must reach its existing
             // source-independent refusal, including when nothing reads it.
             // Pruning it would let an empty child bypass the parent's REQ-1248.
+            self.budget.work(
+                self.input.nodes()[intermediate.node]
+                    .length()
+                    .unwrap_or(0)
+                    .saturating_mul(128),
+            )?;
             let rename_only = crate::specification::is_rename_only(self.input, intermediate.node)
                 && self
                     .field(intermediate.node, "dataset")?
                     .is_some_and(|node| matches!(self.input.nodes()[node], N::Text(_)));
             if has_assertion || rename_only {
-                add(&mut self.live_intermediates, intermediate.name)?;
+                add(&mut self.live_intermediates, intermediate.name, self.budget)?;
             }
         }
         let base = self.field(root, "base")?;
         if let Some(name) = base.and_then(|id| self.text(id)) {
-            add(&mut self.live_inputs, name)?;
+            add(&mut self.live_inputs, name, self.budget)?;
         }
         for name in ["verifications", "filter"] {
             let refs = self.refs_field(root, "root_class", name, false)?;
@@ -273,10 +321,10 @@ impl<'a> Run<'a> {
             let row = self.rows[i];
             let driver = self.field(row, "dataset")?.or(base);
             if let Some(name) = driver.and_then(|id| self.text(id)) {
-                if lookup(&self.intermediates, name)?.is_some() {
-                    add(&mut self.live_intermediates, name)?;
+                if lookup(&self.intermediates, name, self.budget)?.is_some() {
+                    add(&mut self.live_intermediates, name, self.budget)?;
                 } else {
-                    add(&mut self.live_inputs, name)?;
+                    add(&mut self.live_inputs, name, self.budget)?;
                 }
             }
             for name in ["group_by", "filter"] {
@@ -288,14 +336,19 @@ impl<'a> Run<'a> {
     }
     fn reachable(&mut self) -> Result<(), Error> {
         self.roots()?;
+        self.budget.reserve(
+            0,
+            self.columns.len().saturating_add(self.intermediates.len()),
+        )?;
         let mut done_columns = vec![false; self.columns.len()];
         let mut done_intermediates = vec![false; self.intermediates.len()];
         let mut done_rows: Vec<(usize, usize)> = Vec::new();
         loop {
+            self.budget.work(1)?;
             let mut changed = false;
             for (i, done) in done_columns.iter_mut().enumerate() {
                 let col = self.columns[i];
-                if *done || !contains(&self.live_columns, col.name)? {
+                if *done || !contains(&self.live_columns, col.name, self.budget)? {
                     continue;
                 }
                 *done = true;
@@ -311,9 +364,13 @@ impl<'a> Run<'a> {
                 };
                 for &(key, value) in items {
                     let Some(name) = self.text(key) else { continue };
-                    if done_rows.contains(&(node, key)) || !contains(&self.live_columns, name)? {
+                    self.budget.work(done_rows.len().saturating_add(1))?;
+                    if done_rows.contains(&(node, key))
+                        || !contains(&self.live_columns, name, self.budget)?
+                    {
                         continue;
                     }
+                    self.budget.reserve(0, 2)?;
                     done_rows.push((node, key));
                     let refs = self.refs_derivation(value)?;
                     changed |= self.mark_all(refs)?;
@@ -321,7 +378,7 @@ impl<'a> Run<'a> {
             }
             for (i, done) in done_intermediates.iter_mut().enumerate() {
                 let member = self.intermediates[i];
-                if *done || !contains(&self.live_intermediates, member.name)? {
+                if *done || !contains(&self.live_intermediates, member.name, self.budget)? {
                     continue;
                 }
                 *done = true;
@@ -329,7 +386,7 @@ impl<'a> Run<'a> {
                     .field(member.node, "dataset")?
                     .and_then(|id| self.text(id))
                 {
-                    add(&mut self.live_inputs, name)?;
+                    add(&mut self.live_inputs, name, self.budget)?;
                 }
                 if let N::Mapping(items) = &self.input.nodes()[member.node] {
                     for &(key, _) in items {
@@ -365,6 +422,7 @@ impl<'a> Run<'a> {
         for i in 0..self.row_derivations.len() {
             if let Some(node) = self.field(self.row_derivations[i], column.name)? {
                 let additional = self.refs_derivation(node)?;
+                self.budget.reserve(0, additional.len())?;
                 refs.extend(additional);
             }
         }
@@ -375,8 +433,8 @@ impl<'a> Run<'a> {
                 continue;
             }
             if let Some((qualifier, _)) = reference.name.split_once('.') {
-                if let Some(intermediate) = lookup(&self.intermediates, qualifier)? {
-                    if !contains(&self.live_intermediates, qualifier)? {
+                if let Some(intermediate) = lookup(&self.intermediates, qualifier, self.budget)? {
+                    if !contains(&self.live_intermediates, qualifier, self.budget)? {
                         continue;
                     }
                     for field in ["key", "between", "filter", "order_by"] {
@@ -384,19 +442,24 @@ impl<'a> Run<'a> {
                             self.refs_field(intermediate.node, "intermediate_class", field, true)?
                         {
                             if r.kind != Kind::Dataset && !r.name.contains('.') {
-                                add(&mut names, &r.name)?;
+                                add(&mut names, &r.name, self.budget)?;
                             }
                         }
                     }
                 }
             } else {
-                add(&mut names, &reference.name)?;
+                add(&mut names, &reference.name, self.budget)?;
                 if reference.kind == Kind::Variable {
-                    add(&mut diagnosable, &reference.name)?;
+                    add(&mut diagnosable, &reference.name, self.budget)?;
                 }
             }
         }
-
+        // Reserve comparisons before the sort; diagnostics use lexical dependency order.
+        let chars = names
+            .iter()
+            .fold(0usize, |n, s| n.saturating_add(s.len().saturating_add(1)));
+        self.budget
+            .work(chars.saturating_mul(names.len().saturating_add(1)))?;
         names.sort();
         diagnosable.sort();
         Ok((names, diagnosable))
@@ -404,7 +467,8 @@ impl<'a> Run<'a> {
     fn order(&mut self) -> Result<(), Error> {
         let mut selected = Vec::new();
         for i in 0..self.columns.len() {
-            if contains(&self.live_columns, self.columns[i].name)? {
+            if contains(&self.live_columns, self.columns[i].name, self.budget)? {
+                self.budget.reserve(0, 1)?;
                 selected.push(self.columns[i]);
             }
         }
@@ -412,12 +476,28 @@ impl<'a> Run<'a> {
         let mut issues = Vec::new();
         for &column in &selected {
             let (names, diagnosable) = self.column_dependencies(column)?;
+            self.budget.reserve(0, names.len())?;
             let mut indices = Vec::new();
             for dependency in names {
+                self.budget.work(
+                    selected
+                        .len()
+                        .saturating_mul(dependency.len().saturating_add(1)),
+                )?;
                 if let Some(index) = selected.iter().position(|c| c.name == dependency) {
                     indices.push(index);
                 } else if diagnosable.iter().any(|name| name == &dependency) {
+                    self.budget
+                        .reserve(column.name.len().saturating_add(dependency.len()), 2)?;
                     // Account for the rendered path and both owned context values.
+                    self.budget.validation.reserve_diagnostic(
+                        column
+                            .name
+                            .len()
+                            .saturating_mul(2)
+                            .saturating_add(dependency.len())
+                            .saturating_add(40),
+                    )?;
                     issues.push(InheritanceDependencyIssue::Unknown {
                         column: column.name.into(),
                         dependency,
@@ -429,21 +509,41 @@ impl<'a> Run<'a> {
         if !issues.is_empty() {
             return Err(Error::Invalid(issues));
         }
-        let analysis = dependency_analysis::analyze_admitted(dependencies);
+        self.budget.reserve(0, selected.len())?;
         let mut emitted = vec![false; selected.len()];
-        for &index in &analysis.order {
-            emitted[index] = true;
-            self.ordered_columns.push(selected[index].node);
-        }
+        // The shared scheduler needs its own bounded state. Keep this request's
+        // normalization policy rather than imposing dependency-analysis caps.
+        self.budget
+            .reserve(0, dependency_analysis::stable_order_slots(&dependencies))?;
+        dependency_analysis::visit_stable_order(&dependencies, |next| -> Result<(), Error> {
+            // Retain the legacy scan's charge sequence, including emitted
+            // prefixes and the final exhausted pass. Scheduling itself has one
+            // shared implementation; this is only request-policy accounting.
+            let scanned = next.map_or(dependencies.len(), |node| node + 1);
+            for edges in dependencies.iter().take(scanned) {
+                self.budget.work(edges.len().saturating_add(1))?;
+            }
+            if let Some(i) = next {
+                emitted[i] = true;
+                self.budget.reserve(0, 1)?;
+                self.ordered_columns.push(selected[i].node);
+            }
+            Ok(())
+        })?;
         if self.ordered_columns.len() != selected.len() {
             let mut columns = Vec::new();
             for (i, column) in selected.iter().enumerate() {
                 if !emitted[i] {
+                    self.budget.reserve(column.name.len(), 1)?;
                     columns.push(column.name.into());
                 }
             }
             // Name the cycle itself, not only the residuals it blocks: the shared
             // analysis spells the first cycle the same way the flat compiler does.
+            // Charge its bounded scheduler state like the first scheduling pass.
+            self.budget
+                .reserve(0, dependency_analysis::stable_order_slots(&dependencies))?;
+            let analysis = dependency_analysis::analyze_admitted(dependencies);
             let (cycle_indices, closed) = match analysis.cycle {
                 Some(cycle) => (cycle, true),
                 None => (
@@ -465,13 +565,21 @@ impl<'a> Run<'a> {
             let mut cycle = Vec::new();
             for &index in &cycle_indices {
                 let column = selected[index];
+                self.budget.reserve(column.name.len(), 1)?;
                 cycle.push(column.name.into());
             }
             let mut paths = Vec::new();
             for &index in members {
                 paths.push(self.derivation_path(selected[index])?);
             }
-
+            let text_bytes = columns
+                .iter()
+                .chain(&cycle)
+                .chain(&paths)
+                .fold(12usize, |total, name: &String| {
+                    total.saturating_add(name.len())
+                });
+            self.budget.validation.reserve_diagnostic(text_bytes)?;
             return Err(Error::Invalid(vec![InheritanceDependencyIssue::Cycle {
                 columns,
                 cycle,
@@ -506,10 +614,11 @@ impl<'a> Run<'a> {
             },
             _ => format!("columns.{}.derivation", column.name),
         };
+        self.budget.reserve(path.len(), 1)?;
         Ok(path)
     }
     fn copy(&mut self, node: usize, depth: usize) -> Result<usize, Error> {
-        let limit = crate::limits::Limits::SEMANTIC_DEPTH;
+        let limit = self.budget.limits.depth.min(128);
         if depth > limit {
             return Err(NormalizationError::Limit {
                 resource: NormalizationResource::Depth,
@@ -517,8 +626,18 @@ impl<'a> Run<'a> {
             }
             .into());
         }
+        self.budget.work(1)?;
         let source = &self.input.nodes()[node];
-
+        let edges = match source {
+            N::Sequence(v) => v.len(),
+            N::Mapping(v) => v.len().saturating_mul(2),
+            _ => 0,
+        };
+        let bytes = match source {
+            N::Text(s) | N::Integer(s) => s.len(),
+            _ => 0,
+        };
+        self.budget.reserve(bytes, edges)?;
         let result = match source {
             N::Sequence(items) => {
                 let mut output = Vec::new();
@@ -531,7 +650,7 @@ impl<'a> Run<'a> {
                         if Some(node) == self.intermediate_node {
                             let name = self.field(item, "id")?.and_then(|id| self.text(id));
                             if !match name {
-                                Some(n) => contains(&self.live_intermediates, n)?,
+                                Some(n) => contains(&self.live_intermediates, n, self.budget)?,
                                 None => false,
                             } {
                                 continue;
@@ -543,6 +662,7 @@ impl<'a> Run<'a> {
                 N::Sequence(output)
             }
             N::Mapping(items) => {
+                self.budget.work(self.row_derivations.len())?;
                 let row_derivation = self.row_derivations.contains(&node);
                 let mut output = Vec::new();
                 for &(key, value) in items {
@@ -563,7 +683,7 @@ impl<'a> Run<'a> {
                             &self.live_inputs
                         };
                         if !match name {
-                            Some(n) => contains(live, n)?,
+                            Some(n) => contains(live, n, self.budget)?,
                             None => false,
                         } {
                             continue;
@@ -594,6 +714,7 @@ impl SchemaStructure {
     pub fn resolve_inheritance_dependencies(
         &self,
         input: &Document,
+        budget: &mut NormalizationBudget,
     ) -> Result<NormalizedDocument, InheritanceDependencyError> {
         if !matches!(input.nodes()[input.root()], N::Mapping(_)) {
             return Err(ValidationError::InvalidDescriptor.into());
@@ -601,6 +722,7 @@ impl SchemaStructure {
         let mut run = Run {
             schema: self,
             input,
+            budget,
             inputs: Vec::new(),
             columns: Vec::new(),
             intermediates: Vec::new(),
@@ -620,7 +742,9 @@ impl SchemaStructure {
         run.reachable()?;
         run.order()?;
         let root = run.copy(input.root(), 0)?;
-        let document = Document::new(run.nodes, root).map_err(NormalizationError::Document)?;
+        run.budget.work(run.nodes.len())?;
+        let document = Document::new(run.nodes, root, run.budget.limits.storage)
+            .map_err(NormalizationError::Document)?;
         Ok(NormalizedDocument {
             document,
             origins: run.origins,

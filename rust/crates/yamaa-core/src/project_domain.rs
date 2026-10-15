@@ -3,7 +3,7 @@
 use crate::{
     domain::{self, CheckedSpecification},
     project_activation::{self, ActivationPort, Bindings, Failure},
-    specification_run::{CapturedAttempt, PortError, SourceDecoder, SourcePort},
+    specification_run::{CapturedAttempt, Limits, PortError, SourceDecoder, SourcePort},
 };
 use crate::{
     project_environment::ExecutionEnvironment,
@@ -11,6 +11,15 @@ use crate::{
     specification::{PrepareError, PreparedSpecification},
     table::TableAccess,
 };
+
+pub(crate) type BuildEvidence<'a, P, D> = (
+    &'a mut CapturedAttempt<
+        <P as SourcePort>::Error,
+        <D as SourceDecoder>::Error,
+        <D as SourceDecoder>::Table,
+    >,
+    &'a mut project_activation::Observations,
+);
 
 /// The private fields tie compilation and selected indices to the same immutable
 /// environment. No caller can swap a different definition collection at build.
@@ -44,8 +53,63 @@ impl CheckedProject<'_> {
         activation: &mut A,
         source: &mut P,
         decoder: &mut D,
+        limits: Limits,
         attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
-        observations: Option<&mut project_activation::Observations>,
+    ) -> Result<(), Failure<A::Error>>
+    where
+        D::Table: TableAccess<Error = A::Error>,
+    {
+        build(
+            (&self.checked, self.environment),
+            activation,
+            source,
+            decoder,
+            limits,
+            attempt,
+            (
+                None,
+                crate::application_observer::Scope::new(&crate::application_observer::Noop),
+            ),
+        )
+    }
+
+    /// Keep activation evidence outside the host boundary and dataset attempt.
+    /// Successful cases remain observable after a later activation/build failure.
+    pub fn build_observed_into<A: ActivationPort, P: SourcePort, D: SourceDecoder>(
+        &self,
+        activation: &mut A,
+        source: &mut P,
+        decoder: &mut D,
+        limits: Limits,
+        attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
+        observations: &mut project_activation::Observations,
+    ) -> Result<(), Failure<A::Error>>
+    where
+        D::Table: TableAccess<Error = A::Error>,
+    {
+        build(
+            (&self.checked, self.environment),
+            activation,
+            source,
+            decoder,
+            limits,
+            attempt,
+            (
+                Some(observations),
+                crate::application_observer::Scope::new(&crate::application_observer::Noop),
+            ),
+        )
+    }
+
+    /// Retain activation evidence and forward trusted application events without
+    /// adding measurement fields to the semantic attempt.
+    pub fn build_with_observer_into<A: ActivationPort, P: SourcePort, D: SourceDecoder>(
+        &self,
+        activation: &mut A,
+        source: &mut P,
+        decoder: &mut D,
+        limits: Limits,
+        evidence: BuildEvidence<'_, P, D>,
         scope: crate::application_observer::Scope<'_>,
     ) -> Result<(), Failure<A::Error>>
     where
@@ -56,8 +120,9 @@ impl CheckedProject<'_> {
             activation,
             source,
             decoder,
-            attempt,
-            (observations, scope),
+            limits,
+            evidence.0,
+            (Some(evidence.1), scope),
         )
     }
 }
@@ -109,8 +174,59 @@ impl CheckedOwnedProject {
         activation: &mut A,
         source: &mut P,
         decoder: &mut D,
+        limits: Limits,
         attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
-        observations: Option<&mut project_activation::Observations>,
+    ) -> Result<(), Failure<A::Error>>
+    where
+        D::Table: TableAccess<Error = A::Error>,
+    {
+        build(
+            (&self.checked, &self.environment),
+            activation,
+            source,
+            decoder,
+            limits,
+            attempt,
+            (
+                None,
+                crate::application_observer::Scope::new(&crate::application_observer::Noop),
+            ),
+        )
+    }
+
+    pub fn build_observed_into<A: ActivationPort, P: SourcePort, D: SourceDecoder>(
+        &self,
+        activation: &mut A,
+        source: &mut P,
+        decoder: &mut D,
+        limits: Limits,
+        attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
+        observations: &mut project_activation::Observations,
+    ) -> Result<(), Failure<A::Error>>
+    where
+        D::Table: TableAccess<Error = A::Error>,
+    {
+        build(
+            (&self.checked, &self.environment),
+            activation,
+            source,
+            decoder,
+            limits,
+            attempt,
+            (
+                Some(observations),
+                crate::application_observer::Scope::new(&crate::application_observer::Noop),
+            ),
+        )
+    }
+
+    pub fn build_with_observer_into<A: ActivationPort, P: SourcePort, D: SourceDecoder>(
+        &self,
+        activation: &mut A,
+        source: &mut P,
+        decoder: &mut D,
+        limits: Limits,
+        evidence: BuildEvidence<'_, P, D>,
         scope: crate::application_observer::Scope<'_>,
     ) -> Result<(), Failure<A::Error>>
     where
@@ -121,8 +237,9 @@ impl CheckedOwnedProject {
             activation,
             source,
             decoder,
-            attempt,
-            (observations, scope),
+            limits,
+            evidence.0,
+            (Some(evidence.1), scope),
         )
     }
 }
@@ -131,6 +248,7 @@ fn build<A: ActivationPort, P: SourcePort, D: SourceDecoder>(
     activation: &mut A,
     source: &mut P,
     decoder: &mut D,
+    limits: Limits,
     attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
     (observations, scope): (
         Option<&mut project_activation::Observations>,
@@ -149,10 +267,11 @@ where
     });
     let selected = checked.compiled().called_functions();
     if selected.is_empty() {
-        checked.build_into(
+        checked.build_with_observer_into(
             source,
             decoder,
             &mut crate::function_invocation::NoFunctions::new(),
+            limits,
             attempt,
             scope,
         );
@@ -165,7 +284,9 @@ where
     let language = environment
         .language()
         .expect("admitted called functions declare a language");
-    let lock = environment.lock();
+    let lock = environment
+        .lock()
+        .expect("admitted called functions declare a lock");
     scope.phase(crate::application_observer::Phase::Activation);
     let activated = match observations {
         Some(observations) => project_activation::activate_references_observed(
@@ -173,6 +294,7 @@ where
             lock,
             &functions,
             &mut scope.activation(activation),
+            project_activation::Limits::default(),
             observations,
         ),
         None => project_activation::activate_references(
@@ -188,6 +310,6 @@ where
     );
     let activated = activated?;
     let mut bindings = Bindings::new(&activated, activation);
-    checked.build_into(source, decoder, &mut bindings, attempt, scope);
+    checked.build_with_observer_into(source, decoder, &mut bindings, limits, attempt, scope);
     Ok(())
 }

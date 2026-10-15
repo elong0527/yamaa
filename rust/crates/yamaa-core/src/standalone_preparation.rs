@@ -3,8 +3,9 @@
 //! Physical decoding and occurrence locations remain codec authority. This service
 //! neither captures sources nor grants data, function, path or publication authority.
 use crate::schema::{
-    Document, ExpandedWindows, NormalizationError, NormalizedDocument, SchemaDiagnostic,
-    SchemaOrigin, SchemaStructure, SpecificationDocument, ValidationError, WindowReference,
+    Document, ExpandedWindows, NormalizationBudget, NormalizationError, NormalizedDocument,
+    SchemaDiagnostic, SchemaOrigin, SchemaStructure, SpecificationDocument, ValidationError,
+    WindowReference,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -69,8 +70,9 @@ impl PreparedStandalone {
 fn expand(
     schema: &SchemaStructure,
     normalized: NormalizedDocument,
+    budget: &mut NormalizationBudget,
 ) -> Result<(ExpandedWindows, Vec<SchemaOrigin>), Error> {
-    let expanded = match schema.expand_named_windows(&normalized.document, true) {
+    let expanded = match schema.expand_named_windows(&normalized.document, true, budget) {
         Ok(expanded) => expanded,
         Err(error) => return Err(normalization_failure(error, normalized.document)),
     };
@@ -84,18 +86,23 @@ fn expand(
 }
 
 /// Parent presence (including null) precedes normalization. Normalization, strict
-/// window expansion and model admission preserve the source provenance.
-/// No study data is read during preparation.
-pub fn prepare(schema: &SchemaStructure, raw: Document) -> Result<PreparedStandalone, Error> {
+/// window expansion and model admission share the caller's existing cumulative
+/// budget; failed attempts retain their charges. No counters or limits are reset.
+pub fn prepare(
+    schema: &SchemaStructure,
+    raw: Document,
+    budget: &mut NormalizationBudget,
+) -> Result<PreparedStandalone, Error> {
     if raw.field(raw.root(), "parents").is_some() {
         return Err(Error::InheritanceRequired);
     }
-    let normalized = match schema.normalize_document(&raw) {
+    budget.admit_input(&raw);
+    let normalized = match schema.normalize_document(&raw, budget) {
         Ok(normalized) => normalized,
         Err(error) => return Err(normalization_failure(error, raw)),
     };
-    let (expanded, origins) = expand(schema, normalized)?;
-    let model = SpecificationDocument::admit(expanded.document)
+    let (expanded, origins) = expand(schema, normalized, budget)?;
+    let model = SpecificationDocument::admit(expanded.document, budget.validation_scope())
         .map_err(Error::Validation)?
         .map_err(Error::Model)?;
     Ok(PreparedStandalone {
@@ -109,63 +116,82 @@ pub fn prepare(schema: &SchemaStructure, raw: Document) -> Result<PreparedStanda
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::schema::{DocumentNode as N, SchemaContext, SchemaModule};
+    use crate::schema::{
+        BundleLimits, DocumentLimits, DocumentNode as N, NormalizationLimits, SchemaContext,
+        SchemaModule,
+    };
     use std::vec;
 
     #[test]
     fn strict_failure_moves_the_actual_normalized_checkpoint_allocation() {
         // Closed root with a bare window-bearing column list. The schema/input
         // arenas are independently authored; no adapter JSON or YAML participates.
-        use crate::test_document::Tree;
-
+        enum Tree {
+            Text(&'static str),
+            List(Vec<Tree>),
+            Map(Vec<(&'static str, Tree)>),
+        }
+        use Tree::{List, Map, Text};
         fn doc(tree: Tree) -> Document {
-            tree.document()
+            fn push(tree: Tree, nodes: &mut Vec<N>) -> usize {
+                let node = match tree {
+                    Text(text) => N::Text(text.into()),
+                    List(items) => N::Sequence(items.into_iter().map(|v| push(v, nodes)).collect()),
+                    Map(items) => N::Mapping(
+                        items
+                            .into_iter()
+                            .map(|(k, v)| (push(Text(k), nodes), push(v, nodes)))
+                            .collect(),
+                    ),
+                };
+                let id = nodes.len();
+                nodes.push(node);
+                id
+            }
+            let mut nodes = Vec::new();
+            let root = push(tree, &mut nodes);
+            Document::new(nodes, root, DocumentLimits::default()).unwrap()
         }
         fn field(name: &'static str, kind: &'static str) -> Tree {
-            Tree::map(vec![(name, Tree::map(vec![("type", Tree::text(kind))]))])
+            Map(vec![(name, Map(vec![("type", Text(kind))]))])
         }
         let schema = SchemaStructure::admit(
             vec![SchemaModule {
                 name: "schema.yaml".into(),
-                document: doc(Tree::map(vec![
-                    ("version", Tree::text("1.0")),
+                document: doc(Map(vec![
+                    ("version", Text("1.0")),
                     (
                         "root",
-                        Tree::List(vec![
+                        List(vec![
                             field("schema_version", "str"),
                             field("columns", "list[column_class]"),
                         ]),
                     ),
                     (
                         "column_class",
-                        Tree::List(vec![
+                        List(vec![
                             field("name", "str"),
                             field("derivation", "handled_expression_class"),
                         ]),
                     ),
                     (
                         "handled_expression_class",
-                        Tree::List(vec![field("value", "expression")]),
+                        List(vec![field("value", "expression")]),
                     ),
-                    (
-                        "window_selection",
-                        Tree::map(vec![("type", Tree::text("str"))]),
-                    ),
-                    (
-                        "expression",
-                        Tree::map(vec![("registry", Tree::text("expressions"))]),
-                    ),
+                    ("window_selection", Map(vec![("type", Text("str"))])),
+                    ("expression", Map(vec![("registry", Text("expressions"))])),
                     (
                         "expressions",
-                        Tree::map(vec![(
+                        Map(vec![(
                             "row_number",
-                            Tree::List(vec![field("window", "window_selection")]),
+                            List(vec![field("window", "window_selection")]),
                         )]),
                     ),
                 ])),
             }],
             0,
             "root",
+            BundleLimits::default(),
         )
         .unwrap();
         // Unknown window is found by the lifecycle's column expression traversal.
@@ -187,11 +213,12 @@ mod tests {
             N::Sequence(vec![13]),
             N::Mapping(vec![(0, 1), (2, 14)]),
         ];
-        let raw = Document::new(nodes, 15).unwrap();
-        let normalized = schema.normalize_document(&raw).unwrap();
+        let raw = Document::new(nodes, 15, DocumentLimits::default()).unwrap();
+        let mut budget = NormalizationBudget::new(NormalizationLimits::default());
+        let normalized = schema.normalize_document(&raw, &mut budget).unwrap();
         let pointer = normalized.document.nodes().as_ptr();
         let expected = normalized.document.clone();
-        let Err(Error::Normalize(failure)) = expand(&schema, normalized) else {
+        let Err(Error::Normalize(failure)) = expand(&schema, normalized, &mut budget) else {
             panic!("expected strict window failure");
         };
         let held = failure.input.unwrap();

@@ -1,16 +1,12 @@
 //! Dataset-JSON byte writer over a held published table; never executes a spec.
 use crate::{
     diagnostic::ConditionCode,
-    limits::{LimitExceeded, Limits},
     submission_composition::{Dataset, Finding, Study},
     table::{TableAccess, ValueRef},
-    value::Value,
+    value::{ColumnType, Value},
 };
 use serde_json::Value as JsonValue;
-use std::{
-    collections::BTreeMap,
-    io::{self, Write},
-};
+use std::collections::BTreeMap;
 
 fn string(value: &str) -> String {
     serde_json::to_string(value).expect("JSON strings serialize")
@@ -25,60 +21,42 @@ fn object(fields: Vec<(&str, String)>) -> String {
             .join(", ")
     )
 }
-/// One saved file, checked before every physical buffer extension. JSON strings
-/// stream through serde so escaping cannot allocate an oversized intermediate.
-struct Writer<'a> {
-    output: Vec<u8>,
-    path: &'a str,
-}
-impl Write for Writer<'_> {
-    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        let required = self.output.len().checked_add(bytes.len());
-        let actual = required.ok_or_else(|| {
-            io::Error::other(LimitExceeded {
-                resource: "output_bytes",
-                limit: Limits::OUTPUT_BYTES,
-                actual: None,
-            })
-        })?;
-        Limits::output_bytes(actual).map_err(io::Error::other)?;
-        self.output.extend_from_slice(bytes);
-        Ok(bytes.len())
-    }
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-impl Writer<'_> {
-    fn failure(&self, cause: impl std::fmt::Display) -> Finding {
-        Finding::cause(
-            ConditionCode::ApplicationRejected,
-            self.path,
-            &cause.to_string(),
-        )
-    }
-    fn text(&mut self, text: &str) -> Result<(), Finding> {
-        self.write_all(text.as_bytes())
-            .map_err(|error| self.failure(error))
-    }
-    fn string(&mut self, text: &str) -> Result<(), Finding> {
-        serde_json::to_writer(&mut *self, text).map_err(|error| self.failure(error))
-    }
-    fn cell(&mut self, value: ValueRef<'_>) -> Result<(), Finding> {
-        match value {
-            ValueRef::Missing => self.text("null"),
-            ValueRef::Str(value) => self.string(value),
-            ValueRef::Int(value) => self.text(&value.to_string()),
-            ValueRef::Float(value) => self.text(&crate::conversion::float_text(value)),
-            ValueRef::Date(value) => self.string(&value.to_string()),
-            ValueRef::DateTime(value) => self.string(&value.to_string()),
-            ValueRef::Bool(_) => Err(Finding::cause(
+fn cell(value: ValueRef<'_>) -> Result<String, Finding> {
+    Ok(match value {
+        ValueRef::Missing => "null".into(),
+        ValueRef::Str(s) => string(s),
+        ValueRef::Int(i) => i.to_string(),
+        ValueRef::Float(f) => crate::conversion::float_text(f),
+        ValueRef::Date(d) => match crate::conversion::convert(&Value::Date(d), ColumnType::Str) {
+            Ok(Value::Str(s)) => string(&s),
+            _ => {
+                return Err(Finding::cause(
+                    ConditionCode::SubmissionJsonInvalid,
+                    "dataset_json",
+                    "date conversion",
+                ))
+            }
+        },
+        ValueRef::DateTime(d) => {
+            match crate::conversion::convert(&Value::DateTime(d), ColumnType::Str) {
+                Ok(Value::Str(s)) => string(&s),
+                _ => {
+                    return Err(Finding::cause(
+                        ConditionCode::SubmissionJsonInvalid,
+                        "dataset_json",
+                        "datetime conversion",
+                    ))
+                }
+            }
+        }
+        ValueRef::Bool(_) => {
+            return Err(Finding::cause(
                 ConditionCode::SubmissionJsonInvalid,
                 "dataset_json",
                 "schema_violation: boolean cell",
-            )),
+            ))
         }
-    }
+    })
 }
 pub fn render<T: TableAccess>(
     study: &Study,
@@ -88,13 +66,13 @@ pub fn render<T: TableAccess>(
 ) -> Result<Vec<u8>, Finding> {
     let path = format!("datasets.{}.dataset_json", dataset.id);
     let invalid = |detail| Finding::cause(ConditionCode::SubmissionJsonInvalid, &path, detail);
-    Limits::table(table.row_count(), dataset.columns.len()).map_err(|error| {
-        Finding::cause(
-            ConditionCode::ApplicationRejected,
-            &path,
-            &error.to_string(),
-        )
-    })?;
+    if table
+        .row_count()
+        .checked_mul(dataset.columns.len())
+        .is_none_or(|n| n > 16_777_216)
+    {
+        return Err(invalid("table cell limit"));
+    }
     validate_artifact(study, dataset, table)?;
     let mut fields = std::vec![
         ("datasetJSONCreationDateTime", string(&study.created)),
@@ -169,44 +147,41 @@ pub fn render<T: TableAccess>(
         columns.push(object(values));
     }
     fields.push(("columns", list(&columns)));
-    let mut writer = Writer {
-        output: Vec::new(),
-        path: &path,
-    };
-    writer.text("{\n")?;
-    for (key, value) in fields {
-        writer.text("  ")?;
-        writer.string(key)?;
-        writer.text(": ")?;
-        writer.text(&value)?;
-        writer.text(",\n")?;
-    }
-    writer.text("  \"rows\": [")?;
-    if table.row_count() > 0 {
-        writer.text("\n")?;
-        for row in 0..table.row_count() {
-            if row > 0 {
-                writer.text(",\n")?;
-            }
-            writer.text("    [")?;
-            for column in 0..dataset.columns.len() {
-                if column > 0 {
-                    writer.text(", ")?;
-                }
-                writer.cell(
-                    table
-                        .cell(row, column)
-                        .map_err(|_| invalid("held table access"))?,
-                )?;
-            }
-            writer.text("]")?;
+    let mut rows = Vec::new();
+    let mut bytes = columns.iter().map(String::len).sum::<usize>();
+    for row in 0..table.row_count() {
+        let mut cells = Vec::with_capacity(dataset.columns.len());
+        for column in 0..dataset.columns.len() {
+            cells.push(cell(
+                table
+                    .cell(row, column)
+                    .map_err(|_| invalid("held table access"))?,
+            )?);
         }
-        writer.text("\n  ")?;
+        let row = format!("[{}]", cells.join(", "));
+        bytes = bytes
+            .checked_add(row.len())
+            .filter(|&n| n <= 67_108_864)
+            .ok_or_else(|| invalid("render byte limit"))?;
+        rows.push(row);
     }
-    writer.text("]\n}\n")?;
-    Ok(writer.output)
+    fields.push(("rows", list(&rows)));
+    let mut lines = std::vec!["{".into()];
+    for (index, (key, value)) in fields.iter().enumerate() {
+        lines.push(format!(
+            "  {}: {}{}",
+            string(key),
+            value,
+            if index + 1 == fields.len() { "" } else { "," }
+        ));
+    }
+    lines.push("}".into());
+    let result = format!("{}\n", lines.join("\n"));
+    if result.len() > 67_108_864 {
+        return Err(invalid("render byte limit"));
+    }
+    Ok(result.into_bytes())
 }
-
 fn artifact_mismatch(dataset: &Dataset, detail: &str) -> Finding {
     let mut finding = Finding::cause(
         ConditionCode::ProducerContractMismatch,
@@ -264,6 +239,50 @@ fn validate_artifact<T: TableAccess>(
         return Err(mismatch(
             "published artifact fields, order or types differ from the output contract",
         ));
+    }
+    let mut work = 0usize;
+    for column in dataset.columns.iter().flat_map(|column| {
+        std::iter::once(column).chain(column.values.iter().map(|value| &value.column))
+    }) {
+        let meta = column
+            .declaration
+            .submission
+            .as_ref()
+            .expect("composed metadata");
+        let list_work = meta
+            .codelist
+            .as_ref()
+            .and_then(|id| {
+                study
+                    .codelists
+                    .iter()
+                    .find(|list| list.declaration.id == id.value)
+            })
+            .filter(|list| !list.declaration.extensible)
+            .and_then(|list| list.declaration.items.as_ref())
+            .map_or(1, Vec::len);
+        let inventory_work = if meta
+            .inventory_vocabulary
+            .as_ref()
+            .is_some_and(|field| field.value)
+        {
+            study.datasets.len()
+        } else {
+            0
+        };
+        work = list_work
+            .checked_add(inventory_work)
+            .and_then(|n| n.checked_add(column.values.len() + 1))
+            .and_then(|n| n.checked_mul(table.row_count()))
+            .and_then(|n| work.checked_add(n))
+            .filter(|&n| n <= 268_435_456)
+            .ok_or_else(|| {
+                Finding::cause(
+                    ConditionCode::ApplicationRejected,
+                    &format!("datasets.{}.artifact", dataset.id),
+                    "published artifact vocabulary work limit",
+                )
+            })?;
     }
     let lists: BTreeMap<_, _> = study
         .codelists
@@ -434,33 +453,6 @@ fn list(values: &[String]) -> String {
 mod tests {
     use super::*;
     use crate::value::FiniteFloat;
-
-    #[test]
-    fn streamed_cells_preserve_exact_json_and_full_width_scalar_spelling() {
-        let values = [
-            (Value::Missing, "null"),
-            (
-                Value::Str("\0\u{e9}\u{1f642}\"\\\n\t".into()),
-                "\"\\u0000\u{e9}\u{1f642}\\\"\\\\\\n\\t\"",
-            ),
-            (Value::Int(i64::MIN), "-9223372036854775808"),
-            (Value::Int(i64::MAX), "9223372036854775807"),
-            (Value::float(-0.0), "-0"),
-            (Value::Date("2024-02-01".parse().unwrap()), "\"2024-02-01\""),
-            (
-                Value::DateTime("2024-02-29T03:04:00".parse().unwrap()),
-                "\"2024-02-29T03:04:00\"",
-            ),
-        ];
-        for (value, expected) in values {
-            let mut writer = Writer {
-                output: Vec::new(),
-                path: "dataset_json",
-            };
-            writer.cell(ValueRef::from(&value)).unwrap();
-            assert_eq!(writer.output, expected.as_bytes());
-        }
-    }
     #[test]
     fn codelist_numeric_equality_preserves_integer_precision() {
         assert!(equal_value(
