@@ -1,8 +1,5 @@
 # First Rescue Medication
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adsl-rescue-med.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** carry each subject's first rescue medication in `RESCTRT`.
 
 **Input:** one subject-level table listing the subjects, plus
@@ -22,5 +19,3 @@ medication records carrying a treatment name (`CMTRT`), a category
   record does not change the answer. A start date with only year
   and month compares as written, so it falls before any full date
   in the same month.
-
-**Standard:** ADaM | **Domain:** ADSL

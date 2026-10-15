@@ -1,8 +1,5 @@
 # Retain the Latest Earlier Character Result
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-advs-prior-result.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build one ADVS row per collected character-result row,
 carrying `SERIES`, `AVISITN`, and `AVALC` through unchanged and
 adding `PREVAVALC` for the closest earlier non-blank result.
@@ -28,5 +25,3 @@ results, so it can cross consecutive blank rows, but it never
 crosses into another series. A subject with a single collected row,
 and a series whose earlier rows are all blank, both leave `PREVAVALC`
 blank.
-
-**Standard:** ADaM | **Domain:** ADVS

@@ -1,8 +1,5 @@
 # Derive Randomization Timing
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adsl-randomization.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** one record per subject (`STUDYID`, `USUBJID`) recording
 when randomization happened: the collected date (`RANDDT`), the
 study day of randomization (`RANDDY`), and the collected moment
@@ -36,5 +33,3 @@ collected date.
 independently of the date: a subject with a collected moment but
 no collected date still gets `RANDDTC`, while `RANDDT` and
 `RANDDY` stay empty.
-
-**Standard:** ADaM | **Domain:** ADSL

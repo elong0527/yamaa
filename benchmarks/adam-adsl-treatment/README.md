@@ -1,8 +1,5 @@
 # Select the Actual Treatment and Its Exposure Dates
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adsl-treatment.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** select each subject's actual treatment (`TRT01A`), the first and
 last exposure dates and times (`TRTSDT`, `TRTSDTM`, `TRTEDT`, `TRTEDTM`),
 the imputation flags (`TRTSTMF`, `TRTETMF`), the treatment duration in days
@@ -43,5 +40,3 @@ demographics record adds no record.
 **Note:** the exposure dates, date/times, and duration are all present or
 all blank together; the latest end can come from a record whose start was
 never collected.
-
-**Standard:** ADaM | **Domain:** ADSL

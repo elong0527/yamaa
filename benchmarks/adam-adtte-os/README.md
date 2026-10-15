@@ -1,8 +1,5 @@
 # Overall Survival
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adtte-os.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive one overall-survival record per subject with
 parameter code `OS` (`Overall Survival`), carrying `STARTDT`,
 `ADT`, `AVAL`, `CNSR`, `EVNTDESC`, `CNSDTDSC`, `SRCDOM`,
@@ -44,5 +41,3 @@ with no such record as having no death.
 **Note:** a death dated before randomization still counts as an
 event: `ADT` is set to randomization while `CNSR`, `EVNTDESC`,
 and the source columns still reflect the death.
-
-**Standard:** ADaM | **Domain:** ADTTE

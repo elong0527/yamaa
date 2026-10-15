@@ -1,8 +1,5 @@
 # Normalize the Collected Country and Assign Its Region
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adsl-country-region.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** give each subject a normalized country in `COUNTRY`
 and its region in `REGION1`.
 
@@ -23,5 +20,3 @@ outside the three listed below.
 **Note:** case differences never split a country (`usa` and `USA`
 are one), and the fallback values mean every subject has both a
 country and a region.
-
-**Standard:** ADaM | **Domain:** ADSL

@@ -1,8 +1,5 @@
 # Multi-Scale Instrument Scoring
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adqs-multi-scale-scoring.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** carry each questionnaire item response into `PARAMCD`, `PARAM`, and
 `AVAL`, and add one scale score record per scale per visit, coded `F1SCORE`,
 `F2SCORE`, `SSCORE`, and `GSCORE`, holding the mean answered-item response
@@ -35,5 +32,3 @@ answer scale.
 too few answers to score keeps an empty score and stays apart from a visit
 with no records at all. One item, `F104`, belongs to two scales and feeds
 both of their scores.
-
-**Standard:** ADaM | **Domain:** ADQS

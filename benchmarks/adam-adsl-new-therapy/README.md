@@ -1,8 +1,5 @@
 # Derive the new anti-cancer therapy start date
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adsl-new-therapy.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive the start date of new anti-cancer therapy given during
 the study (`NACTDT`), its study day relative to the start of study
 treatment (`NACTDY`), and a flag marking subjects who started such
@@ -39,5 +36,3 @@ the treatment start date by construction.
 partial date. The analysis-ready `CMSTDTC_IMP` completes it under a stated
 rule: a year-month start is completed to the 15th of that month, and a full
 date passes through unchanged. Subject 107's `2025-04` becomes `2025-04-15`.
-
-**Standard:** ADaM | **Domain:** ADSL

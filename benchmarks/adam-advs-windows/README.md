@@ -1,8 +1,5 @@
 # Assign Analysis Windows by Study Day
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-advs-windows.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** assign each systolic blood pressure (`SYSBP`) record to
 its analysis window, adding the analysis visit (`AVISIT`), its
 numeric order (`AVISITN`), and `ANL01FL`; add an expected record
@@ -51,5 +48,3 @@ the planned visit and window and a sequence number continuing past
 the subject's measurements, but no date, day, or value, so
 summaries see a complete visit spine. Unscheduled visits and
 planned visits after week 4 never get one.
-
-**Standard:** ADaM | **Domain:** ADVS
