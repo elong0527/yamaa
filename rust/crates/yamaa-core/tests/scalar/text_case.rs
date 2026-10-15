@@ -85,12 +85,7 @@ fn original_ascii_casing_truth_preserves_range_endpoints_and_unicode_word_bounda
         assert_eq!(actual.chars().count(), source.chars().count());
     }
     for source in [
-        "\u{00df}",
-        "\u{0130}",
-        "\u{0131}",
-        "\u{212a}",
-        "\u{00e9}",
-        "\u{00c9}",
+        "\u{00df}", "\u{0130}", "\u{0131}", "\u{212a}", "\u{00e9}", "\u{00c9}",
     ] {
         for mode in [Case::Upper, Case::Lower, Case::Sentence, Case::Title] {
             assert_eq!(transform(source, mode, source.len()).unwrap(), source);
