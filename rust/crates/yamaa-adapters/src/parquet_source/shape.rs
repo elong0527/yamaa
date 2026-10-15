@@ -106,7 +106,7 @@ pub(super) fn constraints(
                 .into_iter()
                 .map(|(level, size)| {
                     Ok(List {
-                        repetition: i16::try_from(level + 1).map_err(|_| Error::Limit)?,
+                        repetition: i16::try_from(level + 1).map_err(|_| Error::Malformed)?,
                         definition: *repeated.get(level).ok_or(Error::Malformed)?,
                         parent_definition: if level == 0 {
                             0

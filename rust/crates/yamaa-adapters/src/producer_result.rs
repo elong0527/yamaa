@@ -6,7 +6,6 @@ use crate::{
     producer_report::{self, NativeAttempt, ProjectionError},
     project_report::Classified,
     public_table::PublicTable,
-    report_projection::Budget,
     report_storage::StoredReport,
     specification_report::{Error as ReportError, Identity},
 };
@@ -78,20 +77,13 @@ impl RootResult {
         self.save_attempt.as_ref()
     }
     pub fn save(&mut self) -> Result<bool, crate::file_application::FailedBuild> {
-        self.save_with_limits(
-            Default::default(),
-            yamaa_core::capacity::REPORT_ENCODED_BYTES,
-        )
+        let outcome = self.save_actual();
+        self.issues = crate::issue_rows::collect(std::mem::take(&mut self.issues));
+        outcome
     }
-    pub fn save_with_limits(
-        &mut self,
-        limits: yamaa_core::producer_publication::Limits,
-        maximum: usize,
-    ) -> Result<bool, crate::file_application::FailedBuild> {
+    fn save_actual(&mut self) -> Result<bool, crate::file_application::FailedBuild> {
         if self.log_publication.is_some() {
-            return self.save_logs_with(limits, maximum, |publisher, path, bytes| {
-                publisher.publish(path, bytes)
-            });
+            return self.save_logs_with(|publisher, path, bytes| publisher.publish(path, bytes));
         }
         if self.output.is_none()
             || (self.publication.is_none() && self.publication_refusal.is_none())
@@ -110,15 +102,8 @@ impl RootResult {
         };
         // Complete report ownership and prefix projection admission precedes
         // every publisher. Save never classifies a host error or rerenders Build.
-        let mut budget = Budget::new(maximum);
+
         let admitted = (|| {
-            budget.shared_report(&self.observations)?;
-            budget.entries(publication.artifacts().len().saturating_mul(64))?;
-            for artifact in publication.artifacts() {
-                for _ in 0..4 {
-                    budget.text(artifact.path())?;
-                }
-            }
             let mut value = self.observations.clone();
             value["publication"] = serde_json::json!({"status":"failure",
                 "entered":publication.artifacts().iter().map(|item|serde_json::json!({"node":item.node(),"published":false})).collect::<Vec<_>>(),
@@ -133,13 +118,7 @@ impl RootResult {
                     path: None,
                 })
                 .collect::<Vec<_>>();
-            let fields = crate::report_publication::Prepared::new(
-                &mut value,
-                &locations,
-                false,
-                maximum,
-                &mut budget,
-            )?;
+            let fields = crate::report_publication::Prepared::new(&mut value, &locations, false)?;
             Ok::<_, ReportError>((value, fields))
         })();
         let (mut value, mut fields) = match admitted {
@@ -155,13 +134,13 @@ impl RootResult {
             }
         };
         let mut attempt = crate::producer_publication::Attempt::default();
-        publication.save_into(limits, &mut attempt);
+        publication.save_into(&mut attempt);
         use yamaa_core::producer_publication::Failure;
         let (saved, code, node) = if let Some(failure) = publication.admission_failure() {
             use crate::producer_publication::AdmissionFailure;
             match failure {
                 AdmissionFailure::Incomplete => (false, "publication_incomplete", None),
-                AdmissionFailure::Limit(code) => (false, *code, None),
+                AdmissionFailure::Rejected(code) => (false, *code, None),
                 AdmissionFailure::Resource { node, error } => {
                     self.issues
                         .extend(crate::file_application::resource_failure("output", error));
@@ -174,7 +153,6 @@ impl RootResult {
             match &attempt.entered.outcome {
                 Ok(()) => (true, "", None),
                 Err(Failure::Incomplete) => (false, "publication_incomplete", None),
-                Err(Failure::Limit(code)) => (false, *code, None),
                 Err(Failure::Preflight(error)) => {
                     self.issues
                         .extend(crate::file_application::publication_failure(&error.error));
@@ -221,8 +199,6 @@ impl RootResult {
     }
     fn save_logs_with(
         &mut self,
-        limits: yamaa_core::producer_publication::Limits,
-        maximum: usize,
         publish: impl FnMut(
             &mut crate::file_publication::Publisher,
             &str,
@@ -245,20 +221,12 @@ impl RootResult {
         self.log_save_attempt = None;
         let publication = self.log_publication.as_ref().expect("logged owner");
         let count = publication.requests(failed).count();
-        let mut budget = Budget::new(maximum);
+
         let report = (|| {
-            budget.entries(count.saturating_mul(64))?;
-            for (_, request) in publication.requests(failed) {
-                for _ in 0..8 {
-                    budget.text(&request.path)?;
-                }
-                budget.text(request.field)?;
-            }
             // Own the complete report before any write. Every actual prefix is
             // formed by dropping already-owned artifact/entry suffixes; it never
             // reprojects observations or clones their tables and CSV content.
-            let mut value =
-                publication.prefix_report(&self.observations, failed, count, count, &mut budget)?;
+            let mut value = publication.prefix_report(&self.observations, failed, count, count)?;
             let locations = publication
                 .requests(failed)
                 .map(|(key, request)| crate::report_publication::Location {
@@ -268,13 +236,7 @@ impl RootResult {
                     path: Some(&request.path),
                 })
                 .collect::<Vec<_>>();
-            let fields = crate::report_publication::Prepared::new(
-                &mut value,
-                &locations,
-                true,
-                maximum,
-                &mut budget,
-            )?;
+            let fields = crate::report_publication::Prepared::new(&mut value, &locations, true)?;
             Ok::<_, ReportError>((value, fields))
         })();
         let (mut value, mut fields) = match report {
@@ -294,12 +256,12 @@ impl RootResult {
             }
         };
         let mut attempt = crate::producer_log_publication::Attempt::default();
-        publication.save_into(failed, limits, &mut attempt, publish);
+        publication.save_into(failed, &mut attempt, publish);
         let (saved, code, request) = if let Some(failure) = publication.admission_failure(failed) {
             use crate::producer_publication::AdmissionFailure;
             match &failure.failure {
                 AdmissionFailure::Incomplete => (false, "publication_incomplete", failure.request),
-                AdmissionFailure::Limit(code) => (false, *code, failure.request),
+                AdmissionFailure::Rejected(code) => (false, *code, failure.request),
                 AdmissionFailure::Resource { error, .. } => {
                     self.issues
                         .extend(crate::file_application::resource_failure("output", error));
@@ -318,7 +280,6 @@ impl RootResult {
                 Err(Failure::Incomplete | Failure::Admission) => {
                     (false, "publication_incomplete", None)
                 }
-                Err(Failure::Limit(code)) => (false, *code, None),
                 Err(Failure::Preflight(failure)) => {
                     self.issues
                         .extend(crate::file_application::publication_failure(&failure.error));
@@ -425,28 +386,16 @@ impl<E> std::fmt::Debug for Error<'_, E> {
 pub fn prepare_classified<'a, E>(
     attempt: &'a NativeAttempt<E>,
     id: Identity<'_>,
-    maximum: usize,
     facts: &[Classified<'a, E>],
 ) -> Result<RootResult, Error<'a, E>> {
-    let observations = producer_report::attempt_report_classified(attempt, id, maximum, facts)
-        .map_err(Error::Report)?;
-    prepare_observations(attempt, observations, maximum, true)
+    let observations =
+        producer_report::attempt_report_classified(attempt, id, facts).map_err(Error::Report)?;
+    prepare_observations(attempt, observations, true)
 }
 fn prepare_observations<'a, E>(
     attempt: &'a NativeAttempt<E>,
     observations: StoredReport,
-    maximum: usize,
     output_allowed: bool,
-) -> Result<RootResult, Error<'a, E>> {
-    let mut budget = Budget::new(maximum);
-    prepare_observations_with_budget(attempt, observations, maximum, output_allowed, &mut budget)
-}
-fn prepare_observations_with_budget<'a, E>(
-    attempt: &'a NativeAttempt<E>,
-    observations: StoredReport,
-    maximum: usize,
-    output_allowed: bool,
-    budget: &mut Budget,
 ) -> Result<RootResult, Error<'a, E>> {
     let diagnostics =
         observations["diagnostics"]
@@ -454,17 +403,6 @@ fn prepare_observations_with_budget<'a, E>(
             .ok_or(Error::Report(ProjectionError::Report(
                 ReportError::InvalidObservation,
             )))?;
-    let admit = (|| {
-        budget.entries(diagnostics.len())?;
-        for diagnostic in diagnostics {
-            // JSON clone, five-field owned rows and escaped context text.
-            for _ in 0..3 {
-                budget.json(diagnostic)?;
-            }
-        }
-        Ok::<_, ReportError>(())
-    })();
-    admit.map_err(|error| Error::Report(ProjectionError::Report(error)))?;
     let mut issues = diagnostics
         .iter()
         .cloned()
@@ -474,16 +412,8 @@ fn prepare_observations_with_budget<'a, E>(
     if (!attempt.accepted() || !output_allowed) && issues.is_empty() {
         issues = crate::file_application::rejected("build", "producer_build");
     }
-    if !crate::issue_rows::within_limit(
-        &issues,
-        maximum.min(crate::specification_check::MAX_ISSUE_BYTES),
-    ) {
-        return Err(Error::Report(ProjectionError::Report(
-            ReportError::OutputLimit,
-        )));
-    }
     let output = if attempt.accepted() && output_allowed {
-        match root_output(attempt, budget) {
+        match root_output(attempt) {
             Ok(output) => Some(output),
             Err(error) => {
                 return Err(Error::Output {
@@ -496,6 +426,7 @@ fn prepare_observations_with_budget<'a, E>(
     } else {
         None
     };
+    let issues = crate::issue_rows::collect(issues);
     Ok(RootResult {
         observations,
         base_issues: issues.len(),
@@ -518,25 +449,19 @@ fn prepare_observations_with_budget<'a, E>(
 pub fn prepare_owned_classified<'a, E>(
     attempt: &'a crate::file_producer_build::OwnedAttempt<E>,
     id: Identity<'_>,
-    maximum: usize,
     facts: &[Classified<'a, E>],
 ) -> Result<RootResult, Error<'a, E>> {
     let has_verification = attempt
         .logs()
         .iter()
         .any(|logs| logs.logs.verification.is_some());
-    let mut result = match prepare_classified(attempt, id, maximum, facts) {
+    let mut result = match prepare_classified(attempt, id, facts) {
         Ok(result) => result,
         Err(Error::Output {
             mut observations,
             error,
             ..
         }) if has_verification => {
-            let mut budget = Budget::new(maximum);
-            budget
-                .json(&observations)
-                .and_then(|()| budget.entries(32))
-                .map_err(|error| Error::Report(ProjectionError::Report(error)))?;
             observations["outcome"] = Value::String("failure".into());
             observations["error"] =
                 serde_json::json!({"stage":"output","code":"output_projection"});
@@ -549,12 +474,12 @@ pub fn prepare_owned_classified<'a, E>(
                     ReportError::InvalidObservation,
                 )))?
                 .push(finding);
-            let mut result = prepare_observations(attempt, observations, maximum, false)?;
+            let mut result = prepare_observations(attempt, observations, false)?;
             result._output_failure = Some(error);
             result
         }
         Err(Error::Report(ProjectionError::Original { observations, .. })) if has_verification => {
-            prepare_observations(attempt, observations, maximum, false)?
+            prepare_observations(attempt, observations, false)?
         }
         Err(error) => return Err(error),
     };
@@ -567,25 +492,11 @@ pub fn prepare_owned_classified<'a, E>(
     Ok(result)
 }
 
-fn root_output<E>(
-    attempt: &NativeAttempt<E>,
-    budget: &mut Budget,
-) -> Result<(PublicTable, Vec<u8>), TableError> {
+fn root_output<E>(attempt: &NativeAttempt<E>) -> Result<(PublicTable, Vec<u8>), TableError> {
     let invalid = TableError::InvalidTable;
     let metadata = attempt.provenance.metadata();
     // Root identity and compiler are borrowed from the sealed complete owner.
-    budget
-        .entries(metadata.nodes().len())
-        .map_err(|_| TableError::OutputLimit)?;
-    budget
-        .work(
-            metadata
-                .nodes()
-                .len()
-                .checked_mul(3)
-                .ok_or(TableError::OutputLimit)?,
-        )
-        .map_err(|_| TableError::OutputLimit)?;
+
     let root = metadata.root();
     let view = attempt.provenance.report_views().nth(root).ok_or(invalid)?;
     let mut matches = attempt.graph.nodes.iter().filter(|node| node.node == root);
@@ -611,17 +522,7 @@ fn root_output<E>(
     let table = &execution.dataset;
     let columns = table.schema().columns();
     let projection = artifact.projection();
-    budget
-        .entries(projection.len())
-        .map_err(|_| TableError::OutputLimit)?;
-    budget
-        .work(
-            projection
-                .len()
-                .checked_mul(columns.len())
-                .ok_or(TableError::OutputLimit)?,
-        )
-        .map_err(|_| TableError::OutputLimit)?;
+
     if projection.len() != view.compiled().projection().len()
         || projection
             .iter()
@@ -629,25 +530,6 @@ fn root_output<E>(
             .any(|(&index, name)| columns.get(index).is_none_or(|column| &column.name != name))
     {
         return Err(invalid);
-    }
-    // The qualified encoder sanitizes the complete table before projection.
-    // Admit full shape, names, cells and work for Arrow, public columns and IPC
-    // before any of those owners allocate. Serialized CSV precision is irrelevant.
-    for _ in 0..3 {
-        budget
-            .typed_shape(table.row_count(), columns.len())
-            .map_err(|_| TableError::OutputLimit)?;
-        for (index, column) in columns.iter().enumerate() {
-            budget
-                .text(&column.name)
-                .map_err(|_| TableError::OutputLimit)?;
-            for row in 0..table.row_count() {
-                let cell = table.cell(row, index).map_err(|_| invalid)?;
-                budget
-                    .typed_cell(&cell)
-                    .map_err(|_| TableError::OutputLimit)?;
-            }
-        }
     }
     let bytes = ipc_table::encode_projected_dataset(table, projection)?;
     let table = PublicTable::decode(&bytes)?;
@@ -750,18 +632,13 @@ mod log_tests {
                 "root.yaml",
                 environment(language),
                 shipped_schema::capture().unwrap(),
-                Default::default(),
             )
         }
-        fn owned(
-            &self,
-            language: Language,
-            limits: crate::file_producer_build::Limits,
-        ) -> OwnedAttempt<Infallible> {
+        fn owned(&self, language: Language) -> OwnedAttempt<Infallible> {
             self.graph(language)
                 .unwrap_or_else(|error| panic!("graph fixture: {:?}", error.error()))
                 .into_build()
-                .build_owned_reported(&mut NoActivation, id(), limits)
+                .build_owned_reported(&mut NoActivation, id(), scope())
         }
         fn remove_inputs(&self) {
             for name in ["root.yaml", "producer.yaml", "input.csv"] {
@@ -794,7 +671,6 @@ mod log_tests {
             },
             language,
             &mut NoMetadata,
-            Default::default(),
         )
         .unwrap()
         .into_owned()
@@ -832,8 +708,11 @@ mod log_tests {
             base_directory: ".",
         }
     }
+    fn scope() -> yamaa_core::application_observer::Scope<'static> {
+        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop)
+    }
     fn root(owned: &OwnedAttempt<Infallible>) -> RootResult {
-        prepare_owned_classified(owned, id(), 16_777_216, &[]).unwrap()
+        prepare_owned_classified(owned, id(), &[]).unwrap()
     }
     fn execution(mut report: Value) -> Value {
         report.as_object_mut().unwrap().remove("publication");
@@ -841,11 +720,80 @@ mod log_tests {
         report
     }
     #[test]
+    #[cfg(unix)]
+    fn actual_sparse_source_boundary_keeps_facts_across_plain_project_and_graph_results() {
+        for route in ["plain", "project", "producer"] {
+            let study = Study::new();
+            study.fixture(false, false, false);
+            let source = fs::OpenOptions::new()
+                .write(true)
+                .open(study.0.join("input.csv"))
+                .unwrap();
+            source.set_len(10 * 1024 * 1024 * 1024 + 1).unwrap();
+            drop(source);
+            let resources = || Resources::new(&study.path(), &study.path(), &[]).unwrap();
+            let issues = match route {
+                "plain" => {
+                    let prepared = crate::file_preparation::FileSpecification::prepare(
+                        resources(),
+                        "producer.yaml",
+                    )
+                    .unwrap();
+                    let result = crate::file_application::plain(prepared, id()).unwrap();
+                    assert!(result.output().is_none());
+                    result.issues()
+                }
+                "project" => {
+                    study.write("environment.yaml", "schema_version: '1.0'\n");
+                    let mut prepared = crate::file_project::FileProject::prepare(
+                        resources(),
+                        "producer.yaml",
+                        "environment.yaml",
+                        Language::Python,
+                        shipped_schema::capture().unwrap(),
+                        shipped_schema::capture_environment().unwrap(),
+                    )
+                    .unwrap();
+                    let attempt = prepared.build(&mut NoActivation);
+                    let result =
+                        crate::project_report::build_result(prepared.run(), &attempt, id(), &[])
+                            .unwrap();
+                    assert!(result.output().is_none());
+                    result.issues().to_vec()
+                }
+                _ => {
+                    let owned = study.owned(Language::Python);
+                    assert!(!owned.accepted());
+                    let result = root(&owned);
+                    assert!(result.output().is_none());
+                    result.issues().to_vec()
+                }
+            };
+            assert_eq!(issues.len(), 1, "{route}");
+            assert_eq!(
+                issues[0].condition,
+                yamaa_core::diagnostic::ConditionCode::ApplicationRejected
+                    .definition()
+                    .condition
+            );
+            assert_eq!(issues[0].requirement, None);
+            assert_eq!(issues[0].spec_paths, ["input.SRC.path"]);
+            let context: Value = serde_json::from_str(&issues[0].context).unwrap();
+            assert_eq!(
+                context,
+                serde_json::json!({"stage":"capture", "code":"resource_limit", "resource":"source_bytes",
+                "limit":10_737_418_240_u64,"actual":10_737_418_241_u64,"dataset":"SRC","path":"input.csv"}),
+                "{route}"
+            );
+            assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
+        }
+    }
+    #[test]
     fn actual_alias_logs_publish_in_node_order_and_repeat_only_held_bytes() {
         for language in [Language::Python, Language::R] {
             let study = Study::new();
             study.fixture(false, false, true);
-            let owned = study.owned(language, Default::default());
+            let owned = study.owned(language);
             assert!(owned.accepted());
             let source = &owned.graph.nodes[1].dataset.sources;
             assert!(Arc::ptr_eq(
@@ -925,7 +873,7 @@ mod log_tests {
                 "root",
             ),
         );
-        let owned = study.owned(Language::Python, Default::default());
+        let owned = study.owned(Language::Python);
         assert!(owned.accepted());
         let mut result = root(&owned);
         let before = execution(result.observations().clone());
@@ -952,7 +900,7 @@ mod log_tests {
         for (leaf, expected_nodes, expected_v) in [(true, 1, 1), (false, 2, 2)] {
             let study = Study::new();
             study.fixture(leaf, !leaf, true);
-            let owned = study.owned(Language::Python, Default::default());
+            let owned = study.owned(Language::Python);
             assert!(!owned.accepted());
             assert_eq!(owned.graph.nodes.len(), expected_nodes);
             let mut result = root(&owned);
@@ -1003,7 +951,7 @@ mod log_tests {
         for unwind in [false, true] {
             let study = Study::new();
             study.fixture(false, false, true);
-            let owned = study.owned(Language::Python, Default::default());
+            let owned = study.owned(Language::Python);
             let mut result = root(&owned);
             let before = execution(result.observations().clone());
             study.write("generated/root.csv", b"earlier root");
@@ -1011,7 +959,7 @@ mod log_tests {
             let payload = Arc::new(());
             let mut calls = 0;
             assert!(!result
-                .save_logs_with(Default::default(), 16_777_216, |publisher, path, bytes| {
+                .save_logs_with(|publisher, path, bytes| {
                     calls += 1;
                     if calls == 5 {
                         if unwind {
@@ -1123,13 +1071,13 @@ mod log_tests {
             for boundary in 1..=requests.len() {
                 let study = Study::new();
                 study.fixture(false, false, true);
-                let owned = study.owned(Language::Python, Default::default());
+                let owned = study.owned(Language::Python);
                 let mut result = root(&owned);
                 let before = execution(result.observations().clone());
                 study.remove_inputs();
                 let mut calls = 0;
                 assert!(!result
-                    .save_logs_with(Default::default(), 16_777_216, |publisher, path, bytes| {
+                    .save_logs_with(|publisher, path, bytes| {
                         calls += 1;
                         if calls == boundary {
                             if unwind {
@@ -1176,70 +1124,14 @@ mod log_tests {
         }
     }
     #[test]
-    fn cumulative_admission_and_whole_set_parent_preflight_enter_no_publishers() {
+    fn whole_set_parent_preflight_enters_no_publishers() {
         let study = Study::new();
         study.fixture(false, false, true);
-        let owned = study.owned(Language::Python, Default::default());
+        let owned = study.owned(Language::Python);
         let mut result = root(&owned);
-        let bytes = owned
-            .logs()
-            .iter()
-            .flat_map(|held| held.logs.verification.iter().chain(&held.logs.warning))
-            .map(|log| log.bytes().len())
-            .sum::<usize>()
-            + owned
-                .graph
-                .nodes
-                .iter()
-                .map(|entered| {
-                    entered
-                        .output
-                        .as_ref()
-                        .unwrap()
-                        .as_ref()
-                        .unwrap()
-                        .artifact()
-                        .unwrap()
-                        .bytes()
-                        .len()
-                })
-                .sum::<usize>();
-        for limits in [
-            yamaa_core::producer_publication::Limits {
-                nodes: 1,
-                ..Default::default()
-            },
-            yamaa_core::producer_publication::Limits {
-                path_bytes: 1,
-                ..Default::default()
-            },
-            yamaa_core::producer_publication::Limits {
-                artifact_bytes: bytes - 1,
-                ..Default::default()
-            },
-            yamaa_core::producer_publication::Limits {
-                work: 1,
-                ..Default::default()
-            },
-        ] {
-            assert!(!result
-                .save_logs_with(limits, 16_777_216, |_, _, _| panic!(
-                    "unadmitted publication"
-                ))
-                .unwrap());
-            assert!(result.log_save_attempt.as_ref().unwrap().entered.is_empty());
-        }
-        assert!(!result
-            .save_logs_with(Default::default(), 1, |_, _, _| panic!(
-                "report quota precedes ports"
-            ))
-            .unwrap());
-        assert!(result.log_save_attempt.is_none());
         fs::remove_dir(study.0.join("generated")).unwrap();
         assert!(!result
-            .save_logs_with(Default::default(), 16_777_216, |_, _, _| panic!(
-                "all parents first"
-            ))
+            .save_logs_with(|_, _, _| panic!("all parents first"))
             .unwrap());
         assert!(result.log_save_attempt.as_ref().unwrap().entered.is_empty());
         assert!(!result
@@ -1251,36 +1143,6 @@ mod log_tests {
                 )));
         fs::create_dir(study.0.join("generated")).unwrap();
         assert!(result.save().unwrap());
-    }
-    #[test]
-    fn warning_byte_refusal_retains_verification_and_stops_dependent_before_entry() {
-        let study = Study::new();
-        study.fixture(false, false, true);
-        let baseline = study.owned(Language::Python, Default::default());
-        let leaf = &baseline
-            .logs()
-            .iter()
-            .find(|held| held.node == 1)
-            .unwrap()
-            .logs;
-        let bytes = leaf.verification.as_ref().unwrap().bytes().len()
-            + leaf.warning.as_ref().unwrap().bytes().len()
-            - 1;
-        let mut limits = crate::file_producer_build::Limits::default();
-        limits.engine.output_bytes = bytes;
-        let owned = study.owned(Language::Python, limits);
-        assert!(!owned.accepted());
-        assert_eq!(owned.graph.nodes.len(), 1);
-        assert!(owned.logs()[0].logs.verification.is_some());
-        assert!(owned.logs()[0].logs.warning.is_none());
-        let mut result = root(&owned);
-        study.remove_inputs();
-        assert!(result.save().is_err());
-        assert_eq!(
-            result.observations()["artifacts"].as_array().unwrap().len(),
-            1
-        );
-        assert!(!study.0.join("generated/producer.csv").exists());
     }
     #[test]
     fn logged_graph_metadata_refuses_cross_node_aliases_before_study_and_missing_parents_stay_allowed(
@@ -1317,16 +1179,14 @@ mod log_tests {
                 "https://example.invalid/root-warnings.csv",
             ),
         );
-        let owned = study.owned(Language::Python, Default::default());
+        let owned = study.owned(Language::Python);
         assert!(owned.accepted());
         let mut result = root(&owned);
         let before = execution(result.observations().clone());
         study.remove_inputs();
         for _ in 0..2 {
             assert!(!result
-                .save_logs_with(Default::default(), 16_777_216, |_, _, _| panic!(
-                    "all target admission precedes publication"
-                ))
+                .save_logs_with(|_, _, _| panic!("all target admission precedes publication"))
                 .unwrap());
             let error = &result.observations()["publication"]["error"];
             assert_eq!(error["code"], "target_admission");
@@ -1391,7 +1251,7 @@ mod log_tests {
                 );
             }
             assert!(!study.0.join("generated/producer-checks.csv").exists());
-            let owned = study.owned(Language::Python, Default::default());
+            let owned = study.owned(Language::Python);
             assert!(owned.accepted());
             let mut result = root(&owned);
             let before = execution(result.observations().clone());
@@ -1402,9 +1262,7 @@ mod log_tests {
                 }
             } else {
                 assert!(!result
-                    .save_logs_with(Default::default(), 16_777_216, |_, _, _| panic!(
-                        "whole physical target set first"
-                    ))
+                    .save_logs_with(|_, _, _| panic!("whole physical target set first"))
                     .unwrap());
                 assert_eq!(
                     result.observations()["publication"]["error"]["code"],
@@ -1429,7 +1287,7 @@ mod log_tests {
             .graph(Language::Python)
             .unwrap()
             .into_build()
-            .build_reported(&mut NoActivation, id(), Default::default());
+            .build_reported(&mut NoActivation, id(), scope());
         assert!(actual.accepted());
         let authored = NativeAttempt {
             provenance: Arc::clone(&actual.provenance),
@@ -1437,76 +1295,57 @@ mod log_tests {
             graph: actual.graph,
             resources: actual.resources,
         };
-        let mut result = prepare_classified(&authored, id(), 16_777_216, &[]).unwrap();
+        let mut result = prepare_classified(&authored, id(), &[]).unwrap();
         assert!(result.output().is_some());
         assert!(result.verification_log().is_none());
         assert!(result.save().is_err());
         assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
     }
     #[test]
-    fn actual_root_ipc_shape_refusal_preserves_v_only_and_original_no_v_error() {
+    fn actual_root_at_the_fixed_column_boundary_retains_logs_and_held_output() {
         for logs in [false, true] {
             let study = Study::new();
             study.fixture(false, false, logs);
-            let columns = (0..1_025)
+            let columns = (0..1_024)
                 .map(|index| {
                     format!("  - {{name: C{index}, type: int, label: Column, derivation: A.ID}}\n")
                 })
                 .collect::<String>();
-            let names = (0..1_025)
+            let names = (0..1_024)
                 .map(|index| format!("C{index}"))
-                .collect::<Vec<_>>()
-                .join(", ");
+                .collect::<Vec<_>>();
             let sidecars = if logs {
                 ", verification_log: generated/root-checks.csv, warning_log: generated/root-warnings.csv"
             } else {
                 ""
             };
-            study.write("root.yaml",format!("schema_version: '1.0'\ndomain: TEST\nkeys: [C0]\nbase: A\ninput: {{A: {{path: generated/producer.csv, schema: producer.yaml}}}}\ncolumns:\n{columns}output: {{path: generated/root.csv, columns: [{names}]{sidecars}}}\n"));
-            // Production compilation caps columns at 1,024 (#2185). Enlarge
-            // only this fixture's compiler admission to reach the real IPC
-            // 1,024-column boundary without fabricating a transport error.
-            let mut metadata = crate::producer_graph::Limits::default();
-            metadata.graph.metadata.compilation.columns = 2_048;
-            metadata.graph.metadata.compilation.projected_columns = 2_048;
-            let owned = FileGraph::prepare(
-                Resources::new(&study.path(), &study.path(), &[]).unwrap(),
-                "root.yaml",
-                environment(Language::Python),
-                shipped_schema::capture().unwrap(),
-                metadata,
-            )
-            .unwrap_or_else(|error| panic!("shape fixture: {:?}", error.error()))
-            .into_build()
-            .build_owned_reported(&mut NoActivation, id(), Default::default());
+            study.write("root.yaml", format!("schema_version: '1.0'\ndomain: TEST\nkeys: [C0]\nbase: A\ninput: {{A: {{path: generated/producer.csv, schema: producer.yaml}}}}\ncolumns:\n{columns}output: {{path: generated/root.csv, columns: [{}]{sidecars}}}\n", names.join(", ")));
+            let owned = study.owned(Language::Python);
             assert!(owned.accepted());
-            let prepared = prepare_owned_classified(&owned, id(), 16_777_216, &[]);
-            if !logs {
-                assert!(matches!(
-                    prepared,
-                    Err(Error::Output {
-                        error: TableError::ShapeLimit,
-                        ..
-                    })
-                ));
-                continue;
-            }
-            let mut result = prepared.unwrap();
-            assert_eq!(result._output_failure, Some(TableError::ShapeLimit));
-            assert!(result.output().is_none());
-            assert!(result.warning_log().is_none());
-            assert!(result.verification_log().is_some());
-            assert_eq!(result.observations()["error"]["code"], "output_projection");
-            study.write("generated/root.csv", b"held sentinel");
+            let artifact = owned.graph.nodes[1]
+                .output
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .artifact()
+                .unwrap();
+            let expected = format!(
+                "{}\n{}\n{}\n",
+                names.join(","),
+                vec!["1"; 1_024].join(","),
+                vec!["2"; 1_024].join(",")
+            );
+            assert_eq!(artifact.bytes(), expected.as_bytes());
+            let mut result = root(&owned);
+            assert!(result.output().is_some());
+            assert_eq!(result.output_table().unwrap().columns().len(), 1_024);
+            assert_eq!(result.verification_log().is_some(), logs);
+            assert_eq!(result.warning_log().is_some(), logs);
             study.remove_inputs();
             for _ in 0..2 {
-                assert!(result.save().is_err());
-                assert_eq!(
-                    result.observations()["artifacts"].as_array().unwrap().len(),
-                    2
-                );
-                assert_eq!(study.generated("root.csv"), b"held sentinel");
-                assert!(!study.0.join("generated/producer.csv").exists());
+                assert!(result.save().unwrap());
+                assert_eq!(study.generated("root.csv"), expected.as_bytes());
             }
         }
     }
@@ -1542,16 +1381,10 @@ mod log_tests {
         ));
     }
 
-    fn selected_projection_refusal(
-        rows: usize,
-        extra_columns: usize,
-        payload: &str,
-        bytes: usize,
-        cells: usize,
-    ) {
+    fn selected_projection(rows: usize, extra_columns: usize, payload: &str) {
         let study = Study::new();
         projection_fixture(&study, rows, extra_columns, payload);
-        let owned = study.owned(Language::Python, Default::default());
+        let owned = study.owned(Language::Python);
         assert!(owned.accepted());
         assert_eq!(
             owned
@@ -1606,60 +1439,29 @@ mod log_tests {
         );
         study.remove_inputs();
         for _ in 0..2 {
-            let maximum = yamaa_core::capacity::REPORT_ENCODED_BYTES;
-            let observations = producer_report::attempt_report(&owned, id(), maximum).unwrap();
+            let observations = producer_report::attempt_report(&owned, id()).unwrap();
             assert_eq!(observations["outcome"], "success");
             assert_eq!(observations["artifacts"].as_array().unwrap().len(), 2);
             assert!(observations["error"].is_null());
-            let mut budget =
-                Budget::selected_projection_limits(bytes, cells, yamaa_core::capacity::REPORT_WORK);
-            let error = match prepare_observations_with_budget(
-                &owned,
-                observations,
-                maximum,
-                true,
-                &mut budget,
-            ) {
-                Err(error) => error,
-                Ok(_) => panic!("the selected copy budget must refuse this projection"),
-            };
-            let Error::Output {
-                attempt,
-                observations,
-                error,
-            } = error
-            else {
-                panic!("projection refusal must retain the original complete attempt");
-            };
-            assert!(std::ptr::eq(attempt, &*owned));
-            assert_eq!(error, TableError::OutputLimit);
-            assert!(attempt.accepted());
-            assert_eq!(observations["outcome"], "success");
-            assert_eq!(observations["artifacts"].as_array().unwrap().len(), 2);
-            assert!(observations["error"].is_null());
+            let result = prepare_observations(&owned, observations, true).unwrap();
+            let table = result.output_table().unwrap();
+            assert_eq!(table.rows(), rows);
+            assert_eq!(
+                table.columns().len(),
+                2 + if extra_columns == 0 { 1 } else { extra_columns }
+            );
+            assert_eq!(result.observations()["outcome"], "success");
             assert_eq!(artifact.bytes(), expected.as_bytes());
-            // No partial RootResult can grant Save after this refusal.
             assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
         }
     }
 
     #[test]
-    fn selected_copy_cells_refusal_keeps_original_large_attempt_and_artifacts() {
-        // The original 23,000 x 63 x 3 geometry exceeds the former 4 Mi-cell
-        // policy. The other capacities are deliberately sufficient here.
-        selected_projection_refusal(23_000, 59, "", 1 << 30, 4_194_304);
+    fn large_selected_projection_keeps_original_cells_and_artifacts() {
+        selected_projection(23_000, 59, "");
     }
-
     #[test]
-    fn selected_copy_bytes_refusal_keeps_original_large_attempt_and_artifacts() {
-        // Select an explicit 8 MiB retained-copy policy independently of the
-        // larger approved public defaults and the original accepted attempt.
-        selected_projection_refusal(
-            4_095,
-            0,
-            &"x".repeat(2_048),
-            8_388_608,
-            yamaa_core::capacity::REPORT_CELLS,
-        );
+    fn long_selected_projection_keeps_complete_text_and_artifacts() {
+        selected_projection(4_095, 0, &"x".repeat(2_048));
     }
 }

@@ -1,27 +1,15 @@
 //! Resolve held lock origins and represent core-owned classified diagnostic facts.
 use crate::{issue_rows::Issue, project_lock::Finding, project_source::CapturedEnvironment};
-use yamaa_core::diagnostic::{lock_diagnostics_with_limit, LockDiagnosticError, LockOrigins};
+use yamaa_core::diagnostic::{lock_diagnostics, LockDiagnosticError, LockOrigins};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     InvalidContext,
-    Limit,
     Projection,
 }
 pub fn issues(
     environment: &CapturedEnvironment,
     findings: &[Finding],
-) -> Result<Vec<Issue>, Error> {
-    issues_with_limit(
-        environment,
-        findings,
-        crate::specification_check::MAX_ISSUE_BYTES,
-    )
-}
-pub fn issues_with_limit(
-    environment: &CapturedEnvironment,
-    findings: &[Finding],
-    maximum: usize,
 ) -> Result<Vec<Issue>, Error> {
     let document = &environment.root().raw().document;
     let origins = environment.lock().and_then(|lock| {
@@ -38,11 +26,9 @@ pub fn issues_with_limit(
             written,
         })
     });
-    let diagnostics =
-        lock_diagnostics_with_limit(origins, findings, maximum).map_err(|error| match error {
-            LockDiagnosticError::InvalidContext => Error::InvalidContext,
-            LockDiagnosticError::Limit => Error::Limit,
-        })?;
+    let diagnostics = lock_diagnostics(origins, findings).map_err(|error| match error {
+        LockDiagnosticError::InvalidContext => Error::InvalidContext,
+    })?;
     if diagnostics.is_empty() {
         return Ok(Vec::new());
     }
@@ -51,8 +37,5 @@ pub fn issues_with_limit(
         .map(Issue::from_core)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|_| Error::Projection)?;
-    if !crate::issue_rows::within_limit(&result, maximum) {
-        return Err(Error::Limit);
-    }
     Ok(result)
 }

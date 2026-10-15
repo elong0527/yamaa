@@ -1,7 +1,7 @@
 //! Native capture, file geometry, codecs and publication for the engine Define service.
 use crate::{
     file_configuration, file_preparation, file_project, file_publication,
-    file_resources::{self, MetadataLimits, Resources},
+    file_resources::{self, Resources},
     issue_rows::Issue,
     project_application,
     project_source::OwnedEnvironment,
@@ -61,6 +61,8 @@ impl Define {
             environment: None,
             environment_written: String::new(),
             specifications: Vec::new(),
+            #[cfg(test)]
+            after_publish: None,
         };
         let attempt = service::Application::prepare(
             &mut ports,
@@ -84,13 +86,7 @@ impl Define {
         result
     }
     fn refuse(&mut self, failure: Failure) {
-        self.issues = issues(&failure, self.host);
-        if !crate::issue_rows::within_limit(
-            &self.issues,
-            crate::specification_check::MAX_ISSUE_BYTES,
-        ) {
-            self.issues = crate::file_application::rejected("define", "issue_limit");
-        }
+        self.issues = crate::issue_rows::collect(issues(&failure, self.host));
         self.failure = Some(failure);
     }
     pub fn issues(&self) -> &[Issue] {
@@ -110,13 +106,6 @@ impl Define {
     }
     pub fn save(&mut self) -> Result<bool, SaveError> {
         let result = self.application.save(&mut self.ports);
-        self.save_result(result)
-    }
-    #[cfg(test)]
-    fn save_with_checkpoint(&mut self, checkpoint: impl FnMut(usize)) -> Result<bool, SaveError> {
-        let result = self
-            .application
-            .save_with_checkpoint(&mut self.ports, checkpoint);
         self.save_result(result)
     }
     fn save_result(
@@ -144,12 +133,17 @@ fn native_failure(failure: service::Failure<Failure, file_publication::Error>) -
         service::Failure::Publication { index, error } => Failure::Publication { index, error },
     }
 }
+#[cfg(test)]
+type AfterPublish = Box<dyn FnMut(&str)>;
+
 struct NativePorts {
     resources: Option<Resources>,
     host: Language,
     environment: Option<std::sync::Arc<OwnedEnvironment>>,
     environment_written: String,
     specifications: Vec<(String, String, std::sync::Arc<PreparedDocument>)>,
+    #[cfg(test)]
+    after_publish: Option<AfterPublish>,
 }
 impl NativePorts {
     fn resources(&self) -> &Resources {
@@ -227,25 +221,10 @@ impl Ports for NativePorts {
             .ok()
             .map(|duration| duration.as_secs())
     }
-    fn capture_environment(
-        &mut self,
-        written: &str,
-        limits: service::MetadataLimits,
-    ) -> Result<Self::Environment, Failure> {
-        let (mut resources, entry) = file_configuration::resources(written)
+    fn capture_environment(&mut self, written: &str) -> Result<Self::Environment, Failure> {
+        let (resources, entry) = file_configuration::resources(written)
             .map_err(|error| Failure::Project(project_application::Error::Configuration(error)))?;
-        resources
-            .admit_metadata_budget(MetadataLimits {
-                bytes: limits.bytes,
-                snapshots: limits.snapshots,
-                text: limits.text,
-                work: limits.work,
-            })
-            .map_err(|error| resource(written, written, error))?;
         self.resources = Some(resources);
-        self.resources_mut()
-            .charge_metadata_text(written.len())
-            .map_err(|error| resource("environment", written, error))?;
         self.environment_written = written.into();
         let schema = crate::shipped_schema::capture_environment()
             .map_err(|error| Failure::Project(project_application::Error::Schema(error)))?;
@@ -266,23 +245,10 @@ impl Ports for NativePorts {
     }
     fn capture_specification(
         &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<Self::Specification, Failure> {
-        self.capture_specification_at("specification", declaring, written)
-    }
-    fn capture_specification_at(
-        &mut self,
         path: &str,
         declaring: &str,
         written: &str,
     ) -> Result<Self::Specification, Failure> {
-        if self.specifications.len() >= service::METADATA_LIMITS.snapshots {
-            return Err(resource(path, written, file_resources::Error::Limit));
-        }
-        self.resources_mut()
-            .charge_metadata_text(path.len().saturating_add(written.len()))
-            .map_err(|error| resource(path, written, error))?;
         let document = file_preparation::prepare_document_from(
             self.resources_mut(),
             Some(declaring),
@@ -359,18 +325,15 @@ impl Ports for NativePorts {
                 resource(path, source, error)
             })
     }
-    fn finish_metadata(&mut self) {
-        self.resources_mut().finish_metadata_budget();
-    }
+
     fn capture_published(
         &mut self,
         path: &str,
         declaring: &str,
         written: &str,
-        maximum: usize,
     ) -> Result<Self::Bytes, Failure> {
         self.resources_mut()
-            .capture_from(declaring, written, maximum)
+            .capture_from(declaring, written)
             .map(|(bytes, _)| bytes)
             .map_err(|error| resource(path, written, error))
     }
@@ -402,7 +365,12 @@ impl Ports for NativePorts {
         written: &str,
         bytes: &[u8],
     ) -> Result<(), Self::PublicationError> {
-        publisher.publish(written, bytes)
+        publisher.publish(written, bytes)?;
+        #[cfg(test)]
+        if let Some(after_publish) = self.after_publish.as_mut() {
+            after_publish(written);
+        }
+        Ok(())
     }
 }
 fn same_location(left: &Path, right: &Path) -> bool {
@@ -479,7 +447,7 @@ fn issues(failure: &Failure, host: Language) -> Vec<Issue> {
                 E::OutsideRoots => R::OutsideRoots,
                 E::Symlink => R::Symlink,
                 E::Changed => R::Changed,
-                E::Limit => R::Limit,
+                E::Limit(error) => R::Limit(*error),
             };
             vec![
                 Issue::from_core(service::resource_diagnostic(path, written, observation))
@@ -507,46 +475,7 @@ fn issues(failure: &Failure, host: Language) -> Vec<Issue> {
 fn read_parquet(
     bytes: &[u8],
 ) -> Result<crate::arrow_table::ArrowTable, crate::parquet_source::Error> {
-    use crate::parquet_source::{self, CompressionLimits, FramingLimits, MetadataLimits};
-    let table_limits = crate::arrow_table::TableLimits {
-        max_rows: 65_536,
-        max_columns: 16_384,
-        max_batches: 1024,
-        max_cells: 16_777_216,
-    };
-    parquet_source::parse(
-        bytes,
-        parquet_source::Limits {
-            framing: FramingLimits {
-                source_bytes: 67_108_864,
-                metadata_bytes: 2_097_152,
-                metadata_nodes: 65_536,
-                header_bytes: 65_536,
-                header_nodes: 65_536,
-                row_groups: 1024,
-                columns: 16_384,
-                rows: table_limits.max_rows,
-                cells: table_limits.max_cells,
-                pages: 65_536,
-                page_bytes: 8_388_608,
-                decoded_bytes: 67_108_864,
-            },
-            compression: CompressionLimits {
-                page_bytes: 8_388_608,
-                window_log: 24,
-            },
-            metadata: MetadataLimits {
-                bytes: 2_097_152,
-                tables: 65_536,
-                depth: 64,
-            },
-            expanded_bytes: 67_108_864,
-            retained_bytes: 67_108_864,
-            array_elements: table_limits.max_cells,
-            batches: table_limits.max_batches,
-        },
-        table_limits,
-    )
+    crate::parquet_source::parse(bytes)
 }
 
 #[cfg(test)]

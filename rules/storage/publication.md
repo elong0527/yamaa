@@ -100,7 +100,9 @@ the separate uniqueness check changes it.
 **REQ-0715.** `output.path` is required and names the primary file; it has no
 default. `output.warning_log` and
 `output.verification_log` name [Verification](../execution/verification.md)'s
-sidecars when the specification declares them.
+sidecars when the specification declares them. `output.relative_to` selects the
+base for all three targets under [Resource resolution](resources.md#req-0780);
+`entry` lets a shared output declaration publish separately for each study.
 
 <a id="req-0716"></a>
 

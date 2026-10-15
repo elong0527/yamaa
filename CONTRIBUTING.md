@@ -64,8 +64,11 @@ to create the required import library. The Python extension feature belongs to
 maturin packaging; enabling every feature would select extension linking instead of
 normal Python linking for these Cargo tests. Native qualification also runs
 the workspace tests with the optimized `release-test` profile.
-Register new integration modules in their crate's test harness. Test helpers
-belong to the owning crate; do not import another crate's source into tests.
+Cargo discovers integration tests in each crate's `tests/*.rs` files. Add a
+feature file there to run new cases with the workspace command; no harness
+registration is needed. Keep test bodies in those files and shared private
+helpers under that crate's `tests/support/`. Test helpers belong to their owning
+crate; do not import another crate's source into tests.
 Portable numerical behavior has independently authored controls in
 `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv`.
 

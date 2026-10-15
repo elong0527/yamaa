@@ -10,7 +10,7 @@
 #include "../readstat_iconv.h"
 #include "../readstat_convert.h"
 #include "../readstat_malloc.h"
-extern int yamaa_readstat_admit(size_t, size_t, size_t);
+extern int yamaa_readstat_admit(size_t, size_t);
 
 typedef struct col_info_s {
     sas_text_ref_t  name_ref;
@@ -30,6 +30,11 @@ typedef struct subheader_pointer_s {
     unsigned char compression;
     unsigned char is_compressed_data;
 } subheader_pointer_t;
+
+typedef struct sas_text_page_s {
+    struct sas_text_page_s *next;
+    char bytes[];
+} sas_text_page_t;
 
 typedef struct sas7bdat_ctx_s {
     readstat_callbacks_t handle;
@@ -61,9 +66,9 @@ typedef struct sas7bdat_ctx_s {
     uint64_t        subheader_pointer_size;
 
     int            text_blob_count;
-    size_t         text_blob_bytes;
     size_t        *text_blob_lengths;
-    char         **text_blobs;
+    const char   **text_blobs;
+    sas_text_page_t *text_pages;
 
     int            col_names_count;
     int            col_attrs_count;
@@ -95,12 +100,14 @@ typedef struct sas7bdat_ctx_s {
 static void sas7bdat_ctx_free(sas7bdat_ctx_t *ctx) {
     int i;
     if (ctx->text_blobs) {
-        for (i=0; i<ctx->text_blob_count; i++) {
-            free(ctx->text_blobs[i]);
-        }
         free(ctx->text_blobs);
     }
     free(ctx->text_blob_lengths);
+    while (ctx->text_pages) {
+        sas_text_page_t *next = ctx->text_pages->next;
+        free(ctx->text_pages);
+        ctx->text_pages = next;
+    }
     if (ctx->variables) {
         for (i=0; i<ctx->column_count; i++) {
             if (ctx->variables[i])
@@ -150,7 +157,7 @@ static readstat_error_t sas7bdat_copy_text_ref(char *out_buffer, size_t out_buff
         return READSTAT_OK;
     }
 
-    char *blob = ctx->text_blobs[text_ref.index];
+    const char *blob = ctx->text_blobs[text_ref.index];
 
     if (text_ref.offset + text_ref.length > ctx->text_blob_lengths[text_ref.index])
         return READSTAT_ERROR_PARSE;
@@ -160,47 +167,28 @@ static readstat_error_t sas7bdat_copy_text_ref(char *out_buffer, size_t out_buff
 }
 
 static readstat_error_t sas7bdat_parse_column_text_subheader(const char *subheader, size_t len, sas7bdat_ctx_t *ctx) {
-    readstat_error_t retval = READSTAT_OK;
     size_t signature_len = ctx->subheader_signature_size;
     if (len < signature_len + 2) return READSTAT_ERROR_PARSE;
     uint16_t remainder = sas_read2(&subheader[signature_len], ctx->bswap);
-    char *blob = NULL;
-    if (remainder != sas_subheader_remainder(len, signature_len)) {
-        retval = READSTAT_ERROR_PARSE;
-        goto cleanup;
-    }
-    /* A uint16 text reference addresses 65536 blobs. Actual header ownership
-     * remains bounded by cumulative work admission before either array grows. */
-    if (len < signature_len + 2 || ctx->text_blob_count > UINT16_MAX ||
-            len > SIZE_MAX - ctx->text_blob_bytes)
+    if (remainder != sas_subheader_remainder(len, signature_len))
         return READSTAT_ERROR_PARSE;
-    ctx->text_blob_bytes += len;
-    if (!yamaa_readstat_admit(0, 0, ctx->text_blob_bytes))
-        return READSTAT_ERROR_MALLOC;
+    /* A uint16 text reference addresses at most 65536 blobs. */
+    if (ctx->text_blob_count > UINT16_MAX)
+        return READSTAT_ERROR_PARSE;
     size_t new_blob_count = ctx->text_blob_count + 1;
-    READSTAT_RESIZE_OR_RETURN(ctx->text_blobs, new_blob_count * sizeof(char *));
-    ctx->text_blobs[new_blob_count-1] = NULL;
+    READSTAT_RESIZE_OR_RETURN(ctx->text_blobs, new_blob_count * sizeof(ctx->text_blobs[0]));
+    READSTAT_RESIZE_OR_RETURN(ctx->text_blob_lengths, new_blob_count * sizeof(ctx->text_blob_lengths[0]));
+    /* The first pass owns the page. Slots preserve physical text-reference
+     * indices, including repeated or overlapping ranges, without copying each
+     * pointed-to range again. */
+    ctx->text_blobs[ctx->text_blob_count] = subheader + signature_len;
+    ctx->text_blob_lengths[ctx->text_blob_count] = len - signature_len;
     ctx->text_blob_count = new_blob_count;
-    READSTAT_RESIZE_OR_RETURN(ctx->text_blob_lengths, ctx->text_blob_count * sizeof(ctx->text_blob_lengths[0]));
-    if (ctx->text_blobs == NULL || ctx->text_blob_lengths == NULL) {
-        retval = READSTAT_ERROR_MALLOC;
-        goto cleanup;
-    }
-
-    if ((blob = readstat_malloc(len-signature_len)) == NULL) {
-        retval = READSTAT_ERROR_MALLOC;
-        goto cleanup;
-    }
-    memcpy(blob, subheader+signature_len, len-signature_len);
-    ctx->text_blob_lengths[ctx->text_blob_count-1] = len-signature_len;
-    ctx->text_blobs[ctx->text_blob_count-1] = blob;
-
-cleanup:
-    return retval;
+    return READSTAT_OK;
 }
 
 static readstat_error_t sas7bdat_realloc_col_info(sas7bdat_ctx_t *ctx, size_t count) {
-    if (!yamaa_readstat_admit(0, count, count * sizeof(col_info_t)))
+    if (!yamaa_readstat_admit(0, count))
         return READSTAT_ERROR_MALLOC;
     if (ctx->col_info_count < count) {
         size_t old_count = ctx->col_info_count;
@@ -234,7 +222,7 @@ static readstat_error_t sas7bdat_parse_column_size_subheader(const char *subhead
         col_count = sas_read4(&subheader[4], ctx->bswap);
     }
 
-    if (!yamaa_readstat_admit(0, col_count, 0))
+    if (!yamaa_readstat_admit(0, col_count))
         return READSTAT_ERROR_MALLOC;
     ctx->column_count = col_count;
 
@@ -287,7 +275,7 @@ static readstat_error_t sas7bdat_parse_row_size_subheader(const char *subheader,
 
     if (!row_length || row_length > UINT32_MAX || page_row_count > UINT32_MAX)
         return READSTAT_ERROR_ROW_WIDTH_MISMATCH;
-    if (!yamaa_readstat_admit(total_row_count, ctx->column_count, row_length))
+    if (!yamaa_readstat_admit(total_row_count, ctx->column_count))
         return READSTAT_ERROR_MALLOC;
     ctx->row_length = row_length;
 
@@ -755,7 +743,7 @@ static readstat_error_t sas7bdat_submit_columns(sas7bdat_ctx_t *ctx, int compres
      * admitted shape and known SAS scalar widths/offsets before allocating a
      * potentially large compressed observation buffer. Physical gaps remain
      * source-authoritative; do not infer a packed row size from field widths. */
-    if (!yamaa_readstat_admit(ctx->row_limit, ctx->column_count, ctx->row_length))
+    if (!yamaa_readstat_admit(ctx->row_limit, ctx->column_count))
         return READSTAT_ERROR_MALLOC;
     for (uint32_t i = 0; i < ctx->column_count; i++) {
         col_info_t *column = &ctx->col_info[i];
@@ -897,6 +885,7 @@ static readstat_error_t sas7bdat_validate_subheader_pointer(subheader_pointer_t 
 /* First, extract column text */
 static readstat_error_t sas7bdat_parse_page_pass1(const char *page, size_t page_size, sas7bdat_ctx_t *ctx) {
     readstat_error_t retval = READSTAT_OK;
+    sas_text_page_t *text_page = NULL;
 
     uint16_t subheader_count = sas_read2(&page[ctx->page_header_size-4], ctx->bswap);
 
@@ -926,7 +915,17 @@ static readstat_error_t sas7bdat_parse_page_pass1(const char *page, size_t page_
                     signature = sas_read4(page + shp_info.offset + 4, ctx->bswap);
                 }
                 if (signature == SAS_SUBHEADER_SIGNATURE_COLUMN_TEXT) {
-                    if ((retval = sas7bdat_parse_subheader(signature, page + shp_info.offset, shp_info.len, ctx))
+                    if (!text_page) {
+                        if (page_size > SIZE_MAX - sizeof(*text_page) ||
+                                (text_page = readstat_malloc(sizeof(*text_page) + page_size)) == NULL) {
+                            retval = READSTAT_ERROR_MALLOC;
+                            goto cleanup;
+                        }
+                        memcpy(text_page->bytes, page, page_size);
+                        text_page->next = ctx->text_pages;
+                        ctx->text_pages = text_page;
+                    }
+                    if ((retval = sas7bdat_parse_subheader(signature, text_page->bytes + shp_info.offset, shp_info.len, ctx))
                             != READSTAT_OK) {
                         goto cleanup;
                     }
@@ -1273,9 +1272,6 @@ readstat_error_t readstat_parse_sas7bdat(readstat_parser_t *parser, const char *
     ctx->version = hinfo->major_version;
     if (ctx->input_encoding == NULL) {
         ctx->input_encoding = hinfo->encoding;
-    }
-    if (!yamaa_readstat_admit(0, 0, ctx->page_size)) {
-        retval = READSTAT_ERROR_MALLOC; goto cleanup;
     }
     if ((ctx->page = readstat_malloc(ctx->page_size)) == NULL) {
         retval = READSTAT_ERROR_MALLOC;
