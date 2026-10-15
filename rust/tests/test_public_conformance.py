@@ -86,6 +86,41 @@ class PublicConformance(unittest.TestCase):
         self.build["tables"]["output"]["columns"][0][1] = "float"
         self.assertEqual(self.verdict()["verdict"], "mismatch")
 
+    def test_retired_adapter_csv_mutations_cannot_pass_public_conformance(self):
+        # Preserve the independent corruption controls from the retired
+        # adapters/test_conformance.py: cell, header, row order and row count.
+        # Mutating either saved output or expected truth must fail even when
+        # the separately observed public table is otherwise unchanged.
+        truth = self.case / "expected/result.csv"
+        candidate = self.observed / "work/simple/result.csv"
+        original = truth.read_bytes()
+        records = original.splitlines(keepends=True)
+        mutations = {
+            "cell": original.replace(b"9223372036854775807", b"9223372036854775806"),
+            "header and columns": b'VALUE,ID\n"",9223372036854775807\n,2\n"a,b",3\n',
+            "row order": records[0] + b"".join(reversed(records[1:])),
+            "row count": b"".join(records[:-1]),
+        }
+        for target in (truth, candidate):
+            for name, changed in mutations.items():
+                with self.subTest(target=target.name, mutation=name):
+                    try:
+                        target.write_bytes(changed)
+                        self.assertEqual(self.verdict()["verdict"], "mismatch")
+                    finally:
+                        target.write_bytes(original)
+        self.assertEqual(self.verdict()["verdict"], "pass")
+
+    def test_retired_adapter_missing_or_renamed_artifact_cannot_pass(self):
+        truth = self.case / "expected/result.csv"
+        renamed = truth.with_name("renamed.csv")
+        truth.rename(renamed)
+        self.assertEqual(self.verdict()["verdict"], "mismatch")
+        renamed.rename(truth)
+        candidate = self.observed / "work/simple/result.csv"
+        candidate.unlink()
+        self.assertEqual(self.verdict()["verdict"], "mismatch")
+
     def test_r_input_staging_preserves_native_links_and_excludes_expected_truth(self):
         inputs = self.case / "input"
         inputs.mkdir()
@@ -304,6 +339,172 @@ class PublicConformance(unittest.TestCase):
             table.set_column(0, "ID", pa.array([1, 2, 3], type=pa.int32())), candidate
         )
         self.assertEqual(self.verdict()["verdict"], "mismatch")
+
+    def test_original_parquet_primary_and_review_log_mutations_are_refused(self):
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        # Retain the retired TestParquetGolden inputs and its AGE=99,
+        # FAILURE_COUNT=2, renamed-column, float-type and empty-table probes.
+        original_case = ROOT.parent / "benchmarks/schema-parquet"
+        specification = (original_case / "spec.yaml").read_text()
+        (self.case / "expected/result.csv").unlink()
+        originals = {}
+        tables = {}
+        for name in ("adsl.parquet", "adsl-violations.parquet"):
+            source = original_case / "expected" / name
+            originals[name] = source.read_bytes()
+            tables[name] = pq.read_table(source)
+            (self.case / "expected" / name).write_bytes(originals[name])
+            (self.observed / "work/simple" / name).write_bytes(originals[name])
+
+        def public_view(table):
+            # Freeze the observed view from authored fixture values before
+            # mutating either side; no engine produces these expectations.
+            return {
+                "columns": [
+                    [field.name, "int" if pa.types.is_int64(field.type) else "str"]
+                    for field in table.schema
+                ],
+                "rows": [
+                    [
+                        None
+                        if value is None
+                        else str(value)
+                        if isinstance(value, int)
+                        else value.encode("utf-8").hex()
+                        for value in row.values()
+                    ]
+                    for row in table.to_pylist()
+                ],
+            }
+
+        inventory = self.root / "inventory.json"
+
+        def verdict():
+            with contextlib.redirect_stdout(io.StringIO()):
+                judge.compare(self.fixtures, self.observed, inventory)
+            return judge.read_json(inventory)["benchmarks"][0]
+
+        # The original benchmark uses warning_log; the same independent
+        # Parquet checks must also cover the public verification_log slot.
+        for log_slot in ("warning_log", "verification_log"):
+            (self.case / "spec.yaml").write_text(
+                specification.replace("warning_log:", f"{log_slot}:")
+            )
+            self.build["tables"] = {
+                "output": public_view(tables["adsl.parquet"]),
+                "warning_log": None,
+                "verification_log": None,
+            }
+            self.build["tables"][log_slot] = public_view(
+                tables["adsl-violations.parquet"]
+            )
+            judge.write_json(
+                self.observed / "records/simple.json", {"builds": [self.build]}
+            )
+            self.assertEqual(verdict()["verdict"], "pass")
+            for name, table in tables.items():
+                primary = name == "adsl.parquet"
+                field = "AGE" if primary else "FAILURE_COUNT"
+                index = table.schema.get_field_index(field)
+                renamed = "AGE" if primary else "ARTIFACT"
+                mutations = {
+                    "cell": table.set_column(
+                        index,
+                        field,
+                        pa.array([99 if primary else 2] * table.num_rows, pa.int64()),
+                    ),
+                    "column name": table.rename_columns(
+                        [
+                            f"{column}_X" if column == renamed else column
+                            for column in table.column_names
+                        ]
+                    ),
+                    "logical type": table.set_column(
+                        index, field, table[field].cast(pa.float64())
+                    ),
+                    "row count": table.slice(0, 0),
+                }
+                if table.num_rows > 1:
+                    mutations["row order"] = table.take(
+                        pa.array(list(reversed(range(table.num_rows))))
+                    )
+                for directory in (
+                    self.case / "expected",
+                    self.observed / "work/simple",
+                ):
+                    target = directory / name
+                    for mutation, changed in mutations.items():
+                        with self.subTest(
+                            slot=log_slot,
+                            artifact=name,
+                            target=directory,
+                            mutation=mutation,
+                        ):
+                            try:
+                                pq.write_table(changed, target)
+                                result = verdict()
+                                malformed_truth = (
+                                    directory == self.case / "expected"
+                                    and (
+                                        mutation == "logical type"
+                                        or (primary and mutation == "column name")
+                                    )
+                                )
+                                self.assertEqual(
+                                    result["verdict"],
+                                    "error" if malformed_truth else "mismatch",
+                                )
+                                self.assertTrue(result["findings"])
+                            finally:
+                                target.write_bytes(originals[name])
+                    removed = target.with_name("removed-" + target.name)
+                    with self.subTest(
+                        slot=log_slot,
+                        artifact=name,
+                        target=directory,
+                        mutation="renamed artifact",
+                    ):
+                        try:
+                            target.rename(removed)
+                            self.assertEqual(verdict()["verdict"], "mismatch")
+                        finally:
+                            removed.rename(target)
+            self.assertEqual(verdict()["verdict"], "pass")
+
+    def test_parquet_verification_log_row_order_is_compared(self):
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        (self.case / "spec.yaml").write_text(
+            SPEC.replace(
+                "path: result.csv,", "path: result.csv, verification_log: log.parquet,"
+            )
+        )
+        table = pa.table(
+            {
+                "FAILURE_COUNT": pa.array([1, 2], pa.int64()),
+                "ARTIFACT": ["first.csv", "second.csv"],
+            }
+        )
+        self.build["tables"]["verification_log"] = {
+            "columns": [["FAILURE_COUNT", "int"], ["ARTIFACT", "str"]],
+            "rows": [["1", "66697273742e637376"], ["2", "7365636f6e642e637376"]],
+        }
+        truth = self.case / "expected/log.parquet"
+        candidate = self.observed / "work/simple/log.parquet"
+        pq.write_table(table, truth)
+        pq.write_table(table, candidate)
+        self.assertEqual(self.verdict()["verdict"], "pass")
+        original = truth.read_bytes()
+        for target in (truth, candidate):
+            try:
+                pq.write_table(table.take(pa.array([1, 0])), target)
+                self.assertEqual(self.verdict()["verdict"], "mismatch")
+            finally:
+                target.write_bytes(original)
+        self.assertEqual(self.verdict()["verdict"], "pass")
 
     def test_declared_reported_precision_rounds_exactly_without_tolerance(self):
         self.assertEqual(
@@ -542,7 +743,9 @@ class PublicConformance(unittest.TestCase):
         # #2190 fixes the 40 missing-handler empty children. The reviewed
         # forward-reference ordering exception remains permanent.
         self.assertEqual(len(expectations), 1)
-        self.assertTrue(expectations[("negative-forward-reference", "empty_child")]["permanent"])
+        self.assertTrue(
+            expectations[("negative-forward-reference", "empty_child")]["permanent"]
+        )
         for (benchmark, check), item in expectations.items():
             self.assertIn(benchmark, names)
             self.assertIn(check, {"empty_child", "key_order"})
