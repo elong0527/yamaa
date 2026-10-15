@@ -203,6 +203,9 @@ pub(super) fn declaration_findings(
             }
         }
     }
+    match_values::visit_keys(d, &mut |value, path| {
+        visit(d, value, path, output, findings, 0, has_rows, &mut bytes)
+    })?;
     Ok(())
 }
 
@@ -257,7 +260,7 @@ pub(super) fn bind_row(
     intermediates: &[Option<crate::dataset::Intermediate>],
 ) -> Result<Option<Expression>, BindError> {
     let path = format!("{}.source", operation.path());
-    Ok(self_relations::bind_operand(
+    let source = self_relations::bind_operand(
         operation.source(),
         &path,
         catalog,
@@ -271,8 +274,25 @@ pub(super) fn bind_row(
         named,
         secondary,
         intermediates,
-    )?
-    .map(|expression| Expression::StrCase {
+    )?;
+    if source.is_some() {
+        if let Some(kind) = catalog
+            .type_of(operation.source())
+            .map_err(BindError::Catalog)?
+            .filter(|kind| *kind != ColumnType::Str)
+        {
+            let actual = match kind {
+                ColumnType::Int => "int",
+                ColumnType::Float => "float",
+                ColumnType::Date => "date",
+                ColumnType::DateTime => "datetime",
+                ColumnType::Str => unreachable!(),
+            };
+            findings.push(BindFinding::Scalar(operation.input_diagnostic(actual)));
+            return Ok(None);
+        }
+    }
+    Ok(source.map(|expression| Expression::StrCase {
         source: alloc::boxed::Box::new(Assignment {
             column,
             path,

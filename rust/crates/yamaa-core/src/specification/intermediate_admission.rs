@@ -69,6 +69,17 @@ pub(super) fn declaration_findings(
         } else {
             identifiers.insert(name, format!("{path}.id"));
         }
+        if d.field(item, "key").is_some_and(|key| {
+            matches!(&d.nodes()[key], N::Mapping(pairs) if pairs.is_empty())
+                || matches!(&d.nodes()[key], N::Sequence(pairs) if pairs.is_empty())
+        }) {
+            admit_finding()?;
+            let mut finding = LookupFinding::new(&format!("{path}.key"), C::IntermediateEmptyKey);
+            finding.text("intermediate", name);
+            finding.text("dataset", dataset);
+            finding.text("expected", "at least one match pair");
+            findings.push(PreflightFinding::Scalar(finding.diagnostic()));
+        }
         if is_rename_only(d, item) {
             admit_finding()?;
             let mut finding = LookupFinding::new(&path, C::IntermediateRenameOnly);

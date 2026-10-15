@@ -36,6 +36,48 @@ pub(super) struct Run {
 }
 
 impl Run {
+    /// A key window observes a different relation after row templates finish.
+    /// Choices and correlated materializations from template-local windows
+    /// cannot identify a choice in the complete output relation.
+    pub(super) fn begin_columns<E>(
+        &mut self,
+        plan: &DatasetPlan,
+        budget: &mut Budget,
+    ) -> Result<(), Box<ExecutionError<E>>> {
+        if !plan.intermediates().iter().flat_map(|item| &item.keys).any(
+            |key| matches!(&key.value, MatchValue::Expression(expression) if expression.windowed),
+        ) {
+            return Ok(());
+        }
+        budget.work(plan.intermediates().len(), 1)?;
+        let mut affected = Vec::new();
+        affected
+            .try_reserve_exact(plan.intermediates().len())
+            .map_err(|_| Box::new(ExecutionError::Allocation))?;
+        for item in plan.intermediates() {
+            let mut windowed = item.keys.iter().any(
+                |key| matches!(&key.value, MatchValue::Expression(expression) if expression.windowed),
+            );
+            for field in item.current_fields() {
+                budget.work(1, 1)?;
+                if let CurrentRead::Intermediate { index, .. } = field.read {
+                    windowed |= affected.get(index).copied().unwrap_or(true);
+                }
+            }
+            affected.push(windowed);
+        }
+        let entries = self
+            .eligible
+            .len()
+            .checked_add(self.choices.len())
+            .and_then(|count| count.checked_add(self.materialized.len()))
+            .ok_or_else(|| Box::new(ExecutionError::Capacity))?;
+        budget.work(entries, 1)?;
+        self.eligible.retain(|index, _| !affected[*index]);
+        self.choices.retain(|(_, index), _| !affected[*index]);
+        self.materialized.retain(|(index, _), _| !affected[*index]);
+        Ok(())
+    }
     /// Every completed template changes only SELF eligibility and match choices.
     pub(super) fn publish_self<E>(
         &mut self,
@@ -689,7 +731,16 @@ fn read_with_observations<T: TableAccess + ?Sized>(
         let mut count = 0;
         let mut selected = None;
         let keys = match current {
-            Some(current) => match_values::evaluate(item, &current, candidate, plan, row, state)?,
+            Some(current) => match_values::evaluate(
+                item,
+                &current,
+                candidate,
+                plan,
+                row,
+                primary,
+                state.budget.limits(),
+                state,
+            )?,
             None => match_values::ordinary(item, candidate, plan, row, primary, state)?,
         };
         let range_value = item

@@ -135,7 +135,8 @@ impl Intermediate {
     pub fn output_dependencies(&self) -> impl Iterator<Item = usize> + '_ {
         self.keys
             .iter()
-            .filter_map(|key| key.value.read().and_then(MatchRead::output_column))
+            .flat_map(|key| key.value.reads())
+            .filter_map(MatchRead::output_column)
             .chain(
                 self.filter
                     .iter()
@@ -358,9 +359,6 @@ pub(super) fn validate_context_read(
     output: &TableSchema,
     mode: &RowMode,
 ) -> Result<(), PlanError> {
-    if item.keys.iter().filter_map(|key| key.value.read()).any(|read| matches!(read, MatchRead::SecondaryRecord { source, .. } if source + 1 != mode.source_index())) {
-        return Err(PlanError::InvalidIntermediate);
-    }
     if !matches!(
         mode.local_mode(),
         RowMode::Records | RowMode::Keys | RowMode::Groups(_)
@@ -372,7 +370,7 @@ pub(super) fn validate_context_read(
         if item
             .keys
             .iter()
-            .filter_map(|key| key.value.read())
+            .flat_map(|key| key.value.reads())
             .any(|read| matches!(read, MatchRead::Record { column, .. } if !keys.contains(column)))
         {
             return Err(PlanError::NonGroupSource);

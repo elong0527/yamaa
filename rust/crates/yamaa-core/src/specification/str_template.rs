@@ -162,6 +162,24 @@ fn walk(
         if let Some(payload) = d.field(id, "str_template") {
             visit(payload, &format!("{path}.str_template"), rows, multiplicity)?;
         }
+        if let Some(key) = d
+            .field(id, "aggregate")
+            .and_then(|payload| d.field(payload, "key"))
+        {
+            if let N::Mapping(pairs) = &d.nodes()[key] {
+                for &(name, value) in pairs {
+                    expression(
+                        d,
+                        value,
+                        &format!("{path}.aggregate.key.{}", text(d, name)?),
+                        rows,
+                        multiplicity,
+                        depth + 1,
+                        visit,
+                    )?;
+                }
+            }
+        }
         if let Some(bindings) = d
             .field(id, "aggregate")
             .and_then(|payload| d.field(payload, "derive"))
@@ -260,6 +278,21 @@ fn walk(
         .filter(|&id| !matches!(d.nodes()[id], N::Null))
     {
         for (index, &item) in sequence(d, items)?.iter().enumerate() {
+            if let Some(key) = d.field(item, "key") {
+                if let N::Mapping(pairs) = &d.nodes()[key] {
+                    for &(name, value) in pairs {
+                        expression(
+                            d,
+                            value,
+                            &format!("intermediates[{index}].key.{}", text(d, name)?),
+                            rows,
+                            multiplicity,
+                            0,
+                            visit,
+                        )?;
+                    }
+                }
+            }
             if let Some(items) = d
                 .field(item, "derivations")
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))

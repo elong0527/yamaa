@@ -191,6 +191,9 @@ pub(super) fn declaration_findings(
             }
         }
     }
+    match_values::visit_keys(d, &mut |value, path| {
+        visit(d, value, path, output, findings, 0)
+    })?;
     Ok(())
 }
 fn bound_types(

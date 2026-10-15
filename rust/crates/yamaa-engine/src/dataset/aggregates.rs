@@ -231,7 +231,14 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
             // selected. Its predicate visits only matched donor records.
             let values = match current {
                 Some(current) => intermediates::match_values::evaluate(
-                    request, &current, candidate, plan, row, state,
+                    request,
+                    &current,
+                    candidate,
+                    plan,
+                    row,
+                    primary,
+                    state.budget.limits(),
+                    state,
                 )?,
                 None => intermediates::match_values::ordinary(
                     request, candidate, plan, row, primary, state,

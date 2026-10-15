@@ -2843,5 +2843,48 @@ class IntermediateDependencies(unittest.TestCase):
                 self.assertEqual(entry.read_text(encoding="ascii"), case["specification"])
 
 
+class KeyExpressions(unittest.TestCase):
+    def test_public_scalar_and_window_keys_keep_scope_comparison_handlers_and_saved_truth(self):
+        import yamaa
+        def issues(frame):
+            records = frame.to_dicts()
+            for record in records:
+                self.assertIsInstance(record["context"], str)
+                record["context"] = json.loads(record["context"])
+            return records
+        for case in TRUTH["key_expressions"]:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                entry = root / "spec.yaml"
+                entry.write_text(case["specification"], encoding="ascii")
+                if case["check_issues"]:
+                    self.assertEqual(issues(yamaa.check(entry).issues), case["check_issues"])
+                    self.assertEqual(issues(yamaa.domain(entry).issues), case["check_issues"])
+                for name, content in case["inputs"].items():
+                    (root / name).write_text(content, encoding="ascii")
+                for attempt in range(2):
+                    with self.subTest(attempt=attempt):
+                        self.assertEqual(issues(yamaa.check(entry).issues), case["check_issues"])
+                        result = yamaa.domain(entry)
+                        self.assertEqual(issues(result.issues), case["issues"])
+                        self.assertFalse((root / "out.csv").exists())
+                        if case["issues"]:
+                            self.assertIsNone(result.output)
+                            with self.assertRaises(yamaa.DomainError):
+                                result.save()
+                            self.assertFalse((root / "out.csv").exists())
+                        else:
+                            observations = json.loads(result._native.observations())
+                            self.assertEqual(observations["handler_counts"], case["handlers"])
+                            self.assertTrue(result.save())
+                            self.assertEqual((root / "out.csv").read_bytes(), case["csv"].encode("ascii"))
+                            (root / "source.csv").write_bytes(b"changed after build")
+                            self.assertTrue(result.save())
+                            self.assertEqual((root / "out.csv").read_bytes(), case["csv"].encode("ascii"))
+                            (root / "out.csv").unlink()
+                            (root / "source.csv").write_text(case["inputs"]["source.csv"], encoding="ascii")
+                self.assertEqual(entry.read_text(encoding="ascii"), case["specification"])
+
+
 if __name__ == "__main__":
     unittest.main()

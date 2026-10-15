@@ -5,21 +5,42 @@ use crate::{
     key_relation::ComparableType,
     match_value::{self, LiteralKind},
 };
+use alloc::boxed::Box;
 
+#[derive(Clone, Copy)]
+pub(super) struct Context<'a> {
+    pub output: &'a TableSchema,
+    pub driver: &'a str,
+    pub row: Option<&'a str>,
+    pub phase: crate::reference_scope::Phase<'a>,
+    pub project: Option<&'a crate::project_calls::ProjectCalls>,
+    pub named: &'a intermediates::Declarations,
+    pub secondary: &'a [crate::dataset::SecondarySource],
+    pub intermediates: &'a [Option<crate::dataset::Intermediate>],
+}
 #[derive(Clone, Debug)]
 pub(super) enum Declaration {
     Variable(String),
     Source(String),
     Literal(crate::value::Value),
     StrPad(str_pad::Declaration),
+    Expression {
+        branch: cases::Branch,
+        references: Vec<String>,
+        operation: String,
+    },
 }
 impl Declaration {
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn prepare(
         d: &Document,
         value: usize,
         path: &str,
         _sources: &[SourceDeclaration],
         _driver: usize,
+        project: Option<&functions::Prepared>,
+        extraction: &str_extract::Prepared,
+        templates: &str_template::Prepared,
         extra: &mut Vec<UnsupportedFeature>,
     ) -> Result<Self, PrepareError> {
         if let N::Text(name) = &d.nodes()[value] {
@@ -58,6 +79,57 @@ impl Declaration {
                 None,
                 extra,
             )?),
+            "str_case"
+            | "date_impute"
+            | "datetime_impute"
+            | "to_date"
+            | "date_precision"
+            | "datetime_precision"
+            | "round_half_away_from_zero"
+            | "date_diff"
+            | "study_day"
+            | "to_epoch_day"
+            | "mapping"
+            | "cut"
+            | "greatest"
+            | "least"
+            | "str_concat"
+            | "str_contains"
+            | "str_extract"
+            | "str_template"
+            | "compute"
+            | "row_number"
+            | "rank"
+            | "baseline_flag"
+            | "row_value"
+            | "previous_non_missing"
+            | "locf"
+            | "date_shift"
+            | "datetime_diff"
+            | "datetime_shift"
+            | "duration_value"
+            | "duration_text" => {
+                let mut references = Vec::new();
+                derivations::references(d, value, project, &mut references, 0)?;
+                self_relations::template_references(d, value, templates, &mut references, 0)?;
+                let branch = derivations::prepare_value(
+                    d,
+                    value,
+                    path,
+                    project,
+                    &intermediates::Declarations::default(),
+                    false,
+                    0,
+                    extraction,
+                    templates,
+                )?;
+                reject_deferred_owners(&branch, extra);
+                Self::Expression {
+                    branch,
+                    references,
+                    operation: op.into(),
+                }
+            }
             _ => {
                 reject(extra, op, operation_path);
                 // A rejected operation never becomes an executable plan.
@@ -91,7 +163,13 @@ impl Declaration {
         match self {
             Self::Variable(name) | Self::Source(name) => Some(name),
             Self::StrPad(pad) => Some(pad.source()),
-            Self::Literal(_) => None,
+            Self::Literal(_) | Self::Expression { .. } => None,
+        }
+    }
+    pub(super) fn references(&self) -> Box<dyn Iterator<Item = &str> + '_> {
+        match self {
+            Self::Expression { references, .. } => Box::new(references.iter().map(String::as_str)),
+            _ => Box::new(self.reference().into_iter()),
         }
     }
     pub(super) fn display_name(&self, field: &str) -> String {
@@ -107,6 +185,7 @@ impl Declaration {
         let expression = match self {
             Self::Variable(name) | Self::Source(name) => match_value::Expression::Source(name),
             Self::StrPad(_) => match_value::Expression::Operation("str_pad"),
+            Self::Expression { operation, .. } => match_value::Expression::Operation(operation),
             Self::Literal(value) => match_value::Expression::Literal(match value {
                 crate::value::Value::Missing => LiteralKind::Missing,
                 crate::value::Value::Str(_) => LiteralKind::Str,
@@ -124,8 +203,9 @@ impl Declaration {
         intermediate: &str,
         catalog: &Catalog,
         findings: &mut Vec<BindFinding>,
+        context: Context<'_>,
     ) -> Result<Option<MatchValue>, BindError> {
-        self.bind_in_context(path, intermediate, catalog, findings, false)
+        self.bind_in_context(path, intermediate, catalog, findings, false, context)
     }
     pub(super) fn bind_deferred(
         &self,
@@ -133,9 +213,11 @@ impl Declaration {
         intermediate: &str,
         catalog: &Catalog,
         findings: &mut Vec<BindFinding>,
+        context: Context<'_>,
     ) -> Result<Option<MatchValue>, BindError> {
-        self.bind_in_context(path, intermediate, catalog, findings, true)
+        self.bind_in_context(path, intermediate, catalog, findings, true, context)
     }
+    #[allow(clippy::too_many_arguments)]
     fn bind_in_context(
         &self,
         path: &str,
@@ -143,7 +225,122 @@ impl Declaration {
         catalog: &Catalog,
         findings: &mut Vec<BindFinding>,
         defer_unknown: bool,
+        context: Context<'_>,
     ) -> Result<Option<MatchValue>, BindError> {
+        if let Self::Expression {
+            branch, references, ..
+        } = self
+        {
+            if defer_unknown {
+                for name in references {
+                    if catalog.bind(name).map_err(BindError::Catalog)?.is_none() {
+                        return Ok(Some(MatchValue::Contextual(
+                            crate::dataset::ContextualMatch::Expression {
+                                identifier: name.clone(),
+                            },
+                        )));
+                    }
+                }
+            }
+            let before = findings.len();
+            let mut reads = Vec::new();
+            let mut fields = Vec::new();
+            for name in references {
+                let Some(bound) = catalog.bind(name).map_err(BindError::Catalog)? else {
+                    findings.push(BindFinding::Lookup(LookupFinding::reference(
+                        path,
+                        name,
+                        Some(intermediate),
+                        ReferenceCause::OutputKey,
+                        None,
+                    )));
+                    continue;
+                };
+                let (read, kind) = match bound {
+                    reference_binding::Binding::Output {
+                        column,
+                        column_type,
+                    } => (
+                        MatchRead::Output {
+                            column,
+                            identifier: name.clone(),
+                        },
+                        column_type,
+                    ),
+                    reference_binding::Binding::Dataset {
+                        dataset: 0,
+                        field,
+                        column_type,
+                    } => (
+                        MatchRead::Record {
+                            column: field,
+                            identifier: name.clone(),
+                        },
+                        column_type,
+                    ),
+                    reference_binding::Binding::Dataset {
+                        dataset,
+                        field,
+                        column_type,
+                    } => (
+                        MatchRead::SecondaryRecord {
+                            source: dataset - 1,
+                            column: field,
+                            identifier: name.clone(),
+                        },
+                        column_type,
+                    ),
+                };
+                if !reads
+                    .iter()
+                    .any(|prior: &MatchRead| prior.identifier() == name)
+                {
+                    reads.push(read);
+                    fields.push(Column {
+                        name: name.clone(),
+                        kind,
+                    });
+                }
+            }
+            if findings.len() != before {
+                return Ok(None);
+            }
+            let mut edges = Vec::new();
+            let expression = derivations::bind_row(
+                &branch.operation,
+                &branch.path,
+                context.output.columns().len(),
+                catalog,
+                context.driver,
+                context.row,
+                context.phase,
+                None,
+                &mut edges,
+                findings,
+                false,
+                context.output,
+                context.project,
+                context.named,
+                context.secondary,
+                context.intermediates,
+            )?;
+            return expression
+                .map(|expression| {
+                    crate::dataset::MatchExpression::new(
+                        Assignment {
+                            column: context.output.columns().len(),
+                            expression,
+                            path: branch.path.clone(),
+                        },
+                        reads,
+                        TableSchema::new(fields).map_err(|_| BindError::Internal)?,
+                        self.result_type(catalog)?,
+                    )
+                    .map(|expression| MatchValue::Expression(Box::new(expression)))
+                    .map_err(BindError::InvalidPlan)
+                })
+                .transpose();
+        }
         if let Self::StrPad(operation) = self {
             str_pad::declaration_findings(operation, findings);
         }
@@ -183,7 +380,7 @@ impl Declaration {
                             str_pad::Declaration::WidthError { .. } => None,
                         },
                     },
-                    Self::Literal(_) => return Err(BindError::Internal),
+                    Self::Literal(_) | Self::Expression { .. } => return Err(BindError::Internal),
                 };
                 return Ok(Some(MatchValue::Contextual(declaration)));
             }
@@ -216,8 +413,38 @@ impl Declaration {
                     str_pad::Declaration::WidthError { .. } => None,
                 },
             },
-            Self::Literal(_) => return Err(BindError::Internal),
+            Self::Literal(_) | Self::Expression { .. } => return Err(BindError::Internal),
         }))
+    }
+}
+
+/// Conditional and callback relation contexts need a demand-aware key owner.
+/// Keep them outside this bounded scalar/window expansion, including nested
+/// concatenation operands, rather than pre-reading their unselected branches.
+fn reject_deferred_owners(branch: &cases::Branch, extra: &mut Vec<UnsupportedFeature>) {
+    let operation = match branch.operation.as_ref() {
+        Operation::Case(_) => Some("case"),
+        Operation::ProjectFunction(_) => Some("function"),
+        Operation::Aggregate(_) => Some("aggregate"),
+        Operation::Odm(_) => Some("odm"),
+        Operation::Flag(_) => Some("flag"),
+        Operation::FirstAvailable(_) => Some("first_available"),
+        Operation::Imputation(operation) if operation.bound_source().is_some() => {
+            reject(extra, "not_before", format!("{}.not_before", branch.path));
+            None
+        }
+        Operation::Scalar(declaration) => {
+            if let scalar::Declaration::Concat { sources, .. } = declaration.as_ref() {
+                for source in sources {
+                    reject_deferred_owners(source, extra);
+                }
+            }
+            None
+        }
+        _ => None,
+    };
+    if let Some(operation) = operation {
+        reject(extra, operation, branch.path.clone());
     }
 }
 
@@ -251,6 +478,138 @@ pub(super) fn declaration_admission(
                         Some(fields.len()),
                         None,
                     ));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Share authored key occurrence paths with the existing declaration validators.
+/// Each operation owner still decides which input types and metadata to inspect.
+pub(super) fn visit_keys(
+    d: &Document,
+    visit: &mut impl FnMut(usize, &str) -> Result<(), PrepareError>,
+) -> Result<(), PrepareError> {
+    fn key(
+        d: &Document,
+        owner: usize,
+        path: &str,
+        visit: &mut impl FnMut(usize, &str) -> Result<(), PrepareError>,
+    ) -> Result<(), PrepareError> {
+        if let Some(id) = d.field(owner, "key") {
+            if let N::Mapping(pairs) = &d.nodes()[id] {
+                for &(name, value) in pairs {
+                    if !matches!(d.nodes()[value], N::Text(_)) {
+                        visit(value, &format!("{path}.key.{}", text(d, name)?))?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+    fn expression(
+        d: &Document,
+        value: usize,
+        path: &str,
+        depth: usize,
+        visit: &mut impl FnMut(usize, &str) -> Result<(), PrepareError>,
+    ) -> Result<(), PrepareError> {
+        if depth > 64 {
+            return Err(PrepareError::limit(
+                "expression_depth",
+                64,
+                Some(depth),
+                Some(path),
+            ));
+        }
+        if path.len() > 65_536 {
+            return Err(PrepareError::limit(
+                "path_bytes",
+                65_536,
+                Some(path.len()),
+                Some(path),
+            ));
+        }
+        if let Some(payload) = d.field(value, "aggregate") {
+            key(d, payload, &format!("{path}.aggregate"), visit)?;
+        }
+        if let Some(case) = d.field(value, "case") {
+            for (index, &branch) in sequence(d, case)?.iter().enumerate() {
+                for name in ["then", "otherwise"] {
+                    if let Some(value) = d.field(branch, name) {
+                        expression(
+                            d,
+                            value,
+                            &format!("{path}.case[{index}].{name}"),
+                            depth + 1,
+                            visit,
+                        )?;
+                    }
+                }
+            }
+        }
+        if let Some(payload) = d.field(value, "str_concat") {
+            for (index, &value) in sequence(d, field(d, payload, "sources")?)?
+                .iter()
+                .enumerate()
+            {
+                expression(
+                    d,
+                    value,
+                    &format!("{path}.str_concat.sources[{index}]"),
+                    depth + 1,
+                    visit,
+                )?;
+            }
+        }
+        Ok(())
+    }
+    for &column in sequence(d, field(d, d.root(), "columns")?)? {
+        if let Some(value) = d
+            .field(column, "derivation")
+            .and_then(|id| d.field(id, "value"))
+        {
+            expression(
+                d,
+                value,
+                &format!("columns.{}.derivation", text(d, field(d, column, "name")?)?),
+                0,
+                visit,
+            )?;
+        }
+    }
+    if let Some(rows) = d.field(d.root(), "rows") {
+        for (index, &row) in sequence(d, rows)?.iter().enumerate() {
+            if let Some(derivations) = d.field(row, "derivations") {
+                for &(name, handled) in mapping(d, derivations)? {
+                    if let Some(value) = d.field(handled, "value") {
+                        expression(
+                            d,
+                            value,
+                            &format!("rows[{index}].derivations.{}", text(d, name)?),
+                            0,
+                            visit,
+                        )?;
+                    }
+                }
+            }
+        }
+    }
+    if let Some(items) = d
+        .field(d.root(), "intermediates")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+    {
+        for (index, &item) in sequence(d, items)?.iter().enumerate() {
+            key(d, item, &format!("intermediates[{index}]"), visit)?;
+            if let Some(derivations) = d
+                .field(item, "derivations")
+                .filter(|&id| !matches!(d.nodes()[id], N::Null))
+            {
+                for &(name, handled) in mapping(d, derivations)? {
+                    let path = format!("intermediates[{index}].derivations.{}", text(d, name)?);
+                    let (value, path) = intermediate_derivations::value(d, handled, &path)?;
+                    expression(d, value, &path, 0, visit)?;
                 }
             }
         }

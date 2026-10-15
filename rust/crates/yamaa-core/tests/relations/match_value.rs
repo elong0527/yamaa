@@ -60,3 +60,28 @@ fn limits_precede_unknown_results_and_do_not_poison_catalog() {
         Ok(None)
     );
 }
+
+#[test]
+fn operations_outside_the_complete_req1259_table_defer_comparison() {
+    let catalog = Catalog::compile(&[], &[], Limits::default()).unwrap();
+    for name in [
+        "date_shift",
+        "datetime_shift",
+        "datetime_diff",
+        "duration_text",
+        "duration_value",
+        "row_value",
+        "locf",
+        "previous_non_missing",
+        "mapping",
+        "case",
+        "greatest",
+        "least",
+    ] {
+        assert_eq!(
+            result_type(&catalog, Expression::Operation(name)),
+            Ok(None),
+            "{name}"
+        );
+    }
+}

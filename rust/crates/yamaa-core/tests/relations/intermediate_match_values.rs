@@ -54,7 +54,13 @@ fn doc(key: Tree<'_>) -> SpecificationDocument {
         (
             "input",
             Map(vec![
-                ("SRC", Map(vec![("path", Text("src.csv"))])),
+                (
+                    "SRC",
+                    Map(vec![
+                        ("path", Text("src.csv")),
+                        ("types", Map(vec![("N", Text("int"))])),
+                    ]),
+                ),
                 ("TAB", Map(vec![("path", Text("tab.csv"))])),
             ]),
         ),
@@ -265,13 +271,10 @@ fn unsupported_operations_keep_the_authored_gate_path() {
     let (key, operation, path) = (
         Tree::Map(vec![(
             "K",
-            Tree::Map(vec![(
-                "compute",
-                Tree::Map(vec![("expr", Tree::Text("1 / 0"))]),
-            )]),
+            Tree::Map(vec![("vendor_extension", Tree::Text("unrecognized"))]),
         )]),
-        "compute",
-        "intermediates[0].key.K.compute",
+        "vendor_extension",
+        "intermediates[0].key.K.vendor_extension",
     );
     let Err(PrepareError::Unsupported(features)) = PreparedSpecification::prepare(&doc(key)) else {
         panic!("explicit unsupported gate")
@@ -308,4 +311,57 @@ fn borrowed_equality_preserves_complete_integer_precision_and_missingness() {
         );
     }
     assert!(compare_present_refs(ValueRef::Missing, ValueRef::Int(0)).is_err());
+}
+
+#[test]
+fn scalar_keys_retain_all_current_operands_without_synthetic_dependencies_or_destinations() {
+    use Tree::*;
+    let prepared = PreparedSpecification::prepare(&doc(Map(vec![(
+        "KINT",
+        Map(vec![(
+            "greatest",
+            Map(vec![(
+                "sources",
+                List(vec![Text("N"), Text("SRC.N"), Text("N")]),
+            )]),
+        )]),
+    )])))
+    .unwrap();
+    let (src, tab) = schemas();
+    let plan = prepared.bind_sources(&[&src, &tab]).unwrap();
+    assert_eq!(
+        plan.output()
+            .columns()
+            .iter()
+            .map(|column| column.name.as_str())
+            .collect::<Vec<_>>(),
+        ["ID", "N", "V"]
+    );
+    let item = &plan.intermediates()[0];
+    assert_eq!(item.output_dependencies().collect::<Vec<_>>(), [1]);
+    let MatchValue::Expression(expression) = &item.keys[0].value else {
+        panic!("bound shared scalar")
+    };
+    assert_eq!(
+        expression.reads,
+        [
+            MatchRead::Output {
+                column: 1,
+                identifier: "N".into()
+            },
+            MatchRead::Record {
+                column: 1,
+                identifier: "SRC.N".into()
+            },
+        ]
+    );
+    assert_eq!(
+        expression.assignment.path,
+        "intermediates[0].key.KINT.greatest"
+    );
+    assert!(
+        expression.result_type.is_none(),
+        "greatest retains runtime comparability"
+    );
+    assert!(!expression.windowed);
 }

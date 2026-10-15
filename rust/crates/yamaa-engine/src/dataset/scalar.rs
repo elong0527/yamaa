@@ -7,6 +7,19 @@ use yamaa_core::{
 pub(super) fn register(assignment: &Assignment, counter: &mut HandlerCounter) {
     match &assignment.expression {
         Expression::Aggregate(aggregate) => {
+            if let yamaa_core::dataset::AggregateRelation::Matched { keys, .. } =
+                aggregate.relation()
+            {
+                for key in keys {
+                    if let MatchValue::Expression(expression) = &key.value {
+                        register(&expression.assignment, counter);
+                        imputation::register(&expression.assignment.expression, counter);
+                        str_case::register(&expression.assignment.expression, counter);
+                        str_extract::register(&expression.assignment.expression, counter);
+                        str_template::register(&expression.assignment.expression, counter);
+                    }
+                }
+            }
             for binding in aggregate.derivations() {
                 if let Some(handler) = &binding.handler {
                     counter.register(&handler.spec_path, HandlerKind::Unconvertible);
