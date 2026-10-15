@@ -5,7 +5,6 @@ use crate::{
     predicate_compiler,
     value::Value,
 };
-use std::collections::BTreeSet;
 
 type UniqueDeclarations = Vec<(String, Vec<(String, String)>, Option<String>)>;
 

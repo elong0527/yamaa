@@ -1534,7 +1534,7 @@ fn public_root_keeps_complete_large_truth_after_resources_drop() {
 #[test]
 fn classified_graph_reports_keep_actual_host_causes_and_authored_origins_without_replay() {
     use yamaa_adapters::{
-        producer_report::{attempt_report_classified, ProjectionError},
+        producer_report::attempt_report_classified,
         project_function_diagnostics::HostDetails,
         project_lock::{Finding, Reason},
         project_report::Classified,

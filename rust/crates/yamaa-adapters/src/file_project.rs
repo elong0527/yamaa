@@ -146,8 +146,6 @@ impl FileProject {
     pub fn capture_reads(&self) -> usize {
         self.resources.capture_reads()
     }
-    /// Explicit source-byte capture stays in the owner's original native roots.
-
     pub(crate) fn publication_target(
         &self,
     ) -> Result<crate::file_publication::AnchoredTarget, ResourceError> {
