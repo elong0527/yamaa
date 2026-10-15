@@ -1,5 +1,8 @@
 # Normal Limit Check
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adlb-reported-precision.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** report each analysis value (`AVAL`) against the analysis
 normal range lower limit (`ANRLO`), adding `R2ANRLO`.
 
@@ -20,3 +23,5 @@ away from zero (one thirty-second is reported as `0.0313`).
 Nothing is rounded before the report: the ratio keeps every digit
 it was calculated with, and a number that was never collected is
 reported as absent rather than as four zeroes.
+
+**Standard:** ADaM | **Domain:** ADLB

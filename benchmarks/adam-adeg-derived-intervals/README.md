@@ -1,5 +1,8 @@
 # Derived ECG Intervals
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adeg-derived-intervals.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** add one new record per subject (`USUBJID`) and analysis visit
 (`AVISIT`) in study `CATH-01` for each of three ECG measures: the
 Bazett-corrected QT interval (`QTCBR`), the Fridericia-corrected QT
@@ -32,3 +35,5 @@ results are present at that visit; an `RRR` record is added only when
 the heart rate is present and not zero. Collected QT and RR records in
 a unit other than `ms` or `msec` fail the run, and each visit is
 expected to carry at most one record per parameter code.
+
+**Standard:** ADaM | **Domain:** ADEG

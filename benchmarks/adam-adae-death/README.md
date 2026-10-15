@@ -1,5 +1,8 @@
 # Death Carryforward
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adae-death.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build one Analysis Data Model (ADaM) adverse events row per
 collected adverse event (AE), carrying the coded term (`AEDECOD`) and
 start date (`ASTDT`) through and adding `DTHFL`, `DTHCAUS`, and `DTHDT`
@@ -23,3 +26,5 @@ date, plus demographics with death date.
 start date supplies the cause and date, and a tie on start date goes to
 the highest `AESEQ`. A death recorded only in demographics gives a date
 but no cause, because there is no event term to name.
+
+**Standard:** ADaM | **Domain:** ADAE

@@ -1,5 +1,8 @@
 # Closest Visit Selection
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adlb-closest-visit.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** place each laboratory record in its analysis visit
 (`AVISIT`, `AWTARGET`, `ADIST`) and flag the record closest to
 the visit's target day (`ANL01FL`).
@@ -29,3 +32,5 @@ inside the window carries all three, while a record outside every
 window or with a missing study day carries none and is never
 flagged. All records stay in the output, and the flag identifies
 the ones selected for analysis.
+
+**Standard:** ADaM | **Domain:** ADLB

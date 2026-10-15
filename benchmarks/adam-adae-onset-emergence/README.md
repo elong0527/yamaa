@@ -1,5 +1,8 @@
 # Treatment Emergence Timing
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adae-onset-emergence.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** one row per adverse event (AE), marking treatment
 emergence (`TRTEMFL`) and the subject's earliest treatment-emergent
 event (`AOCCFL`) from onset, first exposure, and the study's
@@ -45,3 +48,5 @@ the coercion happens inside the engine's datetime type, and the
 language's collected-precision model reports only day/second
 tiers, so a minute-precision source is not distinguishable from
 a second-precision one in spec language.
+
+**Standard:** ADaM | **Domain:** ADAE

@@ -1,5 +1,8 @@
 # Ordered Float Sum
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adlb-ordered-sum.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** add one total laboratory record per subject and visit whose
 analysis value (`AVAL`) is the collected component results added in the
 order the source records were stored, flagged with the record-type flag
@@ -26,3 +29,5 @@ standardized result. The component values are deliberately simple
 that order: one subject's records stored as `0.1`, `0.2`, `0.3` total
 `0.6000000000000001`, while another subject's identical values stored as
 `0.3`, `0.2`, `0.1` total `0.6`.
+
+**Standard:** ADaM | **Domain:** ADLB

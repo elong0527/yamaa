@@ -1,5 +1,8 @@
 # First Event Flags
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adae-occurrence-flags.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** mark the first treatment-emergent adverse event (AE) for each
 subject with three flags: one for the subject overall, one within each
 body system, and one within each dictionary-derived term.
@@ -27,3 +30,5 @@ treatment-emergent events has all three flags missing on every record.
 The levels nest: a subject's first event is also the first in its body
 system and in its dictionary-derived term. Sponsors use these flags to
 trace summary-table counts back to their source records.
+
+**Standard:** ADaM | **Domain:** ADAE

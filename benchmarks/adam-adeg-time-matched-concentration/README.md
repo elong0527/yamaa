@@ -1,5 +1,8 @@
 # Time-Matched Plasma Concentrations for ECG Time Points
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adeg-time-matched-concentration.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** give each electrocardiogram (ECG) time-point record of a QT study
 the plasma concentration of the parent drug measured at the same nominal
 time, for the concentration-QT analysis: flag the records with a matching
@@ -34,3 +37,5 @@ lower limit of quantification.
 
 **Note:** a PK sample without an ECG record at its time point adds no
 record, and whether a record is placebo follows its own period's treatment.
+
+**Standard:** ADaM | **Domain:** ADEG

@@ -1,5 +1,8 @@
 # Name Each Event's Prior Serious Event
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adae-prior-serious-event.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** for each adverse event, name the subject's most recent
 earlier serious event (`PRIOR_SAEFL`, `PRIOR_SAEDECOD`,
 `PRIOR_SAESEQ`), the subject's first serious event
@@ -30,3 +33,5 @@ event's own prior and first serious event fields stay empty, because
 they cannot look back at records that are still being written. The
 preceding event is named only after every event is in place, so it
 can name an event of either kind.
+
+**Standard:** ADaM | **Domain:** ADAE

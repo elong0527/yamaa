@@ -1,5 +1,8 @@
 # Accumulation Ratios Between Day 1 and Steady State
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adpp-accumulation-ratio.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** keep every pharmacokinetic (PK) parameter record of a
 multiple-dose study and add, per subject, the accumulation ratios of the
 area under the curve over the dosing interval (`ARAUC`) and of the maximum
@@ -30,3 +33,5 @@ an interim profile during dosing or the last profile of a subject who
 stopped dosing early, enters neither value. A ratio record exists only when
 both values are present; a parameter that was not calculated keeps its own
 record with no value.
+
+**Standard:** ADaM | **Domain:** ADPP

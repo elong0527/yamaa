@@ -1,5 +1,8 @@
 # Carry a Previous Visit's Change
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adlbc-window-chain.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build the albumin change parameter `_ALB`, carrying each
 visit's previous result (`PREV_AVAL`), the change from it (`CHG`),
 and the previous visit's change (`PREV2`).
@@ -29,3 +32,5 @@ gets no row, and the change and its lag compare against the latest
 earlier visit with a result. `CHG` here is the change from the
 previous visit, not the ADaMIG "change from baseline" definition; a
 zero change is a real value (`0`), distinct from blank.
+
+**Standard:** ADaM | **Domain:** ADLBC

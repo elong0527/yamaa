@@ -1,5 +1,8 @@
 # Carry Each Event's Severity
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adae-severity.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** one Analysis Dataset for Adverse Events (ADAE) row per
 collected adverse event (AE), carrying `AEDECOD` and `AESEV`.
 
@@ -18,3 +21,5 @@ supplemental records carrying the severity recorded for each event.
 together with the event sequence number, so two events for one subject
 keep their own severities apart. A supplemental record for an event
 that was never collected is ignored: it creates no row.
+
+**Standard:** ADaM | **Domain:** ADAE

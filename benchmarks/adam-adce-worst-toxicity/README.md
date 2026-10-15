@@ -1,5 +1,8 @@
 # Worst Toxicity Flags
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adce-worst-toxicity.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** rank severity and flag the worst-graded clinical event
 (CE) for each subject, adding `ASEV`, `ASEVN`, `ATOXGRN` and
 `AOCCFL`.
@@ -25,3 +28,5 @@
 subject with no graded event has no flagged event. Grading stays
 separate from flagging so the grade means the same thing on every
 event while the flag answers a question about the subject.
+
+**Standard:** ADaM | **Domain:** ADCE

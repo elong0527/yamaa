@@ -1,5 +1,8 @@
 # Calculate each subject's mean result
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adlb-mean.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** add the subject's mean result (`AVALMEAN`) for each
 laboratory parameter to every collected record.
 
@@ -19,3 +22,5 @@ result.
 
 **Note:** the mean is taken separately for each test code, so
 each of a subject's records carries the mean for its own test.
+
+**Standard:** ADaM | **Domain:** ADLB

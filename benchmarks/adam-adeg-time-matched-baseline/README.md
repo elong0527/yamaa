@@ -1,5 +1,8 @@
 # Time-Matched ECG Baselines by Period
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adeg-time-matched-baseline.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** give each electrocardiogram (ECG) time-point record of a QT study
 its time-matched baseline: flag the baseline records (`ABLFL`), carry the
 baseline value (`BASE`), compute the change from baseline (`CHG`), and name
@@ -30,3 +33,5 @@ holding the average of the replicate ECGs taken at that time (`AVAL`, unit
 **Note:** every period has its own baseline day, so a subject has one
 baseline record per period and time point, and each of them has a baseline
 type of its own.
+
+**Standard:** ADaM | **Domain:** ADEG

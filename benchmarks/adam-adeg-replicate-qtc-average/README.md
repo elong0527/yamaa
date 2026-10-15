@@ -1,5 +1,8 @@
 # Replicate ECG Averages with QTcF Corrected per ECG
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adeg-replicate-qtc-average.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** one average record (`DTYPE` `AVERAGE`) per subject (`USUBJID`),
 planned time point (`ATPTN`) and parameter (`PARAMCD`) over the replicate
 electrocardiograms (ECGs) taken at that time point: the QT interval, the
@@ -30,3 +33,5 @@ that was not done has `EGSTAT` `NOT DONE` and no result.
 (`EGREPNUM`) within the time point, even when two ECGs carry the same
 collection date and time. A parameter with no value at a time point has
 no record there.
+
+**Standard:** ADaM | **Domain:** ADEG

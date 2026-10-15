@@ -1,5 +1,8 @@
 # Records Each Planned Treatment Comparison Uses
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adpp-comparison-sets.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** flag, for each planned test-versus-reference comparison of a
 three-period crossover, the pharmacokinetic (PK) parameter records the
 comparison uses (`ANL01FL`, `ANL02FL`), and carry the planned sequence
@@ -30,3 +33,5 @@ that is missing or zero also takes its partner record out of that
 comparison. A treatment that is the test of one comparison and the
 reference of the other can carry both flags. Every record stays in the
 dataset.
+
+**Standard:** ADaM | **Domain:** ADPP

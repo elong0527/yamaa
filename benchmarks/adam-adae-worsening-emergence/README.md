@@ -1,5 +1,8 @@
 # Split Adverse Events at Severity Changes
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adae-worsening-emergence.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** split each adverse event (AE) into continuous analysis periods
 and mark treatment-emergent periods (`TRTEMFL`).
 
@@ -32,3 +35,5 @@ visit assessments from which a change time must be inferred. Simultaneous
 severity and grade changes create one period. Missing comparison values
 show no worsening for that dimension. Separate events sharing a term
 remain separate. Periods are continuous with end equal to next start.
+
+**Standard:** ADaM | **Domain:** ADAE
