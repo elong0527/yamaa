@@ -1,6 +1,7 @@
 """Independent benchmark metadata and call-selection refusal controls."""
 
 import copy
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -22,6 +23,29 @@ class BenchmarkMetadata(unittest.TestCase):
     def write(self, metadata=None):
         (self.case / "benchmark.yaml").write_text(
             yaml.safe_dump(self.metadata if metadata is None else metadata)
+        )
+
+    def test_runtime_staging_supplies_the_actual_function_environment_lock(self):
+        from tools.paths import ROOT
+        from tools.staging.stage_project_inputs import stage_case
+
+        source = ROOT / "benchmarks/adam-adsl-bmi"
+        staged = self.case / "runtime"
+        stage_case(
+            source,
+            staged,
+            ignore=shutil.ignore_patterns("expected", "README.md", "benchmark.yaml"),
+        )
+        self.assertEqual(
+            (staged / "python/uv.lock").read_bytes(),
+            (ROOT / "python/uv.lock").read_bytes(),
+        )
+        self.assertFalse((source / "python/uv.lock").exists())
+        for name in ("expected", "README.md", "benchmark.yaml"):
+            self.assertFalse((staged / name).exists())
+        self.assertEqual(
+            (staged / "input/adsl.csv").read_bytes(),
+            (source / "input/adsl.csv").read_bytes(),
         )
 
     def test_singleton_and_host_environment_defaults_are_explicit_in_plan(self):

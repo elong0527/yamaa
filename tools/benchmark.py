@@ -2,6 +2,8 @@
 
 import argparse
 import re
+import shutil
+import tempfile
 from pathlib import Path, PurePosixPath
 
 import yaml
@@ -208,16 +210,26 @@ def main():
     case = parser.parse_args().case.resolve()
     from yamaa import domain
 
-    for call in entries(case)["python"]:
-        environment = call["environment"]
-        result = domain(
-            case / call["specification"],
-            environment=None if environment is None else case / environment,
+    from tools.staging.stage_project_inputs import stage_case
+
+    calls = entries(case)["python"]
+    with tempfile.TemporaryDirectory(prefix="yamaa-benchmark-") as temporary:
+        staged = Path(temporary) / case.name
+        stage_case(
+            case,
+            staged,
+            ignore=shutil.ignore_patterns("expected", "README.md", "benchmark.yaml"),
         )
-        output = result.output
-        if output is None:
-            parser.exit(1, f"{call['specification']}: {result.issues}\n")
-        print(output)
+        for call in calls:
+            environment = call["environment"]
+            result = domain(
+                staged / call["specification"],
+                environment=None if environment is None else staged / environment,
+            )
+            output = result.output
+            if output is None:
+                parser.exit(1, f"{call['specification']}: {result.issues}\n")
+            print(output)
 
 
 if __name__ == "__main__":
