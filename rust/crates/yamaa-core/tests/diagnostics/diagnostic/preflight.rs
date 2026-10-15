@@ -1001,6 +1001,36 @@ pub(super) fn self_reached() -> BTreeSet<ConditionCode> {
 /// Named lookup declaration causes are reached without opening any declared input.
 pub(super) fn intermediate_reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
+    for empty in [Map(Vec::new()), List(Vec::new())] {
+        let mut fields = base(
+            "TEST",
+            inputs(),
+            vec![column("ID", Some(source()))],
+            vec![Text("ID")],
+        );
+        fields.push(("base", Text("SRC")));
+        fields.push((
+            "intermediates",
+            List(vec![Map(vec![
+                ("id", Text("P")),
+                ("dataset", Text("SECOND")),
+                ("key", empty),
+            ])]),
+        ));
+        reached.extend(check(
+            fields,
+            vec![(
+                "invalid_field_type",
+                Some("REQ-0115"),
+                vec!["intermediates[0].key"],
+                vec![
+                    ("intermediate", text("P")),
+                    ("dataset", text("SECOND")),
+                    ("expected", text("at least one match pair")),
+                ],
+            )],
+        ));
+    }
     for variant in 0..3 {
         let mut fields = base(
             "TEST",
