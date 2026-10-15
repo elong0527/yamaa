@@ -5,18 +5,14 @@ mod domain_entry;
 mod file_domain;
 mod file_producer;
 mod file_project;
-mod file_publication;
-mod file_resources;
-mod file_specification;
 mod function_callback;
+mod handle;
 mod issue_frame;
 mod project_activation;
 mod project_result;
 mod public_table;
+mod report_fields;
 mod scalars;
-mod specification_inheritance;
-mod specification_result;
-mod specification_service;
 
 #[extendr]
 fn core_version() -> &'static str {
@@ -29,13 +25,4 @@ extendr_module! {
     use domain_entry;
     use define_entry;
     use scalars;
-    use specification_service;
-    use specification_result;
-    use project_result;
-    use specification_inheritance;
-    use file_publication;
-    use file_resources;
-    use file_specification;
-    use file_project;
-    use file_producer;
 }

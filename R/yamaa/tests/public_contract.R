@@ -177,11 +177,29 @@ run_contract <- function() {
   source <- readBin(entry, "raw", n = file.info(entry)$size)
   writeBin(charToRaw(sub("args: {}", "args: {x: SOURCE.VALUE}", rawToChar(source), fixed = TRUE)), entry)
   environment <- file.path(project, "r", "environment.yaml")
-  interrupted <- structure(list(message = host_truth[["interrupt_message"]], call = NULL),
-    class = c("public_contract_interrupt", "interrupt", "condition"))
-  seen <- with_binding(".yamaa_verify_locked_versions", function(...) stop(interrupted),
-    tryCatch(yamaa_domain(entry, environment), interrupt = identity))
-  stopifnot(identical(seen, interrupted), !file.exists(file.path(project, "test.csv")))
+  for (stage in c("lock","binding","conformance","derivation")) {
+    interrupted <- structure(list(message = host_truth[["interrupt_message"]], call = NULL, token = new.env()),
+      class = c("public_contract_interrupt", "interrupt", "condition"))
+    invoked <- 0L
+    verify <- function(...) {
+      if (stage=="lock") return(list(3L,interrupted))
+      capabilities$verify(...)
+    }
+    resolve <- function(call,parameters) {
+      if (stage=="binding") return(list(3L,interrupted))
+      resolved <- capabilities$resolve(call,parameters)
+      if (resolved[[1L]]!=0L) return(resolved)
+      invoke <- resolved[[2L]]
+      list(0L,function(encoded) {
+        invoked <<- invoked+1L
+        if (stage=="conformance" || (stage=="derivation" && invoked>2L)) return(list(3L,interrupted))
+        invoke(encoded)
+      })
+    }
+    seen <- with_capabilities(verify,resolve,tryCatch(yamaa_domain(entry,environment),interrupt=identity))
+    expected <- if (stage=="conformance") 1L else if (stage=="derivation") 3L else 0L
+    stopifnot(identical(seen,interrupted),identical(invoked,expected),!file.exists(file.path(project,"test.csv")))
+  }
   calls <- list()
   resolve_reentrant <- function(call, parameters) {
     resolved <- capabilities$resolve(call, parameters)
@@ -232,3 +250,51 @@ run_contract <- function() {
 }
 run_contract()
 cat("public signatures, argument errors, owned results and logs, exact values, interrupts and reentrancy passed\n")
+
+qualify_public_integer_callback <- function() {
+  directory <- tempfile("public-integer-callback-"); dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE))
+  lock <- charToRaw(paste0('{"R":{"Version":"',getRversion(),'"},"Packages":{"yamaa":{"Version":"',utils::packageVersion("yamaa"),'"}}}'))
+  writeBin(lock,file.path(directory,"renv.lock"))
+  writeBin(charToRaw("schema_version: '1.0'\nlanguage: r\nlock: renv.lock\nfunctions:\n  id:\n    function: base::identity\n    description: Integer identity.\n    params: [{name: x, type: int}]\n    returns: int\n    tests:\n      - {id: normal, covers: [normal], args: {x: 7}, result: 7}\n      - {id: boundary, covers: [boundary], args: {x: -9223372036854775808}, result: -9223372036854775808}\n      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n"),file.path(directory,"environment.yaml"))
+  writeBin(charToRaw("schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: V, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\noutput: {path: result.csv, columns: [ID, V]}\n"),file.path(directory,"domain.yaml"))
+  writeBin(charToRaw("ID\n1\n"),file.path(directory,"input.csv"))
+  entry <- file.path(directory,"domain.yaml")
+  environment <- file.path(directory,"environment.yaml")
+  input <- file.path(directory,"input.csv")
+  unlink(input)
+  stopifnot(nrow(yamaa_check(entry,environment)$issues)==0L)
+  writeBin(charToRaw("ID\n1\n"),input)
+  calls <- character()
+  resolve <- function(call,parameters) {
+    resolved <- capabilities$resolve(call,parameters)
+    if (resolved[[1L]]!=0L) return(resolved)
+    invoke <- resolved[[2L]]
+    list(0L,function(encoded) {
+      calls <<- c(calls,as.character(get(".scalar_unpack",namespace)(encoded[[1L]])))
+      invoke(encoded)
+    })
+  }
+  first <- with_capabilities(capabilities$verify,resolve,yamaa_domain(entry,environment))
+  stopifnot(nrow(first$issues)==0L,identical(as.character(first$output$V),"1"),
+    identical(calls,c("7","-9223372036854775808","1")))
+  observed <- rawToChar(get(".domain_observations",namespace)(first))
+  stopifnot(grepl('"actual":{"int":"-9223372036854775808"}',observed,fixed=TRUE),
+    grepl('"actual":{"missing":null}',observed,fixed=TRUE),grepl('"invoked":false',observed,fixed=TRUE))
+  second <- with_capabilities(capabilities$verify,resolve,yamaa_domain(entry,environment))
+  stopifnot(nrow(second$issues)==0L,identical(as.character(second$output$V),"1"),
+    identical(calls,rep(c("7","-9223372036854775808","1"),2L)))
+  writeBin(charToRaw('{"R":{"Version":"4.6.1"},"Packages":{"yamaa":{"Version":"999.0"}}}'),file.path(directory,"renv.lock"))
+  unlink(input)
+  rejected <- with_capabilities(capabilities$verify,function(...) stop("bad lock reached binding"),yamaa_domain(entry,environment))
+  stopifnot(is.null(rejected$output),identical(rejected$issues$condition,"runtime_artifact_mismatch"),
+    !file.exists(input),identical(calls,rep(c("7","-9223372036854775808","1"),2L)))
+  unlink(entry); unlink(environment); invisible(gc())
+  for (result in list(first,second)) for (attempt in seq_len(2L)) {
+    stopifnot(identical(result$save(),TRUE),identical(as.character(result$output$V),"1"))
+    target <- file.path(directory,"result.csv")
+    stopifnot(identical(readBin(target,"raw",n=file.info(target)$size),charToRaw("ID,V\n1,1\n")))
+  }
+  cat("public integer callbacks preserve exact int64, missing short-circuiting, repeated activation and held Saves\n")
+}
+qualify_public_integer_callback()

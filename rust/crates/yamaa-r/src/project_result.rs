@@ -1,15 +1,9 @@
-//! Registered complete project results retain every original condition and source.
-use crate::specification_service::boundary;
+//! Classify retained ordinary-project failures and format the public result.
 use extendr_api::prelude::*;
-
 pub(crate) mod platform {
     use super::*;
     use crate::{file_project::platform::HeldAttempt, project_activation::Error as HostError};
-    use std::{
-        cell::{Cell, RefCell},
-        collections::BTreeMap,
-        rc::{Rc, Weak},
-    };
+    use std::rc::Rc;
     use yamaa_adapters::{
         callback::CallbackError,
         project_function_diagnostics::HostDetails,
@@ -17,35 +11,9 @@ pub(crate) mod platform {
         specification_report::BuildResult,
     };
     pub(crate) struct HeldResult {
-        pub(crate) attempt: Rc<HeldAttempt>,
         pub(crate) formatted: Option<BuildResult>,
         pub(crate) refusal: &'static str,
         pub(crate) refusal_details: Option<yamaa_adapters::resource_diagnostics::Refusal>,
-    }
-    thread_local! {
-        static RESULTS: RefCell<BTreeMap<usize, Weak<HeldResult>>> = const { RefCell::new(BTreeMap::new()) };
-    }
-    struct Handle {
-        state: Rc<HeldResult>,
-        identity: Cell<usize>,
-    }
-    impl Drop for Handle {
-        fn drop(&mut self) {
-            RESULTS.with(|handles| {
-                handles.borrow_mut().remove(&self.identity.get());
-            });
-        }
-    }
-    fn resolve(handle: &Robj) -> std::result::Result<Rc<HeldResult>, String> {
-        let id = crate::specification_service::address(handle)?;
-        RESULTS
-            .with(|handles| handles.borrow().get(&id).and_then(Weak::upgrade))
-            .ok_or_else(|| "unknown project result handle".into())
-    }
-    fn report(state: &HeldResult) -> std::result::Result<&BuildResult, String> {
-        state.formatted.as_ref().ok_or_else(|| {
-            "complete project report is unavailable; original attempt remains retained".into()
-        })
     }
     fn details(error: &CallbackError) -> Option<HostDetails<'_>> {
         match error {
@@ -91,27 +59,6 @@ pub(crate) mod platform {
                 truncated: class_cut || message_cut,
             }
         })
-    }
-    pub(super) fn prepare(
-        handle: Robj,
-        metadata: List,
-        formatter: Function,
-    ) -> std::result::Result<Robj, String> {
-        let fields = crate::specification_result::fields(&metadata)?;
-        let attempt = crate::file_project::platform::attempt(&handle)?;
-        let state = format(attempt, &fields, &formatter);
-        let handle = ExternalPtr::new(Handle {
-            state: Rc::new(state),
-            identity: Cell::new(0),
-        });
-        let id = crate::specification_service::address(handle.as_robj())?;
-        handle.identity.set(id);
-        RESULTS.with(|handles| {
-            handles
-                .borrow_mut()
-                .insert(id, Rc::downgrade(&handle.state));
-        });
-        Ok(handle.into_robj())
     }
     pub(crate) fn format(
         attempt: Rc<HeldAttempt>,
@@ -186,7 +133,7 @@ pub(crate) mod platform {
             match project_report::build_result(
                 &attempt.run,
                 &attempt.inner,
-                crate::specification_result::identity(fields),
+                crate::report_fields::identity(fields),
                 &facts,
             ) {
                 Ok(result) => Some(result),
@@ -217,97 +164,9 @@ pub(crate) mod platform {
             None
         };
         HeldResult {
-            attempt,
             formatted,
             refusal,
             refusal_details,
         }
     }
-    pub(super) fn status(handle: Robj) -> std::result::Result<Robj, String> {
-        let state = resolve(&handle)?;
-        Ok(r!(if state.formatted.is_some() {
-            "complete"
-        } else {
-            state.refusal
-        }))
-    }
-    pub(super) fn output(handle: Robj) -> std::result::Result<Robj, String> {
-        let state = resolve(&handle)?;
-        Ok(report(&state)?
-            .output()
-            .map_or_else(|| r!(NULL), |bytes| Raw::from_bytes(bytes).into_robj()))
-    }
-    pub(super) fn observations(handle: Robj) -> std::result::Result<Robj, String> {
-        let state = resolve(&handle)?;
-        Ok(r!(report(&state)?.observations().to_string()))
-    }
-    pub(super) fn issues(handle: Robj) -> std::result::Result<Robj, String> {
-        let state = resolve(&handle)?;
-        crate::issue_frame::frame(report(&state)?.issues())
-    }
-    pub(super) fn retained(handle: Robj) -> std::result::Result<Robj, String> {
-        crate::file_project::platform::observe(&resolve(&handle)?.attempt)
-    }
-    pub(super) fn interrupt(handle: Robj) -> std::result::Result<Robj, String> {
-        let state = resolve(&handle)?;
-        let mut interrupted = None;
-        yamaa_adapters::project_attempt::visit_host_failures(&state.attempt.inner, |_, error| {
-            if let HostError::Interrupt(condition) = error {
-                if interrupted.is_none() {
-                    interrupted = Some(condition.clone());
-                }
-            }
-        });
-        Ok(interrupted.unwrap_or_else(|| r!(NULL)))
-    }
-    pub(super) fn save(handle: Robj, publish: Function) -> std::result::Result<Robj, String> {
-        let state = resolve(&handle)?;
-        report(&state)?
-            .save(&mut crate::specification_result::Publisher(publish))
-            .map(|report| r!(report.to_string()))
-            .map_err(|error| match error {
-                yamaa_core::specification_output::SaveError::FailedBuild => {
-                    "cannot save a failed build".into()
-                }
-                yamaa_core::specification_output::SaveError::Publish(error) => error,
-            })
-    }
-    pub(super) fn save_file(handle: Robj, publisher: Robj) -> std::result::Result<Robj, String> {
-        let state = resolve(&handle)?;
-        crate::file_publication::platform::save_result(report(&state)?, publisher)
-    }
-}
-
-// Non-Unix platforms retain the existing explicit R support boundary.
-macro_rules! operation {
-    ($name:ident, $operation:ident, $( $argument:ident : $kind:ty ),+) => {
-        #[extendr]
-        fn $name($( $argument: $kind ),+) -> List {
-            boundary(|| {
-                 { platform::$operation($( $argument ),+) }
-
-            })
-        }
-    };
-}
-operation!(file_project_result, prepare, handle: Robj, metadata: List, formatter: Function);
-operation!(project_result_status, status, handle: Robj);
-operation!(project_result_output, output, handle: Robj);
-operation!(project_result_observations, observations, handle: Robj);
-operation!(project_result_issues, issues, handle: Robj);
-operation!(project_result_retained, retained, handle: Robj);
-operation!(project_result_interrupt, interrupt, handle: Robj);
-operation!(project_result_save, save, handle: Robj, publish: Function);
-operation!(project_result_save_file, save_file, handle: Robj, publisher: Robj);
-extendr_module! {
-    mod project_result;
-    fn file_project_result;
-    fn project_result_status;
-    fn project_result_output;
-    fn project_result_observations;
-    fn project_result_issues;
-    fn project_result_retained;
-    fn project_result_interrupt;
-    fn project_result_save;
-    fn project_result_save_file;
 }

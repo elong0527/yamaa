@@ -1,182 +1,28 @@
-//! Registered private graph carriers; original R payloads stay on the calling
-//! thread. Pointer identities are registry keys, never cast native pointees.
-use crate::specification_service::boundary;
+//! Actual producer results retain R callback payloads on the calling thread.
 use extendr_api::prelude::*;
-
 pub(crate) mod platform {
     use super::*;
     use crate::project_activation::Error as HostError;
-    use std::{
-        cell::{Cell, RefCell},
-        collections::BTreeMap,
-        rc::{Rc, Weak},
-    };
+    use std::{cell::RefCell, rc::Rc};
     use yamaa_adapters::{
         callback::CallbackError,
         file_producer_build::{FileBuild, Limits},
-        file_workflow,
         producer_report::{self, ProjectionError},
         project_function_diagnostics::HostDetails,
         project_report::Classified,
     };
     type NativeAttempt = yamaa_adapters::file_producer_build::OwnedAttempt<HostError>;
-    type Prepared = Result<FileBuild, file_workflow::Error>;
     struct Attempt {
         inner: RefCell<NativeAttempt>,
         fields: Vec<String>,
     }
-    enum State {
-        Specification(RefCell<Prepared>),
-        Attempt(Rc<Attempt>),
-        Report {
-            attempt: Rc<Attempt>,
-            observations: Option<String>,
-            refusal: &'static str,
-            refusal_details: Option<yamaa_adapters::resource_diagnostics::Refusal>,
-            domain: Option<Box<yamaa_adapters::producer_result::RootResult>>,
-            output_error: Option<yamaa_adapters::ipc_table::TableError>,
-        },
-    }
-    thread_local! {
-        static HANDLES: RefCell<BTreeMap<usize, Weak<State>>> = const { RefCell::new(BTreeMap::new()) };
-        static RESERVED: Cell<usize> = const { Cell::new(0) };
-    }
-    struct Slot;
-    impl Slot {
-        fn reserve() -> Result<Self, String> {
-            let live = HANDLES.with(|handles| handles.borrow().len());
-            RESERVED.with(|reserved| {
-                if live.saturating_add(reserved.get()) >= 4096 {
-                    return Err("producer handle limit".into());
-                }
-                reserved.set(reserved.get() + 1);
-                Ok(Self)
-            })
-        }
-    }
-    impl Drop for Slot {
-        fn drop(&mut self) {
-            RESERVED.with(|reserved| reserved.set(reserved.get() - 1));
-        }
-    }
-    struct Handle {
-        state: Rc<State>,
-        identity: Cell<usize>,
-    }
-    impl Drop for Handle {
-        fn drop(&mut self) {
-            HANDLES.with(|handles| {
-                handles.borrow_mut().remove(&self.identity.get());
-            });
-        }
-    }
-    fn register(state: State, _slot: Slot) -> Result<Robj, String> {
-        let handle = ExternalPtr::new(Handle {
-            state: Rc::new(state),
-            identity: Cell::new(0),
-        });
-        let identity = crate::specification_service::address(handle.as_robj())?;
-        handle.identity.set(identity);
-        HANDLES.with(|handles| {
-            handles
-                .borrow_mut()
-                .insert(identity, Rc::downgrade(&handle.state));
-        });
-        Ok(handle.into_robj())
-    }
-    fn resolve(handle: &Robj) -> Result<Rc<State>, String> {
-        let identity = crate::specification_service::address(handle)?;
-        HANDLES
-            .with(|handles| handles.borrow().get(&identity).and_then(Weak::upgrade))
-            .ok_or_else(|| "unknown producer handle".into())
-    }
-    fn attempt(state: &State) -> Result<&Rc<Attempt>, String> {
-        match state {
-            State::Attempt(attempt) | State::Report { attempt, .. } => Ok(attempt),
-            _ => Err("producer attempt required".into()),
-        }
-    }
-    fn path(raw: &Raw) -> Result<&str, String> {
-        if raw.len() > yamaa_adapters::host_limits::IDENTITY_BYTES {
-            return Err("producer path byte limit".into());
-        }
-        std::str::from_utf8(raw.as_slice()).map_err(|_| "invalid producer path UTF-8".into())
-    }
-    pub(super) fn prepare(specification: Raw, environment: Raw) -> Result<Robj, String> {
-        let slot = Slot::reserve()?;
-        let prepared = file_workflow::prepare(
-            path(&specification)?,
-            path(&environment)?,
-            yamaa_core::project_function::Language::R,
-        )
-        .map(|graph| graph.into_build());
-        register(State::Specification(RefCell::new(prepared)), slot)
-    }
-    pub(super) fn status(handle: Robj) -> Result<Robj, String> {
-        let state = resolve(&handle)?;
-        Ok(r!(match state.as_ref() {
-            State::Specification(state) => match &*state
-                .try_borrow()
-                .map_err(|_| "producer handle already borrowed")?
-            {
-                Ok(_) => "ready",
-                Err(file_workflow::Error::Configuration(_)) => "configuration_failure",
-                Err(file_workflow::Error::Schema(_)) => "schema_failure",
-                Err(file_workflow::Error::Admission(_)) => "admission_failure",
-                Err(file_workflow::Error::Environment(_)) => "environment_failure",
-                Err(file_workflow::Error::Graph(_)) => "graph_failure",
-            },
-            State::Attempt(_) => "attempt",
-            State::Report { refusal: "", .. } => "complete",
-            State::Report { refusal, .. } => refusal,
-        }))
-    }
-    pub(super) fn build(
-        handle: Robj,
-        metadata: List,
-        verify: Function,
-        resolve_host: Function,
-        report_bytes: i32,
-    ) -> Result<Robj, String> {
-        let slot = Slot::reserve()?;
-        let fields = crate::specification_result::fields(&metadata)?;
-        let maximum = usize::try_from(report_bytes).map_err(|_| "invalid report byte limit")?;
-        let owner = resolve(&handle)?;
-        let State::Specification(state) = owner.as_ref() else {
-            return Err("producer specification required".into());
-        };
-        let mut state = state
-            .try_borrow_mut()
-            .map_err(|_| "producer handle already borrowed")?;
-        let prepared = state
-            .as_mut()
-            .map_err(|_| "producer preparation failed; original rejection remains retained")?;
-        register(
-            State::Attempt(build_selected_attempt(
-                prepared,
-                fields,
-                verify,
-                resolve_host,
-                maximum,
-            )),
-            slot,
-        )
-    }
-    fn build_selected_attempt(
-        prepared: &mut FileBuild,
-        fields: Vec<String>,
-        verify: Function,
-        resolve_host: Function,
-        maximum: usize,
-    ) -> Rc<Attempt> {
-        build_selected_attempt_with_observer(
-            prepared,
-            fields,
-            verify,
-            resolve_host,
-            maximum,
-            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
-        )
+    pub(crate) struct PublicResult {
+        attempt: Rc<Attempt>,
+        observations: Option<String>,
+        refusal: &'static str,
+        refusal_details: Option<yamaa_adapters::resource_diagnostics::Refusal>,
+        domain: Option<Box<yamaa_adapters::producer_result::RootResult>>,
+        output_error: Option<yamaa_adapters::ipc_table::TableError>,
     }
     fn build_selected_attempt_with_observer(
         prepared: &mut FileBuild,
@@ -199,7 +45,7 @@ pub(crate) mod platform {
         limits.engine.report_bytes = maximum;
         let inner = prepared.build_owned_reported_with_observer(
             &mut port,
-            crate::specification_result::identity(&fields),
+            crate::report_fields::identity(&fields),
             limits,
             scope,
         );
@@ -209,12 +55,6 @@ pub(crate) mod platform {
         })
     }
 
-    /// The public domain registry roots this whole state on the calling thread.
-    /// Its reservation continues for the full result lifetime, before growth.
-    pub(crate) struct PublicResult {
-        state: State,
-        _slot: Slot,
-    }
     pub(crate) fn build_selected_with_observer(
         prepared: &mut FileBuild,
         fields: Vec<String>,
@@ -223,7 +63,6 @@ pub(crate) mod platform {
         formatter: Function,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Result<PublicResult, String> {
-        let slot = Slot::reserve()?;
         let attempt = build_selected_attempt_with_observer(
             prepared,
             fields,
@@ -233,17 +72,12 @@ pub(crate) mod platform {
             scope,
         );
         scope.phase(yamaa_core::application_observer::Phase::Output);
-        let converted = (|| {
-            Ok(PublicResult {
-                state: format_attempt(
-                    attempt,
-                    &formatter,
-                    yamaa_core::capacity::REPORT_ENCODED_BYTES,
-                    true,
-                )?,
-                _slot: slot,
-            })
-        })();
+        let converted = format_attempt(
+            attempt,
+            &formatter,
+            yamaa_core::capacity::REPORT_ENCODED_BYTES,
+            true,
+        );
         scope.exit(
             yamaa_core::application_observer::Phase::Output,
             if converted.is_ok() {
@@ -256,94 +90,64 @@ pub(crate) mod platform {
     }
     impl PublicResult {
         pub(crate) fn accepted(&self) -> bool {
-            match &self.state {
-                State::Report {
-                    domain: Some(result),
-                    ..
-                } => result.output().is_some(),
-                _ => false,
-            }
+            self.domain
+                .as_ref()
+                .is_some_and(|result| result.output().is_some())
         }
-
         pub(crate) fn save(
             &mut self,
         ) -> Result<bool, yamaa_adapters::file_application::FailedBuild> {
-            let State::Report {
-                domain: Some(result),
-                attempt,
-                ..
-            } = &mut self.state
-            else {
-                return Err(yamaa_adapters::file_application::FailedBuild);
-            };
-            let _owner = attempt
+            let result = self
+                .domain
+                .as_mut()
+                .ok_or(yamaa_adapters::file_application::FailedBuild)?;
+            let _owner = self
+                .attempt
                 .inner
                 .try_borrow_mut()
                 .map_err(|_| yamaa_adapters::file_application::FailedBuild)?;
             result.save()
         }
         pub(crate) fn output_table(&self) -> Option<&yamaa_adapters::public_table::PublicTable> {
-            match &self.state {
-                State::Report {
-                    domain: Some(result),
-                    ..
-                } => result.output_table(),
-                _ => None,
-            }
+            self.domain
+                .as_ref()
+                .and_then(|result| result.output_table())
         }
         pub(crate) fn log_table(
             &self,
             warning: bool,
         ) -> Option<&yamaa_adapters::public_table::PublicTable> {
-            match &self.state {
-                State::Report {
-                    domain: Some(result),
-                    ..
-                } => result.log_table(warning),
-                _ => None,
-            }
+            self.domain
+                .as_ref()
+                .and_then(|result| result.log_table(warning))
         }
         pub(crate) fn issues(&self) -> Vec<yamaa_adapters::issue_rows::Issue> {
-            match &self.state {
-                State::Report {
-                    domain: Some(result),
-                    ..
-                } => result.issues().to_vec(),
-                State::Report {
-                    refusal,
-                    refusal_details,
-                    ..
-                } => refusal_details.as_ref().map_or_else(
-                    || yamaa_adapters::file_application::rejected("build", refusal),
-                    |details| details.issues("build", refusal),
-                ),
-                _ => yamaa_adapters::file_application::rejected("build", "producer_report"),
-            }
+            self.domain.as_ref().map_or_else(
+                || {
+                    self.refusal_details.as_ref().map_or_else(
+                        || yamaa_adapters::file_application::rejected("build", self.refusal),
+                        |details| details.issues("build", self.refusal),
+                    )
+                },
+                |result| result.issues().to_vec(),
+            )
         }
         pub(crate) fn observations(&self) -> Option<String> {
-            match &self.state {
-                State::Report {
-                    domain: Some(result),
-                    ..
-                } => Some(result.observations_json()),
-                State::Report { observations, .. } => observations.clone(),
-                _ => None,
-            }
+            self.domain
+                .as_ref()
+                .map(|result| result.observations_json())
+                .or_else(|| self.observations.clone())
         }
         pub(crate) fn projection_failure(&self) -> Option<String> {
-            match &self.state {
-                State::Report { output_error, .. } => output_error.map(|error| error.to_string()),
-                _ => None,
-            }
+            self.output_error.map(|error| error.to_string())
         }
         pub(crate) fn interrupt(&self) -> Result<Robj, String> {
-            held_interrupt(attempt(&self.state)?)
+            held_interrupt(&self.attempt)
         }
         pub(crate) fn evidence(&self) -> Result<Robj, String> {
-            held_evidence(attempt(&self.state)?)
+            held_evidence(&self.attempt)
         }
     }
-
     fn details(error: &CallbackError) -> Option<HostDetails<'_>> {
         match error {
             CallbackError::Exception {
@@ -423,19 +227,12 @@ pub(crate) mod platform {
             }
         })
     }
-    pub(super) fn report(handle: Robj, formatter: Function, maximum: i32) -> Result<Robj, String> {
-        let slot = Slot::reserve()?;
-        let maximum = usize::try_from(maximum).map_err(|_| "invalid report byte limit")?;
-        let owner = resolve(&handle)?;
-        let attempt = Rc::clone(attempt(&owner)?);
-        register(format_attempt(attempt, &formatter, maximum, false)?, slot)
-    }
     fn format_attempt(
         attempt: Rc<Attempt>,
         formatter: &Function,
         maximum: usize,
         public: bool,
-    ) -> Result<State, String> {
+    ) -> Result<PublicResult, String> {
         // Exclusive borrow spans host classification. Reentrant reads or reports
         // refuse promptly; the original rooted condition cannot be replaced.
         let observations = attempt
@@ -562,7 +359,7 @@ pub(crate) mod platform {
             let projected = if public {
                 match yamaa_adapters::producer_result::prepare_owned_classified(
                     &observations,
-                    crate::specification_result::identity(&attempt.fields),
+                    crate::report_fields::identity(&attempt.fields),
                     maximum,
                     &facts,
                 ) {
@@ -599,7 +396,7 @@ pub(crate) mod platform {
             } else {
                 producer_report::attempt_report_classified(
                     &observations,
-                    crate::specification_result::identity(&attempt.fields),
+                    crate::report_fields::identity(&attempt.fields),
                     maximum,
                     &facts,
                 )
@@ -625,7 +422,7 @@ pub(crate) mod platform {
             }
         }
         drop(observations);
-        Ok(State::Report {
+        Ok(PublicResult {
             attempt,
             observations: formatted,
             refusal,
@@ -633,20 +430,6 @@ pub(crate) mod platform {
             domain,
             output_error,
         })
-    }
-    pub(super) fn observations(handle: Robj) -> Result<Robj, String> {
-        let state = resolve(&handle)?;
-        match state.as_ref() {
-            State::Report {
-                observations: Some(value),
-                ..
-            } => Ok(r!(value.as_str())),
-            _ => Err("report refused; original attempt remains retained".into()),
-        }
-    }
-    pub(super) fn retained(handle: Robj) -> Result<Robj, String> {
-        let owner = resolve(&handle)?;
-        held_evidence(attempt(&owner)?)
     }
     fn held_evidence(attempt: &Attempt) -> Result<Robj, String> {
         let held = attempt
@@ -721,10 +504,6 @@ pub(crate) mod platform {
         )
         .into_robj())
     }
-    pub(super) fn interrupt(handle: Robj) -> Result<Robj, String> {
-        let owner = resolve(&handle)?;
-        held_interrupt(attempt(&owner)?)
-    }
     fn held_interrupt(attempt: &Attempt) -> Result<Robj, String> {
         let held = attempt
             .inner
@@ -740,128 +519,4 @@ pub(crate) mod platform {
         });
         Ok(interrupt.unwrap_or_else(|| r!(NULL)))
     }
-    pub(super) fn rejection_issues(handle: Robj, maximum: i32) -> Result<Robj, String> {
-        let maximum = usize::try_from(maximum).map_err(|_| "invalid report byte limit")?;
-        let owner = resolve(&handle)?;
-        let State::Specification(state) = owner.as_ref() else {
-            return Err("producer specification required".into());
-        };
-        let state = state
-            .try_borrow()
-            .map_err(|_| "producer handle already borrowed")?;
-        let error = state
-            .as_ref()
-            .err()
-            .ok_or("producer preparation has no rejection")?;
-        let issues = yamaa_adapters::producer_check::rejected_with_limit(
-            error,
-            yamaa_core::project_function::Language::R,
-            maximum,
-        )
-        .map_err(|_| "rejection projection refused; original rejection remains retained")?;
-        crate::issue_frame::frame(&issues)
-    }
-    pub(super) fn rejected_sources(handle: Robj) -> Result<Robj, String> {
-        let owner = resolve(&handle)?;
-        let State::Specification(state) = owner.as_ref() else {
-            return Err("producer specification required".into());
-        };
-        let state = state
-            .try_borrow()
-            .map_err(|_| "producer handle already borrowed")?;
-        let sources = match &*state {
-            Err(file_workflow::Error::Admission(error)) => {
-                error.retained_sources(yamaa_adapters::host_limits::RECORDS, 16777216)
-            }
-            Err(file_workflow::Error::Environment(error)) => {
-                error.retained_sources(yamaa_adapters::host_limits::RECORDS, 16777216)
-            }
-            Err(file_workflow::Error::Graph(error)) => {
-                error.retained_sources(yamaa_adapters::host_limits::RECORDS, 16777216)
-            }
-            _ => Ok(Vec::new()),
-        }
-        .map_err(|_| "source evidence limit; original rejection remains retained")?;
-        let mut bytes = yamaa_adapters::host_limits::SOURCE_BYTES;
-        for (_, source) in &sources {
-            bytes = bytes
-                .checked_sub(source.len())
-                .ok_or("source evidence limit")?;
-        }
-        Ok(List::from_values(sources.iter().map(|(name, bytes)| {
-            list!(
-                name = Raw::from_bytes(name.as_bytes()),
-                bytes = Raw::from_bytes(bytes)
-            )
-        }))
-        .into_robj())
-    }
-    pub(super) fn artifact(handle: Robj, node: i32) -> Result<Robj, String> {
-        let node = usize::try_from(node).map_err(|_| "invalid node index")?;
-        let owner = resolve(&handle)?;
-        let held = attempt(&owner)?
-            .inner
-            .try_borrow()
-            .map_err(|_| "producer attempt already borrowed")?;
-        Ok(held
-            .graph
-            .nodes
-            .iter()
-            .find(|entered| entered.node == node)
-            .and_then(|entered| entered.output.as_ref().ok())
-            .and_then(Option::as_ref)
-            .and_then(|output| output.artifact())
-            .map_or_else(
-                || r!(NULL),
-                |artifact| Raw::from_bytes(artifact.bytes()).into_robj(),
-            ))
-    }
 }
-
-#[extendr]
-fn prepare_producer_file(specification: Raw, environment: Raw) -> List {
-    boundary(|| platform::prepare(specification, environment))
-}
-#[extendr]
-fn producer_status(handle: Robj) -> List {
-    boundary(|| platform::status(handle))
-}
-#[extendr]
-fn producer_build(
-    handle: Robj,
-    metadata: List,
-    verify: Function,
-    resolve: Function,
-    report_bytes: i32,
-) -> List {
-    boundary(|| platform::build(handle, metadata, verify, resolve, report_bytes))
-}
-#[extendr]
-fn producer_report(handle: Robj, formatter: Function, maximum: i32) -> List {
-    boundary(|| platform::report(handle, formatter, maximum))
-}
-#[extendr]
-fn producer_observations(handle: Robj) -> List {
-    boundary(|| platform::observations(handle))
-}
-#[extendr]
-fn producer_retained(handle: Robj) -> List {
-    boundary(|| platform::retained(handle))
-}
-#[extendr]
-fn producer_interrupt(handle: Robj) -> List {
-    boundary(|| platform::interrupt(handle))
-}
-#[extendr]
-fn producer_artifact(handle: Robj, node: i32) -> List {
-    boundary(|| platform::artifact(handle, node))
-}
-#[extendr]
-fn producer_rejected_sources(handle: Robj) -> List {
-    boundary(|| platform::rejected_sources(handle))
-}
-#[extendr]
-fn producer_rejection_issues(handle: Robj, maximum: i32) -> List {
-    boundary(|| platform::rejection_issues(handle, maximum))
-}
-extendr_module! { mod file_producer; fn prepare_producer_file; fn producer_status; fn producer_build; fn producer_report; fn producer_observations; fn producer_retained; fn producer_interrupt; fn producer_artifact; fn producer_rejected_sources; fn producer_rejection_issues; }

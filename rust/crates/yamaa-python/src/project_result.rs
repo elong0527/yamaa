@@ -1,10 +1,10 @@
 //! Retain the original whole attempt beside its complete public-result candidate.
 //! Formatting refusal cannot discard original exceptions, interrupts or sources.
-use crate::{file_project::Attempt, project_activation::Error as HostError, specification_result};
+use crate::{file_project::Attempt, project_activation::Error as HostError, report_fields};
 use pyo3::{
-    exceptions::{PyException, PyRuntimeError, PyValueError},
+    exceptions::{PyException, PyRuntimeError},
     prelude::*,
-    types::{PyBytes, PyDict, PyTuple},
+    types::PyTuple,
 };
 use std::sync::Arc;
 use yamaa_adapters::{
@@ -13,10 +13,9 @@ use yamaa_adapters::{
     project_report::{self, Classified},
 };
 
-#[pyclass(frozen, module = "yamaa._native", name = "_ProjectResult")]
 pub struct Result {
     carrier: Attempt,
-    formatted: Option<specification_result::BuildResult>,
+    formatted: Option<yamaa_adapters::specification_report::BuildResult>,
     refusal: &'static str,
     refusal_details: Option<yamaa_adapters::resource_diagnostics::Refusal>,
 }
@@ -43,7 +42,7 @@ pub(super) fn prepare(
     attempt: &Attempt,
     metadata: &Bound<'_, PyTuple>,
 ) -> PyResult<Result> {
-    let fields = specification_result::fields(metadata)?;
+    let fields = report_fields::fields(metadata)?;
     let state = attempt.inner.try_lock().map_err(|_| {
         PyRuntimeError::new_err("native project attempt is already borrowed or poisoned")
     })?;
@@ -124,10 +123,10 @@ pub(super) fn prepare(
         match project_report::build_result(
             &attempt.run,
             &state,
-            specification_result::identity(&fields),
+            report_fields::identity(&fields),
             &facts,
         ) {
-            Ok(inner) => Some(specification_result::BuildResult { inner }),
+            Ok(inner) => Some(inner),
             Err(error) => {
                 if let project_report::Error::Report(
                     yamaa_adapters::specification_report::Error::ResourceLimit(details),
@@ -177,7 +176,7 @@ impl Result {
     ) {
         let result = match self.formatted {
             Some(formatted) => {
-                yamaa_adapters::file_application::Domain::from_project(formatted.inner, project)
+                yamaa_adapters::file_application::Domain::from_project(formatted, project)
             }
             None => Err(self.refusal_details.map_or_else(
                 || yamaa_adapters::file_application::rejected("build", self.refusal),
@@ -186,16 +185,6 @@ impl Result {
         };
         (self.carrier, result)
     }
-    fn report(&self) -> PyResult<&specification_result::BuildResult> {
-        self.formatted.as_ref().ok_or_else(|| {
-            PyValueError::new_err(
-                "complete project report is unavailable; original attempt remains retained",
-            )
-        })
-    }
-}
-#[pymethods]
-impl Result {
     /// Preserve the original control-flow payload even after a refused formatter.
     pub(super) fn propagate_interrupt(&self, py: Python<'_>) -> PyResult<()> {
         let state = self.carrier.inner.try_lock().map_err(|_| {
@@ -213,49 +202,5 @@ impl Result {
             Some(error) => Err(error),
             None => Ok(()),
         }
-    }
-    fn report_status(&self) -> &'static str {
-        if self.formatted.is_some() {
-            "complete"
-        } else {
-            self.refusal
-        }
-    }
-    fn issues(&self) -> PyResult<Vec<specification_result::IssueRow>> {
-        Ok(self.report()?.issues())
-    }
-    fn output<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyBytes>>> {
-        Ok(self.report()?.output(py))
-    }
-    fn observations(&self) -> PyResult<String> {
-        Ok(self.report()?.observations())
-    }
-    fn save(&self, publish: &Bound<'_, PyAny>) -> PyResult<String> {
-        self.report()?.save(publish)
-    }
-    fn save_file(&self, declared: &str, target: &str) -> PyResult<String> {
-        self.report()?.save_file(declared, target)
-    }
-    fn activation(&self) -> PyResult<String> {
-        self.carrier.activation()
-    }
-    fn host_failures(&self, py: Python<'_>) -> PyResult<Vec<(&'static str, Py<PyAny>)>> {
-        self.carrier.host_failures(py)
-    }
-    fn failure_facts<'py>(
-        &self,
-        py: Python<'py>,
-    ) -> PyResult<Vec<(&'static str, Bound<'py, PyDict>)>> {
-        self.carrier.failure_facts(py)
-    }
-    fn prepared_sources<'py>(&self, py: Python<'py>) -> Vec<(String, Bound<'py, PyBytes>)> {
-        self.carrier.prepared_sources(py)
-    }
-    fn study_snapshot<'py>(
-        &self,
-        py: Python<'py>,
-        index: usize,
-    ) -> PyResult<Option<Bound<'py, PyBytes>>> {
-        self.carrier.study_snapshot(py, index)
     }
 }

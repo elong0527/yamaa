@@ -114,21 +114,19 @@ impl Domain {
         let _ = py;
         Ok(None)
     }
-    fn issues(&self) -> PyResult<Vec<crate::specification_result::IssueRow>> {
+    fn issues(&self) -> PyResult<Vec<crate::report_fields::IssueRow>> {
         if let Some(inner) = &self.inner {
             return inner
                 .try_lock()
-                .map(|inner| crate::specification_result::issue_rows(&inner.issues()))
+                .map(|inner| crate::report_fields::issue_rows(&inner.issues()))
                 .map_err(|_| {
                     pyo3::exceptions::PyRuntimeError::new_err("domain result handle poisoned")
                 });
         }
         if let Some(producer) = &self.producer {
-            return Ok(crate::specification_result::issue_rows(
-                &producer.domain_issues()?,
-            ));
+            return Ok(crate::report_fields::issue_rows(&producer.domain_issues()?));
         }
-        Ok(crate::specification_result::issue_rows(&self.failures))
+        Ok(crate::report_fields::issue_rows(&self.failures))
     }
     fn log<'py>(&self, py: Python<'py>, warning: bool) -> PyResult<Option<Bound<'py, PyBytes>>> {
         if let Some(inner) = &self.inner {
@@ -256,7 +254,7 @@ pub fn _check_file(
     py: Python<'_>,
     specification: &str,
     environment: Option<&str>,
-) -> Vec<crate::specification_result::IssueRow> {
+) -> Vec<crate::report_fields::IssueRow> {
     {
         let issues = yamaa_adapters::file_application::check(
             yamaa_core::domain_entry::Request {
@@ -272,6 +270,6 @@ pub fn _check_file(
                 base_directory: ".",
             },
         );
-        crate::specification_result::issue_rows(&issues)
+        crate::report_fields::issue_rows(&issues)
     }
 }
