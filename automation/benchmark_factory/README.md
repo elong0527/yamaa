@@ -93,7 +93,7 @@ scaffolding script.
    the target benchmark(s) and the intended end state.
 2. Hand the work-item issue and `proposer.md` to a research agent. It
    writes a new `benchmarks/<name>/` or edits existing ones,
-   following `../benchmarks/agents.md`.
+   following `../benchmarks/AGENTS.md`.
 3. `./factory.sh validate <name>` runs the mechanical admission
    (Stage 2). Fix or regenerate until clean.
 4. Build the Harbor task and pilot it (Stage 3):
@@ -111,7 +111,7 @@ scaffolding script.
 
 - It never rewrites a golden file from the engine's output. A golden
   is an independent contract: reproduce it by hand or in a short
-  script and compare, per `../benchmarks/agents.md`. `factory.sh` has
+  script and compare, per `../benchmarks/AGENTS.md`. `factory.sh` has
   no regenerate-expected command on purpose.
 - It never writes the grader. `evaluations/harbor/grade.py` is reused
   unchanged; the agent's job is the task content, not the rubric.

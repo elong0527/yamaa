@@ -100,7 +100,7 @@ if [ "$1" = "validate" ]; then
   grep -q "Dashboard" "$DIR/README.md" 2>/dev/null \
     && say ok "dashboard badge present" || say bad "README missing dashboard badge"
 
-  # 3. README data-contract rules (ported from benchmarks/agents.md)
+  # 3. README data-contract rules (ported from benchmarks/AGENTS.md)
   OUT="$(cd "$BENCH" && python3 - "$name" <<'PY'
 import re, sys
 name = sys.argv[1]

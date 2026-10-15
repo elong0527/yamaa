@@ -1,90 +1,101 @@
-# Conventions
+# yamaa agent guide
 
-## Find the current commands and contracts
+This file is the single entry point for agents. It maps the repository,
+states the hard rules, and gives the command that proves each kind of
+change. Area guides (linked below) add detail; none of them overrides
+this file. Release docs are not needed for normal changes: read
+`docs/release.md` only for a release, a supported-platform change, or a
+migration decision.
 
-Run `make help` at the repository root for supported checks and their prerequisites.
-`make check-fast` provides repository feedback; installed-host checks and complete
-native release qualification are separate routes. Local targets and CI share the
-owned scripts under `.github/scripts/commands/` and the canonical `rust/tools/`.
-Current architecture/development and release gates live in `docs/development.md`
-and `docs/release.md`; language contracts remain in `rules/` and `yaml/`.
+Run `make help` at the repository root for the supported checks and
+their prerequisites. Local targets and CI share the owned scripts under
+`.github/scripts/commands/`.
 
-## The project name is written `yamaa`, never `YAMAA`
+## Repo map
 
-Lower case, always, including at the start of a sentence, in headings, in page
-titles, in nav labels, and in doc comments. The hex logo spells it that way and
-the site is built to match. Do not "fix" it to title case or upper case.
+- `.github/` -- CI workflows and the owned check, docs, and validation scripts they run.
+- `automation/` -- the benchmark factory and other maintainer automation, with its own guides.
+- `benchmarks/` -- one directory per benchmark: spec, inputs, and authored expected output; see `benchmarks/AGENTS.md`.
+- `docs/` -- the site pages other than the two canonical sources, plus development and release guides.
+- `evaluations/` -- the Harbor agent evaluation: prompts, solutions, grading, and leaderboards.
+- `python/` -- the Python host package: a thin facade over the shared Rust engine.
+- `R/` -- the R host package under `R/yamaa/`, likewise a facade over the shared engine.
+- `rules/` -- the normative language contracts, indexed by `rules/README.md`.
+- `rust/` -- the shared Rust engine workspace, its tools, and installed-host qualification.
+- `yaml/` -- the specification schemas, closed grammars, and conformance fixtures; see `yaml/README.md`.
 
-One place keeps capitals on purpose, because the string there is not the
-project name being written as prose:
+## Hard rules
 
-- **`YAMAA-01` in `benchmarks/**/input/` and `benchmarks/**/expected/`** is a
-  CDISC `STUDYID` data value, and uppercase study identifiers are the
-  convention in clinical data. It also lives inside committed `.parquet`
-  fixtures, so changing it means regenerating binary test data.
+- **Expected data is truth.** Files under `benchmarks/**/expected/` are
+  independently authored and define what an implementation must
+  reproduce. Never regenerate them from the implementation, and never
+  edit `benchmarks/**/input/` or `benchmarks/**/expected/` to make a
+  failing implementation pass. Changing a golden file is a decision:
+  reproduce it independently first, and say in the pull request which
+  values moved and why.
+- **Write the project name as lowercase `yamaa`**, never `YAMAA` --
+  including at the start of a sentence, in headings, page titles, nav
+  labels, and doc comments. One exception: `YAMAA-01` inside
+  `benchmarks/**/input/` and `benchmarks/**/expected/` is a CDISC
+  `STUDYID` data value, not the project name written as prose.
+- **Label the benchmark runtime `opensas`** in benchmark labels, prose,
+  prompts, commands, dataset names, leaderboards, and solution comments.
+  Keep the standard `.sas` source extension, upstream asset names, and
+  required legal trademark attribution intact.
+- **No content hashing.** The repository does not hash content: a
+  runtime artifact is pinned by `runtime.artifact.reference` alone, a
+  contract fingerprint is its canonical RFC 8785 JSON, the activation
+  cache key is the joined identities themselves, and a resource snapshot
+  compares the bytes it already holds. Do not reintroduce SHA-256 (or
+  any digest field) to give something an identity. The packaging-tool
+  exceptions are `python/uv.lock` and `rust/Cargo.lock`, including
+  unchanged copies staged into Python/R source packages; their checksum
+  fields belong to the packaging tools.
+- **Site pages have one source.** Edit `README.md` for the site home
+  page and `rules/README.md` for the rules index. MkDocs reads those
+  files through `.github/scripts/docs/canonical_pages.py`; do not create
+  `docs/index.md` or `docs/articles/rules.md`.
 
-## The two halves of the site share one palette
+## Change recipes
 
-`docs/stylesheets/extra.css` styles the Material pages and
-`.github/scripts/benchmark-docs/dashboard.css` styles the self-contained
-benchmark dashboards. They are separate files on purpose -- a dashboard opens
-from disk with no network request -- but they are meant to render as one site.
-Change a color or a bar treatment in one and change it in the other.
+Each recipe names the command that proves the change. Run the recipe
+for every area a change touches.
 
-## No content hashing
+- **Rule or schema change** (`rules/`, `yaml/`): follow the terminology
+  and requirement-allocation rules in `rules/README.md` and the
+  maintenance rules in `yaml/README.md`, then run
+  `python .github/scripts/commands/repository.py rules` and
+  `python .github/scripts/commands/repository.py rule-references`.
+- **Rust change** (`rust/`): from `rust/`, run
+  `cargo test --locked -p <crate>` for each crate touched, then
+  `cargo clippy --locked --all-targets -- -D warnings` and
+  `cargo fmt --all --check`. The release-API inventory check and the
+  portable-math golden command live in `docs/development.md`.
+- **Python host change** (`python/`): run
+  `uv run --project python --no-sync pytest python/tests`.
+- **New or changed benchmark** (`benchmarks/`): follow
+  `benchmarks/AGENTS.md`. Run one positive benchmark from its own
+  directory -- after `make sync-python` once, `cd benchmarks/<name>` and
+  `uv run --project ../../python --no-sync python run.py` -- then run
+  the repository validator from the root, which also checks negative
+  benchmarks:
+  `python .github/scripts/commands/repository.py validator`.
+- **Docs change** (`docs/`, `README.md`, `rules/README.md`): run
+  `make docs-test docs`.
+- **Anything else, or a cross-area change:** `make check-fast` gives
+  repository feedback; `make check-repository` runs the full repository
+  checks. Installed-host checks and complete native release
+  qualification are separate routes described in `docs/development.md`.
 
-The repository does not hash content. A runtime artifact is pinned by
-`runtime.artifact.reference` alone, a contract fingerprint is its canonical
-RFC 8785 JSON rather than a hash of it, the activation cache key is the
-joined identities themselves, and a resource snapshot compares the bytes it
-already holds.
+## Pointers
 
-Do not reintroduce SHA-256 (or any digest field) to give something an
-identity. Compare the canonical form directly, and keep the bytes when
-equality has to be decided on bytes.
-
-The packaging-tool exceptions are `python/uv.lock` and the canonical
-`rust/Cargo.lock`, including unchanged copies staged into Python/R source
-packages. Their checksum fields belong to the packaging tools and are not
-the repository's own provenance. This exception does not permit runtime
-identity digests, hashed contract fingerprints, activation-cache digests or
-resource-snapshot digests.
-
-## Label the benchmark runtime `opensas`
-
-Use `opensas` in benchmark labels, prose, prompts, commands, dataset names,
-leaderboards, and solution comments. Keep the standard `.sas` source extension,
-upstream asset names, and required legal trademark attribution intact.
-
-## Site pages have one source
-
-Edit `README.md` for the site home page and `rules/README.md` for the rules
-index. MkDocs reads those files through `.github/scripts/docs/canonical_pages.py`;
-do not create `docs/index.md` or `docs/articles/rules.md`. Their site URLs and
-Edit buttons are set by the hook. Relative Markdown links resolve from the
-canonical source file. Build and test commands live in
-`.github/scripts/docs/README.md`.
-
-## Rust and host APIs
-
-`docs/development.md` describes the crate boundaries and local verification
-commands; `rust/README.md` is the Rust entry point. `docs/release.md` owns current
-API/math/platform decisions and migration notes.
-Language contracts live in `rules/`, and host usage lives in `python/README.md`
-and `R/yamaa/README.md`. The declared API inventory is
-`rust/qualification/release-api.json`; check it from the repository root with
-`uv run --project python --no-sync python rust/tools/check_release_api.py`.
-
-Current REQ owners and generated references derive from `rules/` and `yaml/`.
-The independent schema-owner fixture is
-`.github/scripts/yaml-validation/fixtures/schema-navigation.tsv`; preserve its
-expectations when changing checkers. Run the rule/reference commands in
-`docs/development.md` with the repository Python environment.
-
-Portable math golden values live in
-`rust/crates/yamaa-core/tests/fixtures/portable_math.tsv` and are shared by the
-Rust and Python tests. Run
-`cargo test --locked -p yamaa-core --test portable_math_golden` from `rust/`.
-Public math conversion, verification and publication checks run from the
-repository root with
-`uv run --project python --no-sync python -m unittest discover -s rust/tests -p test_portable_math.py`.
+- Language contracts and terminology: `rules/README.md`
+- Schemas, grammars, and conformance fixtures: `yaml/README.md`
+- Benchmark authoring: `benchmarks/AGENTS.md`
+- Architecture, crate boundaries, and local verification: `docs/development.md`
+- Rust workspace entry point: `rust/README.md`
+- Host usage: `python/README.md` and `R/yamaa/README.md`
+- Site build and canonical pages: `.github/scripts/docs/README.md`
+- Benchmark factory: `automation/benchmark_factory/README.md`
+- Harbor evaluation: `evaluations/harbor/README.md`
+- Release, platforms, and migrations (not needed for normal changes): `docs/release.md`

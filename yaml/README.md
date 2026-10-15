@@ -40,7 +40,6 @@ replay the same parser vectors.
 | [benchmarks/](../benchmarks/README.md) | Specifications, inputs, and expected outcomes |
 | [conformance/](conformance/) | Shared language fixtures |
 | [grammar/](grammar/README.md) | Closed grammars and parser vectors |
-| [agents.md](agents.md) | Maintenance instructions |
 
 ## Execution overview
 
@@ -62,6 +61,57 @@ that composes specifications and metadata without running their derivations.
 
 Unspecified behavior remains an explicit design question. Implementations
 must not infer a new contract from a host default.
+
+## Maintenance rules
+
+Terminology and requirement allocation live in the
+[contract index](../rules/README.md#terminology). When changing a schema,
+rule, grammar, or fixture:
+
+- Keep `schema.yaml` and every `schema_*.yaml` module compact and strictly valid
+  YAML.
+- Register every expression in an `expressions` registry and every verification
+  in its applicable verification registry before an example uses it.
+- Keep handler fields local to the expression or result stage that can use them;
+  do not recreate a generic exception list.
+- Store each cohesive semantic area in one rule file under `rules/`.
+- Declare governed submission metadata in `submission`, never in the free-form
+  `metadata` map. The [submission contract](../rules/submission/metadata.md)
+  reserves its governed key names, so the map cannot
+  become a second place a governed fact lives.
+- Declare nothing a rule derives. For `sdtm` and `send`, `Mandatory` comes
+  from `core`; for `adam` the two are independently declared. A submission
+  length comes from `max_length`, an ADaM origin source from its type, and a
+  collected value's annotated-CRF reference from the document that declares
+  it.
+- Declare a codelist once in the study document and bind columns to its
+  identifier, as required by the
+  [terminology contract](../rules/submission/terminology.md).
+- Change a closed grammar in its `grammar/` file first. The rule's grammar
+  block is rendered from that file, each parser's closed vocabulary is
+  compared with it, and both implementations replay its vectors, so a change
+  made anywhere else fails validation. Add a vector for every behavior the
+  change decides.
+- Keep repository-authored source ASCII-only. Spell non-ASCII characters by
+  code point in rules, documentation, schemas, specifications, and tests;
+  literal Unicode belongs only in input and expected-output data fixtures.
+- Keep ordinary examples portable: declare source paths relative to the YAML
+  file that writes them and store their fixtures beside that file. Dedicated
+  path-policy tests may exercise parent-directory segments and temporary
+  absolute local paths as positive cases. URI schemes, symbolic links,
+  non-regular resources and missing files remain negative cases. A
+  `yamaa-project.yaml` does not change document resource locations.
+- Write every fixture under the source profile its extension selects. CSV
+  fixtures follow the [CSV profile](../rules/storage/csv.md): UTF-8 without a
+  byte-order mark, comma-separated
+  fields, a named non-empty field per column, and the same field count in
+  every record. Parquet fixtures follow the closed
+  [Parquet profile](../rules/storage/parquet.md).
+  A file that departs from its profile belongs only in a negative example that
+  declares the condition it provokes.
+- Do not duplicate normative behavior across schema definitions, rules, or
+  examples. Keep all behavior in its owning contract and link to it from schema
+  descriptions. Generate field tables with `generate_rule_reference.py`.
 
 ## Reusing a complete window
 
@@ -89,8 +139,10 @@ within the partition; it never constructs additional rows.
 
 A named intermediate can compare a donor field with the
 current driver's field in its `filter`, for example
-`OBS.AVISITN < PLAN.AVISITN`. The driver is root `base` without row templates,
-or the explicit template's `dataset`. `order_by` and `keep` select one donor
+`OBS.AVISITN < PLAN.AVISITN`. The driver is the row template's `dataset` (an
+input dataset or an eligible named intermediate), or root `base` without row
+templates; either defaults to the single declared input when omitted (see the
+[contract index](../rules/README.md#terminology)). `order_by` and `keep` select one donor
 from the surviving candidates. Use an explicit planning input for visits
 that do not yet have observed records. See the [window contract](../rules/operations/windows.md)
 and [lookup contract](../rules/operations/lookup.md).

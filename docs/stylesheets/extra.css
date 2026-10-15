@@ -1,9 +1,12 @@
 /* yamaa site tweaks on top of the Material theme.
  *
- * The brand palette is sampled from the hex logo: a deep navy outline over
+ * Palette note (the single home for this rule; it is not in AGENTS.md):
+ * the brand palette is sampled from the hex logo: a deep navy outline over
  * steel-blue bands. The generated benchmark dashboards carry the same values
  * in .github/scripts/benchmark-docs/dashboard.css, so the Material pages and
- * the self-contained pages read as one site. Change a value in one place and
+ * the self-contained pages read as one site. The dashboard tokens that mirror
+ * the variables below are --brand (#2d5f8a, --yamaa-blue) and --brand-deep
+ * (#1f3a5c, --yamaa-navy). Change a color or a bar treatment in one file and
  * change it in the other.
  */
 
