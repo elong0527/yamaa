@@ -50,12 +50,18 @@ and supported targets. Its inventory is the command reference. Set
 | `make check` | Run the checks required by ordinary CI. |
 | `make check-lint` | Check formatting and lint across Python and Rust. |
 | `make check-repository` | Check authored specifications, layout, rules, references and the site. |
-| `make test-rust` | Run the shared Rust tests. |
+| `make test-rust` | Run `cargo test --locked --workspace`, including both host bindings. |
 | `make test-python` | Run package/tool tests and standalone installed-host suites. |
 | `make test-r` | Build, install and strictly check a fresh R source package. |
 | `make docs-test docs` | Test page ownership, generate dashboards and build the strict site. |
 
 For a focused Rust change, run `cargo test --locked -p <crate>` from `rust/`.
+The workspace test command needs Python and R 4.6.1 installed because it builds
+and links both binding test targets. `make test-rust` selects its development
+Python interpreter for PyO3. The Python extension feature belongs to maturin
+packaging; enabling every feature would select extension linking instead of
+normal Python linking for these Cargo tests. Native qualification also runs
+the workspace tests with the optimized `release-test` profile.
 Register new integration modules in their crate's test harness. Test helpers
 belong to the owning crate; do not import another crate's source into tests.
 Portable numerical behavior has independently authored controls in
