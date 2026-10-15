@@ -815,6 +815,27 @@ fn row_recovery_binds_only_effective_handlers_in_row_order_and_shares_defaults()
 }
 
 #[test]
+fn null_rows_prepare_without_internal_error() {
+    // #2428: `rows: null` is the natural YAML spelling of "no row
+    // derivations" and the rest of preparation treats a Null node as
+    // absent. Imputation declaration findings ran unconditionally and
+    // passed the Null node to `sequence()`, aborting preparation with
+    // `PrepareError::Internal` even for specifications with no imputation.
+    // The same unfiltered pattern in the other unconditional declaration
+    // passes (match values, scalar, str_case, str_extract, str_pad and
+    // str_template) aborted preparation immediately afterwards, so those
+    // passes skip a Null `rows` node too.
+    let document = operation_document_with_rows(
+        "compute",
+        Tree::Map(vec![("expr", Tree::Text("ID + 1"))]),
+        "input.csv",
+        None,
+        Some(Tree::Scalar(N::Null)),
+    );
+    PreparedSpecification::prepare(&document).unwrap();
+}
+
+#[test]
 fn wide_row_recovery_fails_validation_at_its_authored_path_before_binding() {
     let document = operation_document_with_rows(
         "literal",
