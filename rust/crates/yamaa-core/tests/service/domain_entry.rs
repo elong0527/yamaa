@@ -54,9 +54,7 @@ impl Fake {
 }
 impl MetadataAdmissionPort for Fake {
     type Error = Original;
-    fn charge_work(&mut self, _: usize) -> Result<(), Original> {
-        self.enter("original arena")
-    }
+
     fn verify_metadata(&mut self) -> Result<(), (String, Original)> {
         self.enter("snapshot verification")
             .map_err(|e| ("spec.yaml".into(), e))
@@ -91,21 +89,10 @@ impl PreparationPort for Fake {
                 N::Mapping(vec![(0, 5)]),
             ],
             6,
-            Default::default(),
         )
         .unwrap();
-        let selected = build::select_entry(
-            build::EntryView {
-                original: &document,
-                model_nodes: 7,
-            },
-            16,
-            self,
-        )
-        .map_err(|error| match error {
-            build::SelectionFailure::Resource(e)
-            | build::SelectionFailure::Snapshot { error: e, .. } => e,
-            _ => panic!("fixture capacity"),
+        let selected = build::select_entry(&document, self).map_err(|error| match error {
+            build::SelectionFailure::Snapshot { error, .. } => error,
         })?;
         Ok(Entry(selected))
     }
@@ -298,13 +285,7 @@ fn both_entry_points_select_all_routes_from_the_original_held_entry() {
         if environment {
             expected.push("environment");
         }
-        expected.extend([
-            "entry",
-            "original arena",
-            "snapshot verification",
-            compilation,
-            check,
-        ]);
+        expected.extend(["entry", "snapshot verification", compilation, check]);
         assert_eq!(port.events, expected);
         port.events.clear();
         assert!(domain_entry::domain(request(environment), &mut port).is_ok());
@@ -329,7 +310,6 @@ fn every_failure_retains_its_original_payload_and_stops_later_authority() {
             "root admission",
             "environment",
             "entry",
-            "original arena",
             "snapshot verification",
             if producer {
                 "graph compilation"
@@ -360,7 +340,6 @@ fn every_failure_retains_its_original_payload_and_stops_later_authority() {
                 "root admission"
                     | "environment"
                     | "entry"
-                    | "original arena"
                     | "snapshot verification"
                     | "graph compilation"
                     | "project compilation"

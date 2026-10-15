@@ -1,15 +1,13 @@
 //! Fake native ports pin application order without a host runtime or codec.
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use yamaa_core::{
-    dataset::{self, ExecutionError},
+    dataset::ExecutionError,
     specification_run::{
         self as run, CapturedAttempt, PortError, RunError, SourceDecoder, SourcePort,
     },
 };
 use yamaa_core::{
-    schema::{
-        Document, DocumentLimits, DocumentNode as N, SpecificationDocument, ValidationBudget,
-    },
+    schema::{Document, DocumentNode as N, SpecificationDocument},
     specification::{PreparedSpecification, SourceDeclaration},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
@@ -91,10 +89,8 @@ fn document_output(
     ]);
     let mut nodes = Vec::new();
     let root = tree.append(&mut nodes);
-    let document = Document::new(nodes, root, DocumentLimits::default()).unwrap();
-    SpecificationDocument::admit(document, &mut ValidationBudget::new(Default::default()))
-        .unwrap()
-        .unwrap()
+    let document = Document::new(nodes, root).unwrap();
+    SpecificationDocument::admit(document).unwrap().unwrap()
 }
 
 fn source() -> TableSchema {
@@ -127,23 +123,19 @@ impl SourcePort for Port {
     fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn capture_observed(
-        &mut self,
-        source: &SourceDeclaration,
-        byte_limit: usize,
-        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-    ) -> Result<Arc<[u8]>, Self::Error> {
-        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-        self.capture(source, byte_limit)
-    }
+
     type Error = Payload;
     fn capture_reads(&self) -> usize {
         self.reads
     }
-    fn capture(&mut self, source: &SourceDeclaration, limit: usize) -> Result<Arc<[u8]>, Payload> {
+    fn capture(
+        &mut self,
+        source: &SourceDeclaration,
+        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+    ) -> Result<Arc<[u8]>, Payload> {
+        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
         self.trace.borrow_mut().push("capture");
         assert_eq!(source.path, "input.csv");
-        assert_eq!(limit, 1024);
         self.requests += 1;
         if self.regress {
             self.reads -= 1;
@@ -193,17 +185,16 @@ impl SourceDecoder for Decoder {
     fn continue_after(&self, _error: &Self::Error) -> bool {
         false
     }
-    fn decode_with_interpretation(
-        &mut self,
-        source: &SourceDeclaration,
-        bytes: &[u8],
-        _interpretation: yamaa_core::specification::SourceInterpretation,
-    ) -> Result<Self::Table, Self::Error> {
-        self.decode(source, bytes)
-    }
+
     type Error = Payload;
     type Table = Table;
-    fn decode(&mut self, declaration: &SourceDeclaration, bytes: &[u8]) -> Result<Table, Payload> {
+    fn decode(
+        &mut self,
+        declaration: &SourceDeclaration,
+        bytes: &[u8],
+        _interpretation: yamaa_core::specification::SourceInterpretation,
+        _contract: Option<&yamaa_core::producer_contract::Contract>,
+    ) -> Result<Table, Payload> {
         self.trace.borrow_mut().push("decode");
         assert_eq!(declaration.name, "SRC");
         assert_eq!(bytes, b"held snapshot");
@@ -241,23 +232,7 @@ fn fixtures() -> (Port, Decoder) {
         },
     )
 }
-fn limits() -> run::Limits {
-    run::Limits {
-        source_bytes: 1024,
-        source_cells: 10,
-        execution: dataset::Limits {
-            source_rows: 10,
-            output_rows: 10,
-            output_cells: 100,
-            key_cells: 100,
-            work_cells: 1000,
-            scalar_text_bytes: 1000,
-            output_text_bytes: 1000,
-            identity_cells: 100,
-            identity_text_bytes: 1000,
-        },
-    }
-}
+
 #[test]
 fn reuse_repeats_effects_and_reports_actual_cached_captures() {
     let prepared = PreparedSpecification::prepare(&document("ID + 1", "input.csv")).unwrap();
@@ -265,7 +240,14 @@ fn reuse_repeats_effects_and_reports_actual_cached_captures() {
     let mut attempt = CapturedAttempt::new(prepared.source());
     for created in [1, 0] {
         decoder.trace.borrow_mut().clear();
-        run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+        run::execute_into(
+            &prepared,
+            &mut port,
+            &mut decoder,
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            &mut attempt,
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+        );
         assert_eq!(attempt.sources[0].read.snapshots_created, Some(created));
         assert_eq!(
             attempt.sources[0].read.origin,
@@ -292,7 +274,14 @@ fn capture_decode_and_binding_failures_stop_later_effects_without_losing_payload
     let (mut port, mut decoder) = fixtures();
     let mut attempt = CapturedAttempt::new(prepared.source());
     port.fail = true;
-    run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+    run::execute_into(
+        &prepared,
+        &mut port,
+        &mut decoder,
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        &mut attempt,
+        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+    );
     assert_eq!(
         attempt.sources[0].read.origin,
         Some(run::SourceOrigin::Resource)
@@ -311,7 +300,14 @@ fn capture_decode_and_binding_failures_stop_later_effects_without_losing_payload
     port.fail = false;
     decoder.fail = true;
     decoder.trace.borrow_mut().clear();
-    run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+    run::execute_into(
+        &prepared,
+        &mut port,
+        &mut decoder,
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        &mut attempt,
+        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+    );
     let Err(PortError::Run(RunError::Sources(ref failures))) = attempt.result else {
         panic!("decode error");
     };
@@ -323,64 +319,59 @@ fn capture_decode_and_binding_failures_stop_later_effects_without_losing_payload
     decoder.fail = false;
     decoder.trace.borrow_mut().clear();
     let invalid = PreparedSpecification::prepare(&document("ID +", "input.csv")).unwrap();
-    run::execute_with_port_into(&invalid, &mut port, &mut decoder, limits(), &mut attempt);
+    run::execute_into(
+        &invalid,
+        &mut port,
+        &mut decoder,
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        &mut attempt,
+        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+    );
     assert!(matches!(
         attempt.result,
         Err(PortError::Run(RunError::Bind(_)))
     ));
     assert!(attempt.sources[0].table.is_some());
-    assert_eq!(*decoder.trace.borrow(), ["capture", "decode", "schema"]);
+    assert_eq!(
+        *decoder.trace.borrow(),
+        ["capture", "decode", "schema", "schema"]
+    );
 }
 #[test]
-fn accounting_and_resource_failures_preserve_snapshots_and_precede_later_effects() {
+fn regressing_capture_reads_preserve_the_snapshot_and_precede_decoding() {
     let prepared = PreparedSpecification::prepare(&document("ID + 1", "input.csv")).unwrap();
     let (mut port, mut decoder) = fixtures();
     let mut attempt = CapturedAttempt::new(prepared.source());
     port.regress = true;
     port.reads = 1;
-    run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+    run::execute_into(
+        &prepared,
+        &mut port,
+        &mut decoder,
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        &mut attempt,
+        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+    );
     assert!(matches!(attempt.result, Err(PortError::CaptureAccounting)));
     assert_eq!(attempt.sources[0].read.snapshots_created, None);
     assert!(attempt.sources[0].snapshot.is_some() && attempt.sources[0].table.is_none());
     assert_eq!(*decoder.trace.borrow(), ["capture"]);
-    decoder.trace.borrow_mut().clear();
-    let bytes = run::execute_bytes(
-        &prepared,
-        b"held snapshot",
-        &mut decoder,
-        run::Limits {
-            source_bytes: 0,
-            ..limits()
-        },
-    );
-    assert!(matches!(
-        bytes.result,
-        Err(RunError::SourceBytes {
-            limit: 0,
-            actual: Some(13),
-            source: 0
-        })
-    ));
-    assert!(decoder.trace.borrow().is_empty());
-    let cells = run::execute_bytes(
-        &prepared,
-        b"held snapshot",
-        &mut decoder,
-        run::Limits {
-            source_cells: 0,
-            ..limits()
-        },
-    );
-    assert!(matches!(cells.result, Err(RunError::SourceCells { .. })));
-    assert!(cells.table.is_some() && !decoder.trace.borrow().contains(&"cell"));
 }
+
 #[test]
 fn runtime_errors_and_panic_boundaries_keep_the_observed_source() {
     let prepared = PreparedSpecification::prepare(&document("ID + 1", "input.csv")).unwrap();
     let (mut port, mut decoder) = fixtures();
     let mut attempt = CapturedAttempt::new(prepared.source());
     decoder.fail_cell = true;
-    run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+    run::execute_into(
+        &prepared,
+        &mut port,
+        &mut decoder,
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        &mut attempt,
+        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+    );
     let result = std::mem::replace(&mut attempt.result, Err(PortError::Incomplete));
     let Err(error) = result.unwrap().result else {
         panic!("cell error")
@@ -397,7 +388,14 @@ fn runtime_errors_and_panic_boundaries_keep_the_observed_source() {
     decoder.fail_cell = false;
     decoder.panic_cell = true;
     let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+        run::execute_into(
+            &prepared,
+            &mut port,
+            &mut decoder,
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            &mut attempt,
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+        );
     }));
     assert!(panic.is_err());
     assert!(
@@ -480,16 +478,10 @@ mod publication {
     }
     impl ArtifactEncoder for Host {
         type Error = Payload;
-        fn encode(
-            &mut self,
-            dataset: &Dataset,
-            projection: &[usize],
-            limit: usize,
-        ) -> Result<Vec<u8>, Payload> {
+        fn encode(&mut self, dataset: &Dataset, projection: &[usize]) -> Result<Vec<u8>, Payload> {
             self.event("encode")?;
             assert_eq!(dataset.rows().len(), 1);
             assert_eq!(projection, [1, 0]);
-            assert_eq!(limit, 16);
             Ok(self.bytes.clone())
         }
     }
@@ -520,7 +512,7 @@ mod publication {
     }
     fn execution(prepared: &PreparedSpecification) -> Execution {
         let (_, mut decoder) = fixtures();
-        run::execute_bytes(prepared, b"held snapshot", &mut decoder, limits())
+        run::execute_bytes(prepared, b"held snapshot", &mut decoder)
             .result
             .unwrap()
             .result
@@ -532,7 +524,7 @@ mod publication {
         let execution = execution(&prepared);
         let (mut report, mut codec, mut publisher) = hosts();
         assert_eq!(
-            output::complete(&prepared, None, 16, &mut report, &mut codec, &mut publisher).unwrap(),
+            output::complete(&prepared, None, &mut report, &mut codec, &mut publisher).unwrap(),
             "failure"
         );
         assert_eq!(*report.trace.borrow(), ["failure"]);
@@ -542,7 +534,6 @@ mod publication {
                 output::complete(
                     &prepared,
                     Some(&execution),
-                    16,
                     &mut report,
                     &mut codec,
                     &mut publisher
@@ -561,7 +552,7 @@ mod publication {
         let plan = prepared("result.csv", &["VALUE", "ID"]);
         let execution = execution(&plan);
         let (mut report, mut codec, mut publisher) = hosts();
-        let result = output::prepare(&plan, Some(&execution), 16, &mut report, &mut codec).unwrap();
+        let result = output::prepare(&plan, Some(&execution), &mut report, &mut codec).unwrap();
         assert_eq!(*report.trace.borrow(), ["begin", "encode", "report"]);
         assert_eq!(result.artifact().unwrap().projection(), [1, 0]);
         assert_eq!(result.artifact().unwrap().path(), "result.csv");
@@ -588,7 +579,7 @@ mod publication {
     fn failed_or_rejected_build_cannot_reach_save_authority() {
         let plan = prepared("result.csv", &["VALUE", "ID"]);
         let (mut report, mut codec, mut publisher) = hosts();
-        let failure = output::prepare(&plan, None, 16, &mut report, &mut codec).unwrap();
+        let failure = output::prepare(&plan, None, &mut report, &mut codec).unwrap();
         assert!(matches!(
             failure.save(&mut publisher),
             Err(output::SaveError::FailedBuild)
@@ -599,7 +590,7 @@ mod publication {
         let invalid = prepared("result.csv", &["ID", "ID"]);
         let execution = execution(&invalid);
         let rejected =
-            output::prepare(&invalid, Some(&execution), 16, &mut report, &mut codec).unwrap();
+            output::prepare(&invalid, Some(&execution), &mut report, &mut codec).unwrap();
         assert!(matches!(
             rejected.save(&mut publisher),
             Err(output::SaveError::FailedBuild)
@@ -616,7 +607,6 @@ mod publication {
             output::complete(
                 &invalid,
                 Some(&execution),
-                16,
                 &mut report,
                 &mut codec,
                 &mut publisher
@@ -635,7 +625,6 @@ mod publication {
             let error = output::complete(
                 &valid,
                 Some(&execution),
-                16,
                 &mut report,
                 &mut codec,
                 &mut publisher,
@@ -655,25 +644,6 @@ mod publication {
                 .unwrap();
             assert_eq!(*trace, ["begin", "encode", "report", "publish"][..=end]);
         }
-    }
-    #[test]
-    fn encoder_overrun_never_reaches_report_or_publication() {
-        let prepared = prepared("result.csv", &["VALUE", "ID"]);
-        let execution = execution(&prepared);
-        let (mut report, mut codec, mut publisher) = hosts();
-        codec.bytes = vec![0; 17];
-        assert!(matches!(
-            output::complete(
-                &prepared,
-                Some(&execution),
-                16,
-                &mut report,
-                &mut codec,
-                &mut publisher
-            ),
-            Err(CompleteError::OutputLimit)
-        ));
-        assert_eq!(*report.trace.borrow(), ["begin", "encode"]);
     }
 }
 
@@ -721,16 +691,13 @@ mod source_collection {
         }
         let mut ordered = Vec::new();
         let root = reorder(root, &nodes, &mut ordered);
-        let d = Document::new(ordered, root, DocumentLimits::default()).unwrap();
-        let model = SpecificationDocument::admit(d, &mut ValidationBudget::new(Default::default()))
-            .unwrap()
-            .unwrap();
+        let d = Document::new(ordered, root).unwrap();
+        let model = SpecificationDocument::admit(d).unwrap().unwrap();
         PreparedSpecification::prepare(&model).unwrap()
     }
     struct Capture {
         trace: Trace,
         requests: Vec<String>,
-        limits: Vec<usize>,
         seen: Vec<String>,
         reads: usize,
         fail: Option<String>,
@@ -746,15 +713,7 @@ mod source_collection {
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            self.capture(source, byte_limit)
-        }
+
         type Error = Payload;
         fn capture_reads(&self) -> usize {
             self.reads
@@ -762,11 +721,11 @@ mod source_collection {
         fn capture(
             &mut self,
             source: &SourceDeclaration,
-            limit: usize,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Payload> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             self.trace.borrow_mut().push("capture");
             self.requests.push(source.name.clone());
-            self.limits.push(limit);
             if self.fail.as_deref() == Some(source.name.as_str()) {
                 return Err(Payload(Rc::clone(&self.payload)));
             }
@@ -790,14 +749,6 @@ mod source_collection {
         payload: Rc<()>,
     }
     impl SourceDecoder for Decode {
-        fn decode_with_interpretation(
-            &mut self,
-            source: &SourceDeclaration,
-            bytes: &[u8],
-            _interpretation: yamaa_core::specification::SourceInterpretation,
-        ) -> Result<Self::Table, Self::Error> {
-            self.decode(source, bytes)
-        }
         type Error = DecodeFailure;
         type Table = Table;
         fn continue_after(&self, error: &DecodeFailure) -> bool {
@@ -807,6 +758,8 @@ mod source_collection {
             &mut self,
             source: &SourceDeclaration,
             _bytes: &[u8],
+            _interpretation: yamaa_core::specification::SourceInterpretation,
+            _contract: Option<&yamaa_core::producer_contract::Contract>,
         ) -> Result<Table, DecodeFailure> {
             self.trace.borrow_mut().push("decode");
             if self.fail.contains(&source.name) {
@@ -835,7 +788,6 @@ mod source_collection {
             Capture {
                 trace: Rc::clone(&trace),
                 requests: Vec::new(),
-                limits: Vec::new(),
                 seen: Vec::new(),
                 reads: 0,
                 fail: None,
@@ -863,15 +815,6 @@ mod source_collection {
         panic_at: Option<String>,
     }
     impl SourcePort for Inspection {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            self.capture(source, byte_limit)
-        }
         type Error = InspectError;
         fn resource_failure(
             &self,
@@ -904,10 +847,11 @@ mod source_collection {
         fn capture(
             &mut self,
             source: &SourceDeclaration,
-            limit: usize,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, InspectError> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             self.capture
-                .capture(source, limit)
+                .capture(source, origin)
                 .map_err(|error| InspectError {
                     cause: None,
                     payload: error.0,
@@ -935,13 +879,22 @@ mod source_collection {
         for created in [1, 0] {
             port.capture.trace.borrow_mut().clear();
             port.inspected.clear();
-            run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+            run::execute_into(
+                &prepared,
+                &mut port,
+                &mut decoder,
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                &mut attempt,
+                yamaa_core::application_observer::Scope::new(
+                    &yamaa_core::application_observer::Noop,
+                ),
+            );
             assert_eq!(port.inspected, ["SRC", "SECOND", "THIRD"]);
             assert_eq!(
-                &port.capture.trace.borrow()[..9],
+                &port.capture.trace.borrow()[..12],
                 [
-                    "inspect", "inspect", "inspect", "capture", "decode", "capture", "decode",
-                    "capture", "decode"
+                    "inspect", "inspect", "inspect", "capture", "decode", "schema", "capture",
+                    "decode", "schema", "capture", "decode", "schema"
                 ]
             );
             assert!(attempt
@@ -962,7 +915,14 @@ mod source_collection {
             ("THIRD".into(), Some(NotRegularFile)),
         ];
         let mut attempt = CapturedAttempt::new(prepared.source());
-        run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+        run::execute_into(
+            &prepared,
+            &mut port,
+            &mut decoder,
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            &mut attempt,
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+        );
         assert!(attempt.sources.is_empty());
         let Err(PortError::Inspect(errors)) = &attempt.result else {
             panic!("inspection findings");
@@ -992,7 +952,14 @@ mod source_collection {
             ("THIRD".into(), Some(Missing)),
         ];
         let mut attempt = CapturedAttempt::new(prepared.source());
-        run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+        run::execute_into(
+            &prepared,
+            &mut port,
+            &mut decoder,
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            &mut attempt,
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+        );
         let Err(PortError::Inspect(errors)) = &attempt.result else {
             panic!("content change missing");
         };
@@ -1011,7 +978,14 @@ mod source_collection {
         let (mut port, mut decoder) = inspection();
         port.failures = vec![("SRC".into(), Some(Missing)), ("SECOND".into(), None)];
         let mut attempt = CapturedAttempt::new(prepared.source());
-        run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+        run::execute_into(
+            &prepared,
+            &mut port,
+            &mut decoder,
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            &mut attempt,
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+        );
         let Err(PortError::Inspect(errors)) = &attempt.result else {
             panic!("opaque inspection failure");
         };
@@ -1028,7 +1002,14 @@ mod source_collection {
         let (mut port, mut decoder) = inspection();
         port.counter_change = true;
         let mut attempt = CapturedAttempt::new(prepared.source());
-        run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+        run::execute_into(
+            &prepared,
+            &mut port,
+            &mut decoder,
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            &mut attempt,
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+        );
         assert!(matches!(attempt.result, Err(PortError::CaptureAccounting)));
         assert_eq!(port.inspected, ["SRC"]);
         assert!(attempt.sources.is_empty() && port.capture.requests.is_empty());
@@ -1041,7 +1022,16 @@ mod source_collection {
         port.panic_at = Some("SECOND".into());
         let mut attempt = CapturedAttempt::new(prepared.source());
         assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+            run::execute_into(
+                &prepared,
+                &mut port,
+                &mut decoder,
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                &mut attempt,
+                yamaa_core::application_observer::Scope::new(
+                    &yamaa_core::application_observer::Noop,
+                ),
+            );
         }))
         .is_err());
         assert!(matches!(attempt.result, Err(PortError::Incomplete)));
@@ -1056,7 +1046,16 @@ mod source_collection {
         let mut attempt = CapturedAttempt::new(prepared.source());
         for created in [1, 0] {
             port.trace.borrow_mut().clear();
-            run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+            run::execute_into(
+                &prepared,
+                &mut port,
+                &mut decoder,
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                &mut attempt,
+                yamaa_core::application_observer::Scope::new(
+                    &yamaa_core::application_observer::Noop,
+                ),
+            );
             assert!(attempt.result.as_ref().unwrap().result.is_ok());
             assert_eq!(attempt.sources.len(), 3);
             assert!(attempt
@@ -1066,15 +1065,17 @@ mod source_collection {
                     && s.snapshot.is_some()
                     && s.table.is_some()));
             assert_eq!(
-                &port.trace.borrow()[..6],
-                ["capture", "decode", "capture", "decode", "capture", "decode"]
+                &port.trace.borrow()[..9],
+                [
+                    "capture", "decode", "schema", "capture", "decode", "schema", "capture",
+                    "decode", "schema"
+                ]
             );
         }
         assert_eq!(
             port.requests,
             ["SRC", "SECOND", "THIRD", "SRC", "SECOND", "THIRD"]
         );
-        assert_eq!(port.limits, [1024, 1011, 998, 1024, 1011, 998]);
         assert_eq!(port.reads, 3);
     }
     #[test]
@@ -1085,7 +1086,16 @@ mod source_collection {
             decoder.fail = vec!["SRC".into(), "THIRD".into()];
             decoder.recoverable = recoverable;
             let mut attempt = CapturedAttempt::new(prepared.source());
-            run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+            run::execute_into(
+                &prepared,
+                &mut port,
+                &mut decoder,
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                &mut attempt,
+                yamaa_core::application_observer::Scope::new(
+                    &yamaa_core::application_observer::Noop,
+                ),
+            );
             let Err(PortError::Run(RunError::Sources(errors))) = attempt.result else {
                 panic!("ingestion errors")
             };
@@ -1100,45 +1110,21 @@ mod source_collection {
             assert!(!port.trace.borrow().contains(&"cell"));
         }
     }
-    #[test]
-    fn byte_and_cell_budgets_cover_the_whole_collection() {
-        let prepared = prepared();
-        let (mut port, mut decoder) = ports();
-        let mut attempt = CapturedAttempt::new(prepared.source());
-        let mut bounded = limits();
-        bounded.source_bytes = 20;
-        run::execute_with_port_into(&prepared, &mut port, &mut decoder, bounded, &mut attempt);
-        assert!(matches!(
-            attempt.result,
-            Err(PortError::Run(RunError::SourceBytes {
-                limit: 20,
-                actual: Some(26),
-                source: 1
-            }))
-        ));
-        assert_eq!(port.requests, ["SRC", "SECOND"]);
-        assert_eq!(port.limits, [20, 7]);
-        assert!(attempt.sources[1].snapshot.is_some() && attempt.sources[1].table.is_none());
-        assert!(!port.trace.borrow().contains(&"cell"));
-        let (mut port, mut decoder) = ports();
-        let mut bounded = limits();
-        bounded.source_cells = 2;
-        run::execute_with_port_into(&prepared, &mut port, &mut decoder, bounded, &mut attempt);
-        assert!(matches!(
-            attempt.result,
-            Err(PortError::Run(RunError::SourceCells { .. }))
-        ));
-        assert_eq!(port.requests, ["SRC", "SECOND", "THIRD"]);
-        assert!(attempt.sources.iter().all(|s| s.table.is_some()));
-        assert!(!port.trace.borrow().contains(&"cell"));
-    }
+
     #[test]
     fn later_capture_failure_and_decoder_panic_retain_prior_observations() {
         let prepared = prepared();
         let (mut port, mut decoder) = ports();
         port.fail = Some("SECOND".into());
         let mut attempt = CapturedAttempt::new(prepared.source());
-        run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+        run::execute_into(
+            &prepared,
+            &mut port,
+            &mut decoder,
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            &mut attempt,
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+        );
         let Err(PortError::Capture(Payload(ref payload))) = attempt.result else {
             panic!("capture failure")
         };
@@ -1150,7 +1136,16 @@ mod source_collection {
         decoder.fail = vec!["SECOND".into()];
         decoder.panic = true;
         assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt)
+            run::execute_into(
+                &prepared,
+                &mut port,
+                &mut decoder,
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                &mut attempt,
+                yamaa_core::application_observer::Scope::new(
+                    &yamaa_core::application_observer::Noop,
+                ),
+            )
         }))
         .is_err());
         assert!(matches!(attempt.result, Err(PortError::Incomplete)));
@@ -1182,12 +1177,9 @@ mod domain_usecase {
         fields.push((name, verification));
         let root = nodes.len();
         nodes.push(N::Mapping(fields));
-        let model = SpecificationDocument::admit(
-            Document::new(nodes, root, Default::default()).unwrap(),
-            &mut ValidationBudget::new(Default::default()),
-        )
-        .unwrap()
-        .unwrap();
+        let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+            .unwrap()
+            .unwrap();
         let checked = domain::check(&model).unwrap();
         let (mut port, mut decoder) = fixtures();
         for _ in 0..2 {
@@ -1204,7 +1196,7 @@ mod domain_usecase {
             assert!(port.trace.borrow().is_empty());
             assert_eq!((port.requests, port.reads), (0, 0));
         }
-        let attempt = domain::build(&model, &mut port, &mut decoder, limits()).unwrap();
+        let attempt = domain::build(&model, &mut port, &mut decoder).unwrap();
         let execution = attempt.result.unwrap();
         let ExecutionError::Numeric { error, .. } = *execution.result.unwrap_err() else {
             panic!("arithmetic precedes the deferred declaration")
@@ -1223,7 +1215,7 @@ mod domain_usecase {
             panic!("check must reject unknown source profile");
         };
         let Err(PrepareError::Invalid(build_findings)) =
-            domain::build(&document, &mut port, &mut decoder, limits())
+            domain::build(&document, &mut port, &mut decoder)
         else {
             panic!("build must reject unknown source profile");
         };
@@ -1253,7 +1245,15 @@ mod domain_usecase {
         let mut attempt = CapturedAttempt::new(checked.compiled().source());
         for created in [1, 0] {
             port.trace.borrow_mut().clear();
-            checked.build_into(&mut port, &mut decoder, limits(), &mut attempt);
+            checked.build_into(
+                &mut port,
+                &mut decoder,
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                &mut attempt,
+                yamaa_core::application_observer::Scope::new(
+                    &yamaa_core::application_observer::Noop,
+                ),
+            );
             assert_eq!(attempt.sources.len(), 1);
             assert_eq!(attempt.sources[0].read.snapshots_created, Some(created));
             assert_eq!(
@@ -1274,7 +1274,7 @@ mod domain_usecase {
         // An admitted arithmetic expression is not evaluated by check.
         let zero = document("ID / 0", "input.csv");
         domain::check(&zero).unwrap();
-        let attempt = domain::build(&zero, &mut port, &mut decoder, limits()).unwrap();
+        let attempt = domain::build(&zero, &mut port, &mut decoder).unwrap();
         assert!(attempt.result.unwrap().result.is_err());
     }
 
@@ -1282,13 +1282,8 @@ mod domain_usecase {
     fn one_shot_build_preserves_opaque_errors_without_retry() {
         let (mut port, mut decoder) = fixtures();
         port.fail = true;
-        let attempt = domain::build(
-            &document("ID + 1", "input.csv"),
-            &mut port,
-            &mut decoder,
-            limits(),
-        )
-        .unwrap();
+        let attempt =
+            domain::build(&document("ID + 1", "input.csv"), &mut port, &mut decoder).unwrap();
         let Err(PortError::Capture(Payload(payload))) = attempt.result else {
             panic!("original capture failure");
         };
@@ -1305,7 +1300,15 @@ mod domain_usecase {
         decoder.panic_cell = true;
         let mut attempt = CapturedAttempt::new(checked.compiled().source());
         let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            checked.build_into(&mut port, &mut decoder, limits(), &mut attempt);
+            checked.build_into(
+                &mut port,
+                &mut decoder,
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                &mut attempt,
+                yamaa_core::application_observer::Scope::new(
+                    &yamaa_core::application_observer::Noop,
+                ),
+            );
         }));
         assert!(panic.is_err());
         assert!(matches!(attempt.result, Err(PortError::Incomplete)));

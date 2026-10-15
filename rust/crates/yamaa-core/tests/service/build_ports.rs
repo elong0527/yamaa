@@ -11,7 +11,7 @@ use yamaa_core::{
     project_domain::{self, CheckedOwnedProject},
     project_preparation as metadata,
     specification_output::{self as output, CompleteError, OutputReport, PreparedOutput},
-    specification_run::{CapturedAttempt, Limits},
+    specification_run::CapturedAttempt,
     test_support::*,
 };
 use yamaa_core::{
@@ -128,7 +128,7 @@ fn document(tree: Tree) -> Document {
     }
     let mut nodes = vec![];
     let root = append(tree, &mut nodes);
-    Document::new(nodes, root, Default::default()).unwrap()
+    Document::new(nodes, root).unwrap()
 }
 fn environment(invalid: bool) -> Document {
     document(Tree::map(vec![
@@ -201,7 +201,6 @@ impl Application {
         });
         self.source.captures.push_back(CaptureStep {
             source: source.clone(),
-            byte_limit: 1024,
             new_snapshots: 1,
             outcome: if matches!(self.scenario, Scenario::Capture) {
                 Err(Opaque(Rc::new(())))
@@ -224,7 +223,6 @@ impl Application {
         });
         self.encoder.steps.push_back(EncodeStep {
             projection: vec![0, 1],
-            byte_limit: 1024,
             outcome: if matches!(self.scenario, Scenario::Encode) {
                 Err(Opaque(Rc::new(())))
             } else {
@@ -232,28 +230,16 @@ impl Application {
             },
         });
         let mut attempt = CapturedAttempt::new(&source);
-        let limits = Limits {
-            source_bytes: 1024,
-            source_cells: 64,
-            execution: yamaa_core::dataset::Limits {
-                source_rows: 8,
-                output_rows: 8,
-                output_cells: 64,
-                key_cells: 64,
-                work_cells: 4096,
-                scalar_text_bytes: 4096,
-                output_text_bytes: 4096,
-                identity_cells: 64,
-                identity_text_bytes: 4096,
-            },
-        };
         checked
             .build_into(
                 &mut self.activation,
                 &mut self.source,
                 &mut self.decoder,
-                limits,
                 &mut attempt,
+                None,
+                yamaa_core::application_observer::Scope::new(
+                    &yamaa_core::application_observer::Noop,
+                ),
             )
             .map_err(Failure::Activation)?;
         let execution = attempt
@@ -264,7 +250,6 @@ impl Application {
         output::prepare(
             checked.compiled(),
             execution,
-            1024,
             &mut self.report,
             &mut self.encoder,
         )
@@ -273,10 +258,7 @@ impl Application {
 }
 impl MetadataAdmissionPort for Application {
     type Error = Failure;
-    fn charge_work(&mut self, _: usize) -> Result<(), Failure> {
-        self.log.record(Event::Observation("admit original arena"));
-        Ok(())
-    }
+
     fn verify_metadata(&mut self) -> Result<(), (String, Failure)> {
         self.log.record(Event::Observation("verify metadata"));
         Ok(())
@@ -305,8 +287,6 @@ impl PreparationPort for Application {
             kind: metadata::Kind::Lock,
             declaring_source: source.identity.clone(),
             written: "uv.lock".into(),
-            remaining_bytes: 1024 - source.bytes.len(),
-            remaining_identity_bytes: 1024 - source.identity.len(),
             outcome: Ok(metadata::Reply::Lock {
                 source: metadata::Source {
                     identity: "/study/uv.lock".into(),
@@ -315,16 +295,10 @@ impl PreparationPort for Application {
                 kind: LockKind::Uv,
             }),
         });
-        let limits = metadata::Limits {
-            bytes: 1024,
-            identity_bytes: 1024,
-            ..Default::default()
-        };
-        let environment =
-            metadata::prepare(&mut decoder, source, Language::Python, &mut port, limits)
-                .map_err(|error| Failure::Metadata(Box::new(error)))?
-                .environment
-                .into_execution();
+        let environment = metadata::prepare(&mut decoder, source, Language::Python, &mut port)
+            .map_err(|error| Failure::Metadata(Box::new(error)))?
+            .environment
+            .into_execution();
         self.log.record(Event::Observation("entry"));
         let expression = if matches!(self.scenario, Scenario::Unsupported) {
             Tree::map(vec![("future_operation", Tree::text("SRC.ID"))])
@@ -332,15 +306,8 @@ impl PreparationPort for Application {
             call("constant", vec![])
         };
         let model = specification(vec![("VALUE", "int", expression)]);
-        let selection = build::select_entry(
-            build::EntryView {
-                original: model.document(),
-                model_nodes: model.document().nodes().len(),
-            },
-            1024,
-            self,
-        )
-        .unwrap_or_else(|_| panic!("fixture metadata admission"));
+        let selection = build::select_entry(model.document(), self)
+            .unwrap_or_else(|_| panic!("fixture metadata admission"));
         Ok(Entry {
             selection,
             model,

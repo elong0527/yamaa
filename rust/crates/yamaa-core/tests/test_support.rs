@@ -26,8 +26,6 @@ fn shared_metadata_capture_fake_consumes_owned_outcomes_once_and_logs_before_fai
             kind: metadata::Kind::Function,
             declaring_source: "environment.yaml".into(),
             written: "function.yaml".into(),
-            remaining_bytes: 42,
-            remaining_identity_bytes: 23,
             outcome,
         });
     }
@@ -35,8 +33,6 @@ fn shared_metadata_capture_fake_consumes_owned_outcomes_once_and_logs_before_fai
         kind: metadata::Kind::Function,
         declaring_source: "environment.yaml",
         written: "function.yaml",
-        remaining_bytes: 42,
-        remaining_identity_bytes: 23,
     };
     let metadata::Reply::Document(source) = port.capture(request()).unwrap() else {
         panic!()
@@ -56,7 +52,7 @@ fn shared_metadata_capture_fake_consumes_owned_outcomes_once_and_logs_before_fai
 #[test]
 fn shared_metadata_decoder_fake_retains_source_and_document_and_moves_nonclone_errors() {
     use metadata::DecodePort;
-    use yamaa_core::schema::{Document, DocumentLimits, DocumentNode};
+    use yamaa_core::schema::{Document, DocumentNode};
     let log = EventLog::default();
     let mut decoder = ScriptedMetadataDecoder::new(log.clone());
     let source = metadata::Source {
@@ -64,12 +60,7 @@ fn shared_metadata_decoder_fake_retains_source_and_document_and_moves_nonclone_e
         bytes: b"{}".to_vec(),
     };
     let bytes = source.bytes.as_ptr();
-    let document = Document::new(
-        vec![DocumentNode::Mapping(vec![])],
-        0,
-        DocumentLimits::default(),
-    )
-    .unwrap();
+    let document = Document::new(vec![DocumentNode::Mapping(vec![])], 0).unwrap();
     let nodes = document.nodes().as_ptr();
     decoder.steps.push_back(MetadataDecodeStep {
         source: source.clone(),

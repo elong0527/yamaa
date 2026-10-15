@@ -8,9 +8,7 @@ use yamaa_core::{
 };
 use yamaa_core::{
     odm_source::FIELDS,
-    schema::{
-        Document, DocumentLimits, DocumentNode as N, SpecificationDocument, ValidationBudget,
-    },
+    schema::{Document, DocumentNode as N, SpecificationDocument},
     specification::{PreparedSpecification, SourceDeclaration, SourceInterpretation},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::ColumnType,
@@ -84,11 +82,8 @@ fn prepared() -> PreparedSpecification {
     ]);
     let mut nodes = Vec::new();
     let root = tree.append(&mut nodes);
-    let document = Document::new(nodes, root, DocumentLimits::default()).unwrap();
-    let admitted =
-        SpecificationDocument::admit(document, &mut ValidationBudget::new(Default::default()))
-            .unwrap()
-            .unwrap();
+    let document = Document::new(nodes, root).unwrap();
+    let admitted = SpecificationDocument::admit(document).unwrap().unwrap();
     PreparedSpecification::prepare(&admitted).unwrap()
 }
 #[derive(Debug)]
@@ -134,21 +129,17 @@ impl SourcePort for Port {
     fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn capture_observed(
-        &mut self,
-        source: &SourceDeclaration,
-        byte_limit: usize,
-        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-    ) -> Result<Arc<[u8]>, Self::Error> {
-        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-        self.capture(source, byte_limit)
-    }
+
     type Error = Original;
     fn capture_reads(&self) -> usize {
         self.reads
     }
-    fn capture(&mut self, source: &SourceDeclaration, limit: usize) -> Result<Arc<[u8]>, Original> {
-        assert!(limit >= 4);
+    fn capture(
+        &mut self,
+        source: &SourceDeclaration,
+        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+    ) -> Result<Arc<[u8]>, Original> {
+        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
         self.trace
             .borrow_mut()
             .push(format!("capture:{}", source.name));
@@ -167,14 +158,13 @@ impl SourceDecoder for Decoder {
     }
     type Error = Original;
     type Table = Table;
-    fn decode(&mut self, _: &SourceDeclaration, _: &[u8]) -> Result<Table, Original> {
-        panic!("authored source interpretation was lost")
-    }
-    fn decode_with_interpretation(
+
+    fn decode(
         &mut self,
         source: &SourceDeclaration,
         bytes: &[u8],
         interpretation: SourceInterpretation,
+        _contract: Option<&yamaa_core::producer_contract::Contract>,
     ) -> Result<Table, Original> {
         assert_eq!(bytes, b"held");
         self.trace
@@ -215,30 +205,20 @@ fn fixtures(fail: Option<(usize, usize)>) -> (Port, Decoder) {
         },
     )
 }
-fn limits() -> run::Limits {
-    run::Limits {
-        source_bytes: 1024,
-        source_cells: 100,
-        execution: yamaa_core::dataset::Limits {
-            source_rows: 100,
-            output_rows: 100,
-            output_cells: 1000,
-            key_cells: 1000,
-            work_cells: 10000,
-            scalar_text_bytes: 10000,
-            output_text_bytes: 10000,
-            identity_cells: 10000,
-            identity_text_bytes: 10000,
-        },
-    }
-}
 
 #[test]
 fn required_value_findings_keep_csv_coordinates_and_later_original_decoder_failure() {
     let prepared = prepared();
     let (mut port, mut decoder) = fixtures(None);
     let mut attempt = CapturedAttempt::new(prepared.source());
-    run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+    run::execute_into(
+        &prepared,
+        &mut port,
+        &mut decoder,
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        &mut attempt,
+        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+    );
     let Err(PortError::Run(RunError::AdmittedSources(errors))) = attempt.result else {
         panic!("admitted source failure")
     };
@@ -278,7 +258,14 @@ fn original_identifier_access_failure_suppresses_partial_findings_and_later_capt
     let prepared = prepared();
     let (mut port, mut decoder) = fixtures(Some((1, 5)));
     let mut attempt = CapturedAttempt::new(prepared.source());
-    run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+    run::execute_into(
+        &prepared,
+        &mut port,
+        &mut decoder,
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        &mut attempt,
+        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+    );
     let execution = attempt.result.unwrap();
     assert!(execution.handler_counts.is_empty());
     assert!(execution.retained_verifications.is_empty());
@@ -303,21 +290,4 @@ fn original_identifier_access_failure_suppresses_partial_findings_and_later_capt
         }
     }
     assert_eq!(*decoder.trace.borrow(), expected);
-}
-
-#[test]
-fn complete_source_cell_admission_precedes_required_identifier_reads() {
-    let prepared = prepared();
-    let (mut port, mut decoder) = fixtures(Some((0, 0)));
-    let mut attempt = CapturedAttempt::new(prepared.source());
-    let mut limits = limits();
-    limits.source_cells = 21;
-    run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits, &mut attempt);
-    assert!(matches!(
-        attempt.result,
-        Err(PortError::Run(RunError::SourceCells { .. }))
-    ));
-    assert_eq!(*decoder.trace.borrow(), ["capture:SRC", "decode:SRC"]);
-    assert!(attempt.sources[0].table.is_some());
-    assert_eq!(port.reads, 1);
 }

@@ -7,9 +7,7 @@ use crate::function_signature::Presence;
 use crate::function_signature::ProjectFunctionIdentity;
 use crate::function_signature::ProjectInvocationPlan;
 use crate::{
-    schema::{
-        Document, DocumentLimits, DocumentNode as N, SpecificationDocument, ValidationBudget,
-    },
+    schema::{Document, DocumentNode as N, SpecificationDocument},
     specification::{OutputFinding, PreparedSpecification, SourceDeclaration},
     table::{CellError, Column, TableAccess, TableSchema},
     value::{ColumnType, Value, ValueType},
@@ -114,30 +112,11 @@ fn prepared(expression: &str) -> PreparedSpecification {
     ]);
     let mut nodes = Vec::new();
     let root = tree.append(&mut nodes);
-    let document = Document::new(nodes, root, DocumentLimits::default()).unwrap();
-    let document =
-        SpecificationDocument::admit(document, &mut ValidationBudget::new(Default::default()))
-            .unwrap()
-            .unwrap();
+    let document = Document::new(nodes, root).unwrap();
+    let document = SpecificationDocument::admit(document).unwrap().unwrap();
     PreparedSpecification::prepare(&document).unwrap()
 }
-fn limits() -> run::Limits {
-    run::Limits {
-        source_bytes: 1024,
-        source_cells: 10,
-        execution: dataset::Limits {
-            source_rows: 10,
-            output_rows: 10,
-            output_cells: 100,
-            key_cells: 100,
-            work_cells: 1000,
-            scalar_text_bytes: 1000,
-            output_text_bytes: 1000,
-            identity_cells: 100,
-            identity_text_bytes: 1000,
-        },
-    }
-}
+
 fn table(log: EventLog) -> FixtureTable<Opaque> {
     FixtureTable::new(
         TableSchema::new(vec![Column {
@@ -161,7 +140,6 @@ fn source(
     });
     source.captures.push_back(CaptureStep {
         source: declaration.clone(),
-        byte_limit: 1024,
         new_snapshots: usize::from(outcome.is_ok()),
         outcome,
     });
@@ -200,7 +178,14 @@ fn capture_and_inspection_failures_preserve_original_payload_and_stop_effects() 
         };
         let mut decoder = decoder(log.clone(), prepared.source(), Ok(table(log.clone())));
         let mut attempt = CapturedAttempt::new(prepared.source());
-        run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+        run::execute_into(
+            &prepared,
+            &mut port,
+            &mut decoder,
+            &mut crate::function_invocation::NoFunctions::new(),
+            &mut attempt,
+            crate::application_observer::Scope::new(&crate::application_observer::Noop),
+        );
         match attempt.result {
             Err(PortError::Capture(error)) if !inspect => assert_identity(error, identity),
             Err(PortError::Inspect(mut failures)) if inspect => {
@@ -213,7 +198,6 @@ fn capture_and_inspection_failures_preserve_original_payload_and_stop_effects() 
         if !inspect {
             expected.push(Event::Capture {
                 source: prepared.source().clone(),
-                byte_limit: 1024,
             });
         }
         assert_eq!(&*log.events(), expected);
@@ -237,7 +221,14 @@ fn decode_failure_and_invalid_binding_keep_snapshot_without_reading_cells() {
         };
         let mut decoder = decoder(log.clone(), prepared.source(), outcome);
         let mut attempt = CapturedAttempt::new(prepared.source());
-        run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+        run::execute_into(
+            &prepared,
+            &mut port,
+            &mut decoder,
+            &mut crate::function_invocation::NoFunctions::new(),
+            &mut attempt,
+            crate::application_observer::Scope::new(&crate::application_observer::Noop),
+        );
         match attempt.result {
             Err(PortError::Run(RunError::Sources(mut failures))) if !invalid_binding => {
                 assert_eq!(failures.len(), 1);
@@ -258,7 +249,6 @@ fn decode_failure_and_invalid_binding_keep_snapshot_without_reading_cells() {
             Event::Inspect(prepared.source().clone()),
             Event::Capture {
                 source: prepared.source().clone(),
-                byte_limit: 1024,
             },
             Event::Decode {
                 source: prepared.source().clone(),
@@ -308,7 +298,14 @@ fn execution(log: EventLog) -> (PreparedSpecification, dataset::Execution) {
     );
     let mut decoder = decoder(log.clone(), prepared.source(), Ok(table(log)));
     let mut attempt = CapturedAttempt::new(prepared.source());
-    run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+    run::execute_into(
+        &prepared,
+        &mut port,
+        &mut decoder,
+        &mut crate::function_invocation::NoFunctions::new(),
+        &mut attempt,
+        crate::application_observer::Scope::new(&crate::application_observer::Noop),
+    );
     let execution = attempt.result.unwrap().result.unwrap();
     assert_eq!(
         execution.dataset.rows(),
@@ -333,18 +330,16 @@ fn held_output_publishes_exact_bytes_only_on_explicit_save_without_retry() {
     let mut codec = ScriptedEncoder::<Opaque>::new(log.clone());
     codec.steps.push_back(EncodeStep {
         projection: vec![1, 0],
-        byte_limit: 16,
         outcome: Ok(b"VALUE,ID\n8,7\n".to_vec()),
     });
     let mut report = Report(log.clone());
-    let result = output::prepare(&prepared, Some(&execution), 16, &mut report, &mut codec).unwrap();
+    let result = output::prepare(&prepared, Some(&execution), &mut report, &mut codec).unwrap();
     assert_eq!(
         &log.events()[captured..],
         [
             Event::Observation("begin"),
             Event::Encode {
                 projection: vec![1, 0],
-                byte_limit: 16
             },
             Event::Observation("report")
         ]
@@ -394,14 +389,12 @@ fn encoding_failure_and_failed_build_never_reach_publication() {
     let (error, identity) = failure();
     codec.steps.push_back(EncodeStep {
         projection: vec![1, 0],
-        byte_limit: 16,
         outcome: Err(error),
     });
     let mut publisher = ScriptedPublisher::<Opaque>::new(log.clone());
     let Err(output::CompleteError::Encode(error)) = output::complete(
         &prepared,
         Some(&execution),
-        16,
         &mut report,
         &mut codec,
         &mut publisher,
@@ -415,12 +408,11 @@ fn encoding_failure_and_failed_build_never_reach_publication() {
             Event::Observation("begin"),
             Event::Encode {
                 projection: vec![1, 0],
-                byte_limit: 16
             }
         ]
     );
     log.clear();
-    let failed = output::prepare(&prepared, None, 16, &mut report, &mut codec).unwrap();
+    let failed = output::prepare(&prepared, None, &mut report, &mut codec).unwrap();
     assert!(matches!(
         failed.save(&mut publisher),
         Err(SaveError::FailedBuild)

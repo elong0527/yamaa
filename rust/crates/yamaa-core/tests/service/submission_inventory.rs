@@ -1,9 +1,6 @@
 use std::rc::Rc;
+use yamaa_core::schema::{Document, DocumentNode as N};
 use yamaa_core::submission_inventory::{self as service, Ports};
-use yamaa_core::{
-    schema::{Document, DocumentNode as N},
-    submission_inventory::Inventory,
-};
 fn domain(name: &str) -> Document {
     Document::new(
         vec![
@@ -12,7 +9,6 @@ fn domain(name: &str) -> Document {
             N::Mapping(vec![(0, 1)]),
         ],
         2,
-        Default::default(),
     )
     .unwrap()
 }
@@ -28,7 +24,6 @@ fn environment() -> Document {
             N::Mapping(vec![(0, 5)]),
         ],
         6,
-        Default::default(),
     )
     .unwrap()
 }
@@ -97,23 +92,4 @@ fn an_uncloneable_boundary_failure_keeps_its_exact_original_payload_and_written_
     assert_eq!(written, "second.yaml");
     assert!(Rc::ptr_eq(&original, &error.0));
     assert_eq!(port.calls.len(), 2);
-}
-#[test]
-fn inventory_limits_refuse_before_copying_a_partial_dataset_vocabulary() {
-    let input = domain("DM");
-    let error = Inventory::from_specifications(
-        &[&input],
-        yamaa_core::project_limits::Limits {
-            work: 1,
-            ..Default::default()
-        },
-    )
-    .unwrap_err();
-    assert_eq!(
-        error,
-        yamaa_core::submission_inventory::MetadataError::Limit(yamaa_core::project_limits::Limit {
-            resource: yamaa_core::project_limits::Resource::Work
-        })
-    );
-    assert!(Inventory::default().names().is_empty());
 }
