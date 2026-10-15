@@ -80,7 +80,6 @@ pub(crate) fn diagnostic(issue: Issue) -> Result<Value, report::Error> {
 fn project_error<'a, C, E>(error: invocation::Error<'a, E>) -> Error<'a, C, E> {
     match error {
         invocation::Error::Opaque(error) => Error::Opaque(error),
-        invocation::Error::Limit => report::Error::OutputLimit.into(),
         invocation::Error::InvalidContext => invalid(),
     }
 }
@@ -92,7 +91,6 @@ pub(crate) fn checked_records(
 ) -> Result<(Vec<Value>, Vec<Value>), report::Error> {
     crate::project_codelist_diagnostics::codelist_issues(run.compiled(), records).map_err(
         |error| match error {
-            crate::project_codelist_diagnostics::Error::Limit => report::Error::OutputLimit,
             _ => report::Error::InvalidObservation,
         },
     )?;
@@ -260,10 +258,6 @@ pub(crate) fn activation_origins(
     issues: Vec<Issue>,
     functions: impl Iterator<Item = usize> + Clone,
 ) -> Result<Vec<Value>, report::Error> {
-    // Admit the complete origin lookup and temporary ownership before collecting
-    // indices or captures. Both ordinary runs and graph unions are sealed views.
-    let mut budget =
-        crate::report_projection::Budget::new(crate::specification_check::MAX_ISSUE_BYTES);
     let captured = run.captured_environment();
 
     let functions = functions.collect::<Vec<_>>();
@@ -281,7 +275,6 @@ pub(crate) fn activation_origins(
             _ => None,
         })
         .collect::<std::collections::BTreeMap<_, _>>();
-    let mut remaining = crate::specification_check::MAX_ISSUE_BYTES;
     let mut metadata = Vec::new();
     for &selected in &functions {
         let &index = run
@@ -303,20 +296,7 @@ pub(crate) fn activation_origins(
             .ok_or(report::Error::InvalidObservation)?;
         let external = external.get(name.as_str()).copied();
         let source = external.unwrap_or(entry);
-        for text in [source, entry, declaration] {
-            remaining = remaining
-                .checked_sub(
-                    text.len()
-                        .checked_mul(12)
-                        .and_then(|size| size.checked_add(128))
-                        .ok_or(report::Error::OutputLimit)?,
-                )
-                .ok_or(report::Error::OutputLimit)?;
-        }
         metadata.push((source, declaration, external.is_some()));
-    }
-    if !crate::issue_rows::within_limit(&issues, remaining) {
-        return Err(report::Error::OutputLimit);
     }
     issues
         .into_iter()
@@ -389,16 +369,7 @@ pub fn build_result<'a, C, E>(
         }
     }
     let activation = crate::project_activation_observations::activation(run, &attempt.activation)
-        .map_err(|error| match error {
-        crate::project_activation_observations::Error::Limit {
-            resource,
-            limit,
-            actual,
-        } => Error::Report(report::Error::ResourceLimit(
-            crate::resource_diagnostics::Refusal::new(resource, limit, actual, Vec::new()),
-        )),
-        _ => invalid(),
-    })?;
+        .map_err(|_| invalid())?;
     let boundary = match &attempt.boundary {
         Ok(()) => ActivationBoundary::Complete,
         Err(BoundaryFailure::Activation(error)) => ActivationBoundary::Failed(error),
@@ -446,9 +417,6 @@ pub fn build_result<'a, C, E>(
                 }
                 crate::project_lock_diagnostics::issues(run.captured_environment(), findings)
                     .map_err(|error| match error {
-                        crate::project_lock_diagnostics::Error::Limit => {
-                            Error::Report(report::Error::OutputLimit)
-                        }
                         _ => invalid(),
                     })?
                     .into_iter()
@@ -500,9 +468,9 @@ pub fn build_result<'a, C, E>(
         {
             return Err(invalid());
         }
-        result = report::envelope_sources(run, &attempt.dataset.sources, &id)?;
+        result = report::envelope_sources(run, &attempt.dataset.sources, &id, true)?;
     } else {
-        result = report::envelope_sources(run, &attempt.dataset.sources, &id)?;
+        result = report::envelope_sources(run, &attempt.dataset.sources, &id, true)?;
         match &attempt.dataset.result {
             Ok(dataset) => {
                 let (checks, findings) =
@@ -662,7 +630,6 @@ pub fn build_result<'a, C, E>(
                                 crate::source_diagnostics::admitted_findings(
                                     errors,
                                     run.compiled().sources(),
-                                    yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
                                 )
                                 .map_err(report::Error::from)?
                                 .map(|findings| {
@@ -691,10 +658,5 @@ pub fn build_result<'a, C, E>(
     report::set_diagnostics(&mut result, diagnostics);
     result["verifications"] = json!(verifications);
     result["activation"] = activation;
-    Ok(report::prepare_result(
-        run,
-        execution,
-        id,
-        report::bounded(result)?,
-    )?)
+    Ok(report::prepare_result(run, execution, id, result)?)
 }

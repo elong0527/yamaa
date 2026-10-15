@@ -121,12 +121,7 @@ pub(crate) fn preparation_failure(message: String) -> Failure {
             else {
                 return rejected("prepare", "issue_projection");
             };
-            if !crate::issue_rows::within_limit(
-                &issues,
-                crate::specification_check::MAX_ISSUE_BYTES,
-            ) {
-                return rejected("prepare", "issue_limit");
-            }
+
             issues
         }
         Some("unsupported") => {
@@ -183,12 +178,7 @@ pub(crate) fn preparation_failure(message: String) -> Failure {
                     issue.context = context.to_string();
                 }
             }
-            if !crate::issue_rows::within_limit(
-                &issues,
-                crate::specification_check::MAX_ISSUE_BYTES,
-            ) {
-                return rejected("prepare", "issue_limit");
-            }
+
             issues
         }
         _ => rejected("prepare", "preparation_boundary"),
@@ -315,12 +305,13 @@ impl Domain {
         self.result.log_table(warning)
     }
     pub fn issues(&self) -> Failure {
-        self.result
-            .issues()
-            .iter()
-            .cloned()
-            .chain(self.publication_issues.iter().cloned())
-            .collect()
+        crate::issue_rows::collect(
+            self.result
+                .issues()
+                .iter()
+                .cloned()
+                .chain(self.publication_issues.iter().cloned()),
+        )
     }
     /// Retain complete run observations without recapture. Artifacts describe
     /// only a successful latest save; a refused save returns build observations.
@@ -340,14 +331,10 @@ impl Domain {
     /// Failed builds may publish their diagnostic log on explicit Save and still
     /// raise the original failed-build result. Build itself never writes.
     pub fn save(&mut self) -> Result<bool, FailedBuild> {
-        self.save_with(
-            yamaa_core::capacity::REPORT_ENCODED_BYTES,
-            |publisher, path, bytes| publisher.publish(path, bytes),
-        )
+        self.save_with(|publisher, path, bytes| publisher.publish(path, bytes))
     }
     fn save_with(
         &mut self,
-        report_limit: usize,
         mut publish: impl FnMut(
             &mut crate::file_publication::Publisher,
             &str,
@@ -368,18 +355,14 @@ impl Domain {
         // publication. Every prefix fits the admitted complete encoded report;
         // its artifact slots are reserved before the first publisher. Later
         // success only moves an already-owned entry into an admitted slot.
-        let mut budget = crate::report_projection::Budget::new(report_limit);
         let report = (|| {
-            let mut report = self
-                .result
-                .publication_observations(items.len(), &mut budget)?;
+            let mut report = self.result.publication_observations(items.len())?;
             let Value::Array(artifacts) = report["artifacts"].take() else {
                 return Err(specification_report::Error::InvalidObservation);
             };
             if artifacts.len() != items.len() {
                 return Err(specification_report::Error::InvalidObservation);
             }
-            budget.entries(artifacts.len())?;
             report["artifacts"] = Value::Array(Vec::with_capacity(artifacts.len()));
             Ok((report, artifacts.into_iter()))
         })();
@@ -677,21 +660,25 @@ fn native(identity: Identity<'_>) -> Application<Native<'_>> {
 }
 pub fn check(request: Request<'_>, identity: Identity<'_>) -> Failure {
     let mut application = native(identity);
-    domain_entry::check(request, &mut application).unwrap_or_else(|error| match error {
-        ApplicationError::Preparation(error) => {
-            crate::project_application::selection_failure(&error, application.host)
-        }
-        ApplicationError::Runtime(issues) => issues,
-    })
+    crate::issue_rows::collect(
+        domain_entry::check(request, &mut application).unwrap_or_else(|error| match error {
+            ApplicationError::Preparation(error) => {
+                crate::project_application::selection_failure(&error, application.host)
+            }
+            ApplicationError::Runtime(issues) => issues,
+        }),
+    )
 }
 pub fn domain(request: Request<'_>, identity: Identity<'_>) -> Result<Domain, Failure> {
     let mut application = native(identity);
-    domain_entry::domain(request, &mut application).map_err(|error| match error {
-        ApplicationError::Preparation(error) => {
-            crate::project_application::selection_failure(&error, application.host)
-        }
-        ApplicationError::Runtime(issues) => issues,
-    })
+    domain_entry::domain(request, &mut application)
+        .map_err(|error| match error {
+            ApplicationError::Preparation(error) => {
+                crate::project_application::selection_failure(&error, application.host)
+            }
+            ApplicationError::Runtime(issues) => issues,
+        })
+        .map_err(crate::issue_rows::collect)
 }
 
 #[cfg(test)]

@@ -79,12 +79,12 @@ fn successful_observations<C, D, T: TableAccess>(
 
     let mut value = report::envelope_sources(view, &attempt.sources, id, true)?;
     let (mut checks, findings) =
-        project_report::checked_records(&entered.retained_verifications, "verification", id)?;
+        project_report::checked_records(view, &entered.retained_verifications, "verification", id)?;
     if !findings.is_empty() {
         return Err(Error::InvalidObservation);
     }
     let (tail, findings) =
-        project_report::checked_records(&success.verifications, "verification", id)?;
+        project_report::checked_records(view, &success.verifications, "verification", id)?;
     if !findings.is_empty() {
         return Err(Error::InvalidObservation);
     }
@@ -123,7 +123,7 @@ fn log_observations<C, D, T: TableAccess>(
         };
         for actual in [&entered.retained_verifications[..], tail] {
             records(actual)?;
-            let (observed, _) = project_report::checked_records(actual, "verification", id)?;
+            let (observed, _) = project_report::checked_records(view, actual, "verification", id)?;
             checks.extend(observed);
         }
     }
@@ -318,25 +318,18 @@ impl<E> From<Error> for ProjectionError<'_, E> {
         Self::Report(error)
     }
 }
-fn activation_prefix<E>(attempt: &NativeAttempt<E>, budget: &mut Budget) -> Result<Value, Error> {
+fn activation_prefix<E>(attempt: &NativeAttempt<E>) -> Result<Value, Error> {
     use crate::project_activation_observations::{self as activation, ActivationView};
     use yamaa_core::producer_build::Failure;
     let held = attempt.provenance.as_ref();
     let observed = &attempt.graph.activation;
-
-    let lookups = observed
-        .bindings
-        .len()
-        .checked_add(observed.tests.len())
-        .ok_or(Error::OutputLimit)?;
 
     for binding in &observed.bindings {
         let index = *held
             .called_functions()
             .get(binding.function)
             .ok_or(Error::InvalidObservation)?;
-        let function = held
-            .metadata()
+        held.metadata()
             .environment()
             .functions()
             .get(index)
@@ -354,31 +347,12 @@ fn activation_prefix<E>(attempt: &NativeAttempt<E>, budget: &mut Budget) -> Resu
             .get(index)
             .ok_or(Error::InvalidObservation)?;
         let definition = function.definition();
-        let declared = definition
+        definition
             .tests
             .get(case.case)
             .ok_or(Error::InvalidObservation)?;
-
-        if let Some(value) = &case.actual {}
     }
-    // A source identity is copied for every observed binding/case. Admit its
-    // complete retained origin scan before the existing prefix formatter grows.
-    for _ in 0..lookups {
-        if let Some(root) = held.environment().root_optional() {}
-    }
-    let value = activation::activation(held, observed).map_err(|error| match error {
-        activation::Error::Limit {
-            resource,
-            limit,
-            actual,
-        } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-            resource,
-            limit,
-            actual,
-            Vec::new(),
-        )),
-        _ => Error::InvalidObservation,
-    })?;
+    let value = activation::activation(held, observed).map_err(|_| Error::InvalidObservation)?;
     let boundary = match &attempt.graph.outcome {
         Ok(()) | Err(Failure::Node { .. } | Failure::Binding { .. }) => {
             project_report::ActivationBoundary::Complete
@@ -441,21 +415,6 @@ fn decoded_finding(
         push_diagnostic(findings, diagnostic)?;
         return Ok(true);
     }
-    if let DecodeError::ResourceLimit {
-        resource,
-        limit,
-        actual,
-    } = error
-    {
-        let refusal = crate::resource_diagnostics::Refusal::new(
-            resource,
-            *limit,
-            *actual,
-            vec![format!("input.{}", source.name)],
-        );
-        push_diagnostic(findings, &refusal.diagnostic("ingest", "source_limit"))?;
-        return Ok(true);
-    }
     let DecodeError::Codec(error) = error else {
         return Ok(false);
     };
@@ -463,79 +422,15 @@ fn decoded_finding(
         push_diagnostic(findings, &refusal.diagnostic("ingest", "source_limit"))?;
         return Ok(true);
     }
-    if matches!(
-        error,
-        crate::specification_run::Error::OdmFields(_)
-            | crate::specification_run::Error::OdmValues(_)
-    ) {
-        let Some(diagnostics) = crate::source_diagnostics::findings_with_limit(
-            error,
-            Some(source),
-            budget.remaining_bytes(),
-        )
-        .map_err(Error::from)?
-        else {
-            return Ok(false);
-        };
-        for diagnostic in diagnostics {
-            push_diagnostic(findings, &diagnostic)?;
-        }
-        return Ok(true);
-    }
-
-    match error {
-        crate::specification_run::Error::Source(crate::csv_source::TextTableError::Csv(_)) => {}
-        crate::specification_run::Error::Ordinal(error) => {
-            let Some(field) = source
-                .ordinal
-                .as_deref()
-                .filter(|field| error.finding(&source.name, field).is_some())
-            else {
-                return Ok(false);
-            };
-        }
-        crate::specification_run::Error::TypedSource(crate::typed_csv::Error::Typing(error)) => {
-            use yamaa_core::typed_csv::Error::*;
-            match error {
-                UnknownField { field } => {}
-                FieldParse { field, value, .. } => {}
-                _ => return Ok(false),
-            }
-        }
-        crate::specification_run::Error::ParquetSource(error) => {
-            use crate::parquet_source::Error::*;
-            match error {
-                Malformed | EmptyName { .. } => {}
-                DuplicateName { field } | Value { field, .. } => {}
-                Unsupported { field, stored_type } => {}
-                _ => return Ok(false),
-            }
-        }
-        crate::specification_run::Error::SasSource(error) => {
-            use crate::sas_source::Error;
-            match error {
-                Error::Invalid(cause) => {}
-                Error::Typing(yamaa_core::typed_csv::Error::UnknownField { field }) => {}
-                Error::Typing(yamaa_core::typed_csv::Error::FieldParse {
-                    field, value, ..
-                }) => {}
-                _ => return Ok(false),
-            }
-        }
-        _ => return Ok(false),
-    }
-    let Some(values) = crate::specification_diagnostics::findings_with_limit(
-        error,
-        Some(source),
-        budget.remaining_bytes(),
-    )
-    .map_err(Error::from)?
+    let Some(values) =
+        crate::specification_diagnostics::findings(error, Some(source)).map_err(Error::from)?
     else {
         return Ok(false);
     };
     findings.extend(values);
     Ok(true)
 }
+
 fn failed_observations<'a, E>(
     view: &NodeReport<'_>,
     entered: &'a crate::file_producer_build::GraphAttempt<E, StoredReport, Error>,
@@ -642,7 +537,7 @@ fn failed_observations<'a, E>(
             } else {
                 "verification"
             };
-            let (checks, findings) = project_report::checked_records(tail, phase, id)?;
+            let (checks, findings) = project_report::checked_records(view, tail, phase, id)?;
             verifications.extend(checks);
             diagnostics.extend(findings);
         }
@@ -716,12 +611,8 @@ fn failed_observations<'a, E>(
                                 },
                             )
                             .collect::<Vec<_>>();
-                        let report = yamaa_core::diagnostic::admit_source_diagnostics(
-                            &borrowed,
-                            budget.remaining_bytes(),
-                        )
-                        .map_err(|_| Error::OutputLimit)?;
-                        for diagnostic in report.iter() {
+                        let report = yamaa_core::diagnostic::source_diagnostics(&borrowed);
+                        for diagnostic in report {
                             push_diagnostic(&mut diagnostics, &diagnostic)?;
                         }
                     }
@@ -754,13 +645,14 @@ fn failed_observations<'a, E>(
         }
         Err(yamaa_core::specification_output::CompleteError::Encode(
             crate::file_producer_build::CodecError::Csv(crate::csv_artifact::Error::Limit {
+                resource,
                 limit,
                 actual,
                 decimal_formatting,
             }),
         )) => {
             let refusal = crate::resource_diagnostics::Refusal::new(
-                "output_bytes",
+                resource,
                 *limit,
                 *actual,
                 vec![if *decimal_formatting {
@@ -820,9 +712,8 @@ fn failed_observations<'a, E>(
 pub fn attempt_report<'a, E>(
     attempt: &'a NativeAttempt<E>,
     id: Identity<'_>,
-    maximum: usize,
 ) -> Result<StoredReport, ProjectionError<'a, E>> {
-    attempt_report_classified(attempt, id, maximum, &[])
+    attempt_report_classified(attempt, id, &[])
 }
 
 /// Ordinary facts borrow payloads in this exact complete attempt. Reporting
@@ -830,7 +721,6 @@ pub fn attempt_report<'a, E>(
 pub fn attempt_report_classified<'a, E>(
     attempt: &'a NativeAttempt<E>,
     id: Identity<'_>,
-    maximum: usize,
     facts: &[project_report::Classified<'a, E>],
 ) -> Result<StoredReport, ProjectionError<'a, E>> {
     let facts = crate::producer_diagnostics::Facts::admit(attempt, facts)?;
@@ -873,23 +763,17 @@ pub fn attempt_report_classified<'a, E>(
     let activation_findings = facts.activation(attempt)?;
     let environment = attempt.provenance.environment();
 
-    if let Some(root) = environment.root_optional() {}
-    if let Some(lock) = environment.lock() {}
     let environment = json!({"source":environment.root_optional().map(|root| &root.source().identity),"lock_source":environment.lock().map(|lock| &lock.source.identity)});
     let mut result = StoredReport::empty(
         json!({"report_version":"0.3.0-draft","runtime":id.runtime,"backend":"rust","runtime_version":id.runtime_version,"engine_version":id.engine_version,"example":id.example,"entry":attempt.provenance.entry(),"outcome":if attempt.accepted() {"success"} else {"failure"},"activation":activation,"environment":environment,"nodes":[],"artifacts":[],"diagnostics":[],"unsupported":[],"handler_counts":[],"tables":[],"verifications":[],"callbacks":[],"source_reads":[],"error":null}),
     );
     let mut portable = attempt.boundary.is_ok()
-        && attempt.resources.is_ok()
         && activation_findings.is_some()
         && !matches!(attempt.graph.outcome, Err(Failure::Incomplete));
     if let Some(findings) = activation_findings {
         result["diagnostics"] = json!(findings);
     }
     match &attempt.graph.outcome {
-        Err(yamaa_core::producer_build::Failure::Limit(code)) => {
-            result["error"] = json!({"stage":"producer_build","code":code});
-        }
         Err(yamaa_core::producer_build::Failure::Binding { node, slot }) => {
             result["error"] = json!({"stage":"producer_binding","node":node,"slot":slot});
         }
@@ -985,8 +869,6 @@ pub fn attempt_report_classified<'a, E>(
     if attempt.accepted() && entered.len() != metadata.order().len() {
         return Err(Error::InvalidObservation.into());
     }
-    crate::report_projection::encoded_within_limit(&result, maximum)?;
-    let result = report::bounded(result)?;
     if portable {
         Ok(result)
     } else {

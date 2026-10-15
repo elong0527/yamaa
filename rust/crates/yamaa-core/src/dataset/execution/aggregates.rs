@@ -264,12 +264,7 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
                 if matches {
                     first.get_or_insert(source_row);
                     if filter(donor, bound, source_row)?
-                        && narrow(
-                            bound,
-                            range_value.as_ref(),
-                            donor,
-                            coordinate,
-                            source_row)?
+                        && narrow(bound, range_value.as_ref(), donor, coordinate, source_row)?
                     {
                         members.push(source_row);
                     }

@@ -4,7 +4,7 @@ use crate::{
     file_producer_build::Provenance,
     file_publication::{AnchoredTarget, Publisher},
     file_resources::{Error as ResourceError, Resources},
-    producer_publication::{same_location, selected_bound, AdmissionFailure},
+    producer_publication::{same_location, AdmissionFailure},
     producer_report::{NativeAttempt, NodeLogs},
     report_storage::StoredReport,
     specification_report::Error as ReportError,
@@ -16,7 +16,7 @@ use std::{
     panic::{catch_unwind, AssertUnwindSafe},
     sync::Arc,
 };
-use yamaa_core::producer_publication::{Limits, PreparedPublication};
+use yamaa_core::producer_publication::PreparedPublication;
 
 /// Lexical collisions across the complete authored graph are metadata facts.
 /// Existing-parent/physical alias checks remain at Save's whole-set preflight.
@@ -47,25 +47,6 @@ pub(crate) fn admit_locations(
                 .count()
         })
         .sum::<usize>();
-    resources
-        .charge_work(count.saturating_mul(count))
-        .map_err(Error::Resource)?;
-    // Reserve both selected path ownership and worst-case comparison work
-    // before location_from allocates any canonical selection text.
-    for document in documents {
-        for (field, _) in fields {
-            if let Some(origin) = document.written_output_field_origin(field) {
-                let bound = selected_bound(origin.declaring_source, origin.written)
-                    .map_err(|_| Error::Limit("producer_graph_text_bytes"))?;
-                resources
-                    .charge_metadata_text(bound.saturating_mul(2))
-                    .map_err(Error::Resource)?;
-                resources
-                    .charge_work(bound.saturating_mul(count + 1).saturating_mul(4))
-                    .map_err(Error::Resource)?;
-            }
-        }
-    }
     let mut locations: Vec<(&'static str, String)> = Vec::with_capacity(count);
     for (node, document) in documents.iter().enumerate() {
         for (field, right) in fields {
@@ -128,8 +109,6 @@ struct Target {
 }
 struct Targets {
     values: Vec<Target>,
-    paths: usize,
-    work: usize,
 }
 pub(crate) struct Admission {
     pub(crate) failure: AdmissionFailure,
@@ -152,7 +131,6 @@ impl Admission {
 pub(crate) struct Publication {
     primary: Option<PreparedPublication>,
     logs: Arc<[NodeLogs]>,
-    nodes: usize,
     requests: Vec<Request>,
     full: Result<Targets, Admission>,
     // A rejected warning/primary target cannot consume a retained V capability.
@@ -168,7 +146,6 @@ pub(crate) struct TargetFailure {
 #[derive(Debug)]
 pub(crate) enum Failure {
     Incomplete,
-    Limit(&'static str),
     Admission,
     Preflight(TargetFailure),
     Publish(TargetFailure),
@@ -268,7 +245,6 @@ impl Publication {
         prepared: Result<PreparedPublication, &'static str>,
         logs: Arc<[NodeLogs]>,
         resources: &Resources,
-        limits: Limits,
     ) -> Self {
         let (primary, refusal) = if attempt.accepted() {
             match prepared {
@@ -278,25 +254,24 @@ impl Publication {
         } else {
             (None, None)
         };
-        let requests = Self::collect_requests(attempt, primary.as_ref(), &logs, limits);
+        let requests = Self::collect_requests(attempt, primary.as_ref(), &logs);
         let (requests, full, diagnostic) = match requests {
             Err(error) => (Vec::new(), Err(Admission::unlocated(error)), None),
             Ok(requests) => {
                 let full = if let Some(code) = refusal {
-                    Err(Admission::unlocated(AdmissionFailure::Limit(code)))
+                    Err(Admission::unlocated(AdmissionFailure::Rejected(code)))
                 } else {
-                    Self::targets(&requests, false, &attempt.provenance, resources, limits)
+                    Self::targets(&requests, false, &attempt.provenance, resources)
                 };
-                let diagnostic = full.is_err().then(|| {
-                    Self::targets(&requests, true, &attempt.provenance, resources, limits)
-                });
+                let diagnostic = full
+                    .is_err()
+                    .then(|| Self::targets(&requests, true, &attempt.provenance, resources));
                 (requests, full, diagnostic)
             }
         };
         Self {
             primary,
             logs,
-            nodes: attempt.provenance.metadata().nodes().len(),
             requests,
             full,
             diagnostic,
@@ -306,42 +281,20 @@ impl Publication {
         attempt: &NativeAttempt<E>,
         primary: Option<&PreparedPublication>,
         logs: &[NodeLogs],
-        limits: Limits,
     ) -> Result<Vec<Request>, AdmissionFailure> {
         let nodes = attempt.provenance.metadata().nodes().len();
-        if nodes == 0 || nodes > limits.nodes || logs.len() > nodes {
-            return Err(AdmissionFailure::Limit("producer_publication_nodes"));
+        if nodes == 0 || logs.len() > nodes {
+            return Err(AdmissionFailure::Incomplete);
         }
-        let mut work = limits
-            .work
-            .checked_sub(nodes.saturating_mul(nodes).saturating_mul(8))
-            .ok_or(AdmissionFailure::Limit("producer_publication_work"))?;
         for (index, held) in logs.iter().enumerate() {
             if held.node >= nodes || logs[..index].iter().any(|prior| prior.node == held.node) {
                 return Err(AdmissionFailure::Incomplete);
             }
         }
-        let mut paths = limits.path_bytes;
-        let mut bytes = limits.artifact_bytes;
-        let mut budget = Budget::new(yamaa_core::capacity::REPORT_ENCODED_BYTES);
         let mut count = 0usize;
-        each(attempt, primary, logs, |request| {
+        each(attempt, primary, logs, |_| {
             count += 1;
-            if count > nodes.saturating_mul(3) {
-                return Err(AdmissionFailure::Limit("producer_publication_nodes"));
-            }
-            paths = paths
-                .checked_sub(request.path.len())
-                .ok_or(AdmissionFailure::Limit("producer_publication_paths"))?;
-            bytes = bytes
-                .checked_sub(request.bytes.len())
-                .ok_or(AdmissionFailure::Limit("producer_publication_bytes"))?;
-            work = work
-                .checked_sub(request.path.len())
-                .and_then(|n| n.checked_sub(request.bytes.len()))
-                .ok_or(AdmissionFailure::Limit("producer_publication_work"))?;
-            let copied = (|| budget.json(request.observation))();
-            copied.map_err(|_| AdmissionFailure::Limit("publication_report_limit"))
+            Ok(())
         })?;
         if count == 0 {
             return Err(AdmissionFailure::Incomplete);
@@ -371,47 +324,25 @@ impl Publication {
         diagnostic: bool,
         provenance: &Provenance,
         resources: &Resources,
-        limits: Limits,
     ) -> Result<Targets, Admission> {
         let selected = |request: &&Request| !diagnostic || request.field == "verification_log";
         let count = requests.iter().filter(selected).count();
         if count == 0 {
             return Err(Admission::unlocated(AdmissionFailure::Incomplete));
         }
-        let mut text = limits.path_bytes;
-        let mut work = limits.work;
+        // Validate every retained metadata owner before native target selection.
         for (index, request) in requests
             .iter()
             .enumerate()
             .filter(|(_, request)| selected(request))
         {
-            let failure = |reason| Admission::at(index, reason);
             let view = provenance
                 .report_views()
                 .nth(request.node)
-                .ok_or_else(|| failure(AdmissionFailure::Incomplete))?;
-            let origin = view
-                .document()
+                .ok_or_else(|| Admission::at(index, AdmissionFailure::Incomplete))?;
+            view.document()
                 .written_output_field_origin(request.field)
-                .ok_or_else(|| failure(AdmissionFailure::Incomplete))?;
-            for path in [
-                origin.declaring_source,
-                origin.written,
-                request.path.as_str(),
-            ] {
-                text = text.checked_sub(path.len()).ok_or_else(|| {
-                    failure(AdmissionFailure::Limit("producer_publication_paths"))
-                })?;
-            }
-            let bound = selected_bound(origin.declaring_source, origin.written).map_err(failure)?;
-            text = text
-                .checked_sub(bound.saturating_mul(2))
-                .ok_or_else(|| failure(AdmissionFailure::Limit("producer_publication_paths")))?;
-            work = work
-                .checked_sub(request.node.saturating_add(1))
-                .and_then(|n| n.checked_sub(bound.saturating_mul(count + 1).saturating_mul(4)))
-                .and_then(|n| n.checked_sub(count))
-                .ok_or_else(|| failure(AdmissionFailure::Limit("producer_publication_work")))?;
+                .ok_or_else(|| Admission::at(index, AdmissionFailure::Incomplete))?;
         }
         let mut targets = Vec::with_capacity(count);
         for (index, request) in requests.iter().enumerate() {
@@ -435,15 +366,6 @@ impl Publication {
             let selected = resources
                 .location_from(origin.declaring_source, origin.written)
                 .map_err(failure)?;
-            if selected.len()
-                > selected_bound(origin.declaring_source, origin.written)
-                    .map_err(|reason| Admission::at(index, reason))?
-            {
-                return Err(Admission::at(
-                    index,
-                    AdmissionFailure::Limit("producer_publication_paths"),
-                ));
-            }
             let target = resources
                 .publication_target_from(origin.declaring_source, origin.written)
                 .map_err(failure)?;
@@ -459,11 +381,7 @@ impl Publication {
                 target,
             });
         }
-        Ok(Targets {
-            values: targets,
-            paths: limits.path_bytes - text,
-            work: limits.work - work,
-        })
+        Ok(Targets { values: targets })
     }
     pub(crate) fn requests(&self, diagnostic: bool) -> impl Iterator<Item = (usize, &Request)> {
         self.requests
@@ -525,7 +443,6 @@ impl Publication {
     pub(crate) fn save_into(
         &self,
         diagnostic: bool,
-        limits: Limits,
         attempt: &mut Attempt,
         mut publish: impl FnMut(
             &mut Publisher,
@@ -542,37 +459,6 @@ impl Publication {
             }
         };
         let count = self.requests(diagnostic).count();
-        let admitted = (|| {
-            if self.nodes > limits.nodes || count == 0 || count > limits.nodes.saturating_mul(3) {
-                return Err("producer_publication_nodes");
-            }
-            let mut paths = limits
-                .path_bytes
-                .checked_sub(targets.paths)
-                .ok_or("producer_publication_paths")?;
-            let mut bytes = limits.artifact_bytes;
-            let mut work = limits
-                .work
-                .checked_sub(targets.work)
-                .ok_or("producer_publication_work")?;
-            for (_, request) in self.requests(diagnostic) {
-                paths = paths
-                    .checked_sub(request.path.len())
-                    .ok_or("producer_publication_paths")?;
-                bytes = bytes
-                    .checked_sub(self.bytes(request).len())
-                    .ok_or("producer_publication_bytes")?;
-                work = work
-                    .checked_sub(request.path.len())
-                    .and_then(|n| n.checked_sub(self.bytes(request).len()))
-                    .ok_or("producer_publication_work")?;
-            }
-            Ok::<_, &'static str>(())
-        })();
-        if let Err(code) = admitted {
-            attempt.outcome = Err(Failure::Limit(code));
-            return;
-        }
         // Retain all potential entry text before opening any publisher. The
         // actual ledger receives only entries moved before crossing the port.
         let mut entries = self

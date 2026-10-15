@@ -186,37 +186,24 @@ pub(crate) fn source_findings(
     error: &Error,
     source: &SourceDeclaration,
 ) -> Result<Option<Vec<Value>>, crate::source_diagnostics::SourceProjectionError> {
-    source_findings_at(error, source, 0)
-}
-fn source_findings_at(
-    error: &Error,
-    source: &SourceDeclaration,
-    depth: usize,
-) -> Result<Option<Vec<Value>>, crate::source_diagnostics::SourceProjectionError> {
-    let projected = crate::specification_diagnostics::findings_with_limit(
-        error,
-        Some(source),
-        yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
-    )?;
-    if projected.is_some() {
-        return Ok(projected);
-    }
-    if let Error::Sources(errors) = error {
-        if depth == crate::source_diagnostics::MAX_SOURCE_REPORT_FRAMES {
-            return Err(crate::source_diagnostics::SourceProjectionError::TraversalLimit);
-        }
-        let mut findings = Vec::new();
-        for (source, error) in errors {
-            let Some(projected) = source_findings_at(error, source, depth + 1)? else {
-                return Ok(None);
-            };
+    let mut pending = vec![(source, error)];
+    let mut findings = Vec::new();
+    while let Some((source, error)) = pending.pop() {
+        if let Some(projected) = crate::specification_diagnostics::findings(error, Some(source))? {
             findings.extend(projected);
+        } else if let Error::Sources(errors) = error {
+            pending.extend(errors.iter().rev().map(|(source, error)| (source, error)));
+        } else if let Some(refusal) = self::source(error, source) {
+            findings.push(
+                refusal
+                    .value("ingest", "source_limit")
+                    .expect("resource diagnostic"),
+            );
+        } else {
+            return Ok(None);
         }
-        return Ok(Some(findings));
     }
-    Ok(self::source(error, source)
-        .and_then(|refusal| refusal.value("ingest", "source_limit"))
-        .map(|finding| vec![finding]))
+    Ok(Some(findings))
 }
 pub(crate) fn run_limit<E>(
     error: &yamaa_core::specification_run::RunError<E>,
@@ -246,20 +233,7 @@ pub(crate) fn outcome(
         "output_rows" => "output_rows",
         "output_cells" => "output_cells",
         "output_columns" => "output_columns",
-        "source_rows" => "rows",
-        "key_cells" => "key_cells",
-        "work_cells" => "work_cells",
-        "scalar_text_bytes" => "scalar_text_bytes",
-        "output_text_bytes" => "output_text_bytes",
-        "identity_cells" => "identity_cells",
-        "identity_text_bytes" => "identity_text_bytes",
-        "predicate_work" => "predicate_work",
-        "predicate_resolutions" => "predicate_resolutions",
-        "predicate_text_bytes" => "predicate_text_bytes",
-        "predicate_like_work" => "predicate_like_work",
-        "predicate_regex_subject_bytes" => "predicate_regex_subject_bytes",
-        "predicate_regex_work" => "predicate_regex_work",
-        "predicate_regex_state_cells" => "predicate_regex_state_cells",
+        "regex_steps" => "regex_steps",
         _ => return None,
     };
     let limit = value["limit"].as_str()?.parse().ok()?;

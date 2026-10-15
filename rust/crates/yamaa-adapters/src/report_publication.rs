@@ -1,6 +1,6 @@
 //! All publication report storage and its largest wire prefix are admitted
 //! before a publisher is entered. Completion only moves owned fields.
-use crate::{report_projection::Budget, report_storage::StoredReport, specification_report::Error};
+use crate::{report_storage::StoredReport, specification_report::Error};
 use serde_json::{json, Value};
 
 const CODES: [&str; 10] = [
@@ -31,64 +31,30 @@ impl Prepared {
         report: &mut StoredReport,
         locations: &[Location<'_>],
         logged: bool,
-        maximum: usize,
-        budget: &mut Budget,
     ) -> Result<Self, Error> {
-        let count = locations
-            .len()
-            .checked_add(1)
-            .and_then(|n| n.checked_mul(CODES.len() + 1))
-            .ok_or(Error::OutputLimit)?;
-        budget.entries(count.checked_mul(16).ok_or(Error::OutputLimit)?)?;
-        budget.text("success")?;
-        budget.text("failure")?;
+        let count = (locations.len() + 1) * (CODES.len() + 1);
         let mut errors = Vec::with_capacity(count);
-        let mut largest = 0;
-        let mut largest_length = 0;
         for code in CODES.into_iter().chain(std::iter::once(
             yamaa_core::diagnostic::ConditionCode::OutputPublicationFailed
                 .definition()
                 .condition,
         )) {
             for location in std::iter::once(None).chain(locations.iter().map(Some)) {
-                budget.text(code)?;
-                if let Some(location) = location {
-                    for text in location.field.into_iter().chain(location.path) {
-                        budget.text(text)?;
-                    }
-                }
                 let mut value =
                     json!({"stage":"publication","code":code,"node":location.map(|l|l.node)});
                 if logged {
                     value["field"] = json!(location.and_then(|l| l.field));
                     value["path"] = json!(location.and_then(|l| l.path));
                 }
-                let length = serde_json::to_vec(&value)
-                    .map_err(|_| Error::InvalidObservation)?
-                    .len();
-                if length > largest_length {
-                    largest_length = length;
-                    largest = errors.len();
-                }
                 errors.push((location.map(|l| l.key), code, value));
             }
         }
-        // Complete artifact/entry arrays dominate every shorter prefix. False
-        // is one encoded byte longer than true. The longest owned error covers
-        // every admitted code/location, including failures before first entry.
-        let worst = &errors[largest].2;
-        budget.json(worst)?;
-        report["publication"]["error"] = worst.clone();
         for entry in report["publication"]["entered"]
             .as_array_mut()
             .ok_or(Error::InvalidObservation)?
         {
             entry["published"] = Value::Bool(false);
         }
-        crate::report_projection::encoded_within_limit(
-            report,
-            maximum.min(yamaa_core::capacity::REPORT_ENCODED_BYTES),
-        )?;
         Ok(Self {
             errors,
             success: json!("success"),

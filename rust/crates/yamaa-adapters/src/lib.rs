@@ -35,7 +35,6 @@ pub mod specification_run;
 pub mod specification_run_view;
 
 pub mod resource_diagnostics;
-mod source_decode_usage;
 pub mod source_diagnostics;
 mod source_ordinal;
 pub mod specification_diagnostics;
@@ -106,7 +105,6 @@ pub mod host_limits;
 
 pub mod callback;
 pub mod dataset_result;
-pub use yamaa_core::dataset::ExecutionBudget;
 mod dataset_snapshot;
 mod execution_diagnostics;
 pub mod ipc_table;

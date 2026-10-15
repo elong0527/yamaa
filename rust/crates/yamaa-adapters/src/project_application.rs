@@ -132,12 +132,7 @@ fn environment_failure(
                     )),
                 }
             }
-            if !crate::issue_rows::within_limit(
-                &issues,
-                crate::specification_check::MAX_ISSUE_BYTES,
-            ) {
-                return refused("environment");
-            }
+
             Ok(issues)
         }
         EnvironmentFailure::Interrupted { error, .. } => {
@@ -150,10 +145,14 @@ fn environment_failure(
     projected.unwrap_or_else(|_| refused("environment"))
 }
 pub fn check(specification: &str, environment: &str, host: Language) -> Failure {
-    match crate::file_workflow::prepare(specification, environment, host) {
-        Ok(graph) => crate::producer_check::prepared(&graph).unwrap_or_else(|_| refused("check")),
-        Err(error) => workflow_issues(&error, host),
-    }
+    crate::issue_rows::collect(
+        match crate::file_workflow::prepare(specification, environment, host) {
+            Ok(graph) => {
+                crate::producer_check::prepared(&graph).unwrap_or_else(|_| refused("check"))
+            }
+            Err(error) => workflow_issues(&error, host),
+        },
+    )
 }
 fn workflow_issues(error: &crate::file_workflow::Error, host: Language) -> Failure {
     crate::producer_check::rejected(error, host).unwrap_or_else(|error| match error {
@@ -201,30 +200,12 @@ pub fn selection_failure(error: &crate::file_workflow::SelectionError, host: Lan
             PrepareError::Invalid(_) => {
                 crate::project_check::rejected(error.run()).unwrap_or_else(|_| refused("check"))
             }
-            PrepareError::Unsupported(features) => {
-                let mut budget = crate::report_projection::Budget::new(
-                    crate::specification_check::MAX_ISSUE_BYTES,
-                );
-                let admitted = (|| {
-                    budget.entries(features.len())?;
-                    for feature in features {
-                        for _ in 0..4 {
-                            budget.text(&feature.operation)?;
-                            budget.text(&feature.path)?;
-                        }
-                    }
-                    Ok::<_, crate::specification_report::Error>(())
-                })();
-                if admitted.is_err() {
-                    return refused("check");
-                }
-                features
-                    .iter()
-                    .flat_map(|feature| {
-                        file_application::unsupported(&feature.operation, Some(&feature.path))
-                    })
-                    .collect()
-            }
+            PrepareError::Unsupported(features) => features
+                .iter()
+                .flat_map(|feature| {
+                    file_application::unsupported(&feature.operation, Some(&feature.path))
+                })
+                .collect(),
             error @ (PrepareError::Limit(_) | PrepareError::Numeric { .. }) => {
                 crate::specification_diagnostics::compiler_failure(error)
             }

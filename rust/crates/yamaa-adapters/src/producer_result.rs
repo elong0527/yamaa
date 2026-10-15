@@ -77,20 +77,13 @@ impl RootResult {
         self.save_attempt.as_ref()
     }
     pub fn save(&mut self) -> Result<bool, crate::file_application::FailedBuild> {
-        self.save_with_limits(
-            Default::default(),
-            yamaa_core::capacity::REPORT_ENCODED_BYTES,
-        )
+        let outcome = self.save_actual();
+        self.issues = crate::issue_rows::collect(std::mem::take(&mut self.issues));
+        outcome
     }
-    pub fn save_with_limits(
-        &mut self,
-        limits: yamaa_core::producer_publication::Limits,
-        maximum: usize,
-    ) -> Result<bool, crate::file_application::FailedBuild> {
+    fn save_actual(&mut self) -> Result<bool, crate::file_application::FailedBuild> {
         if self.log_publication.is_some() {
-            return self.save_logs_with(limits, maximum, |publisher, path, bytes| {
-                publisher.publish(path, bytes)
-            });
+            return self.save_logs_with(|publisher, path, bytes| publisher.publish(path, bytes));
         }
         if self.output.is_none()
             || (self.publication.is_none() && self.publication_refusal.is_none())
@@ -109,7 +102,7 @@ impl RootResult {
         };
         // Complete report ownership and prefix projection admission precedes
         // every publisher. Save never classifies a host error or rerenders Build.
-        let mut budget = Budget::new(maximum);
+
         let admitted = (|| {
             let mut value = self.observations.clone();
             value["publication"] = serde_json::json!({"status":"failure",
@@ -125,8 +118,7 @@ impl RootResult {
                     path: None,
                 })
                 .collect::<Vec<_>>();
-            let fields =
-                crate::report_publication::Prepared::new(&mut value, &locations, false, maximum)?;
+            let fields = crate::report_publication::Prepared::new(&mut value, &locations, false)?;
             Ok::<_, ReportError>((value, fields))
         })();
         let (mut value, mut fields) = match admitted {
@@ -142,13 +134,13 @@ impl RootResult {
             }
         };
         let mut attempt = crate::producer_publication::Attempt::default();
-        publication.save_into(limits, &mut attempt);
+        publication.save_into(&mut attempt);
         use yamaa_core::producer_publication::Failure;
         let (saved, code, node) = if let Some(failure) = publication.admission_failure() {
             use crate::producer_publication::AdmissionFailure;
             match failure {
                 AdmissionFailure::Incomplete => (false, "publication_incomplete", None),
-                AdmissionFailure::Limit(code) => (false, *code, None),
+                AdmissionFailure::Rejected(code) => (false, *code, None),
                 AdmissionFailure::Resource { node, error } => {
                     self.issues
                         .extend(crate::file_application::resource_failure("output", error));
@@ -161,7 +153,6 @@ impl RootResult {
             match &attempt.entered.outcome {
                 Ok(()) => (true, "", None),
                 Err(Failure::Incomplete) => (false, "publication_incomplete", None),
-                Err(Failure::Limit(code)) => (false, *code, None),
                 Err(Failure::Preflight(error)) => {
                     self.issues
                         .extend(crate::file_application::publication_failure(&error.error));
@@ -208,8 +199,6 @@ impl RootResult {
     }
     fn save_logs_with(
         &mut self,
-        limits: yamaa_core::producer_publication::Limits,
-        maximum: usize,
         publish: impl FnMut(
             &mut crate::file_publication::Publisher,
             &str,
@@ -232,7 +221,7 @@ impl RootResult {
         self.log_save_attempt = None;
         let publication = self.log_publication.as_ref().expect("logged owner");
         let count = publication.requests(failed).count();
-        let mut budget = Budget::new(maximum);
+
         let report = (|| {
             // Own the complete report before any write. Every actual prefix is
             // formed by dropping already-owned artifact/entry suffixes; it never
@@ -247,8 +236,7 @@ impl RootResult {
                     path: Some(&request.path),
                 })
                 .collect::<Vec<_>>();
-            let fields =
-                crate::report_publication::Prepared::new(&mut value, &locations, true, maximum)?;
+            let fields = crate::report_publication::Prepared::new(&mut value, &locations, true)?;
             Ok::<_, ReportError>((value, fields))
         })();
         let (mut value, mut fields) = match report {
@@ -268,12 +256,12 @@ impl RootResult {
             }
         };
         let mut attempt = crate::producer_log_publication::Attempt::default();
-        publication.save_into(failed, limits, &mut attempt, publish);
+        publication.save_into(failed, &mut attempt, publish);
         let (saved, code, request) = if let Some(failure) = publication.admission_failure(failed) {
             use crate::producer_publication::AdmissionFailure;
             match &failure.failure {
                 AdmissionFailure::Incomplete => (false, "publication_incomplete", failure.request),
-                AdmissionFailure::Limit(code) => (false, *code, failure.request),
+                AdmissionFailure::Rejected(code) => (false, *code, failure.request),
                 AdmissionFailure::Resource { error, .. } => {
                     self.issues
                         .extend(crate::file_application::resource_failure("output", error));
@@ -292,7 +280,6 @@ impl RootResult {
                 Err(Failure::Incomplete | Failure::Admission) => {
                     (false, "publication_incomplete", None)
                 }
-                Err(Failure::Limit(code)) => (false, *code, None),
                 Err(Failure::Preflight(failure)) => {
                     self.issues
                         .extend(crate::file_application::publication_failure(&failure.error));
@@ -399,26 +386,15 @@ impl<E> std::fmt::Debug for Error<'_, E> {
 pub fn prepare_classified<'a, E>(
     attempt: &'a NativeAttempt<E>,
     id: Identity<'_>,
-    maximum: usize,
     facts: &[Classified<'a, E>],
 ) -> Result<RootResult, Error<'a, E>> {
-    let observations = producer_report::attempt_report_classified(attempt, id, maximum, facts)
-        .map_err(Error::Report)?;
-    prepare_observations(attempt, observations, maximum, true)
+    let observations =
+        producer_report::attempt_report_classified(attempt, id, facts).map_err(Error::Report)?;
+    prepare_observations(attempt, observations, true)
 }
 fn prepare_observations<'a, E>(
     attempt: &'a NativeAttempt<E>,
     observations: StoredReport,
-    maximum: usize,
-    output_allowed: bool,
-) -> Result<RootResult, Error<'a, E>> {
-    let mut budget = Budget::new(maximum);
-    prepare_observations_with_budget(attempt, observations, maximum, output_allowed)
-}
-fn prepare_observations_with_budget<'a, E>(
-    attempt: &'a NativeAttempt<E>,
-    observations: StoredReport,
-    maximum: usize,
     output_allowed: bool,
 ) -> Result<RootResult, Error<'a, E>> {
     let diagnostics =
@@ -427,8 +403,6 @@ fn prepare_observations_with_budget<'a, E>(
             .ok_or(Error::Report(ProjectionError::Report(
                 ReportError::InvalidObservation,
             )))?;
-    let admit = (|| Ok::<_, ReportError>(()))();
-    admit.map_err(|error| Error::Report(ProjectionError::Report(error)))?;
     let mut issues = diagnostics
         .iter()
         .cloned()
@@ -437,14 +411,6 @@ fn prepare_observations_with_budget<'a, E>(
         .map_err(|_| Error::Report(ProjectionError::Report(ReportError::InvalidObservation)))?;
     if (!attempt.accepted() || !output_allowed) && issues.is_empty() {
         issues = crate::file_application::rejected("build", "producer_build");
-    }
-    if !crate::issue_rows::within_limit(
-        &issues,
-        maximum.min(crate::specification_check::MAX_ISSUE_BYTES),
-    ) {
-        return Err(Error::Report(ProjectionError::Report(
-            ReportError::OutputLimit,
-        )));
     }
     let output = if attempt.accepted() && output_allowed {
         match root_output(attempt) {
@@ -460,6 +426,7 @@ fn prepare_observations_with_budget<'a, E>(
     } else {
         None
     };
+    let issues = crate::issue_rows::collect(issues);
     Ok(RootResult {
         observations,
         base_issues: issues.len(),
@@ -482,22 +449,19 @@ fn prepare_observations_with_budget<'a, E>(
 pub fn prepare_owned_classified<'a, E>(
     attempt: &'a crate::file_producer_build::OwnedAttempt<E>,
     id: Identity<'_>,
-    maximum: usize,
     facts: &[Classified<'a, E>],
 ) -> Result<RootResult, Error<'a, E>> {
     let has_verification = attempt
         .logs()
         .iter()
         .any(|logs| logs.logs.verification.is_some());
-    let mut result = match prepare_classified(attempt, id, maximum, facts) {
+    let mut result = match prepare_classified(attempt, id, facts) {
         Ok(result) => result,
         Err(Error::Output {
             mut observations,
             error,
             ..
         }) if has_verification => {
-            let mut budget = Budget::new(maximum);
-
             observations["outcome"] = Value::String("failure".into());
             observations["error"] =
                 serde_json::json!({"stage":"output","code":"output_projection"});
@@ -510,12 +474,12 @@ pub fn prepare_owned_classified<'a, E>(
                     ReportError::InvalidObservation,
                 )))?
                 .push(finding);
-            let mut result = prepare_observations(attempt, observations, maximum, false)?;
+            let mut result = prepare_observations(attempt, observations, false)?;
             result._output_failure = Some(error);
             result
         }
         Err(Error::Report(ProjectionError::Original { observations, .. })) if has_verification => {
-            prepare_observations(attempt, observations, maximum, false)?
+            prepare_observations(attempt, observations, false)?
         }
         Err(error) => return Err(error),
     };
@@ -566,16 +530,6 @@ fn root_output<E>(attempt: &NativeAttempt<E>) -> Result<(PublicTable, Vec<u8>), 
             .any(|(&index, name)| columns.get(index).is_none_or(|column| &column.name != name))
     {
         return Err(invalid);
-    }
-    // The qualified encoder sanitizes the complete table before projection.
-    // Admit full shape, names, cells and work for Arrow, public columns and IPC
-    // before any of those owners allocate. Serialized CSV precision is irrelevant.
-    for _ in 0..3 {
-        for (index, column) in columns.iter().enumerate() {
-            for row in 0..table.row_count() {
-                let cell = table.cell(row, index).map_err(|_| invalid)?;
-            }
-        }
     }
     let bytes = ipc_table::encode_projected_dataset(table, projection)?;
     let table = PublicTable::decode(&bytes)?;

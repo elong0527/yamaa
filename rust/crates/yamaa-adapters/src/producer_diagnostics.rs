@@ -74,9 +74,6 @@ impl<'a, 'f, E> Facts<'a, 'f, E> {
         let plan = view.compiled();
 
         let declaring = view.document().declaring_source(path);
-        for _ in 0..4 {
-            if let Some(source) = declaring {}
-        }
         let keys = plan.key_names().collect::<Vec<_>>();
         match invocation::invocation(
             path,
@@ -120,22 +117,6 @@ impl<'a, 'f, E> Facts<'a, 'f, E> {
                 return Err(Error::InvalidObservation);
             }
 
-            let raw = &captured.root().raw().document;
-            let written = raw
-                .field(raw.root(), "lock")
-                .and_then(|index| raw.nodes().get(index))
-                .and_then(|node| match node {
-                    yamaa_core::schema::DocumentNode::Text(text) => Some(text.as_str()),
-                    _ => None,
-                })
-                .ok_or(Error::InvalidObservation)?;
-            for _ in 0..findings.len() {
-                for _ in 0..4 {
-                    if let Some(lock) = captured.lock() {}
-                }
-            }
-            // The qualified lock projector admits the held authored lock spelling
-            // and all typed facts before ownership. Its ceiling is cumulative here.
             return match crate::project_lock_diagnostics::issues(captured, findings) {
                 Ok(issues) => issues
                     .into_iter()
@@ -145,18 +126,15 @@ impl<'a, 'f, E> Facts<'a, 'f, E> {
                 Err(_) => Err(Error::InvalidObservation),
             };
         }
-        let count = match failure {
-            Failure::Bindings(failures) => failures.len(),
-            Failure::Tests(failures) => failures.len(),
-            _ => return Ok(None),
-        };
+        if !matches!(failure, Failure::Bindings(_) | Failure::Tests(_)) {
+            return Ok(None);
+        }
         let selected = held.called_functions();
 
         // Preflight the whole selected declaration set and all failure contexts,
         // including external authored origins, before formatting paths or issues.
         for &index in selected {
-            let definition = held
-                .metadata()
+            held.metadata()
                 .environment()
                 .functions()
                 .get(index)
@@ -167,7 +145,7 @@ impl<'a, 'f, E> Facts<'a, 'f, E> {
         match failure {
             Failure::Bindings(failures) => {
                 for failure in failures {
-                    let definition = selected
+                    selected
                         .get(failure.function)
                         .and_then(|&index| held.metadata().environment().functions().get(index))
                         .ok_or(Error::InvalidObservation)?
@@ -185,19 +163,10 @@ impl<'a, 'f, E> Facts<'a, 'f, E> {
                         .and_then(|&index| held.metadata().environment().functions().get(index))
                         .ok_or(Error::InvalidObservation)?
                         .definition();
-                    let test = definition
+                    definition
                         .tests
                         .get(case)
                         .ok_or(Error::InvalidObservation)?;
-
-                    match failure {
-                        TestFailure::Invocation { error, .. } => {
-                            invocation_budget("functions.tests", error, None, std::iter::empty)?
-                        }
-                        TestFailure::Result {
-                            actual, expected, ..
-                        } => {}
-                    }
                 }
             }
             _ => unreachable!(),

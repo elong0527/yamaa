@@ -28,15 +28,10 @@ pub enum Error {
 }
 impl From<crate::source_diagnostics::SourceProjectionError> for Error {
     fn from(error: crate::source_diagnostics::SourceProjectionError) -> Self {
-        use crate::source_diagnostics::SourceProjectionError;
         match error {
-            SourceProjectionError::TraversalLimit
-            | SourceProjectionError::Context(yamaa_core::diagnostic::ProjectionError::Limit) => {
-                Self::OutputLimit
+            crate::source_diagnostics::SourceProjectionError::InvalidContext => {
+                Self::InvalidObservation
             }
-            SourceProjectionError::Context(
-                yamaa_core::diagnostic::ProjectionError::InvalidContext,
-            ) => Self::InvalidObservation,
         }
     }
 }
@@ -436,19 +431,8 @@ impl BuildResult {
             .map(crate::issue_rows::Issue::from_diagnostic)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|_| Error::InvalidObservation)?;
-        if !crate::issue_rows::within_limit(
-            &self.issues,
-            crate::specification_check::MAX_ISSUE_BYTES,
-        ) {
-            return Err(Error::ResourceLimit(
-                crate::resource_diagnostics::Refusal::new(
-                    "diagnostic_bytes",
-                    crate::specification_check::MAX_ISSUE_BYTES,
-                    None,
-                    Vec::new(),
-                ),
-            ));
-        }
+
+        self.issues = crate::issue_rows::collect(std::mem::take(&mut self.issues));
         Ok(())
     }
     pub fn output(&self) -> Option<&[u8]> {
@@ -620,7 +604,6 @@ pub(crate) fn prepare_result(
                     required,
                     vec!["output.path".into()],
                 )),
-                crate::ipc_table::TableError::OutputLimit => Error::OutputLimit,
                 _ => Error::InvalidObservation,
             })
         })
@@ -655,7 +638,6 @@ pub(crate) fn prepare_result(
         }
         artifacts.extend(primary);
         report["artifacts"] = Value::Array(artifacts);
-        let report = Ok(report)?;
         prepared.replace_report(report);
     }
     let issues = prepared.prepared_report()["diagnostics"]
@@ -666,20 +648,11 @@ pub(crate) fn prepare_result(
         .map(crate::issue_rows::Issue::from_diagnostic)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|_| Error::InvalidObservation)?;
-    if !crate::issue_rows::within_limit(&issues, crate::specification_check::MAX_ISSUE_BYTES) {
-        return Err(Error::ResourceLimit(
-            crate::resource_diagnostics::Refusal::new(
-                "diagnostic_bytes",
-                crate::specification_check::MAX_ISSUE_BYTES,
-                None,
-                Vec::new(),
-            ),
-        ));
-    }
+
     Ok(BuildResult {
         prepared,
         table,
-        issues,
+        issues: crate::issue_rows::collect(issues),
         verification,
         warning,
     })
@@ -709,7 +682,7 @@ fn rejected_output(
     report["nodes"][0]["outcome"] = json!("failure");
     report["artifacts"] = json!([]);
     Ok(yamaa_core::specification_output::PreparedOutput::failed(
-        Ok(report)?,
+        report,
     ))
 }
 impl<E> From<Error> for CompleteError<E> {
@@ -793,11 +766,12 @@ impl yamaa_core::specification_output::ArtifactEncoder for Encoder<'_> {
             Some("csv") => crate::csv_artifact::render(dataset, projection, self.1).map_err(
                 |error| match error {
                     crate::csv_artifact::Error::Limit {
+                        resource,
                         limit,
                         actual,
                         decimal_formatting,
                     } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                        "output_bytes",
+                        resource,
                         limit,
                         actual,
                         vec![if decimal_formatting {
@@ -874,7 +848,7 @@ impl yamaa_core::specification_output::OutputReport for Report<'_, '_> {
     type Error = Error;
     type Report = StoredReport;
     fn failure(&mut self) -> Result<StoredReport, Error> {
-        bounded(self.value.take().ok_or(Error::InvalidObservation)?)
+        self.value.take().ok_or(Error::InvalidObservation)
     }
     fn begin(&mut self, _execution: &yamaa_core::dataset::Execution) -> Result<(), Error> {
         self.value.as_ref().ok_or(Error::InvalidObservation)?;
