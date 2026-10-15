@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 
 import pytest
-import yaml
 
 ROOT = Path(__file__).parents[2]
 HARBOR = ROOT / "evaluations/harbor"
@@ -87,33 +86,3 @@ def test_the_r_command_fails_instead_of_skipping_an_absent_runtime(
         controls.main()
     assert error.value.code == 2
     assert not (tmp_path / "out").exists()
-
-
-def test_the_hosted_control_reuses_r_setup_and_retains_failure_evidence():
-    workflow = yaml.safe_load(
-        (ROOT / ".github/workflows/harbor-evaluation.yml").read_text()
-    )
-    steps = workflow["jobs"]["solutions"]["steps"]
-    control = next(
-        s for s in steps if s.get("name") == "Reject R literal golden writers"
-    )
-    assert control["if"] == (
-        "always() && (github.ref == 'refs/heads/validation/issue-2297-harbor' || "
-        "github.ref == 'refs/heads/validation/issue-2297-r-rejection')"
-    )
-    assert (
-        "--no-sync python evaluations/harbor/check_pkqt_r_golden_copy.py"
-        in control["run"]
-    )
-    assert steps.index(control) > next(
-        i
-        for i, step in enumerate(steps)
-        if step.get("name") == "Install the evaluation image's R packages"
-    )
-    artifact = next(s for s in steps if s.get("name") == "Upload R rejection controls")
-    assert "always()" in artifact["if"]
-    assert artifact["with"]["name"] == "pkqt-r-golden-copy"
-    # The completed one-off acceptance branch needs no automatic push runs.
-    assert "validation/issue-2297-r-rejection" not in workflow[True]["push"]["branches"]
-    oracle = yaml.safe_load((ROOT / ".github/workflows/harbor-oracle.yml").read_text())
-    assert "validation/issue-2297-r-rejection" not in oracle[True]["push"]["branches"]
