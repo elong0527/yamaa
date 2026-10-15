@@ -173,7 +173,10 @@ pub(super) fn declaration_findings(
             )?;
         }
     }
-    if let Some(rows) = d.field(d.root(), "rows") {
+    if let Some(rows) = d
+        .field(d.root(), "rows")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+    {
         for (index, &row) in sequence(d, rows)?.iter().enumerate() {
             if let Some(items) = d.field(row, "derivations") {
                 for &(name, value) in mapping(d, items)? {

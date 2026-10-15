@@ -235,6 +235,7 @@ fn walk(
     let rows = present(d, d.root(), "rows");
     let multiplicity = d
         .field(d.root(), "rows")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
         .map(|id| sequence(d, id).map(|items| items.len().max(1)))
         .transpose()?
         .unwrap_or(1);
@@ -254,7 +255,10 @@ fn walk(
             )?;
         }
     }
-    if let Some(items) = d.field(d.root(), "rows") {
+    if let Some(items) = d
+        .field(d.root(), "rows")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+    {
         for (index, &row) in sequence(d, items)?.iter().enumerate() {
             if let Some(items) = d.field(row, "derivations") {
                 for &(name, value) in mapping(d, items)? {
