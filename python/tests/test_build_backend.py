@@ -118,6 +118,71 @@ def test_intact_member_archive_preserved(tmp_path: Path) -> None:
     assert payloads["pkg-0.1/rust/crates/foo/build.rs"] == b"fn main() {}\n"
 
 
+def _make_archive_with_extra(tmp_path: Path, extra) -> Path:
+    archive = tmp_path / "sdist.tar.gz"
+    entries = _BASE_ENTRIES + [
+        ("pkg-0.1/rust/crates/foo/Cargo.toml", b'[package]\nname = "foo"\n'),
+        ("pkg-0.1/rust/crates/foo/src/lib.rs", b"pub fn f() {}\n"),
+    ]
+    with tarfile.open(archive, "w:gz") as target:
+        for name, payload in entries:
+            info = tarfile.TarInfo(name)
+            info.size = len(payload)
+            target.addfile(info, io.BytesIO(payload))
+        extra(target)
+    return archive
+
+
+@pytest.mark.parametrize(
+    "entry_name,entry_type,linkname",
+    [
+        # A symlink naming a restored member's directory.
+        ("pkg-0.1/rust/crates/foo/src", tarfile.SYMTYPE, "/etc"),
+        # A symlink outside every verified set.
+        ("pkg-0.1/evil_link", tarfile.SYMTYPE, "/etc/passwd"),
+        ("pkg-0.1/hard_link", tarfile.LNKTYPE, "/etc/passwd"),
+        ("pkg-0.1/fifo", tarfile.FIFOTYPE, ""),
+    ],
+)
+def test_preserve_workspace_rejects_non_regular_entries(
+    tmp_path: Path, entry_name: str, entry_type: bytes, linkname: str
+) -> None:
+    workspace = _make_workspace(tmp_path)
+
+    def extra(target) -> None:
+        info = tarfile.TarInfo(entry_name)
+        info.type = entry_type
+        info.linkname = linkname
+        target.addfile(info)
+
+    archive = _make_archive_with_extra(tmp_path, extra)
+    original = archive.read_bytes()
+    with pytest.raises(ValueError, match="must not contain links"):
+        preserve_workspace(archive, workspace)
+    assert archive.read_bytes() == original
+
+
+def test_preserve_workspace_rejects_trailing_slash_member_file(
+    tmp_path: Path,
+) -> None:
+    # A regular file named ".../src/lib.rs/" extracts to the verified
+    # member's path but never matches its exact-name verification, so it
+    # must not ride alongside the canonical copy.
+    workspace = _make_workspace(tmp_path)
+
+    def extra(target) -> None:
+        payload = b"pub fn f() { /* tampered */ }\n"
+        info = tarfile.TarInfo("pkg-0.1/rust/crates/foo/src/lib.rs/")
+        info.size = len(payload)
+        target.addfile(info, io.BytesIO(payload))
+
+    archive = _make_archive_with_extra(tmp_path, extra)
+    original = archive.read_bytes()
+    with pytest.raises(ValueError, match="trailing slash"):
+        preserve_workspace(archive, workspace)
+    assert archive.read_bytes() == original
+
+
 @pytest.mark.parametrize("tampered", [False, True])
 def test_readstat_native_sources_and_license_are_verified_and_restored(
     tmp_path: Path, tampered: bool
