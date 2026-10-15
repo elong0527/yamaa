@@ -1,5 +1,5 @@
-//! Borrowed ingestion facts, admitted as one ordered report before owned copies.
-use super::{ConditionCode as C, Context, Diagnostic, ProjectionBudget, ProjectionError};
+//! Borrowed ingestion facts with complete diagnostic contexts.
+use super::{ConditionCode as C, Context, Diagnostic};
 use crate::{
     csv_source::{Field, ProfileCause},
     value::ColumnType,
@@ -101,115 +101,13 @@ impl SourceFinding<'_> {
             },
         }
     }
-    fn admit(self, budget: &mut ProjectionBudget) -> Result<(), ProjectionError> {
-        budget.charge(128)?;
-        let code = self.code().definition();
-        budget.text(code.phase)?;
-        budget.text(code.condition)?;
-        if let Some(requirement) = code.requirement {
-            budget.text(requirement)?;
-        }
+    /// Materialize the complete retained fact without reading a source again.
+    pub fn diagnostic(self) -> Diagnostic {
         if let Self::Odm { dataset, finding } = self {
-            return finding.finding(dataset).admit(budget);
+            return finding.finding(dataset).diagnostic();
         }
         if let Self::OdmValues { dataset, finding } = self {
-            return finding.finding(dataset).admit(budget);
-        }
-        let dataset = match self {
-            Self::Odm { dataset, .. }
-            | Self::OdmValues { dataset, .. }
-            | Self::Csv { dataset, .. }
-            | Self::UnknownField { dataset, .. }
-            | Self::FieldParse { dataset, .. }
-            | Self::Parquet { dataset, .. } => dataset,
-            Self::Sas { dataset, .. } => dataset,
-            Self::OrdinalCollision { dataset, .. } => dataset,
-        };
-        // Charge each component of the constructed specification path before formatting.
-        budget.text("input.")?;
-        budget.text(dataset)?;
-        budget.field("dataset", dataset)?;
-        match self {
-            Self::Sas { path, cause, .. } => {
-                budget.text(".path")?;
-                budget.field("path", path)?;
-                budget.field("cause", cause)?;
-            }
-            Self::OrdinalCollision { field, .. } => {
-                budget.text(".ordinal")?;
-                budget.field("field", field)?;
-            }
-            Self::Odm { .. } | Self::OdmValues { .. } => {
-                unreachable!("ODM has its own complete admission")
-            }
-            Self::Csv { field, path, .. } => {
-                budget.text(".path")?;
-                budget.field("path", path)?;
-                budget.text("record")?;
-                budget.charge(20)?;
-                budget.text("field")?;
-                match field {
-                    Field::Index(_) => budget.charge(20)?,
-                    Field::Name(name) => budget.text(name)?,
-                }
-            }
-            Self::UnknownField { field, .. } => {
-                budget.text(".types.")?;
-                budget.text(field)?;
-                budget.field("field", field)?;
-            }
-            Self::FieldParse {
-                field,
-                target,
-                value,
-                ..
-            } => {
-                budget.text(".types.")?;
-                budget.text(field)?;
-                budget.field("field", field)?;
-                budget.field("type", kind(target))?;
-                budget.field("value", value)?;
-            }
-            Self::Parquet { finding, path, .. } => {
-                budget.text(".path")?;
-                budget.field("path", path)?;
-                match finding {
-                    ParquetFinding::Invalid => {}
-                    ParquetFinding::EmptyName { .. } => {
-                        budget.text("field")?;
-                        budget.charge(20)?;
-                    }
-                    ParquetFinding::DuplicateName { field } => budget.field("field", field)?,
-                    ParquetFinding::Unsupported { field, stored_type } => {
-                        budget.field("field", field)?;
-                        budget.field("stored_type", stored_type)?;
-                    }
-                    ParquetFinding::Value { field, .. } => {
-                        budget.field("field", field)?;
-                        budget.text("row")?;
-                        budget.charge(20)?;
-                        budget.text("value")?;
-                        budget.charge(20)?;
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-    pub fn diagnostic_with_limit(self, maximum: usize) -> Result<Diagnostic, ProjectionError> {
-        let findings = [self];
-        let report = admit_source_diagnostics(&findings, maximum)?;
-        let diagnostic = report.iter().next().expect("single admitted finding");
-        Ok(diagnostic)
-    }
-    /// Owned materialization for admitted in-crate reports; external callers
-    /// use complete-report admission (`admit_source_diagnostics`).
-    fn materialize(self) -> Diagnostic {
-        if let Self::Odm { dataset, finding } = self {
-            return finding.finding(dataset).owned();
-        }
-        if let Self::OdmValues { dataset, finding } = self {
-            return finding.finding(dataset).owned();
+            return finding.finding(dataset).diagnostic();
         }
         let dataset = match self {
             Self::Odm { dataset, .. }
@@ -300,28 +198,9 @@ impl SourceFinding<'_> {
     }
 }
 
-/// Whole-report admission holds borrowed facts; original allocation identity survives.
-pub struct SourceDiagnosticReport<'a> {
+/// Project the retained report in order without replaying source effects.
+pub fn source_diagnostics<'a>(
     findings: &'a [SourceFinding<'a>],
-}
-impl<'a> SourceDiagnosticReport<'a> {
-    pub fn findings(&self) -> &'a [SourceFinding<'a>] {
-        self.findings
-    }
-    /// Owned materialization is available only after every record was admitted.
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = Diagnostic> + 'a {
-        self.findings.iter().map(|finding| finding.materialize())
-    }
-}
-pub fn admit_source_diagnostics<'a>(
-    findings: &'a [SourceFinding<'a>],
-    maximum: usize,
-) -> Result<SourceDiagnosticReport<'a>, ProjectionError> {
-    if !findings.is_empty() {
-        let mut budget = ProjectionBudget::new(maximum)?;
-        for finding in findings {
-            finding.admit(&mut budget)?;
-        }
-    }
-    Ok(SourceDiagnosticReport { findings })
+) -> impl ExactSizeIterator<Item = Diagnostic> + 'a {
+    findings.iter().map(|finding| finding.diagnostic())
 }

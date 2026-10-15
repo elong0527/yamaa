@@ -1,47 +1,13 @@
-//! Complete inherited-column dependency findings, admitted before any projection.
-use super::{ConditionCode as C, Diagnostic, ProjectionBudget, ProjectionError};
+//! Complete inherited-column dependency findings in resolver order.
+use super::{ConditionCode as C, Diagnostic};
 use crate::schema::InheritanceDependencyIssue as Issue;
 use serde_json::Value as JsonValue;
 use std::vec;
 
 /// Preserve all dependency findings in the resolver's order. Cycle membership is
 /// the unresolved authored column list, rather than a closed traversal loop.
-pub fn inheritance_dependency_diagnostics(
-    issues: &[Issue],
-    maximum: usize,
-) -> Result<Vec<Diagnostic>, ProjectionError> {
-    let mut budget = ProjectionBudget::new(maximum)?;
-    for issue in issues {
-        // The report envelope, diagnostic metadata and ordered context containers.
-        budget.charge(256)?;
-        match issue {
-            Issue::Unknown { column, dependency } => {
-                budget.text("columns.")?;
-                budget.text(column)?;
-                budget.text(".derivation")?;
-                budget.field("column", column)?;
-                budget.field("dependency", dependency)?;
-            }
-            Issue::Cycle {
-                columns,
-                cycle,
-                paths,
-            } => {
-                budget.text("cycle")?;
-                for column in columns.iter().chain(cycle) {
-                    // Each retained sequence member also owns a typed container
-                    // and contributes separators, even for an empty spelling.
-                    budget.charge(16)?;
-                    budget.text(column)?;
-                }
-                for path in paths {
-                    budget.charge(16)?;
-                    budget.text(path)?;
-                }
-            }
-        }
-    }
-    Ok(issues
+pub fn inheritance_dependency_diagnostics(issues: &[Issue]) -> Vec<Diagnostic> {
+    issues
         .iter()
         .map(|issue| {
             let mut context = super::Context::new();
@@ -78,5 +44,5 @@ pub fn inheritance_dependency_diagnostics(
                 operand_route: None,
             }
         })
-        .collect())
+        .collect()
 }
