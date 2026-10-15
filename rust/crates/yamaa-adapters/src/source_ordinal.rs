@@ -7,7 +7,7 @@ use crate::{
 use arrow_array::{ArrayRef, Int64Array, RecordBatch};
 use std::sync::Arc;
 use yamaa_core::table::TableAccess;
-use yamaa_core::{source_ordinal, specification::SourceDeclaration};
+use yamaa_engine::{source_ingestion, specification::SourceDeclaration};
 
 pub(crate) fn append(
     source: &SourceDeclaration,
@@ -33,17 +33,17 @@ fn append_inner(
     limits: TableLimits,
     usage: Option<(usize, &mut crate::source_decode_usage::Usage)>,
 ) -> Result<ArrowTable, Error> {
-    let Some(ordinal) = source_ordinal::prepare(
+    let Some(ordinal) = source_ingestion::ordinal(
         source,
         table.schema(),
         table.row_count(),
-        source_ordinal::Limits {
+        source_ingestion::Limits {
             columns: limits.max_columns,
             cells: limits.max_cells,
         },
     )
     .map_err(|error| match error {
-        source_ordinal::Error::ResourceLimit {
+        source_ingestion::Error::ResourceLimit {
             resource,
             limit,
             actual,

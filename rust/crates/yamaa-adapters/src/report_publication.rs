@@ -87,7 +87,7 @@ impl Prepared {
         }
         crate::report_projection::encoded_within_limit(
             report,
-            maximum.min(yamaa_core::capacity::REPORT_ENCODED_BYTES),
+            maximum.min(yamaa_engine::capacity::REPORT_ENCODED_BYTES),
         )?;
         Ok(Self {
             errors,

@@ -190,7 +190,7 @@ pub fn observe(input: Value) -> Value {
     for diagnostic in prepared
         .metadata_source_findings(
             &schemas,
-            yamaa_core::source_metadata::Limits::default().findings,
+            yamaa_engine::source_metadata::Limits::default().findings,
         )
         .expect("native metadata inspection policy admitted")
     {

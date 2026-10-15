@@ -2,7 +2,7 @@
 use serde_json::{json, Value};
 use std::sync::Arc;
 use yamaa_adapters::{file_resources::Resources, issue_rows::Issue};
-use yamaa_core::specification_run::SourcePort;
+use yamaa_engine::specification_run::SourcePort;
 
 #[derive(Default)]
 pub struct Owner {

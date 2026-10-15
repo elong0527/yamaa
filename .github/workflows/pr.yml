@@ -101,13 +101,14 @@ jobs:
         working-directory: rust
         run: |
           cargo fmt --all --check
-          cargo test --locked --lib -p yamaa-core -p yamaa-adapters
+          python3 tools/check_dependencies.py
+          cargo test --locked --lib -p yamaa-core -p yamaa-engine -p yamaa-adapters
       - name: Check parser and public execution boundaries
         if: steps.changes.outputs.rust == 'true'
         working-directory: rust
         run: |
           cargo test --locked -p yamaa-core --test numeric_tests --test scalar_tests --test portable_math_golden
-          cargo test --locked -p yamaa-core --features test-support --test preparation_tests --test test_support --test service_tests
+          cargo test --locked -p yamaa-engine --features test-support --test preparation_tests --test test_support --test service_tests
           cargo test --locked -p yamaa-adapters --test project_tests --test file_tests --test table_tests
 
   python:

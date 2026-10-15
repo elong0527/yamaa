@@ -5,7 +5,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 use yamaa_adapters::{file_application, specification_report::Identity};
-use yamaa_core::domain_entry::Request;
+use yamaa_engine::domain_entry::Request;
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 struct Study(PathBuf);
 impl Study {
@@ -261,7 +261,7 @@ fn per_value_codelist_unknown_and_type_failures_retain_the_authored_row_path() {
 }
 
 struct NoActivation;
-impl yamaa_core::project_activation::ActivationPort for NoActivation {
+impl yamaa_engine::project_activation::ActivationPort for NoActivation {
     type Handle = ();
     type Error = ();
     fn verify_lock(
@@ -282,8 +282,8 @@ impl yamaa_core::project_activation::ActivationPort for NoActivation {
     fn invoke(
         &mut self,
         _: &(),
-        _: &[yamaa_core::function_invocation::Argument<'_>],
-    ) -> Result<yamaa_core::value::Value, yamaa_core::function_invocation::HostError<()>> {
+        _: &[yamaa_engine::function_invocation::Argument<'_>],
+    ) -> Result<yamaa_core::value::Value, yamaa_engine::function_invocation::HostError<()>> {
         panic!("no callable definitions")
     }
 }
@@ -315,10 +315,10 @@ fn project_domain(path: &str, environment: &str) -> file_application::Domain {
 
 #[test]
 fn wide_length_projection_borrows_the_exact_bound_from_compiled_metadata() {
-    use yamaa_core::dataset::{CheckRecord, RowIdentity};
     use yamaa_core::{
         dataset::Check, diagnostic::ConditionCode, project_diagnostics::Fact, value::Value,
     };
+    use yamaa_engine::dataset::{CheckRecord, RowIdentity};
     let study = Study::new();
     let bound = "340282366920938463463374607431768211456";
     fs::write(
@@ -357,10 +357,10 @@ fn wide_length_projection_borrows_the_exact_bound_from_compiled_metadata() {
         inventory: None,
         row_count: None,
     }];
-    let projected = yamaa_core::verification_diagnostics::project(
+    let projected = yamaa_engine::verification_diagnostics::project(
         compiled,
         &records,
-        yamaa_core::verification_diagnostics::Phase::Verification,
+        yamaa_engine::verification_diagnostics::Phase::Verification,
         "spec.yaml",
     )
     .unwrap();

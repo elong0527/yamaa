@@ -28,16 +28,16 @@ pub(crate) struct Budget {
 impl Budget {
     pub(crate) fn new(bytes: usize) -> Self {
         let bytes = bytes
-            .min(yamaa_core::capacity::REPORT_ENCODED_BYTES)
-            .saturating_mul(yamaa_core::capacity::REPORT_RETAINED_FACTOR)
-            .min(yamaa_core::capacity::REPORT_RETAINED_BYTES);
+            .min(yamaa_engine::capacity::REPORT_ENCODED_BYTES)
+            .saturating_mul(yamaa_engine::capacity::REPORT_RETAINED_FACTOR)
+            .min(yamaa_engine::capacity::REPORT_RETAINED_BYTES);
         Self {
             bytes,
-            cells: yamaa_core::capacity::REPORT_CELLS,
-            work: yamaa_core::capacity::REPORT_WORK,
+            cells: yamaa_engine::capacity::REPORT_CELLS,
+            work: yamaa_engine::capacity::REPORT_WORK,
             initial_bytes: bytes,
-            initial_cells: yamaa_core::capacity::REPORT_CELLS,
-            initial_work: yamaa_core::capacity::REPORT_WORK,
+            initial_cells: yamaa_engine::capacity::REPORT_CELLS,
+            initial_work: yamaa_engine::capacity::REPORT_WORK,
         }
     }
     #[cfg(test)]
@@ -52,7 +52,7 @@ impl Budget {
         }
     }
     pub(crate) fn remaining_bytes(&self) -> usize {
-        self.bytes / yamaa_core::capacity::REPORT_RETAINED_FACTOR
+        self.bytes / yamaa_engine::capacity::REPORT_RETAINED_FACTOR
     }
     fn work_amount(&mut self, count: Option<usize>) -> Result<(), Error> {
         charge(&mut self.work, self.initial_work, count, "report_work")
@@ -313,7 +313,7 @@ impl Drop for Budget {
                 "report-capacity retained_limit={} retained_charged={} cells_charged={} work_charged={}",
                 self.initial_bytes,
                 self.initial_bytes - self.bytes,
-                yamaa_core::capacity::REPORT_CELLS - self.cells,
+                yamaa_engine::capacity::REPORT_CELLS - self.cells,
                 self.initial_work - self.work
             );
         }
@@ -401,7 +401,7 @@ mod typed_copy_tests {
     use super::*;
     #[test]
     fn longitudinal_reports_admit_source_artifact_derived_and_three_typed_passes() {
-        use yamaa_core::capacity;
+        use yamaa_engine::capacity;
         // Charge full logical geometry without allocating or reading its cells.
         let mut report = Budget::new(capacity::REPORT_ENCODED_BYTES);
         report.row_shape(10_000_000, 64).unwrap();

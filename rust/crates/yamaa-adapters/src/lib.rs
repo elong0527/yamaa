@@ -129,7 +129,7 @@ pub mod host_limits;
 
 pub mod callback;
 pub mod dataset_result;
-pub use yamaa_core::dataset::ExecutionBudget;
+pub use yamaa_engine::dataset::ExecutionBudget;
 mod dataset_snapshot;
 mod execution_diagnostics;
 pub mod ipc_table;

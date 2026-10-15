@@ -50,7 +50,7 @@ impl Specification {
             .ok_or_else(|| PyValueError::new_err("producer preparation has no rejection"))?;
         let issues = yamaa_adapters::producer_check::rejected_with_limit(
             error,
-            yamaa_core::project_function::Language::Python,
+            yamaa_engine::host_values::Language::Python,
             maximum,
         )
         .map_err(|_| {
@@ -139,7 +139,7 @@ pub(crate) fn build_selected(
         build,
         fields,
         report_bytes,
-        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+        yamaa_engine::application_observer::Scope::new(&yamaa_engine::application_observer::Noop),
     )
 }
 pub(crate) fn build_selected_with_observer(
@@ -147,7 +147,7 @@ pub(crate) fn build_selected_with_observer(
     build: &mut FileBuild,
     fields: Arc<Vec<String>>,
     report_bytes: usize,
-    scope: yamaa_core::application_observer::Scope<'_>,
+    scope: yamaa_engine::application_observer::Scope<'_>,
 ) -> Attempt {
     let provenance = Arc::clone(build.provenance());
     let mut port = crate::project_activation::Port::new(
@@ -178,7 +178,7 @@ pub fn _prepare_producer_file(specification: &str, environment: &str) -> Specifi
             file_workflow::prepare(
                 specification,
                 environment,
-                yamaa_core::project_function::Language::Python,
+                yamaa_engine::host_values::Language::Python,
             )
             .map(|graph| graph.into_build()),
         ),

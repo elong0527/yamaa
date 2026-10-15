@@ -7,12 +7,12 @@ use yamaa_core::schema::{
     NormalizedDocument, SchemaDiagnostic, SchemaOrigin, SchemaStructure, SpecificationDocument,
     ValidationError, WindowReference,
 };
-use yamaa_core::schema_capture::{self as capture, RootSelection};
+use yamaa_engine::schema_capture::{self as capture, RootSelection};
 mod inheritance;
 pub use inheritance::{CapturedParent, InheritanceError, InheritancePort, SourceFailure};
 
 /// The engine-owned identity and byte snapshot shared with metadata preparation.
-pub use yamaa_core::project_preparation::Source;
+pub use yamaa_engine::project_preparation::Source;
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
     pub captured_bytes: usize,
@@ -131,18 +131,18 @@ impl capture::DecodePort for SchemaDecoder {
 
 /// Physical entry decoding retains its source-limit order and YAML locations.
 struct StructuralDecoder<'a>(&'a CapturedSchema);
-impl yamaa_core::structural_preparation::DecodePort for StructuralDecoder<'_> {
+impl yamaa_engine::structural_preparation::DecodePort for StructuralDecoder<'_> {
     type Error = Error;
     type Locations = Vec<SourcePosition>;
     fn decode(
         &mut self,
         source: &Source,
-    ) -> Result<yamaa_core::structural_preparation::Decoded<Self::Locations>, Error> {
+    ) -> Result<yamaa_engine::structural_preparation::Decoded<Self::Locations>, Error> {
         let DecodedYaml {
             document,
             locations,
         } = self.0.decode_entry(source)?;
-        Ok(yamaa_core::structural_preparation::Decoded {
+        Ok(yamaa_engine::structural_preparation::Decoded {
             document,
             locations,
         })
@@ -215,7 +215,7 @@ impl CapturedSchema {
     pub fn prepare_structural(self: &Arc<Self>, source: Source) -> Result<CapturedDocument, Error> {
         self.prepare_structural_selected(
             source,
-            yamaa_core::structural_preparation::Selection::StructuralRoot,
+            yamaa_engine::structural_preparation::Selection::StructuralRoot,
         )
     }
 
@@ -234,16 +234,16 @@ impl CapturedSchema {
     ) -> Result<CapturedDocument, Error> {
         self.prepare_structural_selected(
             source,
-            yamaa_core::structural_preparation::Selection::NamedClass(class_name),
+            yamaa_engine::structural_preparation::Selection::NamedClass(class_name),
         )
     }
 
     fn prepare_structural_selected(
         self: &Arc<Self>,
         source: Source,
-        selection: yamaa_core::structural_preparation::Selection<'_>,
+        selection: yamaa_engine::structural_preparation::Selection<'_>,
     ) -> Result<CapturedDocument, Error> {
-        use yamaa_core::structural_preparation::{self, Error as StructuralError};
+        use yamaa_engine::structural_preparation::{self, Error as StructuralError};
         let prepared = structural_preparation::prepare(
             &self.structure,
             source,
@@ -307,7 +307,7 @@ impl CapturedSchema {
         source: Source,
         raw: DecodedYaml,
     ) -> Result<PreparedDocument, Error> {
-        use yamaa_core::standalone_preparation::{self, Error as StandaloneError};
+        use yamaa_engine::standalone_preparation::{self, Error as StandaloneError};
         let DecodedYaml {
             document,
             locations,
@@ -368,7 +368,7 @@ impl CapturedSchema {
         display_path: String,
         port: &mut P,
     ) -> Result<PreparedDocument, InheritanceError<P::Error>> {
-        use yamaa_core::document_preparation::{self as application, Content, Error as Failure};
+        use yamaa_engine::document_preparation::{self as application, Content, Error as Failure};
         let prepared = application::prepare(
             &self.structure,
             source,
@@ -376,7 +376,7 @@ impl CapturedSchema {
             &mut DocumentEntry(self),
             &mut inheritance::Decoder::new(self.limits.decode),
             port,
-            yamaa_core::inheritance_capture::Limits {
+            yamaa_engine::inheritance_capture::Limits {
                 captured_bytes: self.limits.captured_bytes,
                 identity_bytes: self.limits.identity_bytes,
                 normalization: self.limits.normalization,
@@ -388,10 +388,10 @@ impl CapturedSchema {
             Failure::Standalone { source, error } => {
                 InheritanceError::Entry(standalone_dispatch_error(self, source, error))
             }
-            Failure::Inherited(yamaa_core::inheritance_capture::Error::Entry(error)) => {
+            Failure::Inherited(yamaa_engine::inheritance_capture::Error::Entry(error)) => {
                 InheritanceError::Entry(error)
             }
-            Failure::Inherited(yamaa_core::inheritance_capture::Error::Preparation {
+            Failure::Inherited(yamaa_engine::inheritance_capture::Error::Preparation {
                 error,
                 captured_parents,
             }) => InheritanceError::Preparation {
@@ -441,7 +441,7 @@ impl CapturedSchema {
 
 // Physical entry admission remains exactly decode_entry's byte/identity/codec policy.
 struct DocumentEntry<'a>(&'a CapturedSchema);
-impl yamaa_core::document_preparation::EntryCodec for DocumentEntry<'_> {
+impl yamaa_engine::document_preparation::EntryCodec for DocumentEntry<'_> {
     type Raw = DecodedYaml;
     type Locations = Vec<SourcePosition>;
     type Error = Error;
@@ -458,9 +458,9 @@ impl yamaa_core::document_preparation::EntryCodec for DocumentEntry<'_> {
 fn standalone_dispatch_error(
     schema: &Arc<CapturedSchema>,
     source: Source,
-    error: yamaa_core::standalone_preparation::Error,
+    error: yamaa_engine::standalone_preparation::Error,
 ) -> Error {
-    use yamaa_core::standalone_preparation::Error as Failure;
+    use yamaa_engine::standalone_preparation::Error as Failure;
     match error {
         Failure::InheritanceRequired => Error::InheritanceRequired,
         Failure::Normalize(failure) => match failure.error {
@@ -491,7 +491,7 @@ pub struct PreparedDocument {
     raw: DecodedYaml,
     content: PreparedContent,
     parents: Vec<CapturedParent>,
-    dictionaries: Option<yamaa_core::dictionary_preparation::Prepared<DecodedYaml>>,
+    dictionaries: Option<yamaa_engine::dictionary_preparation::Prepared<DecodedYaml>>,
     resource_aliases: std::collections::BTreeMap<String, Vec<(String, String)>>,
 }
 #[derive(Debug)]
@@ -501,9 +501,9 @@ enum PreparedContent {
         origins: Vec<SchemaOrigin>,
         windows: Vec<WindowReference>,
     },
-    Inherited(Box<yamaa_core::inheritance_preparation::PreparedInheritance>),
+    Inherited(Box<yamaa_engine::inheritance_preparation::PreparedInheritance>),
 }
-impl yamaa_core::file_preparation::PreparedView for PreparedDocument {
+impl yamaa_engine::file_preparation::PreparedView for PreparedDocument {
     type Parent = CapturedParent;
     fn parents(&self) -> &[CapturedParent] {
         &self.parents
@@ -575,7 +575,7 @@ impl PreparedDocument {
         identity: &str,
         failure: yamaa_core::resource::ResourceFailure,
     ) -> Option<yamaa_core::diagnostic::Diagnostic> {
-        use yamaa_core::file_preparation::PreparedView;
+        use yamaa_engine::file_preparation::PreparedView;
         self.resource_aliases
             .get(identity)?
             .iter()
@@ -603,10 +603,10 @@ impl PreparedDocument {
     }
     pub(crate) fn dictionary_input<'a, E>(
         &'a self,
-        error: &'a yamaa_core::dictionary_preparation::Error<E, Error, DecodedYaml>,
-        arena: yamaa_core::dictionary_preparation::Arena,
+        error: &'a yamaa_engine::dictionary_preparation::Error<E, Error, DecodedYaml>,
+        arena: yamaa_engine::dictionary_preparation::Arena,
     ) -> Option<&'a yamaa_core::schema::Document> {
-        use yamaa_core::dictionary_preparation::Arena;
+        use yamaa_engine::dictionary_preparation::Arena;
         match arena {
             Arena::Seed(0) => Some(&self.raw.document),
             Arena::Seed(index) => self
@@ -628,7 +628,7 @@ impl PreparedDocument {
         mut self,
         port: &mut P,
     ) -> Result<Self, InheritanceError<P::Error>> {
-        use yamaa_core::dictionary_preparation::{self as application, Origins, Seed};
+        use yamaa_engine::dictionary_preparation::{self as application, Origins, Seed};
         let origins = self.inheritance().map_or(
             Origins::Standalone(&self.source.identity),
             Origins::Inherited,
@@ -685,7 +685,9 @@ impl PreparedDocument {
             PreparedContent::Inherited(prepared) => prepared.normalization_input(),
         }
     }
-    pub fn inheritance(&self) -> Option<&yamaa_core::inheritance_preparation::PreparedInheritance> {
+    pub fn inheritance(
+        &self,
+    ) -> Option<&yamaa_engine::inheritance_preparation::PreparedInheritance> {
         match &self.content {
             PreparedContent::Standalone { .. } => None,
             PreparedContent::Inherited(prepared) => Some(prepared),

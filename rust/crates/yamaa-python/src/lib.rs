@@ -24,7 +24,7 @@ mod style;
 mod temporal_result;
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add("_CORE_VERSION", yamaa_core::VERSION)?;
+    module.add("_CORE_VERSION", yamaa_engine::host_values::VERSION)?;
     module.add_class::<schema_metadata::Schema>()?;
     module.add_function(wrap_pyfunction!(
         schema_metadata::_capture_schema_metadata,

@@ -6,7 +6,7 @@ use crate::{
     specification_source::{CapturedSchema, PreparedDocument},
 };
 use std::sync::Arc;
-use yamaa_core::submission_inventory as service;
+use yamaa_engine::submission_inventory as service;
 struct Native<'a> {
     resources: &'a mut Resources,
     schema: Arc<CapturedSchema>,
@@ -34,7 +34,7 @@ fn capture(
     schema: &Arc<CapturedSchema>,
     root: &crate::specification_source::CapturedDocument,
 ) -> Result<service::Captured<PreparedDocument>, file_preparation::Error> {
-    let limits = yamaa_core::define::METADATA_LIMITS;
+    let limits = yamaa_engine::define::METADATA_LIMITS;
     resources
         .ensure_metadata_scope(MetadataLimits {
             bytes: limits.bytes,

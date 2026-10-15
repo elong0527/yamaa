@@ -10,9 +10,9 @@ use yamaa_core::{
     table::TableSchema,
     value::ColumnType,
 };
-use yamaa_core::{
+use yamaa_engine::{
+    source_ingestion,
     source_metadata::{self, SourceSchema},
-    source_ordinal,
 };
 
 fn document(value: &Value) -> SpecificationDocument {
@@ -127,11 +127,11 @@ pub fn observe(request: Value) -> Value {
                     .collect(),
             )
             .expect("native published fields");
-            match source_ordinal::prepare(
+            match source_ingestion::ordinal(
                 &declaration,
                 &physical,
                 0,
-                source_ordinal::Limits {
+                source_ingestion::Limits {
                     columns: source_metadata::Limits::default().columns,
                     cells: 0,
                 },

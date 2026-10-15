@@ -15,10 +15,10 @@ impl SourcePort for Port {
         &mut self,
         source: &SourceDeclaration,
         byte_limit: usize,
-        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+        origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
     ) -> Result<Arc<[u8]>, Self::Error> {
-        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-        <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
+        *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
+        <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
     }
     fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
         Ok(())
@@ -87,7 +87,7 @@ fn original_regex_and_temporal_reports_match_independently_captured_reference() 
         for _ in 0..2 {
             assert!(matches!(
                 result.save(&mut port),
-                Err(yamaa_core::specification_output::SaveError::FailedBuild)
+                Err(yamaa_engine::specification_output::SaveError::FailedBuild)
             ));
             assert_eq!(result.observations(), expected);
         }

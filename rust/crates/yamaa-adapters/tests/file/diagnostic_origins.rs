@@ -6,8 +6,8 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 use yamaa_adapters::{file_resources::Resources, file_workflow, shipped_schema, source_metadata};
-use yamaa_core::build::Prepared;
 use yamaa_core::project_function::Language;
+use yamaa_engine::build::Prepared;
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 struct Study(PathBuf);

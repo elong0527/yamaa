@@ -54,14 +54,14 @@ jobs:
       - name: Run complete shared-crate suites with line coverage
         working-directory: rust
         run: |
-          cargo llvm-cov --locked -p yamaa-core -p yamaa-adapters \
-            --features yamaa-core/test-support,yamaa-adapters/arrow-c-data \
+          cargo llvm-cov --locked -p yamaa-core -p yamaa-engine -p yamaa-adapters \
+            --features yamaa-engine/test-support,yamaa-adapters/arrow-c-data \
             --lcov --output-path "${RUNNER_TEMP}/rust.lcov"
       - name: Run the same suites with release code generation
         working-directory: rust
         run: |
-          cargo test --locked -p yamaa-core -p yamaa-adapters \
-            --features yamaa-core/test-support,yamaa-adapters/arrow-c-data --profile release-test
+          cargo test --locked -p yamaa-core -p yamaa-engine -p yamaa-adapters \
+            --features yamaa-engine/test-support,yamaa-adapters/arrow-c-data --profile release-test
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: unit-coverage-rust

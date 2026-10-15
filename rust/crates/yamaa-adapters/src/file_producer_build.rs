@@ -15,13 +15,13 @@ use std::{
     sync::Arc,
 };
 use yamaa_core::{
+    producer_graph::{Node, PreparedGraph},
+    specification::{PreparedSpecification, SourceDeclaration},
+};
+use yamaa_engine::{
     dataset::Dataset,
     producer_build::{self as engine, CodecPort, PreparedBuild, ReportPort, StudyPort},
     project_activation::ActivationPort,
-};
-use yamaa_core::{
-    producer_graph::{Node, PreparedGraph},
-    specification::{PreparedSpecification, SourceDeclaration},
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -38,11 +38,11 @@ impl Default for Limits {
     fn default() -> Self {
         Self {
             engine: Default::default(),
-            resource_bytes: 4 * yamaa_core::capacity::SOURCE_BYTES,
+            resource_bytes: 4 * yamaa_engine::capacity::SOURCE_BYTES,
             resource_text: 16_777_216,
             // Initial reads, content comparison and immutable rereads each
             // charge bytes independently from dataset execution work.
-            resource_work: 4 * yamaa_core::capacity::SOURCE_BYTES,
+            resource_work: 4 * yamaa_engine::capacity::SOURCE_BYTES,
             snapshots: 1024,
             evidence_text: 16_777_216,
             evidence_aliases: 1024,
@@ -144,7 +144,7 @@ pub struct Attempt<E, R, RE> {
 }
 type ActualBuild<E, R, RE> = (
     Attempt<E, R, RE>,
-    Result<yamaa_core::producer_publication::PreparedPublication, &'static str>,
+    Result<yamaa_engine::producer_publication::PreparedPublication, &'static str>,
 );
 impl<E, R, RE> Attempt<E, R, RE> {
     pub fn accepted(&self) -> bool {
@@ -235,7 +235,9 @@ impl FileBuild {
             activation,
             id,
             limits,
-            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+            yamaa_engine::application_observer::Scope::new(
+                &yamaa_engine::application_observer::Noop,
+            ),
         )
     }
     pub fn build_owned_reported_with_observer<A: ActivationPort>(
@@ -243,7 +245,7 @@ impl FileBuild {
         activation: &mut A,
         id: crate::specification_report::Identity<'_>,
         limits: Limits,
-        scope: yamaa_core::application_observer::Scope<'_>,
+        scope: yamaa_engine::application_observer::Scope<'_>,
     ) -> OwnedAttempt<A::Error> {
         let provenance = Arc::clone(&self.provenance);
         let mut report = crate::producer_report::NativeReport::new(&provenance, id);
@@ -307,7 +309,9 @@ impl FileBuild {
             activation,
             report,
             limits,
-            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+            yamaa_engine::application_observer::Scope::new(
+                &yamaa_engine::application_observer::Noop,
+            ),
         )
         .0
     }
@@ -316,7 +320,7 @@ impl FileBuild {
         activation: &mut A,
         report: &mut R,
         limits: Limits,
-        scope: yamaa_core::application_observer::Scope<'_>,
+        scope: yamaa_engine::application_observer::Scope<'_>,
     ) -> ActualBuild<A::Error, R::Report, R::Error> {
         let mut attempt = Attempt {
             provenance: Arc::clone(&self.provenance),
@@ -383,7 +387,7 @@ impl StudyPort for Study<'_> {
         &self,
         error: &Self::Error,
     ) -> Option<yamaa_core::resource::ResourceFailure> {
-        use yamaa_core::specification_run::SourcePort;
+        use yamaa_engine::specification_run::SourcePort;
         self.resources.resource_failure(error)
     }
     fn inspect(&mut self, node: &Node, source: &SourceDeclaration) -> Result<(), Self::Error> {
@@ -426,8 +430,8 @@ impl CodecPort for Codec {
                 projection,
                 crate::parquet_artifact::Limits {
                     output_bytes: maximum,
-                    staged_bytes: yamaa_core::capacity::SOURCE_BYTES,
-                    cells: yamaa_core::capacity::OUTPUT_CELLS,
+                    staged_bytes: yamaa_engine::capacity::SOURCE_BYTES,
+                    cells: yamaa_engine::capacity::OUTPUT_CELLS,
                     columns: 4096,
                 },
             )

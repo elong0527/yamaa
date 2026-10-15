@@ -8,13 +8,13 @@ use crate::{
     specification_report::{self as report, Error, Identity},
 };
 use serde_json::{json, Value};
-use yamaa_core::{
+use yamaa_core::{producer_graph::Node, table::TableAccess};
+use yamaa_engine::{
     dataset::{CheckRecord, Execution},
     producer_build::ReportPort,
     specification_output::OutputReport,
     specification_run::CapturedAttempt,
 };
-use yamaa_core::{producer_graph::Node, table::TableAccess};
 
 fn records(
     budget: &mut Budget,
@@ -196,7 +196,7 @@ fn log_observations<C, D, T: TableAccess>(
     id: &Identity<'_>,
     budget: &mut Budget,
 ) -> Result<Value, Error> {
-    use yamaa_core::dataset::ExecutionError;
+    use yamaa_engine::dataset::ExecutionError;
     let mut checks = Vec::new();
     if let Ok(entered) = &attempt.result {
         let tail: &[CheckRecord] = match &entered.result {
@@ -262,7 +262,7 @@ impl<'a, 'i> NativeReport<'a, 'i> {
     }
     fn admit_budget(&mut self, maximum: usize) {
         if self.encoded_left.is_none() {
-            let maximum = maximum.min(yamaa_core::capacity::REPORT_ENCODED_BYTES);
+            let maximum = maximum.min(yamaa_engine::capacity::REPORT_ENCODED_BYTES);
             self.encoded_left = Some(maximum);
             self.budget = Some(Budget::new(maximum));
         }
@@ -474,7 +474,7 @@ impl<E> From<Error> for ProjectionError<'_, E> {
 }
 fn activation_prefix<E>(attempt: &NativeAttempt<E>, budget: &mut Budget) -> Result<Value, Error> {
     use crate::project_activation_observations::{self as activation, ActivationView};
-    use yamaa_core::producer_build::Failure;
+    use yamaa_engine::producer_build::Failure;
     let held = attempt.provenance.as_ref();
     let observed = &attempt.graph.activation;
     let maximum = budget.remaining_bytes();
@@ -607,18 +607,18 @@ fn source_finding(
     push_diagnostic(budget, findings, &failure.diagnostic(&source.name, written))
 }
 fn native_resource_failure(
-    error: &yamaa_core::producer_build::CaptureError<crate::file_resources::Error>,
+    error: &yamaa_engine::producer_build::CaptureError<crate::file_resources::Error>,
 ) -> Option<yamaa_core::resource::ResourceFailure> {
     use crate::file_resources::Error as Native;
     use yamaa_core::resource::ResourceFailure;
     match error {
-        yamaa_core::producer_build::CaptureError::External(Native::Missing) => {
+        yamaa_engine::producer_build::CaptureError::External(Native::Missing) => {
             Some(ResourceFailure::Missing)
         }
-        yamaa_core::producer_build::CaptureError::External(Native::NotRegularFile) => {
+        yamaa_engine::producer_build::CaptureError::External(Native::NotRegularFile) => {
             Some(ResourceFailure::NotRegularFile)
         }
-        yamaa_core::producer_build::CaptureError::External(Native::Changed) => {
+        yamaa_engine::producer_build::CaptureError::External(Native::Changed) => {
             Some(ResourceFailure::ContentChanged)
         }
         _ => None,
@@ -628,9 +628,9 @@ fn decoded_finding(
     budget: &mut Budget,
     findings: &mut Vec<Value>,
     source: &yamaa_core::specification::SourceDeclaration,
-    error: &yamaa_core::producer_build::DecodeError<crate::specification_run::Error>,
+    error: &yamaa_engine::producer_build::DecodeError<crate::specification_run::Error>,
 ) -> Result<bool, Error> {
-    use yamaa_core::producer_build::DecodeError;
+    use yamaa_engine::producer_build::DecodeError;
     if let DecodeError::Metadata(diagnostic) = error {
         push_diagnostic(budget, findings, diagnostic)?;
         return Ok(true);
@@ -785,8 +785,8 @@ fn failed_observations<'a, E>(
     facts: &crate::producer_diagnostics::Facts<'a, '_, E>,
     entry: &str,
 ) -> Result<(StoredReport, bool), Error> {
-    use yamaa_core::dataset::ExecutionError;
-    use yamaa_core::specification_run::{PortError, RunError};
+    use yamaa_engine::dataset::ExecutionError;
+    use yamaa_engine::specification_run::{PortError, RunError};
     let node = &entered.nodes[position];
     let attempt = &node.dataset;
     if attempt.sources.len() > view.compiled().sources().len()
@@ -947,7 +947,7 @@ fn failed_observations<'a, E>(
             }
         }
         Err(PortError::Run(RunError::AdmittedSources(errors))) => {
-            use yamaa_core::specification_run::SourceIssue;
+            use yamaa_engine::specification_run::SourceIssue;
             budget.entries(errors.len())?;
             for (index, issue) in errors {
                 let source = view
@@ -997,7 +997,7 @@ fn failed_observations<'a, E>(
         _ => portable = false,
     }
     match &node.output {
-        Err(yamaa_core::specification_output::CompleteError::Report(Error::ResourceLimit(
+        Err(yamaa_engine::specification_output::CompleteError::Report(Error::ResourceLimit(
             refusal,
         ))) => {
             budget.entries(16)?;
@@ -1008,7 +1008,7 @@ fn failed_observations<'a, E>(
                 &refusal.diagnostic("output", "output_limit"),
             )?;
         }
-        Err(yamaa_core::specification_output::CompleteError::Encode(
+        Err(yamaa_engine::specification_output::CompleteError::Encode(
             crate::file_producer_build::CodecError::Csv(crate::csv_artifact::Error::Limit {
                 limit,
                 actual,
@@ -1032,7 +1032,7 @@ fn failed_observations<'a, E>(
                 &refusal.diagnostic("output", "output_limit"),
             )?;
         }
-        Err(yamaa_core::specification_output::CompleteError::Encode(
+        Err(yamaa_engine::specification_output::CompleteError::Encode(
             crate::file_producer_build::CodecError::Parquet(
                 crate::parquet_artifact::Error::Limit {
                     resource,
@@ -1053,7 +1053,7 @@ fn failed_observations<'a, E>(
                 &refusal.diagnostic("output", "output_limit"),
             )?;
         }
-        Err(yamaa_core::specification_output::CompleteError::Report(error)) => {
+        Err(yamaa_engine::specification_output::CompleteError::Report(error)) => {
             budget.entries(16)?;
             value["error"] = json!({"stage":"report","code":match error { Error::OutputLimit => "output_limit", _ => "projection_refused" }});
         }
@@ -1105,7 +1105,7 @@ pub fn attempt_report_classified<'a, E>(
     {
         return Err(Error::InvalidObservation.into());
     }
-    use yamaa_core::producer_build::Failure;
+    use yamaa_engine::producer_build::Failure;
     match &attempt.graph.outcome {
         Ok(()) if entered.len() != metadata.order().len() => {
             return Err(Error::InvalidObservation.into())
@@ -1164,12 +1164,12 @@ pub fn attempt_report_classified<'a, E>(
         result["diagnostics"] = json!(findings);
     }
     match &attempt.graph.outcome {
-        Err(yamaa_core::producer_build::Failure::Limit(code)) => {
+        Err(yamaa_engine::producer_build::Failure::Limit(code)) => {
             budget.entries(8)?;
             budget.text(code)?;
             result["error"] = json!({"stage":"producer_build","code":code});
         }
-        Err(yamaa_core::producer_build::Failure::Binding { node, slot }) => {
+        Err(yamaa_engine::producer_build::Failure::Binding { node, slot }) => {
             budget.entries(8)?;
             result["error"] = json!({"stage":"producer_binding","node":node,"slot":slot});
         }
@@ -1295,7 +1295,7 @@ mod tests {
             ordinal: None,
         };
         let value = "x".repeat(1000);
-        let error = yamaa_core::producer_build::DecodeError::Codec(
+        let error = yamaa_engine::producer_build::DecodeError::Codec(
             crate::specification_run::Error::TypedSource(crate::typed_csv::Error::Typing(
                 yamaa_core::typed_csv::Error::FieldParse {
                     field: "N".into(),
@@ -1323,11 +1323,11 @@ mod tests {
     #[test]
     fn native_header_mismatch_reporting_keeps_the_actual_authored_cause_and_refuses_before_copy() {
         use crate::{project_source_decoder::Decoder, specification_source::Source};
-        use yamaa_core::producer_build::{DecodeLimits, DecodePort};
         use yamaa_core::{
             specification::{SourceDeclaration, SourceProfile},
             value::ColumnType,
         };
+        use yamaa_engine::producer_build::{DecodeLimits, DecodePort};
         let document = crate::shipped_schema::capture().unwrap().prepare_standalone(Source {
             identity: "original-producer.yaml".into(),
             bytes: b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: int, label: Value, derivation: RAW.VALUE}\noutput: {path: produced.csv, columns: [ID, VALUE]}\n".to_vec(),
@@ -1373,7 +1373,7 @@ mod tests {
             vec![crate::test_diagnostic_truth::value("producer-header")]
         );
         assert!(
-            matches!(&error, yamaa_core::producer_build::DecodeError::Metadata(held) if held.spec_paths == ["input.P.schema", "input.P.path"])
+            matches!(&error, yamaa_engine::producer_build::DecodeError::Metadata(held) if held.spec_paths == ["input.P.schema", "input.P.path"])
         );
     }
 
@@ -1389,7 +1389,7 @@ mod tests {
             ordinal: None,
         };
         for (resource, limit, actual) in [("rows", 8, Some(9)), ("cells", 15, Some(16))] {
-            let error = yamaa_core::producer_build::DecodeError::ResourceLimit {
+            let error = yamaa_engine::producer_build::DecodeError::ResourceLimit {
                 resource,
                 limit,
                 actual,
@@ -1398,7 +1398,7 @@ mod tests {
             assert!(matches!(
                 decoded_finding(&mut Budget::new(1), &mut findings, &source, &error),
                 Err(Error::ResourceLimit(refusal)) if refusal.resource == "report_retained_bytes"
-                    && refusal.limit == yamaa_core::capacity::REPORT_RETAINED_FACTOR
+                    && refusal.limit == yamaa_engine::capacity::REPORT_RETAINED_FACTOR
                     && refusal.actual.is_some_and(|actual| actual > refusal.limit)
             ));
             assert!(findings.is_empty());

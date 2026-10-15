@@ -12,11 +12,11 @@ use std::{
     panic::{catch_unwind, AssertUnwindSafe},
     sync::Arc,
 };
-use yamaa_core::dataset::{Dataset, ExecutionBudget};
 use yamaa_core::{
     table::{Column, TableAccess, TableSchema, ValueRef},
     value::ColumnType,
 };
+use yamaa_engine::dataset::{Dataset, ExecutionBudget};
 
 pub const MAX_INPUT_BYTES: usize = ExecutionBudget::longitudinal().max_ipc_bytes;
 pub const MAX_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
@@ -245,13 +245,13 @@ impl std::iter::FusedIterator for SnapshotBatches<'_> {}
 
 /// Export only a checked owned dataset; this is not a generic untrusted table API.
 /// The caller's execution policy has already bounded retained cell/text payloads.
-pub(crate) fn encode_dataset(table: &yamaa_core::dataset::Dataset) -> Result<Vec<u8>, Error> {
+pub(crate) fn encode_dataset(table: &yamaa_engine::dataset::Dataset) -> Result<Vec<u8>, Error> {
     encode_dataset_projection(table, None)
 }
 
 /// Export the projection already admitted by the output use case.
 pub(crate) fn encode_projected_dataset(
-    table: &yamaa_core::dataset::Dataset,
+    table: &yamaa_engine::dataset::Dataset,
     projection: &[usize],
 ) -> Result<Vec<u8>, Error> {
     encode_dataset_projection(table, Some(projection))
@@ -271,7 +271,7 @@ fn encode_dataset_projection<T: TableAccess<Error = std::convert::Infallible>>(
     // Accepted output is projected through IPC for the host. Its transport
     // representation is independent from the authored CSV/Parquet byte limit.
     let budget = ExecutionBudget {
-        max_output_bytes: yamaa_core::capacity::OUTPUT_STORAGE_BYTES,
+        max_output_bytes: yamaa_engine::capacity::OUTPUT_STORAGE_BYTES,
         ..Default::default()
     };
     encode_table_projection(table, projection, budget)

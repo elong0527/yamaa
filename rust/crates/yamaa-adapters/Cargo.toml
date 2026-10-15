@@ -13,6 +13,7 @@ arrow-c-data = ["arrow-array/ffi", "arrow-schema/ffi"]
 
 [dependencies]
 yamaa-core = { path = "../yamaa-core" }
+yamaa-engine = { path = "../yamaa-engine" }
 toml = { version = "=0.9.8", default-features = false, features = ["parse", "std", "serde"] }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.145", features = ["arbitrary_precision", "raw_value"] }
@@ -46,7 +47,7 @@ rustix = { version = "=1.1.5", features = ["fs", "process"] }
 windows-sys = { version = "=0.61.2", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Threading", "Win32_Security_Authorization", "Win32_Globalization"] }
 
 [dev-dependencies]
-yamaa-core = { path = "../yamaa-core", features = ["test-support"] }
+yamaa-engine = { path = "../yamaa-engine", features = ["test-support"] }
 
 [build-dependencies]
 # Builds the reviewed vendored read-only ReadStat subset on every native host.

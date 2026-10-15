@@ -2,12 +2,12 @@
 //! location facts are compared as identities; they are not resource capabilities.
 use crate::specification_source::PreparedDocument;
 use std::sync::Arc;
-use yamaa_core::producer_admission::{self, Prepared};
 use yamaa_core::{
     producer_admission::{Candidate, Error as CoreError, Limits as CoreLimits},
     project_environment::ExecutionEnvironment,
     schema::DocumentNode as N,
 };
+use yamaa_engine::producer_admission::{self, CheckedProducerMetadata};
 
 pub struct SuppliedProducer {
     pub dataset: String,
@@ -44,7 +44,7 @@ pub enum Error {
 pub struct PreparedProducers {
     consumer: Arc<PreparedDocument>,
     producers: Vec<SuppliedProducer>,
-    metadata: Prepared,
+    checked: CheckedProducerMetadata,
 }
 impl PreparedProducers {
     pub fn consumer(&self) -> &PreparedDocument {
@@ -53,8 +53,8 @@ impl PreparedProducers {
     pub fn producers(&self) -> &[SuppliedProducer] {
         &self.producers
     }
-    pub fn metadata(&self) -> &Prepared {
-        &self.metadata
+    pub fn checked(&self) -> &CheckedProducerMetadata {
+        &self.checked
     }
 }
 /// Raw entry/parent bytes and independent layer origins remain held beside the
@@ -210,7 +210,7 @@ pub fn prepare(
     limits: Limits,
 ) -> Result<PreparedProducers, Error> {
     let candidates = candidates(&consumer, &producers, limits)?;
-    let metadata = producer_admission::prepare(
+    let checked = producer_admission::check(
         &consumer.source().identity,
         consumer.model(),
         &candidates,
@@ -221,6 +221,6 @@ pub fn prepare(
     Ok(PreparedProducers {
         consumer,
         producers,
-        metadata,
+        checked,
     })
 }

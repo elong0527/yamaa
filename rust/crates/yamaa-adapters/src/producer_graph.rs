@@ -6,6 +6,7 @@ use crate::{
 };
 use std::{collections::BTreeMap, sync::Arc};
 use yamaa_core::{producer_graph as core, project_environment::ExecutionEnvironment};
+use yamaa_engine::producer_graph::{self as engine, CheckedProducerGraph};
 
 pub struct SuppliedNode {
     pub document: Arc<PreparedDocument>,
@@ -45,24 +46,24 @@ pub enum Error {
 }
 pub struct PreparedGraph {
     nodes: Vec<SuppliedNode>,
-    metadata: core::PreparedGraph,
+    checked: CheckedProducerGraph,
 }
 impl PreparedGraph {
     pub fn nodes(&self) -> &[SuppliedNode] {
         &self.nodes
     }
-    pub fn metadata(&self) -> &core::PreparedGraph {
-        &self.metadata
+    pub fn checked(&self) -> &CheckedProducerGraph {
+        &self.checked
     }
     pub(crate) fn into_build(
         self,
     ) -> (
         Vec<Arc<PreparedDocument>>,
-        yamaa_core::producer_build::PreparedBuild,
+        yamaa_engine::producer_build::PreparedBuild,
     ) {
         (
             self.nodes.into_iter().map(|node| node.document).collect(),
-            self.metadata.into_build(),
+            self.checked.into_build(),
         )
     }
 }
@@ -245,7 +246,7 @@ pub fn prepare(
             producers,
         })
         .collect::<Vec<_>>();
-    let metadata =
-        core::prepare(root_identity, &supplied, environment, graph_limits).map_err(Error::Graph)?;
-    Ok(PreparedGraph { nodes, metadata })
+    let checked =
+        engine::check(root_identity, &supplied, environment, graph_limits).map_err(Error::Graph)?;
+    Ok(PreparedGraph { nodes, checked })
 }

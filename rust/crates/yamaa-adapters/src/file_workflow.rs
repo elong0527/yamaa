@@ -226,7 +226,7 @@ pub fn prepare_with_resources(
 /// no activation, study-source or publication port. The ordinary capability keeps
 /// existing build/Save behavior; the static producer graph grants no publisher.
 /// Installed public dispatch remains a separate integration boundary.
-pub type Selected = yamaa_core::build::Prepared<
+pub type Selected = yamaa_engine::build::Prepared<
     crate::file_preparation::FileSpecification,
     Box<FileProject>,
     Box<FileGraph>,
@@ -262,7 +262,7 @@ pub fn select(
     host: Language,
 ) -> Result<Selected, SelectionError> {
     select_request(
-        yamaa_core::build::Request {
+        yamaa_engine::build::Request {
             specification,
             environment: Some(environment),
         },
@@ -271,16 +271,16 @@ pub fn select(
 }
 
 pub fn select_request(
-    request: yamaa_core::build::Request<'_>,
+    request: yamaa_engine::build::Request<'_>,
     host: Language,
 ) -> Result<Selected, SelectionError> {
-    yamaa_core::build::prepare(request, &mut Metadata { host })
+    yamaa_engine::build::prepare(request, &mut Metadata { host })
 }
 
 struct Metadata {
     host: Language,
 }
-impl yamaa_core::build::PreparationPort for Metadata {
+impl yamaa_engine::build::PreparationPort for Metadata {
     type Entry = crate::file_graph::CapturedEntry;
     type Plain = crate::file_preparation::FileSpecification;
     type Project = Box<FileProject>;
@@ -288,7 +288,7 @@ impl yamaa_core::build::PreparationPort for Metadata {
     type Failure = SelectionError;
     fn capture(
         &mut self,
-        request: yamaa_core::build::Request<'_>,
+        request: yamaa_engine::build::Request<'_>,
     ) -> Result<Self::Entry, SelectionError> {
         let request = configure(request.specification, request.environment)
             .map_err(SelectionError::Preparation)?;
@@ -305,7 +305,7 @@ impl yamaa_core::build::PreparationPort for Metadata {
         FileGraph::capture_admitted_entry(resources, entry, environment)
             .map_err(|error| SelectionError::Preparation(Error::Graph(error)))
     }
-    fn selection(entry: &Self::Entry) -> &yamaa_core::build::EntrySelection {
+    fn selection(entry: &Self::Entry) -> &yamaa_engine::build::EntrySelection {
         entry.selection()
     }
     fn plain(&mut self, entry: Self::Entry) -> Result<Self::Plain, SelectionError> {
@@ -366,7 +366,7 @@ pub fn select_with_optional_resources(
     .map_err(SelectionError::Preparation)?;
     let entry = FileGraph::capture_admitted_entry(resources, entry, environment)
         .map_err(|error| SelectionError::Preparation(Error::Graph(error)))?;
-    yamaa_core::build::select(entry, has_environment, &mut Metadata { host })
+    yamaa_engine::build::select(entry, has_environment, &mut Metadata { host })
 }
 
 fn capture_environment(

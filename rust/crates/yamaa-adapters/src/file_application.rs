@@ -10,7 +10,7 @@ use std::{
     any::Any,
     panic::{catch_unwind, AssertUnwindSafe},
 };
-use yamaa_core::domain_entry::{self, Request};
+use yamaa_engine::domain_entry::{self, Request};
 
 pub type Failure = Vec<Issue>;
 
@@ -340,7 +340,7 @@ impl Domain {
     /// raise the original failed-build result. Build itself never writes.
     pub fn save(&mut self) -> Result<bool, FailedBuild> {
         self.save_with(
-            yamaa_core::capacity::REPORT_ENCODED_BYTES,
+            yamaa_engine::capacity::REPORT_ENCODED_BYTES,
             |publisher, path, bytes| publisher.publish(path, bytes),
         )
     }
@@ -498,21 +498,21 @@ pub trait RuntimePort {
     fn plain_with_observer(
         &mut self,
         prepared: FileSpecification,
-        _scope: yamaa_core::application_observer::Scope<'_>,
+        _scope: yamaa_engine::application_observer::Scope<'_>,
     ) -> Result<Self::Result, Self::Error> {
         self.plain(prepared)
     }
     fn project_with_observer(
         &mut self,
         prepared: Box<crate::file_project::FileProject>,
-        _scope: yamaa_core::application_observer::Scope<'_>,
+        _scope: yamaa_engine::application_observer::Scope<'_>,
     ) -> Result<Self::Result, Self::Error> {
         self.project(prepared)
     }
     fn producer_with_observer(
         &mut self,
         prepared: Box<crate::file_graph::FileGraph>,
-        _scope: yamaa_core::application_observer::Scope<'_>,
+        _scope: yamaa_engine::application_observer::Scope<'_>,
     ) -> Result<Self::Result, Self::Error> {
         self.producer(prepared)
     }
@@ -522,10 +522,10 @@ pub enum ApplicationError<E> {
     Runtime(E),
 }
 pub struct Application<R> {
-    pub host: yamaa_core::project_function::Language,
+    pub host: yamaa_engine::host_values::Language,
     pub runtime: R,
 }
-impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
+impl<R: RuntimePort> yamaa_engine::build::Ports for Application<R> {
     type Plain = FileSpecification;
     type Project = Box<crate::file_project::FileProject>;
     type Producer = Box<crate::file_graph::FileGraph>;
@@ -569,7 +569,7 @@ impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
     fn build_plain_with_observer(
         &mut self,
         prepared: FileSpecification,
-        scope: yamaa_core::application_observer::Scope<'_>,
+        scope: yamaa_engine::application_observer::Scope<'_>,
     ) -> Result<R::Result, Self::Failure> {
         self.runtime
             .plain_with_observer(prepared, scope)
@@ -578,7 +578,7 @@ impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
     fn build_project_with_observer(
         &mut self,
         prepared: Self::Project,
-        scope: yamaa_core::application_observer::Scope<'_>,
+        scope: yamaa_engine::application_observer::Scope<'_>,
     ) -> Result<R::Result, Self::Failure> {
         self.runtime
             .project_with_observer(prepared, scope)
@@ -587,7 +587,7 @@ impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
     fn build_producer_with_observer(
         &mut self,
         prepared: Self::Producer,
-        scope: yamaa_core::application_observer::Scope<'_>,
+        scope: yamaa_engine::application_observer::Scope<'_>,
     ) -> Result<R::Result, Self::Failure> {
         self.runtime
             .producer_with_observer(prepared, scope)
@@ -600,19 +600,21 @@ impl RuntimePort for Native<'_> {
     fn plain(&mut self, prepared: FileSpecification) -> Result<Domain, Failure> {
         self.plain_with_observer(
             prepared,
-            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+            yamaa_engine::application_observer::Scope::new(
+                &yamaa_engine::application_observer::Noop,
+            ),
         )
     }
     fn plain_with_observer(
         &mut self,
         mut prepared: FileSpecification,
-        scope: yamaa_core::application_observer::Scope<'_>,
+        scope: yamaa_engine::application_observer::Scope<'_>,
     ) -> Result<Domain, Failure> {
         let attempt = prepared.build_with_observer(scope);
         if let Some(error) = file_preparation::public_opaque_resource_failure(&attempt) {
             return Err(resource_failure("capture", error));
         }
-        scope.phase(yamaa_core::application_observer::Phase::Output);
+        scope.phase(yamaa_engine::application_observer::Phase::Output);
         let converted = (|| {
             let result = specification_report::build_result(
                 prepared.run(),
@@ -636,11 +638,11 @@ impl RuntimePort for Native<'_> {
             })
         })();
         scope.exit(
-            yamaa_core::application_observer::Phase::Output,
+            yamaa_engine::application_observer::Phase::Output,
             if converted.is_ok() {
-                yamaa_core::application_observer::Outcome::Succeeded
+                yamaa_engine::application_observer::Outcome::Succeeded
             } else {
-                yamaa_core::application_observer::Outcome::Failed
+                yamaa_engine::application_observer::Outcome::Failed
             },
         );
         converted
@@ -660,16 +662,16 @@ pub fn plain(prepared: FileSpecification, identity: Identity<'_>) -> Result<Doma
 pub fn plain_with_observer(
     prepared: FileSpecification,
     identity: Identity<'_>,
-    scope: yamaa_core::application_observer::Scope<'_>,
+    scope: yamaa_engine::application_observer::Scope<'_>,
 ) -> Result<Domain, Failure> {
     Native { identity }.plain_with_observer(prepared, scope)
 }
 fn native(identity: Identity<'_>) -> Application<Native<'_>> {
     Application {
         host: if identity.runtime == "r" {
-            yamaa_core::project_function::Language::R
+            yamaa_engine::host_values::Language::R
         } else {
-            yamaa_core::project_function::Language::Python
+            yamaa_engine::host_values::Language::Python
         },
         runtime: Native { identity },
     }
@@ -851,7 +853,7 @@ mod tests {
             let observed = domain_entry::domain_with_observer(
                 request(),
                 &mut application,
-                yamaa_core::application_observer::Scope::new(measurements),
+                yamaa_engine::application_observer::Scope::new(measurements),
             )
             .unwrap_or_else(|_| panic!("observed fixture failed"));
             measurements.complete(observed.output().is_some());

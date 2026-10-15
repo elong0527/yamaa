@@ -5,13 +5,13 @@ use yamaa_adapters::{
     shipped_schema,
     specification_source::{InheritancePort, PreparedDocument, Source},
 };
-use yamaa_core::inheritance::{Source as Identity, SourceError};
 use yamaa_core::{
     producer_graph::Error as CoreError,
     project_environment::{Draft, Environment, ExecutionEnvironment},
     project_function::Language,
     specification::PrepareError,
 };
+use yamaa_engine::inheritance::{Source as Identity, SourceError};
 
 fn environment() -> ExecutionEnvironment {
     Environment::admit(
@@ -96,8 +96,8 @@ fn recursive_original_documents_are_owned_once_and_all_alias_origins_remain_held
     )
     .unwrap();
     drop((root, left, right, leaf));
-    assert_eq!(graph.metadata().root(), 1);
-    assert_eq!(graph.metadata().order(), [2, 3, 0, 1]);
+    assert_eq!(graph.checked().metadata().root(), 1);
+    assert_eq!(graph.checked().metadata().order(), [2, 3, 0, 1]);
     assert_eq!(graph.nodes().len(), 4);
     assert_eq!(
         graph.nodes()[1].document.source().bytes,
@@ -115,7 +115,7 @@ fn recursive_original_documents_are_owned_once_and_all_alias_origins_remain_held
         &graph.nodes()[3].producers[0].document,
         &graph.nodes()[2].document
     ));
-    let aliases = graph.metadata().nodes()[1].producers();
+    let aliases = graph.checked().metadata().nodes()[1].producers();
     assert_eq!(
         aliases
             .iter()
@@ -132,11 +132,11 @@ fn recursive_original_documents_are_owned_once_and_all_alias_origins_remain_held
         ]
     );
     assert!(matches!(
-        graph.metadata().execution_refusal(),
+        graph.checked().metadata().execution_refusal(),
         PrepareError::Unsupported(_)
     ));
     assert!(matches!(
-        yamaa_core::domain::check(graph.nodes()[1].document.model()),
+        yamaa_engine::domain::check(graph.nodes()[1].document.model()),
         Err(PrepareError::Unsupported(_))
     ));
 }
@@ -325,13 +325,13 @@ fn equal_shared_parent_snapshots_and_written_inherited_origins_remain_retained()
         parent
     );
     assert_eq!(
-        graph.metadata().nodes()[0].producers()[0]
+        graph.checked().metadata().nodes()[0].producers()[0]
             .output_origin()
             .declaring_source(),
         "/shared-parent.yaml"
     );
     assert_eq!(
-        graph.metadata().nodes()[0].producers()[0]
+        graph.checked().metadata().nodes()[0].producers()[0]
             .output_origin()
             .written(),
         "p.csv"

@@ -8,10 +8,10 @@ use yamaa_adapters::{
     },
     yaml_decode::{decode_yaml, DecodeFailure, DecodeLimits},
 };
-use yamaa_core::inheritance::{Source as Identity, SourceError};
 use yamaa_core::schema::{
     DocumentLimits, DocumentNode as N, NormalizationError, NormalizationResource, SchemaSource,
 };
+use yamaa_engine::inheritance::{Source as Identity, SourceError};
 
 const SCHEMA: &str = "version: '1.0'\nroot_class:\n  - schema_version: {type: str}\n  - domain: {type: [str, int], default: DEFAULT}\n  - input: {type: dict}\n  - keys: {type: 'list[str]'}\n  - output: {type: dict}\n  - columns: {type: 'list[column_class]'}\n  - windows: {type: 'dict[str, window_spec]'}\ncolumn_class:\n  - name: {type: str}\n  - type: {type: str}\n  - derivation: {type: handled_expression_class}\nhandled_expression_class:\n  - value: {type: expression}\nexpression: {registry: expressions}\nexpressions:\n  row_number:\n    - window: {type: window_selection}\nwindow_selection: {type: [str, window_spec]}\nwindow_spec:\n  - group_by: {type: 'list[str]'}\n  - order_by: {type: 'list[order_term]'}\norder_term:\n  - variable: {type: str}\n";
 const VALID: &str = "schema_version: '1.0'\ndomain: X\ninput: {}\nkeys: []\noutput: {path: output.csv, columns: []}\ncolumns: []\n";

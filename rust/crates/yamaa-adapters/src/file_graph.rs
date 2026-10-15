@@ -110,7 +110,7 @@ pub(crate) struct CapturedEntry {
     schema: Arc<CapturedSchema>,
     document: PreparedDocument,
     limits: Limits,
-    selection: yamaa_core::build::EntrySelection,
+    selection: yamaa_engine::build::EntrySelection,
 }
 /// Entry/schema limits and written identity ownership admitted before capture.
 /// Private fields prevent an unadmitted request from entering the shared transfer.
@@ -120,7 +120,7 @@ pub(crate) struct AdmittedEntry {
     limits: Limits,
 }
 impl CapturedEntry {
-    pub(crate) fn selection(&self) -> &yamaa_core::build::EntrySelection {
+    pub(crate) fn selection(&self) -> &yamaa_engine::build::EntrySelection {
         &self.selection
     }
     pub(crate) fn into_ordinary_parts(
@@ -202,8 +202,8 @@ impl FileGraph {
                 &root.source().identity,
             )
             .map_err(Error::Document)?;
-            yamaa_core::build::select_entry(
-                yamaa_core::build::EntryView {
+            yamaa_engine::build::select_entry(
+                yamaa_engine::build::EntryView {
                     original: root.normalization_input(),
                     model_nodes: root.model().document().nodes().len(),
                 },
@@ -213,9 +213,9 @@ impl FileGraph {
                 },
             )
             .map_err(|error| match error {
-                yamaa_core::build::SelectionFailure::Resource(error) => Error::Resource(error),
-                yamaa_core::build::SelectionFailure::Limit(code) => Error::Limit(code),
-                yamaa_core::build::SelectionFailure::Snapshot { identity, error } => {
+                yamaa_engine::build::SelectionFailure::Resource(error) => Error::Resource(error),
+                yamaa_engine::build::SelectionFailure::Limit(code) => Error::Limit(code),
+                yamaa_engine::build::SelectionFailure::Snapshot { identity, error } => {
                     Error::Snapshot { identity, error }
                 }
             })

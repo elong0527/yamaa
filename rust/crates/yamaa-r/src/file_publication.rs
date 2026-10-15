@@ -53,10 +53,10 @@ pub(super) mod platform {
             .save(&mut *publisher)
             .map(|report| r!(report.to_string()))
             .map_err(|error| match error {
-                yamaa_core::specification_output::SaveError::FailedBuild => {
+                yamaa_engine::specification_output::SaveError::FailedBuild => {
                     "cannot save a failed build".into()
                 }
-                yamaa_core::specification_output::SaveError::Publish(error) => error.message(),
+                yamaa_engine::specification_output::SaveError::Publish(error) => error.message(),
             })
     }
     pub(super) fn create(declared: Raw, target: Raw) -> std::result::Result<Robj, String> {

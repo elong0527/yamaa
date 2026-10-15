@@ -1,6 +1,6 @@
 //! Physical inheritance decoding and compatibility representation of engine preparation.
 use super::*;
-use yamaa_core::{inheritance_capture as application, inheritance_preparation as lifecycle};
+use yamaa_engine::{inheritance_capture as application, inheritance_preparation as lifecycle};
 
 pub use application::CapturePort as InheritancePort;
 pub type CapturedParent = application::CapturedParent<DecodedYaml>;
@@ -10,7 +10,7 @@ pub enum InheritanceError<E> {
     Entry(Error),
     Dictionary {
         document: Box<PreparedDocument>,
-        error: Box<yamaa_core::dictionary_preparation::Error<E, Error, DecodedYaml>>,
+        error: Box<yamaa_engine::dictionary_preparation::Error<E, Error, DecodedYaml>>,
     },
     Preparation {
         schema: Arc<CapturedSchema>,

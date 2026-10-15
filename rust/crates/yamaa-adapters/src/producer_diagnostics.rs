@@ -12,7 +12,7 @@ use crate::{
 use serde_json::Value;
 use std::collections::BTreeMap;
 use yamaa_core::function_signature::ProjectFunctionIdentity;
-use yamaa_core::{
+use yamaa_engine::{
     dataset::RowIdentity,
     function_invocation::{FailureKind, InvocationFailure},
     producer_build::Failure as BuildFailure,

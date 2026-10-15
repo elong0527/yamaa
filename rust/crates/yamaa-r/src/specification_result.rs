@@ -10,7 +10,7 @@ use yamaa_adapters::{
     specification_report::{self, BuildResult, Identity},
     specification_run::{CapturedAttempt, PreparedRun, SourcePort},
 };
-use yamaa_core::resource::ResourceFailure;
+use yamaa_engine::host_values::ResourceFailure;
 
 pub(super) struct CaptureError {
     failure: Option<ResourceFailure>,
@@ -132,7 +132,7 @@ impl SourcePort for Port {
     }
     fn inspect(
         &mut self,
-        source: &yamaa_core::specification::SourceDeclaration,
+        source: &yamaa_engine::specification::SourceDeclaration,
     ) -> std::result::Result<(), CaptureError> {
         if let Some(inspect) = &self.inspect {
             let result = inspect
@@ -149,11 +149,11 @@ impl SourcePort for Port {
     }
     fn capture_observed(
         &mut self,
-        source: &yamaa_core::specification::SourceDeclaration,
+        source: &yamaa_engine::specification::SourceDeclaration,
         byte_limit: usize,
-        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+        origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
     ) -> Result<Arc<[u8]>, CaptureError> {
-        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+        *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
         self.capture(source, byte_limit)
     }
     fn capture_reads(&self) -> usize {
@@ -161,7 +161,7 @@ impl SourcePort for Port {
     }
     fn capture(
         &mut self,
-        source: &yamaa_core::specification::SourceDeclaration,
+        source: &yamaa_engine::specification::SourceDeclaration,
         maximum: usize,
     ) -> std::result::Result<Arc<[u8]>, CaptureError> {
         let result = self
@@ -255,10 +255,10 @@ fn build_save(handle: Robj, publish: Function) -> List {
             .save(&mut Publisher(publish))
             .map(|v| r!(v.to_string()))
             .map_err(|error| match error {
-                yamaa_core::specification_output::SaveError::FailedBuild => {
+                yamaa_engine::specification_output::SaveError::FailedBuild => {
                     "cannot save a failed build".into()
                 }
-                yamaa_core::specification_output::SaveError::Publish(error) => error,
+                yamaa_engine::specification_output::SaveError::Publish(error) => error,
             })
     })
 }

@@ -275,15 +275,15 @@ impl Default for PreparationLimits {
     fn default() -> Self {
         Self {
             core: core::Limits {
-                records: yamaa_core::capacity::OUTPUT_ROWS,
-                cells: yamaa_core::capacity::REPORT_CELLS,
-                text: yamaa_core::capacity::REPORT_ENCODED_BYTES,
-                json_nodes: yamaa_core::capacity::REPORT_CELLS,
+                records: yamaa_engine::capacity::OUTPUT_ROWS,
+                cells: yamaa_engine::capacity::REPORT_CELLS,
+                text: yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+                json_nodes: yamaa_engine::capacity::REPORT_CELLS,
             },
-            output_bytes: yamaa_core::capacity::SOURCE_BYTES,
-            total_output_bytes: yamaa_core::capacity::SOURCE_BYTES,
-            report_bytes: yamaa_core::capacity::REPORT_ENCODED_BYTES,
-            observation_bytes: yamaa_core::capacity::REPORT_ENCODED_BYTES,
+            output_bytes: yamaa_engine::capacity::SOURCE_BYTES,
+            total_output_bytes: yamaa_engine::capacity::SOURCE_BYTES,
+            report_bytes: yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+            observation_bytes: yamaa_engine::capacity::REPORT_ENCODED_BYTES,
         }
     }
 }

@@ -20,12 +20,12 @@ use yamaa_core::{
 };
 
 pub const LIMITS: TableLimits = TableLimits {
-    max_rows: yamaa_core::capacity::SOURCE_ROWS,
+    max_rows: yamaa_engine::capacity::SOURCE_ROWS,
     max_columns: yamaa_core::specification::DEFAULT_MAX_COLUMNS,
     max_batches: 256,
-    max_cells: yamaa_core::capacity::SOURCE_CELLS,
+    max_cells: yamaa_engine::capacity::SOURCE_CELLS,
 };
-const MAX_BYTES: usize = yamaa_core::capacity::SOURCE_BYTES;
+const MAX_BYTES: usize = yamaa_engine::capacity::SOURCE_BYTES;
 const MAX_SCHEMA_BYTES: usize = 64 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -284,7 +284,7 @@ fn timestamp_seconds(array: &ArrayRef) -> Result<ArrayRef, Error> {
 /// Apply the compiled source text policy by replacing validity alone. String
 /// offsets, views and payload buffers stay shared, even for sliced input arrays.
 pub(crate) fn source_policy(
-    source: &yamaa_core::specification::SourceDeclaration,
+    source: &yamaa_engine::specification::SourceDeclaration,
     table: ArrowTable,
 ) -> Result<ArrowTable, Error> {
     for (name, kind) in &source.types {
@@ -382,13 +382,13 @@ pub fn admit_sources(
     if count != run.compiled().sources().len() {
         return Err(ExecutionError::Specification(
             crate::specification_run::Error::Bind(
-                yamaa_core::specification::BindError::SourceCount,
+                yamaa_engine::specification::BindError::SourceCount,
             ),
         ));
     }
     for index in 0..count {
         if run.compiled().source_interpretation(index)
-            != Some(yamaa_core::specification::SourceInterpretation::Ordinary)
+            != Some(yamaa_engine::specification::SourceInterpretation::Ordinary)
         {
             return Err(ExecutionError::Interpretation);
         }
@@ -404,7 +404,7 @@ pub fn execute(
 ) -> Result<crate::dataset_result::DatasetResponse, ExecutionError> {
     use crate::{dataset_result, specification_run};
     use std::panic::{catch_unwind, AssertUnwindSafe};
-
+    use yamaa_engine::dataset::DatasetExecution;
     admit_sources(run, tables.len())?;
     catch_unwind(AssertUnwindSafe(|| {
         let tables = tables

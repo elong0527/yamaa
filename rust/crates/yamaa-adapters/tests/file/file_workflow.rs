@@ -238,9 +238,9 @@ fn complete_original_diamond_checks_each_canonical_node_once_without_data() {
     study.write("root.yaml", &yaml("{L: {path: left.csv, schema: left.yaml}, R: {path: right.csv, schema: right.yaml}, Q: {path: right.csv, schema: './right.yaml'}}", "L", "root.csv", true));
     let graph = study.prepare(Default::default()).unwrap();
     assert_eq!(graph.capture_reads(), 5); // one environment + four canonical nodes
-    assert_eq!(graph.graph().metadata().order(), [3, 1, 2, 0]);
+    assert_eq!(graph.graph().checked().metadata().order(), [3, 1, 2, 0]);
     assert!(matches!(
-        graph.graph().metadata().execution_refusal(),
+        graph.graph().checked().metadata().execution_refusal(),
         PrepareError::Unsupported(_)
     ));
     let expected = ["root.yaml", "left.yaml", "leaf.yaml"].map(|name| yamaa_adapters::issue_rows::Issue {
@@ -528,7 +528,7 @@ fn inherited_graph_findings_retain_the_actual_declaring_layer_after_owner_files_
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].context, expected);
     assert_eq!(
-        graph.graph().metadata().nodes()[0].producers()[0]
+        graph.graph().checked().metadata().nodes()[0].producers()[0]
             .schema_origin()
             .declaring_source(),
         study.path("parents/base.yaml")
@@ -799,7 +799,7 @@ impl Study {
     }
 }
 struct NoActivation;
-impl yamaa_core::project_activation::ActivationPort for NoActivation {
+impl yamaa_engine::project_activation::ActivationPort for NoActivation {
     type Handle = ();
     type Error = ();
     fn verify_lock(
@@ -820,8 +820,8 @@ impl yamaa_core::project_activation::ActivationPort for NoActivation {
     fn invoke(
         &mut self,
         _: &(),
-        _: &[yamaa_core::function_invocation::Argument<'_>],
-    ) -> Result<yamaa_core::value::Value, yamaa_core::function_invocation::HostError<()>> {
+        _: &[yamaa_engine::function_invocation::Argument<'_>],
+    ) -> Result<yamaa_core::value::Value, yamaa_engine::function_invocation::HostError<()>> {
         panic!("functionless workflow must not call")
     }
 }
@@ -839,7 +839,7 @@ fn ordinary_report_id() -> yamaa_adapters::specification_report::Identity<'stati
 #[test]
 fn selected_ordinary_keeps_complete_report_and_explicit_held_byte_save() {
     use file_workflow::Selected;
-    use yamaa_core::specification_output::ArtifactPort;
+    use yamaa_engine::specification_output::ArtifactPort;
     let study = Study::new();
     study.write(
         "root.yaml",
@@ -1002,9 +1002,9 @@ fn selected_inherited_producer_seeds_original_closure_with_shared_aliases_and_di
         &nodes[1].producers[0].document,
         &nodes[2].producers[0].document
     ));
-    assert_eq!(graph.graph().metadata().order(), [3, 1, 2, 0]);
+    assert_eq!(graph.graph().checked().metadata().order(), [3, 1, 2, 0]);
     assert!(matches!(
-        graph.graph().metadata().execution_refusal(),
+        graph.graph().checked().metadata().execution_refusal(),
         PrepareError::Unsupported(_)
     ));
     let rows = producer_check::prepared(&graph).unwrap();
@@ -1514,7 +1514,7 @@ fn absent_environment_selects_producer_without_capturing_or_inventing_metadata()
         ),
     );
     let selected = file_workflow::select_request(
-        yamaa_core::build::Request {
+        yamaa_engine::build::Request {
             specification: &study.path("root.yaml"),
             environment: None,
         },
@@ -1535,6 +1535,7 @@ fn absent_environment_selects_producer_without_capturing_or_inventing_metadata()
     assert!(graph.environment().captures().is_empty());
     assert!(graph
         .graph()
+        .checked()
         .metadata()
         .environment()
         .functions()
@@ -1581,7 +1582,7 @@ fn plain_workflow_profile_inspection_keeps_physical_kind_before_study_capture() 
             }
         }
         let Err(file_workflow::SelectionError::Plain(owner)) = file_workflow::select_request(
-            yamaa_core::build::Request {
+            yamaa_engine::build::Request {
                 specification: &study.path("entry/root.yaml"),
                 environment: None,
             },

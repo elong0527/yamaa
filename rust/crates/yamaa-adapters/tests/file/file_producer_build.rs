@@ -17,14 +17,6 @@ use yamaa_adapters::{
     specification_source::Source,
 };
 use yamaa_core::{
-    dataset::{Execution, ExecutionError},
-    function_invocation::{Argument, FailureKind, HostError},
-    producer_build::{CaptureError, Failure, ReportPort},
-    project_activation::{ActivationPort, Failure as ActivationFailure},
-    specification_output::{CompleteError, OutputReport},
-    specification_run::PortError,
-};
-use yamaa_core::{
     function_signature::{LogicalSignature, ProjectFunctionIdentity},
     producer_graph::Node,
     project_environment::{LockKind, LockReference},
@@ -32,6 +24,14 @@ use yamaa_core::{
     specification::OutputFinding,
     table::{TableAccess, ValueRef},
     value::Value,
+};
+use yamaa_engine::{
+    dataset::{Execution, ExecutionError},
+    function_invocation::{Argument, FailureKind, HostError},
+    producer_build::{CaptureError, Failure, ReportPort},
+    project_activation::{ActivationPort, Failure as ActivationFailure},
+    specification_output::{CompleteError, OutputReport},
+    specification_run::PortError,
 };
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -399,7 +399,7 @@ fn whole_set_invalid_target_and_duplicate_normalized_alias_refuse_every_write() 
 #[test]
 fn native_save_admits_cumulative_limits_and_whole_report_before_first_write() {
     use yamaa_adapters::producer_result::prepare_owned_classified;
-    use yamaa_core::producer_publication::{Failure as SaveFailure, Limits as SaveLimits};
+    use yamaa_engine::producer_publication::{Failure as SaveFailure, Limits as SaveLimits};
     let study = Study::new();
     study.rounded();
     fs::create_dir(study.0.join("generated")).unwrap();
@@ -550,7 +550,7 @@ fn macos_absent_case_alias_and_unproven_unicode_targets_preflight_before_every_w
 fn actual_late_consumer_publication_failure_keeps_producer_bytes_original_io_and_completed_build() {
     use rustix::fs::{self as unix, FlockOperation, Mode as OpenMode, OFlags};
     use yamaa_adapters::producer_result::prepare_owned_classified;
-    use yamaa_core::producer_publication::Failure as SaveFailure;
+    use yamaa_engine::producer_publication::Failure as SaveFailure;
     let study = Study::new();
     study.rounded();
     study.write(
@@ -821,7 +821,7 @@ impl ReportPort for Report {
     fn select<C, D, T: TableAccess>(
         &mut self,
         node: &Node,
-        _attempt: &yamaa_core::specification_run::CapturedAttempt<C, D, T>,
+        _attempt: &yamaa_engine::specification_run::CapturedAttempt<C, D, T>,
         maximum: usize,
     ) -> Result<(), Self::Error> {
         self.entered.push(node.identity().into());
@@ -1665,7 +1665,7 @@ fn public_root_copy_admits_the_prior_frontier_and_keeps_retained_truth_after_res
     let result = producer_result::prepare_classified(
         &attempt,
         report_id(),
-        yamaa_core::capacity::REPORT_ENCODED_BYTES,
+        yamaa_engine::capacity::REPORT_ENCODED_BYTES,
         &[],
     )
     .unwrap_or_else(|_| panic!("accepted graph remains within the longitudinal copying policy"));
@@ -1685,7 +1685,7 @@ fn public_root_copy_admits_the_prior_frontier_and_keeps_retained_truth_after_res
     let repeated = producer_result::prepare_classified(
         &attempt,
         report_id(),
-        yamaa_core::capacity::REPORT_ENCODED_BYTES,
+        yamaa_engine::capacity::REPORT_ENCODED_BYTES,
         &[],
     )
     .unwrap_or_else(|_| panic!("public projection owns its accepted truth"));
@@ -2230,7 +2230,7 @@ fn native_report_admission_stops_dependents_and_whole_report_limits_keep_earlier
 fn report_context_pointer_and_table_count_admission_precede_table_authority_and_clear_old_selection(
 ) {
     use yamaa_adapters::{producer_report::NativeReport, specification_report::Error};
-    use yamaa_core::specification_run::{CapturedAttempt, CapturedSource};
+    use yamaa_engine::specification_run::{CapturedAttempt, CapturedSource};
     struct Bomb {
         schema: yamaa_core::table::TableSchema,
         reads: Rc<std::cell::Cell<usize>>,
@@ -2294,7 +2294,7 @@ fn report_context_pointer_and_table_count_admission_precede_table_authority_and_
         report.select(node, &fake, 16_777_216),
         Err(Error::ResourceLimit(refusal))
             if refusal.resource == "report_cells"
-                && refusal.limit == yamaa_core::capacity::REPORT_CELLS
+                && refusal.limit == yamaa_engine::capacity::REPORT_CELLS
                 && refusal.actual.is_none()
     ));
     assert_eq!(reads.get(), 0);
@@ -2354,7 +2354,7 @@ fn caller_report_quota_refuses_borrowed_identity_before_formatter_copy() {
     // itself. No full-profile allocation is needed to exercise the refusal.
     let report_bytes = 8192;
     let oversized_runtime =
-        "x".repeat(report_bytes * yamaa_core::capacity::REPORT_RETAINED_FACTOR / 12 + 1);
+        "x".repeat(report_bytes * yamaa_engine::capacity::REPORT_RETAINED_FACTOR / 12 + 1);
     let identity = yamaa_adapters::specification_report::Identity {
         runtime_version: &oversized_runtime,
         ..report_id()
@@ -2379,7 +2379,7 @@ fn caller_report_quota_refuses_borrowed_identity_before_formatter_copy() {
         Err(CompleteError::Report(
             yamaa_adapters::specification_report::Error::ResourceLimit(ref refusal)
         )) if refusal.resource == "report_retained_bytes"
-            && refusal.limit == report_bytes * yamaa_core::capacity::REPORT_RETAINED_FACTOR
+            && refusal.limit == report_bytes * yamaa_engine::capacity::REPORT_RETAINED_FACTOR
             && refusal.actual.is_some_and(|actual| actual > refusal.limit)
     ));
     assert_eq!(

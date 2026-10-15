@@ -4,14 +4,14 @@ use yamaa_adapters::project_activation_diagnostics::{
     binding_issues, test_issues, test_issues_with_limit, DefinitionSource, Error, HostDetails,
 };
 use yamaa_core::{
-    function_invocation::{Argument, FailureKind, HostError, InvocationFailure},
-    project_activation::{self, ActivationPort, BindingFailure, Failure, TestFailure},
-};
-use yamaa_core::{
     function_signature::{LogicalSignature, ProjectFunctionIdentity},
     project_environment::{LockKind, LockReference},
     project_function::{Case, Definition, Function, Language},
     value::{ColumnType, FiniteFloat, Value},
+};
+use yamaa_engine::{
+    function_invocation::{Argument, FailureKind, HostError, InvocationFailure},
+    project_activation::{self, ActivationPort, BindingFailure, Failure, TestFailure},
 };
 
 struct Port {

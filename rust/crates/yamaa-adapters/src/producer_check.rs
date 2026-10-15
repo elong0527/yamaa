@@ -190,7 +190,7 @@ pub fn prepared(graph: &FileGraph) -> Result<Vec<Issue>, Error<'_>> {
     prepared_with_limit(graph, crate::specification_check::MAX_ISSUE_BYTES)
 }
 pub fn prepared_with_limit(graph: &FileGraph, maximum: usize) -> Result<Vec<Issue>, Error<'_>> {
-    let checked = graph.graph().metadata();
+    let checked = graph.graph().checked().metadata();
     let entry = graph.graph().nodes()[checked.root()]
         .document
         .source()
@@ -527,7 +527,7 @@ fn inheritance_issues<'a>(
         InheritanceDependencyError as D, InheritanceDependencyIssue as F,
         InheritanceReferenceError as R, NormalizationError as N,
     };
-    use yamaa_core::{inheritance::Error as G, inheritance_preparation::Error as E};
+    use yamaa_engine::{inheritance::Error as G, inheritance_preparation::Error as E};
     let mut budget = Budget::new(maximum);
     let mut supported = true;
     match cause {
@@ -549,7 +549,7 @@ fn inheritance_issues<'a>(
             }
         }
         I::Dictionary { document, error } => {
-            use yamaa_core::dictionary_preparation::Cause;
+            use yamaa_engine::dictionary_preparation::Cause;
             match &error.cause {
                 Cause::Capture {
                     reference,

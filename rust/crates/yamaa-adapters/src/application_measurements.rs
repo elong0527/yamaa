@@ -2,7 +2,7 @@
 //! later never runs a source, function, serializer or publisher again.
 use serde::Serialize;
 use std::{sync::Mutex, time::Instant};
-use yamaa_core::{
+use yamaa_engine::{
     application_observer::{CallStage, Event, Observer, Outcome, Phase},
     dataset::ExecutionPhase,
 };
@@ -72,7 +72,7 @@ struct Refusal {
     limit: usize,
     required: Option<usize>,
 }
-fn resource_name(resource: yamaa_core::dataset::Resource) -> &'static str {
+fn resource_name(resource: yamaa_engine::dataset::Resource) -> &'static str {
     crate::resource_diagnostics::resource_name(resource)
 }
 
@@ -348,7 +348,7 @@ impl Observer for Measurements {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use yamaa_core::application_observer::{Noop, Scope};
+    use yamaa_engine::application_observer::{Noop, Scope};
     #[test]
     fn actual_entries_returns_and_failed_stage_have_bounded_retention_and_typed_offsets() {
         let measurements = Measurements::new();

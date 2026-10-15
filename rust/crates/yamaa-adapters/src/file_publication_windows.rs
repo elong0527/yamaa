@@ -7,7 +7,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 const MAX_PATH_BYTES: usize = 65_536;
-const MAX_OUTPUT_BYTES: usize = yamaa_core::capacity::SOURCE_BYTES;
+const MAX_OUTPUT_BYTES: usize = yamaa_engine::capacity::SOURCE_BYTES;
 static NEXT: AtomicU64 = AtomicU64::new(0);
 fn admit_output_bytes(length: usize) -> Result<(), Error> {
     if length > MAX_OUTPUT_BYTES {
@@ -345,7 +345,7 @@ impl Drop for Pending<'_> {
         let _ = self.cleanup();
     }
 }
-impl yamaa_core::specification_output::ArtifactPort for Publisher {
+impl yamaa_engine::specification_output::ArtifactPort for Publisher {
     type Error = Error;
     fn publish(&mut self, path: &str, content: &[u8]) -> Result<(), Error> {
         Publisher::publish(self, path, content)

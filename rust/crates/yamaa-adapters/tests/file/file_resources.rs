@@ -153,7 +153,7 @@ fn metadata_and_bounded_capture_reuse_only_exact_retained_bytes() {
     assert_eq!(first.as_ref(), b"ID,V\n1,2\n");
     assert_eq!(resources.capture_reads(), 1);
     use yamaa_core::resource::ResourceFailure;
-    use yamaa_core::specification_run::SourcePort;
+    use yamaa_engine::specification_run::SourcePort;
     assert_eq!(
         resources.resource_failure(&Error::Changed),
         Some(ResourceFailure::ContentChanged)
@@ -354,7 +354,7 @@ fn permission_failures_are_terminal_before_any_later_fallback_is_read() {
     let captured = resources.capture("blocked", 32);
     fs::set_permissions(&earlier, permissions).unwrap();
     assert_eq!(
-        <Resources as yamaa_core::specification_run::SourcePort>::resource_failure(
+        <Resources as yamaa_engine::specification_run::SourcePort>::resource_failure(
             &resources,
             inspected.as_ref().unwrap_err()
         ),
@@ -391,7 +391,7 @@ fn unsearchable_directory_does_not_fall_back_to_a_different_file() {
     let captured = resources.capture("private/blocked", 32);
     fs::set_permissions(&earlier, permissions).unwrap();
     assert_eq!(
-        <Resources as yamaa_core::specification_run::SourcePort>::resource_failure(
+        <Resources as yamaa_engine::specification_run::SourcePort>::resource_failure(
             &resources,
             inspected.as_ref().unwrap_err()
         ),

@@ -1176,6 +1176,7 @@ dependencies = [
  "toml",
  "windows-sys",
  "yamaa-core",
+ "yamaa-engine",
  "zstd",
 ]
 
@@ -1189,13 +1190,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "yamaa-engine"
+version = "0.4.0"
+dependencies = [
+ "yamaa-core",
+]
+
+[[package]]
 name = "yamaa-python"
 version = "0.4.0"
 dependencies = [
  "pyo3",
  "pyo3-build-config",
  "yamaa-adapters",
- "yamaa-core",
+ "yamaa-engine",
 ]
 
 [[package]]
@@ -1204,7 +1212,7 @@ version = "0.4.0"
 dependencies = [
  "extendr-api",
  "yamaa-adapters",
- "yamaa-core",
+ "yamaa-engine",
 ]
 
 [[package]]
