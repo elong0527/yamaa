@@ -255,3 +255,28 @@ fn repeated_capture_sums_preserve_fixed_incoming_correlations() {
         assert_eq!(pattern.group_count(), 4 * blocks);
     }
 }
+
+#[test]
+fn repeated_body_local_choices_preserve_fixed_incoming_correlations() {
+    // The incoming pair sums still total three per block. Each first-repeat
+    // body also makes a new capture choice that consumes three in either arm.
+    // Two iterations of both sums therefore have fixed width 6 * blocks + 6.
+    // The final reference makes the first local capture observable without
+    // changing the width of the preceding assertion.
+    for blocks in [1, 3, 30] {
+        let mut source = "(?:(a)(bc)|(ab)(c))".repeat(blocks);
+        source.push_str("(?<=(?:");
+        for block in 0..blocks {
+            write!(source, r"\{}\{}", 4 * block + 1, 4 * block + 3).unwrap();
+        }
+        source.push_str("(?:(x)(yy)|(xx)(y))){2}(?:");
+        for block in 0..blocks {
+            write!(source, r"\{}\{}", 4 * block + 2, 4 * block + 4).unwrap();
+        }
+        source.push_str("){2})");
+        write!(source, r"\{}", 4 * blocks + 1).unwrap();
+
+        let pattern = Pattern::compile(&source).unwrap();
+        assert_eq!(pattern.group_count(), 4 * blocks + 4);
+    }
+}
