@@ -108,7 +108,7 @@ def run_coverage(run, repository, revision):
             and isinstance(branch, str)
             and re.fullmatch(r"qualification/issue-[A-Za-z0-9][A-Za-z0-9._-]*", branch)
         ),
-        "release requires nightly main, main dispatch or a same-repository qualification push",
+        "release requires scheduled main, main dispatch or a same-repository qualification push",
     )
     return native.coverage()
 
