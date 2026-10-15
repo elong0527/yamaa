@@ -1,13 +1,12 @@
-//! Bounded extraction through the shared portable pattern and matcher authorities.
+//! Extraction through the shared portable pattern and matcher authorities.
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
-    predicate, regex,
+    regex,
     table::ValueRef,
     value::Value,
 };
 use serde_json::Value as V;
 
-pub const MAX_DECLARATION_BYTES: usize = 16_777_216;
 #[derive(Clone, Debug, PartialEq)]
 pub struct StringExtract {
     source: String,
@@ -23,8 +22,6 @@ pub struct StringExtract {
 pub enum AdmissionError {
     #[error("text extract shape")]
     Shape,
-    #[error("text extract limit")]
-    Limit,
     #[error("text extract regex: {0:?}")]
     Regex(regex::CompileError),
 }
@@ -39,29 +36,11 @@ pub enum Step<'a> {
 pub enum Error {
     #[error("text extract diagnostic: {0:?}")]
     Diagnostic(Diagnostic),
-    #[error("text extract limit: {0:?}")]
-    Limit(predicate::LimitError),
+    #[error("text extract regex: {0:?}")]
+    Regex(regex::MatchError),
 }
 impl StringExtract {
-    /// Account for metadata/context and several retained parser-arena copies.
-    /// The conservative multiplier bounds arena retention; it is not CPU timing.
-    pub fn declaration_bytes(
-        source: &str,
-        path: &str,
-        pattern: &str,
-        group: &str,
-        handlers: impl IntoIterator<Item = usize>,
-    ) -> Option<usize> {
-        [source.len(), path.len(), group.len()]
-            .into_iter()
-            .chain(handlers)
-            .try_fold(0usize, usize::checked_add)
-            .and_then(|n| n.checked_mul(4))
-            .and_then(|n| pattern.len().checked_mul(512)?.checked_add(n))
-            .and_then(|n| n.checked_add(2048))
-    }
-    /// Public use owns its bounded metadata before any later diagnostic copies.
-    /// Invalid pattern/group facts are retained, allowing source/scope precedence.
+    /// Own the declaration while retaining invalid pattern/group facts for precedence.
     pub fn new(
         source: String,
         path: String,
@@ -70,65 +49,35 @@ impl StringExtract {
         missing: Option<Value>,
         no_match: Option<Value>,
     ) -> Result<Self, AdmissionError> {
-        Self::with_budget(
-            source,
-            path,
-            pattern,
-            group,
-            missing,
-            no_match,
-            &mut regex::CompileBudget::new(Default::default()),
-        )
-    }
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn with_budget(
-        source: String,
-        path: String,
-        pattern: String,
-        group: String,
-        missing: Option<Value>,
-        no_match: Option<Value>,
-        budget: &mut regex::CompileBudget,
-    ) -> Result<Self, AdmissionError> {
         if source.is_empty() || path.is_empty() || !decimal(&group) {
             return Err(AdmissionError::Shape);
         }
-        let handler_bytes = [&missing, &no_match].into_iter().map(|value| match value {
-            Some(Value::Str(text)) => text.len(),
-            _ => 0,
-        });
-        if Self::declaration_bytes(&source, &path, &pattern, &group, handler_bytes)
-            .is_none_or(|n| n > MAX_DECLARATION_BYTES)
-        {
-            return Err(AdmissionError::Limit);
-        }
         let mut deferred = None;
-        let compiled =
-            match regex::Pattern::compile_with_budget(&pattern, Default::default(), budget) {
-                Ok(compiled) => Some(compiled),
-                Err(regex::CompileError::Invalid { reason, .. }) => {
-                    // This projection belongs to extraction; checks retain their own
-                    // pattern-only cause. The rejection is bounded static parser data.
-                    let reason = match reason {
-                        "unclosed character class" => "a character class is never closed",
-                        "trailing backslash" => "a trailing backslash escapes nothing",
-                        "variable-length lookbehind" => {
-                            "a lookbehind whose length can vary is not allowed"
-                        }
-                        reason => reason,
-                    };
-                    deferred = Some(diagnostic(
-                        C::RegexInvalidPattern,
-                        &format!("{path}.pattern"),
-                        [
-                            ("pattern", V::String(pattern.clone())),
-                            ("reason", V::String(reason.into())),
-                        ],
-                    ));
-                    None
-                }
-                Err(error) => return Err(AdmissionError::Regex(error)),
-            };
+        let compiled = match regex::Pattern::compile(&pattern) {
+            Ok(compiled) => Some(compiled),
+            Err(regex::CompileError::Invalid { reason, .. }) => {
+                // This projection belongs to extraction; checks retain their own
+                // pattern-only cause. The rejection is bounded static parser data.
+                let reason = match reason {
+                    "unclosed character class" => "a character class is never closed",
+                    "trailing backslash" => "a trailing backslash escapes nothing",
+                    "variable-length lookbehind" => {
+                        "a lookbehind whose length can vary is not allowed"
+                    }
+                    reason => reason,
+                };
+                deferred = Some(diagnostic(
+                    C::RegexInvalidPattern,
+                    &format!("{path}.pattern"),
+                    [
+                        ("pattern", V::String(pattern.clone())),
+                        ("reason", V::String(reason.into())),
+                    ],
+                ));
+                None
+            }
+            Err(error) => return Err(AdmissionError::Regex(error)),
+        };
         let selected = if group.starts_with('-') && group[1..].bytes().all(|b| b == b'0') {
             Some(0)
         } else {
@@ -200,12 +149,7 @@ impl StringExtract {
     }
     /// Matching borrows captures and never allocates a result or handler literal.
     /// A resource failure cannot be mistaken for an absent match.
-    pub fn apply<'a>(
-        &self,
-        value: ValueRef<'a>,
-        limits: regex::MatchLimits,
-        budget: &mut predicate::Budget,
-    ) -> Result<Step<'a>, Error> {
+    pub fn apply<'a>(&self, value: ValueRef<'a>) -> Result<Step<'a>, Error> {
         if let Some(diagnostic) = &self.deferred {
             return Err(Error::Diagnostic(diagnostic.clone()));
         }
@@ -229,44 +173,24 @@ impl StringExtract {
                 })));
             }
         };
-        match budget
-            .search_pattern(
-                self.compiled.as_ref().expect("admitted pattern"),
-                subject,
-                limits,
-            )
-            .map_err(Error::Limit)?
+        match self
+            .compiled
+            .as_ref()
+            .expect("admitted pattern")
+            .search(subject)
+            .map_err(Error::Regex)?
         {
             Some(found) => Ok(Step::Capture(found.groups[self.group])),
             None if self.no_match.is_some() => Ok(Step::Recovered("no_match")),
             None => Ok(Step::NoMatch(subject)),
         }
     }
-    /// Caller admits cumulative copying; standalone use also bounds complete
-    /// context before allocating subject/pattern/path. None is resource refusal.
-    pub fn failure_text_bytes(&self, step: Step<'_>) -> Option<usize> {
+    pub fn failure_diagnostic(&self, step: Step<'_>) -> Option<Diagnostic> {
         let subject = match step {
             Step::NoMatch(subject) => Some(subject),
             Step::Missing => None,
             _ => return None,
         };
-        self.source
-            .len()
-            .checked_add(self.path.len())?
-            .checked_add(self.pattern.len())?
-            .checked_add(subject.map_or(0, str::len))?
-            .checked_add(512)
-    }
-    pub fn failure_diagnostic(&self, step: Step<'_>, maximum: usize) -> Option<Diagnostic> {
-        let subject = match step {
-            Step::NoMatch(subject) => Some(subject),
-            Step::Missing => None,
-            _ => return None,
-        };
-        let bytes = self.failure_text_bytes(step)?;
-        if bytes > maximum.min(MAX_DECLARATION_BYTES) {
-            return None;
-        }
         Some(match subject {
             Some(subject) => diagnostic(
                 C::ExtractNoMatch,
