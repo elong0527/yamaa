@@ -28,8 +28,8 @@ pairs <- qt |>
     by = c("STUDYID", "USUBJID", "EGTPTNUM", "EGREPNUM")
   ) |>
   # Fridericia's correction of each ECG: QT over the cube root of RR in
-  # seconds.
-  mutate(QTCF = QT / (RR / 1000)^(1 / 3))
+  # seconds; zero RR cannot supply a corrected value.
+  mutate(QTCF = QT / (na_if(RR, 0) / 1000)^(1 / 3))
 
 # The mean over the ECGs that have a value; no value, no record.
 averages <- function(data, value, paramcd, param) {

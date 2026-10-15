@@ -277,6 +277,15 @@ task specs).
 
 ## FDA and PHUSE
 
+- **FDA QT Studies Technical Specification v1.0**, Table 4 -
+  https://www.fda.gov/media/128187/download -
+  Average individual ECG replicate values at each nominal time point.
+  Grounding: `adam-adeg-replicate-qtc-average` pairs QT and RR within each
+  replicate, calculates Fridericia QTcF using RR in seconds, then averages
+  the available corrected values. A single available ECG is sufficient.
+  The exact cube-root formula follows admiral's `compute_qtc()`:
+  https://pharmaverse.github.io/admiral/reference/compute_qtc.html.
+
 - **End-to-End Workflow for CDISC Estimand Framework in Clinical Trials:
   Translating Complex Intercurrent Event Definitions into Submission-Ready
   ADaMs & TLGs** (Raval, Luo, Starkell, PHUSE Connect US 2026, PP20) -

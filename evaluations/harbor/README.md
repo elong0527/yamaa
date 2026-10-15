@@ -22,10 +22,10 @@ Docker; this folder only writes Harbor task directories and a job file.
 Results are not kept in this repository: runs are uploaded to Harbor Hub and
 reviewed on its leaderboards.
 
-Standalone `result.sas` sources are also prepared for the 140 prompted
+Standalone `result.sas` sources are also prepared for the 141 prompted
 derivation benchmarks. Their execution prerequisites, local checks and known
 compatibility gaps are documented in [solutions/opensas.md](solutions/opensas.md).
-The opensas track runs the 137 confident cases with native CSV inputs. Three
+The opensas track runs the 138 confident cases with native CSV inputs. Three
 prepared cases remain excluded: investigator comments (spaces-only text),
 randomization (Parquet input), and age quality (warning-log output).
 `build.py` records their reasons and rejects explicit requests to run them.
@@ -323,7 +323,7 @@ uv run --project python --no-sync python evaluations/harbor/smoke.py \
     --out ~/.cache/yamaa-harbor-opensas
 ```
 
-This runs oracle and nop on the same 137 cases, with no model key. The saved
+This runs oracle and nop on the same 138 cases, with no model key. The saved
 `sample.json` lists every selected task and exclusion; `summary.json` records
 each case's rewards and exceptions. Jobs retain the usual task snapshots,
 verifier grades and logs. Weekly and manual CI runs retain this complete
@@ -350,7 +350,7 @@ uv run --project python --no-sync python evaluations/harbor/build.py \
     --out ~/.cache/yamaa-harbor-language-images
 ```
 
-This prepares 1,245 trials: 139 R, 139 Python and 137 opensas cases in each
+This prepares 1,254 trials: 140 R, 140 Python and 138 opensas cases in each
 prompt tier. Exclusions remain reported. Run at most six job processes in
 parallel, each with one active trial; start the remaining three as slots free
 up. Keep the default model variant, one attempt per task, and all failures.
@@ -496,9 +496,10 @@ The `v5` boards retain protocol 4 and add completed-history intercurrent
 event priority, event-specific time-at-risk incidence and ARS-style adverse
 event results. Their task populations are pinned independently in
 `leaderboards/task-populations.json`, alongside the frozen v4 population.
-The v4 definitions and historical scores remain unchanged. The proposed
-PK/QT contributor batch is not included until its authored files are public
-and admitted; it will require another successor population.
+The v4 definitions and historical scores remain unchanged. The replicate
+ECG QTcF benchmark can be evaluated independently; it is
+not part of these frozen populations. The remaining PK/QT contributor
+benchmarks will require another successor population when admitted.
 
 A row is one job: one agent, model, and variant, so the variants of a model
 sit side by side. Its metadata comes from the job (agent, version, model,

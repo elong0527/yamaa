@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import functools
+import math
 import os
 import re
 import shutil
@@ -18,6 +19,47 @@ import pytest
 
 ROOT = Path(__file__).parents[2]
 SOLUTIONS = ROOT / "evaluations/harbor/solutions"
+
+
+@pytest.mark.parametrize("track", ["yamaa", "python", "r", "opensas"])
+@pytest.mark.parametrize("zero_replicates", [1, 3])
+@pytest.mark.parametrize("qt_value", ["0", "400"])
+def test_replicate_qtcf_omits_zero_rr_before_averaging(
+    tmp_path, track, zero_replicates, qt_value
+):
+    name = "adam-adeg-replicate-qtc-average"
+    records = _input(name, "eg.csv")[:6]
+    for row in records:
+        if row["EGTESTCD"] == "QTAG":
+            row["EGSTRESN"] = qt_value
+        elif int(row["EGREPNUM"]) <= zero_replicates:
+            row["EGSTRESN"] = "0"
+    if track == "yamaa":
+        pytest.importorskip("yamaa._native")
+        from yamaa import domain
+
+        study = tmp_path / "study"
+        shutil.copytree(ROOT / "benchmarks" / name, study)
+        path = study / "input/eg.csv"
+        with path.open("w", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=list(records[0]))
+            writer.writeheader()
+            writer.writerows(records)
+        domain(study / "spec.yaml").save()
+        rows = _read(study / "adeg.csv")[1]
+    else:
+        rows = _run(tmp_path, name, track, {"eg.csv": records})["adeg.csv"]
+    assert all(math.isfinite(float(row["AVAL"])) for row in rows)
+    values = {row["PARAMCD"]: float(row["AVAL"]) for row in rows}
+    assert values["QTAG"] == float(qt_value)
+    assert values["RRAG"] == (2000 / 3 if zero_replicates == 1 else 0)
+    if zero_replicates == 3:
+        assert set(values) == {"QTAG", "RRAG"}
+    else:
+        expected = (
+            sum(float(qt_value) / (rr / 1000) ** (1 / 3) for rr in (900, 1100)) / 2
+        )
+        assert values["QTCF"] == pytest.approx(expected)
 
 
 def _read(path):

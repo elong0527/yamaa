@@ -42,7 +42,7 @@ quit;
    seconds; an ECG without both results has no corrected value. */
 data pairs;
   set pairs;
-  if not missing(QT) and not missing(RR) then QTCF=QT/(RR/1000)**(1/3);
+  if not missing(QT) and not missing(RR) and RR ne 0 then QTCF=QT/(RR/1000)**(1/3);
   else QTCF=.;
 run;
 

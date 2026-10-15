@@ -23,9 +23,10 @@ rr = eg.filter(pl.col("EGTESTCD") == "RRAG")
 pairs = qt.select(*point_keys, "EGREPNUM", QT="RESULT").join(
     rr.select(*ecg_keys, RR="RESULT"), on=ecg_keys, how="left"
 )
-# Fridericia's correction of each ECG: QT over the cube root of RR in seconds.
+# Fridericia's correction of each ECG; zero RR cannot supply a corrected value.
 pairs = pairs.with_columns(
-    QTCF=pl.col("QT") / (pl.col("RR") / 1000).pow(1 / 3)
+    QTCF=pl.col("QT")
+    / (pl.when(pl.col("RR") != 0).then(pl.col("RR")) / 1000).pow(1 / 3)
 )
 
 
@@ -39,18 +40,21 @@ def averages(frame: pl.DataFrame, value: str, paramcd: str, param: str):
     )
 
 
-adeg = pl.concat(
-    [
-        averages(qt, "RESULT", "QTAG", "QT Interval, Aggregate (msec)"),
-        averages(rr, "RESULT", "RRAG", "RR Interval, Aggregate (msec)"),
-        averages(pairs, "QTCF", "QTCF", "QTcF Interval, Aggregate (msec)"),
-    ]
-).with_columns(
-    ATPT=pl.col("EGTPT"),
-    ATPTN=pl.col("TPTNUM"),
-    DTYPE=pl.lit("AVERAGE"),
-).sort(["STUDYID", "USUBJID", "PARAMCD", "ATPTN"]).select(
-    "STUDYID", "USUBJID", "PARAMCD", "PARAM", "ATPT", "ATPTN", "DTYPE", "AVAL"
+adeg = (
+    pl.concat(
+        [
+            averages(qt, "RESULT", "QTAG", "QT Interval, Aggregate (msec)"),
+            averages(rr, "RESULT", "RRAG", "RR Interval, Aggregate (msec)"),
+            averages(pairs, "QTCF", "QTCF", "QTcF Interval, Aggregate (msec)"),
+        ]
+    )
+    .with_columns(
+        ATPT=pl.col("EGTPT"),
+        ATPTN=pl.col("TPTNUM"),
+        DTYPE=pl.lit("AVERAGE"),
+    )
+    .sort(["STUDYID", "USUBJID", "PARAMCD", "ATPTN"])
+    .select("STUDYID", "USUBJID", "PARAMCD", "PARAM", "ATPT", "ATPTN", "DTYPE", "AVAL")
 )
 
 Path("/app/output").mkdir(exist_ok=True)
