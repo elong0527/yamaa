@@ -779,18 +779,57 @@ fn selected_root(written: &str) -> Result<Root, Error> {
     })
 }
 
+pub(crate) fn resource_failure(error: &Error) -> Option<yamaa_core::resource::ResourceFailure> {
+    use yamaa_core::resource::ResourceFailure;
+    match error {
+        Error::Missing => Some(ResourceFailure::Missing),
+        Error::NotRegularFile => Some(ResourceFailure::NotRegularFile),
+        Error::Symlink => Some(ResourceFailure::Symlink),
+        Error::WrittenForm(failure) => Some(*failure),
+        Error::Changed => Some(ResourceFailure::ContentChanged),
+        Error::Limit(bound) => Some(ResourceFailure::Boundary(*bound)),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod classification_tests {
+    use super::*;
+    use yamaa_core::resource::ResourceFailure;
+
+    #[test]
+    fn explicit_physical_facts_are_classified_and_other_failures_stay_opaque() {
+        let boundary = Limits::source_bytes(Limits::SOURCE_BYTES + 1).unwrap_err();
+        for (error, expected) in [
+            (Error::Missing, ResourceFailure::Missing),
+            (Error::NotRegularFile, ResourceFailure::NotRegularFile),
+            (Error::Symlink, ResourceFailure::Symlink),
+            (
+                Error::WrittenForm(ResourceFailure::Backslash),
+                ResourceFailure::Backslash,
+            ),
+            (Error::Changed, ResourceFailure::ContentChanged),
+            (Error::Limit(boundary), ResourceFailure::Boundary(boundary)),
+        ] {
+            assert_eq!(resource_failure(&error), Some(expected));
+        }
+        for error in [
+            Error::Unreadable,
+            Error::InvalidRoot,
+            Error::InvalidBase,
+            Error::InvalidPath,
+            Error::InvalidLock,
+            Error::OutsideRoots,
+        ] {
+            assert_eq!(resource_failure(&error), None);
+        }
+    }
+}
+
 impl yamaa_core::specification_run::SourcePort for Resources {
     type Error = Error;
     fn resource_failure(&self, error: &Error) -> Option<yamaa_core::resource::ResourceFailure> {
-        use yamaa_core::resource::ResourceFailure;
-        match error {
-            Error::Missing => Some(ResourceFailure::Missing),
-            Error::NotRegularFile => Some(ResourceFailure::NotRegularFile),
-            Error::Symlink => Some(ResourceFailure::Symlink),
-            Error::WrittenForm(failure) => Some(*failure),
-            Error::Changed => Some(ResourceFailure::ContentChanged),
-            _ => None,
-        }
+        resource_failure(error)
     }
     fn inspect(
         &mut self,
