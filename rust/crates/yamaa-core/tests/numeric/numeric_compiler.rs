@@ -91,6 +91,11 @@ fn oversized_literals_preserve_order_and_missing_does_not_short_circuit() {
             vec!["UNKNOWN"],
         ),
         (format!("1 / 0 + {digits}"), "division_by_zero", vec![]),
+        (
+            format!("COALESCE(A, {digits}, B)"),
+            "integer_overflow",
+            vec!["A"],
+        ),
     ] {
         let plan = compile(&text);
         let mut resolver = Resolver::default();
