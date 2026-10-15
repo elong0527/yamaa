@@ -123,32 +123,20 @@ fn declaration_locations_keep_approved_containment_and_file_intent() {
 }
 
 #[test]
-fn metadata_and_bounded_capture_reuse_only_exact_retained_bytes() {
+fn metadata_inspection_and_capture_reuse_only_exact_retained_bytes() {
     let study = Study::new();
     fs::write(study.path("project/data/source.csv"), b"ID,V\n1,2\n").unwrap();
     let mut resources = study.resources();
     resources.inspect("../data/source.csv").unwrap();
     assert_eq!(resources.capture_reads(), 0);
-    assert_eq!(
-        resources.capture("../data/source.csv", 8),
-        Err(Error::Limit)
-    );
-    assert_eq!(resources.capture_reads(), 0);
-    let (first, created) = resources.capture("../data/source.csv", 9).unwrap();
+    let (first, created) = resources.capture("../data/source.csv").unwrap();
     assert!(created);
     assert_eq!(first.as_ref(), b"ID,V\n1,2\n");
-    let (again, created) = resources.capture("../data/source.csv", 9).unwrap();
+    let (again, created) = resources.capture("../data/source.csv").unwrap();
     assert!(!created && std::sync::Arc::ptr_eq(&first, &again));
     assert_eq!(resources.capture_reads(), 1);
-    assert_eq!(
-        resources.capture("../data/source.csv", 8),
-        Err(Error::Limit)
-    );
     fs::write(study.path("project/data/source.csv"), b"ID,V\n1,3\n").unwrap();
-    assert_eq!(
-        resources.capture("../data/source.csv", 9),
-        Err(Error::Changed)
-    );
+    assert_eq!(resources.capture("../data/source.csv"), Err(Error::Changed));
     assert_eq!(first.as_ref(), b"ID,V\n1,2\n");
     assert_eq!(resources.capture_reads(), 1);
     use yamaa_core::resource::ResourceFailure;
@@ -163,29 +151,26 @@ fn metadata_and_bounded_capture_reuse_only_exact_retained_bytes() {
 }
 
 #[test]
-fn cached_growth_and_shrink_are_changes_and_refusal_does_not_create_a_snapshot() {
+fn cached_growth_and_shrink_are_changes_without_replacing_the_snapshot() {
     let study = Study::new();
     let name = study.path("project/spec/a");
-    fs::write(&name, b"123").unwrap();
-    let mut resources = study.resources();
-    assert_eq!(resources.capture("a", 2), Err(Error::Limit));
     fs::write(&name, b"12").unwrap();
-    assert!(resources.capture("a", 2).unwrap().1);
+    let mut resources = study.resources();
+    assert!(resources.capture("a").unwrap().1);
     fs::write(&name, b"123").unwrap();
-    assert_eq!(resources.capture("a", 100), Err(Error::Changed));
-    assert_eq!(resources.capture("a", 2), Err(Error::Changed));
+    assert_eq!(resources.capture("a"), Err(Error::Changed));
     fs::write(&name, b"1").unwrap();
-    assert_eq!(resources.capture("a", 100), Err(Error::Changed));
+    assert_eq!(resources.capture("a"), Err(Error::Changed));
     assert_eq!(resources.capture_reads(), 1);
 }
 
 #[test]
-fn empty_file_obeys_zero_ceiling_and_later_attempts_share_the_capture() {
+fn empty_file_and_later_attempts_share_the_capture() {
     let study = Study::new();
     fs::write(study.path("project/spec/empty"), b"").unwrap();
     let mut resources = study.resources();
-    assert!(resources.capture("empty", 0).unwrap().1);
-    assert!(!resources.capture("empty", 0).unwrap().1);
+    assert!(resources.capture("empty").unwrap().1);
+    assert!(!resources.capture("empty").unwrap().1);
     assert_eq!(resources.capture_reads(), 1);
 }
 
@@ -199,15 +184,12 @@ fn relative_fallback_order_is_base_then_project_then_declared_data_roots() {
     fs::write(study.path("additional/b"), b"additional").unwrap();
     fs::write(study.path("additional/c"), b"additional").unwrap();
     let mut resources = study.resources();
-    assert_eq!(resources.capture("a", 32).unwrap().0.as_ref(), b"base");
-    assert_eq!(resources.capture("b", 32).unwrap().0.as_ref(), b"project");
-    assert_eq!(
-        resources.capture("c", 32).unwrap().0.as_ref(),
-        b"additional"
-    );
+    assert_eq!(resources.capture("a").unwrap().0.as_ref(), b"base");
+    assert_eq!(resources.capture("b").unwrap().0.as_ref(), b"project");
+    assert_eq!(resources.capture("c").unwrap().0.as_ref(), b"additional");
     fs::create_dir(study.path("project/spec/d")).unwrap();
     fs::write(study.path("project/d"), b"later").unwrap();
-    assert_eq!(resources.capture("d", 32), Err(Error::NotRegularFile));
+    assert_eq!(resources.capture("d"), Err(Error::NotRegularFile));
 }
 
 #[cfg(unix)]
@@ -225,17 +207,14 @@ fn links_are_terminal_and_paths_cannot_escape_the_selected_roots() {
         .unwrap();
     let mut resources = study.resources();
     assert_eq!(resources.inspect("link"), Err(Error::Symlink));
-    assert_eq!(resources.capture("link", 32), Err(Error::Symlink));
+    assert_eq!(resources.capture("link"), Err(Error::Symlink));
+    assert_eq!(resources.capture("directory/secret"), Err(Error::Symlink));
     assert_eq!(
-        resources.capture("directory/secret", 32),
-        Err(Error::Symlink)
-    );
-    assert_eq!(
-        resources.capture("../../outside/secret", 32),
+        resources.capture("../../outside/secret"),
         Err(Error::OutsideRoots)
     );
     assert_eq!(
-        resources.capture(&study.text("outside/secret"), 32),
+        resources.capture(&study.text("outside/secret")),
         Err(Error::OutsideRoots)
     );
     use yamaa_core::resource::ResourceFailure as R;
@@ -261,12 +240,12 @@ fn hard_link_aliases_share_a_snapshot_and_every_accepted_alias_is_verified() {
     fs::write(&first, b"original").unwrap();
     fs::hard_link(&first, &second).unwrap();
     let mut resources = study.resources();
-    let (a, _) = resources.capture("a", 16).unwrap();
-    let (b, created) = resources.capture("b", 16).unwrap();
+    let (a, _) = resources.capture("a").unwrap();
+    let (b, created) = resources.capture("b").unwrap();
     assert!(!created && std::sync::Arc::ptr_eq(&a, &b));
     fs::remove_file(&first).unwrap();
     fs::write(&first, b"changed!").unwrap();
-    assert_eq!(resources.capture("b", 16), Err(Error::Changed));
+    assert_eq!(resources.capture("b"), Err(Error::Changed));
     assert_eq!(resources.capture_reads(), 1);
 }
 
@@ -279,10 +258,10 @@ fn selected_root_descriptor_survives_renaming_without_following_a_replacement_li
     let mut resources = study.resources();
     fs::rename(study.path("project"), study.path("moved")).unwrap();
     std::os::unix::fs::symlink(study.path("outside"), study.path("project")).unwrap();
-    assert_eq!(resources.capture("a", 16).unwrap().0.as_ref(), b"accepted");
+    assert_eq!(resources.capture("a").unwrap().0.as_ref(), b"accepted");
     assert_eq!(
         resources
-            .capture(&study.text("project/spec/a"), 16)
+            .capture(&study.text("project/spec/a"))
             .unwrap()
             .0
             .as_ref(),
@@ -298,10 +277,10 @@ fn an_outside_declaring_directory_can_reach_an_approved_root_or_fall_back() {
     let mut resources =
         Resources::new(&study.text("project"), &study.text("outside"), &[]).unwrap();
     assert_eq!(
-        resources.capture("../project/a", 16).unwrap().0.as_ref(),
+        resources.capture("../project/a").unwrap().0.as_ref(),
         b"approved"
     );
-    assert_eq!(resources.capture("a", 16).unwrap().0.as_ref(), b"approved");
+    assert_eq!(resources.capture("a").unwrap().0.as_ref(), b"approved");
     assert_eq!(resources.capture_reads(), 1);
 }
 
@@ -319,13 +298,13 @@ fn authored_absolute_root_aliases_and_nested_roots_keep_their_selected_authority
     .unwrap();
     assert_eq!(
         resources
-            .capture(&study.text("alias/spec/a"), 16)
+            .capture(&study.text("alias/spec/a"))
             .unwrap()
             .0
             .as_ref(),
         b"selected"
     );
-    assert_eq!(resources.capture("a", 16).unwrap().0.as_ref(), b"selected");
+    assert_eq!(resources.capture("a").unwrap().0.as_ref(), b"selected");
     assert_eq!(resources.capture_reads(), 1);
     assert_eq!(
         resources.inspect(Path::new(".").to_str().unwrap()),
@@ -350,7 +329,7 @@ fn permission_failures_are_terminal_before_any_later_fallback_is_read() {
         return;
     }
     let inspected = resources.inspect("blocked");
-    let captured = resources.capture("blocked", 32);
+    let captured = resources.capture("blocked");
     fs::set_permissions(&earlier, permissions).unwrap();
     assert_eq!(
         <Resources as yamaa_core::specification_run::SourcePort>::resource_failure(
@@ -362,10 +341,7 @@ fn permission_failures_are_terminal_before_any_later_fallback_is_read() {
     assert_eq!(inspected, Err(Error::Unreadable));
     assert_eq!(captured, Err(Error::Unreadable));
     assert_eq!(resources.capture_reads(), 0);
-    assert_eq!(
-        resources.capture("blocked", 32).unwrap().0.as_ref(),
-        b"earlier"
-    );
+    assert_eq!(resources.capture("blocked").unwrap().0.as_ref(), b"earlier");
 }
 
 #[cfg(unix)]
@@ -387,7 +363,7 @@ fn unsearchable_directory_does_not_fall_back_to_a_different_file() {
         return;
     }
     let inspected = resources.inspect("private/blocked");
-    let captured = resources.capture("private/blocked", 32);
+    let captured = resources.capture("private/blocked");
     fs::set_permissions(&earlier, permissions).unwrap();
     assert_eq!(
         <Resources as yamaa_core::specification_run::SourcePort>::resource_failure(
@@ -407,15 +383,15 @@ fn an_unlinked_snapshot_does_not_poison_a_new_path_to_the_remaining_file() {
     fs::write(study.path("project/spec/a"), b"original").unwrap();
     fs::hard_link(study.path("project/spec/a"), study.path("project/spec/c")).unwrap();
     let mut resources = study.resources();
-    let (first, _) = resources.capture("a", 32).unwrap();
+    let (first, _) = resources.capture("a").unwrap();
     fs::remove_file(study.path("project/spec/a")).unwrap();
-    let (next, created) = resources.capture("c", 32).unwrap();
+    let (next, created) = resources.capture("c").unwrap();
     assert!(created);
     assert_eq!(next.as_ref(), b"original");
     assert_eq!(first.as_ref(), b"original");
     assert_eq!(resources.capture_reads(), 2);
-    assert_eq!(resources.capture("a", 32), Err(Error::Missing));
-    assert!(!resources.capture("c", 32).unwrap().1);
+    assert_eq!(resources.capture("a"), Err(Error::Missing));
+    assert!(!resources.capture("c").unwrap().1);
 }
 
 #[test]
@@ -424,16 +400,16 @@ fn a_changed_snapshot_stays_failed_for_its_path_while_a_new_path_captures_fresh_
     fs::write(study.path("project/spec/a"), b"original").unwrap();
     fs::hard_link(study.path("project/spec/a"), study.path("project/spec/c")).unwrap();
     let mut resources = study.resources();
-    let (first, _) = resources.capture("a", 32).unwrap();
+    let (first, _) = resources.capture("a").unwrap();
     fs::write(study.path("project/spec/a"), b"changed!").unwrap();
-    assert_eq!(resources.capture("a", 32), Err(Error::Changed));
-    let (next, created) = resources.capture("c", 32).unwrap();
+    assert_eq!(resources.capture("a"), Err(Error::Changed));
+    let (next, created) = resources.capture("c").unwrap();
     assert!(created);
     assert_eq!(next.as_ref(), b"changed!");
     assert_eq!(first.as_ref(), b"original");
     assert_eq!(resources.capture_reads(), 2);
-    assert_eq!(resources.capture("a", 32), Err(Error::Changed));
-    assert!(!resources.capture("c", 32).unwrap().1);
+    assert_eq!(resources.capture("a"), Err(Error::Changed));
+    assert!(!resources.capture("c").unwrap().1);
 }
 
 #[test]
@@ -441,11 +417,11 @@ fn different_written_paths_to_the_same_key_are_each_retained_and_verified() {
     let study = Study::new();
     fs::write(study.path("project/a"), b"retained").unwrap();
     let mut resources = study.resources();
-    let (first, _) = resources.capture("../a", 32).unwrap();
-    let (again, created) = resources.capture("a", 32).unwrap();
+    let (first, _) = resources.capture("../a").unwrap();
+    let (again, created) = resources.capture("a").unwrap();
     assert!(!created && std::sync::Arc::ptr_eq(&first, &again));
     fs::write(study.path("project/spec/a"), b"shadowed").unwrap();
-    assert_eq!(resources.capture("../a", 32), Err(Error::Changed));
+    assert_eq!(resources.capture("../a"), Err(Error::Changed));
     assert_eq!(first.as_ref(), b"retained");
     assert_eq!(resources.capture_reads(), 1);
 }
@@ -464,15 +440,17 @@ fn declaring_file_views_resolve_metadata_and_share_held_bytes_before_selecting_d
     assert_eq!(parent, study.resource_key("project/data/parent.yaml"));
     assert_eq!(resources.capture_reads(), 0);
     let (first, created) = resources
-        .capture_from(&entry, "../data/parent.yaml", 6)
+        .capture_metadata_from(&entry, "../data/parent.yaml")
         .unwrap();
     assert!(created && first.as_ref() == b"parent");
-    let (again, created) = resources.capture_from(&parent, "parent.yaml", 6).unwrap();
+    let (again, created) = resources
+        .capture_metadata_from(&parent, "parent.yaml")
+        .unwrap();
     assert!(!created && std::sync::Arc::ptr_eq(&first, &again));
     assert_eq!(resources.capture_reads(), 1);
     resources.select_entry_base(&parent).unwrap();
     assert_eq!(
-        resources.capture("source.csv", 6).unwrap().0.as_ref(),
+        resources.capture("source.csv").unwrap().0.as_ref(),
         b"source"
     );
     assert_eq!(resources.capture_reads(), 2);
@@ -485,15 +463,12 @@ fn every_declaring_base_and_written_alias_is_verified_when_one_fallback_changes(
     fs::write(study.path("project/a"), b"retained").unwrap();
     let mut resources = study.resources();
     let layer = resources.resolve("../data/layer.yaml").unwrap();
-    let (first, created) = resources.capture_from(&layer, "../a", 8).unwrap();
+    let (first, created) = resources.capture_from(&layer, "../a").unwrap();
     assert!(created);
-    let (again, created) = resources.capture("a", 8).unwrap();
+    let (again, created) = resources.capture("a").unwrap();
     assert!(!created && std::sync::Arc::ptr_eq(&first, &again));
     fs::write(study.path("project/spec/a"), b"shadowed").unwrap();
-    assert_eq!(
-        resources.capture_from(&layer, "../a", 8),
-        Err(Error::Changed)
-    );
+    assert_eq!(resources.capture_from(&layer, "../a"), Err(Error::Changed));
     assert_eq!(first.as_ref(), b"retained");
     assert_eq!(resources.capture_reads(), 1);
 }
@@ -512,7 +487,7 @@ fn declaring_file_views_keep_approved_roots_and_terminal_link_failures() {
     let mut resources = study.resources();
     let entry = resources.resolve("entry.yaml").unwrap();
     assert_eq!(
-        resources.capture_from(&entry, "../../outside/secret", 8),
+        resources.capture_from(&entry, "../../outside/secret"),
         Err(Error::OutsideRoots)
     );
     assert_eq!(
@@ -520,7 +495,7 @@ fn declaring_file_views_keep_approved_roots_and_terminal_link_failures() {
         Err(Error::Symlink)
     );
     assert_eq!(
-        resources.capture_from("relative.yaml", "entry.yaml", 8),
+        resources.capture_from("relative.yaml", "entry.yaml"),
         Err(Error::InvalidPath)
     );
     assert_eq!(resources.capture_reads(), 0);
