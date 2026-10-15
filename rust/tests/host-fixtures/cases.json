@@ -1245,7 +1245,135 @@
       "numeric_original_metadata": "core: Exp\n      role: Record Qualifier\n      length: 3",
       "numeric_completion_metadata": "core: Exp\n      role: Record Qualifier\n      length: 3\n      significant_digits: 3\n      codelist: AGE_VALUES",
       "numeric_codelist_yaml": "- codelists:\n  - id: AGE_VALUES\n    name: Ages\n    data_type: float\n    items: [{value: 34}, {value: 67}, {value: 52}]\nsdtm:\n",
-      "created": "2026-09-11T00:00:00"
+      "created": "2026-09-11T00:00:00",
+      "xml_text_cases": [
+        {
+          "name": "column-label",
+          "specification_mutations": [
+            [
+              "label: Domain Abbreviation",
+              "label: \"bad\\tlabel\""
+            ]
+          ],
+          "environment_mutations": [],
+          "inherit_specification": false,
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "untransportable_text",
+              "requirement": "REQ-1025",
+              "spec_paths": [
+                "datasets.DM.columns.DOMAIN.label"
+              ],
+              "context": {
+                "detail": "forbidden XML whitespace"
+              }
+            }
+          ],
+          "xml_fragments": []
+        },
+        {
+          "name": "document-title",
+          "specification_mutations": [],
+          "environment_mutations": [
+            [
+              "title: Annotated Case Report Form",
+              "title: \"bad\\ttitle\""
+            ]
+          ],
+          "inherit_specification": false,
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "untransportable_text",
+              "requirement": "REQ-1025",
+              "spec_paths": [
+                "sdtm.documents[0].title"
+              ],
+              "context": {
+                "detail": "forbidden XML whitespace"
+              }
+            }
+          ],
+          "xml_fragments": []
+        },
+        {
+          "name": "inherited-column-label",
+          "specification_mutations": [
+            [
+              "label: Domain Abbreviation",
+              "label: \"bad\\tlabel\""
+            ]
+          ],
+          "environment_mutations": [],
+          "inherit_specification": true,
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "untransportable_text",
+              "requirement": "REQ-1025",
+              "spec_paths": [
+                "datasets.DM.columns.DOMAIN.label"
+              ],
+              "context": {
+                "detail": "forbidden XML whitespace"
+              }
+            }
+          ],
+          "xml_fragments": []
+        },
+        {
+          "name": "column-before-document-title",
+          "specification_mutations": [
+            [
+              "label: Domain Abbreviation",
+              "label: \"bad\\tlabel\""
+            ]
+          ],
+          "environment_mutations": [
+            [
+              "title: Annotated Case Report Form",
+              "title: \"bad\\ttitle\""
+            ]
+          ],
+          "inherit_specification": false,
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "untransportable_text",
+              "requirement": "REQ-1025",
+              "spec_paths": [
+                "datasets.DM.columns.DOMAIN.label"
+              ],
+              "context": {
+                "detail": "forbidden XML whitespace"
+              }
+            }
+          ],
+          "xml_fragments": []
+        },
+        {
+          "name": "newlines-in-text",
+          "specification_mutations": [
+            [
+              "label: Domain Abbreviation",
+              "label: \"first\\nsecond\""
+            ]
+          ],
+          "environment_mutations": [
+            [
+              "title: Annotated Case Report Form",
+              "title: \"third\\nfourth\""
+            ]
+          ],
+          "inherit_specification": false,
+          "issues": [],
+          "xml_fragments": [
+            "<TranslatedText xml:lang=\"en\">first\nsecond</TranslatedText>",
+            "<def:title>third\nfourth</def:title>"
+          ]
+        }
+      ]
     },
     "public-contract": {
       "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: SRC.VALUE}\noutput: {path: output.csv, columns: [ID, VALUE]}\n",
