@@ -2860,5 +2860,47 @@ class NamespaceAdmission(unittest.TestCase):
                     self.assertEqual(entry.read_bytes(), original)
 
 
+class IntermediateDependencies(unittest.TestCase):
+    def test_original_cycles_and_forward_donor_reads_through_both_public_routes(self):
+        import yamaa
+
+        for case in TRUTH["intermediate_dependencies"]:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                entry = root / "spec.yaml"
+                entry.write_text(case["specification"], encoding="ascii")
+                def rows(frame):
+                    records = frame.to_dicts()
+                    for record in records:
+                        record["context"] = json.loads(record["context"])
+                    return records
+                for inputs_present in (False, True):
+                    if inputs_present:
+                        for name, content in case["inputs"].items():
+                            path = root / name
+                            path.parent.mkdir(parents=True, exist_ok=True)
+                            path.write_text(content, encoding="ascii")
+                    elif not case["issues"]:
+                        continue
+                    for attempt in range(2):
+                        with self.subTest(inputs_present=inputs_present, attempt=attempt):
+                            self.assertEqual(rows(yamaa.check(entry).issues), case["issues"])
+                            result = yamaa.domain(entry)
+                            self.assertEqual(rows(result.issues), case["issues"])
+                            self.assertFalse((root / "out.csv").exists())
+                            if case["issues"]:
+                                self.assertIsNone(result.output)
+                                self.assertIsNone(result._native.observations())
+                                with self.assertRaises(yamaa.DomainError):
+                                    result.save()
+                            else:
+                                self.assertTrue(result.save())
+                                self.assertEqual((root / "out.csv").read_bytes(), case["csv"].encode("ascii"))
+                                (root / "out.csv").unlink()
+                self.assertEqual(entry.read_text(encoding="ascii"), case["specification"])
+
+
+
+
 if __name__ == "__main__":
     unittest.main()
