@@ -1,5 +1,6 @@
 """Regression tests for the sdist build backend's workspace restore."""
 
+import gzip
 import io
 import json
 import shutil
@@ -162,23 +163,74 @@ def test_preserve_workspace_rejects_non_regular_entries(
     assert archive.read_bytes() == original
 
 
-def test_preserve_workspace_rejects_sparse_entries(tmp_path: Path) -> None:
-    # A GNU sparse entry reports isfile(), so the regular-file check
-    # alone admits it, but rewriting it drops its sparse map and would
-    # publish damaged data instead of the verified bytes.
+def _make_sparse_archive(tmp_path: Path, sparse_format: str) -> Path:
+    # Build real GNU sparse headers without GNU tar or filesystem sparse support.
+    # Each format stores ABC at offset 2 in a five-byte logical file.
+    contents = bytearray()
+    for name, payload in _BASE_ENTRIES:
+        entry = tarfile.TarInfo(name)
+        entry.size = len(payload)
+        contents.extend(entry.tobuf())
+        contents.extend(payload)
+        contents.extend(bytes(-len(payload) % tarfile.BLOCKSIZE))
+
+    entry = tarfile.TarInfo("pkg-0.1/sparse.txt")
+    payload = b"ABC"
+    entry.size = len(payload)
+    if sparse_format == "gnu":
+        entry.type = tarfile.GNUTYPE_SPARSE
+        header = bytearray(entry.tobuf(format=tarfile.GNU_FORMAT))
+        # Old GNU headers store four extent pairs at 386 and real size at 483.
+        header[386:398] = b"00000000002\0"
+        header[398:410] = b"00000000003\0"
+        header[483:495] = b"00000000005\0"
+        header[148:156] = b"        "
+        header[148:156] = f"{sum(header):06o}\0 ".encode("ascii")
+    else:
+        if sparse_format == "pax-0.1":
+            entry.pax_headers = {
+                "GNU.sparse.size": "5",
+                "GNU.sparse.numblocks": "1",
+                "GNU.sparse.name": entry.name,
+                "GNU.sparse.map": "2,3",
+            }
+        else:
+            assert sparse_format == "pax-1.0"
+            entry.pax_headers = {
+                "GNU.sparse.major": "1",
+                "GNU.sparse.minor": "0",
+                "GNU.sparse.realsize": "5",
+                "GNU.sparse.name": entry.name,
+            }
+            payload = b"1\n2\n3\n".ljust(tarfile.BLOCKSIZE, b"\0") + payload
+            entry.size = len(payload)
+        header = entry.tobuf(format=tarfile.PAX_FORMAT)
+    contents.extend(header)
+    contents.extend(payload)
+    contents.extend(bytes(-len(payload) % tarfile.BLOCKSIZE))
+    contents.extend(bytes(2 * tarfile.BLOCKSIZE))
+    archive = tmp_path / "sdist.tar.gz"
+    archive.write_bytes(gzip.compress(contents))
+    return archive
+
+
+@pytest.mark.parametrize("sparse_format", ["gnu", "pax-0.1", "pax-1.0"])
+def test_preserve_workspace_rejects_sparse_entries(
+    tmp_path: Path, sparse_format: str
+) -> None:
     workspace = _make_workspace(tmp_path)
-
-    def extra(target) -> None:
-        info = tarfile.TarInfo("pkg-0.1/sparse.bin")
-        info.type = tarfile.GNUTYPE_SPARSE
-        info.sparse = [(0, 1)]
-        target.addfile(info)
-
-    archive = _make_archive_with_extra(tmp_path, extra)
+    archive = _make_sparse_archive(tmp_path, sparse_format)
+    with tarfile.open(archive) as source:
+        entry = source.getmember("pkg-0.1/sparse.txt")
+        # isfile() admits sparse files, including PAX entries with regular type.
+        assert entry.isfile()
+        assert entry.issparse()
+        assert source.extractfile(entry).read() == b"\0\0ABC"
     original = archive.read_bytes()
-    with pytest.raises(ValueError, match="must not contain links"):
+    with pytest.raises(ValueError, match="must not contain links or special files"):
         preserve_workspace(archive, workspace)
     assert archive.read_bytes() == original
+    assert list(tmp_path.glob("*.tar.gz")) == [archive]
 
 
 def test_preserve_workspace_rejects_trailing_slash_member_file(
