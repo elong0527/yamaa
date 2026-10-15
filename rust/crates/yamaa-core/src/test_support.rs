@@ -29,7 +29,6 @@ pub enum Event {
     Inspect(SourceDeclaration),
     Capture {
         source: SourceDeclaration,
-        byte_limit: usize,
     },
     Decode {
         source: SourceDeclaration,
@@ -57,7 +56,6 @@ pub enum Event {
     },
     Encode {
         projection: Vec<usize>,
-        byte_limit: usize,
     },
     Publish {
         path: String,
@@ -85,16 +83,7 @@ impl PartialEq for Event {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Inspect(left), Self::Inspect(right)) => left == right,
-            (
-                Self::Capture {
-                    source: left,
-                    byte_limit: a,
-                },
-                Self::Capture {
-                    source: right,
-                    byte_limit: b,
-                },
-            ) => left == right && a == b,
+            (Self::Capture { source: left }, Self::Capture { source: right }) => left == right,
             (
                 Self::MetadataCapture {
                     kind: a,
@@ -143,16 +132,9 @@ impl PartialEq for Event {
                     arguments: right,
                 },
             ) => a == b && arguments_equal(left, right),
-            (
-                Self::Encode {
-                    projection: left,
-                    byte_limit: a,
-                },
-                Self::Encode {
-                    projection: right,
-                    byte_limit: b,
-                },
-            ) => left == right && a == b,
+            (Self::Encode { projection: left }, Self::Encode { projection: right }) => {
+                left == right
+            }
             (
                 Self::Publish {
                     path: left,

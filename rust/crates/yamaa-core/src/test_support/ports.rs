@@ -107,7 +107,6 @@ pub struct InspectionStep<E> {
 }
 pub struct CaptureStep<E> {
     pub source: SourceDeclaration,
-    pub byte_limit: usize,
     pub new_snapshots: usize,
     pub outcome: Result<Arc<[u8]>, E>,
 }
@@ -132,15 +131,6 @@ impl<E> SourcePort for ScriptedSource<E> {
     fn resource_failure(&self, _error: &E) -> Option<crate::resource::ResourceFailure> {
         None
     }
-    fn capture_observed(
-        &mut self,
-        source: &SourceDeclaration,
-        byte_limit: usize,
-        origin: &mut Option<crate::specification_run::SourceOrigin>,
-    ) -> Result<Arc<[u8]>, E> {
-        *origin = Some(crate::specification_run::SourceOrigin::Resource);
-        self.capture(source, byte_limit)
-    }
     fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), E> {
         self.log.record(Event::Inspect(source.clone()));
         let step = self
@@ -153,17 +143,20 @@ impl<E> SourcePort for ScriptedSource<E> {
     fn capture_reads(&self) -> usize {
         self.reads
     }
-    fn capture(&mut self, source: &SourceDeclaration, byte_limit: usize) -> Result<Arc<[u8]>, E> {
+    fn capture(
+        &mut self,
+        source: &SourceDeclaration,
+        origin: &mut Option<run::SourceOrigin>,
+    ) -> Result<Arc<[u8]>, E> {
+        *origin = Some(run::SourceOrigin::Resource);
         self.log.record(Event::Capture {
             source: source.clone(),
-            byte_limit,
         });
         let step = self
             .captures
             .pop_front()
             .expect("unexpected source capture");
         assert_eq!(&step.source, source, "capture declaration");
-        assert_eq!(step.byte_limit, byte_limit, "capture budget");
         self.reads = self
             .reads
             .checked_add(step.new_snapshots)
@@ -197,15 +190,13 @@ impl<E, T: TableAccess> SourceDecoder for ScriptedDecoder<E, T> {
     fn continue_after(&self, _: &E) -> bool {
         self.continue_after_failure
     }
-    fn decode_with_interpretation(
+    fn decode(
         &mut self,
         source: &SourceDeclaration,
         bytes: &[u8],
         _interpretation: crate::specification::SourceInterpretation,
+        _contract: Option<&crate::producer_contract::Contract>,
     ) -> Result<T, E> {
-        self.decode(source, bytes)
-    }
-    fn decode(&mut self, source: &SourceDeclaration, bytes: &[u8]) -> Result<T, E> {
         self.log.record(Event::Decode {
             source: source.clone(),
             bytes: bytes.into(),
@@ -219,7 +210,6 @@ impl<E, T: TableAccess> SourceDecoder for ScriptedDecoder<E, T> {
 
 pub struct EncodeStep<E> {
     pub projection: Vec<usize>,
-    pub byte_limit: usize,
     pub outcome: Result<Vec<u8>, E>,
 }
 pub struct ScriptedEncoder<E> {
@@ -236,22 +226,15 @@ impl<E> ScriptedEncoder<E> {
 }
 impl<E> ArtifactEncoder for ScriptedEncoder<E> {
     type Error = E;
-    fn encode(
-        &mut self,
-        _: &dataset::Dataset,
-        projection: &[usize],
-        byte_limit: usize,
-    ) -> Result<Vec<u8>, E> {
+    fn encode(&mut self, _: &dataset::Dataset, projection: &[usize]) -> Result<Vec<u8>, E> {
         self.log.record(Event::Encode {
             projection: projection.into(),
-            byte_limit,
         });
         let step = self
             .steps
             .pop_front()
             .expect("unexpected artifact encoding");
         assert_eq!(step.projection, projection, "encoding projection");
-        assert_eq!(step.byte_limit, byte_limit, "encoding budget");
         step.outcome
     }
 }
