@@ -1380,7 +1380,12 @@ fn bind_derivations(
             .iter()
             .enumerate()
             .filter(|(_, field)| item.source_column(secondary, &field.name).is_some())
-            .map(|(column, field)| (field.name.clone(), (column, field.kind)))
+            .map(|(column, field)| {
+                (
+                    field.name.clone(),
+                    (column, item.source_kind(secondary, column)),
+                )
+            })
             .collect();
         selected.push((
             item.identifier.clone(),

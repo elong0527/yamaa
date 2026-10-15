@@ -205,3 +205,82 @@ fn known_date_choices_reject_incompatible_filter_types_in_check_and_build() {
         assert!(!study.0.join("out.csv").exists());
     }
 }
+
+fn heterogeneous_specification(expression: &str) -> String {
+    SPECIFICATION
+        .replace("DERIVATION", expression)
+        .replace(
+            "      EXENDT:",
+            "      ANCHOR: {to_date: {source: REFDTC}}\n      EXENDT:",
+        )
+        .replace("EX.EXENDT >= EX.EXSTDT", "EX.EXENDT >= EX.ANCHOR")
+        .replace(
+            "type: date, derivation: EXP.EXENDT",
+            "type: str, derivation: EXP.EXENDT",
+        )
+}
+const HETEROGENEOUS_CHOICES: [&str; 2] = [
+    "{first_available: {sources: [EXENDT0, EXSTDT], missing: 17}}",
+    "{case: [{when: 'EX.EXENDT0 IS NOT NULL', then: {source: EXENDT0}}, {otherwise: {literal: 17}}]}",
+];
+
+#[test]
+fn unknown_choices_compare_the_actual_date_when_a_date_source_is_present() {
+    for expression in HETEROGENEOUS_CHOICES {
+        let study = Study::new(&heterogeneous_specification(expression));
+        let path = study.specification();
+        let request = || Request {
+            specification: &path,
+            environment: None,
+        };
+        let checked = file_application::check(request(), identity(&path));
+        assert!(checked.is_empty(), "{checked:?}");
+        fs::write(
+            study.0.join("ex.csv"),
+            "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,2024-01-01,2024-01-10,2024-01-01\n",
+        )
+        .unwrap();
+        let mut result = file_application::domain(request(), identity(&path)).unwrap();
+        assert!(
+            result.issues().is_empty(),
+            "{expression}: {:?}",
+            result.issues()
+        );
+        assert!(result.save().unwrap());
+        assert_eq!(
+            fs::read(study.0.join("out.csv")).unwrap(),
+            b"USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,2024-01-10\n"
+        );
+    }
+}
+
+#[test]
+fn unknown_choices_report_the_actual_integer_when_date_sources_are_missing() {
+    for expression in HETEROGENEOUS_CHOICES {
+        let study = Study::new(&heterogeneous_specification(expression));
+        let path = study.specification();
+        let request = || Request {
+            specification: &path,
+            environment: None,
+        };
+        let checked = file_application::check(request(), identity(&path));
+        assert!(checked.is_empty(), "{checked:?}");
+        fs::write(
+            study.0.join("ex.csv"),
+            "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,,,2024-01-01\n",
+        )
+        .unwrap();
+        let result = file_application::domain(request(), identity(&path)).unwrap();
+        let issues = result.issues();
+        assert_eq!(issues.len(), 1, "{expression}: {issues:?}");
+        assert_eq!(issues[0].condition, "incompatible_input_type");
+        assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0190"));
+        assert_eq!(issues[0].spec_paths, ["intermediates[0].filter"]);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&issues[0].context).unwrap(),
+            serde_json::json!({"left_type":"int","right_type":"date"})
+        );
+        assert!(result.output().is_none());
+        assert!(!study.0.join("out.csv").exists());
+    }
+}

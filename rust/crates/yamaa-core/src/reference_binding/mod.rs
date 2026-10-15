@@ -74,6 +74,7 @@ pub enum Diagnostic {
 #[derive(Debug)]
 pub struct Catalog {
     record_derivation: bool,
+    record_kinds: Option<Vec<Option<ColumnType>>>,
     outputs: BTreeMap<String, (usize, ColumnType)>,
     datasets: BTreeMap<String, DatasetCatalog>,
     selected: BTreeMap<String, SelectedRelation>,
@@ -98,10 +99,14 @@ pub(crate) struct JoinedRelation {
 #[derive(Debug)]
 pub(crate) struct SelectedRelation {
     pub index: usize,
-    pub fields: BTreeMap<String, (usize, ColumnType)>,
+    pub fields: BTreeMap<String, (usize, Option<ColumnType>)>,
     pub dependencies: std::vec::Vec<usize>,
 }
-pub(crate) type SelectedRead<'a> = (crate::bound_expression::Read, ColumnType, &'a [usize]);
+pub(crate) type SelectedRead<'a> = (
+    crate::bound_expression::Read,
+    Option<ColumnType>,
+    &'a [usize],
+);
 
 #[derive(Debug)]
 struct DatasetCatalog {
@@ -117,6 +122,11 @@ impl Catalog {
     }
     pub(crate) fn record_derivation(&self) -> bool {
         self.record_derivation
+    }
+    /// Raw donor results need not have one known kind despite having a layout slot.
+    pub(crate) fn with_record_kinds(mut self, kinds: Vec<Option<ColumnType>>) -> Self {
+        self.record_kinds = Some(kinds);
+        self
     }
     pub(crate) fn with_selected(
         mut self,
@@ -182,18 +192,35 @@ impl Catalog {
         self.joined.get(name)
     }
     pub(crate) fn type_of(&self, name: &str) -> Option<ColumnType> {
-        let bound = self.bind(name).map(|binding| match binding {
-            Binding::Output { column_type, .. } | Binding::Dataset { column_type, .. } => {
-                column_type
-            }
-        });
-        bound.or_else(|| {
-            name.split_once('.').and_then(|(relation, field)| {
-                self.joined(relation)?
-                    .fields
-                    .get(field)
-                    .map(|(_, kind)| *kind)
-            })
+        if let Some(binding) = self.bind(name) {
+            return match binding {
+                Binding::Output {
+                    column,
+                    column_type,
+                } => self
+                    .record_kinds
+                    .as_ref()
+                    .map_or(Some(column_type), |kinds| {
+                        kinds.get(column).copied().flatten()
+                    }),
+                Binding::Dataset {
+                    dataset: 0,
+                    field,
+                    column_type,
+                } => self
+                    .record_kinds
+                    .as_ref()
+                    .map_or(Some(column_type), |kinds| {
+                        kinds.get(field).copied().flatten()
+                    }),
+                Binding::Dataset { column_type, .. } => Some(column_type),
+            };
+        }
+        name.split_once('.').and_then(|(relation, field)| {
+            self.joined(relation)?
+                .fields
+                .get(field)
+                .map(|(_, kind)| *kind)
         })
     }
 
@@ -380,6 +407,7 @@ impl Catalog {
         }
         Ok(Self {
             record_derivation: false,
+            record_kinds: None,
             outputs: output_index,
             datasets: dataset_index,
             selected: BTreeMap::new(),

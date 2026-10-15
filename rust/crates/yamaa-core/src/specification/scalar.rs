@@ -283,10 +283,9 @@ pub(super) fn bind(
             for (name, kind) in sources.iter().zip(&mut types) {
                 if let Some((index, field)) = spec.intermediates.reference(name) {
                     if let Some(item) = &intermediates[index] {
-                        *kind = item.source_column(secondary, field).and_then(|column| {
-                            item.source_schema(secondary)
-                                .map(|schema| schema.columns()[column].kind)
-                        });
+                        *kind = item
+                            .source_column(secondary, field)
+                            .and_then(|column| item.source_kind(secondary, column));
                     }
                 }
             }
@@ -438,10 +437,8 @@ pub(super) fn bind_row(
                     .map(|name| {
                         if let Some((index, field)) = named.reference(name) {
                             Ok(intermediates[index].as_ref().and_then(|item| {
-                                item.source_column(secondary, field).and_then(|column| {
-                                    item.source_schema(secondary)
-                                        .map(|schema| schema.columns()[column].kind)
-                                })
+                                item.source_column(secondary, field)
+                                    .and_then(|column| item.source_kind(secondary, column))
                             }))
                         } else {
                             bound_types(std::slice::from_ref(name), catalog).map(|types| types[0])

@@ -751,6 +751,7 @@ mod execution {
                 plan: Rc::new(nested),
                 current: vec![],
                 stored_columns: 1,
+                result_kinds: vec![Some(T::Int)],
                 driver_kinds: vec![],
                 typed_columns: vec![],
             };

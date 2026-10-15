@@ -61,6 +61,13 @@ fn value_kind(value: &N) -> Option<ColumnType> {
         _ => None,
     }
 }
+fn literal_kind(value: &N) -> Kind {
+    if matches!(value, N::Null) {
+        Kind::Literal(None)
+    } else {
+        value_kind(value).map_or(Kind::Unavailable, |kind| Kind::Literal(Some(kind)))
+    }
+}
 fn prepare_kind(
     d: &Document,
     value: usize,
@@ -80,10 +87,10 @@ fn prepare_kind(
     };
     let op = text(d, op)?;
     Ok(match op {
-        "function" => {
-            Kind::Literal(project.and_then(|project| project.returns.get(&payload).copied()))
-        }
-        "literal" => Kind::Literal(value_kind(&d.nodes()[payload])),
+        "function" => project
+            .and_then(|project| project.returns.get(&payload).copied())
+            .map_or(Kind::Unavailable, |kind| Kind::Literal(Some(kind))),
+        "literal" => literal_kind(&d.nodes()[payload]),
         "source" => Kind::Reference(match &d.nodes()[payload] {
             N::Text(name) => name.clone(),
             _ => text(d, field(d, payload, "variable")?)?.into(),
@@ -100,7 +107,7 @@ fn prepare_kind(
                 .collect::<Result<Vec<_>, PrepareError>>()?;
             if op == "first_available" {
                 if let Some(missing) = d.field(payload, "missing") {
-                    kinds.push(Kind::Literal(value_kind(&d.nodes()[missing])));
+                    kinds.push(literal_kind(&d.nodes()[missing]));
                 }
             }
             Kind::Choice(kinds)
@@ -108,19 +115,19 @@ fn prepare_kind(
         "compute" => {
             match crate::numeric_parser::parse_numeric(text(d, field(d, payload, "expr")?)?) {
                 Ok(plan) => Kind::Numeric(plan),
-                Err(_) => Kind::Literal(None),
+                Err(_) => Kind::Unavailable,
             }
         }
         "mapping" => Kind::Choice(
             mapping(d, field(d, payload, "dict")?)?
                 .iter()
-                .map(|&(_, value)| Kind::Literal(value_kind(&d.nodes()[value])))
+                .map(|&(_, value)| literal_kind(&d.nodes()[value]))
                 .collect(),
         ),
         "cut" => Kind::Choice(
             sequence(d, field(d, payload, "labels")?)?
                 .iter()
-                .map(|&value| Kind::Literal(value_kind(&d.nodes()[value])))
+                .map(|&value| literal_kind(&d.nodes()[value]))
                 .collect(),
         ),
         "case" => Kind::Choice(
@@ -145,11 +152,10 @@ fn prepare_kind(
         | "date_precision" | "datetime_precision" | "baseline_flag" => {
             Kind::Literal(Some(ColumnType::Str))
         }
-        "flag" => Kind::Literal(
-            d.field(payload, "true_value")
-                .map(|id| value_kind(&d.nodes()[id]))
-                .unwrap_or(Some(ColumnType::Str)),
-        ),
+        "flag" => d
+            .field(payload, "true_value")
+            .map(|id| literal_kind(&d.nodes()[id]))
+            .unwrap_or(Kind::Literal(Some(ColumnType::Str))),
         "date_impute" | "to_date" | "date_shift" => Kind::Literal(Some(ColumnType::Date)),
         "datetime_impute" | "datetime_shift" => Kind::Literal(Some(ColumnType::DateTime)),
         "datetime_diff" => {
@@ -159,17 +165,19 @@ fn prepare_kind(
                 ColumnType::Float
             }))
         }
-        "duration_value" => Kind::Literal(if text(d, field(d, payload, "unit")?)? == "second" {
-            None
-        } else {
-            Some(ColumnType::Float)
-        }),
+        "duration_value" => {
+            if text(d, field(d, payload, "unit")?)? == "second" {
+                Kind::Unavailable
+            } else {
+                Kind::Literal(Some(ColumnType::Float))
+            }
+        }
         "duration_text" => Kind::Literal(Some(ColumnType::Str)),
         "round_half_away_from_zero" => Kind::Literal(Some(ColumnType::Float)),
         "row_value" | "previous_non_missing" | "locf" => {
             Kind::Reference(text(d, field(d, payload, "source")?)?.into())
         }
-        _ => Kind::Literal(None),
+        _ => Kind::Unavailable,
     })
 }
 fn prepare_driver_kind(
@@ -229,6 +237,13 @@ fn unify(items: impl Iterator<Item = Option<ColumnType>>) -> Option<ColumnType> 
     kind
 }
 impl Kind {
+    fn missing_only(&self) -> bool {
+        match self {
+            Self::Literal(None) => true,
+            Self::Choice(items) | Self::StrictChoice(items) => items.iter().all(Self::missing_only),
+            _ => false,
+        }
+    }
     fn infer(&self, lookup: &impl Fn(&str) -> Option<ColumnType>) -> Option<ColumnType> {
         match self {
             Self::Unavailable => None,
@@ -248,7 +263,14 @@ impl Kind {
             }
             Self::Literal(kind) => *kind,
             Self::Reference(name) => lookup(name),
-            Self::Choice(items) => unify(items.iter().map(|item| item.infer(lookup))),
+            Self::Choice(items) => {
+                let kinds = items
+                    .iter()
+                    .filter(|item| !item.missing_only())
+                    .map(|item| item.infer(lookup))
+                    .collect::<Option<Vec<_>>>()?;
+                unify(kinds.into_iter().map(Some))
+            }
             Self::Numeric(parsed) => {
                 use crate::numeric_parser::{NumericFunction as F, ParsedKind as K};
                 let mut kinds = Vec::new();
@@ -386,6 +408,7 @@ pub(super) fn bind(
     // Admit aggregate retained schema/catalog copies before making the first copy.
     let original_secondary = outer_secondary(sources, schemas, driver);
     let mut fields = stored.columns().to_vec();
+    let mut result_kinds = Vec::new();
     let mut driver_kinds = Vec::new();
     for declaration in declarations {
         let lookup = |name: &str| {
@@ -393,15 +416,21 @@ pub(super) fn bind(
             if owner == dataset {
                 fields
                     .iter()
-                    .find(|column| column.name == field)
-                    .map(|column| column.kind)
+                    .position(|column| column.name == field)
+                    .and_then(|column| {
+                        if column < stored.columns().len() {
+                            Some(fields[column].kind)
+                        } else {
+                            result_kinds
+                                .get(column - stored.columns().len())
+                                .copied()
+                                .flatten()
+                        }
+                    })
             } else if let Some((index, field)) = named.reference(name) {
-                previous
-                    .get(index)
-                    .and_then(Option::as_ref)
-                    .and_then(|item| item.source_schema(&original_secondary))
-                    .and_then(|schema| schema.columns().iter().find(|column| column.name == field))
-                    .map(|column| column.kind)
+                let item = previous.get(index).and_then(Option::as_ref)?;
+                let column = item.source_column(&original_secondary, field)?;
+                item.source_kind(&original_secondary, column)
             } else {
                 sources
                     .iter()
@@ -415,7 +444,8 @@ pub(super) fn bind(
                     .map(|column| column.kind)
             }
         };
-        let kind = declaration.result_kind(&lookup).unwrap_or({
+        let result_kind = declaration.result_kind(&lookup);
+        let kind = result_kind.unwrap_or({
             // An unresolved numeric operand must not turn a later read of
             // this computed field into a spurious text-input diagnostic.
             if matches!(declaration.kind, Kind::Numeric(_)) {
@@ -474,6 +504,7 @@ pub(super) fn bind(
             name: declaration.name.clone(),
             kind,
         });
+        result_kinds.push(result_kind);
     }
     let output = TableSchema::new(fields).map_err(|_| BindError::Internal)?;
     *pending_schema = Some(output.clone());
@@ -610,7 +641,15 @@ pub(super) fn bind(
         .collect::<Vec<_>>();
     let catalog = Catalog::compile(&outputs, &datasets)
         .map_err(BindError::Catalog)?
-        .with_record_derivation();
+        .with_record_derivation()
+        .with_record_kinds(
+            stored
+                .columns()
+                .iter()
+                .map(|column| Some(column.kind))
+                .chain(result_kinds.iter().copied())
+                .collect(),
+        );
     let references = declarations
         .iter()
         .flat_map(|item| &item.references)
@@ -676,7 +715,12 @@ pub(super) fn bind(
             .iter()
             .enumerate()
             .filter(|(_, field)| item.source_column(&secondary, &field.name).is_some())
-            .map(|(column, field)| (field.name.clone(), (column, field.kind)))
+            .map(|(column, field)| {
+                (
+                    field.name.clone(),
+                    (column, item.source_kind(&secondary, column)),
+                )
+            })
             .collect();
         selected.push((
             item.identifier.clone(),
@@ -780,6 +824,7 @@ pub(super) fn bind(
         plan: std::rc::Rc::new(plan),
         current,
         stored_columns: stored.columns().len(),
+        result_kinds,
         driver_kinds,
         typed_columns: declarations
             .iter()

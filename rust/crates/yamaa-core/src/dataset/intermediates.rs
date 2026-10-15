@@ -71,9 +71,27 @@ pub struct IntermediateDerivations {
     pub plan: std::rc::Rc<DatasetPlan>,
     pub current: Vec<CurrentField>,
     pub stored_columns: usize,
+    /// An untyped result may have no single statically known non-missing kind.
+    pub result_kinds: Vec<Option<ColumnType>>,
     pub driver_kinds: Vec<Option<ColumnType>>,
     /// Explicitly typed results convert before completing their donor slot.
     pub typed_columns: Vec<usize>,
+}
+impl IntermediateDerivations {
+    pub fn column_kind(&self, column: usize) -> Option<ColumnType> {
+        if column < self.stored_columns {
+            self.plan
+                .output()
+                .columns()
+                .get(column)
+                .map(|column| column.kind)
+        } else {
+            self.result_kinds
+                .get(column - self.stored_columns)
+                .copied()
+                .flatten()
+        }
+    }
 }
 
 /// A named secondary record selector with literal absence handling.

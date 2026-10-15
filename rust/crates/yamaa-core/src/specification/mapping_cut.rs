@@ -142,9 +142,7 @@ fn bound_kind(
         Expression::Intermediate { index, column } => intermediates
             .get(*index)
             .and_then(Option::as_ref)
-            .and_then(|item| item.source_schema(secondary))
-            .and_then(|schema| schema.columns().get(*column))
-            .map(|c| c.kind),
+            .and_then(|item| item.source_kind(secondary, *column)),
         Expression::SourceLookup { lookup, .. } => secondary
             .get(lookup.source)
             .and_then(|item| item.schema.columns().get(lookup.column))
@@ -255,9 +253,10 @@ pub(super) fn bind_row(
         intermediates
             .get(index)
             .and_then(Option::as_ref)
-            .and_then(|item| item.source_schema(secondary))
-            .and_then(|schema| schema.columns().iter().find(|c| c.name == field))
-            .map(|c| c.kind)
+            .and_then(|item| {
+                let column = item.source_column(secondary, field)?;
+                item.source_kind(secondary, column)
+            })
     } else {
         catalog.type_of(name)
     };

@@ -98,7 +98,9 @@ pub fn bind(
                                 .iter()
                                 .find(|p| p.name == item.name)
                                 .ok_or(Error::InvalidAdmittedCall)?;
-                            if kind(actual) != parameter.kind {
+                            if let Some(actual) =
+                                actual.filter(|actual| kind(*actual) != parameter.kind)
+                            {
                                 findings.push(Finding {
                                     argument,
                                     kind: Kind::ArgumentType {
@@ -189,22 +191,13 @@ pub fn bind(
                 });
                 match binding {
                     Some(binding) if !terminal => {
-                        let (input, actual) = match binding {
-                            Binding::Output {
-                                column,
-                                column_type,
-                            } => {
+                        let actual = catalog.type_of(name).map(kind);
+                        let input = match binding {
+                            Binding::Output { column, .. } => {
                                 dependencies.push(column);
-                                (
-                                    Some(FunctionInput::Read(Read::Column(column))),
-                                    kind(column_type),
-                                )
+                                Some(FunctionInput::Read(Read::Column(column)))
                             }
-                            Binding::Dataset {
-                                dataset,
-                                field,
-                                column_type,
-                            } => {
+                            Binding::Dataset { dataset, field, .. } => {
                                 let input = if dataset != context.source_dataset {
                                     findings.push(Finding {
                                         argument,
@@ -222,7 +215,7 @@ pub fn bind(
                                         },
                                     })
                                 };
-                                (input, kind(column_type))
+                                input
                             }
                         };
                         let parameter = plan
@@ -231,7 +224,7 @@ pub fn bind(
                             .iter()
                             .find(|p| p.name == item.name)
                             .ok_or(Error::InvalidAdmittedCall)?;
-                        if actual != parameter.kind {
+                        if let Some(actual) = actual.filter(|actual| *actual != parameter.kind) {
                             findings.push(Finding {
                                 argument,
                                 kind: Kind::ArgumentType {

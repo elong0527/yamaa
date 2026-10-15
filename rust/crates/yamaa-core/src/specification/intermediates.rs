@@ -772,6 +772,21 @@ impl Declarations {
                         plan,
                         source_name,
                         schema,
+                        &|column| {
+                            if let Some(derived) = &derivations {
+                                derived.column_kind(column)
+                            } else {
+                                match item.source {
+                                    self_relations::Relation::Input(index) => schemas[index]
+                                        .columns()
+                                        .get(column)
+                                        .map(|column| column.kind),
+                                    self_relations::Relation::SelfRows => {
+                                        output.columns().get(column).map(|column| column.kind)
+                                    }
+                                }
+                            }
+                        },
                         matches!(item.source, self_relations::Relation::SelfRows),
                         &admits,
                         &item.name,
@@ -1065,7 +1080,7 @@ impl Declarations {
             })
             .collect::<Vec<_>>();
         let catalog = Catalog::compile(&output_fields, &datasets).map_err(BindError::Catalog)?;
-        let mut known = BTreeMap::<String, ColumnType>::new();
+        let mut known = BTreeMap::<String, Option<ColumnType>>::new();
         for declaration in self.0.iter() {
             let dataset = match declaration.source {
                 self_relations::Relation::Input(index) => sources[index].name.as_str(),
@@ -1075,12 +1090,12 @@ impl Declarations {
                 self_relations::Relation::Input(index) => sources[index]
                     .types
                     .iter()
-                    .cloned()
+                    .map(|(name, kind)| (name.clone(), Some(*kind)))
                     .collect::<BTreeMap<_, _>>(),
                 self_relations::Relation::SelfRows => output
                     .columns()
                     .iter()
-                    .map(|column| (column.name.clone(), column.kind))
+                    .map(|column| (column.name.clone(), Some(column.kind)))
                     .collect(),
             };
             if let (Some(expression), Some(compiled)) =
@@ -1095,12 +1110,12 @@ impl Declarations {
             }
             for derived in &declaration.derivations {
                 static_checks::branch(&derived.branch, findings)?;
-                if let Some(kind) = derived.result_kind(&|name| {
+                let kind = derived.result_kind(&|name| {
                     let (owner, field) = name.split_once('.').unwrap_or((dataset, name));
                     if owner == dataset {
-                        donor.get(field).copied()
+                        donor.get(field).copied().flatten()
                     } else if let Some(kind) = known.get(name) {
-                        Some(*kind)
+                        *kind
                     } else {
                         sources
                             .iter()
@@ -1113,9 +1128,8 @@ impl Declarations {
                                     .map(|(_, kind)| *kind)
                             })
                     }
-                }) {
-                    donor.insert(derived.name.clone(), kind);
-                }
+                });
+                donor.insert(derived.name.clone(), kind);
             }
             if let Some(Ok(filter)) = &declaration.filter {
                 findings.extend(
@@ -1124,7 +1138,7 @@ impl Declarations {
                             .split_once('.')
                             .or_else(|| (dataset == "SELF").then_some((dataset, name)))?;
                         if owner == dataset {
-                            donor.get(field).copied().map(Into::into)
+                            donor.get(field).copied().flatten().map(Into::into)
                         } else {
                             sources
                                 .iter()
@@ -1140,16 +1154,17 @@ impl Declarations {
                 );
             }
             for (field, value) in declaration.keys.iter().flatten() {
-                if let (Some(actual), Some(expected)) =
-                    (donor.get(field), value.result_type(&catalog))
-                {
-                    if !crate::key_relation::comparable(expected, (*actual).into()) {
+                if let (Some(actual), Some(expected)) = (
+                    donor.get(field).copied().flatten(),
+                    value.result_type(&catalog),
+                ) {
+                    if !crate::key_relation::comparable(expected, actual.into()) {
                         findings.push(BindFinding::Lookup(LookupFinding::key_type(
                             &format!("{}.key", declaration.path),
                             &declaration.name,
                             &value.display_name(field),
                             expected,
-                            *actual,
+                            actual,
                         )));
                     }
                 }

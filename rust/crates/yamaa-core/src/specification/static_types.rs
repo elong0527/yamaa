@@ -99,19 +99,12 @@ pub(super) fn kind(
         return Ok(intermediates
             .get(index)
             .and_then(Option::as_ref)
-            .and_then(|item| item.source_schema(secondary))
-            .and_then(|schema| schema.columns().iter().find(|column| column.name == field))
-            .map(|column| column.kind.into()));
+            .and_then(|item| {
+                let column = item.source_column(secondary, field)?;
+                item.source_kind(secondary, column).map(Into::into)
+            }));
     }
-    if let Some((relation, field)) = name.split_once('.') {
-        if let Some(joined) = catalog.joined(relation) {
-            return Ok(joined.fields.get(field).map(|(_, kind)| (*kind).into()));
-        }
-    }
-    Ok(catalog.bind(name).map(|binding| match binding {
-        reference_binding::Binding::Output { column_type, .. }
-        | reference_binding::Binding::Dataset { column_type, .. } => column_type.into(),
-    }))
+    Ok(catalog.type_of(name).map(Into::into))
 }
 
 pub(super) fn numeric(

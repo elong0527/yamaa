@@ -440,14 +440,11 @@ pub(super) fn bind_row(
             let column_type = if let Expression::Intermediate { index, column } = &expression {
                 intermediates[*index]
                     .as_ref()
-                    .and_then(|item| item.source_schema(secondary))
-                    .and_then(|schema| schema.columns().get(*column))
-                    .map(|column| column.kind)
-                    .ok_or(BindError::Internal)?
+                    .and_then(|item| item.source_kind(secondary, *column))
             } else {
-                catalog.type_of(source).ok_or(BindError::Internal)?
+                catalog.type_of(source)
             };
-            if !operation.accepts(index, column_type) {
+            if let Some(column_type) = column_type.filter(|&kind| !operation.accepts(index, kind)) {
                 let actual = match column_type {
                     ColumnType::Str => "str",
                     ColumnType::Int => "int",

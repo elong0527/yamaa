@@ -41,13 +41,9 @@ fn validate_predicate<E>(
     let mut bindings = Vec::new();
     for binding in predicate.bindings() {
         let kind = match binding.read {
-            Read::Column(column) => plan.output().columns()[column].kind,
+            Read::Column(column) => Some(plan.output().columns()[column].kind),
             Read::Intermediate { index, column } => {
-                plan.intermediates()[index]
-                    .source_schema(plan.secondary())
-                    .expect("admitted donor schema")
-                    .columns()[column]
-                    .kind
+                plan.intermediates()[index].source_kind(plan.secondary(), column)
             }
             _ => unreachable!(
                 "verification admission permits completed columns and declared lookups"
@@ -57,7 +53,7 @@ fn validate_predicate<E>(
             name: binding.name.clone(),
             read: Read::Column(samples.len()),
         });
-        samples.push(sample(kind));
+        samples.push(kind.map_or(Value::Missing, sample));
     }
     let sample_predicate = BoundPredicate::new(predicate.plan().clone(), bindings)
         .expect("admitted verification names");
