@@ -16,12 +16,12 @@ fn actual_changed_define_resource_keeps_authored_cause_path_and_snapshot_in_both
     fs::write(directory.join("dm.csv"), b"ID\n1\n").unwrap();
     let text = file_resources::caller_path(&directory).unwrap();
     let mut resources = Resources::new(&text, &text, &[]).unwrap();
-    let original = resources.capture("dm.csv").unwrap().0;
+    let original = resources.capture("dm.csv", 16).unwrap().0;
     fs::write(directory.join("dm.csv"), b"ID\n2\n").unwrap();
-    let error = resources.capture("dm.csv").unwrap_err();
+    let error = resources.capture("dm.csv", 16).unwrap_err();
     assert_eq!(error, file_resources::Error::Changed);
     for host in [Language::Python, Language::R] {
-        let error = resources.capture("dm.csv").unwrap_err();
+        let error = resources.capture("dm.csv", 16).unwrap_err();
         let findings = issues(&resource("datasets.DM.artifact", "dm.csv", error), host);
         assert_eq!(findings.len(), 1);
         let finding = &findings[0];
@@ -73,16 +73,17 @@ fn changed_define_metadata_uses_original_root_spec_parent_and_dictionary_occurre
         let environment_written =
             file_resources::caller_path(&directory.join("environment.yaml")).unwrap();
         let mut ports = NativePorts {
-            after_publish: None,
             resources: None,
             host: Language::Python,
             environment: None,
             environment_written: String::new(),
             specifications: Vec::new(),
         };
-        let environment = ports.capture_environment(&environment_written).unwrap();
+        let environment = ports
+            .capture_environment(&environment_written, service::METADATA_LIMITS)
+            .unwrap();
         let specification = ports
-            .capture_specification(
+            .capture_specification_at(
                 "sdtm.specs[0]",
                 &environment.root().source().identity,
                 "spec.yaml",
@@ -166,13 +167,13 @@ fn later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_re
     assert!(result.issues().is_empty(), "{:?}", result.issues());
     let held = result.artifacts().next().unwrap().1.to_vec();
     let reads = result.capture_reads();
-    let later_target = directory.join("second.json");
-    result.ports.after_publish = Some(Box::new(move |written| {
-        if written == "dm.json" {
-            fs::create_dir(&later_target).unwrap();
-        }
-    }));
-    assert!(result.save().is_err());
+    assert!(result
+        .save_with_checkpoint(|index| {
+            if index == 0 {
+                fs::create_dir(directory.join("second.json")).unwrap();
+            }
+        })
+        .is_err());
     assert_eq!(fs::read(directory.join("dm.json")).unwrap(), held);
     assert_eq!(
         fs::read(directory.join("define.xml")).unwrap(),

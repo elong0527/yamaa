@@ -1,31 +1,49 @@
-//! Copied IPC streams for installed hosts. No files, callbacks or fallback.
-use crate::arrow_table::{date_array, datetime_array, physical_schema, ArrowTable};
-use arrow_array::{ArrayRef, Float64Array, Int64Array, RecordBatch, RecordBatchOptions};
+//! Bounded copied IPC streams for installed hosts. No files, callbacks or fallback.
+use crate::arrow_table::{date_array, datetime_array, physical_schema, ArrowTable, TableLimits};
+use arrow_array::{
+    ArrayRef, Float64Array, Int64Array, RecordBatch, RecordBatchOptions, StringArray,
+};
 use arrow_ipc::{reader::StreamReader, writer::StreamWriter, MessageHeader, MetadataVersion};
 use arrow_schema::DataType;
 use serde::Serialize;
 use std::{
     fmt,
-    io::{Cursor, Write},
+    io::{self, Cursor, Write},
     panic::{catch_unwind, AssertUnwindSafe},
     sync::Arc,
 };
-use yamaa_core::{dataset::Dataset, limits::Limits};
+use yamaa_core::dataset::{Dataset, ExecutionBudget};
 use yamaa_core::{
     table::{Column, TableAccess, TableSchema, ValueRef},
     value::ColumnType,
 };
 
+pub const MAX_INPUT_BYTES: usize = ExecutionBudget::longitudinal().max_ipc_bytes;
+pub const MAX_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
+// Keep per-message bytes and verifier traversal bounded while admitting the
+// schema and record-batch metadata for the wider default column policy.
+const MAX_METADATA: usize = yamaa_core::specification::DEFAULT_MAX_COLUMNS * 1024;
+const MAX_METADATA_TABLES: usize = yamaa_core::specification::DEFAULT_MAX_COLUMNS * 32;
+
+fn source_limits(budget: ExecutionBudget) -> TableLimits {
+    TableLimits {
+        max_rows: budget.execution.source_rows,
+        max_columns: budget.max_columns,
+        max_batches: budget.max_batches,
+        max_cells: budget.max_decoded_cells,
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TableError {
+    InputLimit,
+    OutputLimit,
     Limit {
         resource: &'static str,
         limit: usize,
         required: Option<usize>,
     },
-    Representation {
-        representation: &'static str,
-    },
+    ShapeLimit,
     InvalidStream,
     InvalidTable,
     OutputIo,
@@ -35,8 +53,10 @@ impl fmt::Display for TableError {
     /// Stable host errors never disclose raw input or panic payloads.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Self::Limit { .. } => "table geometry exceeds fixed limit",
-            Self::Representation { representation } => representation,
+            Self::InputLimit => "table IPC input exceeds byte limit",
+            Self::OutputLimit => "table output exceeds byte limit",
+            Self::Limit { .. } => "table resource budget exceeded",
+            Self::ShapeLimit => "table IPC exceeds shape limit",
             Self::InvalidStream => "invalid or unsupported table IPC stream",
             Self::InvalidTable => "invalid table schema or value",
             Self::OutputIo => "table IPC output write failed",
@@ -47,73 +67,143 @@ impl fmt::Display for TableError {
 impl std::error::Error for TableError {}
 type Error = TableError;
 
-/// Contain codec panics while preserving ordinary stream failures.
+/// Bound input before FlatBuffers verification and preserve panic containment.
 fn boundary<T>(
+    input: &[u8],
+    budget: ExecutionBudget,
     run: impl FnOnce() -> Result<T, Error> + std::panic::UnwindSafe,
 ) -> Result<T, Error> {
+    if input.len() > budget.max_ipc_bytes {
+        return Err(Error::InputLimit);
+    }
+    if budget.max_sources == 0 {
+        return Err(Error::ShapeLimit);
+    }
     catch_unwind(run).map_err(|_| Error::Internal)?
 }
 
-fn shape_error(error: yamaa_core::limits::LimitExceeded) -> Error {
-    Error::Limit {
-        resource: error.resource,
-        limit: error.limit,
-        required: error.actual,
-    }
+/// Return a sanitized IPC stream with exact schema/rows/chunks and no hidden null
+/// payloads. Returned bytes are independently owned; no host buffer is retained.
+pub fn table_round_trip(input: &[u8]) -> Result<Vec<u8>, Error> {
+    table_round_trip_with_budget(input, ExecutionBudget::default())
 }
 
-/// Return a sanitized stream with exact schema/rows/chunks and no hidden null payloads.
-pub fn table_round_trip(input: &[u8]) -> Result<Vec<u8>, Error> {
-    boundary(|| {
-        let table = decode(input)?;
-        let mut output = Vec::new();
-        let mut writer = StreamWriter::try_new(&mut output, &physical_schema(table.schema()))
-            .map_err(|_| Error::OutputIo)?;
-        let mut start = 0;
-        for batch in table.batches() {
-            let clean = sanitized_batch(&table, start, batch.num_rows()).map_err(batch_error)?;
-            writer.write(&clean).map_err(|_| Error::OutputIo)?;
-            start += batch.num_rows();
+/// Apply caller-selected byte/shape limits while preserving input chunk order.
+pub fn table_round_trip_with_budget(
+    input: &[u8],
+    budget: ExecutionBudget,
+) -> Result<Vec<u8>, Error> {
+    boundary(input, budget, || {
+        let table = decode(input, budget)?;
+        let mut output = LimitedWriter::new(budget.max_output_bytes);
+        let result = (|| {
+            let mut writer = StreamWriter::try_new(&mut output, &physical_schema(table.schema()))?;
+            let mut start = 0;
+            for batch in table.batches() {
+                let clean = sanitized_batch(&table, start, batch.num_rows())?;
+                writer.write(&clean)?;
+                start += batch.num_rows();
+            }
+            writer.finish()
+        })();
+        if result.is_err() {
+            return Err(if output.exceeded {
+                Error::OutputLimit
+            } else {
+                Error::Internal
+            });
         }
-        writer.finish().map_err(|_| Error::OutputIo)?;
-        Ok(output)
+        Ok(output.bytes)
     })
 }
 
-fn decode(input: &[u8]) -> Result<ArrowTable, Error> {
-    let shape = preflight(input)?;
-    let batches =
-        SnapshotBatches::new(input, shape.schema.clone())?.collect::<Result<Vec<_>, _>>()?;
-    ArrowTable::try_new(shape.schema, batches).map_err(|_| Error::InvalidTable)
+/// Decode only after every frame, schema and declared shape has been preflighted.
+fn decode(input: &[u8], budget: ExecutionBudget) -> Result<ArrowTable, Error> {
+    let shape = preflight(input, budget)?;
+    decode_preflighted(input, shape, budget, budget.max_ipc_bytes).map(|(table, _)| table)
 }
 
-/// Decode only after complete framing, schema and fixed geometry validation.
+pub(crate) fn decode_preflighted(
+    input: &[u8],
+    shape: SnapshotShape,
+    budget: ExecutionBudget,
+    text_limit: usize,
+) -> Result<(ArrowTable, usize), Error> {
+    let mut reader = SnapshotBatches::new(input, shape.schema.clone(), budget, text_limit)?;
+    let batches = reader.by_ref().collect::<Result<Vec<_>, _>>()?;
+    let table = ArrowTable::try_new(shape.schema, batches, source_limits(budget))
+        .map_err(|_| Error::InvalidTable)?;
+    Ok((table, text_limit - reader.text_left))
+}
+
+fn logical_text_bytes(table: &ArrowTable, text_limit: usize) -> Result<usize, Error> {
+    // Aliased IPC buffers can multiply logical text far beyond the input length.
+    let mut text_bytes = 0_usize;
+    for (column, field) in table.schema().columns().iter().enumerate() {
+        if field.kind == ColumnType::Str {
+            for row in 0..table.row_count() {
+                if let ValueRef::Str(value) = table.cell(row, column).expect("validated coordinate")
+                {
+                    text_bytes = text_bytes
+                        .checked_add(value.len())
+                        .ok_or(Error::ShapeLimit)?;
+                    if text_bytes > text_limit {
+                        return Err(Error::ShapeLimit);
+                    }
+                }
+            }
+        }
+    }
+    Ok(text_bytes)
+}
+
+/// Retain the same byte/shape/UTF-8/alias checks for dataset execution inputs.
 pub fn decode_snapshot(input: &[u8]) -> Result<ArrowTable, Error> {
-    boundary(|| decode(input))
+    decode_snapshot_with_budget(input, ExecutionBudget::default())
+}
+
+/// Preflight the entire stream before decoding under a caller-selected policy.
+pub fn decode_snapshot_with_budget(
+    input: &[u8],
+    budget: ExecutionBudget,
+) -> Result<ArrowTable, Error> {
+    boundary(input, budget, || decode(input, budget))
 }
 
 /// Decode one normalized, checked batch at a time after whole-stream framing
 /// admission. Consumers must exhaust the iterator to validate all values.
 /// The input bytes stay borrowed; previously yielded batches need not be retained.
-pub fn snapshot_batches(input: &[u8]) -> Result<SnapshotBatches<'_>, Error> {
-    boundary(|| {
-        let shape = preflight(input)?;
-        SnapshotBatches::new(input, shape.schema)
+pub fn snapshot_batches(
+    input: &[u8],
+    budget: ExecutionBudget,
+) -> Result<SnapshotBatches<'_>, Error> {
+    boundary(input, budget, || {
+        let shape = preflight(input, budget)?;
+        SnapshotBatches::new(input, shape.schema, budget, budget.max_ipc_bytes)
     })
 }
 
 pub struct SnapshotBatches<'a> {
     reader: StreamReader<Cursor<&'a [u8]>>,
     schema: TableSchema,
+    budget: ExecutionBudget,
+    text_left: usize,
     finished: bool,
 }
 
 impl<'a> SnapshotBatches<'a> {
-    fn new(input: &'a [u8], schema: TableSchema) -> Result<Self, Error> {
+    fn new(
+        input: &'a [u8],
+        schema: TableSchema,
+        budget: ExecutionBudget,
+        text_limit: usize,
+    ) -> Result<Self, Error> {
         Ok(Self {
             reader: StreamReader::try_new(Cursor::new(input), None)
                 .map_err(|_| Error::InvalidStream)?,
             schema,
+            budget,
+            text_left: text_limit,
             finished: false,
         })
     }
@@ -133,8 +223,13 @@ impl Iterator for SnapshotBatches<'_> {
         let next = catch_unwind(AssertUnwindSafe(|| {
             self.reader.next().map(|batch| {
                 let batch = batch.map_err(|_| Error::InvalidStream)?;
-                let table = ArrowTable::try_new(self.schema.clone(), vec![batch])
-                    .map_err(|_| Error::InvalidTable)?;
+                let table = ArrowTable::try_new(
+                    self.schema.clone(),
+                    vec![batch],
+                    source_limits(self.budget),
+                )
+                .map_err(|_| Error::InvalidTable)?;
+                self.text_left -= logical_text_bytes(&table, self.text_left)?;
                 Ok(table.batches()[0].clone())
             })
         }))
@@ -173,16 +268,23 @@ fn encode_dataset_projection<T: TableAccess<Error = std::convert::Infallible>>(
     table: &T,
     projection: Option<&[usize]>,
 ) -> Result<Vec<u8>, Error> {
-    encode_table_projection(table, projection)
+    // Accepted output is projected through IPC for the host. Its transport
+    // representation is independent from the authored CSV/Parquet byte limit.
+    let budget = ExecutionBudget {
+        max_output_bytes: yamaa_core::capacity::OUTPUT_STORAGE_BYTES,
+        ..Default::default()
+    };
+    encode_table_projection(table, projection, budget)
 }
 
 fn encode_table_projection<T: TableAccess<Error = std::convert::Infallible>>(
     table: &T,
     projection: Option<&[usize]>,
+    budget: ExecutionBudget,
 ) -> Result<Vec<u8>, Error> {
-    let mut output = Vec::new();
-    write_table_projection(table, projection, &mut output)?;
-    Ok(output)
+    let mut output = LimitedWriter::new(budget.max_output_bytes);
+    write_table_projection(table, projection, &mut output, budget)?;
+    Ok(output.bytes)
 }
 
 /// Lazily rebuild accepted values into sanitized Arrow batches.
@@ -198,8 +300,17 @@ pub(crate) struct DatasetBatches<'a, T = Dataset> {
 fn table_batches<'a, T: TableAccess<Error = std::convert::Infallible>>(
     table: &'a T,
     projection: Option<&'a [usize]>,
+    budget: ExecutionBudget,
 ) -> Result<DatasetBatches<'a, T>, Error> {
-    Limits::table(table.row_count(), table.schema().columns().len()).map_err(shape_error)?;
+    if table.row_count() > budget.execution.output_rows
+        || table.schema().columns().len() > budget.max_columns
+        || table
+            .row_count()
+            .checked_mul(table.schema().columns().len())
+            .is_none_or(|cells| cells > budget.execution.output_cells)
+    {
+        return Err(Error::ShapeLimit);
+    }
     if projection.is_some_and(|columns| {
         columns
             .iter()
@@ -207,12 +318,17 @@ fn table_batches<'a, T: TableAccess<Error = std::convert::Infallible>>(
     }) {
         return Err(Error::InvalidTable);
     }
-    let batch_rows = 65_536;
+    let batch_rows = budget
+        .batch_rows
+        .map_or(table.row_count().max(1), |rows| rows.get());
     let batches = if table.row_count() == 0 {
         1
     } else {
         (table.row_count() - 1) / batch_rows + 1
     };
+    if batches > budget.max_batches {
+        return Err(Error::ShapeLimit);
+    }
     Ok(DatasetBatches {
         table,
         projection,
@@ -231,7 +347,7 @@ impl<T: TableAccess<Error = std::convert::Infallible>> Iterator for DatasetBatch
         }
         let rows = self.batch_rows.min(self.table.row_count() - self.start);
         let result = sanitized_batch(self.table, self.start, rows)
-            .map_err(batch_error)
+            .map_err(|_| Error::Internal)
             .and_then(|batch| match self.projection {
                 Some(projection) => batch.project(projection).map_err(|_| Error::InvalidTable),
                 None => Ok(batch),
@@ -259,8 +375,9 @@ fn write_table_projection<T: TableAccess<Error = std::convert::Infallible>>(
     table: &T,
     projection: Option<&[usize]>,
     output: &mut impl Write,
+    budget: ExecutionBudget,
 ) -> Result<(), Error> {
-    let batches = table_batches(table, projection)?;
+    let batches = table_batches(table, projection, budget)?;
     let schema = physical_schema(table.schema());
     let schema = match projection {
         Some(projection) => Arc::new(
@@ -270,16 +387,67 @@ fn write_table_projection<T: TableAccess<Error = std::convert::Infallible>>(
         ),
         None => schema,
     };
-    let mut writer = StreamWriter::try_new(output, &schema).map_err(|_| Error::OutputIo)?;
-    for batch in batches {
-        writer.write(&batch?).map_err(|_| Error::OutputIo)?;
+    let mut output = CappedWriter {
+        output,
+        remaining: budget.max_output_bytes,
+        initial: budget.max_output_bytes,
+        required: None,
+        exceeded: false,
+    };
+    let result = (|| {
+        let mut writer =
+            StreamWriter::try_new(&mut output, &schema).map_err(|_| Error::OutputIo)?;
+        for batch in batches {
+            writer.write(&batch?).map_err(|_| Error::OutputIo)?;
+        }
+        writer.finish().map_err(|_| Error::OutputIo)
+    })();
+    if output.exceeded {
+        Err(Error::Limit {
+            resource: "output_ipc_bytes",
+            limit: budget.max_output_bytes,
+            required: output.required,
+        })
+    } else {
+        result
     }
-    writer.finish().map_err(|_| Error::OutputIo)
 }
 
-/// Serialize the actual observation without a second transport byte policy.
-pub fn serialize_json(value: &impl Serialize) -> Result<String, Error> {
-    serde_json::to_string(value).map_err(|_| Error::Internal)
+struct CappedWriter<'a, W> {
+    output: &'a mut W,
+    remaining: usize,
+    initial: usize,
+    required: Option<usize>,
+    exceeded: bool,
+}
+
+impl<W: Write> Write for CappedWriter<'_, W> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        if bytes.len() > self.remaining {
+            self.exceeded = true;
+            self.required = (self.initial - self.remaining).checked_add(bytes.len());
+            return Err(io::Error::other("output limit"));
+        }
+        let written = self.output.write(bytes)?;
+        self.remaining -= written;
+        Ok(written)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        self.output.flush()
+    }
+}
+
+/// Serialize directly through a byte cap without constructing a JSON value tree.
+pub fn bounded_json(value: &impl Serialize, maximum: usize) -> Result<String, Error> {
+    let mut output = LimitedWriter::new(maximum);
+    if serde_json::to_writer(&mut output, value).is_err() {
+        return Err(if output.exceeded {
+            Error::OutputLimit
+        } else {
+            Error::Internal
+        });
+    }
+    String::from_utf8(output.bytes).map_err(|_| Error::Internal)
 }
 
 /// Take bytes only after checked remaining-length validation; no declared-size allocation.
@@ -299,14 +467,19 @@ fn word(input: &mut &[u8]) -> Result<u32, Error> {
 }
 
 /// Validate canonical schema shape before Arrow's schema conversion can recurse.
-fn schema_from_message(schema: arrow_ipc::Schema<'_>) -> Result<TableSchema, Error> {
+fn schema_from_message(
+    schema: arrow_ipc::Schema<'_>,
+    max_columns: usize,
+) -> Result<TableSchema, Error> {
     if schema.endianness() != arrow_ipc::Endianness::Little
         || schema.custom_metadata().is_some_and(|m| !m.is_empty())
     {
         return Err(Error::InvalidTable);
     }
     let fields = schema.fields().ok_or(Error::InvalidTable)?;
-    Limits::columns(fields.len()).map_err(shape_error)?;
+    if fields.len() > max_columns {
+        return Err(Error::ShapeLimit);
+    }
     for field in fields {
         check_field(field, true)?;
     }
@@ -375,7 +548,10 @@ pub(crate) struct SnapshotShape {
     pub schema: TableSchema,
 }
 
-pub(crate) fn preflight(mut input: &[u8]) -> Result<SnapshotShape, Error> {
+pub(crate) fn preflight(mut input: &[u8], budget: ExecutionBudget) -> Result<SnapshotShape, Error> {
+    if input.len() > budget.max_ipc_bytes {
+        return Err(Error::InputLimit);
+    }
     let mut schema: Option<TableSchema> = None;
     let mut batches = 0_usize;
     let mut rows = 0_usize;
@@ -392,8 +568,18 @@ pub(crate) fn preflight(mut input: &[u8]) -> Result<SnapshotShape, Error> {
             return Ok(SnapshotShape { schema });
         }
         let length = usize::try_from(length).map_err(|_| Error::InvalidStream)?;
+        if length > MAX_METADATA {
+            return Err(Error::ShapeLimit);
+        }
         let metadata = take(&mut input, length)?;
-        let message = arrow_ipc::root_as_message(metadata).map_err(|_| Error::InvalidStream)?;
+        let options = flatbuffers::VerifierOptions {
+            max_depth: 16,
+            max_tables: MAX_METADATA_TABLES,
+            max_apparent_size: MAX_METADATA * 4,
+            ..Default::default()
+        };
+        let message = arrow_ipc::root_as_message_with_opts(&options, metadata)
+            .map_err(|_| Error::InvalidStream)?;
         if message.version() != MetadataVersion::V5
             || message.custom_metadata().is_some_and(|m| !m.is_empty())
         {
@@ -405,6 +591,7 @@ pub(crate) fn preflight(mut input: &[u8]) -> Result<SnapshotShape, Error> {
             MessageHeader::Schema if schema.is_none() && batches == 0 && body == 0 => {
                 schema = Some(schema_from_message(
                     message.header_as_schema().ok_or(Error::InvalidStream)?,
+                    budget.max_columns,
                 )?);
             }
             MessageHeader::RecordBatch if schema.is_some() => {
@@ -417,14 +604,18 @@ pub(crate) fn preflight(mut input: &[u8]) -> Result<SnapshotShape, Error> {
                     return Err(Error::InvalidStream);
                 }
                 let count = usize::try_from(batch.length()).map_err(|_| Error::InvalidStream)?;
-                rows = rows.checked_add(count).ok_or(Error::Limit {
-                    resource: "table_rows",
-                    limit: Limits::TABLE_ROWS,
-                    required: None,
-                })?;
-                batches += 1;
+                rows = rows.checked_add(count).ok_or(Error::ShapeLimit)?;
+                batches = batches.checked_add(1).ok_or(Error::ShapeLimit)?;
                 let schema = schema.as_ref().expect("schema present");
-                Limits::table(rows, schema.columns().len()).map_err(shape_error)?;
+                if rows > budget.execution.source_rows
+                    || batches > budget.max_batches
+                    || rows
+                        .checked_mul(schema.columns().len())
+                        .ok_or(Error::ShapeLimit)?
+                        > budget.max_decoded_cells
+                {
+                    return Err(Error::ShapeLimit);
+                }
                 let expected_nodes: usize = schema
                     .columns()
                     .iter()
@@ -473,19 +664,6 @@ pub(crate) fn preflight(mut input: &[u8]) -> Result<SnapshotShape, Error> {
     }
 }
 
-fn batch_error(error: arrow_schema::ArrowError) -> Error {
-    match error {
-        arrow_schema::ArrowError::CastError(message)
-            if message == crate::arrow_table::UTF8_OFFSETS =>
-        {
-            Error::Representation {
-                representation: crate::arrow_table::UTF8_OFFSETS,
-            }
-        }
-        _ => Error::Internal,
-    }
-}
-
 /// Rebuild visible values into fresh arrays, removing all masked physical payloads
 /// and out-of-slice buffers before the public IPC writer sees them.
 pub(crate) fn sanitized_batch<T: TableAccess<Error = std::convert::Infallible>>(
@@ -498,12 +676,10 @@ pub(crate) fn sanitized_batch<T: TableAccess<Error = std::convert::Infallible>>(
         let values =
             (start..start + rows).map(|row| table.cell(row, column).expect("validated coordinate"));
         arrays.push(match field.kind {
-            ColumnType::Str => {
-                Arc::new(crate::arrow_table::string_array(values.map(|v| match v {
-                    ValueRef::Str(v) => Some(v),
-                    _ => None,
-                }))?)
-            }
+            ColumnType::Str => Arc::new(StringArray::from_iter(values.map(|v| match v {
+                ValueRef::Str(v) => Some(v),
+                _ => None,
+            }))),
             ColumnType::Int => Arc::new(Int64Array::from_iter(values.map(|v| match v {
                 ValueRef::Int(v) => Some(v),
                 _ => None,
@@ -535,4 +711,38 @@ pub(crate) fn sanitized_batch<T: TableAccess<Error = std::convert::Infallible>>(
         arrays,
         &RecordBatchOptions::new().with_row_count(Some(rows)),
     )
+}
+
+struct LimitedWriter {
+    maximum: usize,
+    bytes: Vec<u8>,
+    exceeded: bool,
+}
+impl LimitedWriter {
+    /// Apply the protocol-specific cap; IPC output must be valid input again.
+    fn new(maximum: usize) -> Self {
+        Self {
+            maximum,
+            bytes: Vec::new(),
+            exceeded: false,
+        }
+    }
+}
+impl Write for LimitedWriter {
+    /// Never append beyond the transport output budget, including JSON expansion.
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        if bytes.len() > self.maximum - self.bytes.len() {
+            self.exceeded = true;
+            return Err(io::Error::other("output limit"));
+        }
+        self.bytes
+            .try_reserve(bytes.len())
+            .map_err(io::Error::other)?;
+        self.bytes.extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+    /// The owned memory buffer has no external flush action.
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
 }

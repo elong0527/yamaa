@@ -1,7 +1,7 @@
 //! Physical metadata codec port for the native study-inventory application.
 use crate::{
     file_preparation,
-    file_resources::Resources,
+    file_resources::{MetadataLimits, Resources},
     project_source::{CapturedEnvironment, OwnedEnvironment},
     specification_source::{CapturedSchema, PreparedDocument},
 };
@@ -34,6 +34,15 @@ fn capture(
     schema: &Arc<CapturedSchema>,
     root: &crate::specification_source::CapturedDocument,
 ) -> Result<service::Captured<PreparedDocument>, file_preparation::Error> {
+    let limits = yamaa_core::define::METADATA_LIMITS;
+    resources
+        .ensure_metadata_scope(MetadataLimits {
+            bytes: limits.bytes,
+            snapshots: limits.snapshots,
+            text: limits.text,
+            work: limits.work,
+        })
+        .map_err(file_preparation::Error::Resource)?;
     service::capture(
         &root.normalized().document,
         &root.source().identity,
@@ -44,7 +53,9 @@ fn capture(
     )
     .map_err(|error| match error {
         service::Error::Port { error, .. } => error,
-        service::Error::Metadata(error) => file_preparation::Error::Inventory(error),
+        service::Error::Metadata(_) | service::Error::Limit => {
+            file_preparation::Error::Resource(crate::file_resources::Error::Limit)
+        }
     })
 }
 pub(crate) fn prepare(

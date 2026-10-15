@@ -43,7 +43,21 @@ impl Domain {
         py: Python<'py>,
     ) -> PyResult<Vec<(String, Bound<'py, PyBytes>)>> {
         if let Some(error) = &self._preparation {
-            let sources = error.retained_sources();
+            let sources = error
+                .retained_sources(
+                    yamaa_adapters::host_limits::RECORDS,
+                    yamaa_adapters::host_limits::REPLY_BYTES,
+                )
+                .map_err(|_| {
+                    pyo3::exceptions::PyValueError::new_err(
+                        "source evidence limit; original preparation remains retained",
+                    )
+                })?;
+            crate::file_producer::source_budget(
+                sources
+                    .iter()
+                    .map(|(name, bytes)| (name.as_str(), bytes.as_ref())),
+            )?;
             return Ok(sources
                 .into_iter()
                 .map(|(name, bytes)| (name, PyBytes::new(py, &bytes)))

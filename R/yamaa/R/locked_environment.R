@@ -4,6 +4,7 @@
                                          version = utils::packageVersion,
                                          base_packages = NULL) {
   if (!length(calls)) return(list())
+  if (length(calls) > 1024L) stop("called-function limit", call. = FALSE)
   if (is.null(base_packages)) {
     base_packages <- rownames(utils::installed.packages(priority = "base"))
   }
@@ -22,7 +23,7 @@
       next
     }
     if (!is.character(expected) || length(expected) != 1L ||
-        is.na(expected)) {
+        is.na(expected) || nchar(expected, type = "bytes") > 2048L) {
       record(package, "invalid_locked_version")
       next
     }
@@ -43,7 +44,8 @@
       next
     }
     actual <- as.character(installed)
-    if (length(actual) != 1L || is.na(actual)) {
+    if (length(actual) != 1L || is.na(actual) ||
+        nchar(actual, type = "bytes") > 2048L) {
       record(package, "invalid_installed_version", expected)
       next
     }
@@ -61,8 +63,9 @@
 # Signature inspection never runs the function or substitutes host defaults.
 .yamaa_resolve_locked_function <- function(call, parameters,
                                            lookup = base::getExportedValue) {
-  if (length(call) != 1L || !is.character(call) || is.na(call)) {
-    stop("expected one callable name", call. = FALSE)
+  if (length(call) != 1L || !is.character(call) || is.na(call) ||
+      nchar(call, type = "bytes") > 2048L || length(parameters) > 1024L) {
+    stop("callable metadata limit", call. = FALSE)
   }
   parts <- strsplit(call, "::", fixed = TRUE)[[1L]]
   if (length(parts) != 2L || any(!nzchar(parts))) {

@@ -15,6 +15,11 @@ pub(super) fn fields(metadata: &Bound<'_, PyTuple>) -> PyResult<Vec<String>> {
         .iter()
         .map(|item| {
             let text = item.cast::<PyString>()?.to_str()?;
+            if text.len() > 4096 {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "report metadata limit",
+                ));
+            }
             Ok(text.to_owned())
         })
         .collect()

@@ -44,6 +44,7 @@ pub(crate) fn issue(diagnostic: Diagnostic<'_>) -> Result<Issue, InvalidIssue> {
 }
 pub(crate) fn finish<'a, E>(
     diagnostics: Vec<Diagnostic<'_>>,
+    maximum: usize,
 ) -> Result<Vec<Issue>, yamaa_core::project_diagnostics::Error<'a, E>> {
     use yamaa_core::project_diagnostics::Error;
     let issues = diagnostics
@@ -51,5 +52,8 @@ pub(crate) fn finish<'a, E>(
         .map(issue)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|_| Error::InvalidContext)?;
+    if !crate::issue_rows::within_limit(&issues, maximum) {
+        return Err(Error::Limit);
+    }
     Ok(issues)
 }

@@ -1,6 +1,6 @@
 //! Complete held-container read, followed by closed-profile admission.
 //! No filesystem reads, semantic fallback, publication or host date conversion.
-use super::{compact, compression, framing, metadata, payload, physical, profile, schema};
+use super::{compact, compression, expansion, framing, metadata, physical, profile, schema};
 use arrow_array::{
     ArrayRef, Date32Array, Float64Array, Int64Array, LargeStringArray, RecordBatch, StringArray,
     TimestampMicrosecondArray,
@@ -13,10 +13,20 @@ use parquet::{
 use std::sync::Arc;
 use yamaa_core::{table::TableSchema, value::ColumnType};
 
+#[derive(Clone, Copy, Debug)]
+pub struct Limits {
+    pub framing: framing::Limits,
+    pub compression: compression::Limits,
+    pub metadata: metadata::Limits,
+    pub expanded_bytes: usize,
+    pub retained_bytes: usize,
+    pub array_elements: usize,
+    pub batches: usize,
+}
 #[derive(Debug, PartialEq)]
 pub(super) enum Error {
     Malformed,
-    Representation,
+    Limit,
     ResourceLimit {
         resource: &'static str,
         limit: usize,
@@ -30,6 +40,7 @@ impl From<framing::Error> for Error {
     fn from(error: framing::Error) -> Self {
         match error {
             framing::Error::Malformed => Self::Malformed,
+            framing::Error::Limit => Self::Limit,
             framing::Error::ResourceLimit {
                 resource,
                 limit,
@@ -43,24 +54,37 @@ impl From<framing::Error> for Error {
     }
 }
 impl From<compact::Error> for Error {
-    fn from(_: compact::Error) -> Self {
-        Self::Malformed
+    fn from(error: compact::Error) -> Self {
+        match error {
+            compact::Error::Malformed => Self::Malformed,
+            compact::Error::Limit => Self::Limit,
+            compact::Error::ResourceLimit {
+                resource,
+                limit,
+                actual,
+            } => Self::ResourceLimit {
+                resource,
+                limit,
+                actual,
+            },
+        }
     }
 }
 impl From<compression::Error> for Error {
     fn from(error: compression::Error) -> Self {
         match error {
             compression::Error::Malformed => Self::Malformed,
+            compression::Error::Limit => Self::Limit,
+            compression::Error::ResourceLimit {
+                resource,
+                limit,
+                actual,
+            } => Self::ResourceLimit {
+                resource,
+                limit,
+                actual,
+            },
             compression::Error::Unavailable(codec) => Self::Unavailable(codec),
-        }
-    }
-}
-impl From<yamaa_core::limits::LimitExceeded> for Error {
-    fn from(error: yamaa_core::limits::LimitExceeded) -> Self {
-        Self::ResourceLimit {
-            resource: error.resource,
-            limit: error.limit,
-            actual: error.actual,
         }
     }
 }
@@ -70,20 +94,36 @@ pub(super) struct Decoded {
     pub batches: Vec<RecordBatch>,
 }
 
-pub(super) fn read(bytes: &[u8]) -> Result<Decoded, Error> {
-    read_interpreted(bytes, false)
+pub(super) fn read(bytes: &[u8], limits: Limits) -> Result<Decoded, Error> {
+    read_interpreted(bytes, limits, false)
 }
 
-pub(super) fn read_odm(bytes: &[u8]) -> Result<Decoded, Error> {
-    read_interpreted(bytes, true)
+pub(super) fn read_odm(bytes: &[u8], limits: Limits) -> Result<Decoded, Error> {
+    read_interpreted(bytes, limits, true)
 }
 
-fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
-    let frame = framing::admit(bytes)?;
+fn read_interpreted(bytes: &[u8], limits: Limits, odm: bool) -> Result<Decoded, Error> {
+    read_with_usage(bytes, limits, odm, None)
+}
+
+pub(super) fn read_with_usage(
+    bytes: &[u8],
+    limits: Limits,
+    odm: bool,
+    mut usage: Option<&mut crate::source_decode_usage::Usage>,
+) -> Result<Decoded, Error> {
+    let frame = if let Some(usage) = usage.as_deref_mut() {
+        framing::admit_with_usage(bytes, limits.framing, usage)?
+    } else {
+        framing::admit(bytes, limits.framing)?
+    };
     let metadata = Arc::new(
         ParquetMetaDataReader::decode_metadata(frame.metadata).map_err(|_| Error::Malformed)?,
     );
-    let hint = metadata::admit(metadata.file_metadata().key_value_metadata())?;
+    let hint = metadata::admit(
+        metadata.file_metadata().key_value_metadata(),
+        limits.metadata,
+    )?;
     let columns = metadata.file_metadata().schema_descr().columns();
     // ODM field admission uses metadata alone. Ordinary profile findings keep
     // their existing precedence after all physical chunks have been decoded.
@@ -104,7 +144,20 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
                     .and_then(|column| profile::column_type(column, field.data_type())),
             })
             .collect::<Vec<_>>();
-        let binding = yamaa_core::odm_source::bind_fields(&fields).map_err(Error::OdmFields)?;
+        let binding = yamaa_core::odm_source::bind_fields(&fields)
+            .map_err(|error| {
+                let yamaa_core::odm_source::AdmissionError::MetadataLimit {
+                    resource,
+                    limit,
+                    actual,
+                } = error;
+                Error::ResourceLimit {
+                    resource,
+                    limit,
+                    actual,
+                }
+            })?
+            .map_err(Error::OdmFields)?;
         let stored = binding.stored().map(|root| {
             columns
                 .iter()
@@ -115,17 +168,41 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
     } else {
         None
     };
-    let mut payloads = payload::Validation::new();
+    let mut expansion = expansion::Admission::new(limits.expanded_bytes);
+    let mut actual_values = 0usize;
     for page in &frame.pages {
         let column = columns.get(page.column).ok_or(Error::Malformed)?;
-        let decoded = compression::decode(page)?;
-        payloads.admit(page, &decoded, column)?;
+        let decoded = compression::decode(page, limits.compression)?;
+        let result = expansion.admit(page, &decoded, column);
+        if let Some(usage) = usage.as_deref_mut() {
+            usage.work(expansion.used());
+        }
+        result?;
+        if let framing::Payload::DataV1 { values, .. } | framing::Payload::DataV2 { values, .. } =
+            page.payload
+        {
+            actual_values = actual_values
+                .checked_add(values)
+                .ok_or(Error::ResourceLimit {
+                    resource: "array_elements",
+                    limit: limits.array_elements,
+                    actual: None,
+                })?;
+        }
     }
     let row_count =
         usize::try_from(metadata.file_metadata().num_rows()).map_err(|_| Error::Malformed)?;
     let arrow = ArrowReaderMetadata::try_new(metadata.clone(), ArrowReaderOptions::new())
         .map_err(|_| Error::Malformed)?;
-    yamaa_core::limits::Limits::table(row_count, columns.len())?;
+    for actual in [Some(actual_values), row_count.checked_mul(columns.len())] {
+        if actual.is_none_or(|actual| actual > limits.array_elements) {
+            return Err(Error::ResourceLimit {
+                resource: "array_elements",
+                limit: limits.array_elements,
+                actual,
+            });
+        }
+    }
     let arrow_schema = schema::normalize(arrow.schema(), hint.as_ref());
     // Determine retention only. Profile errors remain deferred until every
     // physical chunk has been decoded, including fields outside the profile.
@@ -144,19 +221,24 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
                 })
         })
         .collect();
-    let raw = physical::read(bytes, &keep, &arrow_schema)?;
+    let mut remaining = limits.retained_bytes;
+    let result = physical::read(bytes, &keep, &mut remaining, &arrow_schema);
+    if let Some(usage) = usage.as_deref_mut() {
+        usage.storage(limits.retained_bytes - remaining);
+    }
+    let raw = result?;
     let group_rows = metadata
         .row_groups()
         .iter()
         .try_fold(0usize, |sum, group| {
             sum.checked_add(usize::try_from(group.num_rows()).map_err(|_| Error::Malformed)?)
-                .ok_or(Error::Malformed)
+                .ok_or(Error::Limit)
         })?;
     if group_rows != row_count {
         return Err(Error::Malformed);
     }
     if let Some((_, stored)) = odm_metadata {
-        return odm_decoded(raw, stored, row_count);
+        return odm_decoded(raw, stored, row_count, limits, usage);
     }
     let schema = profile::columns(&arrow_schema, metadata.file_metadata().schema_descr())
         .map_err(Error::Profile)?;
@@ -195,11 +277,6 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
                             .transpose()
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                if !crate::arrow_table::fits_utf8_offsets(
-                    strings.iter().flatten().map(|text| text.len()),
-                ) {
-                    return Err(Error::Representation);
-                }
                 if matches!(arrow_schema.field(index).data_type(), DataType::LargeUtf8) {
                     Arc::new(LargeStringArray::from(strings))
                 } else {
@@ -228,7 +305,13 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
         }
         arrays.push(array);
     }
-
+    if limits.batches == 0 {
+        return Err(Error::ResourceLimit {
+            resource: "batches",
+            limit: limits.batches,
+            actual: Some(1),
+        });
+    }
     // Normalization can make a required stored float missing. The language's
     // typed table admits missing values for every column, regardless of storage.
     let output_schema = Arc::new(arrow_schema::Schema::new(
@@ -239,7 +322,19 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
             .collect::<Vec<_>>(),
     ));
     let batch = RecordBatch::try_new(output_schema, arrays).map_err(|_| Error::Malformed)?;
-
+    if batch.get_array_memory_size() > limits.retained_bytes {
+        if let Some(usage) = usage.as_deref_mut() {
+            usage.complete = false;
+        }
+        return Err(Error::ResourceLimit {
+            resource: "retained_bytes",
+            limit: limits.retained_bytes,
+            actual: Some(batch.get_array_memory_size()),
+        });
+    }
+    if let Some(usage) = usage {
+        usage.storage(batch.get_array_memory_size());
+    }
     Ok(Decoded {
         schema,
         batches: vec![batch],
@@ -250,6 +345,8 @@ fn odm_decoded(
     raw: Vec<physical::Column>,
     stored: [usize; 11],
     row_count: usize,
+    limits: Limits,
+    mut usage: Option<&mut crate::source_decode_usage::Usage>,
 ) -> Result<Decoded, Error> {
     use yamaa_core::{odm_source::FIELDS, table::Column};
     let schema = TableSchema::new(
@@ -279,12 +376,15 @@ fn odm_decoded(
         if strings.len() != row_count {
             return Err(Error::Malformed);
         }
-        if !crate::arrow_table::fits_utf8_offsets(strings.iter().flatten().map(|text| text.len())) {
-            return Err(Error::Representation);
-        }
         arrays.push(Arc::new(StringArray::from(strings)));
     }
-
+    if limits.batches == 0 {
+        return Err(Error::ResourceLimit {
+            resource: "batches",
+            limit: limits.batches,
+            actual: Some(1),
+        });
+    }
     let output_schema = Arc::new(arrow_schema::Schema::new(
         FIELDS
             .iter()
@@ -292,7 +392,19 @@ fn odm_decoded(
             .collect::<Vec<_>>(),
     ));
     let batch = RecordBatch::try_new(output_schema, arrays).map_err(|_| Error::Malformed)?;
-
+    if batch.get_array_memory_size() > limits.retained_bytes {
+        if let Some(usage) = usage.as_deref_mut() {
+            usage.complete = false;
+        }
+        return Err(Error::ResourceLimit {
+            resource: "retained_bytes",
+            limit: limits.retained_bytes,
+            actual: Some(batch.get_array_memory_size()),
+        });
+    }
+    if let Some(usage) = usage {
+        usage.storage(batch.get_array_memory_size());
+    }
     Ok(Decoded {
         schema,
         batches: vec![batch],

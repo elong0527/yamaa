@@ -138,12 +138,12 @@ impl PreparedRun {
             dataset: CapturedAttempt::new(self.compiled().source()),
         };
         attempt.boundary = match catch_unwind(AssertUnwindSafe(|| {
-            self.checked.build_into(
+            self.checked.build_with_observer_into(
                 activation,
                 source,
                 &mut Decoder::<A::Error>::default(),
-                &mut attempt.dataset,
-                Some(&mut attempt.activation),
+                crate::specification_run::limits(),
+                (&mut attempt.dataset, &mut attempt.activation),
                 scope,
             )
         })) {

@@ -1,7 +1,7 @@
 //! Representation of typed execution causes in the portable issue shape.
 use crate::dataset_result::DatasetError as Error;
 use serde_json::Value;
-use yamaa_core::table::CellError;
+use yamaa_core::{diagnostic::ProjectionError, table::CellError};
 pub(crate) type Diagnostic = Value;
 pub(crate) fn project(diagnostic: yamaa_core::diagnostic::Diagnostic) -> Result<Box<Value>, Error> {
     Ok(Box::new(
@@ -11,7 +11,11 @@ pub(crate) fn project(diagnostic: yamaa_core::diagnostic::Diagnostic) -> Result<
 pub(crate) fn predicate<E>(
     error: &yamaa_core::predicate::EvaluationError<CellError<E>>,
 ) -> Result<Box<Value>, Error> {
-    project(error.diagnostic().map_err(|_| Error::InvalidObservation)?)
+    use yamaa_core::diagnostic::PredicateDiagnosticError;
+    project(error.diagnostic().map_err(|error| match error {
+        PredicateDiagnosticError::OutputLimit => Error::OutputLimit,
+        _ => Error::Internal,
+    })?)
 }
 pub(crate) fn numeric(
     error: yamaa_core::numeric_compiler::CompiledEvaluationError<std::convert::Infallible>,
@@ -32,12 +36,15 @@ pub(crate) fn conversion(
 }
 pub(crate) fn failure<E>(
     error: &yamaa_core::dataset::ExecutionError<E>,
+    maximum: usize,
 ) -> Result<Box<Value>, Error> {
     project(
         error
-            .diagnostic()
-            .map_err(|_| Error::InvalidObservation)?
-            .ok_or(Error::UnsupportedOutcome)?,
+            .diagnostic_with_limit(maximum)
+            .map_err(|error| match error {
+                ProjectionError::Limit => Error::OutputLimit,
+                ProjectionError::InvalidContext => Error::Internal,
+            })?,
     )
 }
 
@@ -58,24 +65,20 @@ mod tests {
     use std::convert::Infallible;
     use yamaa_core::dataset::ExecutionError;
     #[test]
-    fn complete_diagnostic_keeps_long_context_and_original_typed_error() {
+    fn projection_refusal_preserves_original_typed_error() {
         let error = ExecutionError::<Infallible>::MultipleValues {
             path: "columns.A.source".into(),
             identifier: "A".repeat(3_000_000),
             value_count: 2,
             identity: None,
         };
-        let projected = failure(&error).unwrap();
-        assert_eq!(
-            projected["context"]["identifier"].as_str().unwrap().len(),
-            3_000_000
-        );
+        assert!(matches!(failure(&error, 1024), Err(Error::OutputLimit)));
         assert!(
             matches!(&error,ExecutionError::MultipleValues {identifier,value_count:2,..} if identifier.len()==3_000_000)
         );
         assert!(matches!(
-            failure(&ExecutionError::<Infallible>::SchemaMismatch),
-            Err(Error::UnsupportedOutcome)
+            failure(&ExecutionError::<Infallible>::SchemaMismatch, 1024),
+            Err(Error::Internal)
         ));
     }
     #[test]
@@ -87,7 +90,7 @@ mod tests {
             value_count: usize::MAX,
             identity: None,
         };
-        let value = *failure(&error).unwrap();
+        let value = *failure(&error, 4096).unwrap();
         assert_eq!(value.as_object().unwrap().len(), 5);
         let issue = crate::issue_rows::Issue::from_diagnostic(value).unwrap();
         let expected: Value = serde_json::from_str(include_str!(
