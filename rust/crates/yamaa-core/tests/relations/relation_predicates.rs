@@ -314,3 +314,192 @@ fn kept_current_selectors_cannot_hide_a_first_template_self_read() {
         Err(PlanError::InvalidIntermediate)
     );
 }
+
+fn bound_intermediate_compute() -> Expression {
+    Expression::Compute(
+        yamaa_core::bound_expression::BoundNumeric::new(
+            yamaa_core::numeric_compiler::compile_numeric("P.V + 1", "C2", Default::default())
+                .unwrap(),
+            vec![Binding {
+                name: "P.V".into(),
+                read: Read::Intermediate {
+                    index: 0,
+                    column: 1,
+                },
+            }],
+        )
+        .unwrap(),
+    )
+}
+fn bound_intermediate_flag() -> Expression {
+    Expression::Flag(
+        yamaa_core::dataset::Flag::new(
+            predicate_compiler::compile("P.V > 0", "C2", Default::default()).unwrap(),
+            vec![yamaa_core::dataset::FlagBinding {
+                name: "P.V".into(),
+                read: yamaa_core::dataset::FlagRead::Read(Read::Intermediate {
+                    index: 0,
+                    column: 1,
+                }),
+            }],
+            Value::Int(1),
+            None,
+            None,
+        )
+        .unwrap(),
+    )
+}
+
+#[test]
+fn secondary_driver_record_coordinates_hidden_in_compute_and_flag_reads_are_rejected() {
+    // The intermediate matches on shared output values, but its filter's
+    // current field reads a record coordinate. `validate_named_read` permits
+    // it here because the current field names the template driver's own
+    // source (1); only the primary-coordinate guard in `current_record_read`
+    // separates the direct form from the bound forms, so the Compute and
+    // Flag arms must inspect their intermediate bindings like the fixed
+    // Function/Case arms (issue #2430).
+    let relation = item(Some(filter(
+        "DVR.V",
+        CurrentRead::Record {
+            source: 1,
+            column: 1,
+        },
+    )));
+    let mode = RowMode::Driver {
+        source: 1,
+        mode: Box::new(RowMode::Records),
+    };
+    for expression in [
+        Expression::Intermediate {
+            index: 0,
+            column: 1,
+        },
+        bound_intermediate_compute(),
+        bound_intermediate_flag(),
+    ] {
+        assert_eq!(
+            make(
+                vec![relation.clone()],
+                vec![
+                    assignment(0, Expression::Source(0)),
+                    assignment(1, Expression::Literal(Value::Int(2))),
+                    assignment(2, expression),
+                ],
+                mode.clone(),
+            ),
+            Err(PlanError::InvalidIntermediate)
+        );
+    }
+    // Shared output matching without any record coordinate remains admitted
+    // through the same bound form.
+    let shared = item(Some(filter("OUT.V", CurrentRead::Output(1))));
+    assert!(make(
+        vec![shared],
+        vec![
+            assignment(0, Expression::Source(0)),
+            assignment(1, Expression::Literal(Value::Int(2))),
+            assignment(2, bound_intermediate_compute()),
+        ],
+        mode,
+    )
+    .is_ok());
+}
+
+#[test]
+fn secondary_driver_column_phase_rejects_bound_record_reads_and_reductions() {
+    let relation = item(Some(filter(
+        "DVR.V",
+        CurrentRead::Record {
+            source: 1,
+            column: 1,
+        },
+    )));
+    let column_plan = |expression: Expression| {
+        DatasetPlan::new_with_intermediates(
+            SourceSchemas {
+                primary: schema(&["ID", "V"]),
+                secondary: vec![SecondarySource {
+                    name: "D".into(),
+                    schema: schema(&["ID", "V"]),
+                }],
+            },
+            vec![relation.clone()],
+            schema(&["ID", "CURRENT", "A"]),
+            vec![RowTemplate {
+                mode: RowMode::Driver {
+                    source: 1,
+                    mode: Box::new(RowMode::Records),
+                },
+                assignments: vec![
+                    assignment(0, Expression::Source(0)),
+                    assignment(1, Expression::Literal(Value::Int(2))),
+                ],
+                filter: None,
+            }],
+            vec![assignment(2, expression)],
+            vec![0],
+            vec![],
+        )
+    };
+    // Column assignments execute against the primary table, so a bound
+    // intermediate read of a record coordinate is rejected in the column
+    // phase (`RecordReadScope::All`) just like the direct form.
+    for expression in [
+        Expression::Intermediate {
+            index: 0,
+            column: 1,
+        },
+        bound_intermediate_compute(),
+        bound_intermediate_flag(),
+    ] {
+        assert_eq!(column_plan(expression), Err(PlanError::InvalidKeyMode));
+    }
+    // PR #2030 Minor, adjudicated with #2430: column-phase Reduce/Count read
+    // the primary table with the secondary driver's row indices, so they
+    // are current record reads in `RecordReadScope::All` as well.
+    let grouped_column_plan = |expression: Expression| {
+        DatasetPlan::new_with_intermediates(
+            SourceSchemas {
+                primary: schema(&["ID", "V"]),
+                secondary: vec![SecondarySource {
+                    name: "D".into(),
+                    schema: schema(&["ID", "V"]),
+                }],
+            },
+            vec![],
+            schema(&["ID", "CURRENT", "A"]),
+            vec![RowTemplate {
+                mode: RowMode::Driver {
+                    source: 1,
+                    mode: Box::new(RowMode::Groups(vec![0])),
+                },
+                assignments: vec![
+                    assignment(0, Expression::Source(0)),
+                    assignment(1, Expression::Literal(Value::Int(2))),
+                ],
+                filter: None,
+            }],
+            vec![assignment(2, expression)],
+            vec![0],
+            vec![],
+        )
+    };
+    for expression in [
+        Expression::Reduce {
+            identifier: None,
+            column: 1,
+            reducer: yamaa_core::reduction::NumericReducer::Sum,
+            text: "SUM(x.V)".into(),
+        },
+        Expression::Count {
+            column: Some(1),
+            text: "COUNT(x.V)".into(),
+        },
+    ] {
+        assert_eq!(
+            grouped_column_plan(expression),
+            Err(PlanError::InvalidKeyMode)
+        );
+    }
+}
