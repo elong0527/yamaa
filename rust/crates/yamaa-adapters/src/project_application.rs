@@ -111,7 +111,7 @@ fn environment_failure(
         EnvironmentFailure::Rejected(rejected) => {
             let mut issues = match diagnostics::admission(rejected) {
                 Ok(issues) => issues,
-                Err(_) => return refused("environment"),
+                Err(error) => return environment_projection_failure(error),
             };
             for projection in [
                 diagnostics::scalar_sources(rejected),
@@ -120,10 +120,7 @@ fn environment_failure(
             ] {
                 match projection {
                     Ok(rows) => issues.extend(rows),
-                    Err(diagnostics::Error::ResourceLimit(refusal)) => {
-                        return refusal.issues("environment", "resource_limit");
-                    }
-                    Err(_) => return refused("environment"),
+                    Err(error) => return environment_projection_failure(error),
                 }
             }
             Ok(issues)
@@ -131,16 +128,25 @@ fn environment_failure(
         EnvironmentFailure::Interrupted { error, .. } => {
             return file_application::resource_failure("environment", error)
         }
-        EnvironmentFailure::Root(_) => {
-            return file_application::rejected("environment", "environment_boundary")
+        EnvironmentFailure::Root(error @ SourceError::Decode { identity, .. }) => {
+            diagnostics::root_boundary(error, identity)
+        }
+        EnvironmentFailure::Root(error) => {
+            if let Some(error) = diagnostics::root_limit(error) {
+                return environment_projection_failure(error);
+            }
+            return file_application::rejected("environment", "environment_boundary");
         }
     };
-    projected.unwrap_or_else(|error| match error {
-        diagnostics::Error::ResourceLimit(refusal) => {
+    projected.unwrap_or_else(environment_projection_failure)
+}
+fn environment_projection_failure(error: crate::project_environment_diagnostics::Error) -> Failure {
+    match error {
+        crate::project_environment_diagnostics::Error::ResourceLimit(refusal) => {
             refusal.issues("environment", "resource_limit")
         }
         _ => refused("environment"),
-    })
+    }
 }
 pub fn check(specification: &str, environment: &str, host: Language) -> Failure {
     crate::issue_rows::collect(
@@ -164,7 +170,7 @@ fn workflow_issues(error: &crate::file_workflow::Error, host: Language) -> Failu
         crate::producer_check::Error::Original(crate::file_workflow::Error::Schema(_)) => {
             file_application::rejected("prepare", "shipped_schema")
         }
-        crate::producer_check::Error::Original(error) => workflow_failure(error),
+        crate::producer_check::Error::Original(error) => workflow_failure(error, host),
         crate::producer_check::Error::Projection(_) => refused("check"),
         crate::producer_check::Error::ResourceLimit(refusal) => {
             refusal.issues("environment", "resource_limit")
@@ -217,19 +223,14 @@ pub fn selection_failure(error: &crate::file_workflow::SelectionError, host: Lan
         },
     }
 }
-fn workflow_failure(error: &crate::file_workflow::Error) -> Failure {
+fn workflow_failure(error: &crate::file_workflow::Error, host: Language) -> Failure {
     use crate::{file_graph::Error as G, file_preparation::Error as D, file_workflow::Error as W};
     match error {
         W::Environment(environment) => match environment.error() {
             file_project::Error::Resource(error) => {
                 file_application::resource_failure("environment", error)
             }
-            file_project::Error::Environment(EnvironmentFailure::Interrupted { error, .. }) => {
-                file_application::resource_failure("environment", error)
-            }
-            file_project::Error::Environment(EnvironmentFailure::Root(_)) => {
-                file_application::rejected("environment", "environment_boundary")
-            }
+            file_project::Error::Environment(error) => environment_failure(error, host),
             _ => file_application::rejected("environment", "metadata_boundary"),
         },
         W::Graph(graph) => match graph.error() {
@@ -306,6 +307,52 @@ fn preparation_boundary(
 #[cfg(test)]
 mod resource_tests {
     use super::*;
+
+    #[test]
+    fn retained_root_resource_and_semantic_limits_keep_their_public_boundary_facts() {
+        use yamaa_core::{
+            limits::Limits,
+            schema::{NormalizationError, NormalizationResource},
+        };
+        let byte_limit = Limits::spec_bytes(Limits::SPEC_BYTES + 1).unwrap_err();
+        for (cause, resource, limit, actual) in [
+            (
+                SourceError::Limit(byte_limit),
+                "spec_bytes",
+                Limits::SPEC_BYTES,
+                Some(Limits::SPEC_BYTES + 1),
+            ),
+            (
+                SourceError::Normalize(NormalizationError::Limit {
+                    resource: NormalizationResource::Depth,
+                    limit: Limits::SEMANTIC_DEPTH,
+                }),
+                "semantic_depth",
+                Limits::SEMANTIC_DEPTH,
+                None,
+            ),
+        ] {
+            let error = Error::Project(file_project::Error::Environment(EnvironmentFailure::Root(
+                cause,
+            )));
+            let mut context = yamaa_core::json::json!({
+                "stage":"environment", "code":"resource_limit", "resource":resource, "limit":limit,
+            });
+            if let Some(actual) = actual {
+                context["actual"] = actual.into();
+            }
+            for host in [Language::Python, Language::R] {
+                let rows = failure(&error, host);
+                assert_eq!(rows.len(), 1);
+                assert_eq!(rows[0].phase, "engine");
+                assert_eq!(rows[0].condition, "engine_rejected");
+                assert_eq!(rows[0].requirement, None);
+                assert_eq!(rows[0].spec_paths, ["$"]);
+                assert_eq!(rows[0].context, context.to_string());
+            }
+        }
+    }
+
     #[test]
     fn inventory_rejection_retains_the_preparation_stage_and_inventory_cause() {
         let inventory = || {

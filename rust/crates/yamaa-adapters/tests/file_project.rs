@@ -1736,63 +1736,264 @@ mod file {
         }
 
         #[test]
-        fn oversized_dependency_refuses_partial_metadata_diagnostics_with_the_fixed_bound() {
+        fn per_source_resource_and_decoder_limits_keep_original_facts_without_partial_diagnostics()
+        {
             use yamaa_adapters::{
                 file_resources::Error as ResourceError,
                 project_source::{CaptureFailure, Failure},
+                specification_source::Error as SourceError,
+                yaml_decode::DecodeFailure,
+            };
+            use yamaa_core::limits::{LimitExceeded, Limits};
+
+            for structural in [false, true] {
+                let study = Study::new();
+                let environment = "schema_version: '1.0'\ncodelists: [missing.yaml, ct.yaml]\n";
+                study.write("environment.yaml", environment);
+                let metadata = if structural {
+                    format!(
+                        "{}0{}",
+                        "[".repeat(Limits::YAML_DEPTH + 1),
+                        "]".repeat(Limits::YAML_DEPTH + 1),
+                    )
+                } else {
+                    "#".repeat(Limits::SPEC_BYTES + 1)
+                };
+                study.write("ct.yaml", &metadata);
+                let expected = if structural {
+                    LimitExceeded {
+                        resource: "yaml_depth",
+                        limit: Limits::YAML_DEPTH,
+                        actual: Some(Limits::YAML_DEPTH + 1),
+                    }
+                } else {
+                    LimitExceeded {
+                        resource: "spec_bytes",
+                        limit: Limits::SPEC_BYTES,
+                        actual: Some(Limits::SPEC_BYTES + 1),
+                    }
+                };
+                let selection = file_workflow::select(
+                    &study.path("root.yaml"),
+                    &study.path("environment.yaml"),
+                    Language::Python,
+                )
+                .err()
+                .unwrap();
+                let file_workflow::SelectionError::Preparation(error) = &selection else {
+                    panic!("retained metadata failure precedes entry reads")
+                };
+                let Error::Environment(owner) = error else {
+                    panic!("original environment owner")
+                };
+                let yamaa_adapters::file_project::Error::Environment(Failure::Rejected(rejected)) =
+                    owner.error()
+                else {
+                    panic!("original source failures remain owned: {:?}", owner.error())
+                };
+                assert_eq!(rejected.sources.len(), 2);
+                assert_eq!(rejected.sources[0].written, "missing.yaml");
+                assert!(matches!(
+                    rejected.sources[0].error,
+                    CaptureFailure::Port(ResourceError::Missing)
+                ));
+                assert_eq!(rejected.sources[1].written, "ct.yaml");
+                let actual = match &rejected.sources[1].error {
+                    CaptureFailure::Port(ResourceError::Limit(limit)) if !structural => limit,
+                    CaptureFailure::Structural(SourceError::Decode {
+                        error: DecodeFailure::Limit(limit),
+                        ..
+                    }) if structural => limit,
+                    failure => panic!("retained typed limit: {failure:?}"),
+                };
+                assert_eq!(actual, &expected);
+                assert_eq!(rejected.root.source().bytes, environment.as_bytes());
+                assert_eq!(owner.capture_reads(), if structural { 2 } else { 1 });
+                let reads = owner.capture_reads();
+                let held_root = rejected.root.source().bytes.as_ptr();
+                let held_error = owner.error() as *const _;
+                let producer_check::Error::ResourceLimit(refusal) =
+                    producer_check::rejected(error, Language::Python).unwrap_err()
+                else {
+                    panic!("whole projection retains the typed refusal")
+                };
+                assert_eq!(refusal.resource, expected.resource);
+                assert_eq!(refusal.limit, expected.limit);
+                assert_eq!(refusal.actual, expected.actual);
+                assert_eq!(refusal.spec_paths, ["codelists[1]"]);
+                let expected_rows = refusal.issues("environment", "resource_limit");
+                assert_eq!(
+                    yamaa_adapters::project_application::check(
+                        &study.path("root.yaml"),
+                        &study.path("environment.yaml"),
+                        Language::Python,
+                    ),
+                    expected_rows,
+                );
+                let application_error = yamaa_adapters::project_application::prepare(
+                    &study.path("root.yaml"),
+                    &study.path("environment.yaml"),
+                    Language::Python,
+                )
+                .err()
+                .unwrap();
+                let yamaa_adapters::project_application::Error::Project(
+                    yamaa_adapters::file_project::Error::Environment(Failure::Rejected(
+                        application_owner,
+                    )),
+                ) = &application_error
+                else {
+                    panic!("public preparation retains the native environment failure")
+                };
+                assert_eq!(application_owner.sources.len(), 2);
+                let held_application_root = application_owner.root.source().bytes.as_ptr();
+                assert!(!study.0.join("root.yaml").exists());
+                fs::remove_dir_all(&study.0).unwrap();
+                for _ in 0..2 {
+                    assert!(matches!(
+                        producer_check::rejected(error, Language::Python),
+                        Err(producer_check::Error::ResourceLimit(again)) if again == refusal
+                    ));
+                    let rows = yamaa_adapters::project_application::selection_failure(
+                        &selection,
+                        Language::Python,
+                    );
+                    assert_eq!(rows.len(), 1);
+                    assert_eq!(rows[0].phase, "engine");
+                    assert_eq!(rows[0].condition, "engine_rejected");
+                    assert_eq!(rows[0].requirement, None);
+                    assert_eq!(rows[0].spec_paths, ["codelists[1]"]);
+                    assert_eq!(rows, expected_rows);
+                    assert_eq!(
+                        serde_json::from_str::<yamaa_core::json::Value>(&rows[0].context).unwrap(),
+                        yamaa_core::json::json!({
+                            "stage": "environment", "code": "resource_limit",
+                            "resource": expected.resource, "limit": expected.limit,
+                            "actual": expected.actual,
+                        }),
+                    );
+                    assert_eq!(
+                        yamaa_adapters::project_application::failure(
+                            &application_error,
+                            Language::Python,
+                        ),
+                        rows,
+                    );
+                    assert_eq!(owner.capture_reads(), reads);
+                    assert_eq!(owner.error() as *const _, held_error);
+                    assert_eq!(rejected.root.source().bytes.as_ptr(), held_root);
+                    assert_eq!(rejected.root.source().bytes, environment.as_bytes());
+                    assert_eq!(
+                        application_owner.root.source().bytes.as_ptr(),
+                        held_application_root,
+                    );
+                    assert_eq!(
+                        application_owner.root.source().bytes,
+                        environment.as_bytes(),
+                    );
+                }
+            }
+        }
+
+        #[test]
+        fn root_decoder_failures_keep_native_facts_across_public_views_without_rereads() {
+            use yamaa_adapters::{
+                file_project, issue_rows::Issue, project_application, project_source::Failure,
+                specification_source::Error as SourceError, yaml_decode::DecodeFailure,
             };
             use yamaa_core::limits::Limits;
-            let study = Study::new();
-            study.write(
-                "environment.yaml",
-                "schema_version: '1.0'\ncodelists: [missing.yaml, ct.yaml]\n",
-            );
-            study.write("ct.yaml", &"#".repeat(Limits::SPEC_BYTES + 1));
-            let error = study.rejected();
-            let Error::Environment(owner) = &error else {
-                panic!("metadata failure precedes entry reads")
-            };
-            let yamaa_adapters::file_project::Error::Environment(Failure::Rejected(rejected)) =
-                owner.error()
-            else {
-                panic!("original source failures remain owned: {:?}", owner.error())
-            };
-            assert_eq!(rejected.sources.len(), 2);
-            assert!(matches!(
-                rejected.sources[0].error,
-                CaptureFailure::Port(ResourceError::Missing)
-            ));
-            let CaptureFailure::Port(ResourceError::Limit(bound)) = rejected.sources[1].error
-            else {
-                panic!("native fixed metadata boundary")
-            };
-            assert_eq!(
-                bound,
-                Limits::spec_bytes(Limits::SPEC_BYTES + 1).unwrap_err()
-            );
-            let producer_check::Error::ResourceLimit(refusal) =
-                producer_check::rejected(&error, Language::Python).unwrap_err()
-            else {
-                panic!("whole projection retains the typed refusal")
-            };
-            assert_eq!(refusal.resource, "spec_bytes");
-            assert_eq!(refusal.limit, Limits::SPEC_BYTES);
-            assert_eq!(refusal.actual, Some(Limits::SPEC_BYTES + 1));
-            assert_eq!(refusal.spec_paths, ["codelists[1]"]);
-            let public = yamaa_adapters::project_application::check(
-                &study.path("root.yaml"),
-                &study.path("environment.yaml"),
-                Language::Python,
-            );
-            assert_eq!(public, refusal.issues("environment", "resource_limit"));
-            let reads = owner.capture_reads();
-            assert!(!study.0.join("root.yaml").exists());
-            fs::remove_dir_all(&study.0).unwrap();
-            assert!(matches!(
-                producer_check::rejected(&error, Language::Python),
-                Err(producer_check::Error::ResourceLimit(again)) if again == refusal
-            ));
-            assert_eq!(owner.capture_reads(), reads);
+
+            for limited in [false, true] {
+                let study = Study::new();
+                let raw = if limited {
+                    format!(
+                        "{}0{}",
+                        "[".repeat(Limits::YAML_DEPTH + 1),
+                        "]".repeat(Limits::YAML_DEPTH + 1),
+                    )
+                } else {
+                    "schema_version: '1.0'\nfunctions: [\n".to_owned()
+                };
+                study.write("environment.yaml", &raw);
+                let entry = study.path("root.yaml");
+                let environment = study.path("environment.yaml");
+                let selection = file_workflow::select(&entry, &environment, Language::Python)
+                    .err()
+                    .unwrap();
+                let file_workflow::SelectionError::Preparation(Error::Environment(owner)) =
+                    &selection
+                else {
+                    panic!("root decoder failure precedes entry reads")
+                };
+                let file_project::Error::Environment(Failure::Root(SourceError::Decode {
+                    identity,
+                    error,
+                })) = owner.error()
+                else {
+                    panic!("native decoder cause remains owned")
+                };
+                assert_eq!(identity, &environment);
+                let expected = match error {
+                    DecodeFailure::Limit(bound) if limited => {
+                        assert_eq!(
+                            bound,
+                            &Limits::yaml_depth(Limits::YAML_DEPTH + 1).unwrap_err()
+                        );
+                        Issue {
+                            phase: "engine".into(),
+                            condition: "engine_rejected".into(),
+                            requirement: None,
+                            spec_paths: vec!["$".into()],
+                            context: yamaa_core::json::json!({
+                                "stage":"environment", "code":"resource_limit",
+                                "resource":"yaml_depth", "limit":Limits::YAML_DEPTH,
+                                "actual":Limits::YAML_DEPTH + 1,
+                            })
+                            .to_string(),
+                        }
+                    }
+                    DecodeFailure::InvalidYaml { position, reason } if !limited => Issue {
+                        phase: "validation".into(),
+                        condition: "invalid_yaml".into(),
+                        requirement: Some("REQ-0280".into()),
+                        spec_paths: vec!["$".into()],
+                        context: yamaa_core::json::json!({
+                            "line":position.line, "column":position.column, "reason":reason,
+                            "path":environment, "entry":environment, "environment_path":"$",
+                        })
+                        .to_string(),
+                    },
+                    cause => panic!("expected retained decoder cause: {cause:?}"),
+                };
+                assert_eq!(owner.capture_reads(), 1);
+                let (_, bytes) = owner.captured_sources().next().unwrap();
+                assert_eq!(bytes, raw.as_bytes());
+                let held_bytes = bytes.as_ptr();
+                let application_error =
+                    project_application::prepare(&entry, &environment, Language::Python)
+                        .err()
+                        .unwrap();
+                assert_eq!(
+                    project_application::check(&entry, &environment, Language::Python),
+                    [expected.clone()]
+                );
+                assert!(!study.0.join("root.yaml").exists());
+                fs::remove_dir_all(&study.0).unwrap();
+                for _ in 0..2 {
+                    assert_eq!(
+                        project_application::selection_failure(&selection, Language::Python),
+                        [expected.clone()]
+                    );
+                    assert_eq!(
+                        project_application::failure(&application_error, Language::Python),
+                        [expected.clone()]
+                    );
+                    assert_eq!(owner.capture_reads(), 1);
+                    let (_, bytes) = owner.captured_sources().next().unwrap();
+                    assert_eq!(bytes.as_ptr(), held_bytes);
+                    assert_eq!(bytes, raw.as_bytes());
+                }
+            }
         }
 
         #[test]
