@@ -48,12 +48,11 @@ def domain(
     )
     try:
         native.propagate_interrupt()
-    except BaseException:
-        # The original payload retains this traceback. Release this local owner
-        # so it cannot form a hidden native-attempt/exception/frame cycle.
+        return Domain(native)
+    finally:
+        # Retained callback tracebacks can include this frame. Keep their
+        # native owner in the returned result, never in this frame's locals.
         del native
-        raise
-    return Domain(native)
 
 
 class Check:
