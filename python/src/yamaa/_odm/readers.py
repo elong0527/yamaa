@@ -442,6 +442,19 @@ def iter_odm_records(
                     continue
 
                 if name == "ItemData":
+                    # ItemData holds a value, never another ItemData: without
+                    # this guard the inner item is emitted as if it were a
+                    # sibling row, silently inventing a clinical value the
+                    # document's structure does not support.
+                    ancestor = element.getparent()
+                    while ancestor is not None:
+                        if (
+                            isinstance(ancestor.tag, str)
+                            and etree.QName(ancestor.tag).namespace == odm_namespace
+                            and _local_name(ancestor.tag) == "ItemData"
+                        ):
+                            raise ODMError("nested ItemData is not supported")
+                        ancestor = ancestor.getparent()
                     if subject is None or event is None:
                         raise ODMError("ItemData requires subject and event context")
                     item_oid = _required_attribute(element, "ItemOID")
