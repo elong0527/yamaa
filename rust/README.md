@@ -23,3 +23,10 @@ bytes when changing implementation or repository structure.
 
 Layer composition and null handling follow the
 [composition contract](../rules/specification/composition.md).
+
+Arrow/Parquet release-specific operations live in the adapter's
+`storage_api` module: fallible IPC schema conversion, logical timestamp/integer
+construction, and logical-type inspection. The canonical lock and manifests
+continue to select 60; using 57 requires adapting this boundary and qualifying
+that dependency graph. Keep malformed-schema rejection and the closed output
+profile when adapting the boundary.

@@ -91,7 +91,7 @@ fn field<E>(name: &str, kind: ColumnType) -> Result<Arc<Type>, Error<E>> {
         ColumnType::Date => (Physical::INT32, Some(LogicalType::Date)),
         ColumnType::DateTime => (
             Physical::INT64,
-            Some(LogicalType::timestamp(false, TimeUnit::MICROS)),
+            Some(crate::storage_api::timestamp(false, TimeUnit::MICROS)),
         ),
     };
     Type::primitive_type_builder(name, physical)
