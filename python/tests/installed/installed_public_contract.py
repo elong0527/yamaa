@@ -80,6 +80,7 @@ class PublicContract(unittest.TestCase):
             "_compile_reference_catalog",
             "_ReferenceCatalog",
             "_profile_dataset_functions",
+            "_temporal_result",
         ):
             with self.subTest(name=name):
                 self.assertFalse(hasattr(_native, name))

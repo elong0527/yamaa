@@ -7,10 +7,6 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
-[features]
-# In-process host transport only; Arrow remains outside the core and engine.
-arrow-c-data = ["arrow-array/ffi", "arrow-schema/ffi"]
-
 [dependencies]
 yamaa-core = { path = "../yamaa-core" }
 toml = { version = "=0.9.8", default-features = false, features = ["parse", "std", "serde"] }
@@ -76,8 +72,3 @@ path = "tests/file_tests.rs"
 [[test]]
 name = "table_tests"
 path = "tests/table_tests.rs"
-
-[[test]]
-name = "c_data_table"
-path = "tests/c_data_table.rs"
-required-features = ["arrow-c-data"]
