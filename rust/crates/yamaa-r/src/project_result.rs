@@ -96,8 +96,7 @@ pub(crate) mod platform {
                         project_report::Error::Source(_) => "source_boundary",
                         project_report::Error::Execution(_) => "execution_boundary",
                         project_report::Error::Report(
-                            yamaa_adapters::specification_report::Error::OutputLimit
-                            | yamaa_adapters::specification_report::Error::ResourceLimit(_),
+                            yamaa_adapters::specification_report::Error::ResourceLimit(_),
                         ) => "output_limit",
                         project_report::Error::Report(_) => "report_refusal",
                     };

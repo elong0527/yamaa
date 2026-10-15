@@ -139,9 +139,6 @@ impl Attempt {
                     refusal = "original_boundary";
                 }
                 Err(ProjectionError::Report(
-                    yamaa_adapters::specification_report::Error::OutputLimit,
-                )) => refusal = "output_limit",
-                Err(ProjectionError::Report(
                     yamaa_adapters::specification_report::Error::ResourceLimit(details),
                 )) => {
                     refusal = "output_limit";
