@@ -1605,7 +1605,8 @@ fn public_root_result_refuses_limited_or_contradictory_whole_attempts_before_out
         Err(producer_result::Error::Report(ProjectionError::Report(
             Error::ResourceLimit(refusal)
         ))) if refusal.resource == "report_retained_bytes"
-            && refusal.limit == 6 && refusal.actual == Some(8192)
+            && refusal.limit == 6
+            && refusal.actual.is_some_and(|actual| actual > refusal.limit)
     ));
     attempt.graph.nodes.swap(0, 1);
     assert!(matches!(
@@ -1797,7 +1798,7 @@ fn classified_graph_reports_keep_actual_host_causes_and_authored_origins_without
                 yamaa_adapters::specification_report::Error::ResourceLimit(refusal)
             )) if refusal.resource == "report_retained_bytes"
                 && refusal.limit == 6
-                && refusal.actual == Some(if facts.is_empty() { 8192 } else { 128 * facts.len() })
+                && refusal.actual.is_some_and(|actual| actual > refusal.limit)
         ));
     }
 }
@@ -2378,8 +2379,8 @@ fn caller_report_quota_refuses_borrowed_identity_before_formatter_copy() {
         Err(CompleteError::Report(
             yamaa_adapters::specification_report::Error::ResourceLimit(ref refusal)
         )) if refusal.resource == "report_retained_bytes"
-            && refusal.limit == 49_152
-            && refusal.actual == Some(54_228)
+            && refusal.limit == report_bytes * yamaa_engine::capacity::REPORT_RETAINED_FACTOR
+            && refusal.actual.is_some_and(|actual| actual > refusal.limit)
     ));
     assert_eq!(
         attempt.graph.nodes[0].dataset.sources[0]

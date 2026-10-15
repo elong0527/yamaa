@@ -90,7 +90,7 @@ where
         let prepared = match standalone_preparation::prepare(
             schema,
             raw,
-            &mut NormalizationBudget::new(limits.normalization),
+            &mut NormalizationBudget::for_application(limits.normalization),
         ) {
             Ok(prepared) => prepared,
             Err(error) => return Err(Error::Standalone { source, error }),

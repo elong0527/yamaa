@@ -255,11 +255,22 @@ impl Run<'_, '_, '_> {
                     || self.schema.descriptors()[field.descriptor]
                         .descriptor
                         .required()
-                    || previous.is_none()
                     || name == "schema_version" && matches!(kind, Boundary::Root)
                 {
                     self.invalid_clear(&logical, name)?;
                     changes.push(Change::Keep);
+                } else if previous.is_none() {
+                    // A first declaration is a value, including a literal missing
+                    // handler. Only a null over an inherited value is a clear.
+                    self.diagnostics.extend(self.schema.validate_descriptor(
+                        field.descriptor,
+                        value.document,
+                        value.node,
+                        &logical,
+                        false,
+                        &mut self.budget.validation,
+                    )?);
+                    changes.push(Change::Value(self.copy(value, depth + 1)?));
                 } else {
                     changes.push(Change::Remove);
                 }
@@ -325,6 +336,9 @@ impl Run<'_, '_, '_> {
         path: &str,
         depth: usize,
     ) -> Result<usize, NormalizationError> {
+        // An invalid introducing null has already been diagnosed; a later
+        // collection value still replaces it without treating it as a collection.
+        let old = old.filter(|site| !matches!(site.value(), N::Null));
         match name {
             "windows" => self.named(old, new, None, path, depth),
             "input" => self.named(old, new, Some("dataset_class"), path, depth),
@@ -576,7 +590,7 @@ fn provenance(
         };
         budget.work(1)?;
         match name.as_str() {
-            "input" | "windows" => {
+            "input" | "windows" if matches!(document.nodes()[value], N::Mapping(_)) => {
                 let N::Mapping(items) = &document.nodes()[value] else {
                     return Err(ValidationError::InvalidDescriptor.into());
                 };
@@ -598,7 +612,9 @@ fn provenance(
                     )?;
                 }
             }
-            "columns" | "rows" | "intermediates" => {
+            "columns" | "rows" | "intermediates"
+                if matches!(document.nodes()[value], N::Sequence(_)) =>
+            {
                 let N::Sequence(items) = &document.nodes()[value] else {
                     return Err(ValidationError::InvalidDescriptor.into());
                 };

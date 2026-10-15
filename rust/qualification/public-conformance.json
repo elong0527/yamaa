@@ -3,9 +3,10 @@
   "source_revision": "2ba10418607933f92597f7c00ac363a3113a49db",
   "evidence": "https://github.com/elong0527/yamaa/actions/runs/38416920074",
   "run_attempt": 1,
-  "benchmarks": 319,
+  "benchmarks": 321,
   "python": [
     "adam-adae-death",
+    "adam-adae-exposure-adjusted-incidence",
     "adam-adae-occurrence-flags",
     "adam-adae-onset-emergence",
     "adam-adae-partial-dates",
@@ -89,6 +90,7 @@
     "adam-advs-prior-result",
     "adam-advs-window-table",
     "adam-advs-windows",
+    "ars-ae-incidence-results",
     "bimo-clinsite-site-level",
     "negative-adeg-rrr",
     "negative-adlb-computed-param",
@@ -325,6 +327,7 @@
   ],
   "r": [
     "adam-adae-death",
+    "adam-adae-exposure-adjusted-incidence",
     "adam-adae-occurrence-flags",
     "adam-adae-onset-emergence",
     "adam-adae-partial-dates",
@@ -408,6 +411,7 @@
     "adam-advs-prior-result",
     "adam-advs-window-table",
     "adam-advs-windows",
+    "ars-ae-incidence-results",
     "bimo-clinsite-site-level",
     "negative-adeg-rrr",
     "negative-adlb-computed-param",
@@ -875,6 +879,78 @@
       ],
       "r": [
         "adam-adice-governing-event"
+      ],
+      "inventories": [
+        {
+          "artifact": "public-conformance-python-ubuntu-24.04-3.12-wheel",
+          "evidence": "https://github.com/elong0527/yamaa/actions/runs/38647072070/artifacts/11933128039",
+          "job": "https://github.com/elong0527/yamaa/actions/runs/38647072070/job/116138272610",
+          "runtime_version": "3.12.15",
+          "package_form": "wheel",
+          "summary": {
+            "pass": 319,
+            "mismatch": 0,
+            "unsupported": 0,
+            "error": 0,
+            "excluded": 2
+          }
+        },
+        {
+          "artifact": "public-conformance-r-ubuntu-24.04",
+          "evidence": "https://github.com/elong0527/yamaa/actions/runs/38647072070/artifacts/11932079381",
+          "job": "https://github.com/elong0527/yamaa/actions/runs/38647072070/job/116136509519",
+          "runtime_version": "4.6.1",
+          "package_form": "source",
+          "summary": {
+            "pass": 319,
+            "mismatch": 0,
+            "unsupported": 0,
+            "error": 0,
+            "excluded": 2
+          }
+        },
+        {
+          "artifact": "public-conformance-r-macos-15",
+          "evidence": "https://github.com/elong0527/yamaa/actions/runs/38647072070/artifacts/11933232423",
+          "job": "https://github.com/elong0527/yamaa/actions/runs/38647072070/job/116136509305",
+          "runtime_version": "4.6.1",
+          "package_form": "source",
+          "summary": {
+            "pass": 319,
+            "mismatch": 0,
+            "unsupported": 0,
+            "error": 0,
+            "excluded": 2
+          }
+        },
+        {
+          "artifact": "public-conformance-r-windows-latest",
+          "evidence": "https://github.com/elong0527/yamaa/actions/runs/38647072070/artifacts/11932988556",
+          "job": "https://github.com/elong0527/yamaa/actions/runs/38647072070/job/116136509330",
+          "runtime_version": "4.6.1",
+          "package_form": "source",
+          "summary": {
+            "pass": 319,
+            "mismatch": 0,
+            "unsupported": 0,
+            "error": 0,
+            "excluded": 2
+          }
+        }
+      ]
+    },
+    {
+      "scope": "incidence and ARS public benchmark observations",
+      "source_revision": "9b91d3d113f811f3cc3e84c5e872e20fbd6ed0c9",
+      "evidence": "https://github.com/elong0527/yamaa/actions/runs/38647072070",
+      "run_attempt": 1,
+      "python": [
+        "adam-adae-exposure-adjusted-incidence",
+        "ars-ae-incidence-results"
+      ],
+      "r": [
+        "adam-adae-exposure-adjusted-incidence",
+        "ars-ae-incidence-results"
       ],
       "inventories": [
         {

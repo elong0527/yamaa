@@ -56,10 +56,73 @@ assert_refusal <- function(result, compiler = FALSE) {
   }
 }
 
+assert_layered_cases <- function(root, width) {
+  dir.create(root, recursive = TRUE)
+  writeLines(c("ID,A,B", "S-001,x,1", "S-002,y,2", "S-003,,3"),
+             file.path(root, "input.csv"))
+  names <- c("ID", sprintf("K%04d", seq_len(width - 1L)))
+  case_column <- function(index) c(
+    sprintf("  - name: K%04d", index), "    type: str", "    derivation:", "      case:",
+    sprintf("        - when: \"SRC.A = 'x' AND SRC.B = '%d'\"", index %% 3L),
+    "          then: {literal: P}", "        - when: \"SRC.A IS NULL\"",
+    "          then: {literal: Q}", "        - otherwise: SRC.A")
+  document <- c(
+    "schema_version: '1.0'", "domain: TEST", "keys: [ID]", "input: {SRC: input.csv}",
+    "columns:", "  - {name: ID, type: str, derivation: SRC.ID}",
+    unlist(lapply(seq_len(width - 1L), case_column), use.names = FALSE),
+    sprintf("output: {path: out.csv, columns: [%s]}", paste(names, collapse = ", ")))
+  writeLines(document, file.path(root, "parent.yaml"))
+  writeLines(c(document, "parents: []"), file.path(root, "explicit.yaml"))
+  writeLines(c("schema_version: '1.0'", "parents: [parent.yaml]"),
+             file.path(root, "child.yaml"))
+  writeLines(c("schema_version: '1.0'", "parents: [child.yaml]"),
+             file.path(root, "grandchild.yaml"))
+  rows <- list(
+    c("S-001", ifelse(seq_len(width - 1L) %% 3L == 1L, "P", "x")),
+    c("S-002", rep("y", width - 1L)), c("S-003", rep("Q", width - 1L)))
+  expected <- charToRaw(paste0(paste(c(paste(names, collapse = ","),
+    vapply(rows, paste, character(1L), collapse = ",")), collapse = "\n"), "\n"))
+  for (file in c("parent.yaml", "explicit.yaml", "child.yaml", "grandchild.yaml")) {
+    spec <- file.path(root, file)
+    stopifnot(nrow(yamaa_check(spec)$issues) == 0L)
+    built <- yamaa_domain(spec)
+    stopifnot(nrow(built$issues) == 0L, identical(names(built$output), names),
+              nrow(built$output) == 3L, ncol(built$output) == width)
+    for (row in seq_along(rows)) {
+      stopifnot(identical(unlist(built$output[row, ], use.names = FALSE), rows[[row]]))
+    }
+    built$save()
+    output <- file.path(root, "out.csv")
+    stopifnot(identical(readBin(output, "raw", n = file.info(output)$size), expected))
+  }
+}
+
 run_column_ceilings <- function() {
   root <- tempfile("yamaa-column-ceilings-")
   on.exit(unlink(root, recursive = TRUE))
   path <- function(name) file.path(root, name)
+
+  for (width in c(40L, 64L, 1024L)) {
+    assert_layered_cases(path(paste0("layered-", width)), width)
+  }
+  parent <- write_case(path("repeated-parents"))
+  child <- file.path(dirname(parent), "child.yaml")
+  writeLines(c("schema_version: '1.0'",
+               paste0("parents: [", paste(rep("spec.yaml", 8193L), collapse = ", "), "]")), child)
+  for (operation in list(yamaa_check, yamaa_domain)) {
+    result <- operation(child)
+    assert_refusal(result)
+    contexts <- result$issues$context
+    with_resource <- grepl('"resource":', contexts, fixed = TRUE)
+    if (any(with_resource)) {
+      details <- contexts[with_resource]
+      visits <- grepl('"resource":"parent_visits"', details, fixed = TRUE) &
+        grepl('"limit":8192', details, fixed = TRUE)
+      paths <- grepl('"resource":"path_bytes"', details, fixed = TRUE) &
+        grepl('"limit":1048576', details, fixed = TRUE)
+      stopifnot(all(visits | paths))
+    }
+  }
 
   # Compiler capacity facts are identical through both operations and routes.
   for (resource in c("columns", "inputs", "source_fields", "projected_columns")) {

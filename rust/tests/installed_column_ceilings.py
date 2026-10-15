@@ -105,6 +105,99 @@ class ColumnCeilings(unittest.TestCase):
         for operation in (yamaa.check, yamaa.domain):
             self.assert_refusal(operation(spec), compiler=True)
 
+    def test_empty_inheritance_preserves_wide_case_columns_and_saved_bytes(self):
+        for width in (40, 64, 1024):
+            with self.subTest(width=width):
+                root = self.root / f"layered-{width}"
+                root.mkdir()
+                (root / "input.csv").write_text(
+                    "ID,A,B\nS-001,x,1\nS-002,y,2\nS-003,,3\n", encoding="ascii"
+                )
+                names = ["ID", *[f"K{index:04d}" for index in range(1, width)]]
+                document = {
+                    "schema_version": "1.0",
+                    "domain": "TEST",
+                    "keys": ["ID"],
+                    "input": {"SRC": "input.csv"},
+                    "columns": [
+                        {"name": "ID", "type": "str", "derivation": "SRC.ID"},
+                        *[
+                            {
+                                "name": name,
+                                "type": "str",
+                                "derivation": {
+                                    "case": [
+                                        {
+                                            "when": f"SRC.A = 'x' AND SRC.B = '{index % 3}'",
+                                            "then": {"literal": "P"},
+                                        },
+                                        {
+                                            "when": "SRC.A IS NULL",
+                                            "then": {"literal": "Q"},
+                                        },
+                                        {"otherwise": "SRC.A"},
+                                    ]
+                                },
+                            }
+                            for index, name in enumerate(names[1:], 1)
+                        ],
+                    ],
+                    "output": {"path": "out.csv", "columns": names},
+                }
+                parent = root / "parent.yaml"
+                parent.write_text(json.dumps(document), encoding="ascii")
+                document["parents"] = []
+                explicit = root / "explicit.yaml"
+                explicit.write_text(json.dumps(document), encoding="ascii")
+                child = root / "child.yaml"
+                child.write_text(
+                    "schema_version: '1.0'\nparents: [parent.yaml]\n", encoding="ascii"
+                )
+                grandchild = root / "grandchild.yaml"
+                grandchild.write_text(
+                    "schema_version: '1.0'\nparents: [child.yaml]\n", encoding="ascii"
+                )
+                expected = [
+                    (
+                        "S-001",
+                        *["P" if index % 3 == 1 else "x" for index in range(1, width)],
+                    ),
+                    ("S-002", *["y"] * (width - 1)),
+                    ("S-003", *["Q"] * (width - 1)),
+                ]
+                expected_bytes = (
+                    ",".join(names)
+                    + "\n"
+                    + "".join(",".join(row) + "\n" for row in expected)
+                ).encode("ascii")
+                for spec in (parent, explicit, child, grandchild):
+                    with self.subTest(spec=spec.name):
+                        self.assertEqual(yamaa.check(spec).issues.height, 0)
+                        built = yamaa.domain(spec)
+                        self.assertEqual(built.issues.height, 0)
+                        self.assertEqual(built.output.rows(), expected)
+                        built.save()
+                        self.assertEqual(
+                            (root / "out.csv").read_bytes(), expected_bytes
+                        )
+
+    def test_pathological_repeated_parents_are_still_refused(self):
+        parent = self.write_case("repeated-parents")
+        child = parent.with_name("child.yaml")
+        child.write_text(
+            json.dumps({"schema_version": "1.0", "parents": [parent.name] * 8193}),
+            encoding="ascii",
+        )
+        for operation in (yamaa.check, yamaa.domain):
+            result = operation(child)
+            self.assert_refusal(result)
+            for context in result.issues["context"]:
+                details = json.loads(context)
+                if "resource" in details:
+                    limits = {"parent_visits": 8192, "path_bytes": 1_048_576}
+                    self.assertIn(details["resource"], limits)
+                    self.assertEqual(details["limit"], limits[details["resource"]])
+
     def test_output_columns_reach_their_own_boundary(self):
         self.assert_build(self.write_case("admit-output", columns=1024), width=1024)
         names = ["ID", *[f"C{index:04d}" for index in range(1, 1024)]]

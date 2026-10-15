@@ -195,6 +195,7 @@ pub fn prepare<P: PathPort>(
     {
         return Err(Error::ParentsRequired);
     }
+    normalization.begin_inheritance();
     let mut layers = inheritance::traverse(
         schema,
         entry.clone(),

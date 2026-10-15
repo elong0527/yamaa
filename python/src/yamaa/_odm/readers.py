@@ -325,12 +325,18 @@ def iter_odm_records(
                         continue
                     if name == "ODM":
                         raise ODMError("document contains a nested ODM element")
-                    if clinical is None and name == "Study":
-                        metadata_study = _required_attribute(element, "OID")
-                    elif clinical is None and name == "MetaDataVersion":
-                        if metadata_study is None:
-                            raise ODMError("MetaDataVersion appears outside Study")
-                        metadata_version = _required_attribute(element, "OID")
+                    if name == "Study":
+                        if metadata_study is not None:
+                            raise ODMError("nested Study is not supported")
+                        if clinical is None:
+                            metadata_study = _required_attribute(element, "OID")
+                    elif name == "MetaDataVersion":
+                        if metadata_version is not None:
+                            raise ODMError("nested MetaDataVersion is not supported")
+                        if clinical is None:
+                            if metadata_study is None:
+                                raise ODMError("MetaDataVersion appears outside Study")
+                            metadata_version = _required_attribute(element, "OID")
                     elif clinical is None and name in {
                         "StudyEventDef",
                         "FormDef",
@@ -436,6 +442,19 @@ def iter_odm_records(
                     continue
 
                 if name == "ItemData":
+                    # ItemData holds a value, never another ItemData: without
+                    # this guard the inner item is emitted as if it were a
+                    # sibling row, silently inventing a clinical value the
+                    # document's structure does not support.
+                    ancestor = element.getparent()
+                    while ancestor is not None:
+                        if (
+                            isinstance(ancestor.tag, str)
+                            and etree.QName(ancestor.tag).namespace == odm_namespace
+                            and _local_name(ancestor.tag) == "ItemData"
+                        ):
+                            raise ODMError("nested ItemData is not supported")
+                        ancestor = ancestor.getparent()
                     if subject is None or event is None:
                         raise ODMError("ItemData requires subject and event context")
                     item_oid = _required_attribute(element, "ItemOID")
@@ -450,6 +469,21 @@ def iter_odm_records(
                         and etree.QName(child.tag).namespace == odm_namespace
                         and _local_name(child.tag) == "Value"
                     ]
+                    # A `Value` element in a foreign or absent namespace is
+                    # not an extension element to ignore: it names the item's
+                    # value, so dropping it would silently present a supplied
+                    # value as absent. Reject it like other unsupported
+                    # value layouts instead.
+                    if any(
+                        isinstance(child.tag, str)
+                        and etree.QName(child.tag).namespace != odm_namespace
+                        and _local_name(child.tag) == "Value"
+                        for child in element
+                    ):
+                        raise ODMError(
+                            f"ItemData {item_oid!r} Value child is in an "
+                            "unsupported namespace"
+                        )
                     if "Value" in element.attrib and value_children:
                         raise ODMError(
                             f"ItemData {item_oid!r} has attribute and child values"

@@ -583,6 +583,11 @@ impl MatchBudget {
     pub fn used(&self) -> MatchUsage {
         self.used
     }
+    /// Admit an application's aggregate scope while retaining every prior charge.
+    /// Per-match limits are checked independently by the local matching scope.
+    pub(crate) fn application_limits(&mut self, limits: MatchLimits) {
+        self.limits = limits;
+    }
     /// Refuse overflow and quota exhaustion before changing the selected counter.
     fn consume(&mut self, resource: Resource, amount: usize) -> Result<(), MatchError> {
         let (used, limit) = match resource {
