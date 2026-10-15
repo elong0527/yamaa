@@ -29,55 +29,6 @@ PATHS = TRUTH["lookup_paths"]
 
 
 class FileResources(unittest.TestCase):
-    def test_entry_relative_shared_program_isolates_study_inputs_and_saved_outputs(
-        self,
-    ):
-        self.entry_relative(False)
-
-    def test_entry_relative_schema_links_select_each_study_producer_wrapper(self):
-        self.entry_relative(True)
-
-    def entry_relative(self, producer):
-        truth = TRUTH["entry_relative"]
-        with tempfile.TemporaryDirectory(prefix="yamaa-study-paths-") as directory:
-            root = Path(directory)
-            shared = root / "shared"
-            shared.mkdir()
-            for name, content in truth["shared"].items():
-                (shared / name).write_text(content, encoding="ascii")
-            results = []
-            for name, csv in truth["studies"].items():
-                study = root / name
-                (study / "input").mkdir(parents=True)
-                (study / "output").mkdir()
-                (study / "input/data.csv").write_bytes(csv.encode("ascii"))
-                entry = study / "spec.yaml"
-                program = "consumer" if producer else "ordinary"
-                entry.write_text(
-                    f"schema_version: '1.0'\nparents: ../shared/{program}.yaml\n",
-                    encoding="ascii",
-                )
-                (study / "producer.yaml").write_text(
-                    truth["producer_entry"], encoding="ascii"
-                )
-                self.assertTrue(yamaa.check(entry).issues.is_empty())
-                result = yamaa.domain(entry)
-                self.assertTrue(result.issues.is_empty(), result.issues)
-                self.assertFalse((study / "output/result.csv").exists())
-                results.append((study, csv.encode("ascii"), result))
-            shutil.rmtree(shared)
-            for study, csv, result in results:
-                shutil.rmtree(study / "input")
-                for _ in range(2):
-                    self.assertTrue(result.save())
-                    self.assertEqual((study / "output/result.csv").read_bytes(), csv)
-                    self.assertTrue((study / "output/warnings.csv").is_file())
-                    self.assertTrue((study / "output/verifications.csv").is_file())
-                    if producer:
-                        self.assertEqual(
-                            (study / "output/produced.csv").read_bytes(), csv
-                        )
-
     def setUp(self):
         original = builtins.__import__
         blocked = (

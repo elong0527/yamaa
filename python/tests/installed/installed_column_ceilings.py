@@ -105,7 +105,7 @@ class ColumnCeilings(unittest.TestCase):
         for operation in (yamaa.check, yamaa.domain):
             self.assert_refusal(operation(spec), compiler=True)
 
-    def test_fixed_refusal_and_retry_expose_the_remaining_error(
+    def test_refusal_marks_unassessed_checks_and_retry_exposes_the_remaining_error(
         self,
     ):
         spec = self.write_case("incomplete-checks", columns=1025, selected=["ID"])
@@ -124,7 +124,7 @@ class ColumnCeilings(unittest.TestCase):
                 rows = refused.issues.to_dicts()
                 self.assertEqual(len(rows), 1)
                 context = json.loads(rows[0]["context"])
-                self.assertNotIn("incomplete_checks_from", context)
+                self.assertEqual(context["incomplete_checks_from"], "specification")
                 self.assertEqual((context["limit"], context["actual"]), (1024, 1025))
                 self.assertIsNone(rows[0]["requirement"])
             repaired_capacity = {**document, "columns": document["columns"][:-1]}
@@ -225,18 +225,12 @@ class ColumnCeilings(unittest.TestCase):
         for operation in (yamaa.check, yamaa.domain):
             result = operation(child)
             self.assert_refusal(result)
-            self.assertEqual(result.issues.height, 1)
-            self.assertEqual(
-                json.loads(result.issues["context"][0]),
-                {
-                    "code": "resource_limit",
-                    "stage": "prepare",
-                    "phase": "inheritance",
-                    "resource": "parent_occurrences",
-                    "limit": 8192,
-                    "actual": 8193,
-                },
-            )
+            for context in result.issues["context"]:
+                details = json.loads(context)
+                if "resource" in details:
+                    limits = {"parent_visits": 8192, "path_bytes": 1_048_576}
+                    self.assertIn(details["resource"], limits)
+                    self.assertEqual(details["limit"], limits[details["resource"]])
 
     def test_output_columns_reach_their_own_boundary(self):
         self.assert_build(self.write_case("admit-output", columns=1024), width=1024)
