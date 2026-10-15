@@ -167,7 +167,12 @@ impl Declaration {
                 Some(Err(predicate_compiler::Error::Internal)) => {
                     return Err(PrepareError::Internal)
                 }
-                Some(Err(_)) => return Err(PrepareError::Limit("predicate_compilation")),
+                Some(Err(error)) => {
+                    return Err(PrepareError::predicate(
+                        error.clone(),
+                        Some(&format!("{path}.filter")),
+                    ))
+                }
             }
             Some(Filter {
                 expression: expression.into(),

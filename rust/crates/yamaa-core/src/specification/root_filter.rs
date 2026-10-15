@@ -34,7 +34,7 @@ impl RootFilter {
                 crate::predicate_parser::ParseError::UnsupportedRegex { .. },
             )) => reject(extra, "predicate_regex", "filter".into()),
             Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
-            Err(_) => return Err(PrepareError::Limit("predicate_compilation")),
+            Err(error) => return Err(PrepareError::predicate(error.clone(), Some("filter"))),
         }
         Ok(Some(Self {
             expression: expression.into(),

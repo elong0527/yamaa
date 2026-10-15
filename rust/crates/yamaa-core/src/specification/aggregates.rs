@@ -72,8 +72,21 @@ fn window_path(
     path: &str,
     depth: usize,
 ) -> Result<Option<String>, PrepareError> {
-    if depth > 64 || path.len() > 65_536 {
-        return Err(PrepareError::Limit("expression_depth"));
+    if depth > 64 {
+        return Err(PrepareError::limit(
+            "expression_depth",
+            64,
+            Some(depth),
+            Some(path),
+        ));
+    }
+    if path.len() > 65_536 {
+        return Err(PrepareError::limit(
+            "path_bytes",
+            65_536,
+            Some(path.len()),
+            Some(path),
+        ));
     }
     let &[(operation, payload)] = mapping(d, value)? else {
         return Err(PrepareError::Internal);
@@ -137,16 +150,24 @@ pub(super) fn prepare(
         format!("{path}.expr")
     };
     let compiled = compile_aggregate(expr, &expression_path, Default::default());
-    if matches!(
-        compiled,
+    match &compiled {
         Err(AggregateCompileError::Parse(
-            crate::aggregate_parser::ParseError::Limit { .. }
-        ))
-    ) {
-        return Err(PrepareError::Limit("aggregate_parser"));
-    }
-    if matches!(compiled, Err(AggregateCompileError::MetadataLimit { .. })) {
-        return Err(PrepareError::Limit("aggregate_metadata"));
+            error @ crate::aggregate_parser::ParseError::Limit { .. },
+        )) => {
+            return Err(PrepareError::aggregate_parse(
+                error.clone(),
+                Some(&expression_path),
+            ));
+        }
+        Err(AggregateCompileError::MetadataLimit { limit, required }) => {
+            return Err(PrepareError::limit(
+                "aggregate_metadata",
+                *limit,
+                *required,
+                Some(&expression_path),
+            ));
+        }
+        _ => (),
     }
     let mut extra = Vec::new();
     let mut derive_relations = Vec::<String>::new();
@@ -158,7 +179,7 @@ pub(super) fn prepare(
             .map(|id| {
                 let items = sequence(d, id)?;
                 if items.len() > 4096 {
-                    return Err(PrepareError::Limit("aggregate_derive_bindings"));
+                    return Err(PrepareError::limit("aggregate_derive_bindings", 4096, Some(items.len()), None));
                 }
                 let mut bindings = Vec::<DeriveDeclaration>::new();
                 let invalid = |path: &str, reason: &str| {
@@ -304,7 +325,7 @@ pub(super) fn prepare(
                 if matches!(&d.nodes()[id],N::Sequence(pairs) if pairs.len()>64)
                     || matches!(&d.nodes()[id],N::Mapping(pairs) if pairs.len()>64)
                 {
-                    return Err(PrepareError::Limit("aggregate_keys"));
+                    return Err(PrepareError::limit("aggregate_keys", 64, None, None));
                 }
                 let names = match &d.nodes()[id] {
                     N::Text(name) => Some(vec![name.as_str()]),

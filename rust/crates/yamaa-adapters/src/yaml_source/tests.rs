@@ -211,7 +211,7 @@ fn failed_recovery_never_returns_a_partial_or_repaired_document() {
             parse_bytes: passes * source.len(),
             ..ScanLimits::default()
         };
-        assert_eq!(scan(source, limits), Err(ScanFailure::Limit("parse_bytes")));
+        assert_scan_limit(scan(source, limits), "parse_bytes", limits.parse_bytes);
     }
     assert!(scan(
         source,
@@ -225,45 +225,49 @@ fn failed_recovery_never_returns_a_partial_or_repaired_document() {
 
 #[test]
 fn enforces_source_event_depth_and_decoded_limits() {
-    assert_eq!(
+    assert_scan_limit(
         scan(
             b"abc",
             ScanLimits {
                 source_bytes: 2,
                 ..ScanLimits::default()
-            }
+            },
         ),
-        Err(ScanFailure::Limit("source_bytes"))
+        "source_bytes",
+        2,
     );
-    assert_eq!(
+    assert_scan_limit(
         scan(
             b"abc",
             ScanLimits {
                 events: 1,
                 ..ScanLimits::default()
-            }
+            },
         ),
-        Err(ScanFailure::Limit("events"))
+        "events",
+        1,
     );
-    assert_eq!(
+    assert_scan_limit(
         scan(
             b"[[[1]]]",
             ScanLimits {
                 depth: 2,
                 ..ScanLimits::default()
-            }
+            },
         ),
-        Err(ScanFailure::Limit("depth"))
+        "depth",
+        2,
     );
-    assert_eq!(
+    assert_scan_limit(
         scan(
             b"abc",
             ScanLimits {
                 decoded_bytes: 2,
                 ..ScanLimits::default()
-            }
+            },
         ),
-        Err(ScanFailure::Limit("decoded_bytes"))
+        "decoded_bytes",
+        2,
     );
     assert!(scan(
         b"[[1]]",
@@ -273,14 +277,30 @@ fn enforces_source_event_depth_and_decoded_limits() {
         }
     )
     .is_ok());
-    assert_eq!(
+    assert_scan_limit(
         scan(
             b"",
             ScanLimits {
                 parse_bytes: 0,
                 ..ScanLimits::default()
-            }
+            },
         ),
-        Err(ScanFailure::Limit("parse_bytes"))
+        "parse_bytes",
+        0,
     );
+}
+
+fn assert_scan_limit(
+    result: Result<Vec<LocatedEvent>, ScanFailure>,
+    resource: &'static str,
+    expected: usize,
+) {
+    let Err(ScanFailure::Limit(limit)) = result else {
+        panic!("expected scanner quota refusal")
+    };
+    assert_eq!(limit.resource, resource);
+    assert_eq!(limit.limit, expected);
+    if let Some(actual) = limit.actual {
+        assert!(actual > limit.limit);
+    }
 }

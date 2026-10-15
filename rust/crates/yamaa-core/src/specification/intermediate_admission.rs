@@ -23,7 +23,9 @@ pub(super) fn declaration_findings(
                 .and_then(|n| n.checked_add(dataset.len()))
                 .and_then(|n| n.checked_add(256))
                 .filter(|&n| n <= 16_777_216)
-                .ok_or(PrepareError::Limit("intermediate_findings"))?;
+                .ok_or_else(|| {
+                    PrepareError::limit("intermediate_findings", 16_777_216, None, None)
+                })?;
             Ok(())
         };
         if let Some(previous) = identifiers.get(name).cloned().or_else(|| {

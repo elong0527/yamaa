@@ -22,10 +22,10 @@ Docker; this folder only writes Harbor task directories and a job file.
 Results are not kept in this repository: runs are uploaded to Harbor Hub and
 reviewed on its leaderboards.
 
-Standalone `result.sas` sources are also prepared for the 137 prompted
+Standalone `result.sas` sources are also prepared for the 138 prompted
 derivation benchmarks. Their execution prerequisites, local checks and known
 compatibility gaps are documented in [solutions/opensas.md](solutions/opensas.md).
-The opensas track runs the 134 confident cases with native CSV inputs. Three
+The opensas track runs the 135 confident cases with native CSV inputs. Three
 prepared cases remain excluded: investigator comments (spaces-only text),
 randomization (Parquet input), and age quality (warning-log output).
 `build.py` records their reasons and rejects explicit requests to run them.
@@ -323,7 +323,7 @@ uv run --project python --no-sync python evaluations/harbor/smoke.py \
     --out ~/.cache/yamaa-harbor-opensas
 ```
 
-This runs oracle and nop on the same 134 cases, with no model key. The saved
+This runs oracle and nop on the same 135 cases, with no model key. The saved
 `sample.json` lists every selected task and exclusion; `summary.json` records
 each case's rewards and exceptions. Jobs retain the usual task snapshots,
 verifier grades and logs. Weekly and manual CI runs retain this complete
@@ -350,7 +350,7 @@ uv run --project python --no-sync python evaluations/harbor/build.py \
     --out ~/.cache/yamaa-harbor-language-images
 ```
 
-This prepares 1,218 trials: 136 R, 136 Python and 134 opensas cases in each
+This prepares 1,227 trials: 137 R, 137 Python and 135 opensas cases in each
 prompt tier. Exclusions remain reported. Run at most six job processes in
 parallel, each with one active trial; start the remaining three as slots free
 up. Keep the default model variant, one attempt per task, and all failures.
@@ -475,7 +475,9 @@ rules, and whose rows are uploaded runs that point back to their trials.
 
 A leaderboard's tasks are its fixed question, as a Hub leaderboard is
 pinned to dataset versions: adding a task leaves earlier runs without it,
-and `export` then refuses them. Start a new leaderboard instead. There is
+and `export` then refuses them. Start a new leaderboard instead. New
+benchmarks may be built and evaluated before a successor board is assembled;
+their admission leaves historical task lists and scores unchanged. There is
 one leaderboard per dataset, so one per language and prompt tier
 (`yamaa/yamaa-sdtm-adam-r/sdtm-adam-v4-r`,
 `yamaa/yamaa-sdtm-adam-brief-r/sdtm-adam-v4-brief-r`, ...), and R, Python,

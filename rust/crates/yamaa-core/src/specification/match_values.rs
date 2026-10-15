@@ -234,13 +234,23 @@ pub(super) fn declaration_admission(
     };
     let items = sequence(d, items)?;
     if items.len() > limits.columns {
-        return Err(PrepareError::Limit("intermediates"));
+        return Err(PrepareError::limit(
+            "intermediates",
+            limits.columns,
+            Some(items.len()),
+            None,
+        ));
     }
     for &item in items {
         if let Some(key) = d.field(item, "key") {
             if let N::Mapping(fields) = &d.nodes()[key] {
                 if fields.len() > limits.keys {
-                    return Err(PrepareError::Limit("intermediate_keys"));
+                    return Err(PrepareError::limit(
+                        "intermediate_keys",
+                        limits.keys,
+                        Some(fields.len()),
+                        None,
+                    ));
                 }
             }
         }

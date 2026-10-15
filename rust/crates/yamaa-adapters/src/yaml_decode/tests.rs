@@ -398,9 +398,10 @@ fn document_and_numeric_quotas_fail_explicitly_and_fresh_retry_succeeds() {
         ..DecodeLimits::default()
     };
     for source in ["1234", "0xffff", "0o7777", "1.234", "1e9999"] {
-        assert_eq!(
+        assert_decode_limit(
             decode_yaml(source.as_bytes(), limits).unwrap_err(),
-            DecodeFailure::Limit("numeric_digits")
+            "numeric_digits",
+            limits.numeric_digits,
         );
     }
     assert!(decode_yaml(b"'1234'", limits).is_ok());
@@ -446,28 +447,36 @@ fn document_and_numeric_quotas_fail_explicitly_and_fresh_retry_succeeds() {
             "depth",
         ),
     ] {
-        assert_eq!(
+        assert_decode_limit(
             decode_yaml(
                 source.as_bytes(),
                 DecodeLimits {
                     document,
                     ..DecodeLimits::default()
-                }
+                },
             )
             .unwrap_err(),
-            DecodeFailure::Limit(resource)
+            resource,
+            match resource {
+                "nodes" => document.nodes,
+                "text_bytes" => document.text_bytes,
+                "edges" => document.edges,
+                "depth" => document.depth.min(64),
+                _ => unreachable!(),
+            },
         );
     }
-    assert_eq!(
+    assert_decode_limit(
         decode_yaml(
             br#"["\uD800"]"#,
             DecodeLimits {
                 diagnostic_bytes: 1,
                 ..DecodeLimits::default()
-            }
+            },
         )
         .unwrap_err(),
-        DecodeFailure::Limit("diagnostic_bytes")
+        "diagnostic_bytes",
+        1,
     );
     assert_eq!(scalar("1234"), N::Integer("1234".into()));
 }
@@ -503,14 +512,22 @@ fn duplicate_key_reasons_identify_text_and_respect_diagnostic_limits() {
             },
         );
         if limit < reason.len() {
-            assert_eq!(
-                result.unwrap_err(),
-                DecodeFailure::Limit("diagnostic_bytes")
-            );
+            assert_decode_limit(result.unwrap_err(), "diagnostic_bytes", limit);
         } else {
             assert!(
                 matches!(result.unwrap_err(), DecodeFailure::InvalidYaml { reason: actual, .. } if actual == reason)
             );
         }
+    }
+}
+
+fn assert_decode_limit(error: DecodeFailure, resource: &'static str, expected: usize) {
+    let DecodeFailure::Limit(limit) = error else {
+        panic!("expected decoder quota refusal")
+    };
+    assert_eq!(limit.resource, resource);
+    assert_eq!(limit.limit, expected);
+    if let Some(actual) = limit.actual {
+        assert!(actual > limit.limit);
     }
 }

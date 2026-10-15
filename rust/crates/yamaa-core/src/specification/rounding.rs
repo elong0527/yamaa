@@ -19,8 +19,21 @@ pub(super) fn declaration_findings(
         depth: usize,
         diagnostic_bytes: &mut usize,
     ) -> Result<(), PrepareError> {
-        if depth > 64 || prefix.len() > 65_536 {
-            return Err(PrepareError::Limit("case_depth"));
+        if depth > 64 {
+            return Err(PrepareError::limit(
+                "case_depth",
+                64,
+                Some(depth),
+                Some(prefix),
+            ));
+        }
+        if prefix.len() > 65_536 {
+            return Err(PrepareError::limit(
+                "path_bytes",
+                65_536,
+                Some(prefix.len()),
+                Some(prefix),
+            ));
         }
         if let Some(payload) = d.field(value, "round_half_away_from_zero") {
             let source = text(d, field(d, payload, "source")?)?;
@@ -38,7 +51,9 @@ pub(super) fn declaration_findings(
                         .and_then(|n| n.checked_add(suffix.len()))
                         .and_then(|n| n.checked_add(source.len()))
                         .filter(|&n| n <= 16_777_216)
-                        .ok_or(PrepareError::Limit("rounding_diagnostics"))?;
+                        .ok_or_else(|| {
+                            PrepareError::limit("rounding_diagnostics", 16_777_216, None, None)
+                        })?;
                     findings.push(PreflightFinding::RoundingInput {
                         path: format!("{prefix}{suffix}"),
                         source: source.into(),
