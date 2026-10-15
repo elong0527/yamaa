@@ -378,6 +378,7 @@ conditions! {
     IntermediateDerivationWindowReference => ("validation", "unknown_field", Some("REQ-1263")),
     IntermediateDerivationDependency => ("validation", "unknown_field", Some("REQ-1263")),
     IntermediateDerivationSelfPhase => ("validation", "phase_boundary", Some("REQ-1263")),
+    IntermediateDerivationCycle => ("validation", "dependency_cycle", Some("REQ-1263")),
     IntermediateDriverInvalid => ("validation", "invalid_intermediate_driver", Some("REQ-1262")),
     IntermediateDriverType => ("validation", "unknown_intermediate_driver_type", Some("REQ-1262")),
     IntermediateUniqueCorrelatedDerivation => ("validation", "correlated_derivation_with_unique_verification", Some("REQ-1245")),

@@ -25,6 +25,7 @@ mod inherited_identifier_collision;
 mod inherited_intermediate_verification;
 mod inherited_key_shorthand;
 mod integer_literal_overflow;
+mod intermediate_dependencies;
 mod nested_windows;
 mod probe_successors;
 mod row_derivations;

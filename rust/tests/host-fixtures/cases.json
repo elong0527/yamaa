@@ -906,6 +906,109 @@
           "csv": null,
           "no_match_count": 0
         }
+      ],
+      "intermediate_dependencies": [
+        {
+          "name": "original_two_way_cycle",
+          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"input/source.csv\",\n      \"types\": {\n        \"STUDYID\": \"str\",\n        \"USUBJID\": \"str\",\n        \"LBSEQ\": \"int\"\n      }\n    },\n    \"SUPP\": {\n      \"path\": \"input/supp.csv\",\n      \"types\": {\n        \"STUDYID\": \"str\",\n        \"USUBJID\": \"str\",\n        \"IDVARVAL\": \"str\",\n        \"QVAL\": \"str\"\n      }\n    }\n  },\n  \"base\": \"SRC\",\n  \"keys\": [\n    \"STUDYID\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"STUDYID\",\n      \"USUBJID\",\n      \"LBSEQ\",\n      \"EPFLAG\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"STUDYID\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.STUDYID\"\n      }\n    },\n    {\n      \"name\": \"USUBJID\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.USUBJID\"\n      }\n    },\n    {\n      \"name\": \"LBSEQ\",\n      \"type\": \"int\",\n      \"derivation\": {\n        \"source\": \"SRC.LBSEQ\"\n      }\n    },\n    {\n      \"name\": \"EPFLAG\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC_EP.EP\"\n      }\n    }\n  ],\n  \"intermediates\": [\n    {\n      \"id\": \"SUP_EP\",\n      \"dataset\": \"SUPP\",\n      \"derivations\": {\n        \"BACK\": {\n          \"source\": \"SRC_EP.LBSEQ\"\n        }\n      },\n      \"key\": {\n        \"STUDYID\": \"SRC.STUDYID\",\n        \"USUBJID\": \"SRC.USUBJID\"\n      }\n    },\n    {\n      \"id\": \"SRC_EP\",\n      \"dataset\": \"SRC\",\n      \"key\": [\n        \"STUDYID\",\n        \"USUBJID\"\n      ],\n      \"derivations\": {\n        \"EP\": {\n          \"source\": \"SUP_EP.QVAL\"\n        }\n      }\n    }\n  ]\n}\n",
+          "inputs": {
+            "input/source.csv": "STUDYID,USUBJID,LBSEQ\nS1,U1,259\n",
+            "input/supp.csv": "STUDYID,USUBJID,IDVARVAL,QVAL\nS1,U1,  259,Y\n"
+          },
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "dependency_cycle",
+              "requirement": "REQ-1263",
+              "spec_paths": [
+                "intermediates[0].derivations.BACK.source",
+                "intermediates[1].derivations.EP.source"
+              ],
+              "context": {
+                "cycle": [
+                  "SUP_EP",
+                  "SRC_EP",
+                  "SUP_EP"
+                ]
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "self_cycle",
+          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"input/source.csv\",\n      \"types\": {\n        \"STUDYID\": \"str\",\n        \"USUBJID\": \"str\",\n        \"LBSEQ\": \"int\"\n      }\n    },\n    \"SUPP\": {\n      \"path\": \"input/supp.csv\",\n      \"types\": {\n        \"STUDYID\": \"str\",\n        \"USUBJID\": \"str\",\n        \"IDVARVAL\": \"str\",\n        \"QVAL\": \"str\"\n      }\n    }\n  },\n  \"base\": \"SRC\",\n  \"keys\": [\n    \"STUDYID\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"STUDYID\",\n      \"USUBJID\",\n      \"LBSEQ\",\n      \"EPFLAG\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"STUDYID\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.STUDYID\"\n      }\n    },\n    {\n      \"name\": \"USUBJID\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.USUBJID\"\n      }\n    },\n    {\n      \"name\": \"LBSEQ\",\n      \"type\": \"int\",\n      \"derivation\": {\n        \"source\": \"SRC.LBSEQ\"\n      }\n    },\n    {\n      \"name\": \"EPFLAG\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC_EP.EP\"\n      }\n    }\n  ],\n  \"intermediates\": [\n    {\n      \"id\": \"SUP_EP\",\n      \"dataset\": \"SUPP\",\n      \"derivations\": {\n        \"BACK\": {\n          \"source\": \"SUP_EP.QVAL\"\n        }\n      },\n      \"key\": {\n        \"STUDYID\": \"SRC.STUDYID\",\n        \"USUBJID\": \"SRC.USUBJID\"\n      }\n    },\n    {\n      \"id\": \"SRC_EP\",\n      \"dataset\": \"SRC\",\n      \"key\": [\n        \"STUDYID\",\n        \"USUBJID\"\n      ],\n      \"derivations\": {\n        \"EP\": {\n          \"source\": \"SUP_EP.QVAL\"\n        }\n      }\n    }\n  ]\n}\n",
+          "inputs": {
+            "input/source.csv": "STUDYID,USUBJID,LBSEQ\nS1,U1,259\n",
+            "input/supp.csv": "STUDYID,USUBJID,IDVARVAL,QVAL\nS1,U1,  259,Y\n"
+          },
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "dependency_cycle",
+              "requirement": "REQ-1263",
+              "spec_paths": [
+                "intermediates[0].derivations.BACK.source"
+              ],
+              "context": {
+                "cycle": [
+                  "SUP_EP",
+                  "SUP_EP"
+                ]
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "three_way_cycle",
+          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"input/source.csv\",\n      \"types\": {\n        \"STUDYID\": \"str\",\n        \"USUBJID\": \"str\",\n        \"LBSEQ\": \"int\"\n      }\n    },\n    \"SUPP\": {\n      \"path\": \"input/supp.csv\",\n      \"types\": {\n        \"STUDYID\": \"str\",\n        \"USUBJID\": \"str\",\n        \"IDVARVAL\": \"str\",\n        \"QVAL\": \"str\"\n      }\n    }\n  },\n  \"base\": \"SRC\",\n  \"keys\": [\n    \"STUDYID\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"STUDYID\",\n      \"USUBJID\",\n      \"LBSEQ\",\n      \"EPFLAG\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"STUDYID\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.STUDYID\"\n      }\n    },\n    {\n      \"name\": \"USUBJID\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.USUBJID\"\n      }\n    },\n    {\n      \"name\": \"LBSEQ\",\n      \"type\": \"int\",\n      \"derivation\": {\n        \"source\": \"SRC.LBSEQ\"\n      }\n    },\n    {\n      \"name\": \"EPFLAG\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC_EP.EP\"\n      }\n    }\n  ],\n  \"intermediates\": [\n    {\n      \"id\": \"SUP_EP\",\n      \"dataset\": \"SUPP\",\n      \"derivations\": {\n        \"BACK\": {\n          \"source\": \"MIDDLE.LBSEQ\"\n        }\n      },\n      \"key\": {\n        \"STUDYID\": \"SRC.STUDYID\",\n        \"USUBJID\": \"SRC.USUBJID\"\n      }\n    },\n    {\n      \"id\": \"SRC_EP\",\n      \"dataset\": \"SRC\",\n      \"key\": [\n        \"STUDYID\",\n        \"USUBJID\"\n      ],\n      \"derivations\": {\n        \"EP\": {\n          \"source\": \"SUP_EP.QVAL\"\n        }\n      }\n    },\n    {\n      \"id\": \"MIDDLE\",\n      \"dataset\": \"SRC\",\n      \"key\": [\n        \"STUDYID\",\n        \"USUBJID\"\n      ],\n      \"derivations\": {\n        \"FORWARD\": {\n          \"source\": \"SRC_EP.LBSEQ\"\n        }\n      }\n    }\n  ]\n}\n",
+          "inputs": {
+            "input/source.csv": "STUDYID,USUBJID,LBSEQ\nS1,U1,259\n",
+            "input/supp.csv": "STUDYID,USUBJID,IDVARVAL,QVAL\nS1,U1,  259,Y\n"
+          },
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "dependency_cycle",
+              "requirement": "REQ-1263",
+              "spec_paths": [
+                "intermediates[0].derivations.BACK.source",
+                "intermediates[2].derivations.FORWARD.source",
+                "intermediates[1].derivations.EP.source"
+              ],
+              "context": {
+                "cycle": [
+                  "SUP_EP",
+                  "MIDDLE",
+                  "SRC_EP",
+                  "SUP_EP"
+                ]
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "acyclic_forward_read",
+          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"input/source.csv\",\n      \"types\": {\n        \"STUDYID\": \"str\",\n        \"USUBJID\": \"str\",\n        \"LBSEQ\": \"int\"\n      }\n    },\n    \"SUPP\": {\n      \"path\": \"input/supp.csv\",\n      \"types\": {\n        \"STUDYID\": \"str\",\n        \"USUBJID\": \"str\",\n        \"IDVARVAL\": \"str\",\n        \"QVAL\": \"str\"\n      }\n    }\n  },\n  \"base\": \"SRC\",\n  \"keys\": [\n    \"STUDYID\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"STUDYID\",\n      \"USUBJID\",\n      \"LBSEQ\",\n      \"EPFLAG\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"STUDYID\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.STUDYID\"\n      }\n    },\n    {\n      \"name\": \"USUBJID\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.USUBJID\"\n      }\n    },\n    {\n      \"name\": \"LBSEQ\",\n      \"type\": \"int\",\n      \"derivation\": {\n        \"source\": \"SRC.LBSEQ\"\n      }\n    },\n    {\n      \"name\": \"EPFLAG\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC_EP.EP\"\n      }\n    }\n  ],\n  \"intermediates\": [\n    {\n      \"id\": \"SUP_EP\",\n      \"dataset\": \"SUPP\",\n      \"derivations\": {\n        \"BACK\": {\n          \"source\": \"SRC_EP.LBSEQ\"\n        }\n      },\n      \"key\": {\n        \"STUDYID\": \"SRC.STUDYID\",\n        \"USUBJID\": \"SRC.USUBJID\"\n      }\n    },\n    {\n      \"id\": \"SRC_EP\",\n      \"dataset\": \"SRC\",\n      \"key\": [\n        \"STUDYID\",\n        \"USUBJID\"\n      ],\n      \"derivations\": {\n        \"EP\": {\n          \"literal\": \"Y\"\n        }\n      }\n    }\n  ]\n}\n",
+          "inputs": {
+            "input/source.csv": "STUDYID,USUBJID,LBSEQ\nS1,U1,259\n",
+            "input/supp.csv": "STUDYID,USUBJID,IDVARVAL,QVAL\nS1,U1,  259,Y\n"
+          },
+          "issues": [],
+          "csv": "STUDYID,USUBJID,LBSEQ,EPFLAG\nS1,U1,259,Y\n"
+        },
+        {
+          "name": "acyclic_declared_dependency_first",
+          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"input/source.csv\",\n      \"types\": {\n        \"STUDYID\": \"str\",\n        \"USUBJID\": \"str\",\n        \"LBSEQ\": \"int\"\n      }\n    },\n    \"SUPP\": {\n      \"path\": \"input/supp.csv\",\n      \"types\": {\n        \"STUDYID\": \"str\",\n        \"USUBJID\": \"str\",\n        \"IDVARVAL\": \"str\",\n        \"QVAL\": \"str\"\n      }\n    }\n  },\n  \"base\": \"SRC\",\n  \"keys\": [\n    \"STUDYID\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"STUDYID\",\n      \"USUBJID\",\n      \"LBSEQ\",\n      \"EPFLAG\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"STUDYID\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.STUDYID\"\n      }\n    },\n    {\n      \"name\": \"USUBJID\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.USUBJID\"\n      }\n    },\n    {\n      \"name\": \"LBSEQ\",\n      \"type\": \"int\",\n      \"derivation\": {\n        \"source\": \"SRC.LBSEQ\"\n      }\n    },\n    {\n      \"name\": \"EPFLAG\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC_EP.EP\"\n      }\n    }\n  ],\n  \"intermediates\": [\n    {\n      \"id\": \"SRC_EP\",\n      \"dataset\": \"SRC\",\n      \"key\": [\n        \"STUDYID\",\n        \"USUBJID\"\n      ],\n      \"derivations\": {\n        \"EP\": {\n          \"literal\": \"Y\"\n        }\n      }\n    },\n    {\n      \"id\": \"SUP_EP\",\n      \"dataset\": \"SUPP\",\n      \"derivations\": {\n        \"BACK\": {\n          \"source\": \"SRC_EP.LBSEQ\"\n        }\n      },\n      \"key\": {\n        \"STUDYID\": \"SRC.STUDYID\",\n        \"USUBJID\": \"SRC.USUBJID\"\n      }\n    }\n  ]\n}\n",
+          "inputs": {
+            "input/source.csv": "STUDYID,USUBJID,LBSEQ\nS1,U1,259\n",
+            "input/supp.csv": "STUDYID,USUBJID,IDVARVAL,QVAL\nS1,U1,  259,Y\n"
+          },
+          "issues": [],
+          "csv": "STUDYID,USUBJID,LBSEQ,EPFLAG\nS1,U1,259,Y\n"
+        }
       ]
     },
     "file-resources": {
