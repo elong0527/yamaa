@@ -4,9 +4,9 @@ mod support;
 mod execution {
     mod dataset_odm {
         //! Independently specified item scopes and original opaque table effects.
-        use serde_json::Value as JsonValue;
         use std::{cell::RefCell, rc::Rc};
         use yamaa_core::dataset::*;
+        use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             bound_expression::{Binding, BoundPredicate, Read},
             diagnostic::ConditionCode,

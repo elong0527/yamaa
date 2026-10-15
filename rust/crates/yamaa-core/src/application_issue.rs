@@ -1,6 +1,6 @@
 //! Application admission failures are distinct from normative language findings.
 use crate::diagnostic::{ConditionCode, Diagnostic};
-use serde_json::Value as JsonValue;
+use crate::json::Value as JsonValue;
 use std::vec;
 
 /// Format classified installed-package disagreement. Packaging tools supply the

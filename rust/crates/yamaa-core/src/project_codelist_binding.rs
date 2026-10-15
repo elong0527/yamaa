@@ -1,11 +1,11 @@
 //! Bind admitted catalogue metadata without code, source access or dictionary resolution.
+use crate::json::Value as V;
 use crate::{
     dataset::{Check, Verification},
     diagnostic::{ConditionCode as C, Diagnostic},
     project_terminology::{BindingFinding, Catalogue},
     value::{ColumnType, Value},
 };
-use serde_json::Value as V;
 use std::vec;
 
 #[derive(Clone, Copy, Debug)]

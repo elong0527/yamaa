@@ -5,12 +5,13 @@ use serde::{
     ser::{SerializeMap, SerializeSeq},
     Serialize, Serializer,
 };
-use serde_json::{value::RawValue, Value};
+use serde_json::value::RawValue;
 use std::{
     fmt,
     ops::{Deref, DerefMut},
     sync::Arc,
 };
+use yamaa_core::json::Value;
 use yamaa_core::table::{TableAccess, ValueRef};
 
 struct WireCell<'a>(ValueRef<'a>);
@@ -394,9 +395,9 @@ mod tests {
             r#"[[{"type":"float","value":"8000000000000000"},{"type":"missing","value":null}]]"#;
         let rows: Arc<RawValue> = Arc::from(RawValue::from_string(raw.to_owned()).unwrap());
         let first = StoredReport::with_tables(
-            serde_json::json!({"tables":[],"artifacts":[{"path":"out.csv"}]}),
+            yamaa_core::json::json!({"tables":[],"artifacts":[{"path":"out.csv"}]}),
             vec![StoredTable {
-                metadata: serde_json::json!({"name":"ROOT","rows":null}),
+                metadata: yamaa_core::json::json!({"name":"ROOT","rows":null}),
                 rows: Arc::clone(&rows),
             }],
         );
@@ -408,7 +409,7 @@ mod tests {
             value["tables"][0]["rows"],
             serde_json::from_str::<Value>(raw).unwrap()
         );
-        assert_eq!(value["artifacts"], serde_json::json!([]));
+        assert_eq!(value["artifacts"], yamaa_core::json::json!([]));
         assert_eq!(
             clone.observations_value(false)["artifacts"][0]["path"],
             "out.csv"

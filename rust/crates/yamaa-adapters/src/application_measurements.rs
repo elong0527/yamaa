@@ -175,13 +175,13 @@ impl Measurements {
             }
         }
     }
-    pub fn evidence(&self) -> serde_json::Value {
+    pub fn evidence(&self) -> yamaa_core::json::Value {
         let state = self.state();
-        let callback_counts=state.calls.iter().filter(|(node, _)| node.is_some()).chain(state.calls.iter().filter(|(node, _)| node.is_none())).flat_map(|(node,stages)|stages.iter().enumerate().filter(|(_,calls)|calls.observed).map(move |(stage,calls)|serde_json::json!({
+        let callback_counts=state.calls.iter().filter(|(node, _)| node.is_some()).chain(state.calls.iter().filter(|(node, _)| node.is_none())).flat_map(|(node,stages)|stages.iter().enumerate().filter(|(_,calls)|calls.observed).map(move |(stage,calls)|yamaa_core::json::json!({
             "node":node,"stage":(["activation","execution_admission","execution_derivation","output_keys","verification","execution_finished"][stage]),
             "entered":calls.entered,"succeeded":calls.succeeded,"failed":calls.failed
         }))).collect::<Vec<_>>();
-        serde_json::json!({"protocol":"application-measurements/1", "clock":{"provider":"std::time::Instant","unit":"nanoseconds","origin":"owner-local monotonic origin immediately before original application entry"},
+        yamaa_core::json::json!({"protocol":"application-measurements/1", "clock":{"provider":"std::time::Instant","unit":"nanoseconds","origin":"owner-local monotonic origin immediately before original application entry"},
             "types":{"offsets":"uint64 nanoseconds since owner origin","function_counts":"uint64 actual calls","resource_counts":"usize; required null preserves original overflow/absence"},
             "classified_refusals":state.refusals,
             "admitted":state.refused.is_none() && state.finished && state.accepted.is_some() && state.saves.iter().all(|save|save.completed_ns.is_some()),"refusal":state.refused,"original_execution_finished":state.finished,"build_accepted":state.accepted,
@@ -192,7 +192,7 @@ impl Measurements {
         struct Envelope {
             protocol: &'static str,
             report: Option<Box<serde_json::value::RawValue>>,
-            measurements: serde_json::Value,
+            measurements: yamaa_core::json::Value,
         }
         let report = report.map(|value| {
             serde_json::value::RawValue::from_string(value).expect("admitted report JSON")
@@ -373,11 +373,11 @@ mod tests {
         assert_eq!(measurements.evidence()["function_calls"][0]["entered"], 1);
         assert_eq!(measurements.evidence()["function_calls"][0]["failed"], 0);
         let report = r#"{"tables":[],"artifacts":[],"error":{"stage":"original"}}"#;
-        let wrapped: serde_json::Value =
+        let wrapped: yamaa_core::json::Value =
             serde_json::from_str(&measurements.envelope(Some(report.into()))).unwrap();
         assert_eq!(
             wrapped["report"],
-            serde_json::from_str::<serde_json::Value>(report).unwrap()
+            serde_json::from_str::<yamaa_core::json::Value>(report).unwrap()
         );
         let _ = Scope::new(&Noop);
     }

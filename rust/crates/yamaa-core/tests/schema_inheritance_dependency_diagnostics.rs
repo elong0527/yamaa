@@ -3,7 +3,7 @@
 mod support;
 mod schema {
     mod inheritance_dependency_diagnostics {
-        use serde_json::Value as JsonValue;
+        use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             diagnostic::inheritance_dependency_diagnostics,
             schema::InheritanceDependencyIssue as Issue,

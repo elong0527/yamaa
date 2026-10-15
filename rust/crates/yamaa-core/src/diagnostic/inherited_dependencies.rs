@@ -1,7 +1,7 @@
 //! Complete inherited-column dependency findings in resolver order.
 use super::{ConditionCode as C, Diagnostic};
+use crate::json::Value as JsonValue;
 use crate::schema::InheritanceDependencyIssue as Issue;
-use serde_json::Value as JsonValue;
 use std::vec;
 
 /// Preserve all dependency findings in the resolver's order. Cycle membership is

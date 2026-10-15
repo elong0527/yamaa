@@ -9,8 +9,8 @@ use crate::{
     report_storage::StoredReport,
     specification_report::{Error as ReportError, Identity},
 };
-use serde_json::Value;
 use std::sync::Arc;
+use yamaa_core::json::Value;
 use yamaa_core::table::TableAccess;
 
 pub struct RootResult {
@@ -105,8 +105,8 @@ impl RootResult {
 
         let admitted = (|| {
             let mut value = self.observations.clone();
-            value["publication"] = serde_json::json!({"status":"failure",
-                "entered":publication.artifacts().iter().map(|item|serde_json::json!({"node":item.node(),"published":false})).collect::<Vec<_>>(),
+            value["publication"] = yamaa_core::json::json!({"status":"failure",
+                "entered":publication.artifacts().iter().map(|item|yamaa_core::json::json!({"node":item.node(),"published":false})).collect::<Vec<_>>(),
                 "error":null});
             let locations = publication
                 .artifacts()
@@ -341,12 +341,12 @@ impl RootResult {
                     let mut context: Value =
                         serde_json::from_str(&issue.context).expect("native issue context");
                     context["node"] =
-                        serde_json::json!(actual.map_or(request.node, |entry| entry.node));
-                    context["path"] = serde_json::json!(
+                        yamaa_core::json::json!(actual.map_or(request.node, |entry| entry.node));
+                    context["path"] = yamaa_core::json::json!(
                         actual.map_or(request.path.as_str(), |entry| entry.path.as_str())
                     );
-                    context["entered"] = serde_json::json!(entered);
-                    context["completed"] = serde_json::json!(completed);
+                    context["entered"] = yamaa_core::json::json!(entered);
+                    context["completed"] = yamaa_core::json::json!(completed);
                     issue.context = context.to_string();
                 }
             }
@@ -464,7 +464,7 @@ pub fn prepare_owned_classified<'a, E>(
         }) if has_verification => {
             observations["outcome"] = Value::String("failure".into());
             observations["error"] =
-                serde_json::json!({"stage":"output","code":"output_projection"});
+                yamaa_core::json::json!({"stage":"output","code":"output_projection"});
             let finding = crate::specification_diagnostics::portable_diagnostic(
                 yamaa_core::application_issue::rejected("output", "output_projection"),
             );
@@ -781,7 +781,7 @@ mod log_tests {
             let context: Value = serde_json::from_str(&issues[0].context).unwrap();
             assert_eq!(
                 context,
-                serde_json::json!({"stage":"capture", "code":"resource_limit", "resource":"source_bytes",
+                yamaa_core::json::json!({"stage":"capture", "code":"resource_limit", "resource":"source_bytes",
                 "limit":10_737_418_240_u64,"actual":10_737_418_241_u64,"dataset":"SRC","path":"input.csv"}),
                 "{route}"
             );
@@ -1095,7 +1095,7 @@ mod log_tests {
                     .iter()
                     .enumerate()
                     .map(|(position, (node, field, name))| {
-                        serde_json::json!({
+                        yamaa_core::json::json!({
                             "node":node, "field":field, "path":format!("generated/{name}"),
                             "published":position + 1 < boundary
                         })
@@ -1103,7 +1103,7 @@ mod log_tests {
                     .collect::<Vec<_>>();
                 assert_eq!(
                     report["publication"]["entered"],
-                    serde_json::json!(expected)
+                    yamaa_core::json::json!(expected)
                 );
                 assert_eq!(report["artifacts"].as_array().unwrap().len(), boundary - 1);
                 assert_eq!(execution(report.clone()), before);

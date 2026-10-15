@@ -15,7 +15,7 @@ pub enum ConversionReason {
 #[error("conversion: target={target:?}, value={value:?}, source_type={source_type:?}, reason={reason:?}")]
 pub struct ConversionError {
     pub target: ColumnType,
-    pub value: serde_json::Value,
+    pub value: crate::json::Value,
     /// Semantic kind remains available when temporal values serialize as text.
     pub source_type: Option<ValueType>,
     pub reason: ConversionReason,
@@ -152,7 +152,7 @@ fn numeric_text(text: &str, target: ColumnType) -> Result<Value, ConversionError
     }
     let invalid = || ConversionError {
         target,
-        value: serde_json::Value::String(text.into()),
+        value: crate::json::Value::String(text.into()),
         source_type: Some(ValueType::Str),
         reason: ConversionReason::IncompatibleOrInvalidText,
     };
@@ -163,7 +163,7 @@ fn numeric_text(text: &str, target: ColumnType) -> Result<Value, ConversionError
             .map(Value::Int)
             .map_err(|_| ConversionError {
                 target,
-                value: serde_json::Value::Number(
+                value: crate::json::Value::Number(
                     integer_diagnostic(text).parse().expect("canonical integer"),
                 ),
                 source_type: Some(ValueType::Int),

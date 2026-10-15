@@ -234,7 +234,7 @@ mod diagnostics {
             #[test]
 
             fn arithmetic_after_an_operand_adds_the_compute_column_suggestion() {
-                use serde_json::Value as V;
+                use yamaa_core::json::Value as V;
                 use yamaa_core::predicate_parser::{parse_predicate, ParseError};
                 let suggestion =
                     "derive the value as a column with compute, then compare that column";

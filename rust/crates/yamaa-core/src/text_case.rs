@@ -1,10 +1,10 @@
 //! The four locale-independent ASCII substitutions admitted by text declarations.
+use crate::json::Value as V;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     table::ValueRef,
     value::Value,
 };
-use serde_json::Value as V;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Case {

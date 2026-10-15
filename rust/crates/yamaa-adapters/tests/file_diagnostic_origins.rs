@@ -109,8 +109,8 @@ mod file {
                 assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0188"));
                 assert_eq!(issues[0].spec_paths, ["rows[1].filter"]);
                 assert_eq!(
-                    serde_json::from_str::<serde_json::Value>(&issues[0].context).unwrap(),
-                    serde_json::json!({"predicate": "ID >", "position": 4})
+                    serde_json::from_str::<yamaa_core::json::Value>(&issues[0].context).unwrap(),
+                    yamaa_core::json::json!({"predicate": "ID >", "position": 4})
                 );
                 assert_eq!(
                     yamaa_adapters::project_application::check(
@@ -284,8 +284,8 @@ mod file {
             assert_eq!(finding.requirement.as_deref(), Some("REQ-0788"));
             assert_eq!(finding.spec_paths, ["input.SRC.path"]);
             assert_eq!(
-                serde_json::from_str::<serde_json::Value>(&finding.context).unwrap(),
-                serde_json::json!({"dataset":"SRC","path":"input.csv"})
+                serde_json::from_str::<yamaa_core::json::Value>(&finding.context).unwrap(),
+                yamaa_core::json::json!({"dataset":"SRC","path":"input.csv"})
             );
             for _ in 0..2 {
                 assert!(matches!(
@@ -315,7 +315,7 @@ mod file {
             assert_eq!(issues[0].condition, "project_environment_missing");
             assert_eq!(
                 issues[0].context,
-                serde_json::json!({
+                yamaa_core::json::json!({
                     "cause": "missing", "path": environment,
                 })
                 .to_string()
@@ -429,7 +429,7 @@ mod file {
             let mut result = study.build();
             let before = result.output().unwrap().to_vec();
             let observations = result.observations();
-            assert_eq!(observations["artifacts"], serde_json::json!([]));
+            assert_eq!(observations["artifacts"], yamaa_core::json::json!([]));
             assert!(result.issues().is_empty());
             fs::write(study.0.join("input.csv"), b"changed").unwrap();
             fs::write(study.0.join("spec.yaml"), b"[changed").unwrap();
@@ -450,7 +450,7 @@ mod file {
                     "ID\n-9223372036854775808\n9223372036854775807\n"
                 );
                 let mut build = published;
-                build["artifacts"] = serde_json::json!([]);
+                build["artifacts"] = yamaa_core::json::json!([]);
                 assert_eq!(build, observations);
                 assert!(result.issues().is_empty());
                 assert_eq!(
@@ -690,7 +690,7 @@ mod file {
 
         #[test]
         fn compiler_refusals_retain_the_same_capacity_on_plain_and_environment_routes() {
-            use serde_json::json;
+            use yamaa_core::json::json;
             for (resource, limit, actual, path) in [
                 ("columns", 1024, 1025, "columns"),
                 ("inputs", 16, 17, "input"),
@@ -759,7 +759,8 @@ mod file {
                         assert_eq!(issue.requirement, None);
                         assert_eq!(issue.spec_paths, [path]);
                         assert_eq!(
-                            serde_json::from_str::<serde_json::Value>(&issue.context).unwrap(),
+                            serde_json::from_str::<yamaa_core::json::Value>(&issue.context)
+                                .unwrap(),
                             json!({
                                 "stage":"prepare", "code":"compiler_limit", "resource":resource, "limit":limit, "actual":actual,
                             })
@@ -881,10 +882,11 @@ mod file {
                 findings[0].spec_paths,
                 ["columns.TERM.verifications[0].matches.pattern"]
             );
-            let context: serde_json::Value = serde_json::from_str(&findings[0].context).unwrap();
+            let context: yamaa_core::json::Value =
+                serde_json::from_str(&findings[0].context).unwrap();
             assert_eq!(
                 context,
-                serde_json::json!({"code":"execution_limit","stage":"execute","resource":"regex_steps","limit":1_000_000})
+                yamaa_core::json::json!({"code":"execution_limit","stage":"execute","resource":"regex_steps","limit":1_000_000})
             );
             assert!(!study.0.join("output.csv").exists());
         }
@@ -1303,7 +1305,7 @@ mod file {
             assert_eq!(diagnostic.spec_paths, ["specification"]);
             assert_eq!(
                 diagnostic.context["path"],
-                serde_json::Value::String("root.yaml".into())
+                yamaa_core::json::Value::String("root.yaml".into())
             );
             assert_eq!(failure.capture_reads(), 1);
             assert_eq!(
@@ -1440,7 +1442,6 @@ mod file {
     }
     mod file_preparation {
         use crate::support::ipc_snapshot;
-        use serde_json::{json, Value};
         use std::{
             fs,
             path::PathBuf,
@@ -1450,6 +1451,7 @@ mod file {
             file_preparation::{Error, FileSpecification},
             file_resources::Resources,
         };
+        use yamaa_core::json::{json, Value};
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         struct Study(PathBuf);
         impl Study {

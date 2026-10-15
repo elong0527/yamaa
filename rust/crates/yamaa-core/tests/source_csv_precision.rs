@@ -1382,7 +1382,7 @@ mod source {
     }
     mod source_diagnostics {
         //! Independent complete outcomes over actual profile/type/physical-schema failures.
-        use serde_json::Value as V;
+        use yamaa_core::json::Value as V;
         use yamaa_core::{
             csv_source::{self, Field as CsvField},
             diagnostic::{

@@ -1,6 +1,6 @@
 //! Private typed string-template observations for independently authored fixtures.
-use serde_json::Value as JsonValue;
-use serde_json::{json, Value};
+use yamaa_core::json::Value as JsonValue;
+use yamaa_core::json::{json, Value};
 use yamaa_core::text_template::{AdmissionError, Part, StringTemplate};
 
 pub fn observe(text: &str) -> Value {
@@ -9,7 +9,7 @@ pub fn observe(text: &str) -> Value {
             if let Some(finding) = parsed.declaration_diagnostic() {
                 let span = parsed.syntax_failure_span().expect("syntax refusal span");
                 let definition = finding.definition();
-                let mut context = serde_json::Map::new();
+                let mut context = yamaa_core::json::Map::new();
                 for (name, value) in &finding.context {
                     if let JsonValue::String(text) = value {
                         context.insert(name.clone(), json!(text));

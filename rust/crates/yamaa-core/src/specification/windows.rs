@@ -65,7 +65,7 @@ impl WindowFinding {
     /// Retain the authored failure without consulting a host or source table.
     pub fn diagnostic(&self) -> crate::diagnostic::Diagnostic {
         use crate::diagnostic::Diagnostic;
-        use serde_json::Value as JsonValue;
+        use crate::json::Value as JsonValue;
         let (path, name, value) = match self {
             Self::ZeroOffset { path } => (path, "offset", crate::value::Value::Int(0)),
             Self::Order {

@@ -4,8 +4,8 @@ mod support;
 mod diagnostics {
     mod diagnostic {
         use crate::support::diagnostic::*;
-        use serde_json::Value as JsonValue;
         use std::{collections::BTreeSet, convert::Infallible};
+        use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             conversion::convert,
             diagnostic::CONDITIONS,
@@ -682,21 +682,26 @@ mod diagnostics {
         #[test]
         fn scalar_json_context_preserves_wire_types_and_exact_number_spellings() {
             let context = std::collections::BTreeMap::from([
-                ("bool", serde_json::Value::from(Value::Bool(true))),
+                ("bool", yamaa_core::json::Value::from(Value::Bool(true))),
                 (
                     "date",
-                    serde_json::Value::from(Value::Date("2025-01-02".parse().unwrap())),
+                    yamaa_core::json::Value::from(Value::Date("2025-01-02".parse().unwrap())),
                 ),
                 (
                     "datetime",
-                    serde_json::Value::from(Value::DateTime("2025-01-02T03:04".parse().unwrap())),
+                    yamaa_core::json::Value::from(Value::DateTime(
+                        "2025-01-02T03:04".parse().unwrap(),
+                    )),
                 ),
-                ("float", serde_json::Value::from(Value::float(1.0))),
-                ("max", serde_json::Value::from(Value::Int(i64::MAX))),
-                ("min", serde_json::Value::from(Value::Int(i64::MIN))),
-                ("missing", serde_json::Value::from(Value::Missing)),
-                ("negzero", serde_json::Value::from(Value::float(-0.0))),
-                ("text", serde_json::Value::from(Value::Str("001".into()))),
+                ("float", yamaa_core::json::Value::from(Value::float(1.0))),
+                ("max", yamaa_core::json::Value::from(Value::Int(i64::MAX))),
+                ("min", yamaa_core::json::Value::from(Value::Int(i64::MIN))),
+                ("missing", yamaa_core::json::Value::from(Value::Missing)),
+                ("negzero", yamaa_core::json::Value::from(Value::float(-0.0))),
+                (
+                    "text",
+                    yamaa_core::json::Value::from(Value::Str("001".into())),
+                ),
             ]);
             assert_eq!(
                 serde_json::to_string(&context).unwrap(),

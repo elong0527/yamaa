@@ -175,8 +175,8 @@ pub(super) fn type_condition_diagnostic(
     route: &[predicate::Route],
 ) -> crate::diagnostic::Diagnostic {
     use crate::diagnostic::{ConditionCode as C, Context, Diagnostic};
+    use crate::json::Value as V;
     use predicate::Condition;
-    use serde_json::Value as V;
     fn text(s: &str) -> V {
         V::String(s.into())
     }

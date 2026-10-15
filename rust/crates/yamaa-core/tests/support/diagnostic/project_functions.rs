@@ -1,7 +1,7 @@
 use crate::support::project_call_compiler as support;
-use serde_json::Value as JsonValue;
 use std::collections::BTreeSet;
 use support::{call, function, specification, specification_with_rows, Tree};
+use yamaa_core::json::Value as JsonValue;
 use yamaa_core::{
     diagnostic::ConditionCode,
     schema::DocumentNode as N,

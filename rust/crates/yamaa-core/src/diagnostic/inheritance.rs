@@ -1,6 +1,6 @@
 //! Pure inheritance traversal causes with original declaring-file provenance.
 use super::{ConditionCode as C, Diagnostic, ProjectionError};
-use serde_json::Value as JsonValue;
+use crate::json::Value as JsonValue;
 
 /// Borrow facts retained by the traversal. This grants no source authority and
 /// leaves opaque host errors, schema-arena findings and policy failures separate.

@@ -1,6 +1,7 @@
 //! Complete, bounded producer metadata and sealed whole-graph build transfer.
 //! Graph compilation owns one admitted environment and preserves every local
 //! call's projection into the graph's unique activation selection.
+use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode, Diagnostic},
     producer_admission::{self, Candidate, Declaration},
@@ -10,7 +11,6 @@ use crate::{
     specification::{PrepareError, PreparedSpecification},
     table::TableSchema,
 };
-use serde_json::Value as JsonValue;
 use std::{collections::BTreeMap, vec};
 
 /// The surrounding preparation boundary retains one document per canonical

@@ -1,12 +1,12 @@
 //! Original flag declaration and post-capture binding; no predicate text is invented.
 use super::*;
+use crate::json::Value as V;
 use crate::{
     dataset::{Flag, FlagBinding, FlagRead},
     diagnostic::{ConditionCode as C, Diagnostic},
     predicate::Plan,
     predicate_compiler,
 };
-use serde_json::Value as V;
 
 #[derive(Clone, Debug)]
 pub(super) struct Declaration {

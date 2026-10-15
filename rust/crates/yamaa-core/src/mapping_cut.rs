@@ -1,10 +1,10 @@
 //! Closed dictionary and interval selection, preserving raw literal results.
+use crate::json::Value as V;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     table::ValueRef,
     value::{compare_present_refs, FiniteFloat, Value},
 };
-use serde_json::Value as V;
 use std::cmp::Ordering;
 use std::{collections::BTreeMap, vec};
 

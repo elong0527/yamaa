@@ -4,7 +4,7 @@ use crate::{
     schema_outcomes as errors,
     specification_source::{InheritanceError, SourceFailure},
 };
-use serde_json::{json, Value};
+use yamaa_core::json::{json, Value};
 use yamaa_core::schema::{
     Document, InheritanceDependencyError, InheritanceReferenceError, NormalizationError,
     SchemaStructure,

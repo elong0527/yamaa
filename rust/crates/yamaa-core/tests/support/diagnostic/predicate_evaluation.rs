@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
-pub(crate) use serde_json::Value as V;
 pub(crate) use std::{collections::BTreeSet, convert::Infallible};
+pub(crate) use yamaa_core::json::Value as V;
 pub(crate) use yamaa_core::{
     diagnostic::{ConditionCode, PredicateDiagnosticError as P},
     predicate::{

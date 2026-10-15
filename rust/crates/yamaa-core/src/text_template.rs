@@ -1,11 +1,11 @@
 //! Closed string-template parsing and materialization without data effects.
+use crate::json::Value as V;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     numeric_parser::SourceSpan,
     table::ValueRef,
     value::Value,
 };
-use serde_json::Value as V;
 use std::vec;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Part {

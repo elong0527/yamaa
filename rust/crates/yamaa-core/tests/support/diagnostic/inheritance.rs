@@ -1,7 +1,7 @@
 #![allow(unused_imports)]
-pub(crate) use serde_json::Value as JsonValue;
 pub(crate) use std::collections::BTreeSet;
 pub(crate) use yamaa_core::diagnostic::{ConditionCode, InheritanceFinding as F};
+pub(crate) use yamaa_core::json::Value as JsonValue;
 
 pub fn reached() -> BTreeSet<ConditionCode> {
     let cycle = vec!["entry".into(), "base".into(), "entry".into()];

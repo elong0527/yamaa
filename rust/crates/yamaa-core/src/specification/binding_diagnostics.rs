@@ -1,5 +1,6 @@
 //! Project retained source-dependent binding findings without rebinding or IO.
 use super::{BindFinding, SourceDeclaration};
+use crate::json::Value as V;
 use crate::{
     column_dependencies,
     diagnostic::{ConditionCode as C, Context, Diagnostic},
@@ -7,7 +8,6 @@ use crate::{
     reference_binding, reference_scope,
     schema::quoted_diagnostic_text,
 };
-use serde_json::Value as V;
 use std::vec;
 
 fn text(value: &str) -> V {

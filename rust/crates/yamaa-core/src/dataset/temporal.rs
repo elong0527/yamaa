@@ -1,11 +1,11 @@
 //! Bound complete-date operations retain authored operands and calendar semantics.
+use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode, Diagnostic},
     table::ValueRef,
     temporal::Date,
     value::Value,
 };
-use serde_json::Value as JsonValue;
 use std::vec;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

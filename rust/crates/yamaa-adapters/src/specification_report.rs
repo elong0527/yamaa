@@ -7,7 +7,7 @@ use crate::{
     specification_run::{CapturedAttempt, PortError},
     specification_run_view::RunView,
 };
-use serde_json::{json, Map, Value};
+use yamaa_core::json::{json, Map, Value};
 use yamaa_core::specification_run::SourceOrigin;
 use yamaa_core::{table::TableAccess, value::Value as Scalar};
 
@@ -35,7 +35,7 @@ impl From<crate::source_diagnostics::SourceProjectionError> for Error {
     }
 }
 fn plain(value: &Value) -> Result<Value, Error> {
-    if let Ok(scalar) = serde_json::from_value::<ScalarValue>(value.clone()) {
+    if let Ok(scalar) = yamaa_core::json::from_value::<ScalarValue>(value.clone()) {
         return Ok(
             match scalar.into_core().map_err(|_| Error::InvalidObservation)? {
                 Scalar::Missing => Value::Null,
@@ -109,7 +109,7 @@ pub(crate) fn condition(run: &dyn RunView, value: &Value) -> Result<Value, Error
     }
     if let Some(partition) = value.get("partition").filter(|v| !v.is_null()) {
         let partition = partition.as_array().ok_or(Error::InvalidObservation)?;
-        let mut keys = Map::new();
+        let mut keys: Map<String, Value> = Map::new();
         for field in partition {
             let name = field["name"].as_str().ok_or(Error::InvalidObservation)?;
             keys.insert(name.into(), plain(&field["value"])?);

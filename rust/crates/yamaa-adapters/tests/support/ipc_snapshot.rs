@@ -15,8 +15,8 @@ pub fn table_snapshot(input: &[u8]) -> Result<String, TableError> {
     let table = ipc_table::decode_snapshot(input)?;
     ipc_table::serialize_json(&Snapshot(&table))
 }
-fn scalar(value: yamaa_core::value::Value) -> serde_json::Value {
-    use serde_json::json;
+fn scalar(value: yamaa_core::value::Value) -> yamaa_core::json::Value {
+    use yamaa_core::json::json;
     use yamaa_core::{
         temporal::{DatePrecision, DateTimePrecision},
         value::Value,

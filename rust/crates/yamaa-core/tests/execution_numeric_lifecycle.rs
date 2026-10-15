@@ -867,11 +867,11 @@ mod execution {
     }
     mod predicate_diagnostics {
         //! Predicate projection inspects one completed native failure without port effects.
-        use serde_json::Value as JsonValue;
         use std::cell::RefCell;
         use yamaa_core::dataset::{
             Assignment, DatasetPlan, ExecutionError, Expression, RowMode, RowTemplate,
         };
+        use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             bound_expression::{Binding, BoundPredicate, Read},
             diagnostic::PredicateDiagnosticError,

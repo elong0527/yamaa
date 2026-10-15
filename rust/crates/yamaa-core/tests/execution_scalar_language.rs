@@ -537,8 +537,8 @@ mod execution {
     }
     mod source_diagnostics {
         //! Actual capture/decoder ordering with payloads that are neither Clone nor Debug nor Send.
-        use serde_json::Value as V;
         use std::{cell::RefCell, rc::Rc, sync::Arc};
+        use yamaa_core::json::Value as V;
         use yamaa_core::{
             application_observer::{Noop, Scope},
             function_invocation::NoFunctions,

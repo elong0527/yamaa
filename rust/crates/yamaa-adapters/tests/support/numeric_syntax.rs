@@ -1,6 +1,6 @@
 //! Private typed parser observations for independent differential fixtures.
 use super::syntax_spans as spans;
-use serde_json::{json, Value};
+use yamaa_core::json::{json, Value};
 use yamaa_core::{
     numeric::{BinaryOperator, UnaryOperator},
     numeric_parser::{

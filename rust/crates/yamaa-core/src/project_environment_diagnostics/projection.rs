@@ -5,6 +5,7 @@
 //! cannot establish that ownership. Origin checks validate the supplied retained
 //! relationships; they do not manufacture provenance or authorize source reads.
 use super::{finding_diagnostic, scalar_diagnostic, Error as CoreError, Project};
+use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode, Diagnostic},
     project_environment::{Draft, Finding},
@@ -13,7 +14,6 @@ use crate::{
     schema::{Document, DocumentNode as N},
     value::Value,
 };
-use serde_json::Value as JsonValue;
 use std::fmt::Write;
 use std::vec;
 

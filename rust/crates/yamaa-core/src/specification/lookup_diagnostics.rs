@@ -1,10 +1,10 @@
 //! Typed canonical causes for named-selection binding and predicate findings.
 use super::*;
+use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     predicate_parser::GrammarFailure,
 };
-use serde_json::Value as JsonValue;
 
 #[derive(Clone, Copy, Debug)]
 pub(super) enum ReferenceCause {
