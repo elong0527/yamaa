@@ -11,15 +11,6 @@ struct Port {
     captures: usize,
 }
 impl SourcePort for Port {
-    fn capture_observed(
-        &mut self,
-        source: &SourceDeclaration,
-        byte_limit: usize,
-        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-    ) -> Result<Arc<[u8]>, Self::Error> {
-        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-        <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-    }
     fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -33,9 +24,13 @@ impl SourcePort for Port {
     fn capture_reads(&self) -> usize {
         self.captures
     }
-    fn capture(&mut self, source: &SourceDeclaration, maximum: usize) -> Result<Arc<[u8]>, ()> {
+    fn capture(
+        &mut self,
+        source: &SourceDeclaration,
+        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+    ) -> Result<Arc<[u8]>, ()> {
+        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
         assert_eq!((&*source.name, &*source.path), ("SRC", "source.csv"));
-        assert!(maximum >= 9);
         self.captures += 1;
         Ok(Arc::from(b"ID,V\n1,2\n".as_slice()))
     }

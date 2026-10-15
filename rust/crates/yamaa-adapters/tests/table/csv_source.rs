@@ -1,20 +1,9 @@
-use yamaa_adapters::csv_source::Limits;
-
 #[test]
 fn untyped_arrow_snapshot_owns_exact_source_cells_and_limits() {
-    use yamaa_adapters::{
-        arrow_table::{TableError, TableLimits},
-        csv_source::{parse_text_table, TextTableError},
-    };
+    use yamaa_adapters::csv_source::{parse_text_table, TextTableError};
     use yamaa_core::table::{TableAccess, ValueRef};
-    let limits = TableLimits {
-        max_rows: 10,
-        max_columns: 4,
-        max_batches: 1,
-        max_cells: 40,
-    };
     let mut input = b"A,B\n9007199254740993,\"\"\nx\0y,NA".to_vec();
-    let table = parse_text_table(&input, Limits::default(), limits).unwrap();
+    let table = parse_text_table(&input).unwrap();
     input.fill(0);
     drop(input);
     assert_eq!(table.row_count(), 2);
@@ -23,24 +12,19 @@ fn untyped_arrow_snapshot_owns_exact_source_cells_and_limits() {
     assert_eq!(table.cell(1, 0).unwrap(), ValueRef::Str("x\0y"));
     assert_eq!(table.cell(1, 1).unwrap(), ValueRef::Str("NA"));
     assert!(table.cell(2, 0).is_err());
-    assert_eq!(
-        parse_text_table(b"A,B", Limits::default(), limits)
-            .unwrap()
-            .row_count(),
-        0
-    );
+    assert_eq!(parse_text_table(b"A,B").unwrap().row_count(), 0);
+    let wide = (0..1_025)
+        .map(|i| format!("C{i}"))
+        .collect::<Vec<_>>()
+        .join(",");
     assert!(matches!(
-        parse_text_table(
-            b"A\nx",
-            Limits::default(),
-            TableLimits {
-                max_cells: 0,
-                ..limits
+        parse_text_table(wide.as_bytes()),
+        Err(TextTableError::Csv(
+            yamaa_adapters::csv_source::Error::Limit {
+                resource: "columns",
+                limit: 1_024,
+                actual: Some(1_025)
             }
-        ),
-        Err(TextTableError::Table(TableError::Limit {
-            resource: "cells",
-            ..
-        }))
+        ))
     ));
 }

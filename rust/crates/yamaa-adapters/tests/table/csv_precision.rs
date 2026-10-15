@@ -5,10 +5,7 @@ use yamaa_adapters::{
     specification_run::PreparedRun,
     specification_source::Source,
 };
-use yamaa_core::{
-    schema::DocumentNode,
-    specification::{CompilationLimits, PrepareError, PreparedSpecification, SourceDeclaration},
-};
+use yamaa_core::specification::{PreparedSpecification, SourceDeclaration};
 use yamaa_core::{specification_output::SaveError, specification_run::SourcePort};
 
 const SPEC: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: output.csv, columns: [ID, VALUE, DOUBLE], decimals: PRECISION}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: DOUBLE, type: float, derivation: {compute: {expr: 'VALUE + VALUE'}}}\n";
@@ -28,15 +25,6 @@ fn prepared(precision: &str, path: &str, expression: &str) -> PreparedRun {
 }
 struct Study(usize);
 impl SourcePort for Study {
-    fn capture_observed(
-        &mut self,
-        source: &SourceDeclaration,
-        byte_limit: usize,
-        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-    ) -> Result<Arc<[u8]>, Self::Error> {
-        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-        <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-    }
     fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -50,7 +38,12 @@ impl SourcePort for Study {
     fn capture_reads(&self) -> usize {
         self.0
     }
-    fn capture(&mut self, source: &SourceDeclaration, _: usize) -> Result<Arc<[u8]>, Infallible> {
+    fn capture(
+        &mut self,
+        source: &SourceDeclaration,
+        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+    ) -> Result<Arc<[u8]>, Infallible> {
+        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
         assert_eq!(source.path, "input.csv");
         self.0 += 1;
         Ok(Arc::from(
@@ -169,7 +162,7 @@ fn output_precision_rejection_follows_original_execution_failure_and_denies_publ
 }
 
 #[test]
-fn compiler_charges_arbitrary_width_precision_before_cloning_its_declaration() {
+fn compiler_keeps_arbitrary_width_precision_without_a_metadata_copy_allowance() {
     let schema = yamaa_adapters::shipped_schema::capture().unwrap();
     let precision = "9".repeat(1000);
     let document = schema
@@ -178,31 +171,6 @@ fn compiler_charges_arbitrary_width_precision_before_cloning_its_declaration() {
             bytes: SPEC.replace("PRECISION", &precision).into_bytes(),
         })
         .unwrap();
-    let text_only = document
-        .model()
-        .document()
-        .nodes()
-        .iter()
-        .map(|n| match n {
-            DocumentNode::Text(s) => s.len(),
-            _ => 0,
-        })
-        .sum();
-    assert!(matches!(
-        PreparedSpecification::prepare_with_limits(
-            document.model(),
-            CompilationLimits {
-                model_text_bytes: text_only,
-                ..Default::default()
-            }
-        ),
-        Err(PrepareError::Limit(
-            yamaa_core::specification::CompilerLimit {
-                resource: "model_text_bytes",
-                ..
-            }
-        ))
-    ));
     let compiled = PreparedSpecification::prepare(document.model()).unwrap();
     assert_eq!(compiled.output_decimals(), Some(precision.as_str()));
 }

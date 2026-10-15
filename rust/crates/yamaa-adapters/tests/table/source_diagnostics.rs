@@ -273,6 +273,7 @@ fn missing_identity_is_explicit_and_resource_barriers_preserve_original_error_pr
         Error::Source(TextTableError::Csv(csv_source::Error::Limit {
             resource: "source_bytes",
             limit: yamaa_core::limits::Limits::SOURCE_BYTES,
+            actual: Some(yamaa_core::limits::Limits::SOURCE_BYTES + 1),
         })),
         Error::TypedSource(typed_csv::Error::Typing(
             yamaa_core::typed_csv::Error::InvalidDeclarations,

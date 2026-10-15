@@ -1,5 +1,4 @@
 use yamaa_adapters::{
-    arrow_table::TableLimits,
     csv_source,
     typed_csv::{self, Error},
 };
@@ -8,14 +7,6 @@ use yamaa_core::{
     typed_csv::Error as TypingError,
     value::ColumnType as T,
 };
-fn limits() -> TableLimits {
-    TableLimits {
-        max_rows: 100,
-        max_columns: 16,
-        max_batches: 1,
-        max_cells: 1600,
-    }
-}
 #[test]
 fn declared_types_keep_exact_i64_float_bits_temporal_precision_and_undeclared_text() {
     let data=b"I,F,D,T,RAW\n9007199254740993,-0.0,2024-03-02,2024-03-02T00:00:00,0012\n,1.5,2024-01-01,2024-03-02T01:02:03,NA\n";
@@ -27,8 +18,6 @@ fn declared_types_keep_exact_i64_float_bits_temporal_precision_and_undeclared_te
             ("D".into(), T::Date),
             ("T".into(), T::DateTime),
         ],
-        Default::default(),
-        limits(),
     )
     .unwrap();
     assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Int(9007199254740993));
@@ -64,8 +53,6 @@ fn unknown_fields_follow_written_declaration_order_before_conversion() {
             ("Z".into(), T::Float),
             ("A".into(), T::Int),
         ],
-        Default::default(),
-        limits(),
     )
     .unwrap_err();
     assert!(matches!(error,Error::Typing(TypingError::UnknownField{field}) if field=="Z"));
@@ -75,8 +62,6 @@ fn conversion_failure_follows_rows_then_stored_fields_not_declaration_order() {
     let error = typed_csv::parse(
         b"A,B\n1,bad\nworse,2",
         &[("B".into(), T::Int), ("A".into(), T::Int)],
-        Default::default(),
-        limits(),
     )
     .unwrap_err();
     assert!(
@@ -85,8 +70,6 @@ fn conversion_failure_follows_rows_then_stored_fields_not_declaration_order() {
     let error = typed_csv::parse(
         b"A,B\nfirst,second",
         &[("B".into(), T::Int), ("A".into(), T::Int)],
-        Default::default(),
-        limits(),
     )
     .unwrap_err();
     assert!(
@@ -95,13 +78,7 @@ fn conversion_failure_follows_rows_then_stored_fields_not_declaration_order() {
 }
 #[test]
 fn profile_failure_precedes_unknown_fields_and_nonfinite_spellings_normalize() {
-    let error = typed_csv::parse(
-        b"X\n\"bad",
-        &[("Z".into(), T::Int)],
-        Default::default(),
-        limits(),
-    )
-    .unwrap_err();
+    let error = typed_csv::parse(b"X\n\"bad", &[("Z".into(), T::Int)]).unwrap_err();
     assert!(matches!(
         error,
         Error::Csv(csv_source::Error::Profile {
@@ -109,13 +86,7 @@ fn profile_failure_precedes_unknown_fields_and_nonfinite_spellings_normalize() {
             ..
         })
     ));
-    let table = typed_csv::parse(
-        b"F\n.nan\n+.inf\n-.inf",
-        &[("F".into(), T::Float)],
-        Default::default(),
-        limits(),
-    )
-    .unwrap();
+    let table = typed_csv::parse(b"F\n.nan\n+.inf\n-.inf", &[("F".into(), T::Float)]).unwrap();
     for row in 0..3 {
         assert_eq!(table.cell(row, 0).unwrap(), ValueRef::Missing);
     }
@@ -126,7 +97,7 @@ fn incomplete_temporal_text_is_not_implicitly_imputed() {
     for (kind, text) in [(T::Date, "2024-03"), (T::DateTime, "2024-03-02")] {
         let input = format!("X\n{text}");
         assert!(
-            matches!(typed_csv::parse(input.as_bytes(),&[("X".into(),kind)],Default::default(),limits()),Err(Error::Typing(TypingError::FieldParse {field,value,..})) if field=="X"&&value==text)
+            matches!(typed_csv::parse(input.as_bytes(),&[("X".into(),kind)]),Err(Error::Typing(TypingError::FieldParse {field,value,..})) if field=="X"&&value==text)
         );
     }
 }
@@ -143,13 +114,7 @@ fn retired_python_integer_ingestion_keeps_every_i64_through_long_zero_prefixes()
         input.push_str(&value.unsigned_abs().to_string());
         input.push('\n');
     }
-    let table = typed_csv::parse(
-        input.as_bytes(),
-        &[("VALUE".into(), T::Int)],
-        Default::default(),
-        limits(),
-    )
-    .unwrap();
+    let table = typed_csv::parse(input.as_bytes(), &[("VALUE".into(), T::Int)]).unwrap();
     assert_eq!(table.row_count(), expected.len());
     for (row, value) in expected.into_iter().enumerate() {
         assert_eq!(table.cell(row, 0).unwrap(), ValueRef::Int(value));
@@ -169,8 +134,6 @@ fn retired_python_typed_csv_keeps_original_field_order_missingness_and_civil_tim
 007,42,1.5,2025-01-02,2025-01-02T03:04,,\"\"\n\
 008,,.Inf,2025-02-03,2025-02-03T04:05:06,NA,unknown\n",
         &declared,
-        Default::default(),
-        limits(),
     )
     .unwrap();
     assert_eq!(
@@ -217,25 +180,17 @@ fn retired_python_typed_csv_keeps_original_field_order_missingness_and_civil_tim
         }
     }
 
-    let empty =
-        typed_csv::parse(b"ID,AGE\n", &declared[..1], Default::default(), limits()).unwrap();
+    let empty = typed_csv::parse(b"ID,AGE\n", &declared[..1]).unwrap();
     assert_eq!(empty.row_count(), 0);
     assert_eq!(empty.schema().columns()[0].kind, T::Str);
     assert_eq!(empty.schema().columns()[1].kind, T::Int);
-    let quoted =
-        typed_csv::parse(b"AGE\n\"\"\n", &declared[..1], Default::default(), limits()).unwrap();
+    let quoted = typed_csv::parse(b"AGE\n\"\"\n", &declared[..1]).unwrap();
     assert_eq!(quoted.cell(0, 0).unwrap(), ValueRef::Missing);
 }
 
 #[test]
 fn retired_python_missing_looking_text_is_never_inferred_as_missing() {
-    let table = typed_csv::parse(
-        b"VALUE\nNA\nNULL\n.\nunknown\n",
-        &[],
-        Default::default(),
-        limits(),
-    )
-    .unwrap();
+    let table = typed_csv::parse(b"VALUE\nNA\nNULL\n.\nunknown\n", &[]).unwrap();
     for (row, expected) in ["NA", "NULL", ".", "unknown"].into_iter().enumerate() {
         assert_eq!(table.cell(row, 0).unwrap(), ValueRef::Str(expected));
     }

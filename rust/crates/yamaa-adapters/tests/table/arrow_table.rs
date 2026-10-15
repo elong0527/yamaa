@@ -7,8 +7,7 @@ use arrow_buffer::NullBuffer;
 use arrow_schema::{DataType, Field, Schema};
 use std::sync::Arc;
 use yamaa_adapters::arrow_table::{
-    date_array, datetime_array, physical_schema, ArrowTable, TableError, TableLimits,
-    TemporalCellError,
+    date_array, datetime_array, physical_schema, ArrowTable, TableError, TemporalCellError,
 };
 use yamaa_core::table_reduction::{reduce_column, TableReductionError};
 use yamaa_core::{
@@ -18,17 +17,6 @@ use yamaa_core::{
     temporal::{Date, DatePrecision as DP, DateTime, DateTimePrecision as TP},
     value::ColumnType as CT,
 };
-
-/// Build a closed schema without changing supplied declaration order.
-/// Tests use an explicit small policy; production callers must choose their own.
-fn limits() -> TableLimits {
-    TableLimits {
-        max_rows: 200_000,
-        max_columns: 10,
-        max_batches: 20,
-        max_cells: 1_000_000,
-    }
-}
 
 /// Create a batch with the canonical physical schema.
 fn batch(schema: &TableSchema, arrays: Vec<ArrayRef>) -> RecordBatch {
@@ -84,7 +72,7 @@ fn exact_scalars_normalization_and_buffer_ownership() {
             ])),
         ],
     );
-    let table = ArrowTable::try_new(schema, vec![original.clone()], limits()).unwrap();
+    let table = ArrowTable::try_new(schema, vec![original.clone()]).unwrap();
     drop(original);
     drop(text);
     assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Str(""));
@@ -142,7 +130,6 @@ fn chunk_and_slice_offsets_keep_original_record_and_column_order() {
             original.slice(3, 1),
             empty,
         ],
-        limits(),
     )
     .unwrap();
     assert_eq!(table.row_count(), 3);
@@ -178,7 +165,7 @@ fn temporal_precision_and_negative_epoch_survive_sliced_structs() {
     let dates = Arc::new(date_array(&[None, Some(year), Some(month), Some(day), None]).unwrap());
     let times = Arc::new(datetime_array(&[None, Some(imputed), Some(time), None, None]).unwrap());
     let original = batch(&schema, vec![dates, times]);
-    let table = ArrowTable::try_new(schema, vec![original.slice(1, 4)], limits()).unwrap();
+    let table = ArrowTable::try_new(schema, vec![original.slice(1, 4)]).unwrap();
     drop(original);
     for (row, expected) in [year, month, day].into_iter().enumerate() {
         assert_eq!(date(&table, row, 0).fields(), expected.fields());
@@ -199,7 +186,7 @@ fn temporal_precision_and_negative_epoch_survive_sliced_structs() {
 /// Retain declared schema with no records and record counts with no columns.
 fn zero_rows_and_zero_columns_retain_independent_shapes() {
     let schema = logical_schema(&[("D", CT::Date), ("T", CT::Str)]);
-    let no_batches = ArrowTable::try_new(schema.clone(), vec![], limits()).unwrap();
+    let no_batches = ArrowTable::try_new(schema.clone(), vec![]).unwrap();
     assert_eq!(no_batches.schema(), &schema);
     assert_eq!(no_batches.row_count(), 0);
     let empty = batch(
@@ -209,7 +196,7 @@ fn zero_rows_and_zero_columns_retain_independent_shapes() {
             Arc::new(StringArray::from(Vec::<Option<&str>>::new())),
         ],
     );
-    let table = ArrowTable::try_new(schema, vec![empty], limits()).unwrap();
+    let table = ArrowTable::try_new(schema, vec![empty]).unwrap();
     assert_eq!(table.batches().len(), 1);
     assert_eq!(table.schema().columns().len(), 2);
     assert_eq!(
@@ -223,7 +210,7 @@ fn zero_rows_and_zero_columns_retain_independent_shapes() {
         &RecordBatchOptions::new().with_row_count(Some(3)),
     )
     .unwrap();
-    let table = ArrowTable::try_new(empty_schema, vec![rows], limits()).unwrap();
+    let table = ArrowTable::try_new(empty_schema, vec![rows]).unwrap();
     assert_eq!(table.row_count(), 3);
     assert_eq!(
         table.cell(0, 0),
@@ -260,7 +247,7 @@ fn visible_temporal_payloads_are_validated_before_any_use() {
         let schema = logical_schema(&[("D", CT::Date)]);
         let input = batch(&schema, vec![Arc::new(raw_dates(values, precisions, None))]);
         assert!(
-            matches!(ArrowTable::try_new(schema,vec![input],limits()),Err(TableError::Temporal { batch:0,column:0,row:1,reason: actual }) if actual == reason)
+            matches!(ArrowTable::try_new(schema,vec![input]),Err(TableError::Temporal { batch:0,column:0,row:1,reason: actual }) if actual == reason)
         );
     }
     // Null parent masks even an invalid raw day and unknown precision.
@@ -273,7 +260,7 @@ fn visible_temporal_payloads_are_validated_before_any_use() {
             Some(vec![false, true]),
         ))],
     );
-    let table = ArrowTable::try_new(schema, vec![input], limits()).unwrap();
+    let table = ArrowTable::try_new(schema, vec![input]).unwrap();
     assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Missing);
     assert_eq!(date(&table, 1, 0).fields(), (1970, 1, 1));
 }
@@ -297,12 +284,8 @@ fn temporal_child_validity_and_physical_schema_cannot_drift() {
         Some(NullBuffer::from(vec![false, true])),
     )
     .unwrap();
-    let table = ArrowTable::try_new(
-        schema.clone(),
-        vec![batch(&schema, vec![Arc::new(masked)])],
-        limits(),
-    )
-    .unwrap();
+    let table =
+        ArrowTable::try_new(schema.clone(), vec![batch(&schema, vec![Arc::new(masked)])]).unwrap();
     assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Missing);
     for fields in [
         vec![
@@ -333,51 +316,43 @@ fn temporal_child_validity_and_physical_schema_cannot_drift() {
         )]));
         let input = RecordBatch::try_new(foreign, vec![Arc::new(array)]).unwrap();
         assert!(matches!(
-            ArrowTable::try_new(schema.clone(), vec![input], limits()),
+            ArrowTable::try_new(schema.clone(), vec![input]),
             Err(TableError::SchemaMismatch { batch: 0 })
         ));
     }
 }
 
 #[test]
-/// Reject excess work before inspecting malformed temporal payloads.
-fn schema_mismatches_and_shape_limits_precede_payload_scans() {
+/// Fixed geometry precedes malformed temporal payloads; schema errors remain distinct.
+fn schema_mismatches_and_fixed_geometry_precede_payload_scans() {
     let schema = logical_schema(&[("D", CT::Date)]);
     let invalid = batch(&schema, vec![Arc::new(raw_dates(vec![0], vec![255], None))]);
-    for (policy, resource) in [
-        (
-            TableLimits {
-                max_rows: 0,
-                ..limits()
-            },
-            "rows",
-        ),
-        (
-            TableLimits {
-                max_columns: 0,
-                ..limits()
-            },
-            "columns",
-        ),
-        (
-            TableLimits {
-                max_batches: 0,
-                ..limits()
-            },
-            "batches",
-        ),
-        (
-            TableLimits {
-                max_cells: 0,
-                ..limits()
-            },
-            "cells",
-        ),
-    ] {
-        assert!(
-            matches!(ArrowTable::try_new(schema.clone(),vec![invalid.clone()],policy),Err(TableError::Limit { resource:actual,.. }) if actual == resource)
-        );
-    }
+    let wide_schema = TableSchema::new(
+        (0..1_025)
+            .map(|column| yamaa_core::table::Column {
+                name: if column == 0 {
+                    "D".into()
+                } else {
+                    format!("C{column}")
+                },
+                kind: if column == 0 { CT::Date } else { CT::Int },
+            })
+            .collect(),
+    )
+    .unwrap();
+    let number = Arc::new(Int64Array::from(vec![1])) as ArrayRef;
+    let arrays = std::iter::once(invalid.column(0).clone())
+        .chain(std::iter::repeat_n(number, 1_024))
+        .collect();
+    let wide = batch(&wide_schema, arrays);
+    assert!(matches!(
+        ArrowTable::try_new(wide_schema, vec![wide]),
+        Err(TableError::Limit {
+            resource: "columns",
+            limit: 1_024,
+            required: Some(1_025),
+        })
+    ));
     for foreign in [
         Arc::new(Schema::new(vec![Field::new(
             "wrong",
@@ -389,7 +364,7 @@ fn schema_mismatches_and_shape_limits_precede_payload_scans() {
         let input =
             RecordBatch::try_new(foreign, vec![Arc::new(Int64Array::from(vec![1]))]).unwrap();
         assert!(matches!(
-            ArrowTable::try_new(schema.clone(), vec![input], limits()),
+            ArrowTable::try_new(schema.clone(), vec![input]),
             Err(TableError::SchemaMismatch { batch: 0 })
         ));
     }
@@ -400,14 +375,10 @@ fn schema_mismatches_and_shape_limits_precede_payload_scans() {
         &RecordBatchOptions::new().with_row_count(Some(usize::MAX)),
     )
     .unwrap();
-    let policy = TableLimits {
-        max_rows: usize::MAX,
-        ..limits()
-    };
     assert!(matches!(
-        ArrowTable::try_new(no_columns, vec![huge.clone(), huge], policy),
+        ArrowTable::try_new(no_columns, vec![huge.clone(), huge]),
         Err(TableError::Limit {
-            resource: "rows",
+            resource: "table_rows",
             required: None,
             ..
         })
@@ -433,34 +404,20 @@ fn actual_engine_reductions_cross_chunks_without_partial_sums() {
             ]))],
         ),
     ];
-    let table = ArrowTable::try_new(schema, chunks, limits()).unwrap();
+    let table = ArrowTable::try_new(schema, chunks).unwrap();
     assert_eq!(
-        reduce_column(
-            &table,
-            0,
-            &[0, 1, 2, 3, 4],
-            5,
-            NumericReducer::Sum,
-            "SUM(A)"
-        ),
+        reduce_column(&table, 0, &[0, 1, 2, 3, 4], NumericReducer::Sum, "SUM(A)"),
         Ok(Number::float(1.0))
     );
     assert_eq!(
-        reduce_column(
-            &table,
-            0,
-            &[0, 1, 2, 3, 4],
-            5,
-            NumericReducer::Mean,
-            "MEAN(A)"
-        ),
+        reduce_column(&table, 0, &[0, 1, 2, 3, 4], NumericReducer::Mean, "MEAN(A)"),
         Ok(Number::float(0.25))
     );
     let schema = logical_schema(&[("A", CT::Int)]);
     let chunks = [i64::MAX, 1, -1]
         .map(|value| batch(&schema, vec![Arc::new(Int64Array::from(vec![value]))]));
-    let table = ArrowTable::try_new(schema, chunks.into(), limits()).unwrap();
-    let result = reduce_column(&table, 0, &[0, 1, 2], 3, NumericReducer::Sum, "SUM(A)");
+    let table = ArrowTable::try_new(schema, chunks.into()).unwrap();
+    let result = reduce_column(&table, 0, &[0, 1, 2], NumericReducer::Sum, "SUM(A)");
     assert!(
         matches!(result,Err(TableReductionError::Reduction(ReductionError::Arithmetic { argument:1,error })) if error.kind == ArithmeticErrorKind::IntegerOverflow { value:i64::MAX as i128+1 })
     );
@@ -485,12 +442,8 @@ fn epoch_calendar_anchors_and_full_gregorian_cycle() {
         vec![2; anchors.len()],
         None,
     );
-    let table = ArrowTable::try_new(
-        schema.clone(),
-        vec![batch(&schema, vec![Arc::new(raw)])],
-        limits(),
-    )
-    .unwrap();
+    let table =
+        ArrowTable::try_new(schema.clone(), vec![batch(&schema, vec![Arc::new(raw)])]).unwrap();
     for (row, (_, fields)) in anchors.iter().enumerate() {
         assert_eq!(date(&table, row, 0).fields(), *fields);
     }
@@ -514,12 +467,8 @@ fn epoch_calendar_anchors_and_full_gregorian_cycle() {
     for row in 0..civil.len() {
         assert_eq!(days.value(row), -135140 + row as i32);
     }
-    let table = ArrowTable::try_new(
-        schema.clone(),
-        vec![batch(&schema, vec![Arc::new(array)])],
-        limits(),
-    )
-    .unwrap();
+    let table =
+        ArrowTable::try_new(schema.clone(), vec![batch(&schema, vec![Arc::new(array)])]).unwrap();
     for (row, expected) in civil.into_iter().enumerate() {
         assert_eq!(date(&table, row, 0).fields(), expected.unwrap().fields());
     }
@@ -551,7 +500,7 @@ fn datetime_range_precision_and_unit_are_strict() {
         .unwrap();
         let input = batch(&schema, vec![Arc::new(array)]);
         assert!(
-            matches!(ArrowTable::try_new(schema.clone(),vec![input],limits()),Err(TableError::Temporal { reason:actual,.. }) if actual == reason)
+            matches!(ArrowTable::try_new(schema.clone(),vec![input]),Err(TableError::Temporal { reason:actual,.. }) if actual == reason)
         );
     }
     let seconds = [-62135596800, -86401, -86400, -1, 0, 253402300799];
@@ -572,12 +521,8 @@ fn datetime_range_precision_and_unit_are_strict() {
         None,
     )
     .unwrap();
-    let table = ArrowTable::try_new(
-        schema.clone(),
-        vec![batch(&schema, vec![Arc::new(array)])],
-        limits(),
-    )
-    .unwrap();
+    let table =
+        ArrowTable::try_new(schema.clone(), vec![batch(&schema, vec![Arc::new(array)])]).unwrap();
     for (row, fields) in expected.into_iter().enumerate() {
         assert_eq!(datetime(&table, row, 0).fields(), fields);
     }
@@ -619,7 +564,7 @@ fn datetime_range_precision_and_unit_are_strict() {
     )
     .unwrap();
     assert!(matches!(
-        ArrowTable::try_new(schema, vec![input], limits()),
+        ArrowTable::try_new(schema, vec![input]),
         Err(TableError::SchemaMismatch { batch: 0 })
     ));
 }
@@ -646,7 +591,7 @@ fn null_validity_never_collides_with_exact_scalar_payloads() {
             Arc::new(Float64Array::from(floats)),
         ],
     );
-    let table = ArrowTable::try_new(schema, vec![input], limits()).unwrap();
+    let table = ArrowTable::try_new(schema, vec![input]).unwrap();
     assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Int(i64::MIN));
     assert_eq!(table.cell(1, 0).unwrap(), ValueRef::Missing);
     for (row, bits) in bits.into_iter().enumerate() {

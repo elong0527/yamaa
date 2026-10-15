@@ -7,7 +7,7 @@ use arrow_ipc::{reader::StreamReader, writer::StreamWriter};
 use arrow_schema::{DataType, Field, Schema};
 use ipc_snapshot::table_snapshot;
 use std::{io::Cursor, sync::Arc};
-use yamaa_adapters::ipc_table::{table_round_trip, TableError as E, MAX_INPUT_BYTES};
+use yamaa_adapters::ipc_table::{table_round_trip, TableError as E};
 
 /// Replay independent truth using PyArrow-authored input, not candidate output.
 #[test]
@@ -56,7 +56,7 @@ fn every_truncation_and_bad_frame_is_rejected_before_use() {
         assert!(
             matches!(
                 table_snapshot(&input[..end]),
-                Err(E::InvalidStream | E::InvalidTable | E::ShapeLimit)
+                Err(E::InvalidStream | E::InvalidTable | E::Limit { .. })
             ),
             "prefix {end}"
         );
@@ -70,23 +70,12 @@ fn every_truncation_and_bad_frame_is_rejected_before_use() {
     ] {
         assert!(matches!(
             table_round_trip(&input),
-            Err(E::InvalidStream | E::ShapeLimit)
+            Err(E::InvalidStream | E::Limit { .. })
         ));
     }
     let mut trailing = input.to_vec();
     trailing.push(0);
     assert_eq!(table_snapshot(&trailing), Err(E::InvalidStream));
-    assert_eq!(
-        yamaa_adapters::ipc_table::decode_snapshot_with_budget(
-            input,
-            yamaa_core::dataset::ExecutionBudget {
-                max_ipc_bytes: input.len() - 1,
-                ..Default::default()
-            },
-        )
-        .unwrap_err(),
-        E::InputLimit
-    );
     assert!(table_snapshot(input).is_ok());
 }
 
@@ -206,7 +195,14 @@ fn shape_and_schema_policy_are_enforced() {
         &RecordBatchOptions::new().with_row_count(Some(10_000_001)),
     )
     .unwrap();
-    assert_eq!(table_snapshot(&stream(&batch)), Err(E::ShapeLimit));
+    assert_eq!(
+        table_snapshot(&stream(&batch)),
+        Err(E::Limit {
+            resource: "table_rows",
+            limit: 10_000_000,
+            required: Some(10_000_001)
+        })
+    );
     let schema = Arc::new(Schema::new(vec![Field::new("I", DataType::Int64, false)]));
     let batch = RecordBatch::try_new(schema, vec![Arc::new(Int64Array::from(vec![1]))]).unwrap();
     assert_eq!(table_snapshot(&stream(&batch)), Err(E::InvalidTable));
@@ -217,17 +213,7 @@ fn shape_and_schema_policy_are_enforced() {
         .map(|_| Arc::new(Int64Array::from(Vec::<i64>::new())) as arrow_array::ArrayRef)
         .collect();
     let batch = RecordBatch::try_new(Arc::new(Schema::new(fields)), arrays).unwrap();
-    // 65 columns sit inside the default 1,024-column budget (#2185); the
-    // shape policy still refuses a schema wider than the selected budget.
     assert!(table_snapshot(&stream(&batch)).is_ok());
-    let budget = yamaa_adapters::ExecutionBudget {
-        max_columns: 64,
-        ..Default::default()
-    };
-    assert_eq!(
-        yamaa_adapters::ipc_table::decode_snapshot_with_budget(&stream(&batch), budget).err(),
-        Some(E::ShapeLimit)
-    );
 }
 
 /// Canonical temporal fields exercise the largest supported scalar IPC schema.
@@ -258,12 +244,19 @@ fn wide_temporal_ipc_admits_1024_and_refuses_1025_and_oversized_metadata() {
         if width == 1_024 {
             assert_eq!(read(result.unwrap())[0].num_columns(), 1_024);
         } else {
-            assert_eq!(result, Err(E::ShapeLimit));
+            assert_eq!(
+                result,
+                Err(E::Limit {
+                    resource: "columns",
+                    limit: 1_024,
+                    required: Some(1_025)
+                })
+            );
         }
     }
-    // Framing refuses a declared metadata message over 1 MiB before reading it.
+    // A truncated declared metadata message is malformed, independently of its size.
     let oversized = (1_048_576_u32 + 8).to_le_bytes();
-    assert_eq!(table_round_trip(&oversized), Err(E::ShapeLimit));
+    assert_eq!(table_round_trip(&oversized), Err(E::InvalidStream));
 }
 
 /// Build adversarial metadata independently of Arrow's validating record writer.
@@ -403,9 +396,9 @@ fn adversarial_declared_lengths_nodes_buffers_and_compression() {
     );
 }
 
-/// Aliasing may expand logical text; JSON control escaping has a separate output cap.
+/// Aliased buffers and JSON escaping retain all logical text without copy quotas.
 #[test]
-fn aliased_text_and_json_expansion_are_bounded() {
+fn aliased_text_and_json_expansion_remain_complete() {
     use arrow_ipc::{Buffer as B, FieldNode as N};
     let schema = Schema::new(
         (0..64)
@@ -421,38 +414,42 @@ fn aliased_text_and_json_expansion_are_bounded() {
     let buffers = (0..64)
         .flat_map(|_| [B::new(0, 0), B::new(0, 8), B::new(8, i64::from(length))])
         .collect::<Vec<_>>();
-    assert_eq!(
-        yamaa_adapters::ipc_table::table_round_trip_with_budget(
-            &declared_stream(
-                &schema,
-                1,
-                &nodes,
-                &buffers,
-                &body,
-                body.len() as i64,
-                false,
-            ),
-            yamaa_core::dataset::ExecutionBudget::bounded(),
-        ),
-        Err(E::ShapeLimit)
+    let input = declared_stream(
+        &schema,
+        1,
+        &nodes,
+        &buffers,
+        &body,
+        body.len() as i64,
+        false,
     );
+    let output = table_round_trip(&input).unwrap();
+    let table = yamaa_adapters::ipc_table::decode_snapshot(&output).unwrap();
+    use yamaa_core::table::{TableAccess, ValueRef};
+    assert_eq!(table.row_count(), 1);
+    for column in 0..64 {
+        assert_eq!(
+            table.cell(0, column).unwrap(),
+            ValueRef::Str(&"x".repeat(150_000))
+        );
+    }
     let schema = Arc::new(Schema::new(vec![Field::new("S", DataType::Utf8, true)]));
     let text = "\0".repeat(3 * 1024 * 1024);
     let batch =
         RecordBatch::try_new(schema, vec![Arc::new(StringArray::from(vec![text]))]).unwrap();
     let input = stream(&batch);
-    assert!(input.len() < MAX_INPUT_BYTES);
-    assert_eq!(table_snapshot(&input), Err(E::OutputLimit));
+    let snapshot = table_snapshot(&input).unwrap();
+    assert!(snapshot.len() > 16 * 1024 * 1024);
+    let snapshot: serde_json::Value = serde_json::from_str(&snapshot).unwrap();
+    assert_eq!(snapshot["rows"][0][0]["str"], "\0".repeat(3 * 1024 * 1024));
     assert!(table_round_trip(&input).is_ok());
 }
 
-/// Logical text must share one quota across chunks and across distinct sources,
-/// even when multiple field buffers alias the same small encoded body.
+/// Distinct chunks retain every aliased field without a shared copy allowance.
 #[test]
-fn configurable_text_quota_accumulates_across_batches_and_sources() {
+fn aliased_text_remains_complete_across_batches() {
     use arrow_ipc::{Buffer as B, FieldNode as N};
     use yamaa_adapters::ipc_table::snapshot_batches;
-    use yamaa_adapters::ExecutionBudget;
 
     let schema = Schema::new(vec![
         Field::new("A", DataType::Utf8, true),
@@ -479,17 +476,22 @@ fn configurable_text_quota_accumulates_across_batches_and_sources() {
         body.len() as i64,
         false,
     );
-    let budget = ExecutionBudget {
-        max_ipc_bytes: input.len() * 2,
-        ..ExecutionBudget::default()
-    };
-    assert!(budget.max_ipc_bytes < 4 * length as usize);
     let record_start = 8 + u32::from_le_bytes(input[4..8].try_into().unwrap()) as usize;
     let mut two_batches = input[..input.len() - 8].to_vec();
     two_batches.extend_from_slice(&input[record_start..]);
-    let mut batches = snapshot_batches(&two_batches, budget).unwrap();
-    assert!(batches.next().unwrap().is_ok());
-    assert!(matches!(batches.next(), Some(Err(E::ShapeLimit))));
+    let mut batches = snapshot_batches(&two_batches).unwrap();
+    for _ in 0..2 {
+        let table = batches.next().unwrap().unwrap();
+        assert_eq!(table.num_rows(), 1);
+        for column in 0..2 {
+            let values = table
+                .column(column)
+                .as_any()
+                .downcast_ref::<StringArray>()
+                .unwrap();
+            assert_eq!(values.value(0), "x".repeat(4096));
+        }
+    }
     assert!(batches.next().is_none());
 }
 
