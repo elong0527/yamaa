@@ -2,6 +2,7 @@
 
 import io
 import json
+import shutil
 import subprocess
 import tarfile
 import tempfile
@@ -778,6 +779,7 @@ class PythonSourceWorkspaceTests(unittest.TestCase):
             self.assertEqual(archive.read_bytes(), before)
             self.assertEqual(truth.read_bytes(), b"independently committed truth\n")
 
+    @unittest.skipUnless(shutil.which("cargo"), "cargo is unavailable")
     def test_pruned_archive_is_restored_and_resolves_without_rewriting_lock(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
