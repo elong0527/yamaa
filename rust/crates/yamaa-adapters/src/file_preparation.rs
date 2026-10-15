@@ -676,7 +676,6 @@ mod dispatch_policy_tests {
             },
             None,
             "entry/root.yaml",
-            Limits::default().captured_bytes,
         );
         let Err(yamaa_core::file_preparation::Error::ResourceFinding { error, diagnostic }) =
             result
@@ -715,7 +714,6 @@ mod dispatch_policy_tests {
             },
             None,
             "entry/root.yaml",
-            Limits::default().captured_bytes,
         );
         let Err(yamaa_core::file_preparation::Error::ResourceFinding { error, diagnostic }) =
             result

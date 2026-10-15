@@ -76,7 +76,6 @@ fn environment() -> OwnedEnvironment {
         },
         Language::Python,
         &mut NoMetadata,
-        Default::default(),
     )
     .unwrap()
     .into_owned()
@@ -385,7 +384,7 @@ fn already_captured_changed_metadata_keeps_original_snapshot_and_native_failure(
     let before = yaml("{RAW: never-read.csv}", "RAW", "root.csv");
     study.write("root.yaml", &before);
     let mut resources = study.resources();
-    resources.capture("root.yaml", 65_536).unwrap();
+    resources.capture_metadata("root.yaml").unwrap();
     study.write("root.yaml", &before.replace("TEST", "NEXT"));
     let failure = rejected(FileGraph::prepare(
         resources,
