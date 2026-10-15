@@ -1,5 +1,6 @@
 //! Versionless call preparation and retained diagnostic projection.
 use super::*;
+use crate::json::Value as V;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     project_call_document::{self, Input},
@@ -7,7 +8,6 @@ use crate::{
     project_function::{CallFinding, Function},
     value::ValueType,
 };
-use serde_json::Value as V;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Cause {
@@ -119,31 +119,16 @@ fn collect_calls(
     contextual: bool,
     requests: &mut Vec<(usize, String, bool)>,
 ) -> Result<(), PrepareError> {
-    if depth > 64 {
+    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
         return Err(PrepareError::limit(
-            "function_call_depth",
-            64,
+            "semantic_depth",
+            crate::limits::Limits::SEMANTIC_DEPTH,
             Some(depth),
             Some(path),
         ));
     }
-    if path.len() > 65_536 {
-        return Err(PrepareError::limit(
-            "path_bytes",
-            65_536,
-            Some(path.len()),
-            Some(path),
-        ));
-    }
+
     if let Some(node) = d.field(value, "function") {
-        if requests.len() >= 1024 {
-            return Err(PrepareError::limit(
-                "function_calls",
-                1024,
-                Some(requests.len() + 1),
-                Some(path),
-            ));
-        }
         requests.push((node, format!("{path}.function"), contextual));
     }
     if let Some(bindings) = d
@@ -180,14 +165,6 @@ fn collect_calls(
     }
     if let Some(case) = d.field(value, "case") {
         let branches = sequence(d, case)?;
-        if branches.len() > 1024 {
-            return Err(PrepareError::limit(
-                "case_branches",
-                1024,
-                Some(branches.len()),
-                None,
-            ));
-        }
         for (index, &branch) in branches.iter().enumerate() {
             for name in ["then", "otherwise"] {
                 if let Some(value) = d.field(branch, name) {
@@ -211,38 +188,6 @@ pub(super) fn prepare(
     columns: &[usize],
     functions: &[Function],
 ) -> Result<Prepared, PrepareError> {
-    // The held environment is globally admitted. Bound a borrowed lookup index
-    // for malformed-call name checks and missing-parameter projection too;
-    // neither path may rescan all definitions once per retained diagnostic.
-    if functions.len() > 65_536 {
-        return Err(PrepareError::limit(
-            "function_definitions",
-            65_536,
-            Some(functions.len()),
-            None,
-        ));
-    }
-    let depth = usize::BITS as usize - functions.len().max(1).leading_zeros() as usize;
-    let mut name_bytes = 0usize;
-    for function in functions {
-        name_bytes = name_bytes
-            .checked_add(function.definition().name.len())
-            .filter(|&n| n <= 16_777_216)
-            .ok_or_else(|| {
-                PrepareError::limit("function_definition_bytes", 16_777_216, None, None)
-            })?;
-    }
-    if name_bytes
-        .checked_mul((depth + 1) * 16)
-        .is_none_or(|n| n > 67_108_864)
-    {
-        return Err(PrepareError::limit(
-            "function_definition_work",
-            67_108_864,
-            name_bytes.checked_mul((depth + 1) * 16),
-            None,
-        ));
-    }
     let mut function_index = BTreeMap::new();
     for function in functions {
         if function_index
@@ -289,14 +234,6 @@ pub(super) fn prepare(
     let has_rows = present(d, d.root(), "rows");
     if has_rows {
         let rows = sequence(d, field(d, d.root(), "rows")?)?;
-        if rows.len() > 16 {
-            return Err(PrepareError::limit(
-                "row_templates",
-                16,
-                Some(rows.len()),
-                Some("rows"),
-            ));
-        }
         for (row, &node) in rows.iter().enumerate() {
             for &(name, derivation) in mapping(d, field(d, node, "derivations")?)? {
                 if let Some(value) = d.field(derivation, "value") {
@@ -312,22 +249,11 @@ pub(super) fn prepare(
             }
         }
     }
-    let mut bytes = 0usize;
-    for (node, path, _) in &requests {
-        let cost = project_call_document::text_cost(d, *node, path, Default::default())
-            .map_err(|error| PrepareError::call_document_limit(error, Some(path)))?;
-        bytes = bytes
-            .checked_add(cost)
-            .filter(|&n| n <= 16_777_216)
-            .ok_or_else(|| {
-                PrepareError::limit("function_call_bytes", 16_777_216, None, Some(path))
-            })?;
-    }
     let mut calls = Vec::new();
     let mut origins = Vec::new();
     let mut findings = Vec::new();
     for (request, (node, path, _)) in requests.iter().enumerate() {
-        match project_call_document::decode(d, *node, path, Default::default()) {
+        match project_call_document::decode(d, *node, path) {
             Ok(call) => {
                 origins.push((request, *node, path.clone(), call.name.clone()));
                 calls.push(LocatedCall {
@@ -335,7 +261,7 @@ pub(super) fn prepare(
                     call,
                 });
             }
-            Err(project_call_document::Error::Findings(errors)) => {
+            Err(errors) => {
                 let function = d
                     .field(*node, "name")
                     .and_then(|id| match &d.nodes()[id] {
@@ -367,9 +293,6 @@ pub(super) fn prepare(
                         }),
                     )
                 }));
-            }
-            Err(error @ project_call_document::Error::Limit(_)) => {
-                return Err(PrepareError::call_document_limit(error, Some(path)))
             }
         }
     }
@@ -417,108 +340,93 @@ pub(super) fn prepare(
         .iter()
         .map(|(request, _, _, _)| requests[*request].2)
         .collect::<Vec<_>>();
-    let admitted = match ProjectCalls::admit_contextual(
-        functions,
-        calls,
-        &types,
-        &uses,
-        &contextual,
-        Default::default(),
-    ) {
-        Ok(calls) => Some(calls),
-        Err(project_calls::Error::Limit(resource)) => {
-            return Err(PrepareError::call_limit(resource, None))
-        }
-        Err(
-            project_calls::Error::DuplicateDefinitions(_)
-            | project_calls::Error::InvalidAdmittedSignature
-            | project_calls::Error::InvalidCallUses,
-        ) => return Err(PrepareError::Internal),
-        Err(project_calls::Error::Findings(errors)) => {
-            for error in errors {
-                let (origin, node, path, function) = &origins[error.call];
-                let arguments = &argument_origins[error.call];
-                let (cause, argument, node, path) = match error.kind {
-                    project_calls::Kind::UnknownFunction => {
-                        (Cause::UnknownFunction, None, *node, format!("{path}.name"))
-                    }
-                    project_calls::Kind::UnknownReference { argument } => {
-                        let (name, node, reference) = &arguments[argument];
-                        (
-                            Cause::UnknownReference(
-                                reference.clone().ok_or(PrepareError::Internal)?,
-                            ),
-                            Some(name.clone()),
-                            *node,
-                            format!("{path}.args.{name}"),
-                        )
-                    }
-                    project_calls::Kind::Argument(finding) => {
-                        let (index, cause) = match finding {
-                            CallFinding::UnknownArgument { argument } => {
-                                (Some(argument), Cause::UnknownArgument)
-                            }
-                            CallFinding::DuplicateArgument { argument } => {
-                                (Some(argument), Cause::DuplicateArgument)
-                            }
-                            CallFinding::ArgumentType {
-                                argument,
-                                expected,
-                                actual,
-                            } => (Some(argument), Cause::ArgumentType { expected, actual }),
-                            CallFinding::MissingRequiredArgument { parameter } => {
-                                let f = definitions[error.call].ok_or(PrepareError::Internal)?;
-                                let argument = f
-                                    .definition()
-                                    .params
-                                    .get(parameter)
-                                    .ok_or(PrepareError::Internal)?
-                                    .name
-                                    .clone();
-                                findings.push((
-                                    *origin,
-                                    invalid(FunctionFinding {
-                                        path: format!("{path}.args"),
-                                        function: function.clone(),
-                                        argument: Some(argument),
-                                        node: *node,
-                                        cause: Cause::MissingRequiredArgument,
-                                    }),
-                                ));
-                                continue;
-                            }
-                            CallFinding::Limit(error) => {
-                                return Err(PrepareError::project_limit(
-                                    error,
-                                    Default::default(),
-                                    Some(path),
-                                ))
-                            }
-                        };
-                        let (argument, value, _) =
-                            &arguments[index.ok_or(PrepareError::Internal)?];
-                        (
+    let admitted =
+        match ProjectCalls::admit_contextual(functions, calls, &types, &uses, &contextual) {
+            Ok(calls) => Some(calls),
+            Err(
+                project_calls::Error::DuplicateDefinitions(_)
+                | project_calls::Error::InvalidAdmittedSignature
+                | project_calls::Error::InvalidCallUses,
+            ) => return Err(PrepareError::Internal),
+            Err(project_calls::Error::Findings(errors)) => {
+                for error in errors {
+                    let (origin, node, path, function) = &origins[error.call];
+                    let arguments = &argument_origins[error.call];
+                    let (cause, argument, node, path) = match error.kind {
+                        project_calls::Kind::UnknownFunction => {
+                            (Cause::UnknownFunction, None, *node, format!("{path}.name"))
+                        }
+                        project_calls::Kind::UnknownReference { argument } => {
+                            let (name, node, reference) = &arguments[argument];
+                            (
+                                Cause::UnknownReference(
+                                    reference.clone().ok_or(PrepareError::Internal)?,
+                                ),
+                                Some(name.clone()),
+                                *node,
+                                format!("{path}.args.{name}"),
+                            )
+                        }
+                        project_calls::Kind::Argument(finding) => {
+                            let (index, cause) = match finding {
+                                CallFinding::UnknownArgument { argument } => {
+                                    (Some(argument), Cause::UnknownArgument)
+                                }
+                                CallFinding::DuplicateArgument { argument } => {
+                                    (Some(argument), Cause::DuplicateArgument)
+                                }
+                                CallFinding::ArgumentType {
+                                    argument,
+                                    expected,
+                                    actual,
+                                } => (Some(argument), Cause::ArgumentType { expected, actual }),
+                                CallFinding::MissingRequiredArgument { parameter } => {
+                                    let f =
+                                        definitions[error.call].ok_or(PrepareError::Internal)?;
+                                    let argument = f
+                                        .definition()
+                                        .params
+                                        .get(parameter)
+                                        .ok_or(PrepareError::Internal)?
+                                        .name
+                                        .clone();
+                                    findings.push((
+                                        *origin,
+                                        invalid(FunctionFinding {
+                                            path: format!("{path}.args"),
+                                            function: function.clone(),
+                                            argument: Some(argument),
+                                            node: *node,
+                                            cause: Cause::MissingRequiredArgument,
+                                        }),
+                                    ));
+                                    continue;
+                                }
+                            };
+                            let (argument, value, _) =
+                                &arguments[index.ok_or(PrepareError::Internal)?];
+                            (
+                                cause,
+                                Some(argument.clone()),
+                                *value,
+                                format!("{path}.args.{argument}"),
+                            )
+                        }
+                    };
+                    findings.push((
+                        *origin,
+                        invalid(FunctionFinding {
+                            path,
+                            function: function.clone(),
+                            argument,
+                            node,
                             cause,
-                            Some(argument.clone()),
-                            *value,
-                            format!("{path}.args.{argument}"),
-                        )
-                    }
-                };
-                findings.push((
-                    *origin,
-                    invalid(FunctionFinding {
-                        path,
-                        function: function.clone(),
-                        argument,
-                        node,
-                        cause,
-                    }),
-                ));
+                        }),
+                    ));
+                }
+                None
             }
-            None
-        }
-    };
+        };
     if !findings.is_empty() {
         findings.sort_by_key(|(origin, _)| *origin);
         return Err(PrepareError::Invalid(
@@ -558,16 +466,8 @@ pub(super) fn select_rows(
     functions: &[Function],
     uses: &[usize],
 ) -> Result<Prepared, PrepareError> {
-    let calls = ProjectCalls::admit_with_uses(
-        functions,
-        prepared.calls.into_located_calls(),
-        uses,
-        Default::default(),
-    )
-    .map_err(|error| match error {
-        project_calls::Error::Limit(resource) => PrepareError::call_limit(resource, None),
-        _ => PrepareError::Internal,
-    })?;
+    let calls = ProjectCalls::admit_with_uses(functions, prepared.calls.into_located_calls(), uses)
+        .map_err(|_| PrepareError::Internal)?;
     Ok(Prepared {
         calls,
         nodes: prepared.nodes,

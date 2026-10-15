@@ -2,15 +2,12 @@
 //! This does not execute subjects or use literal/assertion satisfiability to
 //! exempt variable syntax. Intervals describe consumption, not captured text.
 use super::*;
+use std::collections::BTreeSet;
+mod captures;
+mod symbolic;
 
 /// Use the existing scalar arithmetic when no capture-dependent pass is needed.
-pub(super) fn validate(
-    nodes: &[Node],
-    root: usize,
-    groups: usize,
-    limits: CompileLimits,
-    shared: &mut Budget,
-) -> Result<(), CompileError> {
+pub(super) fn validate(nodes: &[Node], root: usize) -> Result<(), CompileError> {
     let has_behind = nodes
         .iter()
         .any(|node| matches!(node.kind, Kind::Look { behind: true, .. }));
@@ -42,25 +39,32 @@ pub(super) fn validate(
     }
     let mut analysis = Analysis {
         nodes,
-        limits,
-        local: Budget::new(limits),
-        shared,
         behind: Vec::new(),
+        referenced: nodes
+            .iter()
+            .filter_map(|node| match node.kind {
+                Kind::Backreference(Reference::Number(number)) => Some(number),
+                _ => None,
+            })
+            .collect(),
+        arena: symbolic::Arena::new(),
+        captures: captures::Captures::new(nodes[root].captures.end),
     };
-    analysis.cells(nodes.len())?;
+
     analysis.behind.resize(nodes.len(), None);
-    analysis.cells(groups + 2)?;
+
     let initial = Path {
-        width: Extent::ZERO,
-        captures: vec![Extent::ZERO; groups + 1],
+        width: 0,
+        captures: 0,
+        guards: BTreeSet::new(),
     };
     analysis.visit(root, initial, false)?;
     // Retain deterministic arena/source ownership rather than returning whichever
     // reverse traversal happens to discover a variable assertion first.
     for (id, node) in nodes.iter().enumerate() {
         if matches!(node.kind, Kind::Look { behind: true, .. }) {
-            let width = analysis.behind[id].expect("every assertion is structurally visited");
-            if width.max != Some(width.min) {
+            let expression = analysis.behind[id].expect("every assertion is structurally visited");
+            if !analysis.arena.is_fixed(expression, node.byte)? {
                 return Err(variable(node.byte));
             }
         }
@@ -91,383 +95,231 @@ impl Extent {
         min: 1,
         max: Some(1),
     };
-
-    /// Union intervals without forgetting correlations stored in separate paths.
-    fn union(self, other: Self) -> Self {
-        Self {
-            min: self.min.min(other.min),
-            max: self.max.zip(other.max).map(|(a, b)| a.max(b)),
-        }
-    }
-    /// Optional repeat iterations must consume, unlike required iterations.
-    fn positive(self) -> Option<Self> {
-        (self.max != Some(0)).then_some(Self {
-            min: self.min.max(1),
-            max: self.max,
-        })
-    }
-    /// Width arithmetic overflow and fixed-width ceilings remain policy errors.
-    fn checked(
-        min: Option<usize>,
-        max: Option<Option<usize>>,
-        limit: usize,
-    ) -> Result<Self, CompileError> {
-        let error = || CompileError::Limit {
-            resource: Resource::Width,
-            limit,
-        };
-        let value = Self {
-            min: min.ok_or_else(error)?,
-            max: max.ok_or_else(error)?,
-        };
-        if value.max == Some(value.min) && value.min > limit {
-            return Err(error());
-        }
-        Ok(value)
-    }
-    /// Concatenate consumption intervals without subtracting unrelated bounds.
-    fn add(self, other: Self, limit: usize) -> Result<Self, CompileError> {
-        let max = match (self.max, other.max) {
-            (Some(a), Some(b)) => a.checked_add(b).map(Some),
-            _ => Some(None),
-        };
-        Self::checked(self.min.checked_add(other.min), max, limit)
-    }
-    /// Multiply required iterations symbolically, including exact zero counts.
-    fn times(self, count: usize, limit: usize) -> Result<Self, CompileError> {
-        if count == 0 {
-            return Ok(Self::ZERO);
-        }
-        let max = match self.max {
-            Some(value) => value.checked_mul(count).map(Some),
-            None => Some(None),
-        };
-        Self::checked(self.min.checked_mul(count), max, limit)
-    }
-    /// Zero or more strictly consuming optional iterations, bounded or unbounded.
-    fn optional(self, maximum: Option<usize>, limit: usize) -> Result<Self, CompileError> {
-        if maximum == Some(0) {
-            return Ok(Self::ZERO);
-        }
-        let max = match (self.max, maximum) {
-            (Some(width), Some(count)) => width.checked_mul(count).map(Some),
-            _ => Some(None),
-        };
-        Self::checked(Some(0), max, limit)
-    }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone)]
 struct Path {
-    width: Extent,
+    width: symbolic::Id,
     // Unentered and empty captures both consume zero as references. The matcher
-    // still retains their distinct participation/result values independently.
-    captures: Vec<Extent>,
-}
-/// Cumulative capture-dependent analysis only; parsing retains structural limits.
-/// The caller owns the scope, and failed charges retain the consumed prefix.
-pub(crate) struct Budget {
-    limits: CompileLimits,
-    work: usize,
-    cells: usize,
-}
-impl Budget {
-    /// Select width work/storage ceilings without changing individual pattern limits.
-    pub(crate) fn new(limits: CompileLimits) -> Self {
-        Self {
-            limits,
-            work: 0,
-            cells: 0,
-        }
-    }
-    /// Charge before analysis or allocation, retaining the original scope's ceiling.
-    fn charge(&mut self, n: usize, resource: Resource) -> Result<(), CompileError> {
-        let (used, limit) = match resource {
-            Resource::WidthWork => (&mut self.work, self.limits.width_work),
-            Resource::WidthCells => (&mut self.cells, self.limits.width_cells),
-            _ => unreachable!("only capture-path resources use this budget"),
-        };
-        *used = used
-            .checked_add(n)
-            .filter(|&next| next <= limit)
-            .ok_or(CompileError::Limit { resource, limit })?;
-        Ok(())
-    }
+    // retains their distinct participation/result values independently.
+    captures: usize,
+    // Independent domain factors stay outside consumption and later captures.
+    guards: BTreeSet<symbolic::Id>,
 }
 struct Analysis<'a> {
     nodes: &'a [Node],
-    limits: CompileLimits,
-    local: Budget,
-    shared: &'a mut Budget,
-    behind: Vec<Option<Extent>>,
+    behind: Vec<Option<symbolic::Id>>,
+    referenced: BTreeSet<usize>,
+    arena: symbolic::Arena,
+    captures: captures::Captures,
 }
 impl Analysis<'_> {
-    /// Bound visits/comparisons across this pattern and the owning request.
-    fn work(&mut self, n: usize) -> Result<(), CompileError> {
-        self.local.charge(n, Resource::WidthWork)?;
-        self.shared.charge(n, Resource::WidthWork)
-    }
-    /// Charge both scopes before allocation; allocator capacity is not counted.
-    fn cells(&mut self, n: usize) -> Result<(), CompileError> {
-        self.local.charge(n, Resource::WidthCells)?;
-        self.shared.charge(n, Resource::WidthCells)
-    }
-    /// Preserve correlated capture vectors without allocating an uncharged clone.
-    fn copy(&mut self, path: &Path) -> Result<Path, CompileError> {
-        self.cells(path.captures.len() + 1)?;
-        Ok(path.clone())
-    }
-    /// Equal width/capture states can share a continuation regardless of literals.
-    fn push(&mut self, paths: &mut Vec<Path>, path: Path) -> Result<(), CompileError> {
-        for known in paths.iter() {
-            self.work(path.captures.len() + 1)?;
-            if known == &path {
-                return Ok(());
-            }
+    /// A syntax join creates one choice shared by its width and capture slots.
+    /// If all captures agree, union consumption immediately as the interval
+    /// analysis did, without retaining an unobservable branch identity.
+    fn join(&mut self, paths: Vec<Path>) -> Path {
+        let first = &paths[0];
+        if paths
+            .iter()
+            .all(|path| path.captures == first.captures && path.guards == first.guards)
+        {
+            return Path {
+                width: self
+                    .arena
+                    .union(paths.iter().map(|path| path.width).collect()),
+                captures: first.captures,
+                guards: first.guards.clone(),
+            };
         }
-        self.cells(1)?;
-        paths.push(path);
-        Ok(())
+        let choice = self.arena.new_choice(paths.len());
+        let width = self
+            .arena
+            .choice(choice, paths.iter().map(|path| path.width).collect());
+        let mut guards = first.guards.clone();
+        guards.retain(|guard| paths.iter().all(|path| path.guards.contains(guard)));
+        let mut domains = Vec::with_capacity(paths.len());
+        for path in &paths {
+            let mut domain = 0;
+            for &guard in path.guards.difference(&guards) {
+                domain = self.arena.add(domain, guard);
+            }
+            domains.push(domain);
+        }
+        let domain = self.arena.choice(choice, domains);
+        if domain != 0 {
+            guards.insert(domain);
+        }
+        let captures = self
+            .captures
+            .choice(choice, paths.iter().map(|path| path.captures).collect());
+        Path {
+            width,
+            captures,
+            guards,
+        }
     }
-    /// Create one charged result slot while moving its owned capture state.
-    fn one(&mut self, path: Path) -> Result<Vec<Path>, CompileError> {
-        self.cells(1)?;
-        Ok(vec![path])
+
+    fn guarded(&mut self, path: &Path) -> symbolic::Id {
+        let mut width = path.width;
+        for &guard in &path.guards {
+            width = self.arena.add(width, guard);
+        }
+        width
     }
-    /// Traverse flat sequences iteratively; only grammar-bounded nesting recurses.
-    fn visit(
-        &mut self,
-        id: usize,
-        mut path: Path,
-        backwards: bool,
-    ) -> Result<Vec<Path>, CompileError> {
-        self.work(1)?;
+    /// Flat sequences are iterative. Recursion follows only grammar nesting;
+    /// capture-dependent expression chains live in the separate indexed arena.
+    fn visit(&mut self, id: usize, mut path: Path, backwards: bool) -> Result<Path, CompileError> {
         let nodes = self.nodes;
         let node = &nodes[id];
-        match &node.kind {
+        let result = match &node.kind {
             Kind::Literal(_) | Kind::Dot | Kind::Class { .. } => {
-                path.width = path.width.add(Extent::ONE, self.limits.width)?;
-                self.one(path)
+                let one = self.arena.value(Extent::ONE);
+                path.width = self.arena.add(path.width, one);
+                path
             }
-            Kind::Start | Kind::End | Kind::Boundary(_) => self.one(path),
+            Kind::Start | Kind::End | Kind::Boundary(_) => path,
             Kind::Backreference(Reference::Number(number)) => {
-                path.width = path.width.add(path.captures[*number], self.limits.width)?;
-                self.one(path)
+                let width = self.captures.get(path.captures, *number, &mut self.arena);
+                path.width = self.arena.add(path.width, width);
+                path
             }
             Kind::Backreference(Reference::Name(_)) => unreachable!("references already resolved"),
             Kind::Sequence(children) => {
-                let mut paths = self.one(path)?;
                 for position in 0..children.len() {
                     let child = children[if backwards {
                         children.len() - 1 - position
                     } else {
                         position
                     }];
-                    let mut next = Vec::new();
-                    for path in paths {
-                        for result in self.visit(child, path, backwards)? {
-                            self.push(&mut next, result)?;
-                        }
-                    }
-                    paths = next;
+                    path = self.visit(child, path, backwards)?;
                 }
-                Ok(paths)
+                path
             }
             Kind::Alternative(children) => {
-                let mut paths = Vec::new();
+                let mut paths = Vec::with_capacity(children.len());
                 for &child in children {
-                    let branch = self.copy(&path)?;
-                    for result in self.visit(child, branch, backwards)? {
-                        self.push(&mut paths, result)?;
-                    }
+                    paths.push(self.visit(child, path.clone(), backwards)?);
                 }
-                Ok(paths)
+                self.join(paths)
             }
             Kind::Group { child, number } => {
                 let prefix = path.width;
-                path.width = Extent::ZERO;
-                let mut paths = self.visit(*child, path, backwards)?;
-                for path in &mut paths {
-                    if let Some(number) = number {
-                        path.captures[*number] = path.width;
-                    }
-                    path.width = prefix.add(path.width, self.limits.width)?;
+                path.width = 0;
+                let mut path = self.visit(*child, path, backwards)?;
+                if let Some(number) = number.filter(|number| self.referenced.contains(number)) {
+                    path.captures = self.captures.set(path.captures, number, path.width);
                 }
-                Ok(paths)
+                path.width = self.arena.add(prefix, path.width);
+                path
             }
             Kind::Look {
                 child,
                 behind,
                 positive,
             } => {
-                let prefix = path.width;
-                let original = if !positive {
-                    Some(self.copy(&path)?)
-                } else {
-                    None
-                };
-                path.width = Extent::ZERO;
-                let mut paths = self.visit(*child, path, *behind)?;
-                for path in &mut paths {
-                    if *behind {
-                        self.behind[id] = Some(
-                            self.behind[id].map_or(path.width, |known| known.union(path.width)),
-                        );
-                    }
-                    path.width = prefix;
+                let original = path.clone();
+                path.width = 0;
+                let mut path = self.visit(*child, path, *behind)?;
+                if *behind {
+                    self.behind[id] = Some(self.guarded(&path));
                 }
-                if let Some(original) = original {
-                    self.one(original)
+                if *positive {
+                    path.width = original.width;
+                    path
                 } else {
-                    Ok(paths)
+                    original
                 }
             }
             Kind::Repeat {
                 child, min, max, ..
             } => {
                 let prefix = path.width;
-                let mut body = self.copy(&path)?;
-                body.width = Extent::ZERO;
-                self.work(nodes[*child].captures.len())?;
-                for capture in nodes[*child].captures.clone() {
-                    body.captures[capture] = Extent::ZERO;
-                }
-                // Even a zero-count body must satisfy nested assertion grammar.
-                let last_paths = self.visit(*child, body, backwards)?;
+                let mut body = path.clone();
+                body.width = 0;
+                body.captures = self
+                    .captures
+                    .clear(body.captures, nodes[*child].captures.clone());
+                let first_choice = self.arena.choices();
+                // Zero-count bodies still undergo nested assertion admission.
+                let last = self.visit(*child, body, backwards)?;
+                let end_choice = self.arena.choices();
                 if *max == Some(0) {
-                    return self.one(path);
+                    return Ok(path);
                 }
-                let any = last_paths
-                    .iter()
-                    .map(|path| path.width)
-                    .reduce(Extent::union)
-                    .expect("structural alternatives have at least one path");
+                let mut body_width = last.width;
+                for &guard in last.guards.difference(&path.guards) {
+                    body_width = self.arena.add(body_width, guard);
+                }
+                let any = self.arena.quantify(body_width, first_choice..end_choice);
                 let mut paths = Vec::new();
                 if *min == 0 {
-                    self.push(&mut paths, path)?;
+                    paths.push(path);
                 }
-                for mut last in last_paths {
-                    let last_width = last.width;
-                    if *min > 0 {
-                        let mut required = self.copy(&last)?;
-                        required.width = prefix
-                            .add(any.times(min - 1, self.limits.width)?, self.limits.width)?
-                            .add(last_width, self.limits.width)?;
-                        self.push(&mut paths, required)?;
-                    }
-                    if max.is_none_or(|max| max > *min) {
-                        if let Some(positive) = last_width.positive() {
-                            let earlier_optional = any
-                                .positive()
-                                .expect("a positive last path exists")
-                                .optional(max.map(|max| max - min - 1), self.limits.width)?;
-                            last.width = prefix
-                                .add(any.times(*min, self.limits.width)?, self.limits.width)?
-                                .add(earlier_optional, self.limits.width)?
-                                .add(positive, self.limits.width)?;
-                            self.push(&mut paths, last)?;
-                        }
-                    }
+                if *min > 0 {
+                    let mut required = last.clone();
+                    let earlier = self.arena.times(any, min - 1);
+                    let width = self.arena.add(prefix, earlier);
+                    required.width = self.arena.add(width, last.width);
+                    paths.push(required);
                 }
-                Ok(paths)
+                if max.is_none_or(|max| max > *min) {
+                    let mut optional = last.clone();
+                    let positive_last = self.arena.positive(last.width);
+                    let positive_any = self.arena.positive(any);
+                    let earlier_optional = self
+                        .arena
+                        .optional(positive_any, max.map(|max| max - min - 1));
+                    let earlier_required = self.arena.times(any, *min);
+                    let width = self.arena.add(prefix, earlier_required);
+                    let width = self.arena.add(width, earlier_optional);
+                    let width = self.arena.add(width, positive_last);
+                    let guard = self.arena.valid(positive_last);
+                    optional.width = width;
+                    if guard != 0 {
+                        optional.guards.insert(guard);
+                    }
+                    paths.push(optional);
+                }
+                self.join(paths)
             }
-        }
+        };
+        // Conservative bounds handle ordinary prefixes without exact queries.
+        // Only a possible arithmetic overflow needs correlation-aware checking.
+        let checked = self.guarded(&result);
+        self.arena.check(checked, node.byte)?;
+        Ok(result)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Exact remaining quotas cover the whole scope, including failed compiles.
     #[test]
-    fn shared_width_quotas_and_fresh_scopes() {
-        let limits = CompileLimits::default();
-        let source = r"(a)(?<=\1)";
-        let mut measured = Budget::new(limits);
-        Pattern::compile_with_budget(source, limits, &mut measured).unwrap();
-        assert!(measured.work > 0 && measured.cells > 0);
-        for resource in [Resource::WidthWork, Resource::WidthCells] {
-            let cost = if resource == Resource::WidthWork {
-                measured.work
-            } else {
-                measured.cells
-            };
-            let mut shared_limits = limits;
-            if resource == Resource::WidthWork {
-                shared_limits.width_work = 2 * cost - 1;
-            } else {
-                shared_limits.width_cells = 2 * cost - 1;
-            }
-            let mut shared = Budget::new(shared_limits);
-            Pattern::compile_with_budget(source, limits, &mut shared).unwrap();
-            assert_eq!(
-                Pattern::compile_with_budget(source, limits, &mut shared).unwrap_err(),
-                CompileError::Limit {
-                    resource,
-                    limit: 2 * cost - 1
-                }
-            );
-            let used = if resource == Resource::WidthWork {
-                shared.work
-            } else {
-                shared.cells
-            };
-            assert!(used >= cost && used < 2 * cost);
-            let mut retry = Budget::new(limits);
-            Pattern::compile_with_budget(source, limits, &mut retry).unwrap();
-            assert_eq!((retry.work, retry.cells), (measured.work, measured.cells));
-            let mut local = limits;
-            if resource == Resource::WidthWork {
-                local.width_work = 0;
-            } else {
-                local.width_cells = 0;
-            }
-            assert_eq!(
-                Pattern::compile_with_budget(source, local, &mut retry).unwrap_err(),
-                CompileError::Limit { resource, limit: 0 }
-            );
-        }
-        let mut shared = Budget::new(limits);
+    fn capture_dependent_width_keeps_fixed_and_variable_lookbehind_distinct() {
+        Pattern::compile(r"(a)(?<=\1)").unwrap();
         assert!(matches!(
-            Pattern::compile_with_budget(r"(a+)(?<=\1)", limits, &mut shared),
+            Pattern::compile(r"(a+)(?<=\1)"),
             Err(CompileError::Invalid { .. })
         ));
-        let used = (shared.work, shared.cells);
-        assert!(used.0 > 0 && used.1 > 0);
-        Pattern::compile_with_budget(source, limits, &mut shared).unwrap();
-        assert_eq!(
-            (shared.work, shared.cells),
-            (used.0 + measured.work, used.1 + measured.cells)
-        );
+        Pattern::compile(r"(a)\1(?<=a)").unwrap();
     }
 
-    /// Overflow refuses without resetting successful charges or charging skipped analysis.
     #[test]
-    fn width_budget_overflow_and_static_fast_path() {
-        let limits = CompileLimits {
-            width_work: usize::MAX,
-            width_cells: usize::MAX,
-            ..CompileLimits::default()
-        };
-        for resource in [Resource::WidthWork, Resource::WidthCells] {
-            let mut shared = Budget::new(limits);
-            shared.charge(usize::MAX - 1, resource).unwrap();
-            assert_eq!(
-                shared.charge(2, resource),
-                Err(CompileError::Limit {
-                    resource,
-                    limit: usize::MAX
-                })
-            );
-            shared.charge(1, resource).unwrap();
-        }
-        let mut shared = Budget::new(CompileLimits {
-            width_work: 0,
-            width_cells: 0,
-            ..limits
-        });
-        Pattern::compile_with_budget(r"(a)\1(?<=a)", limits, &mut shared).unwrap();
-        assert_eq!((shared.work, shared.cells), (0, 0));
+    fn unrelated_capture_alternatives_do_not_multiply_width_states() {
+        let choices = "(a|bb)".repeat(30);
+        assert!(matches!(
+            Pattern::compile(&(choices.clone() + r"(?<=\1)")),
+            Err(CompileError::Invalid {
+                reason: "variable-length lookbehind",
+                ..
+            })
+        ));
+        Pattern::compile(&("(a)".to_owned() + &choices + r"(?<=\1)")).unwrap();
+
+        // Four captures share one alternative choice and always total three.
+        // Later, unreferenced choices must not break that correlation or grow
+        // the retained capture-state product.
+        let correlated = r"(?:(a)(bc)|(ab)(c))".repeat(30) + r"(?<=\1\2\3\4)";
+        Pattern::compile(&correlated).unwrap();
     }
 }
