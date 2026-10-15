@@ -3,145 +3,22 @@ use crate::project_activation::Error as HostError;
 use pyo3::{
     exceptions::{PyException, PyRuntimeError, PyValueError},
     prelude::*,
-    types::{PyBytes, PyTuple},
+    types::PyBytes,
 };
 use std::sync::{Arc, Mutex, MutexGuard};
 use yamaa_adapters::{
     callback::CallbackError,
     file_producer_build::{FileBuild, Limits},
-    file_workflow,
     producer_report::{self, ProjectionError},
     project_function_diagnostics::HostDetails,
     project_report::Classified,
 };
 
 type NativeAttempt = yamaa_adapters::file_producer_build::OwnedAttempt<HostError>;
-type Prepared = Result<FileBuild, file_workflow::Error>;
 fn borrow_error() -> PyErr {
     PyRuntimeError::new_err("native producer handle is already borrowed or poisoned")
 }
-#[pyclass(frozen, module = "yamaa._native", name = "_ProducerSpecification")]
-pub struct Specification {
-    inner: Mutex<Prepared>,
-}
-impl Specification {
-    fn get(&self) -> PyResult<MutexGuard<'_, Prepared>> {
-        self.inner.try_lock().map_err(|_| borrow_error())
-    }
-}
-#[pymethods]
-impl Specification {
-    fn preparation_status(&self) -> PyResult<&'static str> {
-        Ok(match &*self.get()? {
-            Ok(_) => "ready",
-            Err(file_workflow::Error::Configuration(_)) => "configuration_failure",
-            Err(file_workflow::Error::Schema(_)) => "schema_failure",
-            Err(file_workflow::Error::Admission(_)) => "admission_failure",
-            Err(file_workflow::Error::Environment(_)) => "environment_failure",
-            Err(file_workflow::Error::Graph(_)) => "graph_failure",
-        })
-    }
-    #[pyo3(signature = (maximum=yamaa_adapters::host_limits::REPLY_BYTES))]
-    fn rejection_issues(&self, maximum: usize) -> PyResult<String> {
-        let state = self.get()?;
-        let error = state
-            .as_ref()
-            .err()
-            .ok_or_else(|| PyValueError::new_err("producer preparation has no rejection"))?;
-        let issues = yamaa_adapters::producer_check::rejected_with_limit(
-            error,
-            yamaa_core::project_function::Language::Python,
-            maximum,
-        )
-        .map_err(|_| {
-            PyValueError::new_err(
-                "rejection projection refused; original rejection remains retained",
-            )
-        })?;
-        Ok(yamaa_adapters::issue_rows::encode(&issues))
-    }
-    #[pyo3(signature = (metadata, report_bytes=yamaa_adapters::host_limits::REPLY_BYTES))]
-    fn build(
-        &self,
-        py: Python<'_>,
-        metadata: &Bound<'_, PyTuple>,
-        report_bytes: usize,
-    ) -> PyResult<Attempt> {
-        let fields = Arc::new(crate::specification_result::fields(metadata)?);
-        let mut state = self.get()?;
-        let build = state.as_mut().map_err(|_| {
-            PyValueError::new_err(
-                "producer preparation failed; original rejection remains retained",
-            )
-        })?;
-        Ok(build_selected(py, build, fields, report_bytes))
-    }
-
-    /// Early rejections retain all original bytes even if no build can be entered.
-    fn rejected_sources<'py>(
-        &self,
-        py: Python<'py>,
-    ) -> PyResult<Vec<(String, Bound<'py, PyBytes>)>> {
-        let state = self.get()?;
-        let sources = match &*state {
-            Err(file_workflow::Error::Admission(error)) => error
-                .retained_sources(
-                    yamaa_adapters::host_limits::RECORDS,
-                    yamaa_adapters::host_limits::REPLY_BYTES,
-                )
-                .map_err(|_| {
-                    PyValueError::new_err(
-                        "source evidence limit; original rejection remains retained",
-                    )
-                })?,
-            Err(file_workflow::Error::Environment(error)) => error
-                .retained_sources(
-                    yamaa_adapters::host_limits::RECORDS,
-                    yamaa_adapters::host_limits::REPLY_BYTES,
-                )
-                .map_err(|_| {
-                    PyValueError::new_err(
-                        "source evidence limit; original rejection remains retained",
-                    )
-                })?,
-            Err(file_workflow::Error::Graph(error)) => error
-                .retained_sources(
-                    yamaa_adapters::host_limits::RECORDS,
-                    yamaa_adapters::host_limits::REPLY_BYTES,
-                )
-                .map_err(|_| {
-                    PyValueError::new_err(
-                        "source evidence limit; original rejection remains retained",
-                    )
-                })?,
-            _ => Vec::new(),
-        };
-        source_budget(
-            sources
-                .iter()
-                .map(|(name, bytes)| (name.as_str(), bytes.as_ref())),
-        )?;
-        Ok(sources
-            .into_iter()
-            .map(|(name, bytes)| (name, PyBytes::new(py, &bytes)))
-            .collect())
-    }
-}
 /// Transfer the selected whole build directly; preparation is never repeated.
-pub(crate) fn build_selected(
-    py: Python<'_>,
-    build: &mut FileBuild,
-    fields: Arc<Vec<String>>,
-    report_bytes: usize,
-) -> Attempt {
-    build_selected_with_observer(
-        py,
-        build,
-        fields,
-        report_bytes,
-        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
-    )
-}
 pub(crate) fn build_selected_with_observer(
     py: Python<'_>,
     build: &mut FileBuild,
@@ -161,27 +38,13 @@ pub(crate) fn build_selected_with_observer(
     limits.engine.report_bytes = report_bytes;
     let inner = build.build_owned_reported_with_observer(
         &mut port,
-        crate::specification_result::identity(&fields),
+        crate::report_fields::identity(&fields),
         limits,
         scope,
     );
     Attempt {
         inner: Arc::new(Mutex::new(inner)),
         fields,
-    }
-}
-
-#[pyfunction]
-pub fn _prepare_producer_file(specification: &str, environment: &str) -> Specification {
-    Specification {
-        inner: Mutex::new(
-            file_workflow::prepare(
-                specification,
-                environment,
-                yamaa_core::project_function::Language::Python,
-            )
-            .map(|graph| graph.into_build()),
-        ),
     }
 }
 
@@ -332,7 +195,7 @@ impl Attempt {
             let projected = if public {
                 match yamaa_adapters::producer_result::prepare_owned_classified(
                     &state,
-                    crate::specification_result::identity(&self.fields),
+                    crate::report_fields::identity(&self.fields),
                     maximum,
                     &facts,
                 ) {
@@ -369,7 +232,7 @@ impl Attempt {
             } else {
                 producer_report::attempt_report_classified(
                     &state,
-                    crate::specification_result::identity(&self.fields),
+                    crate::report_fields::identity(&self.fields),
                     maximum,
                     &facts,
                 )

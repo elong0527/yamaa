@@ -81,6 +81,22 @@ class PublicContract(unittest.TestCase):
             "_ReferenceCatalog",
             "_profile_dataset_functions",
             "_temporal_result",
+            "_capture_schema_metadata",
+            "_schema_include_names",
+            "_SchemaMetadata",
+            "_prepare_document",
+            "_prepare_specification",
+            "_prepare_inherited_specification",
+            "_prepare_file_specification",
+            "_prepare_file_project",
+            "_prepare_producer_file",
+            "_Specification",
+            "_FileSpecification",
+            "_ProjectSpecification",
+            "_ProjectAttempt",
+            "_ProjectResult",
+            "_ProducerSpecification",
+            "_BuildResult",
         ):
             with self.subTest(name=name):
                 self.assertFalse(hasattr(_native, name))
@@ -253,16 +269,46 @@ class PublicContract(unittest.TestCase):
         )
         return source, case / "python/environment.yaml"
 
-    def test_activation_interrupt_preserves_original_exception(self):
+    def test_each_callback_stage_preserves_original_interrupt_identity(self):
         source, environment = self.function_study()
-        original = KeyboardInterrupt(TRUTH["interrupt_message"])
-        with (
-            patch.object(host, "verify_versions", side_effect=original),
-            self.assertRaises(KeyboardInterrupt) as seen,
-        ):
-            yamaa.domain(source, environment=environment)
-        self.assertIs(seen.exception, original)
-        self.assertFalse((source.parent / "test.csv").exists())
+        verify, resolve = host.verify_versions, host.resolve_callable
+        for kind in (KeyboardInterrupt, SystemExit):
+            for stage in ("lock", "binding", "conformance", "derivation"):
+                with self.subTest(kind=kind.__name__, stage=stage):
+                    original = kind(TRUTH["interrupt_message"])
+                    calls = []
+
+                    def versions(*arguments):
+                        if stage == "lock":
+                            raise original
+                        return verify(*arguments)
+
+                    def binding(*arguments):
+                        if stage == "binding":
+                            raise original
+                        invoke = resolve(*arguments)
+
+                        def callback(**arguments):
+                            calls.append(arguments)
+                            if stage == "conformance" or (
+                                stage == "derivation" and len(calls) > 2
+                            ):
+                                raise original
+                            return invoke(**arguments)
+
+                        return callback
+
+                    with (
+                        patch.object(host, "verify_versions", side_effect=versions),
+                        patch.object(host, "resolve_callable", side_effect=binding),
+                        self.assertRaises(kind) as seen,
+                    ):
+                        yamaa.domain(source, environment=environment)
+                    self.assertIs(seen.exception, original)
+                    self.assertEqual(
+                        len(calls), {"conformance": 1, "derivation": 3}.get(stage, 0)
+                    )
+                    self.assertFalse((source.parent / "test.csv").exists())
 
     def test_callback_can_reenter_public_check_and_domain(self):
         source, environment = self.function_study()

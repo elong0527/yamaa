@@ -10,7 +10,7 @@ including quoting, trailing zeros and final newlines.
 The R assertions share `context.R` to compare decoded diagnostic objects with
 key order ignored at every level. Array order and scalar types remain exact.
 
-The private and public producer suites share the `producer-graph` section. The
+The public producer suites share the `producer-graph` section. The
 function contract has an explicit `HOST_CALLABLE` slot because the installed
 Python and R programs have different callable names. Environment languages,
 locks, ABI handles and callbacks remain host-owned. Public-contract data retains
@@ -18,8 +18,7 @@ the different Python and R i64 vectors, including R's value beyond 2^53.
 
 | Paired family | Shared data and existing owners |
 | --- | --- |
-| producer-builds | Producer/consumer YAML, function cases, exact rounded CSV, aliases and graph variants |
-| public-producer-builds | Same producer graph, retained-source names, exact precision CSV, refusal variants |
+| public-producer-builds | Producer/consumer YAML, function cases, exact rounded CSV, aliases, retained sources and refusal variants |
 | producer-cohort | `project-original/shared-producer-parquet`, source filenames and exact output CSV |
 | original-specifications | Original case selection, lookup/ordering/casing inputs and exact CSV; existing independent TSV/JSON reports |
 | file-resources | Named lookup paths, issue schema and exact alias context; existing inspection/capture reports |
@@ -34,7 +33,6 @@ The R grammar suite's conditional failure and original
 CSV preservation controls also remain. Exact float bit witnesses, NUL/invalid
 UTF-8 refusals, native ownership, callback order/identity, interrupts, provenance,
 publication retries and argument/class assertions stay in each actual host.
-No paired suite is replaced by a reference result or removed from the catalog.
 
 `sas-cases.json` adds paired SAS source controls with explicitly authored typed
 rows, exact CSV bytes, encoding declarations and refusal causes. Integer
@@ -82,8 +80,7 @@ owners while adding host or private lifecycle assertions:
 - `shared-producer-parquet` is an additional installed ownership/publication
   control, rather than an active public-conformance benchmark name.
 
-Unpaired scalar, inheritance, project-function, Arrow and ODM helpers retain
-their existing ownership and installed suite identities.
+Unpaired scalar, project-function and ODM helpers retain their existing owners.
 
 ## Staging and qualification
 

@@ -9,11 +9,11 @@ pub struct Define {
 }
 #[pymethods]
 impl Define {
-    fn issues(&self) -> PyResult<Vec<crate::specification_result::IssueRow>> {
+    fn issues(&self) -> PyResult<Vec<crate::report_fields::IssueRow>> {
         {
             self.inner
                 .try_lock()
-                .map(|result| crate::specification_result::issue_rows(result.issues()))
+                .map(|result| crate::report_fields::issue_rows(result.issues()))
                 .map_err(|_| {
                     pyo3::exceptions::PyRuntimeError::new_err("Define result already borrowed")
                 })

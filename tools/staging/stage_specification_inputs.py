@@ -101,26 +101,6 @@ TEMPLATE_DIRECTORY_NAMES = {
     "type-before-later-invalid-declaration": "type-before-invalid",
     "unknown-before-later-invalid-declaration": "unknown-before-invalid",
 }
-# The current specification schema closure, not other standalone schema roots.
-# Missing/new includes fail shared bundle admission; no runtime parser is used here.
-SCHEMA_MODULES = (
-    "schema.yaml",
-    "schema_shared.yaml",
-    "schema_derivation.yaml",
-    "schema_verification.yaml",
-    "schema_metadata.yaml",
-    "schema_function.yaml",
-    "schema_expression_core.yaml",
-    "schema_expression_aggregate.yaml",
-    "schema_expression_numeric.yaml",
-    "schema_expression_str.yaml",
-    "schema_expression_date.yaml",
-    "schema_expression_mapping.yaml",
-    "schema_expression_window.yaml",
-    "schema_expression_odm.yaml",
-)
-
-
 FIXTURES = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures"
 
 
@@ -1271,7 +1251,6 @@ def stage_completed_lookup_assertion_truth(destination: Path):
 def stage(destination: Path):
     """Keep original files separate from independently authored expected reports."""
     destination.mkdir(parents=True, exist_ok=False)
-    (destination / "schema").mkdir()
     stage_inheritance_replay(destination)
     stage_completed_lookup_assertion_truth(destination)
     stage_json_fixtures(destination)
@@ -1435,8 +1414,6 @@ def stage(destination: Path):
         case.mkdir()
         for name, content in row["inputs"].items():
             (case / (name.lower() + ".csv")).write_bytes(content.encode("utf-8"))
-    for name in SCHEMA_MODULES:
-        shutil.copy2(REPOSITORY / "yaml" / name, destination / "schema" / name)
     for name in (
         *CASES,
         *CASE_PREDICATE_CASES,
