@@ -23,7 +23,7 @@ expressions:
     cut: # See REQ-1118.
 
         - source:
-            type: variable
+            type: filtered_source
             required: true
             description: See REQ-1118.
         - breaks:
