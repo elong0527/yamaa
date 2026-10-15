@@ -17,7 +17,7 @@ pub(super) fn declaration_findings(
     use crate::diagnostic::{ConditionCode as C, Diagnostic};
     use serde_json::Value as JsonValue;
     let mut findings = Vec::new();
-
+    let mut bytes = 0usize;
     for (index, &item) in items.iter().enumerate() {
         let dataset = text(d, field(d, item, "dataset")?)?;
         if dataset != "SELF" {
@@ -25,6 +25,12 @@ pub(super) fn declaration_findings(
         }
         let name = text(d, field(d, item, "id")?)?;
         let path = format!("intermediates[{index}].dataset");
+        bytes = bytes
+            .checked_add(path.len())
+            .and_then(|bytes| bytes.checked_add(name.len()))
+            .and_then(|bytes| bytes.checked_add(128))
+            .filter(|&bytes| bytes <= 16_777_216)
+            .ok_or_else(|| PrepareError::limit("self_findings", 16_777_216, None, None))?;
         let (code, paths, context) = if sources.iter().any(|source| source.name == "SELF") {
             (
                 C::IntermediateIdentifierCollision,
@@ -112,10 +118,10 @@ pub(super) fn template_references(
     names: &mut Vec<String>,
     depth: usize,
 ) -> Result<(), PrepareError> {
-    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+    if depth > 64 {
         return Err(PrepareError::limit(
-            "semantic_depth",
-            crate::limits::Limits::SEMANTIC_DEPTH,
+            "expression_depth",
+            64,
             Some(depth),
             None,
         ));
@@ -141,13 +147,14 @@ pub(super) fn template_references(
     Ok(())
 }
 
-/// Retain every invalid first-template SELF read in declaration order.
+/// Bound all diagnostic copies before retaining a first-template refusal.
 pub(super) struct FirstTemplate<'a> {
     d: &'a Document,
     project: Option<&'a functions::Prepared>,
     named: &'a intermediates::Declarations,
     templates: &'a str_template::Prepared,
     findings: Vec<PreflightFinding>,
+    bytes: usize,
 }
 impl<'a> FirstTemplate<'a> {
     pub(super) fn new(
@@ -162,18 +169,38 @@ impl<'a> FirstTemplate<'a> {
             named,
             templates,
             findings: Vec::new(),
+            bytes: 0,
         }
     }
     pub(super) fn finish(self) -> Vec<PreflightFinding> {
         self.findings
     }
-    fn register(&mut self, name: String, path: &str) {
+    fn register(&mut self, name: String, path: &str) -> Result<(), PrepareError> {
         if !self
             .named
             .reference(&name)
             .is_some_and(|(index, _)| self.named.is_self(index))
         {
-            return;
+            return Ok(());
+        }
+        let cost = path
+            .len()
+            .checked_add(name.len())
+            .and_then(|bytes| bytes.checked_add(128))
+            .and_then(|bytes| bytes.checked_mul(4))
+            .ok_or_else(|| PrepareError::limit("self_findings", 16_777_216, None, None))?;
+        self.bytes = self
+            .bytes
+            .checked_add(cost)
+            .filter(|&bytes| bytes <= 16_777_216)
+            .ok_or_else(|| PrepareError::limit("self_findings", 16_777_216, None, None))?;
+        if self.findings.len() >= 65_536 {
+            return Err(PrepareError::limit(
+                "self_findings",
+                65_536,
+                Some(self.findings.len() + 1),
+                None,
+            ));
         }
         self.findings
             .push(PreflightFinding::Scalar(crate::diagnostic::Diagnostic {
@@ -195,6 +222,7 @@ impl<'a> FirstTemplate<'a> {
                 .into_iter()
                 .collect(),
             }));
+        Ok(())
     }
     /// Include unselected nested alternatives; first-template admission is static.
     pub(super) fn visit(
@@ -203,11 +231,19 @@ impl<'a> FirstTemplate<'a> {
         prefix: &str,
         depth: usize,
     ) -> Result<(), PrepareError> {
-        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+        if depth > 64 {
             return Err(PrepareError::limit(
-                "semantic_depth",
-                crate::limits::Limits::SEMANTIC_DEPTH,
+                "self_read_metadata",
+                64,
                 Some(depth),
+                Some(prefix),
+            ));
+        }
+        if prefix.len() > 65_536 {
+            return Err(PrepareError::limit(
+                "path_bytes",
+                65_536,
+                Some(prefix.len()),
                 Some(prefix),
             ));
         }
@@ -220,11 +256,12 @@ impl<'a> FirstTemplate<'a> {
         if operation == "case" {
             for (index, &branch) in sequence(d, payload)?.iter().enumerate() {
                 if let Some(condition) = d.field(branch, "when") {
-                    if let Ok(parsed) =
-                        crate::predicate_parser::parse_predicate(text(d, condition)?)
-                    {
+                    if let Ok(parsed) = crate::predicate_parser::parse_predicate(
+                        text(d, condition)?,
+                        Default::default(),
+                    ) {
                         for name in parsed.identifiers() {
-                            self.register(name.into(), &format!("{path}[{index}].when"));
+                            self.register(name.into(), &format!("{path}[{index}].when"))?;
                         }
                     }
                 }
@@ -260,7 +297,7 @@ impl<'a> FirstTemplate<'a> {
                     N::Text(name) => name.as_str(),
                     _ => text(d, field(d, source, "variable")?)?,
                 };
-                self.register(name.into(), &format!("{path}.sources[{index}]"));
+                self.register(name.into(), &format!("{path}.sources[{index}]"))?;
             }
             return Ok(());
         }
@@ -275,7 +312,7 @@ impl<'a> FirstTemplate<'a> {
                 } else {
                     path.clone()
                 },
-            );
+            )?;
         }
         Ok(())
     }

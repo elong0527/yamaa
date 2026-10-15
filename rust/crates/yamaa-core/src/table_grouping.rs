@@ -1,6 +1,5 @@
 //! Stable, exact partitioning of an immutable normalized table snapshot.
 
-use crate::limits::{LimitExceeded, Limits};
 use crate::{
     table::{CellError, TableAccess, ValueRef},
     temporal::{Date, DateTime},
@@ -48,8 +47,10 @@ pub enum GroupingError<E> {
     InvalidColumn { position: usize, column: usize },
     #[error("table grouping duplicate column: position={position:?}, column={column:?}")]
     DuplicateColumn { position: usize, column: usize },
-    #[error("table grouping boundary: {0}")]
-    Limit(LimitExceeded),
+    #[error("table grouping row limit: limit={limit:?}, required={required:?}")]
+    RowLimit { limit: usize, required: usize },
+    #[error("table grouping key cell limit: limit={limit:?}")]
+    KeyCellLimit { limit: usize },
     #[error("table grouping allocation")]
     Allocation,
     #[error("table grouping cell: row={row:?}, column={column:?}, error={error:?}")]
@@ -63,11 +64,14 @@ pub enum GroupingError<E> {
 /// Partition all rows by bound columns (REQ-0037/0038/0065). Missing values
 /// compare equal; text is exact; temporal precision and float zero signs do not
 /// affect equality. Each member list is strictly increasing for ordered folds.
-/// Admission validates the complete column list and table geometry before any
+/// Admission validates the complete column list and resource budgets before any
 /// cell access. No sorting of source rows, host callbacks or content hashing occurs.
+/// The key-cell budget bounds cells read, not allocator bytes or text comparison cost.
 pub fn partition<T: TableAccess + ?Sized>(
     table: &T,
     columns: &[usize],
+    max_rows: usize,
+    max_key_cells: usize,
 ) -> Result<Vec<Vec<usize>>, GroupingError<T::Error>> {
     if columns.is_empty() {
         return Err(GroupingError::EmptyColumns);
@@ -81,7 +85,20 @@ pub fn partition<T: TableAccess + ?Sized>(
         }
     }
     let rows = table.row_count();
-    Limits::table(rows, table.schema().columns().len()).map_err(GroupingError::Limit)?;
+    if rows > max_rows {
+        return Err(GroupingError::RowLimit {
+            limit: max_rows,
+            required: rows,
+        });
+    }
+    if rows
+        .checked_mul(columns.len())
+        .is_none_or(|size| size > max_key_cells)
+    {
+        return Err(GroupingError::KeyCellLimit {
+            limit: max_key_cells,
+        });
+    }
     let mut index = BTreeMap::new();
     let mut groups: Vec<Vec<usize>> = Vec::new();
     for row in 0..rows {

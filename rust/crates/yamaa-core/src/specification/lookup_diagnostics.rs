@@ -85,19 +85,36 @@ impl LookupFinding {
         expected: crate::key_relation::ComparableType,
         actual: ColumnType,
     ) -> Self {
-        let expected = match expected {
-            crate::key_relation::ComparableType::Boolean => crate::value::ValueType::Bool,
-            crate::key_relation::ComparableType::Column(kind) => kind.into(),
+        let mut finding = Self::new(path, C::LookupKeyType);
+        let name = |kind: crate::key_relation::ComparableType| match kind {
+            crate::key_relation::ComparableType::Boolean => "bool",
+            crate::key_relation::ComparableType::Column(kind) => match kind {
+                ColumnType::Str => "str",
+                ColumnType::Int => "int",
+                ColumnType::Float => "float",
+                ColumnType::Date => "date",
+                ColumnType::DateTime => "datetime",
+            },
         };
-        Self(crate::diagnostic::lookup_key_type(
-            path,
-            intermediate,
-            source,
-            expected,
-            actual.into(),
-        ))
+        for (key, value) in [
+            ("intermediate", intermediate),
+            ("source", source),
+            ("expected", name(expected)),
+            ("actual", name(actual.into())),
+        ] {
+            finding.text(key, value);
+        }
+        finding
     }
-    pub(super) fn grammar(path: &str, text: &str, position: usize, error: &GrammarFailure) -> Self {
-        Self(error.original_diagnostic(path, text, position))
+    pub(super) fn grammar(
+        path: &str,
+        text: &str,
+        position: usize,
+        error: &GrammarFailure,
+    ) -> Result<Self, BindError> {
+        error
+            .original_diagnostic(path, text, position)
+            .map(Self)
+            .map_err(|_| BindError::PredicateDiagnosticLimit)
     }
 }

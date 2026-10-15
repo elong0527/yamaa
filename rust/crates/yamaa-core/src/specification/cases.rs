@@ -40,7 +40,9 @@ impl InvalidPredicate {
         else {
             return Err(BindError::Internal);
         };
-        Ok(failure.original_diagnostic(&self.path, &self.expression, position.character))
+        failure
+            .original_diagnostic(&self.path, &self.expression, position.character)
+            .map_err(|_| BindError::PredicateDiagnosticLimit)
     }
 }
 fn unsupported(path: &str, operation: &str) -> PrepareError {
@@ -61,17 +63,31 @@ pub(super) fn prepare(
     extraction: &str_extract::Prepared,
     templates: &str_template::Prepared,
 ) -> Result<Vec<Branch>, PrepareError> {
-    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+    if depth > 64 {
         return Err(PrepareError::limit(
-            "semantic_depth",
-            crate::limits::Limits::SEMANTIC_DEPTH,
+            "case_depth",
+            64,
             Some(depth),
             Some(path),
         ));
     }
-
+    if path.len() > 65_536 {
+        return Err(PrepareError::limit(
+            "path_bytes",
+            65_536,
+            Some(path.len()),
+            Some(path),
+        ));
+    }
     let items = sequence(d, node)?;
-
+    if items.len() > 1024 {
+        return Err(PrepareError::limit(
+            "case_branches",
+            1024,
+            Some(items.len()),
+            None,
+        ));
+    }
     // The schema owns REQ-0339 shape failures. These branches defend the
     // normalized-document contract rather than declare a language subset.
     if items.is_empty() {
@@ -91,7 +107,8 @@ pub(super) fn prepare(
             (None, value, format!("{prefix}.otherwise"))
         } else {
             let when = text(d, field(d, item, "when")?)?;
-            let compiled = predicate_compiler::compile(when, &format!("{prefix}.when"));
+            let compiled =
+                predicate_compiler::compile(when, &format!("{prefix}.when"), Default::default());
             let compiled = match compiled {
                 Ok(plan) => Ok(plan),
                 Err(predicate_compiler::Error::Parse(
@@ -475,7 +492,7 @@ pub(super) fn bind(
                         });
                         continue;
                     }
-                    match catalog.bind(name) {
+                    match catalog.bind(name).map_err(BindError::Catalog)? {
                         Some(reference_binding::Binding::Output { column, .. }) => {
                             edges.push(column);
                             bindings.push(Binding {
@@ -534,4 +551,115 @@ pub(super) fn bind(
         }
     }
     Ok((findings.len() == start).then_some(Expression::Case(result)))
+}
+
+/// Charge all nested formulas and case predicates before owning any branch plan.
+pub(super) fn charge(
+    d: &Document,
+    value: usize,
+    path: &str,
+    total: &mut usize,
+    limit: usize,
+    depth: usize,
+) -> Result<(), PrepareError> {
+    if depth > 64 {
+        return Err(PrepareError::limit(
+            "case_depth",
+            64,
+            Some(depth),
+            Some(path),
+        ));
+    }
+    if let Some(flag) = d.field(value, "flag") {
+        let scalar = matches!(d.nodes()[flag], N::Text(_));
+        let condition = if scalar {
+            flag
+        } else {
+            field(d, flag, "condition")?
+        };
+        let condition_path = if scalar {
+            format!("{path}.flag")
+        } else {
+            format!("{path}.flag.condition")
+        };
+        compiler_limits::charge(
+            "numeric_bytes",
+            total,
+            text(d, condition)?.len(),
+            limit,
+            Some(&condition_path),
+        )?;
+    }
+    if let Some(payload) = d.field(value, "str_concat") {
+        for (index, &child) in sequence(d, field(d, payload, "sources")?)?
+            .iter()
+            .enumerate()
+        {
+            let child_path = format!("{path}.str_concat.sources[{index}]");
+            if let Some(expr) = d.field(child, "compute").and_then(|id| d.field(id, "expr")) {
+                compiler_limits::charge(
+                    "numeric_bytes",
+                    total,
+                    text(d, expr)?.len(),
+                    limit,
+                    Some(&format!("{child_path}.compute.expr")),
+                )?;
+            }
+            charge(d, child, &child_path, total, limit, depth + 1)?;
+        }
+    }
+    let Some(case) = d.field(value, "case") else {
+        return Ok(());
+    };
+    for (index, &branch) in sequence(d, case)?.iter().enumerate() {
+        let prefix = format!("{path}.case[{index}]");
+        let when = d.field(branch, "when");
+        let child = d
+            .field(branch, "then")
+            .map(|id| (id, "then"))
+            .or_else(|| d.field(branch, "otherwise").map(|id| (id, "otherwise")));
+        let child_path = child.map(|(_, name)| format!("{prefix}.{name}"));
+        let compute = child
+            .and_then(|(id, _)| d.field(id, "compute"))
+            .and_then(|id| d.field(id, "expr"));
+        let filter = child
+            .and_then(|(id, _)| d.field(id, "source"))
+            .and_then(|id| d.field(id, "filter"))
+            .filter(|&id| !matches!(d.nodes()[id], N::Null));
+        for (id, expression_path) in when
+            .map(|id| (id, format!("{prefix}.when")))
+            .into_iter()
+            .chain(compute.map(|id| {
+                (
+                    id,
+                    format!("{}.compute.expr", child_path.as_deref().unwrap()),
+                )
+            }))
+            .chain(filter.map(|id| {
+                (
+                    id,
+                    format!("{}.source.filter", child_path.as_deref().unwrap()),
+                )
+            }))
+        {
+            compiler_limits::charge(
+                "numeric_bytes",
+                total,
+                text(d, id)?.len(),
+                limit,
+                Some(&expression_path),
+            )?;
+        }
+        if let Some((child, _)) = child {
+            charge(
+                d,
+                child,
+                child_path.as_deref().unwrap(),
+                total,
+                limit,
+                depth + 1,
+            )?;
+        }
+    }
+    Ok(())
 }

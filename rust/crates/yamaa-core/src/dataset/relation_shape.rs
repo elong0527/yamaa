@@ -1,4 +1,4 @@
-//! Donor metadata preserves unknown derived kinds without inventing a schema type.
+//! Bounded donor metadata preserves unknown derived kinds without inventing a schema type.
 use crate::value::{ColumnType, ValueType};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -21,10 +21,25 @@ impl RelationField {
         }
     }
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RelationShapeLimits {
+    pub fields: usize,
+    pub metadata_bytes: usize,
+    pub validation_work: usize,
+}
+impl Default for RelationShapeLimits {
+    fn default() -> Self {
+        Self {
+            fields: 4096,
+            metadata_bytes: 16_777_216,
+            validation_work: 16_777_216,
+        }
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum RelationShapeError {
-    #[error("dataset relation boundary: {0}")]
-    Limit(crate::limits::LimitExceeded),
+    #[error("dataset relation shape limit")]
+    Limit,
     #[error("dataset relation shape empty identifier")]
     EmptyIdentifier,
     #[error("dataset relation shape duplicate identifier")]
@@ -47,8 +62,48 @@ impl RelationShape {
     pub fn new(
         fields: Vec<RelationField>,
         projection: Option<Vec<usize>>,
+        limits: RelationShapeLimits,
     ) -> Result<Self, RelationShapeError> {
-        crate::limits::Limits::columns(fields.len()).map_err(RelationShapeError::Limit)?;
+        let reject = || RelationShapeError::Limit;
+        if fields.len() > limits.fields {
+            return Err(reject());
+        }
+        let projection_len = projection.as_ref().map_or(0, Vec::len);
+        let identifier_bytes = fields
+            .iter()
+            .map(|field| field.identifier.len())
+            .max()
+            .unwrap_or(0)
+            .max(1);
+        let work = fields
+            .len()
+            .checked_mul(fields.len())
+            .and_then(|n| n.checked_mul(identifier_bytes))
+            .and_then(|n| {
+                projection_len
+                    .checked_mul(projection_len)
+                    .and_then(|p| n.checked_add(p))
+            })
+            .filter(|&n| n <= limits.validation_work)
+            .ok_or_else(reject)?;
+        let _ = work;
+        let bytes = fields
+            .capacity()
+            .checked_mul(std::mem::size_of::<RelationField>())
+            .and_then(|n| {
+                projection.as_ref().map_or(Some(n), |p| {
+                    p.capacity()
+                        .checked_mul(std::mem::size_of::<usize>())
+                        .and_then(|p| n.checked_add(p))
+                })
+            })
+            .ok_or_else(reject)?;
+        let bytes = fields
+            .iter()
+            .try_fold(bytes, |n, field| n.checked_add(field.identifier.capacity()))
+            .filter(|&n| n <= limits.metadata_bytes)
+            .ok_or_else(reject)?;
+        let _ = bytes;
         let mut stored = 0;
         let mut derived = 0;
         for (index, field) in fields.iter().enumerate() {

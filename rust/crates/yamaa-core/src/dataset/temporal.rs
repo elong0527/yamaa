@@ -64,6 +64,7 @@ impl ElapsedUnit {
 pub enum InvalidTemporal {
     Shape,
     Bounds,
+    Limit,
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct Temporal {
@@ -79,6 +80,14 @@ impl Temporal {
         sources: Vec<String>,
         path: String,
     ) -> Result<Self, InvalidTemporal> {
+        let context_bytes = sources
+            .iter()
+            .try_fold(path.len(), |total, source| total.checked_add(source.len()))
+            .and_then(|bytes| bytes.checked_mul(6))
+            .and_then(|bytes| bytes.checked_add(1024));
+        if context_bytes.is_none_or(|bytes| bytes > crate::diagnostic::MAX_PROJECTION_BYTES) {
+            return Err(InvalidTemporal::Limit);
+        }
         if path.is_empty()
             || sources.iter().any(String::is_empty)
             || sources.len() != kind.fields().len()

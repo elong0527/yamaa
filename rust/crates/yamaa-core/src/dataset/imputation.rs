@@ -18,10 +18,14 @@ pub enum DayDeclaration<'a> {
     Number(&'a str),
     Position(&'a str),
 }
+/// Maximum borrowed policy/context bytes admitted before scans or copying.
+pub const MAX_IMPUTATION_POLICY_BYTES: usize = 16_777_216;
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum DatePolicyError {
     #[error("dataset imputation diagnostic: {0:?}")]
     Diagnostic(Diagnostic),
+    #[error("dataset imputation limit")]
+    Limit,
     #[error("dataset imputation shape")]
     Shape,
 }
@@ -49,6 +53,16 @@ pub(crate) fn date_policy_findings(
     minimum: DatePrecision,
     path: &str,
 ) -> Result<Result<ImputationKind, std::vec::Vec<Diagnostic>>, DatePolicyError> {
+    let day_text = match day {
+        DayDeclaration::Number(value) | DayDeclaration::Position(value) => value,
+    };
+    path.len()
+        .checked_mul(2)
+        .and_then(|n| n.checked_add(month.map_or(0, str::len)))
+        .and_then(|n| n.checked_add(day_text.len()))
+        .and_then(|n| n.checked_add(512))
+        .filter(|n| *n <= MAX_IMPUTATION_POLICY_BYTES)
+        .ok_or(DatePolicyError::Limit)?;
     fn canonical_integer(text: &str) -> bool {
         let digits = text.strip_prefix('-').unwrap_or(text);
         if digits == "0" {
@@ -220,7 +234,24 @@ impl PartialDate {
     }
 }
 impl Imputation {
-    /// Validate the declared calendar policy and required source metadata.
+    /// Admission includes temporary and retained declaration/context text copies.
+    pub(crate) fn metadata_fits(
+        source: &str,
+        bound: Option<&str>,
+        path: &str,
+        missing: Option<&str>,
+        invalid: Option<&str>,
+    ) -> bool {
+        [Some(source), bound, Some(path), missing, invalid]
+            .into_iter()
+            .flatten()
+            .try_fold(0usize, |bytes, text| bytes.checked_add(text.len()))
+            .and_then(|n| n.checked_mul(2))
+            .and_then(|n| n.checked_add(512))
+            .is_some_and(|n| n <= MAX_IMPUTATION_POLICY_BYTES)
+    }
+    /// Refuse malformed or oversized owned declarations before later copying.
+    /// Runtime borrowed-value quotas remain the evaluator caller's authority.
     pub fn new(
         kind: ImputationKind,
         source: String,
@@ -229,7 +260,22 @@ impl Imputation {
         missing: Option<Value>,
         invalid: Option<Value>,
     ) -> Option<Self> {
-        if source.is_empty() || path.is_empty() || bound.as_ref().is_some_and(String::is_empty) {
+        fn handler_text(value: &Value) -> Option<&str> {
+            match value {
+                Value::Str(text) => Some(text.as_str()),
+                _ => None,
+            }
+        }
+        if !Self::metadata_fits(
+            &source,
+            bound.as_deref(),
+            &path,
+            missing.as_ref().and_then(handler_text),
+            invalid.as_ref().and_then(handler_text),
+        ) || source.is_empty()
+            || path.is_empty()
+            || bound.as_ref().is_some_and(String::is_empty)
+        {
             return None;
         }
         match kind {
@@ -365,7 +411,8 @@ impl Imputation {
         Err(diagnostic(code, &self.path, &fields))
     }
     /// Source completion is a separate step so unused bounds have no read effects.
-    /// This
+    /// The caller must admit borrowed source text work and storage before calling;
+    /// the engine does so with its cumulative work and scalar-text budgets. This
     /// pure service preserves semantic findings and does not own runtime quotas.
     pub fn source_value(&self, value: ValueRef<'_>) -> Result<ImputationStep, Diagnostic> {
         use ImputationKind as K;

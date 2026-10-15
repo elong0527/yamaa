@@ -12,7 +12,9 @@ pub(super) struct Declaration {
 }
 fn admission<T>(result: Result<T, AdmissionError>) -> Result<T, PrepareError> {
     result.map_err(|error| match error {
-        AdmissionError::Shape => PrepareError::Internal,
+        AdmissionError::Limit => {
+            PrepareError::limit("mapping_cut_metadata", 16_777_216, None, None)
+        }
         AdmissionError::Diagnostic(finding) => {
             PrepareError::Invalid(vec![PreflightFinding::Scalar(finding)])
         }
@@ -101,7 +103,12 @@ pub(super) fn prepare(
             None => false,
             _ => return Err(PrepareError::Internal),
         };
-        let findings = Cut::declaration_findings(path, &breaks, &labels);
+        let findings = admission(Cut::declaration_findings(
+            &source.variable,
+            path,
+            &breaks,
+            &labels,
+        ))?;
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(
                 findings.into_iter().map(PreflightFinding::Scalar).collect(),
@@ -142,7 +149,9 @@ fn bound_kind(
         Expression::Intermediate { index, column } => intermediates
             .get(*index)
             .and_then(Option::as_ref)
-            .and_then(|item| item.source_kind(secondary, *column)),
+            .and_then(|item| item.source_schema(secondary))
+            .and_then(|schema| schema.columns().get(*column))
+            .map(|c| c.kind),
         Expression::SourceLookup { lookup, .. } => secondary
             .get(lookup.source)
             .and_then(|item| item.schema.columns().get(lookup.column))
@@ -253,12 +262,11 @@ pub(super) fn bind_row(
         intermediates
             .get(index)
             .and_then(Option::as_ref)
-            .and_then(|item| {
-                let column = item.source_column(secondary, field)?;
-                item.source_kind(secondary, column)
-            })
+            .and_then(|item| item.source_schema(secondary))
+            .and_then(|schema| schema.columns().iter().find(|c| c.name == field))
+            .map(|c| c.kind)
     } else {
-        catalog.type_of(name)
+        catalog.type_of(name).map_err(BindError::Catalog)?
     };
     Ok(expression
         .and_then(|expression| checked_wrap(declaration, column, expression, kind, findings)))

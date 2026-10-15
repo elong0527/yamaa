@@ -22,6 +22,8 @@ pub struct Binding {
 pub enum BindingError {
     #[error("bound expression empty path")]
     EmptyPath,
+    #[error("bound expression metadata limit")]
+    MetadataLimit,
     #[error("bound expression duplicate name")]
     DuplicateName,
     #[error("bound expression missing name")]
@@ -144,6 +146,27 @@ impl BoundPredicate {
         bindings: Vec<Binding>,
         mut collected: Vec<String>,
     ) -> Result<Self, BindingError> {
+        let bytes = plan
+            .expression()
+            .len()
+            .checked_add(plan.spec_path().len())
+            .and_then(|bytes| {
+                bindings.iter().try_fold(bytes, |bytes, binding| {
+                    bytes.checked_add(binding.name.len())?.checked_add(128)
+                })
+            })
+            .and_then(|bytes| {
+                collected
+                    .iter()
+                    .try_fold(bytes, |bytes, name| bytes.checked_add(name.len()))
+            })
+            .and_then(|bytes| bytes.checked_mul(8));
+        if bytes.is_none_or(|bytes| bytes > 16_777_216)
+            || bindings.len() > 65_536
+            || collected.len() > bindings.len()
+        {
+            return Err(BindingError::MetadataLimit);
+        }
         if plan.spec_path().is_empty() {
             return Err(BindingError::EmptyPath);
         }

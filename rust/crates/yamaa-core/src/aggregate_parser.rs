@@ -4,7 +4,7 @@
 
 use crate::numeric::{BinaryOperator, UnaryOperator};
 use crate::numeric_parser::{self, tokenize, NumericFunction, Token, TokenKind};
-pub use crate::numeric_parser::{ParseResource, SourcePosition, SourceSpan};
+pub use crate::numeric_parser::{ParseLimits, ParseResource, SourcePosition, SourceSpan};
 use std::collections::BTreeSet;
 
 /// Closed reducer vocabulary; parsing does not advertise execution support.
@@ -214,15 +214,20 @@ impl ParsedAggregate {
     }
 }
 
-/// Parse the full closed language with a fixed recursion guard. Lexing finishes
+/// Parse the full closed language under explicit resource policy. Lexing finishes
 /// before syntax checking. Names are not bound and numbers remain source text.
-pub fn parse_aggregate(text: &str) -> Result<ParsedAggregate, ParseError> {
-    let tokens = tokenize(text, true)?;
+pub fn parse_aggregate(text: &str, mut limits: ParseLimits) -> Result<ParsedAggregate, ParseError> {
+    limits.depth = limits.depth.min(64);
+    if text.len() > limits.bytes {
+        return Err(limit_error(text, 0, ParseResource::Bytes, limits.bytes));
+    }
+    let tokens = tokenize(text, limits.tokens, true)?;
     let mut parser = Parser {
         text,
         tokens,
         cursor: 0,
         nodes: Vec::new(),
+        limits,
     };
     let root = parser.expression(1)?;
     if parser.token().kind != TokenKind::End {
@@ -308,6 +313,7 @@ struct Parser<'a> {
     tokens: Vec<Token>,
     cursor: usize,
     nodes: Vec<ParsedNode>,
+    limits: ParseLimits,
 }
 
 impl Parser<'_> {
@@ -340,27 +346,34 @@ impl Parser<'_> {
         kind: ParsedKind,
         depth: usize,
     ) -> Result<usize, ParseError> {
-        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+        if depth > self.limits.depth {
             return Err(limit_error(
                 self.text,
                 span.start,
                 ParseResource::Depth,
-                crate::limits::Limits::SEMANTIC_DEPTH,
+                self.limits.depth,
             ));
         }
-
+        if self.nodes.len() == self.limits.nodes {
+            return Err(limit_error(
+                self.text,
+                span.start,
+                ParseResource::Nodes,
+                self.limits.nodes,
+            ));
+        }
         let id = self.nodes.len();
         self.nodes.push(ParsedNode { span, kind, depth });
         Ok(id)
     }
     /// Parse the additive level and guard recursive descent through groups/calls.
     fn expression(&mut self, nesting: usize) -> Result<usize, ParseError> {
-        if nesting > crate::limits::Limits::SEMANTIC_DEPTH {
+        if nesting > self.limits.depth {
             return Err(limit_error(
                 self.text,
                 self.token().span.start,
                 ParseResource::Depth,
-                crate::limits::Limits::SEMANTIC_DEPTH,
+                self.limits.depth,
             ));
         }
         self.binary(nesting, false)

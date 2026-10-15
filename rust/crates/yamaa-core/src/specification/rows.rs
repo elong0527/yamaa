@@ -46,8 +46,20 @@ struct Template {
 fn deferred_odm_contexts(
     declarations: &[Template],
     templates: &[RowTemplate],
-) -> std::rc::Rc<[crate::dataset::OdmTemplateScope]> {
+) -> Result<std::rc::Rc<[crate::dataset::OdmTemplateScope]>, BindError> {
     declarations
+        .iter()
+        .try_fold(0usize, |used, template| {
+            used.checked_add(template.id.len()).and_then(|used| {
+                used.checked_add(
+                    std::mem::size_of::<crate::dataset::OdmTemplateScope>()
+                        + 8 * std::mem::size_of::<usize>(),
+                )
+            })
+        })
+        .filter(|&bytes| bytes <= 16_777_216)
+        .ok_or(BindError::Internal)?;
+    Ok(declarations
         .iter()
         .zip(templates)
         .map(|(declaration, template)| crate::dataset::OdmTemplateScope {
@@ -64,7 +76,7 @@ fn deferred_odm_contexts(
             },
         })
         .collect::<Vec<_>>()
-        .into()
+        .into())
 }
 #[derive(Debug)]
 pub(super) struct Rows {
@@ -98,6 +110,7 @@ fn declaration(
     column: usize,
     prefix: String,
     _grouped: bool,
+    limits: CompilationLimits,
     project: Option<&functions::Prepared>,
     extraction: &str_extract::Prepared,
     string_templates: &str_template::Prepared,
@@ -139,6 +152,7 @@ fn declaration(
             extraction,
             string_templates,
             None,
+            limits,
         )?),
     };
     Ok(RowDeclaration {
@@ -165,13 +179,8 @@ fn default_reads(
     };
     let operation = text(d, operation)?;
     fn contains_window(d: &Document, value: usize, depth: usize) -> Result<bool, PrepareError> {
-        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
-            return Err(PrepareError::limit(
-                "semantic_depth",
-                crate::limits::Limits::SEMANTIC_DEPTH,
-                None,
-                None,
-            ));
+        if depth > 64 {
+            return Err(PrepareError::limit("expression_depth", 64, None, None));
         }
         if [
             "row_number",
@@ -293,7 +302,8 @@ fn default_reads(
             } else {
                 field(d, payload, "condition")?
             };
-            match crate::predicate_parser::parse_predicate(text(d, condition)?) {
+            match crate::predicate_parser::parse_predicate(text(d, condition)?, Default::default())
+            {
                 Ok(parsed) => {
                     for name in parsed.identifiers() {
                         reference(name);
@@ -305,7 +315,7 @@ fn default_reads(
         }
         "compute" => {
             let expression = text(d, field(d, payload, "expr")?)?;
-            match crate::numeric_parser::parse_numeric(expression) {
+            match crate::numeric_parser::parse_numeric(expression, Default::default()) {
                 Ok(parsed) => {
                     for name in parsed.identifiers() {
                         reference(name);
@@ -364,6 +374,22 @@ fn select_defaults(
                 .map(|default| default.unwrap_or((true, Vec::new(), None)))
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let edges = defaults.iter().try_fold(0usize, |n, (_, edges, _)| {
+        n.checked_add(edges.len())
+            .ok_or_else(|| PrepareError::limit("row_dependencies", 67_108_864, None, None))
+    })?;
+    if columns
+        .len()
+        .checked_mul(edges.max(1))
+        .is_none_or(|work| work > 67_108_864)
+    {
+        return Err(PrepareError::limit(
+            "row_dependencies",
+            67_108_864,
+            None,
+            None,
+        ));
+    }
     let mut local = defaults
         .iter()
         .map(|(local, _, _)| *local)
@@ -446,7 +472,23 @@ fn select_defaults(
             break;
         }
     }
+    // Charge the complete retained and projected context before the first copy.
     // Grouping preserves authored row order and emits columns in declaration order.
+    let mut context_bytes = 0usize;
+    for (&column, rows) in &overridden {
+        let bytes = rows
+            .iter()
+            .try_fold(output.columns()[column].name.len(), |n, row| {
+                n.checked_add(row.len()).ok_or_else(|| {
+                    PrepareError::limit("row_default_context", 16_777_216, None, None)
+                })
+            })?;
+        context_bytes = bytes
+            .checked_mul(4)
+            .and_then(|n| context_bytes.checked_add(n))
+            .filter(|&n| n <= 16_777_216)
+            .ok_or_else(|| PrepareError::limit("row_default_context", 16_777_216, None, None))?;
+    }
     let findings = overridden
         .into_iter()
         .map(|(column, rows)| PreflightFinding::DuplicateRowDefault {
@@ -467,7 +509,7 @@ fn select_defaults(
         .collect())
 }
 
-/// Validate every row-phase use before projecting its authored context.
+/// Bound every retained row-phase finding before copying any authored context.
 fn validate_row_phases(
     templates: &[Template],
     project: Option<&functions::Prepared>,
@@ -482,9 +524,14 @@ fn validate_row_phases(
             &'a crate::project_call_document::Argument,
         )>,
     }
-    fn register<'a>(site: Site<'a>, output: &TableSchema, sites: &mut Vec<Site<'a>>) {
+    fn register<'a>(
+        site: Site<'a>,
+        output: &TableSchema,
+        sites: &mut Vec<Site<'a>>,
+        bytes: &mut usize,
+    ) -> Result<(), PrepareError> {
         if site.identifier.contains('.') {
-            return;
+            return Ok(());
         }
         let Some(column) = output
             .columns()
@@ -492,7 +539,7 @@ fn validate_row_phases(
             .position(|c| c.name == site.identifier)
         else {
             // Unknown bare sources retain their ordinary binding diagnostic.
-            return;
+            return Ok(());
         };
         if site
             .template
@@ -500,12 +547,42 @@ fn validate_row_phases(
             .iter()
             .any(|d| d.column == column)
         {
-            return;
+            return Ok(());
+        }
+        let mut cost = site
+            .declaration
+            .path
+            .len()
+            .checked_add(site.identifier.len())
+            .and_then(|n| n.checked_add(site.template.id.len()))
+            .and_then(|n| n.checked_add(128))
+            .ok_or_else(|| PrepareError::limit("function_findings", 16_777_216, None, None))?;
+        if let Some((call, argument)) = site.function {
+            cost = cost
+                .checked_add(call.call.name.len())
+                .and_then(|n| n.checked_add(argument.name.len().checked_mul(2)?))
+                .ok_or_else(|| PrepareError::limit("function_findings", 16_777_216, None, None))?;
+        }
+        let cost = cost
+            .checked_mul(4)
+            .ok_or_else(|| PrepareError::limit("function_findings", 16_777_216, None, None))?;
+        *bytes = bytes
+            .checked_add(cost)
+            .filter(|&n| n <= 16_777_216)
+            .ok_or_else(|| PrepareError::limit("function_findings", 16_777_216, None, None))?;
+        if sites.len() >= 65_536 {
+            return Err(PrepareError::limit(
+                "function_findings",
+                65_536,
+                Some(sites.len() + 1),
+                None,
+            ));
         }
         sites.push(site);
+        Ok(())
     }
     let mut sites = Vec::new();
-
+    let mut bytes = 0usize;
     for template in templates {
         for declaration in &template.declarations {
             match &declaration.operation {
@@ -518,7 +595,8 @@ fn validate_row_phases(
                     },
                     output,
                     &mut sites,
-                ),
+                    &mut bytes,
+                )?,
                 RowOperation::ProjectFunction(call) => {
                     let call = &project
                         .ok_or(PrepareError::Internal)?
@@ -540,7 +618,8 @@ fn validate_row_phases(
                                 },
                                 output,
                                 &mut sites,
-                            );
+                                &mut bytes,
+                            )?;
                         }
                     }
                 }
@@ -595,6 +674,7 @@ impl Rows {
         d: &Document,
         output: &TableSchema,
         driver: &str,
+        limits: CompilationLimits,
         project: Option<&functions::Prepared>,
         _column_terminology: bool,
         extraction: &str_extract::Prepared,
@@ -603,9 +683,15 @@ impl Rows {
     ) -> Result<Self, PrepareError> {
         let root = d.root();
         let raw_rows = sequence(d, field(d, root, "rows")?)?;
-        if raw_rows.is_empty() {
-            return Err(PrepareError::Internal);
+        if raw_rows.is_empty() || raw_rows.len() > 16 {
+            return Err(PrepareError::limit(
+                "row_templates",
+                16,
+                Some(raw_rows.len()),
+                Some("rows"),
+            ));
         }
+        row_intermediates::admit(d, raw_rows.len())?;
         let columns = sequence(d, field(d, root, "columns")?)?;
         let filters = raw_rows
             .iter()
@@ -616,7 +702,8 @@ impl Rows {
                     .map(|id| {
                         let expression = text(d, id)?;
                         let path = format!("rows[{index}].filter");
-                        let compiled = predicate_compiler::compile(expression, &path);
+                        let compiled =
+                            predicate_compiler::compile(expression, &path, Default::default());
                         match &compiled {
                             Ok(_)
                             | Err(predicate_compiler::Error::Parse(
@@ -764,6 +851,7 @@ impl Rows {
                     column,
                     format!("columns.{}.derivation", metadata.name),
                     false,
+                    limits,
                     project,
                     extraction,
                     string_templates,
@@ -797,10 +885,10 @@ impl Rows {
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
                 .map(|id| {
                     let values = sequence(d, id)?;
-                    if values.len() > crate::limits::Limits::KEYS {
+                    if values.len() > limits.keys {
                         return Err(PrepareError::limit(
                             "group_keys",
-                            crate::limits::Limits::KEYS,
+                            limits.keys,
                             Some(values.len()),
                             Some(&format!("{path}.group_by")),
                         ));
@@ -812,10 +900,10 @@ impl Rows {
                 })
                 .transpose()?;
             let entries = mapping(d, field(d, row, "derivations")?)?;
-            if entries.len() > crate::limits::Limits::COLUMNS {
+            if entries.len() > limits.columns {
                 return Err(PrepareError::limit(
                     "row_columns",
-                    crate::limits::Limits::COLUMNS,
+                    limits.columns,
                     Some(entries.len()),
                     Some(&format!("{path}.derivations")),
                 ));
@@ -860,6 +948,7 @@ impl Rows {
                     column,
                     prefix,
                     groups.is_some(),
+                    limits,
                     project,
                     extraction,
                     string_templates,
@@ -926,6 +1015,7 @@ impl Rows {
                     column,
                     format!("{prefix}.derivation"),
                     false,
+                    limits,
                     project,
                     extraction,
                     string_templates,
@@ -943,6 +1033,37 @@ impl Rows {
         calls: &crate::project_calls::ProjectCalls,
     ) -> Result<Vec<usize>, PrepareError> {
         let mut uses = std::vec![0usize; calls.calls().len()];
+        // A row label can appear in each argument finding and its projected context.
+        // Admit the cumulative copies before source binding can construct findings.
+        let mut row_context = 0usize;
+        for template in &self.templates {
+            for declaration in &template.declarations {
+                for call in declaration.operation.calls() {
+                    let arguments = calls
+                        .calls()
+                        .get(call)
+                        .ok_or(PrepareError::Internal)?
+                        .located
+                        .call
+                        .arguments
+                        .len();
+                    let cost = template
+                        .id
+                        .len()
+                        .checked_mul(arguments)
+                        .and_then(|n| n.checked_mul(4))
+                        .ok_or_else(|| {
+                            PrepareError::limit("function_row_context", 16_777_216, None, None)
+                        })?;
+                    row_context = row_context
+                        .checked_add(cost)
+                        .filter(|&n| n <= 16_777_216)
+                        .ok_or_else(|| {
+                            PrepareError::limit("function_row_context", 16_777_216, None, None)
+                        })?;
+                }
+            }
+        }
         for declaration in self
             .templates
             .iter()
@@ -951,12 +1072,29 @@ impl Rows {
         {
             for call in declaration.operation.calls() {
                 let count = uses.get_mut(call).ok_or(PrepareError::Internal)?;
-                *count = count.checked_add(1).ok_or(PrepareError::Internal)?;
+                *count = count
+                    .checked_add(1)
+                    .ok_or_else(|| PrepareError::limit("function_calls", 1024, None, None))?;
             }
         }
         Ok(uses)
     }
-
+    pub(super) fn admit_sources(
+        &self,
+        schemas: &[&TableSchema],
+        output: &TableSchema,
+    ) -> Result<(), BindError> {
+        row_intermediates::admit_sources(
+            schemas,
+            output,
+            self.templates.len(),
+            self.templates
+                .iter()
+                .flat_map(|t| &t.declarations)
+                .chain(&self.columns)
+                .map(|d| d.path.len()),
+        )
+    }
     #[allow(clippy::too_many_arguments)]
     pub(super) fn bind(
         &self,
@@ -1065,7 +1203,7 @@ impl Rows {
                         None
                     } else {
                         let Some(reference_binding::Binding::Output { column, .. }) =
-                            catalog.bind(reference)
+                            catalog.bind(reference).map_err(BindError::Catalog)?
                         else {
                             return Err(BindError::Internal);
                         };
@@ -1136,6 +1274,7 @@ impl Rows {
                                 joined: false,
                                 phase,
                             },
+                            Default::default(),
                         )
                         .map_err(BindError::Catalog)?;
                         let valid = scoped.is_empty();
@@ -1202,8 +1341,9 @@ impl Rows {
                 &secondary,
                 &template.driver,
             )?;
-            let row_catalog =
-                row_catalog.with_row_joins(&template.driver, template.groups.as_deref());
+            let row_catalog = row_catalog
+                .with_row_joins(&template.driver, template.groups.as_deref())
+                .map_err(BindError::Catalog)?;
             let mode = match &template.groups {
                 None => RowMode::Records,
                 Some(groups) => RowMode::Groups(
@@ -1251,7 +1391,7 @@ impl Rows {
                         text,
                         position.character,
                         failure,
-                    )));
+                    )?));
                     None
                 }
                 Some((_, Err(error))) => return Err(BindError::PredicatePolicy(error.clone())),
@@ -1330,8 +1470,8 @@ impl Rows {
                     assignments.insert(declaration.column, value);
                 }
             }
-            let analyzed =
-                crate::dependency_analysis::analyze(&graph).map_err(|_| BindError::Internal)?;
+            let analyzed = crate::dependency_analysis::analyze(&graph, Default::default())
+                .map_err(|_| BindError::Internal)?;
             if let Some(cycle) = analyzed.cycle {
                 let mut paths = std::vec![""; output.columns().len()];
                 for declaration in &template.declarations {
@@ -1566,7 +1706,10 @@ impl Rows {
             )? {
                 crate::dataset::odm::visit_mut(&mut value.expression, &mut |bound| {
                     if odm_contexts.is_none() {
-                        odm_contexts = Some(deferred_odm_contexts(&self.templates, &templates));
+                        odm_contexts = Some(
+                            deferred_odm_contexts(&self.templates, &templates)
+                                .map_err(|_| crate::dataset::PlanError::InvalidSource)?,
+                        );
                     }
                     bound.defer(odm_contexts.as_ref().unwrap().clone())
                 })
@@ -1575,7 +1718,7 @@ impl Rows {
             }
             dependencies[declaration.column] = Some(edges);
         }
-        let analyzed = column_dependencies::analyze(&dependencies, keys, true)
+        let analyzed = column_dependencies::analyze(&dependencies, keys, true, Default::default())
             .map_err(|_| BindError::Internal)?;
         if !analyzed.diagnostics.is_empty() {
             let mut paths = std::vec![String::new(); output.columns().len()];

@@ -3,6 +3,37 @@
 use super::*;
 use crate::diagnostic::Diagnostic;
 
+fn charge(used: &mut usize, amount: usize) -> Result<(), PrepareError> {
+    *used = used
+        .checked_add(amount)
+        .filter(|&n| n <= 16_777_216)
+        .ok_or_else(|| {
+            PrepareError::limit("check_declaration_diagnostics", 16_777_216, None, None)
+        })?;
+    Ok(())
+}
+fn context_bytes(value: &serde_json::Value, used: &mut usize) -> Result<(), PrepareError> {
+    use serde_json::Value as V;
+    charge(used, std::mem::size_of::<V>())?;
+    match value {
+        V::String(text) => charge(used, text.len())?,
+        V::Number(number) => charge(used, number.as_str().len())?,
+        V::Array(values) => {
+            for value in values {
+                context_bytes(value, used)?;
+            }
+        }
+        V::Object(fields) => {
+            for (name, value) in fields {
+                charge(used, name.len())?;
+                context_bytes(value, used)?;
+            }
+        }
+        _ => (),
+    }
+    Ok(())
+}
+
 pub(super) fn predicate(
     compiled: &Result<crate::predicate::Plan, crate::predicate_compiler::Error>,
     expression: &str,
@@ -21,7 +52,7 @@ pub(super) fn predicate(
                 expression,
                 position.character,
                 failure,
-            )));
+            )?));
             Ok(())
         }
         Err(error) => Err(BindError::PredicatePolicy(error.clone())),
@@ -137,12 +168,26 @@ impl PreparedSpecification {
             }
             Ok(())
         };
-        collect(&mut findings).map_err(|_| PrepareError::Internal)?;
+        collect(&mut findings).map_err(|error| match error {
+            BindError::Internal => PrepareError::Internal,
+            _ => PrepareError::limit("check_declaration_diagnostics", 16_777_216, None, None),
+        })?;
+        let mut bytes = 0usize;
         for finding in findings {
             let diagnostics = finding
                 .diagnostics(self.source())
                 .ok_or(PrepareError::Internal)?;
             for diagnostic in diagnostics {
+                // Charge all retained path and context text before extending the collection.
+                // Source-model and parser admission bound each individual finding already.
+                charge(&mut bytes, std::mem::size_of::<Diagnostic>())?;
+                for path in &diagnostic.spec_paths {
+                    charge(&mut bytes, path.len())?;
+                }
+                for (name, value) in &diagnostic.context {
+                    charge(&mut bytes, name.len())?;
+                    context_bytes(value, &mut bytes)?;
+                }
                 self.check_expressions.push(diagnostic);
             }
         }

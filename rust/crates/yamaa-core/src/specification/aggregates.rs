@@ -1,7 +1,7 @@
 //! R013 declarations select one of the three admitted relation contexts.
 use super::*;
 use crate::{
-    aggregate_compiler::{compile_aggregate, CompiledAggregate},
+    aggregate_compiler::{compile_aggregate, AggregateCompileError, CompiledAggregate},
     bound_expression::{Binding, BoundPredicate, Read},
     dataset::{
         AggregateBinding, AggregatePhase, AggregateRelation, AggregateRowContext, AggregateSource,
@@ -17,7 +17,7 @@ pub(super) struct Declaration {
     expression: String,
     expression_path: String,
     path: String,
-    compiled: Result<CompiledAggregate, crate::aggregate_parser::ParseError>,
+    compiled: Result<CompiledAggregate, AggregateCompileError>,
     groups: Vec<String>,
     keys: Option<Vec<(String, match_values::Declaration)>>,
     empty_key: Option<AggregateEmptyKey>,
@@ -71,15 +71,22 @@ fn window_path(
     path: &str,
     depth: usize,
 ) -> Result<Option<String>, PrepareError> {
-    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+    if depth > 64 {
         return Err(PrepareError::limit(
-            "semantic_depth",
-            crate::limits::Limits::SEMANTIC_DEPTH,
+            "expression_depth",
+            64,
             Some(depth),
             Some(path),
         ));
     }
-
+    if path.len() > 65_536 {
+        return Err(PrepareError::limit(
+            "path_bytes",
+            65_536,
+            Some(path.len()),
+            Some(path),
+        ));
+    }
     let &[(operation, payload)] = mapping(d, value)? else {
         return Err(PrepareError::Internal);
     };
@@ -141,12 +148,25 @@ pub(super) fn prepare(
     } else {
         format!("{path}.expr")
     };
-    let compiled = compile_aggregate(expr, &expression_path);
-    if let Err(error @ crate::aggregate_parser::ParseError::Limit { .. }) = &compiled {
-        return Err(PrepareError::aggregate_parse(
-            error.clone(),
-            Some(&expression_path),
-        ));
+    let compiled = compile_aggregate(expr, &expression_path, Default::default());
+    match &compiled {
+        Err(AggregateCompileError::Parse(
+            error @ crate::aggregate_parser::ParseError::Limit { .. },
+        )) => {
+            return Err(PrepareError::aggregate_parse(
+                error.clone(),
+                Some(&expression_path),
+            ));
+        }
+        Err(AggregateCompileError::MetadataLimit { limit, required }) => {
+            return Err(PrepareError::limit(
+                "aggregate_metadata",
+                *limit,
+                *required,
+                Some(&expression_path),
+            ));
+        }
+        _ => (),
     }
     let mut extra = Vec::new();
     let mut derive_relations = Vec::<String>::new();
@@ -158,7 +178,9 @@ pub(super) fn prepare(
             .filter(|&id| !matches!(d.nodes()[id], N::Null))
             .map(|id| {
                 let items = sequence(d, id)?;
-
+                if items.len() > 4096 {
+                    return Err(PrepareError::limit("aggregate_derive_bindings", 4096, Some(items.len()), None));
+                }
                 let mut bindings = Vec::<DeriveDeclaration>::new();
                 let invalid = |path: &str, reason: &str| {
                     PrepareError::Invalid(vec![PreflightFinding::Scalar(diagnostic(
@@ -373,7 +395,11 @@ pub(super) fn prepare(
                 let expr = text(d, id)?;
                 Ok((
                     expr.into(),
-                    crate::predicate_compiler::compile(expr, &format!("{path}.filter")),
+                    crate::predicate_compiler::compile(
+                        expr,
+                        &format!("{path}.filter"),
+                        Default::default(),
+                    ),
                 ))
             })
             .transpose()?
@@ -453,7 +479,10 @@ pub(super) fn bind(
 ) -> Result<Option<Expression>, BindError> {
     let compiled = match &declaration.compiled {
         Ok(compiled) => compiled,
-        Err(crate::aggregate_parser::ParseError::Grammar { failure, .. }) => {
+        Err(AggregateCompileError::Parse(crate::aggregate_parser::ParseError::Grammar {
+            failure,
+            ..
+        })) => {
             findings.push(BindFinding::Aggregate {
                 path: declaration.expression_path.clone(),
                 expression: declaration.expression.clone(),
@@ -461,7 +490,14 @@ pub(super) fn bind(
             });
             return Ok(None);
         }
-
+        Err(AggregateCompileError::Numeric(error)) => {
+            findings.push(BindFinding::Numeric {
+                path: declaration.expression_path.clone(),
+                expression: declaration.expression.clone(),
+                error: error.clone(),
+            });
+            return Ok(None);
+        }
         Err(_) => return Err(BindError::Internal),
     };
     let mut relations = compiled
@@ -668,7 +704,7 @@ pub(super) fn bind(
                    findings: &mut Vec<BindFinding>|
      -> Result<Option<(usize, ColumnType)>, BindError> {
         let bound = match (relation, donor) {
-            (None, _) => match catalog.bind(name) {
+            (None, _) => match catalog.bind(name).map_err(BindError::Catalog)? {
                 Some(reference_binding::Binding::Output {
                     column,
                     column_type,
@@ -687,12 +723,14 @@ pub(super) fn bind(
                         .find(|(_, column)| column.name == field)
                         .map(|(index, column)| (index, column.kind))
                 }),
-            (Some(_), AggregateSource::Primary) => match catalog.bind(name) {
-                Some(reference_binding::Binding::Dataset {
-                    field, column_type, ..
-                }) => Some((field, column_type)),
-                _ => None,
-            },
+            (Some(_), AggregateSource::Primary) => {
+                match catalog.bind(name).map_err(BindError::Catalog)? {
+                    Some(reference_binding::Binding::Dataset {
+                        field, column_type, ..
+                    }) => Some((field, column_type)),
+                    _ => None,
+                }
+            }
         };
         if bound.is_none() {
             findings.push(BindFinding::UnknownReference {
@@ -713,8 +751,8 @@ pub(super) fn bind(
     // must not be reported again under an invented aggregate.group_by path.
     if matches!(phase, Phase::Row { .. })
         && grain.iter().any(|name| {
-            !catalog.bind(name).is_some_and(|binding| {
-                matches!(binding, reference_binding::Binding::Dataset { .. })
+            !catalog.bind(name).is_ok_and(|binding| {
+                matches!(binding, Some(reference_binding::Binding::Dataset { .. }))
             })
         })
     {
@@ -766,7 +804,9 @@ pub(super) fn bind(
                     .filter(|name| {
                         let written = format!("{relation_name}.{name}");
                         match donor {
-                            AggregateSource::Primary => catalog.bind(&written).is_some(),
+                            AggregateSource::Primary => {
+                                catalog.bind(&written).is_ok_and(|value| value.is_some())
+                            }
                             AggregateSource::Secondary(index) => secondary[index]
                                 .schema
                                 .columns()
@@ -888,7 +928,7 @@ pub(super) fn bind(
                 expr,
                 position.character,
                 failure,
-            )));
+            )?));
             None
         }
         Some((_, Err(error))) => return Err(BindError::PredicatePolicy(error.clone())),
@@ -931,7 +971,9 @@ pub(super) fn bind(
                 .filter(|name| {
                     let written = format!("{relation}.{name}");
                     match donor {
-                        AggregateSource::Primary => catalog.bind(&written).is_some(),
+                        AggregateSource::Primary => {
+                            catalog.bind(&written).is_ok_and(|value| value.is_some())
+                        }
                         AggregateSource::Secondary(index) => secondary[index]
                             .schema
                             .columns()
@@ -973,7 +1015,10 @@ pub(super) fn bind(
             for (field, value) in pairs {
                 let written = format!("{relation}.{field}");
                 let donor_field = match donor {
-                    AggregateSource::Primary => match catalog.bind(&written) {
+                    AggregateSource::Primary => match catalog
+                        .bind(&written)
+                        .map_err(BindError::Catalog)?
+                    {
                         Some(reference_binding::Binding::Dataset {
                             field, column_type, ..
                         }) => Some((field, column_type)),
@@ -997,7 +1042,7 @@ pub(super) fn bind(
                     )?;
                     continue;
                 };
-                if let Some(expected) = value.result_type(catalog) {
+                if let Some(expected) = value.result_type(catalog)? {
                     if !crate::key_relation::comparable(expected, actual.into()) {
                         finding(
                             Finding::KeyType {
@@ -1013,7 +1058,11 @@ pub(super) fn bind(
                 }
                 let before_references = findings.len();
                 for reference in value.references() {
-                    if catalog.bind(reference).is_none() {
+                    if catalog
+                        .bind(reference)
+                        .map_err(BindError::Catalog)?
+                        .is_none()
+                    {
                         finding(
                             Finding::KeyReference {
                                 path: key_path,
@@ -1192,17 +1241,22 @@ fn bind_range(
     if findings.len() != before {
         return Ok(None);
     }
-    let current = match catalog.bind(&range.value) {
-        Some(reference_binding::Binding::Output { column, .. }) => {
+    let current = match catalog.bind(&range.value).map_err(BindError::Catalog)? {
+        Some(reference_binding::Binding::Output {
+            column,
+            column_type,
+        }) => {
             edges.push(column);
-            Some((CurrentRead::Output(column), catalog.type_of(&range.value)))
+            Some((CurrentRead::Output(column), column_type))
         }
-        Some(reference_binding::Binding::Dataset { field, .. }) => Some((
+        Some(reference_binding::Binding::Dataset {
+            field, column_type, ..
+        }) => Some((
             CurrentRead::Record {
                 source: 0,
                 column: field,
             },
-            catalog.type_of(&range.value),
+            column_type,
         )),
         None => range.value.split_once('.').and_then(|(name, field)| {
             secondary
@@ -1221,7 +1275,7 @@ fn bind_range(
                                     source: source + 1,
                                     column,
                                 },
-                                Some(field.kind),
+                                field.kind,
                             )
                         })
                 })
@@ -1235,7 +1289,7 @@ fn bind_range(
                         edges.extend(row_intermediates::dependencies(index, intermediates).ok()?);
                         Some((
                             CurrentRead::Intermediate { index, column },
-                            item.source_kind(secondary, column),
+                            item.source_schema(secondary)?.columns()[column].kind,
                         ))
                     })
                 })
@@ -1256,9 +1310,10 @@ fn bind_range(
             read,
             identifier: range.value.clone(),
         },
-        kind.map(Into::into),
+        Some(kind.into()),
         lower,
         upper,
+        16_777_216,
     ) {
         Ok(range) => Ok(Some(range)),
         Err(RelationRangeError::Incomparable(types)) => {
@@ -1266,6 +1321,13 @@ fn bind_range(
                 types.diagnostic_for(&path, None),
             ));
             Ok(None)
+        }
+        Err(RelationRangeError::Limit) => {
+            Err(BindError::Catalog(reference_binding::Error::Limit {
+                resource: "aggregate_range_metadata",
+                limit: 16_777_216,
+                required: usize::MAX,
+            }))
         }
         Err(_) => Err(BindError::Internal),
     }
@@ -1355,6 +1417,7 @@ fn bind_derivations(
             name: relation,
             fields: &source_fields,
         }],
+        Default::default(),
     )
     .map_err(BindError::Catalog)?;
     let references = derive
@@ -1375,12 +1438,7 @@ fn bind_derivations(
             .iter()
             .enumerate()
             .filter(|(_, field)| item.source_column(secondary, &field.name).is_some())
-            .map(|(column, field)| {
-                (
-                    field.name.clone(),
-                    (column, item.source_kind(secondary, column)),
-                )
-            })
+            .map(|(column, field)| (field.name.clone(), (column, field.kind)))
             .collect();
         selected.push((
             item.identifier.clone(),
@@ -1436,14 +1494,23 @@ impl Declaration {
     pub(super) fn check_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
         match &self.compiled {
             Ok(_) => (),
-            Err(crate::aggregate_parser::ParseError::Grammar { failure, .. }) => {
+            Err(AggregateCompileError::Parse(crate::aggregate_parser::ParseError::Grammar {
+                failure,
+                ..
+            })) => {
                 findings.push(BindFinding::Aggregate {
                     path: self.expression_path.clone(),
                     expression: self.expression.clone(),
                     error: failure.clone(),
                 });
             }
-
+            Err(AggregateCompileError::Numeric(error)) => {
+                findings.push(BindFinding::Numeric {
+                    path: self.expression_path.clone(),
+                    expression: self.expression.clone(),
+                    error: error.clone(),
+                });
+            }
             Err(_) => return Err(BindError::Internal),
         }
         if let Some((expression, compiled)) = &self.filter {

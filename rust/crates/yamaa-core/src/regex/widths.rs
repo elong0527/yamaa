@@ -4,7 +4,13 @@
 use super::*;
 
 /// Use the existing scalar arithmetic when no capture-dependent pass is needed.
-pub(super) fn validate(nodes: &[Node], root: usize, groups: usize) -> Result<(), CompileError> {
+pub(super) fn validate(
+    nodes: &[Node],
+    root: usize,
+    groups: usize,
+    limits: CompileLimits,
+    shared: &mut Budget,
+) -> Result<(), CompileError> {
     let has_behind = nodes
         .iter()
         .any(|node| matches!(node.kind, Kind::Look { behind: true, .. }));
@@ -36,11 +42,14 @@ pub(super) fn validate(nodes: &[Node], root: usize, groups: usize) -> Result<(),
     }
     let mut analysis = Analysis {
         nodes,
+        limits,
+        local: Budget::new(limits),
+        shared,
         behind: Vec::new(),
     };
-
+    analysis.cells(nodes.len())?;
     analysis.behind.resize(nodes.len(), None);
-
+    analysis.cells(groups + 2)?;
     let initial = Path {
         width: Extent::ZERO,
         captures: vec![Extent::ZERO; groups + 1],
@@ -97,32 +106,35 @@ impl Extent {
             max: self.max,
         })
     }
-    /// Preserve width arithmetic without wrapping addressable positions.
+    /// Width arithmetic overflow and fixed-width ceilings remain policy errors.
     fn checked(
         min: Option<usize>,
         max: Option<Option<usize>>,
-        byte: usize,
+        limit: usize,
     ) -> Result<Self, CompileError> {
-        let error = || CompileError::Unsupported {
-            byte,
-            feature: "pattern width exceeds addressable range",
+        let error = || CompileError::Limit {
+            resource: Resource::Width,
+            limit,
         };
         let value = Self {
             min: min.ok_or_else(error)?,
             max: max.ok_or_else(error)?,
         };
+        if value.max == Some(value.min) && value.min > limit {
+            return Err(error());
+        }
         Ok(value)
     }
     /// Concatenate consumption intervals without subtracting unrelated bounds.
-    fn add(self, other: Self, byte: usize) -> Result<Self, CompileError> {
+    fn add(self, other: Self, limit: usize) -> Result<Self, CompileError> {
         let max = match (self.max, other.max) {
             (Some(a), Some(b)) => a.checked_add(b).map(Some),
             _ => Some(None),
         };
-        Self::checked(self.min.checked_add(other.min), max, byte)
+        Self::checked(self.min.checked_add(other.min), max, limit)
     }
     /// Multiply required iterations symbolically, including exact zero counts.
-    fn times(self, count: usize, byte: usize) -> Result<Self, CompileError> {
+    fn times(self, count: usize, limit: usize) -> Result<Self, CompileError> {
         if count == 0 {
             return Ok(Self::ZERO);
         }
@@ -130,10 +142,10 @@ impl Extent {
             Some(value) => value.checked_mul(count).map(Some),
             None => Some(None),
         };
-        Self::checked(self.min.checked_mul(count), max, byte)
+        Self::checked(self.min.checked_mul(count), max, limit)
     }
     /// Zero or more strictly consuming optional iterations, bounded or unbounded.
-    fn optional(self, maximum: Option<usize>, byte: usize) -> Result<Self, CompileError> {
+    fn optional(self, maximum: Option<usize>, limit: usize) -> Result<Self, CompileError> {
         if maximum == Some(0) {
             return Ok(Self::ZERO);
         }
@@ -141,7 +153,7 @@ impl Extent {
             (Some(width), Some(count)) => width.checked_mul(count).map(Some),
             _ => Some(None),
         };
-        Self::checked(Some(0), max, byte)
+        Self::checked(Some(0), max, limit)
     }
 }
 
@@ -152,20 +164,75 @@ struct Path {
     // still retains their distinct participation/result values independently.
     captures: Vec<Extent>,
 }
+/// Cumulative capture-dependent analysis only; parsing retains structural limits.
+/// The caller owns the scope, and failed charges retain the consumed prefix.
+pub(crate) struct Budget {
+    limits: CompileLimits,
+    work: usize,
+    cells: usize,
+}
+impl Budget {
+    /// Select width work/storage ceilings without changing individual pattern limits.
+    pub(crate) fn new(limits: CompileLimits) -> Self {
+        Self {
+            limits,
+            work: 0,
+            cells: 0,
+        }
+    }
+    /// Charge before analysis or allocation, retaining the original scope's ceiling.
+    fn charge(&mut self, n: usize, resource: Resource) -> Result<(), CompileError> {
+        let (used, limit) = match resource {
+            Resource::WidthWork => (&mut self.work, self.limits.width_work),
+            Resource::WidthCells => (&mut self.cells, self.limits.width_cells),
+            _ => unreachable!("only capture-path resources use this budget"),
+        };
+        *used = used
+            .checked_add(n)
+            .filter(|&next| next <= limit)
+            .ok_or(CompileError::Limit { resource, limit })?;
+        Ok(())
+    }
+}
 struct Analysis<'a> {
     nodes: &'a [Node],
+    limits: CompileLimits,
+    local: Budget,
+    shared: &'a mut Budget,
     behind: Vec<Option<Extent>>,
 }
 impl Analysis<'_> {
+    /// Bound visits/comparisons across this pattern and the owning request.
+    fn work(&mut self, n: usize) -> Result<(), CompileError> {
+        self.local.charge(n, Resource::WidthWork)?;
+        self.shared.charge(n, Resource::WidthWork)
+    }
+    /// Charge both scopes before allocation; allocator capacity is not counted.
+    fn cells(&mut self, n: usize) -> Result<(), CompileError> {
+        self.local.charge(n, Resource::WidthCells)?;
+        self.shared.charge(n, Resource::WidthCells)
+    }
+    /// Preserve correlated capture vectors without allocating an uncharged clone.
+    fn copy(&mut self, path: &Path) -> Result<Path, CompileError> {
+        self.cells(path.captures.len() + 1)?;
+        Ok(path.clone())
+    }
     /// Equal width/capture states can share a continuation regardless of literals.
-    fn push(&mut self, paths: &mut Vec<Path>, path: Path) {
+    fn push(&mut self, paths: &mut Vec<Path>, path: Path) -> Result<(), CompileError> {
         for known in paths.iter() {
+            self.work(path.captures.len() + 1)?;
             if known == &path {
-                return;
+                return Ok(());
             }
         }
-
+        self.cells(1)?;
         paths.push(path);
+        Ok(())
+    }
+    /// Create one charged result slot while moving its owned capture state.
+    fn one(&mut self, path: Path) -> Result<Vec<Path>, CompileError> {
+        self.cells(1)?;
+        Ok(vec![path])
     }
     /// Traverse flat sequences iteratively; only grammar-bounded nesting recurses.
     fn visit(
@@ -174,21 +241,22 @@ impl Analysis<'_> {
         mut path: Path,
         backwards: bool,
     ) -> Result<Vec<Path>, CompileError> {
+        self.work(1)?;
         let nodes = self.nodes;
         let node = &nodes[id];
         match &node.kind {
             Kind::Literal(_) | Kind::Dot | Kind::Class { .. } => {
-                path.width = path.width.add(Extent::ONE, node.byte)?;
-                Ok(vec![path])
+                path.width = path.width.add(Extent::ONE, self.limits.width)?;
+                self.one(path)
             }
-            Kind::Start | Kind::End | Kind::Boundary(_) => Ok(vec![path]),
+            Kind::Start | Kind::End | Kind::Boundary(_) => self.one(path),
             Kind::Backreference(Reference::Number(number)) => {
-                path.width = path.width.add(path.captures[*number], node.byte)?;
-                Ok(vec![path])
+                path.width = path.width.add(path.captures[*number], self.limits.width)?;
+                self.one(path)
             }
             Kind::Backreference(Reference::Name(_)) => unreachable!("references already resolved"),
             Kind::Sequence(children) => {
-                let mut paths = Ok(vec![path])?;
+                let mut paths = self.one(path)?;
                 for position in 0..children.len() {
                     let child = children[if backwards {
                         children.len() - 1 - position
@@ -198,7 +266,7 @@ impl Analysis<'_> {
                     let mut next = Vec::new();
                     for path in paths {
                         for result in self.visit(child, path, backwards)? {
-                            self.push(&mut next, result);
+                            self.push(&mut next, result)?;
                         }
                     }
                     paths = next;
@@ -208,9 +276,9 @@ impl Analysis<'_> {
             Kind::Alternative(children) => {
                 let mut paths = Vec::new();
                 for &child in children {
-                    let branch = path.clone();
+                    let branch = self.copy(&path)?;
                     for result in self.visit(child, branch, backwards)? {
-                        self.push(&mut paths, result);
+                        self.push(&mut paths, result)?;
                     }
                 }
                 Ok(paths)
@@ -223,7 +291,7 @@ impl Analysis<'_> {
                     if let Some(number) = number {
                         path.captures[*number] = path.width;
                     }
-                    path.width = prefix.add(path.width, node.byte)?;
+                    path.width = prefix.add(path.width, self.limits.width)?;
                 }
                 Ok(paths)
             }
@@ -233,7 +301,11 @@ impl Analysis<'_> {
                 positive,
             } => {
                 let prefix = path.width;
-                let original = if !positive { Some(path.clone()) } else { None };
+                let original = if !positive {
+                    Some(self.copy(&path)?)
+                } else {
+                    None
+                };
                 path.width = Extent::ZERO;
                 let mut paths = self.visit(*child, path, *behind)?;
                 for path in &mut paths {
@@ -245,7 +317,7 @@ impl Analysis<'_> {
                     path.width = prefix;
                 }
                 if let Some(original) = original {
-                    Ok(vec![original])
+                    self.one(original)
                 } else {
                     Ok(paths)
                 }
@@ -254,16 +326,16 @@ impl Analysis<'_> {
                 child, min, max, ..
             } => {
                 let prefix = path.width;
-                let mut body = path.clone();
+                let mut body = self.copy(&path)?;
                 body.width = Extent::ZERO;
-
+                self.work(nodes[*child].captures.len())?;
                 for capture in nodes[*child].captures.clone() {
                     body.captures[capture] = Extent::ZERO;
                 }
                 // Even a zero-count body must satisfy nested assertion grammar.
                 let last_paths = self.visit(*child, body, backwards)?;
                 if *max == Some(0) {
-                    return Ok(vec![path]);
+                    return self.one(path);
                 }
                 let any = last_paths
                     .iter()
@@ -272,28 +344,28 @@ impl Analysis<'_> {
                     .expect("structural alternatives have at least one path");
                 let mut paths = Vec::new();
                 if *min == 0 {
-                    self.push(&mut paths, path);
+                    self.push(&mut paths, path)?;
                 }
                 for mut last in last_paths {
                     let last_width = last.width;
                     if *min > 0 {
-                        let mut required = last.clone();
+                        let mut required = self.copy(&last)?;
                         required.width = prefix
-                            .add(any.times(min - 1, node.byte)?, node.byte)?
-                            .add(last_width, node.byte)?;
-                        self.push(&mut paths, required);
+                            .add(any.times(min - 1, self.limits.width)?, self.limits.width)?
+                            .add(last_width, self.limits.width)?;
+                        self.push(&mut paths, required)?;
                     }
                     if max.is_none_or(|max| max > *min) {
                         if let Some(positive) = last_width.positive() {
                             let earlier_optional = any
                                 .positive()
                                 .expect("a positive last path exists")
-                                .optional(max.map(|max| max - min - 1), node.byte)?;
+                                .optional(max.map(|max| max - min - 1), self.limits.width)?;
                             last.width = prefix
-                                .add(any.times(*min, node.byte)?, node.byte)?
-                                .add(earlier_optional, node.byte)?
-                                .add(positive, node.byte)?;
-                            self.push(&mut paths, last);
+                                .add(any.times(*min, self.limits.width)?, self.limits.width)?
+                                .add(earlier_optional, self.limits.width)?
+                                .add(positive, self.limits.width)?;
+                            self.push(&mut paths, last)?;
                         }
                     }
                 }
@@ -306,13 +378,96 @@ impl Analysis<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Exact remaining quotas cover the whole scope, including failed compiles.
     #[test]
-    fn capture_dependent_width_keeps_fixed_and_variable_lookbehind_distinct() {
-        Pattern::compile(r"(a)(?<=\1)").unwrap();
+    fn shared_width_quotas_and_fresh_scopes() {
+        let limits = CompileLimits::default();
+        let source = r"(a)(?<=\1)";
+        let mut measured = Budget::new(limits);
+        Pattern::compile_with_budget(source, limits, &mut measured).unwrap();
+        assert!(measured.work > 0 && measured.cells > 0);
+        for resource in [Resource::WidthWork, Resource::WidthCells] {
+            let cost = if resource == Resource::WidthWork {
+                measured.work
+            } else {
+                measured.cells
+            };
+            let mut shared_limits = limits;
+            if resource == Resource::WidthWork {
+                shared_limits.width_work = 2 * cost - 1;
+            } else {
+                shared_limits.width_cells = 2 * cost - 1;
+            }
+            let mut shared = Budget::new(shared_limits);
+            Pattern::compile_with_budget(source, limits, &mut shared).unwrap();
+            assert_eq!(
+                Pattern::compile_with_budget(source, limits, &mut shared).unwrap_err(),
+                CompileError::Limit {
+                    resource,
+                    limit: 2 * cost - 1
+                }
+            );
+            let used = if resource == Resource::WidthWork {
+                shared.work
+            } else {
+                shared.cells
+            };
+            assert!(used >= cost && used < 2 * cost);
+            let mut retry = Budget::new(limits);
+            Pattern::compile_with_budget(source, limits, &mut retry).unwrap();
+            assert_eq!((retry.work, retry.cells), (measured.work, measured.cells));
+            let mut local = limits;
+            if resource == Resource::WidthWork {
+                local.width_work = 0;
+            } else {
+                local.width_cells = 0;
+            }
+            assert_eq!(
+                Pattern::compile_with_budget(source, local, &mut retry).unwrap_err(),
+                CompileError::Limit { resource, limit: 0 }
+            );
+        }
+        let mut shared = Budget::new(limits);
         assert!(matches!(
-            Pattern::compile(r"(a+)(?<=\1)"),
+            Pattern::compile_with_budget(r"(a+)(?<=\1)", limits, &mut shared),
             Err(CompileError::Invalid { .. })
         ));
-        Pattern::compile(r"(a)\1(?<=a)").unwrap();
+        let used = (shared.work, shared.cells);
+        assert!(used.0 > 0 && used.1 > 0);
+        Pattern::compile_with_budget(source, limits, &mut shared).unwrap();
+        assert_eq!(
+            (shared.work, shared.cells),
+            (used.0 + measured.work, used.1 + measured.cells)
+        );
+    }
+
+    /// Overflow refuses without resetting successful charges or charging skipped analysis.
+    #[test]
+    fn width_budget_overflow_and_static_fast_path() {
+        let limits = CompileLimits {
+            width_work: usize::MAX,
+            width_cells: usize::MAX,
+            ..CompileLimits::default()
+        };
+        for resource in [Resource::WidthWork, Resource::WidthCells] {
+            let mut shared = Budget::new(limits);
+            shared.charge(usize::MAX - 1, resource).unwrap();
+            assert_eq!(
+                shared.charge(2, resource),
+                Err(CompileError::Limit {
+                    resource,
+                    limit: usize::MAX
+                })
+            );
+            shared.charge(1, resource).unwrap();
+        }
+        let mut shared = Budget::new(CompileLimits {
+            width_work: 0,
+            width_cells: 0,
+            ..limits
+        });
+        Pattern::compile_with_budget(r"(a)\1(?<=a)", limits, &mut shared).unwrap();
+        assert_eq!((shared.work, shared.cells), (0, 0));
     }
 }

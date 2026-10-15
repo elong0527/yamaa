@@ -3,7 +3,17 @@ use super::*;
 use std::collections::BTreeMap;
 
 /// Build an arena, resolve all backreferences, then qualify fixed-width lookbehind.
-pub(super) fn compile(source: &str) -> Result<Pattern, CompileError> {
+pub(super) fn compile(
+    source: &str,
+    limits: CompileLimits,
+    shared: &mut CompileBudget,
+) -> Result<Pattern, CompileError> {
+    if source.len() > limits.bytes {
+        return Err(CompileError::Limit {
+            resource: Resource::PatternBytes,
+            limit: limits.bytes,
+        });
+    }
     let mut parser = Parser {
         source,
         chars: source.char_indices().collect(),
@@ -11,6 +21,7 @@ pub(super) fn compile(source: &str) -> Result<Pattern, CompileError> {
         nodes: Vec::new(),
         groups: 0,
         names: BTreeMap::new(),
+        limits,
     };
     let root = parser.disjunction(0)?;
     if parser.peek().is_some() {
@@ -34,7 +45,7 @@ pub(super) fn compile(source: &str) -> Result<Pattern, CompileError> {
             *reference = Reference::Number(number);
         }
     }
-    widths::validate(&parser.nodes, root, parser.groups)?;
+    widths::validate(&parser.nodes, root, parser.groups, limits, shared)?;
     Ok(Pattern {
         nodes: parser.nodes,
         root,
@@ -49,6 +60,7 @@ struct Parser<'s> {
     nodes: Vec<Node>,
     groups: usize,
     names: BTreeMap<String, usize>,
+    limits: CompileLimits,
 }
 enum Escape {
     Scalar(u32),
@@ -95,14 +107,20 @@ impl Parser<'_> {
     fn limit(&self, resource: Resource, limit: usize) -> CompileError {
         CompileError::Limit { resource, limit }
     }
-    /// Retain one postorder node with its exact width and capture extent.
+    /// Bound arena growth and fixed width before retaining a postorder node.
     fn push(
         &mut self,
         kind: Kind,
         byte: usize,
         width: Width,
         captures: std::ops::Range<usize>,
-    ) -> usize {
+    ) -> Result<usize, CompileError> {
+        if self.nodes.len() >= self.limits.nodes {
+            return Err(self.limit(Resource::Nodes, self.limits.nodes));
+        }
+        if matches!(width, Width::Fixed(value) if value > self.limits.width) {
+            return Err(self.limit(Resource::Width, self.limits.width));
+        }
         let id = self.nodes.len();
         self.nodes.push(Node {
             kind,
@@ -110,7 +128,7 @@ impl Parser<'_> {
             width,
             captures,
         });
-        id
+        Ok(id)
     }
     /// Preserve alternative order and capture numbering while computing fixed width.
     fn disjunction(&mut self, depth: usize) -> Result<usize, CompileError> {
@@ -148,12 +166,12 @@ impl Parser<'_> {
         } else {
             Width::Fixed(fixed.expect("nonempty alternatives contain a fixed width"))
         };
-        Ok(self.push(
+        self.push(
             Kind::Alternative(children),
             byte,
             width,
             first..self.groups + 1,
-        ))
+        )
     }
     /// Flatten concatenation; matching uses an explicit task stack in either direction.
     fn sequence(&mut self, depth: usize) -> Result<usize, CompileError> {
@@ -170,12 +188,10 @@ impl Parser<'_> {
         for &id in &children {
             width = match (width, self.nodes[id].width) {
                 (Width::Variable, _) | (_, Width::Variable) => Width::Variable,
-                (Width::Fixed(a), Width::Fixed(b)) => {
-                    Width::Fixed(a.checked_add(b).ok_or(CompileError::Unsupported {
-                        byte,
-                        feature: "pattern width exceeds addressable range",
-                    })?)
-                }
+                (Width::Fixed(a), Width::Fixed(b)) => Width::Fixed(
+                    a.checked_add(b)
+                        .ok_or_else(|| self.limit(Resource::Width, self.limits.width))?,
+                ),
                 (Width::Backref { nonempty }, Width::Fixed(value))
                 | (Width::Fixed(value), Width::Backref { nonempty }) => Width::Backref {
                     nonempty: nonempty || value > 0,
@@ -185,12 +201,12 @@ impl Parser<'_> {
                 }
             };
         }
-        Ok(self.push(
+        self.push(
             Kind::Sequence(children),
             byte,
             width,
             first..self.groups + 1,
-        ))
+        )
     }
     /// Parse one quantified atom without expanding its repetition count.
     fn term(&mut self, depth: usize) -> Result<usize, CompileError> {
@@ -242,12 +258,11 @@ impl Parser<'_> {
         let greedy = !self.take('?');
         let width = match (self.nodes[child].width, max) {
             (_, Some(0)) | (Width::Fixed(0), _) => Width::Fixed(0),
-            (Width::Fixed(width), Some(max)) if max == min => {
-                Width::Fixed(width.checked_mul(min).ok_or(CompileError::Unsupported {
-                    byte,
-                    feature: "pattern width exceeds addressable range",
-                })?)
-            }
+            (Width::Fixed(width), Some(max)) if max == min => Width::Fixed(
+                width
+                    .checked_mul(min)
+                    .ok_or_else(|| self.limit(Resource::Width, self.limits.width))?,
+            ),
             (Width::Backref { nonempty }, max) => {
                 // Variable repetition of a definitely consuming child is variable.
                 // An unresolved reference may instead be empty; retain that gap.
@@ -259,7 +274,7 @@ impl Parser<'_> {
             }
             _ => Width::Variable,
         };
-        Ok(self.push(
+        self.push(
             Kind::Repeat {
                 child,
                 min,
@@ -269,9 +284,9 @@ impl Parser<'_> {
             byte,
             width,
             first..self.groups + 1,
-        ))
+        )
     }
-    /// Retain an exactly representable repetition count.
+    /// Read a repetition count with checked arithmetic and a separate policy bound.
     fn decimal(&mut self) -> Result<usize, CompileError> {
         if !self.peek().is_some_and(|c| c.is_ascii_digit()) {
             return Err(self.invalid("expected quantifier digit"));
@@ -281,10 +296,8 @@ impl Parser<'_> {
             number = number
                 .checked_mul(10)
                 .and_then(|n| n.checked_add((c as u8 - b'0') as usize))
-                .ok_or(CompileError::Unsupported {
-                    byte: self.byte(),
-                    feature: "repetition count exceeds addressable range",
-                })?;
+                .filter(|n| *n <= self.limits.repetition)
+                .ok_or_else(|| self.limit(Resource::Repetition, self.limits.repetition))?;
             self.at += 1;
         }
         Ok(number)
@@ -324,11 +337,11 @@ impl Parser<'_> {
             }
             c => (Kind::Literal(c as u32), Width::Fixed(1)),
         };
-        Ok(self.push(kind, byte, width, first..first))
+        self.push(kind, byte, width, first..first)
     }
     /// Number captures at their opening delimiter and cap recursive group nesting.
     fn group(&mut self, depth: usize, byte: usize, first: usize) -> Result<usize, CompileError> {
-        let depth_limit = crate::limits::Limits::SEMANTIC_DEPTH;
+        let depth_limit = self.limits.depth.min(64);
         if depth >= depth_limit {
             return Err(self.limit(Resource::Depth, depth_limit));
         }
@@ -359,6 +372,9 @@ impl Parser<'_> {
             }
         }
         let number = if capture {
+            if self.groups >= self.limits.groups {
+                return Err(self.limit(Resource::Groups, self.limits.groups));
+            }
             self.groups += 1;
             if let Some(name) = name {
                 if self.names.insert(name, self.groups).is_some() {
@@ -383,7 +399,7 @@ impl Parser<'_> {
         } else {
             (Kind::Group { child, number }, self.nodes[child].width)
         };
-        Ok(self.push(kind, byte, width, first..self.groups + 1))
+        self.push(kind, byte, width, first..self.groups + 1)
     }
     /// Decode exact name identity with ID properties, without Unicode normalization.
     fn name(&mut self) -> Result<String, CompileError> {
@@ -421,7 +437,7 @@ impl Parser<'_> {
                     reason: "invalid group name",
                 });
             }
-            // Decoding a literal character cannot grow its UTF-8 representation.
+            // Decoding cannot grow beyond the already admitted source byte budget.
             name.push(c);
         }
         if name.is_empty() {

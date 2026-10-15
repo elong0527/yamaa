@@ -5,6 +5,7 @@ use crate::{
 };
 use std::borrow::Cow;
 
+pub const MAX_DECLARATION_BYTES: usize = 16_777_216;
 /// Canonical primitive formatting has a fixed bound; authored text stays borrowed.
 pub const MAX_PRIMITIVE_TEXT_BYTES: usize = 327;
 
@@ -12,11 +13,13 @@ pub const MAX_PRIMITIVE_TEXT_BYTES: usize = 327;
 pub enum DeclarationError {
     #[error("text pad shape")]
     Shape,
+    #[error("text pad metadata limit")]
+    MetadataLimit,
     #[error("text pad width")]
     Width,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct OutputError {
+pub struct OutputLimit {
     pub required: Option<usize>,
 }
 
@@ -42,8 +45,20 @@ enum Text<'a> {
 }
 
 impl StringPad {
+    pub(crate) fn metadata_bytes(source: &str, path: &str, width: &str) -> Option<usize> {
+        source
+            .len()
+            .checked_add(path.len())?
+            .checked_add(width.len())?
+            .checked_mul(8)?
+            .checked_add(512)
+    }
+    /// Admit all metadata before scanning the mathematical integer or copying text.
     /// A positive width beyond usize stays valid; present output refuses overflow.
     pub fn new(source: &str, path: &str, width: &str) -> Result<Self, DeclarationError> {
+        if Self::metadata_bytes(source, path, width).is_none_or(|n| n > MAX_DECLARATION_BYTES) {
+            return Err(DeclarationError::MetadataLimit);
+        }
         if source.is_empty() || path.is_empty() {
             return Err(DeclarationError::Shape);
         }
@@ -75,7 +90,8 @@ impl StringPad {
     pub fn path(&self) -> &str {
         &self.path
     }
-    /// Authored text stays borrowed. Primitive conversion reuses the core conversion owner and
+    /// The caller admits authored subject scan work before this call. No authored
+    /// text is copied. Primitive conversion reuses the core conversion owner and
     /// allocates at most MAX_PRIMITIVE_TEXT_BYTES; bool preserves its existing error.
     pub fn prepare_text<'a>(&self, value: &'a Value) -> Result<PreparedText<'a>, ConversionError> {
         let text = match value {
@@ -109,7 +125,7 @@ impl PreparedText<'_> {
         }
     }
     /// Refuse the complete output size before its allocation or any authored copy.
-    pub fn render(self) -> Result<Value, OutputError> {
+    pub fn render(self, maximum: usize) -> Result<Value, OutputLimit> {
         match self.0 {
             Text::Missing => Ok(Value::Missing),
             Text::Present {
@@ -117,19 +133,14 @@ impl PreparedText<'_> {
                 padding,
                 required,
             } => {
-                let Some(required) = required else {
-                    return Err(OutputError { required });
+                let Some(required) = required.filter(|&n| n <= maximum) else {
+                    return Err(OutputLimit { required });
                 };
                 let padding = padding.expect("representable required output");
                 if padding == 0 {
                     return Ok(Value::Str(text.into_owned()));
                 }
-                let mut output = String::new();
-                output
-                    .try_reserve_exact(required)
-                    .map_err(|_| OutputError {
-                        required: Some(required),
-                    })?;
+                let mut output = String::with_capacity(required);
                 output.extend(std::iter::repeat_n(' ', padding));
                 output.push_str(&text);
                 Ok(Value::Str(output))
@@ -141,7 +152,14 @@ impl PreparedText<'_> {
 impl DeclarationError {
     /// Only a reached positive-width failure has a normative projection.
     pub fn diagnostic(self, path: &str) -> Option<crate::diagnostic::Diagnostic> {
-        if self != Self::Width || path.is_empty() {
+        if self != Self::Width
+            || path.is_empty()
+            || path
+                .len()
+                .checked_mul(8)
+                .and_then(|n| n.checked_add(512))
+                .is_none_or(|n| n > MAX_DECLARATION_BYTES)
+        {
             return None;
         }
         Some(crate::diagnostic::Diagnostic {
