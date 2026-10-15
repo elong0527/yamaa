@@ -86,6 +86,41 @@ class PublicConformance(unittest.TestCase):
         self.build["tables"]["output"]["columns"][0][1] = "float"
         self.assertEqual(self.verdict()["verdict"], "mismatch")
 
+    def test_retired_adapter_csv_mutations_cannot_pass_public_conformance(self):
+        # Preserve the independent corruption controls from the retired
+        # adapters/test_conformance.py: cell, header, row order and row count.
+        # Mutating either saved output or expected truth must fail even when
+        # the separately observed public table is otherwise unchanged.
+        truth = self.case / "expected/result.csv"
+        candidate = self.observed / "work/simple/result.csv"
+        original = truth.read_bytes()
+        records = original.splitlines(keepends=True)
+        mutations = {
+            "cell": original.replace(b"9223372036854775807", b"9223372036854775806"),
+            "header and columns": b'VALUE,ID\n"",9223372036854775807\n,2\n"a,b",3\n',
+            "row order": records[0] + b"".join(reversed(records[1:])),
+            "row count": b"".join(records[:-1]),
+        }
+        for target in (truth, candidate):
+            for name, changed in mutations.items():
+                with self.subTest(target=target.name, mutation=name):
+                    try:
+                        target.write_bytes(changed)
+                        self.assertEqual(self.verdict()["verdict"], "mismatch")
+                    finally:
+                        target.write_bytes(original)
+        self.assertEqual(self.verdict()["verdict"], "pass")
+
+    def test_retired_adapter_missing_or_renamed_artifact_cannot_pass(self):
+        truth = self.case / "expected/result.csv"
+        renamed = truth.with_name("renamed.csv")
+        truth.rename(renamed)
+        self.assertEqual(self.verdict()["verdict"], "mismatch")
+        renamed.rename(truth)
+        candidate = self.observed / "work/simple/result.csv"
+        candidate.unlink()
+        self.assertEqual(self.verdict()["verdict"], "mismatch")
+
     def test_r_input_staging_preserves_native_links_and_excludes_expected_truth(self):
         inputs = self.case / "input"
         inputs.mkdir()
@@ -542,7 +577,9 @@ class PublicConformance(unittest.TestCase):
         # #2190 fixes the 40 missing-handler empty children. The reviewed
         # forward-reference ordering exception remains permanent.
         self.assertEqual(len(expectations), 1)
-        self.assertTrue(expectations[("negative-forward-reference", "empty_child")]["permanent"])
+        self.assertTrue(
+            expectations[("negative-forward-reference", "empty_child")]["permanent"]
+        )
         for (benchmark, check), item in expectations.items():
             self.assertIn(benchmark, names)
             self.assertIn(check, {"empty_child", "key_order"})
