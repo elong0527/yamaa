@@ -120,10 +120,34 @@ class CanonicalPages(unittest.TestCase):
             (self.root / source).write_bytes((ROOT / source).read_bytes())
         self.build()
 
+    def test_rule_references_render_from_current_sources(self):
+        (self.root / "rules/values").mkdir()
+        (self.root / "rules/values/types.md").write_text(
+            "# Types\n\n**REQ-0001.** A column has one type.\n", encoding="ascii"
+        )
+        self.build()
+        repository = "https://github.com/elong0527/yamaa"
+        index = self.page("reference/requirements/index.html")
+        self.assertIn(
+            f'href="{repository}/blob/main/rules/values/types.md#req-0001"', index
+        )
+        self.assertNotIn("/edit/main/", index)
+        self.assertIn("Schema fields", self.page("reference/schema-fields/index.html"))
+        self.assertFalse((self.root / "rules/reference").exists())
+        (self.root / "rules/values/types.md").write_text(
+            "# Types\n\n**REQ-0002.** A column has one type.\n", encoding="ascii"
+        )
+        self.build()
+        self.assertIn("REQ-0002", self.page("reference/requirements/index.html"))
+
     def test_duplicate_pages_fail_with_the_canonical_edit_target(self):
-        for destination, source in (
-            ("index.md", "README.md"),
-            ("articles/rules.md", "rules/README.md"),
+        for destination, message in (
+            ("index.md", "Edit README.md"),
+            ("articles/rules.md", "Edit rules/README.md"),
+            (
+                "reference/requirements.md",
+                "rules/reference/requirements.md is generated",
+            ),
         ):
             with self.subTest(destination=destination):
                 duplicate = self.root / "docs" / destination
@@ -135,7 +159,7 @@ class CanonicalPages(unittest.TestCase):
                         self.assertRaises(Abort),
                     ):
                         self.build()
-                    self.assertIn(f"Edit {source}", "\n".join(logs.output))
+                    self.assertIn(message, "\n".join(logs.output))
                 finally:
                     duplicate.unlink()
 

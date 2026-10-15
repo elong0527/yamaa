@@ -166,8 +166,11 @@ regenerate them to accommodate implementation changes.
 Normative rule checks derive current REQ owners from `rules/` and schema
 navigation from `yaml/`; the rule-rewrite checker validates every schema
 owner directly against the requirement definitions in those sources. The
-requirement and schema-field indexes are generated from the same sources at
-docs build time and are not committed.
+site's [requirement index](reference/requirements.md) and
+[schema fields](reference/schema-fields.md) pages are rendered from the same
+sources on every docs build and are not committed;
+`generate_rule_reference.py` writes local, ignored copies under
+`rules/reference/`.
 Run from the repository root:
 
 ```sh

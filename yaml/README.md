@@ -35,8 +35,8 @@ replay the same parser vectors.
 | [schema_environment.yaml](schema_environment.yaml) | Study environment entry point |
 | [schema_define.yaml](schema_define.yaml) | Study-document entry point |
 | [rules/](../rules/README.md) | Normative contracts |
-| [Schema fields](../rules/reference/schema-fields.md) | Shapes, defaults, and semantic links (generated at docs build time) |
-| [Requirement index](../rules/reference/requirements.md) | Canonical IDs and owners (generated at docs build time) |
+| [Schema fields](https://elong0527.github.io/yamaa/reference/schema-fields/) | Generated shapes, defaults, and semantic links |
+| [Requirement index](https://elong0527.github.io/yamaa/reference/requirements/) | Generated canonical IDs and owners |
 | [benchmarks/](../benchmarks/README.md) | Specifications, inputs, and expected outcomes |
 | [conformance/](conformance/) | Shared language fixtures |
 | [grammar/](grammar/README.md) | Closed grammars and parser vectors |
