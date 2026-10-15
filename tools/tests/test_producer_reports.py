@@ -1,4 +1,4 @@
-"""Independent original-input identity and M1 corruption controls.
+"""Independent original-input identity and complete report corruption controls.
 
 Synthetic native metadata below exercises the comparator only. It is never
 installed-owner or qualification evidence.
