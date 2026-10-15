@@ -23,14 +23,16 @@ output:
             EVNTDESC, CNSDTDSC, SRCDOM, SRCVAR, SRCSEQ]
 
 intermediates:
-  # The baseline assessment: the earliest dated assessment per subject.
-  # The deterioration search below runs strictly after it, so the baseline
+  # The baseline assessment: the earliest dated assessment with a score
+  # per subject. A scoreless row cannot be the baseline: its score is
+  # null, so no later row could ever meet the cutoff against it. The
+  # deterioration search below runs strictly after it, so the baseline
   # record itself can never flag even though its own change from baseline
   # is zero.
   - id: BASELINE
     dataset: QS
     key: [STUDYID, USUBJID]
-    filter: "QS.ADT IS NOT NULL"
+    filter: "QS.ADT IS NOT NULL AND QS.AVAL IS NOT NULL"
     order_by: [QS.ADT, QS.QSSEQ]
     keep: first
     no_match: null
@@ -133,27 +135,29 @@ columns:
             OR DEATHDT <= CENSORRSNDT)"
           then: DEATHDT
 
-  # The last assessment dated on or before the censoring reason. A
-  # missing reason date admits no assessment, so the match is empty then
-  # and the subject falls back to randomization below.
+  # The last assessment with a score dated on or before the censoring
+  # reason; a scoreless row is not an evaluable assessment and cannot
+  # set the censoring date. A missing reason date admits no assessment,
+  # so the match is empty then and the subject falls back to
+  # randomization below.
   - name: LASTQSLE
     type: date
     label: Last Assessment On Or Before Censoring
     derivation:
       aggregate:
-        filter: "QS.ADT IS NOT NULL"
+        filter: "QS.ADT IS NOT NULL AND QS.AVAL IS NOT NULL"
         group_by: [QS.STUDYID, QS.USUBJID]
         between: {value: CENSORRSNDT, lower: ADT}
         expr: "MAX(QS.ADT)"
 
   # The sequence of that assessment: the latest sequence among the
-  # records sharing the censoring date.
+  # scored records sharing the censoring date.
   - name: LASTQSSEQ
     type: int
     label: Sequence of Last Assessment On Or Before Censoring
     derivation:
       aggregate:
-        filter: "QS.ADT IS NOT NULL"
+        filter: "QS.ADT IS NOT NULL AND QS.AVAL IS NOT NULL"
         group_by: [QS.STUDYID, QS.USUBJID]
         between: {value: LASTQSLE, lower: ADT, upper: ADT}
         expr: "MAX(QS.QSSEQ)"
