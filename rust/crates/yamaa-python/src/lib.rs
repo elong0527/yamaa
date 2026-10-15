@@ -27,7 +27,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(domain_entry::_domain_file, module)?)?;
     module.add_function(wrap_pyfunction!(domain_entry::_check_file, module)?)?;
     module.add_class::<file_producer::Attempt>()?;
-    module.add_class::<file_producer::Report>()?;
     module.add_function(wrap_pyfunction!(style::_style_same_value, module)?)?;
     Ok(())
 }

@@ -1,7 +1,6 @@
 //! Owned five-field issue records shared by the build and static-check facades.
 //! Context is encoded in Rust so host data-frame conversion cannot narrow it.
-use serde_json::Value;
-use std::io::Write;
+use yamaa_core::json::Value;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Issue {
@@ -69,7 +68,7 @@ impl Issue {
     }
 
     pub fn as_value(&self) -> Value {
-        serde_json::to_value(self).expect("owned issue fields serialize")
+        yamaa_core::json::to_value(self).expect("owned issue fields serialize")
     }
 
     /// Retained report observations expose admitted context data while installed
@@ -108,31 +107,19 @@ pub fn encode(issues: &[Issue]) -> String {
     Value::Array(issues.iter().map(Issue::as_value).collect()).to_string()
 }
 
-/// Bound the actual host issue payload, including the JSON-text context escaping.
-/// Count serialization bytes without allocating a second copy of the payload.
-pub fn within_limit(issues: &[Issue], maximum: usize) -> bool {
-    struct Counter {
-        remaining: usize,
-    }
-    impl Write for Counter {
-        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-            self.remaining = self
-                .remaining
-                .checked_sub(bytes.len())
-                .ok_or_else(|| std::io::Error::other("issue byte limit"))?;
-            Ok(bytes.len())
-        }
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-    serde_json::to_writer(&mut Counter { remaining: maximum }, issues).is_ok()
+/// Final public issue-table collection. Raw facts and retained reports remain complete.
+/// Taking the prefix here preserves authored stage order across one result.
+pub(crate) fn collect(issues: impl IntoIterator<Item = Issue>) -> Vec<Issue> {
+    issues
+        .into_iter()
+        .take(yamaa_core::limits::Limits::FINDINGS)
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
+    use yamaa_core::json::json;
 
     #[test]
     fn context_retains_full_integer_range_unicode_and_nested_values() {
@@ -145,15 +132,33 @@ mod tests {
         assert_eq!(issue.requirement, None);
         assert_eq!(issue.spec_paths, ["columns.é🙂.derivation"]);
         assert_eq!(encode(&[]), "[]");
-        let length = encode(std::slice::from_ref(&issue)).len();
-        assert!(within_limit(std::slice::from_ref(&issue), length));
-        assert!(!within_limit(std::slice::from_ref(&issue), length - 1));
-        assert!(within_limit(&[], 2));
-        assert!(!within_limit(&[], 1));
         assert_eq!(
             serde_json::from_str::<Value>(&encode(std::slice::from_ref(&issue))).unwrap(),
             json!([issue.as_value()])
         );
+    }
+
+    #[test]
+    fn final_collector_preserves_the_first_ten_thousand_across_stages() {
+        fn row(index: usize) -> Issue {
+            Issue {
+                phase: if index < 6_000 { "input" } else { "output" }.into(),
+                condition: "finding".into(),
+                requirement: None,
+                spec_paths: vec![format!("columns.C{index}")],
+                context: format!("{{\"index\":{index}}}"),
+            }
+        }
+        for length in [0, 9_999, 10_000, 10_001] {
+            let actual = collect((0..length).map(row));
+            assert_eq!(actual.len(), length.min(10_000));
+            for (index, actual) in actual.iter().enumerate() {
+                assert_eq!(actual, &row(index));
+            }
+        }
+        let mut complete = row(0);
+        complete.context = format!("{{\"detail\":\"{}\"}}", "é🙂".repeat(50_000));
+        assert_eq!(collect([complete.clone()]), [complete]);
     }
 
     #[test]

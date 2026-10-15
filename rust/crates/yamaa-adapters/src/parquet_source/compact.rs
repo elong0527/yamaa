@@ -1,69 +1,104 @@
-//! Bounded, borrowed Compact Protocol framing for Parquet metadata/page admission.
+//! Borrowed Compact Protocol framing for Parquet metadata and pages.
 //! Format: https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md
-//! This admits framing and allocation work; Parquet still validates its own schema.
-
-#[derive(Clone, Copy, Debug)]
-pub(super) struct Limits {
-    pub nodes: usize,
-    pub depth: usize,
-    pub bytes: usize,
-}
+//! Parquet still validates its own schema.
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Error {
     Malformed,
-    Limit,
-    ResourceLimit {
-        resource: &'static str,
-        limit: usize,
-        actual: Option<usize>,
-    },
+    /// A structurally valid payload cannot fit the canonical Arrow table.
+    Representation,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum Value<'a> {
     Bool(bool),
     Integer(i64),
     Double(&'a [u8]),
     Binary(&'a [u8]),
     Uuid(&'a [u8]),
-    Struct(Vec<(i16, Value<'a>)>),
-    Sequence(Vec<Value<'a>>),
-    Map(Vec<(Value<'a>, Value<'a>)>),
+    Struct(&'a [u8]),
+    Sequence(Sequence<'a>),
+    Map(&'a [u8]),
 }
 
 impl<'a> Value<'a> {
     /// Like the downstream decoder, the last occurrence supplies a field value.
-    pub(super) fn field(&self, id: i16) -> Option<&Self> {
-        let Self::Struct(fields) = self else {
-            return None;
+    pub(super) fn field(&self, id: i16) -> Result<Option<Self>, Error> {
+        let Self::Struct(bytes) = self else {
+            return Ok(None);
         };
-        fields
-            .iter()
-            .rev()
-            .find(|(key, _)| *key == id)
-            .map(|(_, value)| value)
+        let mut reader = Reader { bytes, position: 0 };
+        let mut previous = 0;
+        let mut found = None;
+        while let Some((key, value)) = reader.field(previous, 0)? {
+            if key == id {
+                found = Some(value);
+            }
+            previous = key;
+        }
+        Ok(found)
+    }
+}
+
+/// Child nodes borrow their validated wire ranges, including unknown fields.
+/// Neither a list element nor a map pair allocates a retained metadata node.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct Sequence<'a> {
+    bytes: &'a [u8],
+    kind: u8,
+    count: usize,
+}
+
+impl Sequence<'_> {
+    pub(super) fn len(self) -> usize {
+        self.count
+    }
+}
+
+pub(super) struct Elements<'a> {
+    reader: Reader<'a>,
+    kind: u8,
+    remaining: usize,
+}
+
+impl<'a> IntoIterator for Sequence<'a> {
+    type Item = Result<Value<'a>, Error>;
+    type IntoIter = Elements<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Elements {
+            reader: Reader {
+                bytes: self.bytes,
+                position: 0,
+            },
+            kind: self.kind,
+            remaining: self.count,
+        }
+    }
+}
+
+impl<'a> Iterator for Elements<'a> {
+    type Item = Result<Value<'a>, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.remaining == 0 {
+            return None;
+        }
+        self.remaining -= 1;
+        Some(self.reader.element(self.kind, 0))
     }
 }
 
 struct Reader<'a> {
     bytes: &'a [u8],
     position: usize,
-    nodes: usize,
-    limits: Limits,
 }
 
 impl<'a> Reader<'a> {
     fn take(&mut self, count: usize) -> Result<&'a [u8], Error> {
         let end = self.position.checked_add(count).ok_or(Error::Malformed)?;
         let value = self.bytes.get(self.position..end).ok_or(Error::Malformed)?;
-        if end > self.limits.bytes {
-            return Err(Error::ResourceLimit {
-                resource: "compact_bytes",
-                limit: self.limits.bytes,
-                actual: Some(end),
-            });
-        }
+
         self.position = end;
         Ok(value)
     }
@@ -100,22 +135,10 @@ impl<'a> Reader<'a> {
         usize::try_from(count).map_err(|_| Error::Malformed)
     }
 
-    fn node(&mut self, depth: usize) -> Result<(), Error> {
-        if depth > self.limits.depth {
-            return Err(Error::ResourceLimit {
-                resource: "compact_depth",
-                limit: self.limits.depth,
-                actual: Some(depth),
-            });
+    fn nesting(depth: usize) -> Result<(), Error> {
+        if depth > yamaa_core::limits::Limits::SEMANTIC_DEPTH {
+            return Err(Error::Malformed);
         }
-        if self.nodes >= self.limits.nodes {
-            return Err(Error::ResourceLimit {
-                resource: "compact_nodes",
-                limit: self.limits.nodes,
-                actual: self.nodes.checked_add(1),
-            });
-        }
-        self.nodes += 1;
         Ok(())
     }
 
@@ -125,19 +148,13 @@ impl<'a> Reader<'a> {
         if count > self.bytes.len() - self.position {
             return Err(Error::Malformed);
         }
-        if count > self.limits.nodes - self.nodes {
-            return Err(Error::ResourceLimit {
-                resource: "compact_nodes",
-                limit: self.limits.nodes,
-                actual: self.nodes.checked_add(count),
-            });
-        }
+
         Ok(())
     }
 
     fn element(&mut self, kind: u8, depth: usize) -> Result<Value<'a>, Error> {
         if kind == 1 {
-            self.node(depth)?;
+            Self::nesting(depth)?;
             return match self.byte()? {
                 1 => Ok(Value::Bool(true)),
                 2 => Ok(Value::Bool(false)),
@@ -150,8 +167,24 @@ impl<'a> Reader<'a> {
         self.value(kind, depth)
     }
 
+    fn field(&mut self, previous: i16, depth: usize) -> Result<Option<(i16, Value<'a>)>, Error> {
+        let header = self.byte()?;
+        let kind = header & 15;
+        if kind == 0 {
+            return Ok(None);
+        }
+        let id = if header >> 4 == 0 {
+            i16::try_from(self.integer()?).map_err(|_| Error::Malformed)?
+        } else {
+            previous
+                .checked_add(i16::from(header >> 4))
+                .ok_or(Error::Malformed)?
+        };
+        Ok(Some((id, self.value(kind, depth)?)))
+    }
+
     fn value(&mut self, kind: u8, depth: usize) -> Result<Value<'a>, Error> {
-        self.node(depth)?;
+        Self::nesting(depth)?;
         Ok(match kind {
             1 => Value::Bool(true),
             2 => Value::Bool(false),
@@ -181,47 +214,36 @@ impl<'a> Reader<'a> {
                     return Err(Error::Malformed);
                 }
                 self.collection(count)?;
-                let mut values = Vec::new();
+                let start = self.position;
                 for _ in 0..count {
-                    values.push(self.element(kind, depth + 1)?);
+                    self.element(kind, depth + 1)?;
                 }
-                Value::Sequence(values)
+                Value::Sequence(Sequence {
+                    bytes: &self.bytes[start..self.position],
+                    kind,
+                    count,
+                })
             }
             11 => {
+                let start = self.position;
                 let count = self.length()?;
-                let mut values = Vec::new();
                 if count != 0 {
                     let kinds = self.byte()?;
                     self.collection(count.checked_mul(2).ok_or(Error::Malformed)?)?;
                     for _ in 0..count {
-                        let key = self.element(kinds >> 4, depth + 1)?;
-                        let value = self.element(kinds & 15, depth + 1)?;
-                        values.push((key, value));
+                        self.element(kinds >> 4, depth + 1)?;
+                        self.element(kinds & 15, depth + 1)?;
                     }
                 }
-                Value::Map(values)
+                Value::Map(&self.bytes[start..self.position])
             }
             12 => {
-                let mut fields = Vec::new();
+                let start = self.position;
                 let mut previous = 0i16;
-                loop {
-                    let header = self.byte()?;
-                    let kind = header & 15;
-                    if kind == 0 {
-                        break;
-                    }
-                    let id = if header >> 4 == 0 {
-                        i16::try_from(self.integer()?).map_err(|_| Error::Malformed)?
-                    } else {
-                        previous
-                            .checked_add(i16::from(header >> 4))
-                            .ok_or(Error::Malformed)?
-                    };
-                    let value = self.value(kind, depth + 1)?;
-                    fields.push((id, value));
+                while let Some((id, _)) = self.field(previous, depth + 1)? {
                     previous = id;
                 }
-                Value::Struct(fields)
+                Value::Struct(&self.bytes[start..self.position])
             }
             13 => Value::Uuid(self.take(16)?),
             _ => return Err(Error::Malformed),
@@ -229,35 +251,184 @@ impl<'a> Reader<'a> {
     }
 }
 
-/// Parse one struct prefix; return its exact byte extent for page-body slicing.
-/// Binary payloads borrow the held input. The node budget bounds all owned AST
-/// collections before count-driven work; no allocation uses an unchecked count.
-pub(super) fn parse(bytes: &[u8], limits: Limits) -> Result<(Value<'_>, usize, usize), Error> {
-    // Bound recursion independently of caller policy so a trusted but overly
-    // permissive request cannot turn malformed nesting into a stack overflow.
-    let limits = Limits {
-        depth: limits.depth.min(64),
-        ..limits
-    };
-    let mut reader = Reader {
-        bytes,
-        position: 0,
-        nodes: 0,
-        limits,
-    };
+/// Parse one struct prefix; return its exact extent for page-body slicing.
+/// Every container and binary payload borrows the held input. Validate all
+/// children, including ignored metadata, without retaining a node per child.
+pub(super) fn parse(bytes: &[u8]) -> Result<(Value<'_>, usize), Error> {
+    let mut reader = Reader { bytes, position: 0 };
     let value = reader.value(12, 0)?;
-    Ok((value, reader.position, reader.nodes))
+    Ok((value, reader.position))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn limits() -> Limits {
-        Limits {
-            nodes: 128,
-            depth: 8,
-            bytes: 256,
+
+    fn unsigned(mut value: usize, output: &mut Vec<u8>) {
+        while value >= 128 {
+            output.push(value as u8 | 128);
+            value >>= 7;
         }
+        output.push(value as u8);
+    }
+
+    #[test]
+    fn known_schema_and_group_lists_borrow_empty_elements_before_admission() {
+        let mut bytes = vec![0x29, 0xfc]; // schema: a wide struct list
+        unsigned(65_536, &mut bytes);
+        let schema_start = bytes.len();
+        bytes.resize(bytes.len() + 65_536, 0);
+        bytes.extend([0x29, 0xfc]); // row_groups: another wide struct list
+        unsigned(65_536, &mut bytes);
+        let groups_start = bytes.len();
+        bytes.resize(bytes.len() + 65_536, 0);
+        bytes.push(0);
+        let (root, used) = parse(&bytes).unwrap();
+        assert_eq!(used, bytes.len());
+        for (id, start) in [(2, schema_start), (4, groups_start)] {
+            let Some(Value::Sequence(values)) = root.field(id).unwrap() else {
+                panic!()
+            };
+            assert_eq!(values.len(), 65_536);
+            assert_eq!(values.bytes.as_ptr(), bytes[start..].as_ptr());
+            assert_eq!(values.bytes.len(), 65_536);
+        }
+    }
+
+    #[test]
+    fn mixed_nested_unknown_fanout_stays_borrowed_and_keeps_later_fields() {
+        // Unknown field 15 contains structs with a bool list and byte->struct
+        // map. An explicit duplicate of the row field follows the collection.
+        let mut bytes = vec![0x36, 14, 0xc9, 0xfc];
+        unsigned(65_536, &mut bytes);
+        let elements = bytes.len();
+        for _ in 0..65_536 {
+            bytes.extend([0x19, 0x21, 1, 2, 0x1b, 1, 0x3c, 0xff, 0, 0]);
+        }
+        bytes.extend([0x06, 6, 18, 0]);
+        let (root, used) = parse(&bytes).unwrap();
+        assert_eq!(used, bytes.len());
+        assert_eq!(root.field(3).unwrap(), Some(Value::Integer(9)));
+        let Some(Value::Sequence(values)) = root.field(15).unwrap() else {
+            panic!()
+        };
+        assert_eq!(values.bytes.as_ptr(), bytes[elements..].as_ptr());
+        assert_eq!(values.len(), 65_536);
+    }
+
+    #[test]
+    fn duplicates_keep_the_last_value_even_when_its_wire_shape_changes() {
+        let bytes = [0x39, 0x31, 1, 2, 1, 0x06, 6, 18, 0];
+        let (root, used) = parse(&bytes).unwrap();
+        assert_eq!(used, bytes.len());
+        assert_eq!(root.field(3).unwrap(), Some(Value::Integer(9)));
+
+        let bytes = [0x36, 18, 0x09, 6, 0x31, 1, 2, 1, 0];
+        let (root, used) = parse(&bytes).unwrap();
+        assert_eq!(used, bytes.len());
+        let Some(Value::Sequence(values)) = root.field(3).unwrap() else {
+            panic!()
+        };
+        assert_eq!(
+            values.into_iter().collect::<Result<Vec<_>, _>>().unwrap(),
+            [Value::Bool(true), Value::Bool(false), Value::Bool(true)]
+        );
+        // A child with an unexpected shape can be superseded together with its
+        // ancestor. Invalid wire data must still fail before that replacement.
+        let bytes = [0x29, 0x1c, 0x59, 0x11, 1, 0, 0x09, 4, 0x0c, 0];
+        let (root, _) = parse(&bytes).unwrap();
+        let Some(Value::Sequence(values)) = root.field(2).unwrap() else {
+            panic!()
+        };
+        assert_eq!(values.len(), 0);
+        assert_eq!(
+            parse(&[0x39, 0x11, 3, 0x06, 6, 18, 0]),
+            Err(Error::Malformed)
+        );
+    }
+
+    #[test]
+    fn ignored_fields_still_validate_lengths_scalars_bool_elements_and_depth() {
+        for bytes in [
+            vec![0x98, 5, 1],                            // truncated binary
+            vec![0x99, 0x21, 1, 3, 0],                   // invalid bool list element
+            vec![0x9b, 1, 0x11, 1, 3, 0],                // invalid bool map value
+            vec![0x9b, 1, 0x2c, 1, 0],                   // invalid map key kind
+            vec![0x9c, 0x15],                            // truncated nested integer
+            vec![0x99, 0xf3, 0x80, 0x80, 1, 0],          // impossible collection count
+            vec![0x95, 0x80, 0x80, 0x80, 0x80, 0x10, 0], // i32 overflow
+        ] {
+            assert_eq!(parse(&bytes), Err(Error::Malformed), "{bytes:?}");
+        }
+        for (depth, accepted) in [
+            (yamaa_core::limits::Limits::SEMANTIC_DEPTH, true),
+            (yamaa_core::limits::Limits::SEMANTIC_DEPTH + 1, false),
+        ] {
+            let mut bytes = vec![0x9c]; // unknown field 9, nested struct
+            bytes.extend(vec![0x1c; depth - 1]);
+            bytes.extend(vec![0; depth + 1]);
+            assert_eq!(parse(&bytes).is_ok(), accepted);
+        }
+    }
+
+    #[test]
+    fn ordinary_footer_and_page_fields_keep_metadata_and_exact_body_extent() {
+        let footer = [
+            0x15, 2, 0x19, 0x2c, 0x48, 1, b's', 0x15, 2, 0, 0x15, 4, 0x25, 0, 0x18, 1, b'X', 0,
+            0x16, 2, 0x19, 0x1c, 0x19, 0x1c, 0x3c, 0x15, 4, 0x35, 0, 0x36, 8, 0x26, 8, 0x26, 8, 0,
+            0, 0x26, 2, 0, 0,
+        ];
+        let (root, used) = parse(&footer).unwrap();
+        assert_eq!(used, footer.len());
+        assert_eq!(root.field(1).unwrap(), Some(Value::Integer(1)));
+        assert_eq!(root.field(3).unwrap(), Some(Value::Integer(1)));
+        let Some(Value::Sequence(schema)) = root.field(2).unwrap() else {
+            panic!()
+        };
+        let mut schema = schema.into_iter();
+        assert_eq!(
+            schema.next().unwrap().unwrap().field(5).unwrap(),
+            Some(Value::Integer(1))
+        );
+        assert_eq!(
+            schema.next().unwrap().unwrap().field(1).unwrap(),
+            Some(Value::Integer(2))
+        );
+        let Some(Value::Sequence(groups)) = root.field(4).unwrap() else {
+            panic!()
+        };
+        let group = groups.into_iter().next().unwrap().unwrap();
+        assert_eq!(group.field(3).unwrap(), Some(Value::Integer(1)));
+        let Some(Value::Sequence(chunks)) = group.field(1).unwrap() else {
+            panic!()
+        };
+        let chunk = chunks
+            .into_iter()
+            .next()
+            .unwrap()
+            .unwrap()
+            .field(3)
+            .unwrap()
+            .unwrap();
+        for (id, expected) in [(4, 0), (7, 4), (9, 4), (11, 4)] {
+            assert_eq!(chunk.field(id).unwrap(), Some(Value::Integer(expected)));
+        }
+
+        let bytes = [
+            0x15, 0, 0x15, 8, 0x15, 8, 0x2c, 0x15, 2, 0x15, 0, 0x15, 6, 0x15, 6, 0x1c, 0, 0, 0x4b,
+            0, 0, 0xaa, 0xbb, 0xcc, 0xdd,
+        ];
+        let (root, used) = parse(&bytes).unwrap();
+        assert_eq!(used, bytes.len() - 4);
+        assert_eq!(root.field(1).unwrap(), Some(Value::Integer(0)));
+        assert_eq!(root.field(2).unwrap(), Some(Value::Integer(4)));
+        assert_eq!(root.field(3).unwrap(), Some(Value::Integer(4)));
+        assert!(matches!(root.field(9).unwrap(), Some(Value::Map(_))));
+        let detail = root.field(5).unwrap().unwrap();
+        for (id, expected) in [(1, 1), (2, 0), (3, 3), (4, 3)] {
+            assert_eq!(detail.field(id).unwrap(), Some(Value::Integer(expected)));
+        }
+        assert!(matches!(detail.field(5).unwrap(), Some(Value::Struct(_))));
     }
 
     #[test]
@@ -268,31 +439,24 @@ mod tests {
             0x15, 0xac, 0x02, 0x48, 3, 0xff, 0, 0x61, 0x12, 0x19, 0x21, 1, 2, 0x1b, 1, 0x3c, 0xff,
             0, 0, 0x99,
         ];
-        let (root, used, nodes) = parse(&data, limits()).unwrap();
+        let (root, used) = parse(&data).unwrap();
         assert_eq!(used, 19);
-        assert_eq!(nodes, 10);
-        assert_eq!(root.field(1), Some(&Value::Integer(150)));
-        assert_eq!(root.field(5), Some(&Value::Binary(&data[5..8])));
-        if let Some(Value::Binary(bytes)) = root.field(5) {
+        assert_eq!(root.field(1).unwrap(), Some(Value::Integer(150)));
+        assert_eq!(root.field(5).unwrap(), Some(Value::Binary(&data[5..8])));
+        if let Some(Value::Binary(bytes)) = root.field(5).unwrap() {
             assert_eq!(bytes.as_ptr(), data[5..].as_ptr());
         } else {
             panic!();
         }
-        assert_eq!(root.field(6), Some(&Value::Bool(false)));
+        assert_eq!(root.field(6).unwrap(), Some(Value::Bool(false)));
+        let Some(Value::Sequence(values)) = root.field(7).unwrap() else {
+            panic!();
+        };
         assert_eq!(
-            root.field(7),
-            Some(&Value::Sequence(vec![
-                Value::Bool(true),
-                Value::Bool(false)
-            ]))
+            values.into_iter().collect::<Result<Vec<_>, _>>().unwrap(),
+            vec![Value::Bool(true), Value::Bool(false)]
         );
-        assert_eq!(
-            root.field(8),
-            Some(&Value::Map(vec![(
-                Value::Integer(-1),
-                Value::Struct(vec![])
-            )]))
-        );
+        assert_eq!(root.field(8).unwrap(), Some(Value::Map(&data[14..18])));
     }
 
     #[test]
@@ -301,13 +465,66 @@ mod tests {
             0x06, 2, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 1, 0x06, 2, 0xfe, 0xff,
             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 1, 0,
         ];
-        let (value, used, _) = parse(&data, limits()).unwrap();
+        let (value, used) = parse(&data).unwrap();
         assert_eq!(used, data.len());
-        let Value::Struct(fields) = &value else {
+        let Value::Struct(bytes) = value else {
             panic!();
         };
-        assert_eq!(fields[0], (1, Value::Integer(i64::MIN)));
-        assert_eq!(value.field(1), Some(&Value::Integer(i64::MAX)));
+        let mut fields = Reader { bytes, position: 0 };
+        assert_eq!(
+            fields.field(0, 0).unwrap(),
+            Some((1, Value::Integer(i64::MIN)))
+        );
+        assert_eq!(value.field(1).unwrap(), Some(Value::Integer(i64::MAX)));
+    }
+
+    #[test]
+    fn wide_unknown_collections_borrow_the_source_and_still_validate_every_child() {
+        fn unsigned(bytes: &mut Vec<u8>, mut value: usize) {
+            while value >= 128 {
+                bytes.push(value as u8 | 128);
+                value >>= 7;
+            }
+            bytes.push(value as u8);
+        }
+        const COUNT: usize = 65536;
+        for kind in [1, 12, 11] {
+            // Unknown field 99 is a bool list, empty-struct list, or bool map.
+            // A known field follows it, so lookup must consume the whole value.
+            let mut data = vec![if kind == 11 { 0x0b } else { 0x09 }, 0xc6, 1];
+            let value_start = data.len();
+            if kind != 11 {
+                data.push(0xf0 | kind);
+            }
+            unsigned(&mut data, COUNT);
+            if kind == 11 {
+                data.push(0x11);
+            }
+            let elements = data.len();
+            for _ in 0..COUNT {
+                match kind {
+                    1 => data.push(1),
+                    12 => data.push(0),
+                    11 => data.extend([1, 2]),
+                    _ => unreachable!(),
+                }
+            }
+            let last_element = data.len() - 1;
+            data.extend([0x06, 6, 14, 0]); // field 3 = i64 7; root STOP
+            let (root, used) = parse(&data).unwrap();
+            assert_eq!(used, data.len());
+            assert_eq!(root.field(3).unwrap(), Some(Value::Integer(7)));
+            match root.field(99).unwrap().unwrap() {
+                Value::Sequence(values) => {
+                    assert_eq!(values.len(), COUNT);
+                    assert_eq!(values.bytes.as_ptr(), data[elements..].as_ptr());
+                }
+                Value::Map(bytes) => assert_eq!(bytes.as_ptr(), data[value_start..].as_ptr()),
+                _ => panic!(),
+            }
+            data[last_element] = if kind == 12 { 0x1e } else { 3 };
+            assert_eq!(parse(&data), Err(Error::Malformed));
+        }
     }
 
     #[test]
@@ -326,109 +543,21 @@ mod tests {
             vec![0x14, 0x80, 0x80, 4, 0],
             vec![0x05, 0xfe, 0xff, 3, 0, 0x15, 0, 0],
         ] {
-            assert_eq!(parse(&data, limits()), Err(Error::Malformed), "{data:?}");
+            assert_eq!(parse(&data), Err(Error::Malformed), "{data:?}");
         }
     }
 
     #[test]
-    fn policy_limits_are_distinct_and_include_unknown_nested_fields() {
-        let data = [0x19, 0x3c, 0, 0, 0, 0]; // Three empty structs in a list.
-        assert!(parse(
-            &data,
-            Limits {
-                nodes: 5,
-                ..limits()
-            }
-        )
-        .is_ok());
-        assert_eq!(
-            parse(
-                &data,
-                Limits {
-                    nodes: 4,
-                    ..limits()
-                }
-            ),
-            Err(Error::ResourceLimit {
-                resource: "compact_nodes",
-                limit: 4,
-                actual: Some(5),
-            })
-        );
-        assert!(parse(
-            &data,
-            Limits {
-                bytes: 6,
-                ..limits()
-            }
-        )
-        .is_ok());
-        assert_eq!(
-            parse(
-                &data,
-                Limits {
-                    bytes: 5,
-                    ..limits()
-                }
-            ),
-            Err(Error::ResourceLimit {
-                resource: "compact_bytes",
-                limit: 5,
-                actual: Some(6),
-            })
-        );
-        assert!(parse(
-            &data,
-            Limits {
-                depth: 2,
-                ..limits()
-            }
-        )
-        .is_ok());
-        assert_eq!(
-            parse(
-                &data,
-                Limits {
-                    depth: 1,
-                    ..limits()
-                }
-            ),
-            Err(Error::ResourceLimit {
-                resource: "compact_depth",
-                limit: 1,
-                actual: Some(2),
-            })
-        );
-        assert_eq!(
-            parse(
-                &[0],
-                Limits {
-                    nodes: 0,
-                    ..limits()
-                }
-            ),
-            Err(Error::ResourceLimit {
-                resource: "compact_nodes",
-                limit: 0,
-                actual: Some(1),
-            })
-        );
-        let mut nested = vec![0x1c; 65];
-        nested.extend(vec![0; 66]);
-        assert_eq!(
-            parse(
-                &nested,
-                Limits {
-                    depth: usize::MAX,
-                    ..limits()
-                }
-            ),
-            Err(Error::ResourceLimit {
-                resource: "compact_depth",
-                limit: 64,
-                actual: Some(65),
-            })
-        );
-        assert!(parse(&[0x19, 0, 0], limits()).is_ok());
+    fn unknown_collections_and_shared_recursion_guard_are_checked() {
+        assert!(parse(&[0x19, 0x3c, 0, 0, 0, 0]).is_ok());
+        assert!(parse(&[0x19, 0, 0]).is_ok());
+        for (depth, accepted) in [
+            (yamaa_core::limits::Limits::SEMANTIC_DEPTH - 1, true),
+            (yamaa_core::limits::Limits::SEMANTIC_DEPTH + 1, false),
+        ] {
+            let mut nested = vec![0x1c; depth];
+            nested.extend(vec![0; depth + 1]);
+            assert_eq!(parse(&nested).is_ok(), accepted);
+        }
     }
 }

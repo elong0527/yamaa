@@ -3,13 +3,14 @@ use crate::{
     file_metadata::Reader as Native,
     file_resources::{Error as ResourceError, Resources},
     specification_run::{CapturedAttempt, PreparedRun},
-    specification_source::{InheritanceError, Limits, Source},
+    specification_source::{InheritanceError, Source},
 };
 use std::sync::Arc;
 
 #[derive(Debug)]
 pub enum Error {
     Resource(ResourceError),
+    Inventory(yamaa_core::submission_inventory::MetadataError),
     Preparation(InheritanceError<ResourceError>),
     ResourceFinding {
         error: ResourceError,
@@ -51,13 +52,18 @@ impl Error {
     pub fn into_message(self) -> String {
         match self {
             Self::Resource(error) => error.message().into(),
+            Self::Inventory(_) => yamaa_core::json::json!({
+                "protocol": "specification/prototype",
+                "outcome": { "status": "rejected", "stage": "prepare", "code": "inventory" },
+            })
+            .to_string(),
             Self::Preparation(error) => {
                 crate::specification_diagnostics::inheritance_failure(error)
                     .unwrap_or_else(|error| error.message().into())
             }
             Self::ResourceFinding { diagnostic, .. }
             | Self::PreparationFinding { diagnostic, .. } => {
-                serde_json::json!({
+                yamaa_core::json::json!({
                     "protocol": "specification/prototype",
                     "outcome": {
                         "status": "invalid",
@@ -81,6 +87,7 @@ pub struct RejectedPlain {
     entry: String,
     resources: Resources,
 }
+
 impl std::fmt::Debug for RejectedPlain {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RejectedPlain")
@@ -100,13 +107,8 @@ impl RejectedPlain {
     pub fn capture_reads(&self) -> usize {
         self.resources.capture_reads()
     }
-    pub fn retained_sources(
-        &self,
-        aliases: usize,
-        text: usize,
-    ) -> Result<crate::file_resources::RetainedSources, crate::file_resources::RetentionFailure>
-    {
-        self.resources.retain_sources(aliases, text)
+    pub fn retained_sources(&self) -> crate::file_resources::RetainedSources {
+        self.resources.retain_sources()
     }
 }
 impl FileSpecification {
@@ -128,7 +130,7 @@ impl FileSpecification {
     pub(crate) fn from_workflow(
         entry: crate::file_graph::CapturedEntry,
     ) -> Result<Self, Box<RejectedPlain>> {
-        let (mut resources, entry, document, _) = entry.into_ordinary_parts();
+        let (resources, entry, document, _) = entry.into_ordinary_parts();
         let result =
             PreparedRun::prepare_with_profile_inspection(document, |document, dataset, path| {
                 crate::source_profile_inspection::inspect(document, &resources, dataset, path)
@@ -144,10 +146,7 @@ impl FileSpecification {
                 }
             });
         match result {
-            Ok(run) => {
-                resources.finish_metadata_budget();
-                Ok(Self { run, resources })
-            }
+            Ok(run) => Ok(Self { run, resources }),
             Err(error) => Err(Box::new(RejectedPlain {
                 error: Error::Compile(error),
                 entry,
@@ -161,16 +160,7 @@ impl FileSpecification {
     pub fn capture_reads(&self) -> usize {
         self.resources.capture_reads()
     }
-    pub fn capture_input_metadata(
-        &mut self,
-        index: usize,
-        maximum: usize,
-    ) -> Result<Arc<[u8]>, Vec<crate::issue_rows::Issue>> {
-        let descriptors = crate::source_metadata::inputs(self.run()).map_err(|_| {
-            crate::file_application::rejected("source_metadata", "descriptor_admission")
-        })?;
-        crate::source_metadata::capture(&mut self.resources, &descriptors, index, maximum)
-    }
+
     pub(crate) fn publication_target(
         &self,
     ) -> Result<crate::file_publication::AnchoredTarget, ResourceError> {
@@ -186,7 +176,7 @@ impl FileSpecification {
             .written_output_field_origin(field)
             .ok_or(ResourceError::InvalidPath)?;
         self.resources
-            .publication_target_from(origin.declaring_source, origin.written)
+            .publication_target_from(origin.base_source, origin.written)
     }
     pub fn build(&mut self) -> CapturedAttempt<ResourceError> {
         self.run.execute_with_port(&mut self.resources)
@@ -223,7 +213,6 @@ pub(crate) fn prepare_document_from(
         &mut Documents { schema },
         declaring,
         written,
-        Limits::default().captured_bytes,
     )
     .map_err(|error| match error {
         Failure::Resource(error) => Error::Resource(error),
@@ -237,53 +226,18 @@ pub(crate) fn prepare_document_from(
     })
 }
 
+/// Return only unclassified native failures; observed facts retain their source owner.
 pub fn opaque_resource_failure(attempt: &CapturedAttempt<ResourceError>) -> Option<&ResourceError> {
     use crate::specification_run::PortError;
     match &attempt.result {
         Err(PortError::Capture(error))
-            if !matches!(
-                error,
-                ResourceError::Missing | ResourceError::NotRegularFile | ResourceError::Symlink
-            ) =>
+            if crate::file_resources::resource_failure(error).is_none() =>
         {
             Some(error)
         }
         Err(PortError::Inspect(errors)) => errors
             .iter()
-            .find(|error| {
-                error.failure.is_none()
-                    || matches!(
-                        error.error,
-                        ResourceError::Changed | ResourceError::WrittenForm(_)
-                    )
-            })
-            .map(|error| &error.error),
-        _ => None,
-    }
-}
-
-/// Public domain reports project these observed causes into owned issue rows.
-/// Private file-build transports retain the original native error contract.
-pub fn public_opaque_resource_failure(
-    attempt: &CapturedAttempt<ResourceError>,
-) -> Option<&ResourceError> {
-    use crate::specification_run::PortError;
-    match &attempt.result {
-        Err(PortError::Capture(error))
-            if !matches!(
-                error,
-                ResourceError::Missing
-                    | ResourceError::NotRegularFile
-                    | ResourceError::Symlink
-                    | ResourceError::WrittenForm(_)
-                    | ResourceError::Changed
-            ) =>
-        {
-            Some(error)
-        }
-        Err(PortError::Inspect(errors)) => errors
-            .iter()
-            .find(|error| error.failure.is_none())
+            .find(|error| crate::file_resources::resource_failure(&error.error).is_none())
             .map(|error| &error.error),
         _ => None,
     }
@@ -362,7 +316,7 @@ mod profile_inspection_tests {
             if kind == 0 || kind == 3 {
                 assert_eq!(
                     issue.context["path"],
-                    serde_json::Value::String("input/unknown".into())
+                    yamaa_core::json::Value::String("input/unknown".into())
                 );
             }
             match kind {
@@ -471,7 +425,6 @@ mod declaring_origin_tests {
 #[cfg(test)]
 mod dispatch_policy_tests {
     use super::*;
-    use crate::file_resources::MetadataLimits;
     use std::{
         fs,
         path::PathBuf,
@@ -506,25 +459,14 @@ mod dispatch_policy_tests {
         }
     }
     #[test]
-    fn native_success_replay_spends_no_additional_preparation_bytes_and_continues_policy() {
+    fn native_success_replays_aliases_from_the_same_retained_snapshots() {
         let study = Study::new(ROOT);
         let mut resources = study.resources();
-        let limits = MetadataLimits {
-            bytes: 2 * (ROOT.len() + PARENT.len()),
-            snapshots: 8,
-            text: 1_000_000,
-            work: 1_000_000,
-        };
-        resources.ensure_metadata_budget(limits).unwrap();
         let document =
             prepare_document_from(&mut resources, None, "entry/root.yaml", None).unwrap();
         assert_eq!(document.parents().len(), 1);
         assert_eq!(resources.snapshot_count(), 2);
         assert_eq!(resources.capture_reads(), 2);
-        let usage = resources.metadata_usage();
-        assert_eq!(usage.0, 2 * (ROOT.len() + PARENT.len()));
-        resources.ensure_metadata_budget(limits).unwrap();
-        assert_eq!(resources.metadata_usage(), usage);
         assert_eq!(
             resources.resolve("root.yaml").unwrap(),
             document.source().identity
@@ -532,13 +474,12 @@ mod dispatch_policy_tests {
         let parent = document.parents()[0].source().identity.clone();
         assert_eq!(
             resources
-                .capture_from(&parent, "./base.yaml", PARENT.len())
+                .capture_metadata_from(&parent, "./base.yaml")
                 .unwrap()
                 .0
                 .as_ref(),
             PARENT.as_bytes()
         );
-        assert_eq!(resources.metadata_usage().0, usage.0);
         assert_eq!(resources.capture_reads(), 2);
     }
     #[test]
@@ -570,7 +511,11 @@ mod dispatch_policy_tests {
         assert_eq!(diagnostic.spec_paths, [field]);
         assert_eq!(
             diagnostic.context,
-            [("path".into(), serde_json::Value::String(written.into()))].into()
+            [(
+                "path".into(),
+                yamaa_core::json::Value::String(written.into())
+            )]
+            .into()
         );
     }
     #[test]
@@ -578,7 +523,7 @@ mod dispatch_policy_tests {
         let study = Study::new(ROOT);
         let mut resources = study.resources();
         let original_base = resources.resolve("root.yaml").unwrap();
-        let original = resources.capture("entry/root.yaml", ROOT.len()).unwrap().0;
+        let original = resources.capture_metadata("entry/root.yaml").unwrap().0;
         fs::write(study.0.join("entry/root.yaml"), b"invalid replacement").unwrap();
         let Err(Error::ResourceFinding { error, diagnostic }) =
             prepare_document_from(&mut resources, None, "entry/root.yaml", None)
@@ -598,7 +543,7 @@ mod dispatch_policy_tests {
         let original_base = resources.resolve("root.yaml").unwrap();
         let entry = resources.resolve("entry/root.yaml").unwrap();
         let original = resources
-            .capture_from(&entry, "../parent/base.yaml", PARENT.len())
+            .capture_metadata_from(&entry, "../parent/base.yaml")
             .unwrap()
             .0;
         fs::write(study.0.join("parent/base.yaml"), b"invalid replacement").unwrap();
@@ -625,7 +570,10 @@ mod dispatch_policy_tests {
         fs::write(study.0.join("entry/dict.yaml"), b"A: answer\n").unwrap();
         let mut resources = study.resources();
         let entry = resources.resolve("entry/root.yaml").unwrap();
-        let original = resources.capture_from(&entry, "dict.yaml", 64).unwrap().0;
+        let original = resources
+            .capture_metadata_from(&entry, "dict.yaml")
+            .unwrap()
+            .0;
         fs::write(study.0.join("entry/dict.yaml"), b"B: replaced\n").unwrap();
         let Err(Error::Preparation(error)) =
             prepare_document_from(&mut resources, None, "entry/root.yaml", None)
@@ -633,12 +581,12 @@ mod dispatch_policy_tests {
             panic!("changed dictionary keeps original preparation error");
         };
         let message = crate::specification_diagnostics::inheritance_failure_ref(&error).unwrap();
-        let finding = &serde_json::from_str::<serde_json::Value>(&message).unwrap()["outcome"]
-            ["diagnostics"][0];
+        let finding = &serde_json::from_str::<yamaa_core::json::Value>(&message).unwrap()
+            ["outcome"]["diagnostics"][0];
         let definition = yamaa_core::diagnostic::ConditionCode::ResourceContentChanged.definition();
         assert_eq!(
             finding,
-            &serde_json::json!({
+            &yamaa_core::json::json!({
                 "phase":definition.phase, "condition":definition.condition, "requirement":definition.requirement,
                 "spec_paths":["columns.ID.derivation.mapping.dict"], "context":{"path":"dict.yaml"},
             })
@@ -690,7 +638,6 @@ mod dispatch_policy_tests {
             },
             None,
             "entry/root.yaml",
-            Limits::default().captured_bytes,
         );
         let Err(yamaa_core::file_preparation::Error::ResourceFinding { error, diagnostic }) =
             result
@@ -709,7 +656,11 @@ mod dispatch_policy_tests {
         );
         assert_eq!(
             diagnostic.context,
-            [("path".into(), serde_json::Value::String("dict.yaml".into()))].into()
+            [(
+                "path".into(),
+                yamaa_core::json::Value::String("dict.yaml".into())
+            )]
+            .into()
         );
         assert_eq!(resources.capture_reads(), 2);
         assert_eq!(resources.resolve("root.yaml").unwrap(), original);
@@ -729,7 +680,6 @@ mod dispatch_policy_tests {
             },
             None,
             "entry/root.yaml",
-            Limits::default().captured_bytes,
         );
         let Err(yamaa_core::file_preparation::Error::ResourceFinding { error, diagnostic }) =
             result
@@ -747,11 +697,34 @@ mod dispatch_policy_tests {
             diagnostic.context,
             [(
                 "path".into(),
-                serde_json::Value::String("../parent/base.yaml".into())
+                yamaa_core::json::Value::String("../parent/base.yaml".into())
             )]
             .into()
         );
         assert_eq!(resources.capture_reads(), 2);
         assert_eq!(resources.resolve("root.yaml").unwrap(), original);
+    }
+}
+
+#[cfg(test)]
+mod inventory_rejection_tests {
+    use super::*;
+
+    #[test]
+    fn plain_selection_keeps_inventory_failure_in_the_preparation_stage() {
+        let error = || Error::Inventory(yamaa_core::submission_inventory::MetadataError::Shape);
+        let base = crate::file_resources::caller_path(&std::env::current_dir().unwrap()).unwrap();
+        let rejected = crate::file_workflow::SelectionError::Plain(Box::new(RejectedPlain {
+            error: error(),
+            entry: "spec.yaml".into(),
+            resources: Resources::for_entry(&base).unwrap(),
+        }));
+        assert_eq!(
+            crate::project_application::selection_failure(
+                &rejected,
+                yamaa_core::project_function::Language::Python,
+            ),
+            crate::file_application::preparation_failure(error().into_message())
+        );
     }
 }

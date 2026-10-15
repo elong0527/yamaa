@@ -1,9 +1,7 @@
 //! Whole-graph native builds retain original evidence and explicit Save authority.
 //! Original metadata and attempts remain owned after this resource owner drops.
 use crate::{
-    file_resources::{
-        Error as ResourceError, MetadataLimits, Resources, RetainedSources, RetentionFailure,
-    },
+    file_resources::{Error as ResourceError, Resources, RetainedSources},
     project_source::CapturedEnvironment,
     project_source_decoder::{Decoder, Snapshot},
     specification_source::PreparedDocument,
@@ -24,31 +22,6 @@ use yamaa_core::{
     specification::{PreparedSpecification, SourceDeclaration},
 };
 
-#[derive(Clone, Copy, Debug)]
-pub struct Limits {
-    pub engine: engine::Limits,
-    pub resource_bytes: usize,
-    pub resource_text: usize,
-    pub resource_work: usize,
-    pub snapshots: usize,
-    pub evidence_text: usize,
-    pub evidence_aliases: usize,
-}
-impl Default for Limits {
-    fn default() -> Self {
-        Self {
-            engine: Default::default(),
-            resource_bytes: 4 * yamaa_core::capacity::SOURCE_BYTES,
-            resource_text: 16_777_216,
-            // Initial reads, content comparison and immutable rereads each
-            // charge bytes independently from dataset execution work.
-            resource_work: 4 * yamaa_core::capacity::SOURCE_BYTES,
-            snapshots: 1024,
-            evidence_text: 16_777_216,
-            evidence_aliases: 1024,
-        }
-    }
-}
 pub struct Provenance {
     build: PreparedBuild,
     documents: Vec<Arc<PreparedDocument>>,
@@ -139,8 +112,7 @@ pub struct Attempt<E, R, RE> {
     pub boundary: Result<(), BoundaryFailure>,
     pub graph: GraphAttempt<E, R, RE>,
     /// Raw metadata and cached study bytes, including originals after Changed.
-    /// A retention quota refusal keeps its own prefix beside the original run.
-    pub resources: Result<RetainedSources, RetentionFailure>,
+    pub resources: RetainedSources,
 }
 type ActualBuild<E, R, RE> = (
     Attempt<E, R, RE>,
@@ -148,7 +120,7 @@ type ActualBuild<E, R, RE> = (
 );
 impl<E, R, RE> Attempt<E, R, RE> {
     pub fn accepted(&self) -> bool {
-        self.boundary.is_ok() && self.resources.is_ok() && self.graph.outcome.is_ok()
+        self.boundary.is_ok() && self.graph.outcome.is_ok()
     }
 }
 /// Immutable evidence and publication authority produced by the actual native
@@ -216,12 +188,12 @@ impl FileBuild {
         &mut self,
         activation: &mut A,
         id: crate::specification_report::Identity<'_>,
-        limits: Limits,
+        scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Attempt<A::Error, crate::report_storage::StoredReport, crate::specification_report::Error>
     {
         let provenance = Arc::clone(&self.provenance);
         let mut report = crate::producer_report::NativeReport::new(&provenance, id);
-        self.build(activation, &mut report, limits)
+        self.build(activation, &mut report, scope)
     }
     /// Seal only the actual boundary. Failed graphs retain their original
     /// evidence and any completed V capability, with primary/W authority revoked.
@@ -229,25 +201,11 @@ impl FileBuild {
         &mut self,
         activation: &mut A,
         id: crate::specification_report::Identity<'_>,
-        limits: Limits,
-    ) -> OwnedAttempt<A::Error> {
-        self.build_owned_reported_with_observer(
-            activation,
-            id,
-            limits,
-            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
-        )
-    }
-    pub fn build_owned_reported_with_observer<A: ActivationPort>(
-        &mut self,
-        activation: &mut A,
-        id: crate::specification_report::Identity<'_>,
-        limits: Limits,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> OwnedAttempt<A::Error> {
         let provenance = Arc::clone(&self.provenance);
         let mut report = crate::producer_report::NativeReport::new(&provenance, id);
-        let (attempt, publication) = self.build_actual(activation, &mut report, limits, scope);
+        let (attempt, publication) = self.build_actual(activation, &mut report, scope);
         let logs: Arc<[crate::producer_report::NodeLogs]> = report.take_logs().into();
         let logged = self
             .provenance
@@ -261,7 +219,6 @@ impl FileBuild {
                         publication,
                         Arc::clone(&logs),
                         &self.resources,
-                        limits.engine.publication,
                     ),
                 )),
                 None,
@@ -276,7 +233,6 @@ impl FileBuild {
                             prepared,
                             &self.provenance,
                             &self.resources,
-                            limits.engine.publication,
                         ),
                     )),
                     None,
@@ -301,54 +257,34 @@ impl FileBuild {
         &mut self,
         activation: &mut A,
         report: &mut R,
-        limits: Limits,
+        scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Attempt<A::Error, R::Report, R::Error> {
-        self.build_actual(
-            activation,
-            report,
-            limits,
-            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
-        )
-        .0
+        self.build_actual(activation, report, scope).0
     }
     fn build_actual<A: ActivationPort, R: ReportPort>(
         &mut self,
         activation: &mut A,
         report: &mut R,
-        limits: Limits,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> ActualBuild<A::Error, R::Report, R::Error> {
         let mut attempt = Attempt {
             provenance: Arc::clone(&self.provenance),
             boundary: Ok(()),
             graph: Default::default(),
-            resources: Ok(Vec::new()),
+            resources: Vec::new(),
         };
         let ready = self
             .resources
-            .admit_metadata_budget(MetadataLimits {
-                bytes: limits.resource_bytes,
-                snapshots: limits.snapshots,
-                text: limits.resource_text,
-                work: limits.resource_work,
-            })
-            .map_err(|error| BoundaryFailure::Resource {
-                identity: None,
+            .verify_prefix(self.metadata_snapshots)
+            .map_err(|(identity, error)| BoundaryFailure::Resource {
+                identity: Some(identity),
                 error,
-            })
-            .and_then(|()| {
-                self.resources
-                    .verify_prefix(self.metadata_snapshots)
-                    .map_err(|(identity, error)| BoundaryFailure::Resource {
-                        identity: Some(identity),
-                        error,
-                    })
             });
         let mut publication = Err("producer_build_failed");
         attempt.boundary = match ready {
             Err(error) => Err(error),
             Ok(()) => match catch_unwind(AssertUnwindSafe(|| {
-                publication = self.provenance.build.build_publication_with_observer_into(
+                publication = self.provenance.build.build_into(
                     engine::Ports {
                         activation,
                         study: &mut Study {
@@ -358,7 +294,6 @@ impl FileBuild {
                         report,
                         codec: &mut Codec,
                     },
-                    limits.engine,
                     &mut attempt.graph,
                     scope,
                 );
@@ -367,10 +302,7 @@ impl FileBuild {
                 Err(error) => Err(BoundaryFailure::Unwind(error)),
             },
         };
-        self.resources.finish_metadata_budget();
-        attempt.resources = self
-            .resources
-            .retain_sources(limits.evidence_aliases, limits.evidence_text);
+        attempt.resources = self.resources.retain_sources();
         (attempt, publication)
     }
 }
@@ -396,10 +328,9 @@ impl StudyPort for Study<'_> {
         &mut self,
         node: &Node,
         source: &SourceDeclaration,
-        maximum: usize,
     ) -> Result<Arc<[u8]>, Self::Error> {
         self.resources
-            .capture_from(node.identity(), &source.path, maximum)
+            .capture_from(node.identity(), &source.path)
             .map(|(bytes, _)| bytes)
     }
 }
@@ -411,27 +342,13 @@ impl CodecPort for Codec {
         plan: &PreparedSpecification,
         dataset: &Dataset,
         projection: &[usize],
-        maximum: usize,
     ) -> Result<Vec<u8>, CodecError> {
         match plan.output_profile() {
-            Some("csv") => crate::csv_artifact::render_with_decimals(
-                dataset,
-                projection,
-                plan.output_decimals(),
-                maximum,
-            )
-            .map_err(CodecError::Csv),
-            Some("parquet") => crate::parquet_artifact::render(
-                dataset,
-                projection,
-                crate::parquet_artifact::Limits {
-                    output_bytes: maximum,
-                    staged_bytes: yamaa_core::capacity::SOURCE_BYTES,
-                    cells: yamaa_core::capacity::OUTPUT_CELLS,
-                    columns: 4096,
-                },
-            )
-            .map_err(CodecError::Parquet),
+            Some("csv") => crate::csv_artifact::render(dataset, projection, plan.output_decimals())
+                .map_err(CodecError::Csv),
+            Some("parquet") => {
+                crate::parquet_artifact::render(dataset, projection).map_err(CodecError::Parquet)
+            }
             _ => Err(CodecError::Profile),
         }
     }

@@ -10,33 +10,12 @@ use std::collections::{BTreeSet, VecDeque};
 
 use saphyr_parser::ScalarStyle;
 use yamaa_core::schema::{
-    scalar_diagnostic_label, Document, DocumentError, DocumentLimits, DocumentNode,
-    DocumentResource, ScalarKey,
+    scalar_diagnostic_label, Document, DocumentError, DocumentNode, DocumentResource, ScalarKey,
 };
 
+pub use crate::yaml_source::SourcePosition;
 use crate::yaml_source::{scan_strict, LocatedEvent, ScanFailure, SourceEvent, SourceText};
-pub use crate::yaml_source::{ResourceLimit, ScanLimits, SourcePosition};
-
-/// Quotas cover source scanning, exact numeric parsing, owned document storage
-/// and cumulative diagnostic-path construction. Refusal is not a language error.
-#[derive(Clone, Copy, Debug)]
-pub struct DecodeLimits {
-    pub scan: ScanLimits,
-    pub document: DocumentLimits,
-    pub numeric_digits: usize,
-    pub diagnostic_bytes: usize,
-}
-
-impl Default for DecodeLimits {
-    fn default() -> Self {
-        Self {
-            scan: ScanLimits::default(),
-            document: DocumentLimits::default(),
-            numeric_digits: 4096,
-            diagnostic_bytes: 8_388_608,
-        }
-    }
-}
+use yamaa_core::limits::{LimitExceeded, Limits};
 
 pub use yamaa_core::yaml_diagnostics::UnicodeIssue;
 
@@ -49,7 +28,7 @@ pub enum DecodeFailure {
         reason: String,
     },
     InvalidText(Vec<UnicodeIssue>),
-    Limit(ResourceLimit),
+    Limit(LimitExceeded),
     Internal,
 }
 
@@ -90,23 +69,6 @@ struct Frame {
     children: Vec<usize>,
 }
 
-fn charge(
-    used: &mut usize,
-    amount: usize,
-    limit: usize,
-    resource: &'static str,
-) -> Result<(), DecodeFailure> {
-    let actual = used.checked_add(amount);
-    *used = actual
-        .filter(|total| *total <= limit)
-        .ok_or(DecodeFailure::Limit(ResourceLimit {
-            resource,
-            limit,
-            actual,
-        }))?;
-    Ok(())
-}
-
 fn invalid_yaml(position: SourcePosition, reason: &str) -> DecodeFailure {
     DecodeFailure::InvalidYaml {
         position,
@@ -114,26 +76,21 @@ fn invalid_yaml(position: SourcePosition, reason: &str) -> DecodeFailure {
     }
 }
 
-fn build(
-    events: Vec<LocatedEvent>,
-    limits: DecodeLimits,
-) -> Result<(Vec<Node>, usize), DecodeFailure> {
+fn build(events: Vec<LocatedEvent>) -> Result<(Vec<Node>, usize), DecodeFailure> {
     let mut nodes = Vec::new();
     let mut stack: Vec<Frame> = Vec::new();
     let mut root = None;
-    let mut bytes = 0;
-    let mut edges = 0;
     for LocatedEvent { event, start, .. } in events {
         if matches!(
             event,
             SourceEvent::Scalar(..)
                 | SourceEvent::SequenceStart(..)
                 | SourceEvent::MappingStart(..)
-        ) && stack.len() + 1 > limits.document.depth.min(64)
+        ) && stack.len() + 1 > Limits::YAML_DEPTH
         {
-            return Err(DecodeFailure::Limit(ResourceLimit {
-                resource: "depth",
-                limit: limits.document.depth.min(64),
+            return Err(DecodeFailure::Limit(LimitExceeded {
+                resource: "yaml_depth",
+                limit: Limits::YAML_DEPTH,
                 actual: Some(stack.len() + 1),
             }));
         }
@@ -142,7 +99,7 @@ fn build(
                 let merge = style == ScalarStyle::Plain && text == SourceText::Unicode("<<".into());
                 let value = match text {
                     SourceText::Unicode(text) => Value::Scalar(if style == ScalarStyle::Plain {
-                        scalar::decode(text, limits.numeric_digits)?
+                        scalar::decode(text)?
                     } else {
                         DocumentNode::Text(text)
                     }),
@@ -193,33 +150,6 @@ fn build(
             | SourceEvent::DocumentEnd => continue,
             _ => return Err(DecodeFailure::Internal),
         };
-        let text_bytes = match &value {
-            Value::Scalar(DocumentNode::Text(text) | DocumentNode::Integer(text)) => text.len(),
-            Value::InvalidText(points) => {
-                points
-                    .len()
-                    .checked_mul(4)
-                    .ok_or(DecodeFailure::Limit(ResourceLimit {
-                        resource: "text_bytes",
-                        limit: limits.document.text_bytes,
-                        actual: None,
-                    }))?
-            }
-            _ => 0,
-        };
-        charge(
-            &mut bytes,
-            text_bytes,
-            limits.document.text_bytes,
-            "text_bytes",
-        )?;
-        if nodes.len() >= limits.document.nodes {
-            return Err(DecodeFailure::Limit(ResourceLimit {
-                resource: "nodes",
-                limit: limits.document.nodes,
-                actual: Some(nodes.len() + 1),
-            }));
-        }
         let id = nodes.len();
         nodes.push(Node {
             value,
@@ -227,7 +157,6 @@ fn build(
             merge,
         });
         if let Some(parent) = stack.last_mut() {
-            charge(&mut edges, 1, limits.document.edges, "edges")?;
             parent.children.push(id);
         } else if root.replace(id).is_some() {
             return Err(DecodeFailure::Internal);
@@ -238,13 +167,6 @@ fn build(
     }
     if let Some(root) = root {
         return Ok((nodes, root));
-    }
-    if limits.document.nodes == 0 {
-        return Err(DecodeFailure::Limit(ResourceLimit {
-            resource: "nodes",
-            limit: limits.document.nodes,
-            actual: Some(nodes.len() + 1),
-        }));
     }
     nodes.push(Node {
         value: Value::Scalar(DocumentNode::Null),
@@ -266,7 +188,7 @@ enum MappingKey<'a> {
 
 /// Match the reference constructor's deferred container order. A containing
 /// mapping's merge/unhashable/duplicate checks finish before nested containers.
-fn check_mappings(nodes: &[Node], root: usize, limit: usize) -> Result<(), DecodeFailure> {
+fn check_mappings(nodes: &[Node], root: usize) -> Result<(), DecodeFailure> {
     let mut queue = VecDeque::from([root]);
     while let Some(id) = queue.pop_front() {
         match &nodes[id].value {
@@ -293,12 +215,11 @@ fn check_mappings(nodes: &[Node], root: usize, limit: usize) -> Result<(), Decod
                         }
                     };
                     if !keys.insert(identity) {
-                        let mut text = Paths { used: 0, limit };
                         let mut reason = String::new();
-                        text.append(&mut reason, "found duplicate key '")?;
-                        let label = text.key(&nodes[key])?;
+                        reason.push_str("found duplicate key '");
+                        let label = key_label(&nodes[key])?;
                         reason.push_str(&label);
-                        text.append(&mut reason, "'")?;
+                        reason.push('\'');
                         return Err(DecodeFailure::InvalidYaml {
                             position: nodes[key].start,
                             reason,
@@ -313,103 +234,121 @@ fn check_mappings(nodes: &[Node], root: usize, limit: usize) -> Result<(), Decod
     Ok(())
 }
 
-struct Paths {
-    used: usize,
-    limit: usize,
+fn escape(points: impl Iterator<Item = u32>) -> String {
+    let mut output = String::new();
+    for point in points {
+        let text = match point {
+            9 => "\\t".into(),
+            10 => "\\n".into(),
+            13 => "\\r".into(),
+            92 => "\\\\".into(),
+            32..=126 => char::from_u32(point).expect("ASCII code point").to_string(),
+            0..=255 => format!("\\x{point:02x}"),
+            256..=65535 => format!("\\u{point:04x}"),
+            _ => format!("\\U{point:08x}"),
+        };
+        output.push_str(&text);
+    }
+    output
+}
+fn key_label(node: &Node) -> Result<String, DecodeFailure> {
+    match &node.value {
+        Value::InvalidText(points) => Ok(escape(points.iter().copied())),
+        Value::Scalar(value) => {
+            let label = scalar_diagnostic_label(value).ok_or(DecodeFailure::Internal)?;
+            Ok(escape(label.chars().map(u32::from)))
+        }
+        _ => Err(DecodeFailure::Internal),
+    }
 }
 
-impl Paths {
-    fn append(&mut self, value: &mut String, suffix: &str) -> Result<(), DecodeFailure> {
-        charge(&mut self.used, suffix.len(), self.limit, "diagnostic_bytes")?;
-        value.push_str(suffix);
-        Ok(())
-    }
-    fn child(&mut self, parent: &str, suffix: &str) -> Result<String, DecodeFailure> {
-        let mut value = String::new();
-        self.append(&mut value, parent)?;
-        self.append(&mut value, suffix)?;
-        Ok(value)
-    }
-    fn escape(&mut self, points: impl Iterator<Item = u32>) -> Result<String, DecodeFailure> {
-        let mut output = String::new();
-        for point in points {
-            let text = match point {
-                9 => "\\t".into(),
-                10 => "\\n".into(),
-                13 => "\\r".into(),
-                92 => "\\\\".into(),
-                32..=126 => char::from_u32(point)
-                    .ok_or(DecodeFailure::Internal)?
-                    .to_string(),
-                0..=255 => format!("\\x{point:02x}"),
-                256..=65535 => format!("\\u{point:04x}"),
-                _ => format!("\\U{point:08x}"),
-            };
-            self.append(&mut output, &text)?;
-        }
-        Ok(output)
-    }
-    fn key(&mut self, node: &Node) -> Result<String, DecodeFailure> {
-        match &node.value {
-            Value::InvalidText(points) => self.escape(points.iter().copied()),
-            Value::Scalar(value) => {
-                let label = scalar_diagnostic_label(value).ok_or(DecodeFailure::Internal)?;
-                self.escape(label.chars().map(u32::from))
+// Keep only borrowed node identities and small indices on the traversal stack.
+// A long ancestor key is rendered once per actual issue, never for each valid
+// descendant or queued sibling. Source admission has already bounded depth.
+enum PathSegment {
+    Key,
+    Field(usize),
+    Index(usize),
+}
+
+fn unicode_path(nodes: &[Node], segments: &[PathSegment]) -> Result<String, DecodeFailure> {
+    use std::fmt::Write;
+    let mut path = String::from("$");
+    for segment in segments {
+        match *segment {
+            PathSegment::Key => path.push_str(".<key>"),
+            PathSegment::Field(key) => {
+                path.push('.');
+                path.push_str(&key_label(&nodes[key])?);
             }
-            _ => Err(DecodeFailure::Internal),
+            PathSegment::Index(index) => {
+                write!(path, "[{index}]").expect("writing to an owned string");
+            }
         }
     }
+    Ok(path)
 }
 
-fn check_unicode(nodes: &[Node], root: usize, limit: usize) -> Result<(), DecodeFailure> {
+fn unicode_issues(
+    nodes: &[Node],
+    id: usize,
+    segments: &mut Vec<PathSegment>,
+    issues: &mut Vec<UnicodeIssue>,
+) -> Result<(), DecodeFailure> {
+    match &nodes[id].value {
+        Value::InvalidText(points) => {
+            let (offset, &code_point) = points
+                .iter()
+                .enumerate()
+                .find(|(_, point)| (0xd800..=0xdfff).contains(*point))
+                .ok_or(DecodeFailure::Internal)?;
+            issues.push(UnicodeIssue {
+                path: unicode_path(nodes, segments)?,
+                code_point,
+                offset,
+            });
+        }
+        Value::Sequence(items) => {
+            for (index, &item) in items.iter().enumerate() {
+                segments.push(PathSegment::Index(index));
+                unicode_issues(nodes, item, segments, issues)?;
+                segments.pop();
+            }
+        }
+        Value::Mapping(entries) => {
+            for &(key, value) in entries {
+                segments.push(PathSegment::Key);
+                unicode_issues(nodes, key, segments, issues)?;
+                segments.pop();
+                segments.push(PathSegment::Field(key));
+                unicode_issues(nodes, value, segments, issues)?;
+                segments.pop();
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn check_unicode(nodes: &[Node], root: usize) -> Result<(), DecodeFailure> {
     if !nodes
         .iter()
         .any(|node| matches!(node.value, Value::InvalidText(_)))
     {
         return Ok(());
     }
-    let mut paths = Paths { used: 0, limit };
-    let mut pending = vec![(root, paths.child("", "$")?)];
     let mut issues = Vec::new();
-    while let Some((id, path)) = pending.pop() {
-        match &nodes[id].value {
-            Value::InvalidText(points) => {
-                let (offset, &code_point) = points
-                    .iter()
-                    .enumerate()
-                    .find(|(_, point)| (0xd800..=0xdfff).contains(*point))
-                    .ok_or(DecodeFailure::Internal)?;
-                issues.push(UnicodeIssue {
-                    path,
-                    code_point,
-                    offset,
-                });
-            }
-            Value::Sequence(items) => {
-                for (index, &item) in items.iter().enumerate().rev() {
-                    pending.push((item, paths.child(&path, &format!("[{index}]"))?));
-                }
-            }
-            Value::Mapping(entries) => {
-                for &(key, value) in entries.iter().rev() {
-                    let label = paths.key(&nodes[key])?;
-                    pending.push((value, paths.child(&path, &format!(".{label}"))?));
-                    pending.push((key, paths.child(&path, ".<key>")?));
-                }
-            }
-            _ => {}
-        }
-    }
+    unicode_issues(nodes, root, &mut Vec::new(), &mut issues)?;
     Err(DecodeFailure::InvalidText(issues))
 }
 
 /// Decode source without host scalar conversion, filesystem IO or schema rules.
 /// A result is published only after syntax, mapping and Unicode admission.
-pub fn decode_yaml(source: &[u8], limits: DecodeLimits) -> Result<DecodedYaml, DecodeFailure> {
-    let events = scan_strict(source, limits.scan)?;
-    let (nodes, root) = build(events, limits)?;
-    check_mappings(&nodes, root, limits.diagnostic_bytes)?;
-    check_unicode(&nodes, root, limits.diagnostic_bytes)?;
+pub fn decode_yaml(source: &[u8]) -> Result<DecodedYaml, DecodeFailure> {
+    let events = scan_strict(source)?;
+    let (nodes, root) = build(events)?;
+    check_mappings(&nodes, root)?;
+    check_unicode(&nodes, root)?;
     let mut document_nodes = Vec::with_capacity(nodes.len());
     let mut locations = Vec::with_capacity(nodes.len());
     for node in nodes {
@@ -421,20 +360,16 @@ pub fn decode_yaml(source: &[u8], limits: DecodeLimits) -> Result<DecodedYaml, D
             Value::InvalidText(_) => return Err(DecodeFailure::Internal),
         });
     }
-    let document =
-        Document::new(document_nodes, root, limits.document).map_err(|error| match error {
-            DocumentError::Limit { resource, limit } => DecodeFailure::Limit(ResourceLimit {
-                resource: match resource {
-                    DocumentResource::Nodes => "nodes",
-                    DocumentResource::TextBytes => "text_bytes",
-                    DocumentResource::Edges => "edges",
-                    DocumentResource::Depth => "depth",
-                },
-                limit,
-                actual: None,
-            }),
-            _ => DecodeFailure::Internal,
-        })?;
+    let document = Document::new(document_nodes, root).map_err(|error| match error {
+        DocumentError::Limit { resource, limit } => DecodeFailure::Limit(LimitExceeded {
+            resource: match resource {
+                DocumentResource::Depth => "yaml_depth",
+            },
+            limit,
+            actual: None,
+        }),
+        _ => DecodeFailure::Internal,
+    })?;
     Ok(DecodedYaml {
         document,
         locations,
