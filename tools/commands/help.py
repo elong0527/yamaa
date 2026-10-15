@@ -7,7 +7,8 @@ HELP = """yamaa repository commands (run from the repository root)
   check             Run the five PR checks below, in the same order locally.
   check-lint        Ruff, cargo fmt and workspace Clippy (requires R as well).
   check-repository  Repository/rule validation and a strict generated docs build.
-  test-rust         All shared workspace features/targets, debug and release-test.
+  test-rust         cargo test --locked --workspace, including both host bindings.
+                    Needs the selected Python interpreter and R 4.6.1.
   test-python       Package/tools tests and standalone public-host suites outside checkout.
   test-r            Build/install a standalone R archive and require R CMD check OK.
                     Needs R 4.6.1, Rust, GNU make and the package's Suggests installed.

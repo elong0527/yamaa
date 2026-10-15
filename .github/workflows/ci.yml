@@ -27,7 +27,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
         with:
-          r: 'true'
+          r: runtime
       - run: make check-lint
   repository:
     runs-on: ubuntu-24.04
@@ -46,6 +46,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
+        with:
+          r: runtime
       - run: make test-rust
   python:
     runs-on: ubuntu-24.04
@@ -65,5 +67,5 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
         with:
-          r: 'true'
+          r: check
       - run: make test-r

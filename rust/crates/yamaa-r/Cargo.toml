@@ -9,7 +9,6 @@ publish.workspace = true
 [lib]
 name = "yamaa_r"
 crate-type = ["staticlib"]
-test = false
 doctest = false
 
 [dependencies]

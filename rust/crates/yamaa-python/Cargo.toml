@@ -9,13 +9,15 @@ publish.workspace = true
 [lib]
 name = "_native"
 crate-type = ["cdylib"]
-test = false
 doctest = false
+
+[features]
+extension-module = ["pyo3/extension-module"]
 
 [dependencies]
 yamaa-core = { path = "../yamaa-core" }
 yamaa-adapters = { path = "../yamaa-adapters" }
-pyo3 = { version = "=0.27.2", features = ["extension-module", "abi3-py312"] }
+pyo3 = { version = "=0.27.2", features = ["abi3-py312"] }
 
 [build-dependencies]
 pyo3-build-config = "=0.27.2"

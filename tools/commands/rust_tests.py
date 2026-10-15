@@ -1,17 +1,21 @@
-"""Run all shared workspace tests with debug and release code generation."""
+"""Run the complete workspace, including normally linked host-binding tests."""
 
+import os
 import subprocess
+import sys
 
 from tools.paths import WORKSPACE
 
 
 def main():
-    for profile in ([], ["--profile", "release-test"]):
-        subprocess.run(
-            ["cargo", "test", "--locked", "--all-targets", "--all-features", *profile],
-            cwd=WORKSPACE,
-            check=True,
-        )
+    environment = dict(os.environ)
+    environment.setdefault("PYO3_PYTHON", sys.executable)
+    subprocess.run(
+        ["cargo", "test", "--locked", "--workspace"],
+        cwd=WORKSPACE,
+        env=environment,
+        check=True,
+    )
 
 
 if __name__ == "__main__":
