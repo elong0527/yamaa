@@ -4,7 +4,7 @@ use yamaa_core::{
     conversion::convert,
     diagnostic::CONDITIONS,
     evaluation::{EvaluationErrorKind, NumericResolver},
-    numeric_compiler::{compile_numeric, CompileLimits},
+    numeric_compiler::compile_numeric,
     numeric_parser::SourceSpan,
     value::{ColumnType, Selection, Value},
 };
@@ -58,19 +58,17 @@ impl NumericResolver for Bindings {
 }
 
 #[test]
-fn resource_refusals_name_the_incomplete_check_scope_without_reclassifying_prior_work() {
-    for (stage, code, expected) in [
-        ("capture", "resource_limit", "specification"),
-        ("prepare", "compiler_limit", "specification"),
-        ("check", "compiler_limit", "specification"),
-        ("ingest", "source_limit", "source_binding"),
-        ("bind", "source_limit", "source_binding"),
-        ("execute", "execution_limit", "data"),
-        ("build", "source_boundary", "source_binding"),
-        ("build", "execution_boundary", "data"),
-        ("build", "result_projection", "build"),
-        ("output", "publication_report_limit", "output"),
-        ("report", "output_limit", "output"),
+fn fixed_refusals_preserve_exact_resource_facts_and_authored_paths() {
+    for (stage, code) in [
+        ("capture", "resource_limit"),
+        ("prepare", "compiler_limit"),
+        ("check", "compiler_limit"),
+        ("ingest", "source_limit"),
+        ("bind", "source_limit"),
+        ("execute", "execution_limit"),
+        ("build", "source_boundary"),
+        ("build", "execution_boundary"),
+        ("output", "resource_limit"),
     ] {
         let finding = yamaa_core::application_issue::resource_rejected(
             stage,
@@ -84,23 +82,45 @@ fn resource_refusals_name_the_incomplete_check_scope_without_reclassifying_prior
         assert_eq!(finding.definition().requirement, None);
         assert_eq!(finding.spec_paths, ["input.SRC"]);
         assert_eq!(
-            finding.context["incomplete_checks_from"],
-            JsonValue::String(expected.into())
+            finding.context,
+            [
+                ("stage".into(), JsonValue::String(stage.into())),
+                ("code".into(), JsonValue::String(code.into())),
+                ("resource".into(), JsonValue::String("bytes".into())),
+                ("limit".into(), JsonValue::from(7)),
+                ("actual".into(), JsonValue::from(8)),
+            ]
+            .into()
         );
-        assert_eq!(
-            finding.context["limit"],
-            JsonValue::Number(("7").parse().expect("canonical integer"))
-        );
-        assert_eq!(
-            finding.context["actual"],
-            JsonValue::Number(("8").parse().expect("canonical integer"))
-        );
+        assert_eq!(finding.source_span, None);
+        assert_eq!(finding.operand_route, None);
     }
-    // An opaque failure cannot establish a resource refusal or its completion boundary.
-    assert!(
-        !yamaa_core::application_issue::rejected("capture", "changed")
-            .context
-            .contains_key("incomplete_checks_from")
+    let finding = yamaa_core::application_issue::resource_rejected(
+        "execute",
+        "execution_limit",
+        "table_cells",
+        640_000_000,
+        None,
+        vec!["columns".into()],
+    );
+    assert_eq!(
+        finding.context,
+        [
+            ("stage".into(), JsonValue::String("execute".into())),
+            ("code".into(), JsonValue::String("execution_limit".into())),
+            ("resource".into(), JsonValue::String("table_cells".into())),
+            ("limit".into(), JsonValue::from(640_000_000)),
+        ]
+        .into()
+    );
+    assert_eq!(finding.spec_paths, ["columns"]);
+    assert_eq!(
+        yamaa_core::application_issue::rejected("capture", "changed").context,
+        [
+            ("stage".into(), JsonValue::String("capture".into())),
+            ("code".into(), JsonValue::String("changed".into())),
+        ]
+        .into()
     );
 }
 
@@ -175,10 +195,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         ("LN(0)", "derivation", "ln_of_nonpositive", "REQ-0432"),
         ("POWER(-1, 0.5)", "derivation", "invalid_power", "REQ-0433"),
     ] {
-        // Existing component-only policy exposes the two math domain failures;
-        // this test grants no new production numerical-policy qualification.
-        let plan =
-            compile_numeric(expression, "columns.X.compute", CompileLimits::default()).unwrap();
+        let plan = compile_numeric(expression, "columns.X.compute").unwrap();
         let error = plan.evaluate(&mut Bindings).unwrap_err();
         let diagnostic = error.diagnostic().unwrap();
         let definition = diagnostic.definition();
@@ -435,16 +452,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         .is_none());
         reached.insert(diagnostic.code);
     }
-    let pattern = yamaa_core::regex::Pattern::compile("b", Default::default()).unwrap();
-    // A caller explicitly grants matching resources, independently of ordinary visits.
-    let mut budget = yamaa_core::predicate::Budget::new(yamaa_core::predicate::Usage {
-        regex: yamaa_core::regex::MatchUsage {
-            subject_bytes: 100,
-            work: 1000,
-            state_cells: 1000,
-        },
-        ..Default::default()
-    });
+    let pattern = yamaa_core::regex::Pattern::compile("b").unwrap();
     let rows = yamaa_core::dataset_checks::matches_offenders(
         &pattern,
         &[
@@ -452,8 +460,6 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
             Value::Missing,
             Value::Str("xxx".into()),
         ],
-        Default::default(),
-        &mut budget,
     )
     .unwrap();
     assert_eq!(rows, [2]);
@@ -479,7 +485,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     );
     reached.insert(diagnostic.code);
     assert!(matches!(
-        yamaa_core::regex::Pattern::compile("(", Default::default()),
+        yamaa_core::regex::Pattern::compile("("),
         Err(yamaa_core::regex::CompileError::Invalid { .. })
     ));
     let diagnostic = yamaa_core::dataset_checks::invalid_pattern_diagnostic(
@@ -596,40 +602,22 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
 }
 
 #[test]
-fn column_pattern_searches_share_a_nonrefundable_subject_budget() {
-    use yamaa_core::{dataset_checks::matches_offenders, predicate, regex};
-    let pattern = regex::Pattern::compile("z", Default::default()).unwrap();
-    let usage = predicate::Usage {
-        regex: regex::MatchUsage {
-            subject_bytes: 4,
-            work: 1000,
-            state_cells: 1000,
-        },
-        ..Default::default()
-    };
-    let mut budget = predicate::Budget::new(usage);
+fn column_pattern_searches_reuse_the_plan_after_a_fixed_work_refusal() {
+    use yamaa_core::{dataset_checks::matches_offenders, regex};
+    let pattern = regex::Pattern::compile("z").unwrap();
     let values = [Value::Str("é".into()), Value::Missing];
-    for _ in 0..2 {
-        assert_eq!(
-            matches_offenders(&pattern, &values, Default::default(), &mut budget).unwrap(),
-            [0]
-        );
+    for _ in 0..3 {
+        assert_eq!(matches_offenders(&pattern, &values).unwrap(), [0]);
     }
-    let error = matches_offenders(&pattern, &values, Default::default(), &mut budget).unwrap_err();
-    assert_eq!(error.resource, predicate::Resource::RegexSubjectBytes);
-    assert_eq!(error.limit, 4);
-    assert_eq!(budget.used().regex.subject_bytes, 4);
-    assert!(matches_offenders(&pattern, &values, Default::default(), &mut budget).is_err());
+    let long = [Value::Str("é".repeat(1_000_000))];
     assert_eq!(
-        matches_offenders(
-            &pattern,
-            &values,
-            Default::default(),
-            &mut predicate::Budget::new(usage)
-        )
-        .unwrap(),
-        [0]
+        matches_offenders(&pattern, &long),
+        Err(regex::MatchError {
+            resource: regex::Resource::Work,
+            limit: 1_000_000,
+        })
     );
+    assert_eq!(matches_offenders(&pattern, &values).unwrap(), [0]);
 }
 
 /// A later nested error keeps its own span/route and full integer diagnostic,
@@ -637,7 +625,7 @@ fn column_pattern_searches_share_a_nonrefundable_subject_budget() {
 #[test]
 fn nested_failure_retains_location_and_full_width_context() {
     let expression = "1 + (9223372036854775807 + 1)";
-    let error = compile_numeric(expression, "columns.X.compute", CompileLimits::default())
+    let error = compile_numeric(expression, "columns.X.compute")
         .unwrap()
         .evaluate(&mut Bindings)
         .unwrap_err();
@@ -653,16 +641,12 @@ fn nested_failure_retains_location_and_full_width_context() {
     );
     assert_eq!(diagnostic.context["minimum"], JsonValue::from(i64::MIN));
     assert_eq!(diagnostic.context["maximum"], JsonValue::from(i64::MAX));
-    let literal = compile_numeric(
-        "9223372036854775808",
-        "columns.Y.compute",
-        CompileLimits::default(),
-    )
-    .unwrap()
-    .evaluate(&mut Bindings)
-    .unwrap_err()
-    .diagnostic()
-    .unwrap();
+    let literal = compile_numeric("9223372036854775808", "columns.Y.compute")
+        .unwrap()
+        .evaluate(&mut Bindings)
+        .unwrap_err()
+        .diagnostic()
+        .unwrap();
     assert_eq!(literal.code, diagnostic.code);
     assert_eq!(literal.context["value"], diagnostic.context["value"]);
 }
@@ -705,7 +689,7 @@ fn opaque_resolver_failure_is_retained_in_place() {
         failure: Some(failure),
         calls: vec![],
     };
-    let error = compile_numeric("BAD + LATER", "columns.X", CompileLimits::default())
+    let error = compile_numeric("BAD + LATER", "columns.X")
         .unwrap()
         .evaluate(&mut resolver)
         .unwrap_err();
