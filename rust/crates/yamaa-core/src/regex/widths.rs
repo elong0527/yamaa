@@ -2,7 +2,9 @@
 //! This does not execute subjects or use literal/assertion satisfiability to
 //! exempt variable syntax. Intervals describe consumption, not captured text.
 use super::*;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
+mod captures;
+mod symbolic;
 
 /// Use the existing scalar arithmetic when no capture-dependent pass is needed.
 pub(super) fn validate(nodes: &[Node], root: usize) -> Result<(), CompileError> {
@@ -45,21 +47,24 @@ pub(super) fn validate(nodes: &[Node], root: usize) -> Result<(), CompileError> 
                 _ => None,
             })
             .collect(),
+        arena: symbolic::Arena::new(),
+        captures: captures::Captures::new(nodes[root].captures.end),
     };
 
     analysis.behind.resize(nodes.len(), None);
 
     let initial = Path {
-        width: Extent::ZERO,
-        captures: BTreeMap::new(),
+        width: 0,
+        captures: 0,
+        guards: BTreeSet::new(),
     };
     analysis.visit(root, initial, false)?;
     // Retain deterministic arena/source ownership rather than returning whichever
     // reverse traversal happens to discover a variable assertion first.
     for (id, node) in nodes.iter().enumerate() {
         if matches!(node.kind, Kind::Look { behind: true, .. }) {
-            let width = analysis.behind[id].expect("every assertion is structurally visited");
-            if width.max != Some(width.min) {
+            let expression = analysis.behind[id].expect("every assertion is structurally visited");
+            if !analysis.arena.is_fixed(expression, node.byte)? {
                 return Err(variable(node.byte));
             }
         }
@@ -90,183 +95,139 @@ impl Extent {
         min: 1,
         max: Some(1),
     };
-
-    /// Union intervals without forgetting correlations stored in separate paths.
-    fn union(self, other: Self) -> Self {
-        Self {
-            min: self.min.min(other.min),
-            max: self.max.zip(other.max).map(|(a, b)| a.max(b)),
-        }
-    }
-    /// Optional repeat iterations must consume, unlike required iterations.
-    fn positive(self) -> Option<Self> {
-        (self.max != Some(0)).then_some(Self {
-            min: self.min.max(1),
-            max: self.max,
-        })
-    }
-    /// Preserve width arithmetic without wrapping addressable positions.
-    fn checked(
-        min: Option<usize>,
-        max: Option<Option<usize>>,
-        byte: usize,
-    ) -> Result<Self, CompileError> {
-        let error = || CompileError::Unsupported {
-            byte,
-            feature: "pattern width exceeds addressable range",
-        };
-        let value = Self {
-            min: min.ok_or_else(error)?,
-            max: max.ok_or_else(error)?,
-        };
-        Ok(value)
-    }
-    /// Concatenate consumption intervals without subtracting unrelated bounds.
-    fn add(self, other: Self, byte: usize) -> Result<Self, CompileError> {
-        let max = match (self.max, other.max) {
-            (Some(a), Some(b)) => a.checked_add(b).map(Some),
-            _ => Some(None),
-        };
-        Self::checked(self.min.checked_add(other.min), max, byte)
-    }
-    /// Multiply required iterations symbolically, including exact zero counts.
-    fn times(self, count: usize, byte: usize) -> Result<Self, CompileError> {
-        if count == 0 {
-            return Ok(Self::ZERO);
-        }
-        let max = match self.max {
-            Some(value) => value.checked_mul(count).map(Some),
-            None => Some(None),
-        };
-        Self::checked(self.min.checked_mul(count), max, byte)
-    }
-    /// Zero or more strictly consuming optional iterations, bounded or unbounded.
-    fn optional(self, maximum: Option<usize>, byte: usize) -> Result<Self, CompileError> {
-        if maximum == Some(0) {
-            return Ok(Self::ZERO);
-        }
-        let max = match (self.max, maximum) {
-            (Some(width), Some(count)) => width.checked_mul(count).map(Some),
-            _ => Some(None),
-        };
-        Self::checked(Some(0), max, byte)
-    }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone)]
 struct Path {
-    width: Extent,
+    width: symbolic::Id,
     // Unentered and empty captures both consume zero as references. The matcher
-    // still retains their distinct participation/result values independently.
-    captures: BTreeMap<usize, Extent>,
+    // retains their distinct participation/result values independently.
+    captures: usize,
+    // Independent domain factors stay outside consumption and later captures.
+    guards: BTreeSet<symbolic::Id>,
 }
 struct Analysis<'a> {
     nodes: &'a [Node],
-    behind: Vec<Option<Extent>>,
+    behind: Vec<Option<symbolic::Id>>,
     referenced: BTreeSet<usize>,
+    arena: symbolic::Arena,
+    captures: captures::Captures,
 }
 impl Analysis<'_> {
-    /// Only referenced captures affect later consumption. Equal capture states
-    /// can share a continuation, unioning its width interval without enumerating
-    /// unrelated literal choices or unreferenced capture combinations.
-    fn push(&mut self, paths: &mut Vec<Path>, path: Path) {
-        for known in paths.iter_mut() {
-            if known.captures == path.captures {
-                known.width = known.width.union(path.width);
-                return;
-            }
+    /// A syntax join creates one choice shared by its width and capture slots.
+    /// If all captures agree, union consumption immediately as the interval
+    /// analysis did, without retaining an unobservable branch identity.
+    fn join(&mut self, paths: Vec<Path>) -> Path {
+        let first = &paths[0];
+        if paths
+            .iter()
+            .all(|path| path.captures == first.captures && path.guards == first.guards)
+        {
+            return Path {
+                width: self
+                    .arena
+                    .union(paths.iter().map(|path| path.width).collect()),
+                captures: first.captures,
+                guards: first.guards.clone(),
+            };
         }
-
-        paths.push(path);
+        let choice = self.arena.new_choice(paths.len());
+        let width = self
+            .arena
+            .choice(choice, paths.iter().map(|path| path.width).collect());
+        let mut guards = first.guards.clone();
+        guards.retain(|guard| paths.iter().all(|path| path.guards.contains(guard)));
+        let mut domains = Vec::with_capacity(paths.len());
+        for path in &paths {
+            let mut domain = 0;
+            for &guard in path.guards.difference(&guards) {
+                domain = self.arena.add(domain, guard);
+            }
+            domains.push(domain);
+        }
+        let domain = self.arena.choice(choice, domains);
+        if domain != 0 {
+            guards.insert(domain);
+        }
+        let captures = self
+            .captures
+            .choice(choice, paths.iter().map(|path| path.captures).collect());
+        Path {
+            width,
+            captures,
+            guards,
+        }
     }
-    /// Traverse flat sequences iteratively; only grammar-bounded nesting recurses.
-    fn visit(
-        &mut self,
-        id: usize,
-        mut path: Path,
-        backwards: bool,
-    ) -> Result<Vec<Path>, CompileError> {
+
+    fn guarded(&mut self, path: &Path) -> symbolic::Id {
+        let mut width = path.width;
+        for &guard in &path.guards {
+            width = self.arena.add(width, guard);
+        }
+        width
+    }
+    /// Flat sequences are iterative. Recursion follows only grammar nesting;
+    /// capture-dependent expression chains live in the separate indexed arena.
+    fn visit(&mut self, id: usize, mut path: Path, backwards: bool) -> Result<Path, CompileError> {
         let nodes = self.nodes;
         let node = &nodes[id];
-        match &node.kind {
+        let result = match &node.kind {
             Kind::Literal(_) | Kind::Dot | Kind::Class { .. } => {
-                path.width = path.width.add(Extent::ONE, node.byte)?;
-                Ok(vec![path])
+                let one = self.arena.value(Extent::ONE);
+                path.width = self.arena.add(path.width, one);
+                path
             }
-            Kind::Start | Kind::End | Kind::Boundary(_) => Ok(vec![path]),
+            Kind::Start | Kind::End | Kind::Boundary(_) => path,
             Kind::Backreference(Reference::Number(number)) => {
-                path.width = path.width.add(
-                    path.captures.get(number).copied().unwrap_or(Extent::ZERO),
-                    node.byte,
-                )?;
-                Ok(vec![path])
+                let width = self.captures.get(path.captures, *number, &mut self.arena);
+                path.width = self.arena.add(path.width, width);
+                path
             }
             Kind::Backreference(Reference::Name(_)) => unreachable!("references already resolved"),
             Kind::Sequence(children) => {
-                let mut paths = Ok(vec![path])?;
                 for position in 0..children.len() {
                     let child = children[if backwards {
                         children.len() - 1 - position
                     } else {
                         position
                     }];
-                    let mut next = Vec::new();
-                    for path in paths {
-                        for result in self.visit(child, path, backwards)? {
-                            self.push(&mut next, result);
-                        }
-                    }
-                    paths = next;
+                    path = self.visit(child, path, backwards)?;
                 }
-                Ok(paths)
+                path
             }
             Kind::Alternative(children) => {
-                let mut paths = Vec::new();
+                let mut paths = Vec::with_capacity(children.len());
                 for &child in children {
-                    let branch = path.clone();
-                    for result in self.visit(child, branch, backwards)? {
-                        self.push(&mut paths, result);
-                    }
+                    paths.push(self.visit(child, path.clone(), backwards)?);
                 }
-                Ok(paths)
+                self.join(paths)
             }
             Kind::Group { child, number } => {
                 let prefix = path.width;
-                path.width = Extent::ZERO;
-                let mut paths = self.visit(*child, path, backwards)?;
-                for path in &mut paths {
-                    if let Some(number) = number.filter(|number| self.referenced.contains(number)) {
-                        if path.width == Extent::ZERO {
-                            path.captures.remove(&number);
-                        } else {
-                            path.captures.insert(number, path.width);
-                        }
-                    }
-                    path.width = prefix.add(path.width, node.byte)?;
+                path.width = 0;
+                let mut path = self.visit(*child, path, backwards)?;
+                if let Some(number) = number.filter(|number| self.referenced.contains(number)) {
+                    path.captures = self.captures.set(path.captures, number, path.width);
                 }
-                Ok(paths)
+                path.width = self.arena.add(prefix, path.width);
+                path
             }
             Kind::Look {
                 child,
                 behind,
                 positive,
             } => {
-                let prefix = path.width;
-                let original = if !positive { Some(path.clone()) } else { None };
-                path.width = Extent::ZERO;
-                let mut paths = self.visit(*child, path, *behind)?;
-                for path in &mut paths {
-                    if *behind {
-                        self.behind[id] = Some(
-                            self.behind[id].map_or(path.width, |known| known.union(path.width)),
-                        );
-                    }
-                    path.width = prefix;
+                let original = path.clone();
+                path.width = 0;
+                let mut path = self.visit(*child, path, *behind)?;
+                if *behind {
+                    self.behind[id] = Some(self.guarded(&path));
                 }
-                if let Some(original) = original {
-                    Ok(vec![original])
+                if *positive {
+                    path.width = original.width;
+                    path
                 } else {
-                    Ok(paths)
+                    original
                 }
             }
             Kind::Repeat {
@@ -274,50 +235,59 @@ impl Analysis<'_> {
             } => {
                 let prefix = path.width;
                 let mut body = path.clone();
-                body.width = Extent::ZERO;
-
-                body.captures
-                    .retain(|capture, _| !nodes[*child].captures.contains(capture));
-                // Even a zero-count body must satisfy nested assertion grammar.
-                let last_paths = self.visit(*child, body, backwards)?;
+                body.width = 0;
+                body.captures = self
+                    .captures
+                    .clear(body.captures, nodes[*child].captures.clone());
+                let first_choice = self.arena.choices();
+                // Zero-count bodies still undergo nested assertion admission.
+                let last = self.visit(*child, body, backwards)?;
+                let end_choice = self.arena.choices();
                 if *max == Some(0) {
-                    return Ok(vec![path]);
+                    return Ok(path);
                 }
-                let any = last_paths
-                    .iter()
-                    .map(|path| path.width)
-                    .reduce(Extent::union)
-                    .expect("structural alternatives have at least one path");
+                let mut body_width = last.width;
+                for &guard in last.guards.difference(&path.guards) {
+                    body_width = self.arena.add(body_width, guard);
+                }
+                let any = self.arena.quantify(body_width, first_choice..end_choice);
                 let mut paths = Vec::new();
                 if *min == 0 {
-                    self.push(&mut paths, path);
+                    paths.push(path);
                 }
-                for mut last in last_paths {
-                    let last_width = last.width;
-                    if *min > 0 {
-                        let mut required = last.clone();
-                        required.width = prefix
-                            .add(any.times(min - 1, node.byte)?, node.byte)?
-                            .add(last_width, node.byte)?;
-                        self.push(&mut paths, required);
-                    }
-                    if max.is_none_or(|max| max > *min) {
-                        if let Some(positive) = last_width.positive() {
-                            let earlier_optional = any
-                                .positive()
-                                .expect("a positive last path exists")
-                                .optional(max.map(|max| max - min - 1), node.byte)?;
-                            last.width = prefix
-                                .add(any.times(*min, node.byte)?, node.byte)?
-                                .add(earlier_optional, node.byte)?
-                                .add(positive, node.byte)?;
-                            self.push(&mut paths, last);
-                        }
-                    }
+                if *min > 0 {
+                    let mut required = last.clone();
+                    let earlier = self.arena.times(any, min - 1);
+                    let width = self.arena.add(prefix, earlier);
+                    required.width = self.arena.add(width, last.width);
+                    paths.push(required);
                 }
-                Ok(paths)
+                if max.is_none_or(|max| max > *min) {
+                    let mut optional = last.clone();
+                    let positive_last = self.arena.positive(last.width);
+                    let positive_any = self.arena.positive(any);
+                    let earlier_optional = self
+                        .arena
+                        .optional(positive_any, max.map(|max| max - min - 1));
+                    let earlier_required = self.arena.times(any, *min);
+                    let width = self.arena.add(prefix, earlier_required);
+                    let width = self.arena.add(width, earlier_optional);
+                    let width = self.arena.add(width, positive_last);
+                    let guard = self.arena.valid(positive_last);
+                    optional.width = width;
+                    if guard != 0 {
+                        optional.guards.insert(guard);
+                    }
+                    paths.push(optional);
+                }
+                self.join(paths)
             }
-        }
+        };
+        // Conservative bounds handle ordinary prefixes without exact queries.
+        // Only a possible arithmetic overflow needs correlation-aware checking.
+        let checked = self.guarded(&result);
+        self.arena.check(checked, node.byte)?;
+        Ok(result)
     }
 }
 
