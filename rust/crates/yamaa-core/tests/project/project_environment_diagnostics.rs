@@ -44,18 +44,37 @@ fn every_root_and_terminology_cause_has_independent_normative_paths_and_mapping(
         &project_environment::validate(Language::Python, &draft),
     )
     .unwrap();
-    assert_eq!(projected[2].context["value"], JsonValue::Bool(true));
-    assert_eq!(projected[0].context.len(), 2);
+    let mismatch = projected
+        .iter()
+        .find(|diagnostic| diagnostic.spec_paths == ["language"])
+        .unwrap();
+    assert_eq!(mismatch.context.len(), 2);
     assert_eq!(
-        projected[0].context["runner"],
+        mismatch.context["runner"],
         JsonValue::String("python".into())
     );
+    let value = projected
+        .iter()
+        .find(|diagnostic| {
+            diagnostic.definition().condition == "codelist_shape_invalid"
+                && diagnostic.spec_paths == ["codelists[0].codelists[0].items[0].value"]
+        })
+        .unwrap();
+    assert_eq!(value.context["value"], JsonValue::Bool(true));
+    let partial_fields = projected
+        .iter()
+        .filter(|diagnostic| {
+            diagnostic.definition().condition == "codelist_partial_item_field"
+                && diagnostic.spec_paths == ["codelists[0].codelists[0]"]
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(partial_fields.len(), 2);
     assert_eq!(
-        projected[6].context["field"],
+        partial_fields[0].context["field"],
         JsonValue::String("decode".into())
     );
     assert_eq!(
-        projected[7].context["field"],
+        partial_fields[1].context["field"],
         JsonValue::String("rank".into())
     );
 }

@@ -278,6 +278,98 @@ fn metadata_failures_name_each_written_dependency_and_cause_before_study_reads()
 }
 
 #[test]
+fn per_source_resource_and_structural_limits_refuse_partial_metadata_diagnostics() {
+    use yamaa_adapters::{
+        file_resources::Error as ResourceError,
+        project_source::{CaptureFailure, Failure},
+        specification_source::{
+            CapturedSchema, Error as SourceError, Limits as SchemaLimits, Source,
+        },
+    };
+    for structural in [false, true] {
+        let study = Study::new();
+        let environment = "schema_version: '1.0'\ncodelists: [missing.yaml, ct.yaml]\n";
+        study.write("environment.yaml", environment);
+        study.write("ct.yaml", &"#".repeat(8193));
+        let environment_schema = if structural {
+            CapturedSchema::admit_root(
+                [
+                    (
+                        "schema_environment.yaml",
+                        include_str!("../fixtures/environment-candidate/schema_environment.yaml"),
+                    ),
+                    (
+                        "schema_shared.yaml",
+                        include_str!("../fixtures/environment-candidate/schema_shared.yaml"),
+                    ),
+                ]
+                .into_iter()
+                .map(|(identity, text)| Source {
+                    identity: identity.into(),
+                    bytes: text.as_bytes().to_vec(),
+                })
+                .collect(),
+                0,
+                "environment_class",
+                SchemaLimits {
+                    captured_bytes: 8192,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+        } else {
+            shipped_schema::capture_environment().unwrap()
+        };
+        let error = file_workflow::prepare_with_resources(
+            Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),
+            "root.yaml",
+            "environment.yaml",
+            Language::Python,
+            shipped_schema::capture().unwrap(),
+            environment_schema,
+            Limits {
+                captured_bytes: if structural { 16384 } else { environment.len() },
+                ..Default::default()
+            },
+        )
+        .err()
+        .unwrap();
+        let Error::Environment(owner) = &error else {
+            panic!("metadata failure precedes entry reads")
+        };
+        let yamaa_adapters::file_project::Error::Environment(Failure::Rejected(rejected)) =
+            owner.error()
+        else {
+            panic!("original source failures remain owned")
+        };
+        assert_eq!(rejected.sources.len(), 2);
+        assert!(matches!(
+            rejected.sources[0].error,
+            CaptureFailure::Port(ResourceError::Missing)
+        ));
+        if structural {
+            assert!(matches!(
+                rejected.sources[1].error,
+                CaptureFailure::Structural(SourceError::Limit("captured_bytes"))
+            ));
+        } else {
+            assert!(matches!(
+                rejected.sources[1].error,
+                CaptureFailure::Port(ResourceError::Limit)
+            ));
+        }
+        let reads = owner.capture_reads();
+        assert!(!study.0.join("root.yaml").exists());
+        fs::remove_dir_all(&study.0).unwrap();
+        assert!(matches!(
+            producer_check::rejected(&error, Language::Python),
+            Err(producer_check::Error::Projection(_))
+        ));
+        assert_eq!(owner.capture_reads(), reads);
+    }
+}
+
+#[test]
 fn supplied_environment_directory_names_its_path_and_file_kind_before_entry_reads() {
     let study = Study::new();
     fs::create_dir(study.0.join("directory.yaml")).unwrap();
