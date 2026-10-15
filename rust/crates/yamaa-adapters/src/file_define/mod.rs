@@ -442,7 +442,7 @@ fn issues(failure: &Failure, host: Language) -> Vec<Issue> {
                 E::OutsideRoots => R::OutsideRoots,
                 E::Symlink => R::Symlink,
                 E::Changed => R::Changed,
-                E::Limit(error) => R::Limit(error),
+                E::Limit(error) => R::Limit(*error),
             };
             vec![
                 Issue::from_core(service::resource_diagnostic(path, written, observation))

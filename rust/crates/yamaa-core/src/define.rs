@@ -612,7 +612,7 @@ pub enum ResourceObservation {
     OutsideRoots,
     Symlink,
     Changed,
-    Limit,
+    Limit(crate::limits::LimitExceeded),
 }
 pub fn resource_diagnostic(
     path: &str,
@@ -620,6 +620,20 @@ pub fn resource_diagnostic(
     observation: ResourceObservation,
 ) -> Diagnostic {
     use ResourceObservation as R;
+    if let R::Limit(error) = observation {
+        let mut diagnostic = crate::application_issue::resource_rejected(
+            "define",
+            "resource_limit",
+            error.resource,
+            error.limit,
+            error.actual,
+            vec![path.into()],
+        );
+        diagnostic
+            .context
+            .insert("path".into(), JsonValue::String(written.into()));
+        return diagnostic;
+    }
     let code = match observation {
         R::Missing if path.ends_with(".artifact") => ConditionCode::ProducerContractMismatch,
         R::Missing => ConditionCode::ResourceMissing,
@@ -638,7 +652,7 @@ pub fn resource_diagnostic(
             R::InvalidLock => "invalid_packaging_lock",
             R::OutsideRoots => "resource_outside_roots",
             R::Symlink => "resource_link",
-            R::Limit => "resource_limit",
+            R::Limit(_) => unreachable!("fixed boundary projected above"),
             R::Missing | R::NotRegularFile | R::Changed => {
                 unreachable!("normative resource cause selected")
             }

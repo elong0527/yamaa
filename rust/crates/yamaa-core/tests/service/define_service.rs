@@ -498,7 +498,6 @@ fn resource_observations_keep_original_normative_and_implementation_wire_owners(
         (R::InvalidLock, "invalid_packaging_lock"),
         (R::OutsideRoots, "resource_outside_roots"),
         (R::Symlink, "resource_link"),
-        (R::Limit, "resource_limit"),
     ] {
         let finding = define::resource_diagnostic("sdtm.specs[0]", "declared.yaml", observation);
         assert_eq!(finding.code, ConditionCode::ApplicationRejected);
@@ -577,5 +576,33 @@ fn publication_stage_projection_preserves_full_width_artifact_index_and_cause_te
         assert_eq!(finding.context, expected);
         assert_eq!(finding.source_span, None);
         assert_eq!(finding.operand_route, None);
+    }
+}
+
+#[test]
+fn fixed_physical_refusals_keep_the_exact_size_and_authored_define_field() {
+    for (resource, limit) in [
+        ("spec_bytes", 8_388_608usize),
+        ("source_bytes", 10_737_418_240usize),
+    ] {
+        let finding = define::resource_diagnostic(
+            "sdtm.specs[0]",
+            "declared.yaml",
+            define::ResourceObservation::Limit(yamaa_core::limits::LimitExceeded {
+                resource,
+                limit,
+                actual: Some(limit + 1),
+            }),
+        );
+        assert_eq!(finding.code, ConditionCode::ApplicationRejected);
+        assert_eq!(finding.spec_paths, ["sdtm.specs[0]"]);
+        assert_eq!(
+            finding.context,
+            serde_json::from_value(serde_json::json!({
+                "path": "declared.yaml", "stage": "define", "code": "resource_limit",
+                "resource": resource, "limit": limit, "actual": limit + 1,
+            }))
+            .unwrap()
+        );
     }
 }
