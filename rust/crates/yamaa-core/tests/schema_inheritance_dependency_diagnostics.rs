@@ -516,6 +516,72 @@ mod schema {
         }
 
         #[test]
+        fn doubling_field_reuse_is_rejected_as_a_duplicate_before_expansion() {
+            let mut declarations = vec![
+                ("version".into(), V::text("1.0")),
+                (
+                    "root_class".into(),
+                    V::List(vec![V::map(vec![("fields_from", V::text("level30"))])]),
+                ),
+                ("level0".into(), V::List(vec![field("id", "str")])),
+            ];
+            for level in 1..=30 {
+                let inherited = V::map(vec![(
+                    "fields_from",
+                    V::text(format!("level{}", level - 1)),
+                )]);
+                declarations.push((
+                    format!("level{level}"),
+                    V::List(vec![inherited.clone(), inherited]),
+                ));
+            }
+            let module = SchemaModule {
+                name: "schema.yaml".into(),
+                document: V::Map(declarations).document(),
+            };
+            let BundleError::Invalid(issues) =
+                SchemaStructure::admit(vec![module], 0, "root_class").unwrap_err()
+            else {
+                panic!("duplicate reuse has a language finding, not a resource quota");
+            };
+            assert_eq!(issues.len(), 1);
+            assert_eq!(issues[0].module, 0);
+            assert_eq!(issues[0].path, "root_class.id");
+            assert_eq!(issues[0].kind, I::DuplicateField("id".into()));
+        }
+
+        #[test]
+        fn malformed_fields_precede_later_duplicate_reuse_in_the_selected_class() {
+            let root = module(
+                "schema.yaml",
+                vec![
+                    (
+                        "root_class",
+                        V::List(vec![
+                            V::map(vec![("broken", V::map(vec![]))]),
+                            reuse("doubled"),
+                        ]),
+                    ),
+                    ("doubled", V::List(vec![reuse("common"), reuse("common")])),
+                    ("common", V::List(vec![field("id", "str")])),
+                ],
+                &[],
+            );
+            let BundleError::Invalid(issues) =
+                SchemaStructure::admit(vec![root], 0, "root_class").unwrap_err()
+            else {
+                panic!("malformed declarations must keep their language findings");
+            };
+            assert_eq!(issues[0].path, "root_class.broken");
+            assert_eq!(
+                issues[0].kind,
+                I::Descriptor(yamaa_core::schema::DescriptorIssue::MissingType)
+            );
+            assert_eq!(issues[1].path, "root_class.id");
+            assert_eq!(issues[1].kind, I::DuplicateField("id".into()));
+        }
+
+        #[test]
         fn duplicate_registry_entries_and_closed_include_names_are_rejected() {
             let root = module(
                 "schema.yaml",

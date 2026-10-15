@@ -148,6 +148,10 @@ struct Named {
     name: String,
     raw: Raw,
 }
+struct ExpandedFields {
+    entries: Vec<Raw>,
+    repeated: bool,
+}
 struct RawRegistry {
     name: String,
     module: usize,
@@ -301,7 +305,7 @@ impl Builder {
         names: &BTreeMap<String, usize>,
         expanded: &mut [Option<Vec<Raw>>],
         active: &mut Vec<usize>,
-    ) -> Result<Vec<Raw>, BundleError> {
+    ) -> Result<ExpandedFields, BundleError> {
         if active.contains(&index) {
             let mut cycle: Vec<_> = active.iter().map(|&id| classes[id].name.clone()).collect();
             cycle.push(classes[index].name.clone());
@@ -312,7 +316,10 @@ impl Builder {
             ));
         }
         if let Some(fields) = &expanded[index] {
-            return Ok(fields.clone());
+            return Ok(ExpandedFields {
+                entries: fields.clone(),
+                repeated: false,
+            });
         }
         if active.len() >= crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(BundleError::Limit {
@@ -327,7 +334,9 @@ impl Builder {
         };
         let entries = entries.clone();
         let mut result = Vec::new();
-        for node in entries {
+        let mut occurrences = BTreeSet::new();
+        let mut repeated = false;
+        'entries: for node in entries {
             let item = Raw {
                 module: raw.module,
                 node,
@@ -351,14 +360,32 @@ impl Builder {
                     ));
                 };
                 let copied = self.expand(target, classes, names, expanded, active)?;
-                result.extend(copied);
+                for field in copied.entries {
+                    result.push(field);
+                    if !occurrences.insert((field.module, field.node)) {
+                        repeated = true;
+                        break 'entries;
+                    }
+                }
             } else {
                 result.push(item);
+                if !occurrences.insert((item.module, item.node)) {
+                    repeated = true;
+                    break;
+                }
             }
         }
         active.pop();
-        expanded[index] = Some(result.clone());
-        Ok(result)
+        // A repeated leaf necessarily repeats a field name or shape defect.
+        // Keep the prefix through that occurrence so the normal descriptor pass
+        // reports any earlier defect first, at the selected class's paths.
+        if !repeated {
+            expanded[index] = Some(result.clone());
+        }
+        Ok(ExpandedFields {
+            entries: result,
+            repeated,
+        })
     }
 }
 
@@ -611,16 +638,20 @@ impl SchemaStructure {
         let mut expanded = vec![None; raw_classes.len()];
         let mut classes = Vec::new();
         for (index, class) in raw_classes.iter().enumerate() {
-            let entries = builder.expand(
+            let expanded = builder.expand(
                 index,
                 &raw_classes,
                 &class_names,
                 &mut expanded,
                 &mut Vec::new(),
             )?;
+            let fields = builder.fields(&expanded.entries, &class.name)?;
+            if expanded.repeated {
+                return Err(BundleError::Invalid(std::mem::take(&mut builder.issues)));
+            }
             classes.push(SchemaClass {
                 name: class.name.clone(),
-                fields: builder.fields(&entries, &class.name)?,
+                fields,
             });
         }
         let registry_names: BTreeMap<_, _> = raw_registries

@@ -2,9 +2,10 @@
 //! This does not execute subjects or use literal/assertion satisfiability to
 //! exempt variable syntax. Intervals describe consumption, not captured text.
 use super::*;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Use the existing scalar arithmetic when no capture-dependent pass is needed.
-pub(super) fn validate(nodes: &[Node], root: usize, groups: usize) -> Result<(), CompileError> {
+pub(super) fn validate(nodes: &[Node], root: usize) -> Result<(), CompileError> {
     let has_behind = nodes
         .iter()
         .any(|node| matches!(node.kind, Kind::Look { behind: true, .. }));
@@ -37,13 +38,20 @@ pub(super) fn validate(nodes: &[Node], root: usize, groups: usize) -> Result<(),
     let mut analysis = Analysis {
         nodes,
         behind: Vec::new(),
+        referenced: nodes
+            .iter()
+            .filter_map(|node| match node.kind {
+                Kind::Backreference(Reference::Number(number)) => Some(number),
+                _ => None,
+            })
+            .collect(),
     };
 
     analysis.behind.resize(nodes.len(), None);
 
     let initial = Path {
         width: Extent::ZERO,
-        captures: vec![Extent::ZERO; groups + 1],
+        captures: BTreeMap::new(),
     };
     analysis.visit(root, initial, false)?;
     // Retain deterministic arena/source ownership rather than returning whichever
@@ -150,17 +158,21 @@ struct Path {
     width: Extent,
     // Unentered and empty captures both consume zero as references. The matcher
     // still retains their distinct participation/result values independently.
-    captures: Vec<Extent>,
+    captures: BTreeMap<usize, Extent>,
 }
 struct Analysis<'a> {
     nodes: &'a [Node],
     behind: Vec<Option<Extent>>,
+    referenced: BTreeSet<usize>,
 }
 impl Analysis<'_> {
-    /// Equal width/capture states can share a continuation regardless of literals.
+    /// Only referenced captures affect later consumption. Equal capture states
+    /// can share a continuation, unioning its width interval without enumerating
+    /// unrelated literal choices or unreferenced capture combinations.
     fn push(&mut self, paths: &mut Vec<Path>, path: Path) {
-        for known in paths.iter() {
-            if known == &path {
+        for known in paths.iter_mut() {
+            if known.captures == path.captures {
+                known.width = known.width.union(path.width);
                 return;
             }
         }
@@ -183,7 +195,10 @@ impl Analysis<'_> {
             }
             Kind::Start | Kind::End | Kind::Boundary(_) => Ok(vec![path]),
             Kind::Backreference(Reference::Number(number)) => {
-                path.width = path.width.add(path.captures[*number], node.byte)?;
+                path.width = path.width.add(
+                    path.captures.get(number).copied().unwrap_or(Extent::ZERO),
+                    node.byte,
+                )?;
                 Ok(vec![path])
             }
             Kind::Backreference(Reference::Name(_)) => unreachable!("references already resolved"),
@@ -220,8 +235,12 @@ impl Analysis<'_> {
                 path.width = Extent::ZERO;
                 let mut paths = self.visit(*child, path, backwards)?;
                 for path in &mut paths {
-                    if let Some(number) = number {
-                        path.captures[*number] = path.width;
+                    if let Some(number) = number.filter(|number| self.referenced.contains(number)) {
+                        if path.width == Extent::ZERO {
+                            path.captures.remove(&number);
+                        } else {
+                            path.captures.insert(number, path.width);
+                        }
                     }
                     path.width = prefix.add(path.width, node.byte)?;
                 }
@@ -257,9 +276,8 @@ impl Analysis<'_> {
                 let mut body = path.clone();
                 body.width = Extent::ZERO;
 
-                for capture in nodes[*child].captures.clone() {
-                    body.captures[capture] = Extent::ZERO;
-                }
+                body.captures
+                    .retain(|capture, _| !nodes[*child].captures.contains(capture));
                 // Even a zero-count body must satisfy nested assertion grammar.
                 let last_paths = self.visit(*child, body, backwards)?;
                 if *max == Some(0) {
@@ -314,5 +332,24 @@ mod tests {
             Err(CompileError::Invalid { .. })
         ));
         Pattern::compile(r"(a)\1(?<=a)").unwrap();
+    }
+
+    #[test]
+    fn unrelated_capture_alternatives_do_not_multiply_width_states() {
+        let choices = "(a|bb)".repeat(30);
+        assert!(matches!(
+            Pattern::compile(&(choices.clone() + r"(?<=\1)")),
+            Err(CompileError::Invalid {
+                reason: "variable-length lookbehind",
+                ..
+            })
+        ));
+        Pattern::compile(&("(a)".to_owned() + &choices + r"(?<=\1)")).unwrap();
+
+        // Four captures share one alternative choice and always total three.
+        // Later, unreferenced choices must not break that correlation or grow
+        // the retained capture-state product.
+        let correlated = r"(?:(a)(bc)|(ab)(c))".repeat(30) + r"(?<=\1\2\3\4)";
+        Pattern::compile(&correlated).unwrap();
     }
 }

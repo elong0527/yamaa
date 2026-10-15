@@ -34,7 +34,7 @@ pub(super) fn compile(source: &str) -> Result<Pattern, CompileError> {
             *reference = Reference::Number(number);
         }
     }
-    widths::validate(&parser.nodes, root, parser.groups)?;
+    widths::validate(&parser.nodes, root)?;
     Ok(Pattern {
         nodes: parser.nodes,
         root,
