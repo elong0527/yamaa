@@ -20,3 +20,10 @@ packaging checks. Host usage and installation commands live in
 
 Expected benchmark data and Parquet fixtures are authored truth. Preserve their
 bytes when changing implementation or repository structure.
+
+Layer composition follows [REQ-0632/0633](../rules/specification/composition.md#req-0632):
+a null first declaring an optional field is its schema value, including a
+missing-value `no_match` handler. A null overriding an inherited field clears
+it. An absent `parents`, `parents: []`, and an empty child preserve an
+introducing null's meaning; required fields and invalid null values remain
+subject to their ordinary admission rules.

@@ -3,6 +3,26 @@ use super::*;
 use crate::value::Value;
 use crate::{diagnostic::ConditionCode as C, key_relation::Inference, value::ColumnType};
 
+/// A missing handler alone leaves the input relation unchanged (REQ-1248).
+/// The inheritance resolver also uses this predicate before pruning declarations.
+pub(crate) fn is_rename_only(d: &Document, item: usize) -> bool {
+    let changes_relation = [
+        "key",
+        "between",
+        "filter",
+        "order_by",
+        "keep",
+        "columns",
+        "derivations",
+        "verifications",
+    ]
+    .iter()
+    .any(|field| present(d, item, field));
+    !changes_relation
+        && d.field(item, "no_match")
+            .is_some_and(|node| matches!(d.nodes()[node], N::Null))
+}
+
 /// Declaration failures precede source access and key-type binding.
 pub(super) fn declaration_findings(
     d: &Document,
@@ -49,22 +69,7 @@ pub(super) fn declaration_findings(
         } else {
             identifiers.insert(name, format!("{path}.id"));
         }
-        let changes_relation = [
-            "key",
-            "between",
-            "filter",
-            "order_by",
-            "keep",
-            "columns",
-            "derivations",
-            "verifications",
-        ]
-        .iter()
-        .any(|field| present(d, item, field));
-        if !changes_relation
-            && d.field(item, "no_match")
-                .is_some_and(|node| matches!(d.nodes()[node], N::Null))
-        {
+        if is_rename_only(d, item) {
             admit_finding()?;
             let mut finding = LookupFinding::new(&path, C::IntermediateRenameOnly);
             finding.text("intermediate", name);

@@ -1582,6 +1582,38 @@ class ParquetOriginalOutput(unittest.TestCase):
 
 
 class PublicDomains(unittest.TestCase):
+    def test_public_inheritance_introducing_nulls_and_inherited_clears(self):
+        import yamaa
+
+        for case in TRUTH["inheritance_nulls"]:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                entry = root / "spec.yaml"
+                entry.write_text(case["spec"], encoding="utf-8")
+                for name, content in case["parents"].items():
+                    (root / name).write_text(content, encoding="utf-8")
+                checked = yamaa.check(entry)
+                conditions = checked.issues["condition"].to_list()
+                if case["check_condition"] is None:
+                    self.assertEqual(conditions, [])
+                else:
+                    self.assertEqual(conditions[0], case["check_condition"])
+                for name, content in case["inputs"].items():
+                    (root / name).write_text(content, encoding="utf-8")
+                result = yamaa.domain(entry)
+                conditions = result.issues["condition"].to_list()
+                if case["run_condition"] is None:
+                    self.assertEqual(conditions, [])
+                    self.assertTrue(result.save())
+                    self.assertEqual((root / "result.csv").read_bytes(), case["csv"].encode("utf-8"))
+                else:
+                    self.assertEqual(conditions[0], case["run_condition"])
+                    self.assertIsNone(result.output)
+                observations = result._native.observations()
+                if observations is not None:
+                    counts = json.loads(observations)["handler_counts"]
+                    self.assertEqual(sum(item["count"] for item in counts if item["handler"] == "no_match"), case["no_match_count"])
+
     def test_public_temporal_arithmetic_conformance(self):
         import yamaa
 

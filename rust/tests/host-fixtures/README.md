@@ -42,6 +42,9 @@ the same typed bindings through their installed public entry points.
 The `original-specifications.temporal_arithmetic` vectors likewise share
 PK relative times, civil shifts, duration parsing/formatting, static refusals,
 range failures and reached `invalid` handler counts across Rust, Python and R.
+The `original-specifications.inheritance_nulls` cases share authored layers,
+missing-lookup CSV bytes, reached `no_match` counts and refusal conditions for
+introducing null values, empty children and inherited clears in both hosts.
 
 ## Public conformance mapping
 
