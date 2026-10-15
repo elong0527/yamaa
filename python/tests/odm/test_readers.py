@@ -427,6 +427,57 @@ def test_item_data_nested_below_a_group_inside_item_data_is_rejected(
         list(iter_odm_records(source))
 
 
+@pytest.mark.parametrize(
+    ("container", "message"),
+    [
+        ('<ItemGroupData ItemGroupOID="LEAKED"/>', "ItemGroupData inside ItemData"),
+        ('<FormData FormOID="EVIL.F"/>', "FormData inside ItemData"),
+    ],
+)
+def test_container_inside_item_data_is_rejected_not_leaked(
+    tmp_path: Path, container: str, message: str
+) -> None:
+    # Without FormData, the single ItemGroupData in ODM_13 cannot supply
+    # item context, so every item must be rejected. A container written
+    # inside the first ItemData was instead adopted as context: its end
+    # event is skipped like other ItemData children, so it was never
+    # cleared and every row — including its siblings — was silently
+    # emitted with the fabricated form/group context.
+    source = tmp_path / "container-inside-item-data.xml"
+    source.write_text(
+        ODM_13.replace('<FormData FormOID="F.13">', "")
+        .replace("</FormData>", "")
+        .replace(
+            '<ItemData ItemOID="I.DATE" Value="2026-01-02"/>',
+            f'<ItemData ItemOID="I.DATE" Value="2026-01-02">{container}</ItemData>',
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ODMError, match=message):
+        list(iter_odm_records(source))
+
+
+def test_subject_data_inside_item_data_is_rejected(tmp_path: Path) -> None:
+    # A SubjectData inside a context-free ItemData set the subject context
+    # at its start event and was never cleared, so the real SubjectData
+    # that followed was reported as nested instead of the rogue element
+    # being rejected where it appears.
+    source = tmp_path / "subject-inside-item-data.xml"
+    source.write_text(
+        ODM_13.replace(
+            '<SubjectData SubjectKey="SUBJECT-1"',
+            '<ItemData ItemOID="I.DATE" Value="rogue">'
+            '<SubjectData SubjectKey="ROGUE"/></ItemData>'
+            '<SubjectData SubjectKey="SUBJECT-1"',
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ODMError, match="SubjectData inside ItemData"):
+        list(iter_odm_records(source))
+
+
 def test_archive_with_one_xml_member_is_selected_automatically(
     tmp_path: Path,
 ) -> None:
