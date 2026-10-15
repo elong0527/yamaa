@@ -171,7 +171,7 @@ impl Parser<'_> {
             width = match (width, self.nodes[id].width) {
                 (Width::Variable, _) | (_, Width::Variable) => Width::Variable,
                 (Width::Fixed(a), Width::Fixed(b)) => {
-                    Width::Fixed(a.checked_add(b).ok_or_else(|| CompileError::Unsupported {
+                    Width::Fixed(a.checked_add(b).ok_or(CompileError::Unsupported {
                         byte,
                         feature: "pattern width exceeds addressable range",
                     })?)
@@ -242,14 +242,12 @@ impl Parser<'_> {
         let greedy = !self.take('?');
         let width = match (self.nodes[child].width, max) {
             (_, Some(0)) | (Width::Fixed(0), _) => Width::Fixed(0),
-            (Width::Fixed(width), Some(max)) if max == min => Width::Fixed(
-                width
-                    .checked_mul(min)
-                    .ok_or_else(|| CompileError::Unsupported {
-                        byte,
-                        feature: "pattern width exceeds addressable range",
-                    })?,
-            ),
+            (Width::Fixed(width), Some(max)) if max == min => {
+                Width::Fixed(width.checked_mul(min).ok_or(CompileError::Unsupported {
+                    byte,
+                    feature: "pattern width exceeds addressable range",
+                })?)
+            }
             (Width::Backref { nonempty }, max) => {
                 // Variable repetition of a definitely consuming child is variable.
                 // An unresolved reference may instead be empty; retain that gap.
@@ -283,7 +281,7 @@ impl Parser<'_> {
             number = number
                 .checked_mul(10)
                 .and_then(|n| n.checked_add((c as u8 - b'0') as usize))
-                .ok_or_else(|| CompileError::Unsupported {
+                .ok_or(CompileError::Unsupported {
                     byte: self.byte(),
                     feature: "repetition count exceeds addressable range",
                 })?;

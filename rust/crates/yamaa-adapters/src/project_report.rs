@@ -89,11 +89,8 @@ pub(crate) fn checked_records(
     phase: &str,
     id: &Identity<'_>,
 ) -> Result<(Vec<Value>, Vec<Value>), report::Error> {
-    crate::project_codelist_diagnostics::codelist_issues(run.compiled(), records).map_err(
-        |error| match error {
-            _ => report::Error::InvalidObservation,
-        },
-    )?;
+    crate::project_codelist_diagnostics::codelist_issues(run.compiled(), records)
+        .map_err(|_| report::Error::InvalidObservation)?;
     let phase = match phase {
         "output" => yamaa_core::verification_diagnostics::Phase::Output,
         "verification" => yamaa_core::verification_diagnostics::Phase::Verification,
@@ -416,9 +413,7 @@ pub fn build_result<'a, C, E>(
                     return Err(invalid());
                 }
                 crate::project_lock_diagnostics::issues(run.captured_environment(), findings)
-                    .map_err(|error| match error {
-                        _ => invalid(),
-                    })?
+                    .map_err(|_| invalid())?
                     .into_iter()
                     .map(diagnostic)
                     .collect::<Result<Vec<_>, _>>()?

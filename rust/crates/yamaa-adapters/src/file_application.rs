@@ -64,7 +64,16 @@ pub(crate) fn resource_failure(stage: &str, error: &crate::file_resources::Error
         E::Symlink => "resource_link",
         E::Changed => "resource_changed",
         E::InvalidLock => "invalid_packaging_lock",
-        E::Limit => "resource_limit",
+        E::Limit(error) => {
+            return resource_rejected(
+                stage,
+                "resource_limit",
+                error.resource,
+                error.limit,
+                error.actual,
+                Vec::new(),
+            )
+        }
     };
     rejected(stage, code)
 }
@@ -693,7 +702,6 @@ mod tests {
             Arc,
         },
     };
-    use yamaa_core::diagnostic::ConditionCode;
     static NEXT: AtomicUsize = AtomicUsize::new(0);
     #[test]
     fn primary_above_the_former_eight_megabyte_quota_retains_logs_and_saves_held_bytes() {
@@ -741,7 +749,8 @@ mod tests {
             resources.publication_target_from(origin.declaring_source, origin.written)
         })
         .unwrap();
-        assert!(result.output().unwrap().len() > 8 * 1024 * 1024);
+        assert!(result.output().is_some());
+        assert!(result.result.publication_items().last().unwrap().1.len() > 8 * 1024 * 1024);
         assert!(result.warning_log().is_some());
         assert_eq!(result.log_table(false).unwrap().rows(), 2);
         assert!(result.issues().is_empty());

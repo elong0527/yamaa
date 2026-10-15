@@ -375,17 +375,9 @@ fn source_finding(
 fn native_resource_failure(
     error: &yamaa_core::producer_build::CaptureError<crate::file_resources::Error>,
 ) -> Option<yamaa_core::resource::ResourceFailure> {
-    use crate::file_resources::Error as Native;
-    use yamaa_core::resource::ResourceFailure;
     match error {
-        yamaa_core::producer_build::CaptureError::External(Native::Missing) => {
-            Some(ResourceFailure::Missing)
-        }
-        yamaa_core::producer_build::CaptureError::External(Native::NotRegularFile) => {
-            Some(ResourceFailure::NotRegularFile)
-        }
-        yamaa_core::producer_build::CaptureError::External(Native::Changed) => {
-            Some(ResourceFailure::ContentChanged)
+        yamaa_core::producer_build::CaptureError::External(error) => {
+            crate::file_resources::resource_failure(error)
         }
         _ => None,
     }
@@ -758,11 +750,9 @@ pub fn attempt_report_classified<'a, E>(
     if let Some(findings) = activation_findings {
         result["diagnostics"] = json!(findings);
     }
-    match &attempt.graph.outcome {
-        Err(yamaa_core::producer_build::Failure::Binding { node, slot }) => {
-            result["error"] = json!({"stage":"producer_binding","node":node,"slot":slot});
-        }
-        _ => {}
+    if let Err(yamaa_core::producer_build::Failure::Binding { node, slot }) = &attempt.graph.outcome
+    {
+        result["error"] = json!({"stage":"producer_binding","node":node,"slot":slot});
     }
     for (position, node) in entered.iter().enumerate() {
         let view = attempt

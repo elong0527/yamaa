@@ -413,7 +413,6 @@ fn decode_parquet(
 #[cfg(test)]
 mod width_tests {
     use super::*;
-    use crate::arrow_table::TableError;
     use yamaa_core::{
         specification::SourceProfile,
         table::{TableAccess, ValueRef},
@@ -496,13 +495,13 @@ mod width_tests {
             } else {
                 assert!(matches!(
                     result,
-                    Err(Error::ParquetSource(crate::parquet_source::Error::Table(
-                        TableError::Limit {
+                    Err(Error::ParquetSource(
+                        crate::parquet_source::Error::ResourceLimit {
                             resource: "columns",
                             limit: 1024,
-                            required: Some(1025)
+                            actual: Some(1025)
                         }
-                    )))
+                    ))
                 ));
             }
         }

@@ -1034,8 +1034,7 @@ impl DatasetPlan {
             outcome: crate::application_observer::Outcome::Succeeded,
         });
         observer(ExecutionEvent::Phase(ExecutionPhase::Derivation));
-        let result = self.execute_admitted(table, secondary, functions, observations, observer);
-        result
+        self.execute_admitted(table, secondary, functions, observations, observer)
     }
     #[allow(clippy::too_many_arguments)]
     fn execute_admitted<T: TableAccess + ?Sized>(
@@ -1170,8 +1169,6 @@ impl DatasetPlan {
                     .try_reserve(groups.len())
                     .map_err(|_| Box::new(ExecutionError::Allocation))?;
                 for members in groups {
-                    // Discarding a row never refunds its token or evaluated work.
-                    if !self.intermediates().is_empty() {}
                     let selection_identity = SelectionIdentity::Candidate(next_selection_identity);
                     next_selection_identity = next_selection_identity
                         .checked_add(1)
@@ -1339,7 +1336,6 @@ impl DatasetPlan {
                         if truth == crate::predicate::Truth::True {
                             candidates.swap(retained, row);
                             retained += 1;
-                        } else {
                         }
                     }
                     candidates.truncate(retained);
@@ -1807,19 +1803,15 @@ impl DatasetPlan {
                                         None
                                     }
                                 });
-                                let codelist = if let Some(id) = identifier {
-                                    Some(CodelistObservation {
-                                        id: id.into(),
-                                        values: offending
-                                            .iter()
-                                            .map(|&position| {
-                                                candidates[position].values[group.column].clone()
-                                            })
-                                            .collect(),
-                                    })
-                                } else {
-                                    None
-                                };
+                                let codelist = identifier.map(|id| CodelistObservation {
+                                    id: id.into(),
+                                    values: offending
+                                        .iter()
+                                        .map(|&position| {
+                                            candidates[position].values[group.column].clone()
+                                        })
+                                        .collect(),
+                                });
                                 let inventory =
                                     if matches!(verification.check, Check::Inventory { .. }) {
                                         Some(
