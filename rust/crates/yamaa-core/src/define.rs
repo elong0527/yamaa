@@ -105,6 +105,66 @@ fn published_source_failure<E, PE>(
     };
     Failure::Diagnostic(vec![finding.diagnostic()])
 }
+fn published_limit_failure<E, PE>(
+    path: &str,
+    written: &str,
+    error: crate::limits::LimitExceeded,
+) -> Failure<E, PE> {
+    Failure::Diagnostic(vec![resource_diagnostic(
+        path,
+        written,
+        ResourceObservation::Limit(error),
+    )])
+}
+fn published_csv_failure<E, PE>(
+    error: &crate::csv_source::Error,
+    dataset: &str,
+    written: &str,
+    path: &str,
+) -> Failure<E, PE> {
+    if let crate::csv_source::Error::Limit {
+        resource,
+        limit,
+        actual,
+    } = error
+    {
+        return published_limit_failure(
+            path,
+            written,
+            crate::limits::LimitExceeded {
+                resource,
+                limit: *limit,
+                actual: *actual,
+            },
+        );
+    }
+    published_source_failure(
+        error.finding(dataset, written),
+        Finding::cause(
+            ConditionCode::ApplicationRejected,
+            written,
+            "published CSV admission",
+        ),
+    )
+}
+fn published_typed_csv_failure<E, PE>(
+    error: &crate::typed_csv::Error,
+    dataset: &str,
+    written: &str,
+    path: &str,
+) -> Failure<E, PE> {
+    if let crate::typed_csv::Error::Limit(error) = error {
+        return published_limit_failure(path, written, *error);
+    }
+    published_source_failure(
+        error.finding(dataset),
+        Finding::cause(
+            ConditionCode::ProducerContractMismatch,
+            written,
+            "published CSV contract",
+        ),
+    )
+}
 type PreflightResult<P> = Result<
     Vec<<P as Ports>::Publisher>,
     Failure<<P as Ports>::Error, <P as Ports>::PublicationError>,
@@ -353,19 +413,12 @@ impl<P: Ports> Application<P> {
             for ((dataset, (declaring, written, json)), location) in
                 composed.datasets().iter().zip(&outputs).zip(&locations)
             {
+                let artifact_path = format!("datasets.{}.artifact", dataset.id());
                 let bytes = ports
-                    .capture_published(
-                        &format!("datasets.{}.artifact", dataset.id()),
-                        declaring,
-                        written,
-                    )
+                    .capture_published(&artifact_path, declaring, written)
                     .map_err(Failure::Port)?;
                 if let Err(error) = Limits::source_bytes(bytes.as_ref().len()) {
-                    return Err(Failure::Metadata(vec![Finding::cause(
-                        ConditionCode::ApplicationRejected,
-                        written,
-                        &error.to_string(),
-                    )]));
+                    return Err(published_limit_failure(&artifact_path, written, error));
                 }
                 let kinds: Vec<_> = dataset
                     .columns()
@@ -379,14 +432,7 @@ impl<P: Ports> Application<P> {
                     .collect();
                 let rendered = if location.to_ascii_lowercase().ends_with(".csv") {
                     let source = crate::csv_source::parse(bytes.as_ref()).map_err(|error| {
-                        published_source_failure(
-                            error.finding(dataset.id(), written),
-                            Finding::cause(
-                                ConditionCode::ApplicationRejected,
-                                written,
-                                "published CSV admission",
-                            ),
-                        )
+                        published_csv_failure(&error, dataset.id(), written, &artifact_path)
                     })?;
                     crate::submission_json::admit_fields(
                         dataset,
@@ -396,13 +442,11 @@ impl<P: Ports> Application<P> {
                     let table = crate::typed_csv::PreparedTypes::new(&kinds)
                         .and_then(|types| types.convert(source))
                         .map_err(|error| {
-                            published_source_failure(
-                                error.finding(dataset.id()),
-                                Finding::cause(
-                                    ConditionCode::ProducerContractMismatch,
-                                    written,
-                                    "published CSV contract",
-                                ),
+                            published_typed_csv_failure(
+                                &error,
+                                dataset.id(),
+                                written,
+                                &artifact_path,
                             )
                         })?;
                     crate::submission_json::render(
@@ -699,6 +743,49 @@ impl<E: std::fmt::Debug, PE: std::fmt::Debug> std::error::Error for SaveFailure<
 #[cfg(test)]
 mod projection_tests {
     use super::*;
+
+    #[test]
+    fn published_resource_and_csv_limits_retain_artifact_owner_and_size_facts() {
+        let error = crate::limits::LimitExceeded {
+            resource: "columns",
+            limit: Limits::COLUMNS,
+            actual: Some(Limits::COLUMNS + 1),
+        };
+        let failures: [Failure<(), ()>; 3] = [
+            published_limit_failure("datasets.DM.artifact", "dm.csv", error),
+            published_csv_failure(
+                &crate::csv_source::Error::Limit {
+                    resource: error.resource,
+                    limit: error.limit,
+                    actual: error.actual,
+                },
+                "DM",
+                "dm.csv",
+                "datasets.DM.artifact",
+            ),
+            published_typed_csv_failure(
+                &crate::typed_csv::Error::Limit(error),
+                "DM",
+                "dm.csv",
+                "datasets.DM.artifact",
+            ),
+        ];
+        for failure in failures {
+            let Failure::Diagnostic(findings) = failure else {
+                panic!("resource boundary must retain structured facts");
+            };
+            assert_eq!(findings.len(), 1);
+            let finding = &findings[0];
+            assert_eq!(finding.code, ConditionCode::ApplicationRejected);
+            assert_eq!(finding.spec_paths, ["datasets.DM.artifact"]);
+            assert_eq!(finding.context["path"], "dm.csv");
+            assert_eq!(finding.context["stage"], "define");
+            assert_eq!(finding.context["code"], "resource_limit");
+            assert_eq!(finding.context["resource"], "columns");
+            assert_eq!(finding.context["limit"], Limits::COLUMNS);
+            assert_eq!(finding.context["actual"], Limits::COLUMNS + 1);
+        }
+    }
 
     #[test]
     fn published_csv_failure_preserves_the_complete_value_and_its_language_owner() {

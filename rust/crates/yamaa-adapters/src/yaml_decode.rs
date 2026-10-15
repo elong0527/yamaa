@@ -269,9 +269,15 @@ fn check_unicode(nodes: &[Node], root: usize) -> Result<(), DecodeFailure> {
     {
         return Ok(());
     }
-    let mut pending = vec![(root, "$".into())];
-    let mut issues = Vec::new();
-    while let Some((id, path)) = pending.pop() {
+    // One mutable ancestry path is shared by the depth-first walk. Retaining a
+    // full path for every pending sibling multiplies long keys by the width of
+    // an otherwise valid subtree, even when the only invalid scalar is outside it.
+    fn visit(
+        nodes: &[Node],
+        id: usize,
+        path: &mut String,
+        issues: &mut Vec<UnicodeIssue>,
+    ) -> Result<(), DecodeFailure> {
         match &nodes[id].value {
             Value::InvalidText(points) => {
                 let (offset, &code_point) = points
@@ -280,26 +286,38 @@ fn check_unicode(nodes: &[Node], root: usize) -> Result<(), DecodeFailure> {
                     .find(|(_, point)| (0xd800..=0xdfff).contains(*point))
                     .ok_or(DecodeFailure::Internal)?;
                 issues.push(UnicodeIssue {
-                    path,
+                    path: path.clone(),
                     code_point,
                     offset,
                 });
             }
             Value::Sequence(items) => {
-                for (index, &item) in items.iter().enumerate().rev() {
-                    pending.push((item, format!("{path}[{index}]")));
+                use std::fmt::Write;
+                for (index, &item) in items.iter().enumerate() {
+                    let prefix = path.len();
+                    write!(path, "[{index}]").map_err(|_| DecodeFailure::Internal)?;
+                    visit(nodes, item, path, issues)?;
+                    path.truncate(prefix);
                 }
             }
             Value::Mapping(entries) => {
-                for &(key, value) in entries.iter().rev() {
-                    let label = key_label(&nodes[key])?;
-                    pending.push((value, format!("{path}.{label}")));
-                    pending.push((key, format!("{path}.<key>")));
+                for &(key, value) in entries {
+                    let prefix = path.len();
+                    path.push_str(".<key>");
+                    visit(nodes, key, path, issues)?;
+                    path.truncate(prefix);
+                    path.push('.');
+                    path.push_str(&key_label(&nodes[key])?);
+                    visit(nodes, value, path, issues)?;
+                    path.truncate(prefix);
                 }
             }
             _ => {}
         }
+        Ok(())
     }
+    let mut issues = Vec::new();
+    visit(nodes, root, &mut "$".into(), &mut issues)?;
     Err(DecodeFailure::InvalidText(issues))
 }
 

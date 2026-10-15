@@ -22,6 +22,7 @@ impl Limits {
     pub const FINDINGS: usize = 10_000;
 
     pub const COLUMNS: usize = 1024;
+    pub const SCHEMA_FIELDS: usize = 65_536;
     pub const KEYS: usize = 64;
     pub const INPUTS: usize = 16;
     pub const SOURCE_OPERANDS: usize = 64;
