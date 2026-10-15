@@ -558,23 +558,19 @@ mod preparation {
                 panic!()
             };
             assert_eq!(effects(&log), full_effects());
-            let Some(findings) = rejected.admission else {
-                panic!()
-            };
-            assert!(matches!(
-                findings[0],
-                Finding::LanguageMismatch {
-                    declared: Language::R,
-                    host: Language::Python
-                }
-            ));
-            assert!(matches!(
-                findings[1],
-                Finding::LockKindMismatch {
-                    language: Language::R,
-                    actual: LockKind::Uv
-                }
-            ));
+            assert_eq!(
+                rejected.admission,
+                Some(vec![
+                    Finding::LanguageMismatch {
+                        declared: Language::R,
+                        host: Language::Python,
+                    },
+                    Finding::LockKindMismatch {
+                        language: Language::R,
+                        actual: LockKind::Uv,
+                    },
+                ])
+            );
         }
 
         #[test]
