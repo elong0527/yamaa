@@ -13,10 +13,10 @@ use yamaa_core::{
 };
 pub fn table_snapshot(input: &[u8]) -> Result<String, TableError> {
     let table = ipc_table::decode_snapshot(input)?;
-    ipc_table::serialize_json(&Snapshot(&table))
+    ipc_table::bounded_json(&Snapshot(&table), ipc_table::MAX_OUTPUT_BYTES)
 }
-fn scalar(value: yamaa_core::value::Value) -> yamaa_core::json::Value {
-    use yamaa_core::json::json;
+fn scalar(value: yamaa_core::value::Value) -> serde_json::Value {
+    use serde_json::json;
     use yamaa_core::{
         temporal::{DatePrecision, DateTimePrecision},
         value::Value,
@@ -37,7 +37,7 @@ fn scalar(value: yamaa_core::value::Value) -> yamaa_core::json::Value {
 }
 struct Snapshot<'a>(&'a ArrowTable);
 impl Serialize for Snapshot<'_> {
-    /// Stream rows without building an expanded JSON value tree.
+    /// Stream rows through the cap instead of building an expanded JSON value tree.
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let table = self.0;
         let mut output = serializer.serialize_struct("Snapshot", 5)?;
@@ -86,7 +86,7 @@ impl Serialize for Rows<'_> {
 }
 struct Row<'a>(&'a ArrowTable, usize);
 impl Serialize for Row<'_> {
-    /// Reuse the established scalar codec one typed cell at a time.
+    /// Reuse the established scalar codec one bounded cell at a time.
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use yamaa_core::value::Value;
         let mut row = serializer.serialize_seq(Some(self.0.schema().columns().len()))?;

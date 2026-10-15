@@ -1,16 +1,21 @@
 //! Typed fixture projections reuse production preparation and diagnostic representation.
+use serde_json::{json, Value};
 use yamaa_adapters::{
     shipped_schema, specification_diagnostics,
     specification_run::{Error, PreparedRun},
     specification_source::Source,
 };
-use yamaa_core::json::{json, Value};
 fn projected_findings(
     error: &Error,
     source: Option<&yamaa_core::specification::SourceDeclaration>,
 ) -> Option<Vec<Value>> {
-    specification_diagnostics::findings(error, source)
-        .expect("valid authored source finding context")
+    specification_diagnostics::findings_with_limit(
+        error,
+        source,
+        yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
+    )
+    .ok()
+    .flatten()
 }
 
 use yamaa_core::{
@@ -55,7 +60,7 @@ pub fn observe(source: &str, headers: &[Vec<String>]) -> Value {
         .collect::<Vec<_>>();
     let mut issues = Vec::new();
     let mut schemas = Vec::new();
-    let mut catalog = yamaa_core::json::Map::new();
+    let mut catalog = serde_json::Map::new();
     for (index, (source, names)) in run.compiled().sources().iter().zip(headers).enumerate() {
         let odm = run.compiled().source_interpretation(index) == Some(SourceInterpretation::Odm);
         let exposed = if odm {
@@ -66,7 +71,9 @@ pub fn observe(source: &str, headers: &[Vec<String>]) -> Value {
                     kind: Some(ColumnType::Str),
                 })
                 .collect::<Vec<_>>();
-            if let Err(findings) = odm_source::bind_fields(&stored) {
+            if let Err(findings) =
+                odm_source::bind_fields(&stored).expect("bounded authored metadata")
+            {
                 issues.extend(
                     projected_findings(&Error::OdmFields(findings), Some(source))
                         .expect("registered ODM metadata findings"),
