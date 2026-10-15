@@ -10,7 +10,7 @@ use std::{
     path::PathBuf,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use yamaa_adapters::parquet_artifact::{render, Error, Limits};
+use yamaa_adapters::parquet_artifact::{render, Error};
 use yamaa_core::{
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
@@ -36,14 +36,7 @@ impl TableAccess for Table {
             .ok_or(CellError::OutOfBounds { row, column })
     }
 }
-fn limits() -> Limits {
-    Limits {
-        output_bytes: 1_048_576,
-        staged_bytes: 131_072,
-        cells: 1_048_576,
-        columns: 64,
-    }
-}
+
 fn table(columns: &[(&str, ColumnType)], rows: Vec<Vec<Value>>) -> Table {
     Table {
         schema: TableSchema::new(
@@ -122,7 +115,7 @@ fn closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero
             ],
         ],
     );
-    let bytes = render(&table, &[0, 1, 2, 3, 4], limits()).unwrap();
+    let bytes = render(&table, &[0, 1, 2, 3, 4]).unwrap();
     let source = Source::new(&bytes);
     let reader = source.reader();
     let meta = reader.metadata().file_metadata();
@@ -185,17 +178,6 @@ fn closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero
         253_402_300_799_000_000
     );
     assert!(rows[2].is_null(3).unwrap() && rows[2].is_null(4).unwrap());
-    let mut budget = limits();
-    budget.output_bytes = bytes.len();
-    assert_eq!(
-        render(&table, &[0, 1, 2, 3, 4], budget).unwrap().len(),
-        bytes.len()
-    );
-    budget.output_bytes = bytes.len() - 1;
-    assert!(matches!(
-        render(&table, &[0, 1, 2, 3, 4], budget),
-        Err(Error::Limit { .. })
-    ));
 }
 
 #[test]
@@ -220,7 +202,7 @@ fn opaque_cell_failures_retain_the_original_payload() {
         schema: table(&[("S", ColumnType::Str)], vec![]).schema,
         token: std::sync::Arc::new(()),
     };
-    let Err(Error::Cell(CellError::Access(original))) = render(&failed, &[0], limits()) else {
+    let Err(Error::Cell(CellError::Access(original))) = render(&failed, &[0]) else {
         panic!("opaque cell error must survive encoding");
     };
     assert!(std::sync::Arc::ptr_eq(&original, &failed.token));
@@ -247,7 +229,7 @@ fn logical_records_preserve_json_spelling_without_rounding_or_partial_dates() {
             ],
         ],
     );
-    let rows = yamaa_adapters::parquet_artifact::records(&table, &[0, 1, 2], 1000).unwrap();
+    let rows = yamaa_adapters::parquet_artifact::records(&table, &[0, 1, 2]).unwrap();
     assert_eq!(
         rows,
         [
@@ -256,12 +238,6 @@ fn logical_records_preserve_json_spelling_without_rounding_or_partial_dates() {
             r#"[null, 1e-07, 9007199254740993]"#,
         ]
     );
-    let size = rows.iter().map(String::len).sum();
-    assert!(yamaa_adapters::parquet_artifact::records(&table, &[0, 1, 2], size).is_ok());
-    assert!(matches!(
-        yamaa_adapters::parquet_artifact::records(&table, &[0, 1, 2], size - 1),
-        Err(Error::Limit { .. })
-    ));
 }
 
 #[test]
@@ -272,7 +248,7 @@ fn ordered_row_groups_and_projection_survive_an_empty_source() {
             .map(|i| vec![Value::Int(i), Value::Int(-i)])
             .collect(),
     );
-    let source = Source::new(&render(&table, &[1, 0], limits()).unwrap());
+    let source = Source::new(&render(&table, &[1, 0]).unwrap());
     let reader = source.reader();
     assert_eq!(
         reader
@@ -301,7 +277,7 @@ fn ordered_row_groups_and_projection_survive_an_empty_source() {
         schema: table.schema,
         rows: vec![],
     };
-    let source = Source::new(&render(&empty, &[1], limits()).unwrap());
+    let source = Source::new(&render(&empty, &[1]).unwrap());
     let reader = source.reader();
     assert_eq!(reader.metadata().file_metadata().num_rows(), 0);
     assert_eq!(
@@ -316,48 +292,19 @@ fn ordered_row_groups_and_projection_survive_an_empty_source() {
 }
 
 #[test]
-fn invalid_projection_shape_staging_and_cell_types_produce_no_artifact() {
+fn invalid_projection_and_cell_types_produce_no_artifact() {
     let table = table(
         &[("S", ColumnType::Str)],
         vec![vec![Value::Str("x".repeat(4096))]],
     );
     for projection in [&[][..], &[0, 0], &[1]] {
-        assert!(matches!(
-            render(&table, projection, limits()),
-            Err(Error::Projection)
-        ));
-    }
-    for budget in [
-        Limits {
-            columns: 0,
-            ..limits()
-        },
-        Limits {
-            cells: 0,
-            ..limits()
-        },
-        Limits {
-            staged_bytes: 1024,
-            ..limits()
-        },
-        Limits {
-            output_bytes: 0,
-            ..limits()
-        },
-    ] {
-        assert!(matches!(
-            render(&table, &[0], budget),
-            Err(Error::Limit { .. })
-        ));
+        assert!(matches!(render(&table, projection), Err(Error::Projection)));
     }
     let wrong = Table {
         schema: table.schema,
         rows: vec![vec![Value::Int(1)]],
     };
-    assert!(matches!(
-        render(&wrong, &[0], limits()),
-        Err(Error::ValueType)
-    ));
+    assert!(matches!(render(&wrong, &[0]), Err(Error::ValueType)));
 }
 
 #[test]
@@ -390,7 +337,7 @@ fn artifacts_keep_complete_temporal_fields_and_drop_collected_precision() {
         })
         .collect(),
     );
-    let bytes = render(&table, &[0, 1], limits()).unwrap();
+    let bytes = render(&table, &[0, 1]).unwrap();
     let source = Source::new(&bytes);
     let reader = source.reader();
     assert!(reader
@@ -409,7 +356,7 @@ fn artifacts_keep_complete_temporal_fields_and_drop_collected_precision() {
         assert_eq!(row.get_timestamp_micros(1).unwrap(), 86_399_000_000);
     }
     assert_eq!(
-        yamaa_adapters::parquet_artifact::records(&table, &[0, 1], 1024).unwrap(),
+        yamaa_adapters::parquet_artifact::records(&table, &[0, 1]).unwrap(),
         [
             r#"["D", "T"]"#,
             r#"["1970-02-28", "1970-01-01T23:59:59"]"#,
@@ -430,7 +377,7 @@ fn retired_python_double_operands_round_trip_without_display_rounding() {
             .map(|(index, value)| vec![Value::Str(format!("S-{index}")), Value::float(value)])
             .collect(),
     );
-    let source = Source::new(&render(&table, &[0, 1], limits()).unwrap());
+    let source = Source::new(&render(&table, &[0, 1]).unwrap());
     let reader = source.reader();
     let rows = reader
         .get_row_iter(None)

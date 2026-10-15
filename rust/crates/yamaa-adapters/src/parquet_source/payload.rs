@@ -1,4 +1,4 @@
-//! Payload admission after bounded footer parsing and actual decompression.
+//! Physical payload validation after footer framing and actual decompression.
 //! These checks do not replace the general reader's full format validation.
 use super::{
     compact::Error,
@@ -80,7 +80,7 @@ pub(super) struct Values<'a> {
 }
 
 /// Return encoding, actual non-null count and checked value bytes. Level
-/// validation precedes string-length/dictionary allocation admission.
+/// validation precedes string and dictionary decoding.
 pub(super) fn values<'a>(
     page: &Page<'_>,
     decoded: &'a [u8],
@@ -151,8 +151,7 @@ fn delta_values(page: &Page<'_>, decoded: &[u8], column: &ColumnDescriptor) -> R
         7 if matches!(physical, Type::BYTE_ARRAY | Type::FIXED_LEN_BYTE_ARRAY) => {
             delta::admit(body, encoding, 32, values)
         }
-        // The remaining encodings use bounded caller buffers or borrowed byte
-        // slices in the pinned library. It still validates their data/types.
+        // The physical reader validates the remaining encodings and types.
         _ => Ok(()),
     }
 }

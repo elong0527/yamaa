@@ -74,10 +74,10 @@ fn fixed_codec(codec: i64, mut input: &[u8], expected: usize) -> Result<Vec<u8>,
 }
 
 fn brotli_window(input: &[u8]) -> Result<(), Error> {
-    // The pinned decoder enables the large-window extension. Read WBITS before
-    // constructing it; a capped output reader alone does not bound its history.
+    // Validate the Brotli WBITS field, including the large-window extension,
+    // before constructing the decoder.
     let first = *input.first().ok_or(Error::Malformed)?;
-    let log = if first & 1 == 0 {
+    let _log = if first & 1 == 0 {
         16
     } else {
         let high = (first >> 1) & 7;
@@ -100,7 +100,6 @@ fn brotli_window(input: &[u8]) -> Result<(), Error> {
             }
         }
     };
-    let _ = log;
     Ok(())
 }
 
@@ -122,7 +121,7 @@ fn verify(page: &Page<'_>) -> Result<(), Error> {
     decode(page).map(|_| ())
 }
 
-/// Retain the bounded expansion for subsequent encoded-value admission.
+/// Decode the exact page size before validating its encoded values.
 pub(super) fn decode(page: &Page<'_>) -> Result<Vec<u8>, Error> {
     let prefix = page.uncompressed_prefix;
     if prefix > page.decoded_bytes || prefix > page.body.len() {

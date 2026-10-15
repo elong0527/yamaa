@@ -60,24 +60,20 @@ fn exact_quoting_preserves_empty_missing_whitespace_unicode_and_line_characters(
     );
     let expected = "A,B,C,D\n,\"\",  text\t,é漢\n\"a,b\",\"a\"\"b\",\"a\nb\",\"a\rb\"\n";
     assert_eq!(
-        csv_artifact::render(&table, &[0, 1, 2, 3], expected.len()).unwrap(),
+        csv_artifact::render(&table, &[0, 1, 2, 3], None).unwrap(),
         expected.as_bytes()
     );
-    assert!(matches!(
-        csv_artifact::render(&table, &[0, 1, 2, 3], expected.len() - 1),
-        Err(Error::Limit { .. })
-    ));
 }
 #[test]
 fn header_only_and_projection_order_are_exact() {
     let table = text_table(&["FIRST", "LAST"], vec![]);
     assert_eq!(
-        csv_artifact::render(&table, &[1, 0], 20).unwrap(),
+        csv_artifact::render(&table, &[1, 0], None).unwrap(),
         b"LAST,FIRST\n"
     );
     for columns in [vec![], vec![0, 0], vec![2]] {
         assert!(matches!(
-            csv_artifact::render(&table, &columns, 100),
+            csv_artifact::render(&table, &columns, None),
             Err(Error::Projection)
         ));
     }
@@ -102,7 +98,7 @@ fn scalar_output_uses_exact_integer_and_shortest_positional_float_text() {
         ],
     };
     assert_eq!(
-        csv_artifact::render(&table, &[0, 1], 100).unwrap(),
+        csv_artifact::render(&table, &[0, 1], None).unwrap(),
         b"I,F\n9223372036854775807,-0\n9007199254740993,0.0000001\n"
     );
 }
@@ -134,22 +130,12 @@ fn precision_serializes_float_projection_only_and_preserves_missing_and_empty_te
     };
     let expected = b"S,F,I\n\"\",0.13,1\n\"a,b\",2.67,2\n,,3\nz,0.00,4\n";
     assert_eq!(
-        csv_artifact::render_with_decimals(&table, &[2, 1, 0], Some("2"), expected.len()).unwrap(),
+        csv_artifact::render(&table, &[2, 1, 0], Some("2")).unwrap(),
         expected
     );
-    assert!(matches!(
-        csv_artifact::render_with_decimals(&table, &[2, 1, 0], Some("2"), expected.len() - 1),
-        Err(Error::Limit { .. })
-    ));
     assert_eq!(table.rows[0][1], Value::float(0.125));
     assert_eq!(
-        csv_artifact::render_with_decimals(
-            &table,
-            &[0],
-            Some("999999999999999999999999999999"),
-            10
-        )
-        .unwrap(),
+        csv_artifact::render(&table, &[0], Some("999999999999999999999999999999")).unwrap(),
         b"I\n1\n2\n3\n4\n"
     );
 }
@@ -166,7 +152,7 @@ fn excessive_precision_refuses_before_the_first_projected_cell_read() {
             1
         }
         fn cell(&self, _: usize, _: usize) -> Result<ValueRef<'_>, CellError<Infallible>> {
-            panic!("precision quota must precede cell authority")
+            panic!("impossible output width must precede cell authority")
         }
     }
     let table = NoCells(
@@ -182,64 +168,12 @@ fn excessive_precision_refuses_before_the_first_projected_cell_read() {
         ])
         .unwrap(),
     );
-    for (precision, maximum) in [
-        ("18", 10),
-        ("10000", 100),
-        ("999999999999999999999999999999", 100),
-    ] {
-        assert!(matches!(
-            csv_artifact::render_with_decimals(&table, &[0, 1], Some(precision), maximum),
-            Err(Error::Limit { limit, actual: None, decimal_formatting: true }) if limit == maximum
-        ));
+    for precision in ["10737418241", "999999999999999999999999999999"] {
+        assert!(
+            matches!(csv_artifact::render(&table, &[0, 1], Some(precision)),
+            Err(Error::Limit { resource: "output_bytes", limit, actual: None, decimal_formatting: true }) if limit == yamaa_core::limits::Limits::OUTPUT_BYTES)
+        );
     }
-    struct FirstCellOnly(TableSchema);
-    impl TableAccess for FirstCellOnly {
-        type Error = Infallible;
-        fn schema(&self) -> &TableSchema {
-            &self.0
-        }
-        fn row_count(&self) -> usize {
-            2
-        }
-        fn cell(&self, row: usize, _: usize) -> Result<ValueRef<'_>, CellError<Infallible>> {
-            assert_eq!(row, 0, "remaining width quota precedes every later cell");
-            Ok(ValueRef::Float(
-                yamaa_core::value::FiniteFloat::new(1.0).unwrap(),
-            ))
-        }
-    }
-    let table = FirstCellOnly(
-        TableSchema::new(vec![Column {
-            name: "F".into(),
-            kind: ColumnType::Float,
-        }])
-        .unwrap(),
-    );
-    // F\n1.00\n exhausts seven bytes; the second record's cell is never read.
-    assert!(matches!(
-        csv_artifact::render_with_decimals(&table, &[0], Some("2"), 7),
-        Err(Error::Limit { .. })
-    ));
-}
-
-#[test]
-fn unused_decimal_option_cannot_own_an_integer_output_byte_refusal() {
-    let table = Table {
-        schema: TableSchema::new(vec![Column {
-            name: "I".into(),
-            kind: ColumnType::Int,
-        }])
-        .unwrap(),
-        rows: vec![vec![Value::Int(12345)]],
-    };
-    assert!(matches!(
-        csv_artifact::render_with_decimals(&table, &[0], Some("1"), 3),
-        Err(Error::Limit {
-            limit: 3,
-            actual: Some(7),
-            decimal_formatting: false
-        })
-    ));
 }
 
 #[test]
@@ -279,7 +213,7 @@ fn retired_python_scalar_text_and_calendar_edges_keep_exact_csv_bytes() {
         ],
     };
     assert_eq!(
-        csv_artifact::render(&table, &[0, 1, 2, 3, 4], 1024).unwrap(),
+        csv_artifact::render(&table, &[0, 1, 2, 3, 4], None).unwrap(),
         "ID,COUNT,WHEN,AT,TEXT\n1,-42,2020-01-02,2020-01-02T03:04:05,\u{e9}\u{1d400}\n2,0,,,\n"
             .as_bytes()
     );
@@ -307,7 +241,7 @@ fn retired_python_scalar_text_and_calendar_edges_keep_exact_csv_bytes() {
         ],
     };
     assert_eq!(
-        csv_artifact::render(&edges, &[0, 1, 2], 1024).unwrap(),
+        csv_artifact::render(&edges, &[0, 1, 2], None).unwrap(),
         b"ID,WHEN,AT\n1,0001-01-01,0001-01-01T00:00:00\n2,9999-12-31,9999-12-31T23:59:59\n"
     );
 }

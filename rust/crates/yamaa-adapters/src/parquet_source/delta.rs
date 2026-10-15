@@ -156,7 +156,7 @@ pub(super) fn admit(
             })?;
             let mut index = 0;
             let mut previous = 0;
-            let mut stored = 0;
+            let mut stored = 0usize;
             let (suffix_offset, suffix_count) =
                 scan(&bytes[offset..], 32, expected_values, |value| {
                     let suffix = length(value)?;

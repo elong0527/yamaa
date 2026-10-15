@@ -25,6 +25,9 @@ use crate::arrow_table::{ArrowTable, TableError};
 pub enum Error {
     OdmFields(Vec<yamaa_core::odm_source::SchemaError>),
     Malformed,
+    Representation {
+        representation: &'static str,
+    },
     ResourceLimit {
         resource: &'static str,
         limit: usize,
@@ -70,6 +73,7 @@ impl Error {
                 value: *value,
             },
             Self::OdmFields(_)
+            | Self::Representation { .. }
             | Self::ResourceLimit { .. }
             | Self::Unavailable { .. }
             | Self::Table(_) => return None,
@@ -131,6 +135,9 @@ pub fn parse_odm(content: &[u8]) -> Result<ArrowTable, Error> {
 fn convert(decoded: reader::Decoded) -> Result<ArrowTable, Error> {
     table::convert(decoded).map_err(|error| match error {
         table::Error::Invalid => Error::Malformed,
+        table::Error::Representation => Error::Representation {
+            representation: "Arrow Utf8 signed 32-bit offsets",
+        },
         table::Error::Table(error) => Error::Table(error),
     })
 }

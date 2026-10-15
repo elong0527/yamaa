@@ -103,20 +103,7 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
                     .and_then(|column| profile::column_type(column, field.data_type())),
             })
             .collect::<Vec<_>>();
-        let binding = yamaa_core::odm_source::bind_fields(&fields)
-            .map_err(|error| {
-                let yamaa_core::odm_source::AdmissionError::MetadataLimit {
-                    resource,
-                    limit,
-                    actual,
-                } = error;
-                Error::ResourceLimit {
-                    resource,
-                    limit,
-                    actual,
-                }
-            })?
-            .map_err(Error::OdmFields)?;
+        let binding = yamaa_core::odm_source::bind_fields(&fields).map_err(Error::OdmFields)?;
         let stored = binding.stored().map(|root| {
             columns
                 .iter()

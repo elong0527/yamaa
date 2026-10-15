@@ -17,6 +17,7 @@ use yamaa_core::{
 #[derive(Debug)]
 pub(super) enum Error {
     Invalid,
+    Representation,
     Table(TableError),
 }
 
@@ -39,10 +40,10 @@ pub(super) fn convert(decoded: Decoded) -> Result<ArrowTable, Error> {
                     .iter()
                     .flatten()
                     .try_fold(0usize, |sum, value| sum.checked_add(value.len()))
-                    .ok_or(Error::Invalid)?;
+                    .ok_or(Error::Representation)?;
                 // The canonical representation uses signed 32-bit offsets.
                 if bytes > i32::MAX as usize {
-                    return Err(Error::Invalid);
+                    return Err(Error::Representation);
                 }
             }
         }
