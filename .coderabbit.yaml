@@ -17,6 +17,7 @@ reviews:
     drafts: true                 # review draft PRs too, for early feedback while a PR is still in draft (#2329)
     base_branches:
       - "main"
+      - "^review/.*-base$"        # synthetic bases for bounded review-only PRs
   path_filters:
     - "!**/uv.lock"              # generated lock diffs are noise
     - "!**/Cargo.lock"           # same: canonical lockfile, packaging-tool checksums only
