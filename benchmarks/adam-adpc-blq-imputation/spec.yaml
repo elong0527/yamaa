@@ -1,0 +1,107 @@
+schema_version: "1.0"
+domain: ADPC
+keys: [STUDYID, USUBJID, PCSEQ]
+input:
+  PC:
+    path: input/pc.csv
+    types: {PCSEQ: int, PCSTRESN: float, PCTPTNUM: float}
+base: PC
+
+output:
+  path: adpc.csv
+  columns: [STUDYID, USUBJID, PCSEQ, PARAMCD, ATPTREF, ATPT, ATPTN, AVAL,
+            AVALU]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: PC.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: PC.USUBJID
+
+  - name: PCSEQ
+    type: int
+    label: Sequence Number
+    derivation: PC.PCSEQ
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: PC.PCTESTCD
+
+  - name: ATPTREF
+    type: str
+    label: Analysis Timepoint Reference
+    derivation: PC.PCTPTREF
+
+  - name: ATPT
+    type: str
+    label: Analysis Timepoint
+    derivation: PC.PCTPT
+
+  - name: ATPTN
+    type: float
+    label: Analysis Timepoint (N)
+    derivation: PC.PCTPTNUM
+
+  # A profile is one subject, analyte and dose (the time point reference),
+  # ordered by planned time point. A result is quantified when it has a
+  # number; a below-limit result and a sample not done have none, so
+  # neither moves the first or last quantified time point.
+  - name: FIRSTQ
+    type: float
+    label: First Quantified Timepoint of the Profile
+    derivation:
+      aggregate:
+        key: {STUDYID: STUDYID, USUBJID: USUBJID, PCTESTCD: PARAMCD,
+              PCTPTREF: ATPTREF}
+        filter: "PC.PCSTRESN IS NOT NULL"
+        expr: "MIN(PC.PCTPTNUM)"
+
+  - name: LASTQ
+    type: float
+    label: Last Quantified Timepoint of the Profile
+    derivation:
+      aggregate:
+        key: {STUDYID: STUDYID, USUBJID: USUBJID, PCTESTCD: PARAMCD,
+              PCTPTREF: ATPTREF}
+        filter: "PC.PCSTRESN IS NOT NULL"
+        expr: "MAX(PC.PCTPTNUM)"
+
+  # PKNCA v0.12.1 clean.conc.blq() with its default
+  # conc.blq = list(first = "keep", middle = "drop", last = "keep"), where a
+  # kept below-limit value is 0: 0 before the first and after the last
+  # quantified result, no value between them. A profile without a quantified
+  # result is 0 throughout. A sample not done stays without a value.
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation:
+      case:
+        - when: "PC.PCSTRESN IS NOT NULL"
+          then: PC.PCSTRESN
+        - when: "PC.PCSTRESC LIKE '<%' AND (FIRSTQ IS NULL OR ATPTN < FIRSTQ
+            OR ATPTN > LASTQ)"
+          then: {literal: 0.0}
+
+  - name: AVALU
+    type: str
+    label: Analysis Value Unit
+    derivation: PC.PCSTRESU
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PCSEQ]
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD, ATPTREF, ATPTN]
+  - row_count:
+      min: 20
+      max: 20
+  - assert:
+      id: zero-lies-outside-the-quantified-span
+      when: "AVAL = 0"
+      require: "FIRSTQ IS NULL OR ATPTN < FIRSTQ OR ATPTN > LASTQ"
