@@ -582,6 +582,30 @@ mod schema {
         }
 
         #[test]
+        fn duplicate_reuse_does_not_hide_later_structural_reference_failures() {
+            let root = module(
+                "schema.yaml",
+                vec![
+                    (
+                        "root_class",
+                        V::List(vec![reuse("common"), reuse("common"), reuse("loop")]),
+                    ),
+                    ("common", V::List(vec![field("id", "str")])),
+                    ("loop", V::List(vec![reuse("loop")])),
+                ],
+                &[],
+            );
+            assert_eq!(
+                kinds(SchemaStructure::admit(vec![root], 0, "root_class").unwrap_err()),
+                [I::FieldsFromCycle(vec![
+                    "root_class".into(),
+                    "loop".into(),
+                    "loop".into(),
+                ])]
+            );
+        }
+
+        #[test]
         fn duplicate_registry_entries_and_closed_include_names_are_rejected() {
             let root = module(
                 "schema.yaml",

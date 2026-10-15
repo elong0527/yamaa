@@ -148,6 +148,7 @@ struct Named {
     name: String,
     raw: Raw,
 }
+#[derive(Clone)]
 struct ExpandedFields {
     entries: Vec<Raw>,
     repeated: bool,
@@ -303,7 +304,7 @@ impl Builder {
         index: usize,
         classes: &[Named],
         names: &BTreeMap<String, usize>,
-        expanded: &mut [Option<Vec<Raw>>],
+        expanded: &mut [Option<ExpandedFields>],
         active: &mut Vec<usize>,
     ) -> Result<ExpandedFields, BundleError> {
         if active.contains(&index) {
@@ -316,10 +317,7 @@ impl Builder {
             ));
         }
         if let Some(fields) = &expanded[index] {
-            return Ok(ExpandedFields {
-                entries: fields.clone(),
-                repeated: false,
-            });
+            return Ok(fields.clone());
         }
         if active.len() >= crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(BundleError::Limit {
@@ -336,7 +334,7 @@ impl Builder {
         let mut result = Vec::new();
         let mut occurrences = BTreeSet::new();
         let mut repeated = false;
-        'entries: for node in entries {
+        for node in entries {
             let item = Raw {
                 module: raw.module,
                 node,
@@ -360,32 +358,34 @@ impl Builder {
                     ));
                 };
                 let copied = self.expand(target, classes, names, expanded, active)?;
-                for field in copied.entries {
-                    result.push(field);
-                    if !occurrences.insert((field.module, field.node)) {
-                        repeated = true;
-                        break 'entries;
+                if !repeated {
+                    for field in copied.entries {
+                        result.push(field);
+                        if !occurrences.insert((field.module, field.node)) {
+                            repeated = true;
+                            break;
+                        }
                     }
                 }
-            } else {
+            } else if !repeated {
                 result.push(item);
                 if !occurrences.insert((item.module, item.node)) {
                     repeated = true;
-                    break;
                 }
             }
         }
         active.pop();
         // A repeated leaf necessarily repeats a field name or shape defect.
         // Keep the prefix through that occurrence so the normal descriptor pass
-        // reports any earlier defect first, at the selected class's paths.
-        if !repeated {
-            expanded[index] = Some(result.clone());
-        }
-        Ok(ExpandedFields {
+        // reports any earlier defect first, at the selected class's paths. Later
+        // reuse edges still receive complete structural validation. Cache the
+        // bounded prefix too, so invalid reuse DAGs cannot multiply traversals.
+        let result = ExpandedFields {
             entries: result,
             repeated,
-        })
+        };
+        expanded[index] = Some(result.clone());
+        Ok(result)
     }
 }
 
