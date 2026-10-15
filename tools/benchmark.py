@@ -1,7 +1,8 @@
 """Authored benchmark metadata shared by planning, validation and dashboards."""
 
+import argparse
 import re
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 import yaml
 
@@ -198,3 +199,26 @@ def entries(case, metadata=None):
             require(value not in result[host], f"{case}: duplicate {host} entry")
             result[host].append(value)
     return result
+
+
+def main():
+    """Run a case's declared Python entries without publishing output files."""
+    parser = argparse.ArgumentParser(description=main.__doc__)
+    parser.add_argument("case", type=Path, help="benchmark directory")
+    case = parser.parse_args().case.resolve()
+    from yamaa import domain
+
+    for call in entries(case)["python"]:
+        environment = call["environment"]
+        result = domain(
+            case / call["specification"],
+            environment=None if environment is None else case / environment,
+        )
+        output = result.output
+        if output is None:
+            parser.exit(1, f"{call['specification']}: {result.issues}\n")
+        print(output)
+
+
+if __name__ == "__main__":
+    main()

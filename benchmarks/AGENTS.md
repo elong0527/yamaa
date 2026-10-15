@@ -373,51 +373,22 @@ check merely to make the sample pass.
 
 ## Checks to run before finishing
 
-    # every declared benchmark column has a non-empty, human-readable label
-    # (validate_column_labels in validate_repository.py; the full prose gate
-    # is check_documentation.py)
-    uv run --project ../python --no-sync \
-        python ../tools/validation/validate_repository.py
+Use the supported setup and repository checks in [CONTRIBUTING.md](../CONTRIBUTING.md).
+From the repository root, run a positive case through its declared Python
+entries without publishing any output files:
 
-    # every specification follows the style contract
-    # (../rules/specification/style.md); --fix applies the proved layout fixes
-    uv run --project ../python --no-sync python -m yamaa.style */spec*.yaml
+```sh
+uv run --project python --no-sync python -m tools.benchmark benchmarks/<name>
+uv run --project python --no-sync python -m tools.validation.validate_repository
+uv run --project python --no-sync python -m yamaa.style benchmarks/<name>/
+```
 
-    # no schema vocabulary reached the data-contract portion of a README,
-    # and every negative benchmark has exactly one remediation section
-    python3 - <<'PY'
-    import glob, re
-    pattern = re.compile(r"R0[0-9][0-9]|output\.columns|handler|verification")
-    for f in sorted(glob.glob("*/README.md")):
-        text = open(f).read()
-        contract = text.split("\n## How to fix\n", 1)[0]
-        for line_no, line in enumerate(contract.splitlines(), 1):
-            if pattern.search(line):
-                print(f, line_no, line)
-    for f in sorted(glob.glob("negative-*/README.md")):
-        count = open(f).read().count("\n## How to fix\n")
-        if count != 1:
-            print(f, "->", count, "How to fix sections")
-    PY
+Conformance qualification compares both hosts with the authored expected data.
+When prompts or independent solutions change, also run the Harbor controls:
 
-    # every column in the golden file is described
-    python3 - <<'PY'
-    import glob, os
-    KEYS = {"STUDYID", "USUBJID", "DOMAIN", "SUBJID", "AESEQ", "VSSEQ",
-            "LBSEQ", "RSSEQ", "ASEQ", "PARAMCD", "PARAM", "AVISIT", "VISIT",
-            "RDOMAIN", "IDVAR", "QNAM"}
-    for f in sorted(glob.glob("*/expected/*.csv")):
-        d = os.path.dirname(os.path.dirname(f))
-        rd = open(f"{d}/README.md").read()
-        cols = open(f).readline().strip().split(",")
-        missing = [c for c in cols if c not in rd and c not in KEYS]
-        if missing:
-            print(d, "->", missing)
-    PY
-
-Both scripts print nothing when the suite is clean. Key columns and fixed
-domain values are skipped because they carry no logic; anything the second
-check reports is a variable the README does not explain.
+```sh
+uv run --project python --no-sync pytest evaluations/harbor/tests
+```
 
 ## Adding a benchmark
 
