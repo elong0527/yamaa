@@ -23,7 +23,6 @@ pub mod csv_artifact;
 pub mod csv_source;
 pub mod parquet_artifact;
 pub mod parquet_source;
-#[allow(unsafe_code)] // The reviewed static ReadStat callback and memory transport ABI.
 pub mod sas_source;
 
 pub mod shipped_schema;

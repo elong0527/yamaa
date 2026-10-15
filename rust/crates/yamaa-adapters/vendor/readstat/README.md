@@ -8,7 +8,9 @@ header reader unit. The adapter exports only a read-only memory bridge and
 builds no writer or hash-table code.
 
 `build.rs` compiles this fixed source inventory into a static library through
-pinned `cc`. Linux, macOS, MSVC Windows, and MinGW Windows use the same C/Rust
+`cc` when the default `readstat` feature is enabled. Disabling that feature
+omits this native backend and the adapter's direct `cc` build dependency.
+Linux, macOS, MSVC Windows, and MinGW Windows use the same C/Rust
 bridge; C owns ReadStat unions and bitfields. No dynamic ReadStat library,
 Python/R reader package, generated bindings, configure program, platform iconv,
 or network access is needed during package builds. The iconv shim fails closed;

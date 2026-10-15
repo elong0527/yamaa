@@ -2,6 +2,7 @@
 #[allow(dead_code)]
 mod support;
 mod table {
+    #[cfg(feature = "readstat")]
     mod sas_source {
         //! Binary source truth is authored independently of the candidate parser.
         use std::path::Path;

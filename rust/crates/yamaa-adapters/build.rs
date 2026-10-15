@@ -1,3 +1,7 @@
+#[cfg(not(feature = "readstat"))]
+fn main() {}
+
+#[cfg(feature = "readstat")]
 fn main() {
     let root = "vendor/readstat";
     let mut build = cc::Build::new();

@@ -49,6 +49,8 @@ jobs:
         with:
           r: runtime
       - run: make test-rust
+      - name: Test adapters without the optional SAS reader
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p yamaa-adapters --no-default-features
   python:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
