@@ -632,18 +632,13 @@ mod log_tests {
                 "root.yaml",
                 environment(language),
                 shipped_schema::capture().unwrap(),
-                Default::default(),
             )
         }
-        fn owned(
-            &self,
-            language: Language,
-            limits: crate::file_producer_build::Limits,
-        ) -> OwnedAttempt<Infallible> {
+        fn owned(&self, language: Language) -> OwnedAttempt<Infallible> {
             self.graph(language)
                 .unwrap_or_else(|error| panic!("graph fixture: {:?}", error.error()))
                 .into_build()
-                .build_owned_reported(&mut NoActivation, id(), limits)
+                .build_owned_reported(&mut NoActivation, id(), scope())
         }
         fn remove_inputs(&self) {
             for name in ["root.yaml", "producer.yaml", "input.csv"] {
@@ -676,7 +671,6 @@ mod log_tests {
             },
             language,
             &mut NoMetadata,
-            Default::default(),
         )
         .unwrap()
         .into_owned()
@@ -714,8 +708,11 @@ mod log_tests {
             base_directory: ".",
         }
     }
+    fn scope() -> yamaa_core::application_observer::Scope<'static> {
+        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop)
+    }
     fn root(owned: &OwnedAttempt<Infallible>) -> RootResult {
-        prepare_owned_classified(owned, id(), 16_777_216, &[]).unwrap()
+        prepare_owned_classified(owned, id(), &[]).unwrap()
     }
     fn execution(mut report: Value) -> Value {
         report.as_object_mut().unwrap().remove("publication");
@@ -727,7 +724,7 @@ mod log_tests {
         for language in [Language::Python, Language::R] {
             let study = Study::new();
             study.fixture(false, false, true);
-            let owned = study.owned(language, Default::default());
+            let owned = study.owned(language);
             assert!(owned.accepted());
             let source = &owned.graph.nodes[1].dataset.sources;
             assert!(Arc::ptr_eq(
@@ -807,7 +804,7 @@ mod log_tests {
                 "root",
             ),
         );
-        let owned = study.owned(Language::Python, Default::default());
+        let owned = study.owned(Language::Python);
         assert!(owned.accepted());
         let mut result = root(&owned);
         let before = execution(result.observations().clone());
@@ -834,7 +831,7 @@ mod log_tests {
         for (leaf, expected_nodes, expected_v) in [(true, 1, 1), (false, 2, 2)] {
             let study = Study::new();
             study.fixture(leaf, !leaf, true);
-            let owned = study.owned(Language::Python, Default::default());
+            let owned = study.owned(Language::Python);
             assert!(!owned.accepted());
             assert_eq!(owned.graph.nodes.len(), expected_nodes);
             let mut result = root(&owned);
@@ -885,7 +882,7 @@ mod log_tests {
         for unwind in [false, true] {
             let study = Study::new();
             study.fixture(false, false, true);
-            let owned = study.owned(Language::Python, Default::default());
+            let owned = study.owned(Language::Python);
             let mut result = root(&owned);
             let before = execution(result.observations().clone());
             study.write("generated/root.csv", b"earlier root");
@@ -893,7 +890,7 @@ mod log_tests {
             let payload = Arc::new(());
             let mut calls = 0;
             assert!(!result
-                .save_logs_with(Default::default(), 16_777_216, |publisher, path, bytes| {
+                .save_logs_with(|publisher, path, bytes| {
                     calls += 1;
                     if calls == 5 {
                         if unwind {
@@ -1005,13 +1002,13 @@ mod log_tests {
             for boundary in 1..=requests.len() {
                 let study = Study::new();
                 study.fixture(false, false, true);
-                let owned = study.owned(Language::Python, Default::default());
+                let owned = study.owned(Language::Python);
                 let mut result = root(&owned);
                 let before = execution(result.observations().clone());
                 study.remove_inputs();
                 let mut calls = 0;
                 assert!(!result
-                    .save_logs_with(Default::default(), 16_777_216, |publisher, path, bytes| {
+                    .save_logs_with(|publisher, path, bytes| {
                         calls += 1;
                         if calls == boundary {
                             if unwind {
@@ -1058,70 +1055,14 @@ mod log_tests {
         }
     }
     #[test]
-    fn cumulative_admission_and_whole_set_parent_preflight_enter_no_publishers() {
+    fn whole_set_parent_preflight_enters_no_publishers() {
         let study = Study::new();
         study.fixture(false, false, true);
-        let owned = study.owned(Language::Python, Default::default());
+        let owned = study.owned(Language::Python);
         let mut result = root(&owned);
-        let bytes = owned
-            .logs()
-            .iter()
-            .flat_map(|held| held.logs.verification.iter().chain(&held.logs.warning))
-            .map(|log| log.bytes().len())
-            .sum::<usize>()
-            + owned
-                .graph
-                .nodes
-                .iter()
-                .map(|entered| {
-                    entered
-                        .output
-                        .as_ref()
-                        .unwrap()
-                        .as_ref()
-                        .unwrap()
-                        .artifact()
-                        .unwrap()
-                        .bytes()
-                        .len()
-                })
-                .sum::<usize>();
-        for limits in [
-            yamaa_core::producer_publication::Limits {
-                nodes: 1,
-                ..Default::default()
-            },
-            yamaa_core::producer_publication::Limits {
-                path_bytes: 1,
-                ..Default::default()
-            },
-            yamaa_core::producer_publication::Limits {
-                artifact_bytes: bytes - 1,
-                ..Default::default()
-            },
-            yamaa_core::producer_publication::Limits {
-                work: 1,
-                ..Default::default()
-            },
-        ] {
-            assert!(!result
-                .save_logs_with(limits, 16_777_216, |_, _, _| panic!(
-                    "unadmitted publication"
-                ))
-                .unwrap());
-            assert!(result.log_save_attempt.as_ref().unwrap().entered.is_empty());
-        }
-        assert!(!result
-            .save_logs_with(Default::default(), 1, |_, _, _| panic!(
-                "report quota precedes ports"
-            ))
-            .unwrap());
-        assert!(result.log_save_attempt.is_none());
         fs::remove_dir(study.0.join("generated")).unwrap();
         assert!(!result
-            .save_logs_with(Default::default(), 16_777_216, |_, _, _| panic!(
-                "all parents first"
-            ))
+            .save_logs_with(|_, _, _| panic!("all parents first"))
             .unwrap());
         assert!(result.log_save_attempt.as_ref().unwrap().entered.is_empty());
         assert!(!result
@@ -1133,36 +1074,6 @@ mod log_tests {
                 )));
         fs::create_dir(study.0.join("generated")).unwrap();
         assert!(result.save().unwrap());
-    }
-    #[test]
-    fn warning_byte_refusal_retains_verification_and_stops_dependent_before_entry() {
-        let study = Study::new();
-        study.fixture(false, false, true);
-        let baseline = study.owned(Language::Python, Default::default());
-        let leaf = &baseline
-            .logs()
-            .iter()
-            .find(|held| held.node == 1)
-            .unwrap()
-            .logs;
-        let bytes = leaf.verification.as_ref().unwrap().bytes().len()
-            + leaf.warning.as_ref().unwrap().bytes().len()
-            - 1;
-        let mut limits = crate::file_producer_build::Limits::default();
-        limits.engine.output_bytes = bytes;
-        let owned = study.owned(Language::Python, limits);
-        assert!(!owned.accepted());
-        assert_eq!(owned.graph.nodes.len(), 1);
-        assert!(owned.logs()[0].logs.verification.is_some());
-        assert!(owned.logs()[0].logs.warning.is_none());
-        let mut result = root(&owned);
-        study.remove_inputs();
-        assert!(result.save().is_err());
-        assert_eq!(
-            result.observations()["artifacts"].as_array().unwrap().len(),
-            1
-        );
-        assert!(!study.0.join("generated/producer.csv").exists());
     }
     #[test]
     fn logged_graph_metadata_refuses_cross_node_aliases_before_study_and_missing_parents_stay_allowed(
@@ -1199,16 +1110,14 @@ mod log_tests {
                 "https://example.invalid/root-warnings.csv",
             ),
         );
-        let owned = study.owned(Language::Python, Default::default());
+        let owned = study.owned(Language::Python);
         assert!(owned.accepted());
         let mut result = root(&owned);
         let before = execution(result.observations().clone());
         study.remove_inputs();
         for _ in 0..2 {
             assert!(!result
-                .save_logs_with(Default::default(), 16_777_216, |_, _, _| panic!(
-                    "all target admission precedes publication"
-                ))
+                .save_logs_with(|_, _, _| panic!("all target admission precedes publication"))
                 .unwrap());
             let error = &result.observations()["publication"]["error"];
             assert_eq!(error["code"], "target_admission");
@@ -1273,7 +1182,7 @@ mod log_tests {
                 );
             }
             assert!(!study.0.join("generated/producer-checks.csv").exists());
-            let owned = study.owned(Language::Python, Default::default());
+            let owned = study.owned(Language::Python);
             assert!(owned.accepted());
             let mut result = root(&owned);
             let before = execution(result.observations().clone());
@@ -1284,9 +1193,7 @@ mod log_tests {
                 }
             } else {
                 assert!(!result
-                    .save_logs_with(Default::default(), 16_777_216, |_, _, _| panic!(
-                        "whole physical target set first"
-                    ))
+                    .save_logs_with(|_, _, _| panic!("whole physical target set first"))
                     .unwrap());
                 assert_eq!(
                     result.observations()["publication"]["error"]["code"],
@@ -1311,7 +1218,7 @@ mod log_tests {
             .graph(Language::Python)
             .unwrap()
             .into_build()
-            .build_reported(&mut NoActivation, id(), Default::default());
+            .build_reported(&mut NoActivation, id(), scope());
         assert!(actual.accepted());
         let authored = NativeAttempt {
             provenance: Arc::clone(&actual.provenance),
@@ -1319,76 +1226,57 @@ mod log_tests {
             graph: actual.graph,
             resources: actual.resources,
         };
-        let mut result = prepare_classified(&authored, id(), 16_777_216, &[]).unwrap();
+        let mut result = prepare_classified(&authored, id(), &[]).unwrap();
         assert!(result.output().is_some());
         assert!(result.verification_log().is_none());
         assert!(result.save().is_err());
         assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
     }
     #[test]
-    fn actual_root_ipc_shape_refusal_preserves_v_only_and_original_no_v_error() {
+    fn actual_root_at_the_fixed_column_boundary_retains_logs_and_held_output() {
         for logs in [false, true] {
             let study = Study::new();
             study.fixture(false, false, logs);
-            let columns = (0..1_025)
+            let columns = (0..1_024)
                 .map(|index| {
                     format!("  - {{name: C{index}, type: int, label: Column, derivation: A.ID}}\n")
                 })
                 .collect::<String>();
-            let names = (0..1_025)
+            let names = (0..1_024)
                 .map(|index| format!("C{index}"))
-                .collect::<Vec<_>>()
-                .join(", ");
+                .collect::<Vec<_>>();
             let sidecars = if logs {
                 ", verification_log: generated/root-checks.csv, warning_log: generated/root-warnings.csv"
             } else {
                 ""
             };
-            study.write("root.yaml",format!("schema_version: '1.0'\ndomain: TEST\nkeys: [C0]\nbase: A\ninput: {{A: {{path: generated/producer.csv, schema: producer.yaml}}}}\ncolumns:\n{columns}output: {{path: generated/root.csv, columns: [{names}]{sidecars}}}\n"));
-            // Production compilation caps columns at 1,024 (#2185). Enlarge
-            // only this fixture's compiler admission to reach the real IPC
-            // 1,024-column boundary without fabricating a transport error.
-            let mut metadata = crate::producer_graph::Limits::default();
-            metadata.graph.metadata.compilation.columns = 2_048;
-            metadata.graph.metadata.compilation.projected_columns = 2_048;
-            let owned = FileGraph::prepare(
-                Resources::new(&study.path(), &study.path(), &[]).unwrap(),
-                "root.yaml",
-                environment(Language::Python),
-                shipped_schema::capture().unwrap(),
-                metadata,
-            )
-            .unwrap_or_else(|error| panic!("shape fixture: {:?}", error.error()))
-            .into_build()
-            .build_owned_reported(&mut NoActivation, id(), Default::default());
+            study.write("root.yaml", format!("schema_version: '1.0'\ndomain: TEST\nkeys: [C0]\nbase: A\ninput: {{A: {{path: generated/producer.csv, schema: producer.yaml}}}}\ncolumns:\n{columns}output: {{path: generated/root.csv, columns: [{}]{sidecars}}}\n", names.join(", ")));
+            let owned = study.owned(Language::Python);
             assert!(owned.accepted());
-            let prepared = prepare_owned_classified(&owned, id(), 16_777_216, &[]);
-            if !logs {
-                assert!(matches!(
-                    prepared,
-                    Err(Error::Output {
-                        error: TableError::ShapeLimit,
-                        ..
-                    })
-                ));
-                continue;
-            }
-            let mut result = prepared.unwrap();
-            assert_eq!(result._output_failure, Some(TableError::ShapeLimit));
-            assert!(result.output().is_none());
-            assert!(result.warning_log().is_none());
-            assert!(result.verification_log().is_some());
-            assert_eq!(result.observations()["error"]["code"], "output_projection");
-            study.write("generated/root.csv", b"held sentinel");
+            let artifact = owned.graph.nodes[1]
+                .output
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .artifact()
+                .unwrap();
+            let expected = format!(
+                "{}\n{}\n{}\n",
+                names.join(","),
+                vec!["1"; 1_024].join(","),
+                vec!["2"; 1_024].join(",")
+            );
+            assert_eq!(artifact.bytes(), expected.as_bytes());
+            let mut result = root(&owned);
+            assert!(result.output().is_some());
+            assert_eq!(result.output_table().unwrap().columns().len(), 1_024);
+            assert_eq!(result.verification_log().is_some(), logs);
+            assert_eq!(result.warning_log().is_some(), logs);
             study.remove_inputs();
             for _ in 0..2 {
-                assert!(result.save().is_err());
-                assert_eq!(
-                    result.observations()["artifacts"].as_array().unwrap().len(),
-                    2
-                );
-                assert_eq!(study.generated("root.csv"), b"held sentinel");
-                assert!(!study.0.join("generated/producer.csv").exists());
+                assert!(result.save().unwrap());
+                assert_eq!(study.generated("root.csv"), expected.as_bytes());
             }
         }
     }
@@ -1424,16 +1312,10 @@ mod log_tests {
         ));
     }
 
-    fn selected_projection_refusal(
-        rows: usize,
-        extra_columns: usize,
-        payload: &str,
-        bytes: usize,
-        cells: usize,
-    ) {
+    fn selected_projection(rows: usize, extra_columns: usize, payload: &str) {
         let study = Study::new();
         projection_fixture(&study, rows, extra_columns, payload);
-        let owned = study.owned(Language::Python, Default::default());
+        let owned = study.owned(Language::Python);
         assert!(owned.accepted());
         assert_eq!(
             owned
@@ -1488,60 +1370,29 @@ mod log_tests {
         );
         study.remove_inputs();
         for _ in 0..2 {
-            let maximum = yamaa_core::capacity::REPORT_ENCODED_BYTES;
-            let observations = producer_report::attempt_report(&owned, id(), maximum).unwrap();
+            let observations = producer_report::attempt_report(&owned, id()).unwrap();
             assert_eq!(observations["outcome"], "success");
             assert_eq!(observations["artifacts"].as_array().unwrap().len(), 2);
             assert!(observations["error"].is_null());
-            let mut budget =
-                Budget::selected_projection_limits(bytes, cells, yamaa_core::capacity::REPORT_WORK);
-            let error = match prepare_observations_with_budget(
-                &owned,
-                observations,
-                maximum,
-                true,
-                &mut budget,
-            ) {
-                Err(error) => error,
-                Ok(_) => panic!("the selected copy budget must refuse this projection"),
-            };
-            let Error::Output {
-                attempt,
-                observations,
-                error,
-            } = error
-            else {
-                panic!("projection refusal must retain the original complete attempt");
-            };
-            assert!(std::ptr::eq(attempt, &*owned));
-            assert_eq!(error, TableError::OutputLimit);
-            assert!(attempt.accepted());
-            assert_eq!(observations["outcome"], "success");
-            assert_eq!(observations["artifacts"].as_array().unwrap().len(), 2);
-            assert!(observations["error"].is_null());
+            let result = prepare_observations(&owned, observations, true).unwrap();
+            let table = result.output_table().unwrap();
+            assert_eq!(table.rows(), rows);
+            assert_eq!(
+                table.columns().len(),
+                2 + if extra_columns == 0 { 1 } else { extra_columns }
+            );
+            assert_eq!(result.observations()["outcome"], "success");
             assert_eq!(artifact.bytes(), expected.as_bytes());
-            // No partial RootResult can grant Save after this refusal.
             assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
         }
     }
 
     #[test]
-    fn selected_copy_cells_refusal_keeps_original_large_attempt_and_artifacts() {
-        // The original 23,000 x 63 x 3 geometry exceeds the former 4 Mi-cell
-        // policy. The other capacities are deliberately sufficient here.
-        selected_projection_refusal(23_000, 59, "", 1 << 30, 4_194_304);
+    fn large_selected_projection_keeps_original_cells_and_artifacts() {
+        selected_projection(23_000, 59, "");
     }
-
     #[test]
-    fn selected_copy_bytes_refusal_keeps_original_large_attempt_and_artifacts() {
-        // Select an explicit 8 MiB retained-copy policy independently of the
-        // larger approved public defaults and the original accepted attempt.
-        selected_projection_refusal(
-            4_095,
-            0,
-            &"x".repeat(2_048),
-            8_388_608,
-            yamaa_core::capacity::REPORT_CELLS,
-        );
+    fn long_selected_projection_keeps_complete_text_and_artifacts() {
+        selected_projection(4_095, 0, &"x".repeat(2_048));
     }
 }

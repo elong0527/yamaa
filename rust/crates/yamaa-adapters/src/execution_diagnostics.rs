@@ -58,7 +58,7 @@ mod tests {
     use std::convert::Infallible;
     use yamaa_core::dataset::ExecutionError;
     #[test]
-    fn projection_refusal_preserves_original_typed_error() {
+    fn complete_diagnostic_keeps_long_context_and_original_typed_error() {
         let error = ExecutionError::<Infallible>::MultipleValues {
             path: "columns.A.source".into(),
             identifier: "A".repeat(3_000_000),
@@ -75,7 +75,7 @@ mod tests {
         );
         assert!(matches!(
             failure(&ExecutionError::<Infallible>::SchemaMismatch),
-            Err(Error::Internal)
+            Err(Error::UnsupportedOutcome)
         ));
     }
     #[test]

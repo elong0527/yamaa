@@ -75,7 +75,6 @@ pub mod project_source_decoder;
 pub mod project_attempt;
 pub mod project_report;
 pub mod project_run;
-mod report_projection;
 
 pub mod project_function_diagnostics;
 

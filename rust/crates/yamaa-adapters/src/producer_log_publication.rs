@@ -98,7 +98,6 @@ struct Borrowed<'a> {
     node: usize,
     field: &'static str,
     path: &'a str,
-    bytes: &'a [u8],
     observation: &'a Value,
     specification: &'a str,
 }
@@ -187,7 +186,7 @@ fn each<E>(
                     node,
                     field: "verification_log",
                     path: log.path(),
-                    bytes: log.bytes(),
+
                     observation: log.observation(),
                     specification,
                 })?;
@@ -199,7 +198,7 @@ fn each<E>(
                         node,
                         field: "warning_log",
                         path: log.path(),
-                        bytes: log.bytes(),
+
                         observation: log.observation(),
                         specification,
                     })?;
@@ -229,7 +228,7 @@ fn each<E>(
                 node,
                 field: "path",
                 path: artifact.path(),
-                bytes: artifact.bytes(),
+
                 observation,
                 specification,
             })?;

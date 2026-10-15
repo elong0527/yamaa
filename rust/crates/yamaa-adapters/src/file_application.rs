@@ -696,7 +696,7 @@ mod tests {
     use yamaa_core::diagnostic::ConditionCode;
     static NEXT: AtomicUsize = AtomicUsize::new(0);
     #[test]
-    fn primary_encoding_limit_retains_completed_verification_without_warning_authority() {
+    fn primary_above_the_former_eight_megabyte_quota_retains_logs_and_saves_held_bytes() {
         let root = std::env::temp_dir().join(format!(
             "yamaa-output-log-cap-{}-{}",
             std::process::id(),
@@ -720,7 +720,7 @@ mod tests {
             crate::file_preparation::prepare_document(&mut resources, &entry, None).unwrap();
         let prepared = crate::specification_run::PreparedRun::prepare(document).unwrap();
         let attempt = prepared.execute_with_port(&mut resources);
-        let result = specification_report::build_result_with_output_limit(
+        let result = specification_report::build_result(
             &prepared,
             &attempt,
             Identity {
@@ -731,7 +731,6 @@ mod tests {
                 specification: written,
                 base_directory: ".",
             },
-            8 * 1024 * 1024,
         )
         .unwrap();
         let mut result = Domain::from_build(result, |field| {
@@ -742,43 +741,27 @@ mod tests {
             resources.publication_target_from(origin.declaring_source, origin.written)
         })
         .unwrap();
-        assert!(result.output().is_none());
-        assert!(result.warning_log().is_none());
+        assert!(result.output().unwrap().len() > 8 * 1024 * 1024);
+        assert!(result.warning_log().is_some());
         assert_eq!(result.log_table(false).unwrap().rows(), 2);
-        assert_eq!(result.issues().len(), 1);
-        assert_eq!(
-            result.issues()[0].condition,
-            ConditionCode::ApplicationRejected.definition().condition
-        );
-        let context: serde_json::Value = serde_json::from_str(&result.issues()[0].context).unwrap();
-        assert_eq!(context["stage"], "output");
-        assert_eq!(context["code"], "output_limit");
-        fs::write(study.0.join("out.csv"), "primary sentinel").unwrap();
-        fs::write(study.0.join("warnings.csv"), "warning sentinel").unwrap();
+        assert!(result.issues().is_empty());
         fs::remove_file(study.0.join("input/input.csv")).unwrap();
         fs::remove_file(study.0.join("spec.yaml")).unwrap();
         for _ in 0..2 {
-            assert!(result.save().is_err());
-            assert_eq!(
-                fs::read(study.0.join("out.csv")).unwrap(),
-                b"primary sentinel"
-            );
-            assert_eq!(
-                fs::read(study.0.join("warnings.csv")).unwrap(),
-                b"warning sentinel"
-            );
+            assert!(result.save().unwrap());
+            let bytes = fs::read(study.0.join("out.csv")).unwrap();
+            assert!(bytes.len() > 8 * 1024 * 1024);
+            assert!(bytes.starts_with(b"ID,VALUE\n1,"));
+            assert!(study.0.join("warnings.csv").exists());
             let checks = fs::read_to_string(study.0.join("checks.csv")).unwrap();
             assert!(checks.starts_with(VERIFICATION_HEADER));
             assert!(checks.contains("not_missing,VALUE,REQ-0375,error,held"));
             assert!(checks.contains("range,VALUE,REQ-0377,warning,violated,range_failed"));
             assert_eq!(
                 result.observations()["artifacts"].as_array().unwrap().len(),
-                1
+                3
             );
-            assert_eq!(
-                result.issues()[0].condition,
-                ConditionCode::ApplicationRejected.definition().condition
-            );
+            assert!(result.issues().is_empty());
         }
     }
 
@@ -911,11 +894,11 @@ mod tests {
         let marker = Arc::new(());
         measurements.save_entered();
         assert!(!result
-            .save_with(16_777_216, |_, _, _| Err(
-                crate::file_publication::Error::Io(std::io::Error::other(Marker(Arc::clone(
-                    &marker
-                ))))
-            ))
+            .save_with(
+                |_, _, _| Err(crate::file_publication::Error::Io(std::io::Error::other(
+                    Marker(Arc::clone(&marker))
+                )))
+            )
             .unwrap());
         measurements.save_completed("refused");
         let Some(crate::file_publication::Error::Io(error)) = &result.publication_attempt.failure
@@ -971,7 +954,7 @@ mod tests {
             let marker = Arc::new(());
             let mut entered = 0;
             assert!(!result
-                .save_with(16_777_216, |publisher, path, bytes| {
+                .save_with(|publisher, path, bytes| {
                     let index = entered;
                     entered += 1;
                     if index == fail_at {
@@ -1038,7 +1021,7 @@ mod tests {
         let original = result.observations();
         let marker = Arc::new(());
         assert!(result
-            .save_with(16_777_216, |_, _, _| {
+            .save_with(|_, _, _| {
                 Err(crate::file_publication::Error::Io(std::io::Error::other(
                     Marker(Arc::clone(&marker)),
                 )))
@@ -1083,9 +1066,7 @@ mod tests {
         fs::create_dir(study.0.join("foreign")).unwrap();
         std::os::unix::fs::symlink("foreign", study.0.join("nested")).unwrap();
         assert!(!result
-            .save_with(16_777_216, |_, _, _| panic!(
-                "linked parent entered publisher"
-            ))
+            .save_with(|_, _, _| panic!("linked parent entered publisher"))
             .unwrap());
         assert_eq!(result.publication_attempt.entered, 0);
         assert_eq!(result.publication_attempt.completed, 0);
@@ -1110,7 +1091,7 @@ mod tests {
         let marker = Arc::new(());
         let mut entered = 0;
         assert!(!result
-            .save_with(16_777_216, |publisher, path, bytes| {
+            .save_with(|publisher, path, bytes| {
                 entered += 1;
                 if entered == 2 {
                     std::panic::panic_any(Arc::clone(&marker));
@@ -1139,24 +1120,6 @@ mod tests {
         assert!(!study.0.join("adsl.csv").exists());
         assert!(result.save().unwrap());
         assert!(result.publication_attempt.unwind.is_none());
-    }
-    #[test]
-    fn report_copy_refusal_precedes_every_publication_port() {
-        let (study, mut result) = built();
-        assert!(!result
-            .save_with(1, |_, _, _| panic!("refused report entered publisher"))
-            .unwrap());
-        assert_eq!(result.publication_attempt.entered, 0);
-        let issues = result.issues();
-        let issue = issues.last().unwrap();
-        let context: Value = serde_json::from_str(&issue.context).unwrap();
-        assert_eq!(context["code"], "publication_report_limit");
-        assert_eq!(context["resource"], "report_retained_bytes");
-        assert_eq!(context["limit"], 6);
-        for name in ["adsl-checks.csv", "adsl-warnings.csv", "adsl.csv"] {
-            assert!(!study.0.join(name).exists());
-        }
-        assert!(result.save().unwrap());
     }
     #[test]
     fn actual_host_view_admits_metadata_beyond_the_old_64k_limit_and_saves_held_bytes() {
@@ -1193,14 +1156,9 @@ mod tests {
             fs::write(&entry, raw).unwrap();
             let written = entry.to_str().unwrap();
             let (mut resources, entry) = file_configuration::resources(written).unwrap();
-            let mut limits = crate::specification_source::Limits::default();
-            limits.normalization.validation.regex.state_cells = 32_000_000;
-            limits.normalization.validation.regex.work = 32_000_000;
-            limits.normalization.validation.regex.subject_bytes = 32_000_000;
             let schema = crate::specification_source::CapturedSchema::admit(
                 crate::shipped_schema::capture().unwrap().sources().to_vec(),
                 0,
-                limits,
             )
             .unwrap();
             let document =

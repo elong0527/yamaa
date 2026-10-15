@@ -1,16 +1,12 @@
-//! All publication report storage and its largest wire prefix are admitted
-//! before a publisher is entered. Completion only moves owned fields.
+//! Publication owns its outcome fields before entering a publisher.
+//! Completion preserves the actual prefix and moves the owned error details.
 use crate::{report_storage::StoredReport, specification_report::Error};
 use serde_json::{json, Value};
 
-const CODES: [&str; 10] = [
+const CODES: [&str; 6] = [
     "publication_incomplete",
     "producer_publication_incomplete",
-    "producer_publication_nodes",
-    "producer_publication_paths",
-    "producer_publication_bytes",
-    "producer_publication_work",
-    "publication_report_limit",
+    "producer_build_failed",
     "target_admission",
     "publication_unwind",
     "target_preflight",
@@ -105,19 +101,7 @@ mod tests {
             path: Some("é\n\"out.csv"),
         }];
         let mut candidate = report();
-        let mut budget = Budget::new(16_777_216);
-        let _ = Prepared::new(&mut candidate, &locations, true, 16_777_216, &mut budget).unwrap();
-        let largest = candidate.observations_json(false).len();
-        for (maximum, accepted) in [(largest, true), (largest - 1, false)] {
-            let mut candidate = report();
-            let mut budget = Budget::new(16_777_216);
-            let prepared = Prepared::new(&mut candidate, &locations, true, maximum, &mut budget);
-            assert_eq!(prepared.is_ok(), accepted);
-        }
-        let mut candidate = report();
-        let mut budget = Budget::new(16_777_216);
-        let mut prepared =
-            Prepared::new(&mut candidate, &locations, true, largest, &mut budget).unwrap();
+        let mut prepared = Prepared::new(&mut candidate, &locations, true).unwrap();
         let original = prepared
             .errors
             .iter()
@@ -135,7 +119,6 @@ mod tests {
                 .as_ptr(),
             original
         );
-        assert!(candidate.observations_json(false).len() <= largest);
         assert_eq!(
             candidate["publication"]["error"],
             json!({"stage":"publication","code":publication_code,"node":0,"field":"verification_log","path":"é\n\"out.csv"})
@@ -166,10 +149,7 @@ mod tests {
             for key in [None, Some(3), Some(7)] {
                 for logged in [false, true] {
                     let mut candidate = report();
-                    let mut budget = Budget::new(16_777_216);
-                    let mut prepared =
-                        Prepared::new(&mut candidate, &locations, logged, 16_777_216, &mut budget)
-                            .unwrap();
+                    let mut prepared = Prepared::new(&mut candidate, &locations, logged).unwrap();
                     let owned = &prepared
                         .errors
                         .iter()
@@ -180,10 +160,8 @@ mod tests {
                     let field_pointer = owned.get("field").and_then(Value::as_str).map(str::as_ptr);
                     let path_pointer = owned.get("path").and_then(Value::as_str).map(str::as_ptr);
                     let expected = owned.clone();
-                    let complete_prefix = candidate.observations_json(false).len();
                     prepared.finish(&mut candidate, false, code, key);
                     assert_eq!(candidate["publication"]["error"], expected);
-                    assert!(candidate.observations_json(false).len() <= complete_prefix);
                     assert_eq!(candidate["publication"]["error"]["code"], code);
                     assert_eq!(
                         candidate["publication"]["error"]["code"]

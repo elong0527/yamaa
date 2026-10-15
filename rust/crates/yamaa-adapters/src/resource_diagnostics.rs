@@ -150,9 +150,11 @@ pub(crate) fn source(error: &Error, source: &SourceDeclaration) -> Option<Refusa
             limit,
             actual,
         }) => (*resource, *limit, *actual),
-        Error::Source(TextTableError::Csv(crate::csv_source::Error::Limit { resource, limit })) => {
-            (*resource, *limit, None)
-        }
+        Error::Source(TextTableError::Csv(crate::csv_source::Error::Limit {
+            resource,
+            limit,
+            actual,
+        })) => (*resource, *limit, *actual),
         Error::Source(TextTableError::Table(crate::arrow_table::TableError::Limit {
             resource,
             limit,
@@ -261,30 +263,25 @@ pub(crate) fn outcome(
 mod tests {
     use super::*;
     #[test]
-    fn source_projection_refusals_survive_resource_fallback() {
-        use crate::source_diagnostics::SourceProjectionError;
-        use yamaa_core::diagnostic::{ProjectionError, MAX_PROJECTION_BYTES};
+    fn source_resource_fallback_preserves_complete_context_and_nested_findings() {
+        let value = "x".repeat(2_000_000);
         let error = Error::TypedSource(crate::typed_csv::Error::Typing(
             yamaa_core::typed_csv::Error::FieldParse {
                 field: "N".into(),
                 target: yamaa_core::value::ColumnType::Int,
-                value: "x".repeat(MAX_PROJECTION_BYTES / 6),
+                value: value.clone(),
             },
         ));
-        assert_eq!(
-            source_findings(&error, &input()),
-            Err(SourceProjectionError::Context(ProjectionError::Limit))
-        );
+        let findings = source_findings(&error, &input()).unwrap().unwrap();
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0]["context"]["value"], value);
         let mut error = Error::Source(TextTableError::Csv(
-            crate::csv_source::parse(b"", Default::default()).unwrap_err(),
+            crate::csv_source::parse(b"").unwrap_err(),
         ));
-        for _ in 0..=crate::source_diagnostics::MAX_SOURCE_REPORT_FRAMES {
+        for _ in 0..150 {
             error = Error::Sources(vec![(input(), error)]);
         }
-        assert_eq!(
-            source_findings(&error, &input()),
-            Err(SourceProjectionError::TraversalLimit)
-        );
+        assert_eq!(source_findings(&error, &input()).unwrap().unwrap().len(), 1);
     }
     fn input() -> SourceDeclaration {
         SourceDeclaration {
@@ -298,32 +295,21 @@ mod tests {
         }
     }
     #[test]
-    fn actual_sas_reader_quota_keeps_its_bound_and_input_owner() {
+    fn fixed_sas_boundary_keeps_its_bound_and_input_owner() {
         let mut declaration = input();
         declaration.path = "v5.xpt".into();
         declaration.profile = yamaa_core::specification::SourceProfile::Xport;
         declaration.encoding = Some("windows-1252".into());
-        let failure = crate::sas_source::parse(
-            include_bytes!("../tests/fixtures/sas/v5.xpt"),
-            &declaration,
-            crate::sas_source::Limits {
-                source_bytes: 1_048_576,
-                work_bytes: 4_194_304,
-                retained_bytes: 4_194_304,
-            },
-            crate::arrow_table::TableLimits {
-                max_rows: 1,
-                max_columns: 1024,
-                max_cells: 1024,
-                max_batches: 1,
-            },
-        )
-        .unwrap_err();
+        let failure = crate::sas_source::Error::Limit {
+            resource: "table_rows",
+            limit: 10_000_000,
+            actual: Some(10_000_001),
+        };
         let failure = Error::SasSource(failure);
         let refusal = source(&failure, &declaration).unwrap();
-        assert_eq!(refusal.resource, "rows");
-        assert_eq!(refusal.limit, 1);
-        assert_eq!(refusal.actual, Some(2));
+        assert_eq!(refusal.resource, "table_rows");
+        assert_eq!(refusal.limit, 10_000_000);
+        assert_eq!(refusal.actual, Some(10_000_001));
         assert_eq!(refusal.spec_paths, ["input.XW"]);
         let projected: Value = serde_json::from_str(&crate::specification_diagnostics::failure(
             &failure,
@@ -332,9 +318,9 @@ mod tests {
         .unwrap();
         assert_eq!(projected["outcome"]["stage"], "ingest");
         assert_eq!(projected["outcome"]["code"], "sas_limit");
-        assert_eq!(projected["outcome"]["resource"], "rows");
-        assert_eq!(projected["outcome"]["limit"], 1);
-        assert_eq!(projected["outcome"]["actual"], 2);
+        assert_eq!(projected["outcome"]["resource"], "table_rows");
+        assert_eq!(projected["outcome"]["limit"], 10_000_000);
+        assert_eq!(projected["outcome"]["actual"], 10_000_001);
         assert_eq!(
             projected["outcome"]["spec_paths"],
             serde_json::json!(["input.XW"])
@@ -362,32 +348,29 @@ mod tests {
         }
     }
     #[test]
-    fn source_shape_refusal_keeps_the_supplied_quota_count_and_input() {
-        for (rows, cells, resource) in [(1, 64, "rows"), (64, 1, "cells")] {
-            let failure = crate::csv_source::parse_text_table(
-                b"ID\n1\n2\n",
-                Default::default(),
-                crate::arrow_table::TableLimits {
-                    max_rows: rows,
-                    max_cells: cells,
-                    max_columns: 1,
-                    max_batches: 1,
+    fn fixed_source_geometry_refusals_keep_the_actual_count_and_input() {
+        crate::csv_source::parse_text_table(b"ID\n1\n2\n").unwrap();
+        for (resource, limit, actual) in [
+            ("table_rows", 10_000_000, 10_000_001),
+            ("table_cells", 640_000_000, 640_000_001),
+        ] {
+            let error = Error::Source(TextTableError::Table(
+                crate::arrow_table::TableError::Limit {
+                    resource,
+                    limit,
+                    required: Some(actual),
                 },
-            )
-            .unwrap_err();
-            let error = Error::Source(failure);
-            let limit = 1;
-            let actual = Some(2);
+            ));
             let refusal = source(&error, &input()).unwrap();
             assert_eq!(
                 refusal,
-                Refusal::new(resource, limit, actual, vec!["input.XW".into()])
+                Refusal::new(resource, limit, Some(actual), vec!["input.XW".into()])
             );
             let value = refusal.value("ingest", "source_limit").unwrap();
             assert_eq!(value["context"]["resource"], resource);
             assert_eq!(value["context"]["limit"], serde_json::json!(limit));
+            assert_eq!(value["context"]["actual"], serde_json::json!(actual));
             assert_eq!(value["spec_paths"], serde_json::json!(["input.XW"]));
-            assert_eq!(value["context"].get("actual").is_some(), actual.is_some());
         }
     }
 }

@@ -219,8 +219,6 @@ impl ReportPort for NativeReport<'_, '_> {
         self.selected = None;
         self.value = None;
 
-        let count = self.provenance.metadata().nodes().len();
-
         let index = self
             .provenance
             .metadata()
@@ -254,19 +252,6 @@ impl OutputReport for NativeReport<'_, '_> {
         &mut self,
         findings: &[yamaa_core::specification::OutputFinding],
     ) -> Result<StoredReport, Error> {
-        for finding in findings {
-            use yamaa_core::specification::OutputFinding::*;
-
-            let text = match finding {
-                UnknownProfile { path } | DecimalsNotApplicable { path } => path,
-                InvalidDecimals { value } => value,
-                DuplicateColumn { name, .. }
-                | UndeclaredColumn { name, .. }
-                | DuplicateOrderTerm { name, .. }
-                | UndeclaredOrderColumn { name, .. }
-                | InternalKey { name, .. } => name,
-            };
-        }
         let diagnostics = report::output_diagnostics(findings);
         let mut value = self.value.take().ok_or(Error::InvalidObservation)?;
         report::set_diagnostics(&mut value, diagnostics);
@@ -883,7 +868,7 @@ pub fn attempt_report_classified<'a, E>(
 mod tests {
     use super::*;
     #[test]
-    fn decoded_context_refusal_is_an_error_and_does_not_drop_the_finding() {
+    fn decoded_context_retains_the_complete_value_and_authored_path() {
         let source = yamaa_core::specification::SourceDeclaration {
             name: "RAW".into(),
             path: "raw.csv".into(),
@@ -904,14 +889,7 @@ mod tests {
             )),
         );
         let mut findings = Vec::new();
-        assert!(matches!(
-            decoded_finding(&mut Budget::new(10_000), &mut findings, &source, &error),
-            Err(Error::OutputLimit)
-        ));
-        assert!(findings.is_empty());
-        assert!(
-            decoded_finding(&mut Budget::new(100_000), &mut findings, &source, &error).unwrap()
-        );
+        assert!(decoded_finding(&mut findings, &source, &error).unwrap());
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0]["context"]["value"], value);
         assert_eq!(
@@ -920,9 +898,9 @@ mod tests {
         );
     }
     #[test]
-    fn native_header_mismatch_reporting_keeps_the_actual_authored_cause_and_refuses_before_copy() {
+    fn native_header_mismatch_reporting_keeps_the_actual_authored_cause() {
         use crate::{project_source_decoder::Decoder, specification_source::Source};
-        use yamaa_core::producer_build::{DecodeLimits, DecodePort};
+        use yamaa_core::specification_run::SourceDecoder;
         use yamaa_core::{
             specification::{SourceDeclaration, SourceProfile},
             value::ColumnType,
@@ -931,8 +909,7 @@ mod tests {
             identity: "original-producer.yaml".into(),
             bytes: b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: int, label: Value, derivation: RAW.VALUE}\noutput: {path: produced.csv, columns: [ID, VALUE]}\n".to_vec(),
         }).unwrap();
-        let contract =
-            yamaa_core::producer_contract::prepare(document.model(), Default::default()).unwrap();
+        let contract = yamaa_core::producer_contract::prepare(document.model()).unwrap();
         let source = SourceDeclaration {
             name: "P".into(),
             path: "produced.csv".into(),
@@ -947,37 +924,28 @@ mod tests {
         };
         let bytes = b"VALUE,ID\nnot-an-int,also-bad\n";
         let error = Decoder::<std::convert::Infallible>::default()
-            .decode_bounded(
+            .decode(
                 &source,
                 bytes,
+                yamaa_core::specification::SourceInterpretation::Ordinary,
                 Some(&contract),
-                DecodeLimits {
-                    rows: 100,
-                    cells: 100,
-                    storage_bytes: 4096,
-                    work_bytes: 4096,
-                },
             )
             .err()
             .unwrap();
+        let error = yamaa_core::producer_build::DecodeError::Codec(error);
         let mut findings = vec![];
-        assert!(matches!(
-            decoded_finding(&mut Budget::new(1), &mut findings, &source, &error),
-            Err(Error::ResourceLimit(refusal)) if refusal.resource == "report_retained_bytes" && refusal.limit == 6
-        ));
-        assert!(findings.is_empty());
-        assert!(decoded_finding(&mut Budget::new(65536), &mut findings, &source, &error).unwrap());
+        assert!(decoded_finding(&mut findings, &source, &error).unwrap());
         assert_eq!(
             findings,
             vec![crate::test_diagnostic_truth::value("producer-header")]
         );
         assert!(
-            matches!(&error, yamaa_core::producer_build::DecodeError::Metadata(held) if held.spec_paths == ["input.P.schema", "input.P.path"])
+            matches!(&error, yamaa_core::producer_build::DecodeError::Codec(crate::specification_run::Error::ProducerMetadata(held)) if held.spec_paths == ["input.P.schema", "input.P.path"])
         );
     }
 
     #[test]
-    fn pooled_source_refusal_keeps_global_bound_actual_and_owner() {
+    fn fixed_source_refusal_keeps_global_bound_actual_and_owner() {
         let source = yamaa_core::specification::SourceDeclaration {
             name: "XW".into(),
             path: "raw.csv".into(),
@@ -987,23 +955,30 @@ mod tests {
             empty_string_present: false,
             ordinal: None,
         };
-        for (resource, limit, actual) in [("rows", 8, Some(9)), ("cells", 15, Some(16))] {
-            let error = yamaa_core::producer_build::DecodeError::ResourceLimit {
-                resource,
-                limit,
-                actual,
-            };
-            let mut findings = Vec::new();
-            assert!(matches!(
-                decoded_finding(&mut Budget::new(1), &mut findings, &source, &error),
-                Err(Error::ResourceLimit(refusal)) if refusal.resource == "report_retained_bytes"
-                    && refusal.limit == yamaa_core::capacity::REPORT_RETAINED_FACTOR
-                    && refusal.actual.is_some_and(|actual| actual > refusal.limit)
-            ));
-            assert!(findings.is_empty());
-            assert!(
-                decoded_finding(&mut Budget::new(65_536), &mut findings, &source, &error).unwrap()
+        for (resource, limit, actual) in [
+            (
+                "table_rows",
+                yamaa_core::limits::Limits::TABLE_ROWS,
+                Some(10_000_001),
+            ),
+            (
+                "table_cells",
+                yamaa_core::limits::Limits::TABLE_CELLS,
+                Some(640_000_001),
+            ),
+        ] {
+            let error = yamaa_core::producer_build::DecodeError::Codec(
+                crate::specification_run::Error::ResourceLimit(
+                    crate::resource_diagnostics::Refusal::new(
+                        resource,
+                        limit,
+                        actual,
+                        vec!["input.XW".into()],
+                    ),
+                ),
             );
+            let mut findings = Vec::new();
+            assert!(decoded_finding(&mut findings, &source, &error).unwrap());
             assert_eq!(findings.len(), 1);
             assert_eq!(findings[0]["context"]["resource"], resource);
             assert_eq!(findings[0]["context"]["limit"], serde_json::json!(limit));

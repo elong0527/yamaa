@@ -174,9 +174,6 @@ impl StoredReport {
         self.rows.append(&mut other.rows);
         Ok(())
     }
-    pub(crate) fn row_blocks(&self) -> usize {
-        self.rows.len()
-    }
     pub(crate) fn without_artifacts_cloned(&self) -> Result<Self, Error> {
         let mut metadata = Value::Object(
             self.metadata

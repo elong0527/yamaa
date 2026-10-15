@@ -21,7 +21,6 @@ pub fn parse_text_table(content: &[u8]) -> Result<crate::arrow_table::ArrowTable
     };
 
     let parsed = parse(content).map_err(TextTableError::Csv)?;
-    let rows = parsed.records.len();
     let columns = parsed.names.len();
     let schema = TableSchema::new(
         parsed

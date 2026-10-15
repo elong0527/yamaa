@@ -302,12 +302,12 @@ fn preparation_boundary(
 mod resource_tests {
     use super::*;
     #[test]
-    fn layered_validation_work_refusal_keeps_its_preparation_outcome_on_both_routes() {
-        use yamaa_core::schema::{ConstraintError, ValidationError};
+    fn layered_validation_depth_refusal_keeps_its_preparation_outcome_on_both_routes() {
+        use yamaa_core::schema::ValidationError;
         let error = crate::specification_source::InheritanceError::<crate::file_resources::Error>::Preparation {
             schema: crate::shipped_schema::capture().unwrap(),
             error: Box::new(yamaa_core::inheritance_preparation::Error::Validation(
-                ValidationError::Constraint(ConstraintError::Work { limit: 7 }),
+                ValidationError::Depth { limit: 128 },
             )),
             captured_parents: Vec::new(),
         };
@@ -329,7 +329,7 @@ mod resource_tests {
         assert_eq!(
             serde_json::from_str::<serde_json::Value>(&issue.context).unwrap(),
             serde_json::json!({
-                "code":"resource_limit", "stage":"prepare", "phase":"validation", "resource":"work", "limit":7, "incomplete_checks_from":"specification",
+                "code":"resource_limit", "stage":"prepare", "phase":"validation", "resource":"semantic_depth", "limit":128,
             })
         );
     }

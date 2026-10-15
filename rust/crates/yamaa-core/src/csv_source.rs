@@ -15,10 +15,11 @@ pub enum Error {
         record: usize,
         field: Field,
     },
-    #[error("csv source limit: resource={resource:?}, limit={limit:?}")]
+    #[error("csv source limit: resource={resource:?}, limit={limit:?}, actual={actual:?}")]
     Limit {
         resource: &'static str,
         limit: usize,
+        actual: Option<usize>,
     },
 }
 /// Closed semantic causes detected by the profile scanner.
@@ -136,6 +137,7 @@ pub fn parse(content: &[u8]) -> Result<CsvSource, Error> {
     crate::limits::Limits::source_bytes(content.len()).map_err(|error| Error::Limit {
         resource: error.resource,
         limit: error.limit,
+        actual: error.actual,
     })?;
     let text = std::str::from_utf8(content).map_err(|error| {
         let (record, field) = coordinates(&content[..error.valid_up_to()]);
@@ -179,6 +181,7 @@ pub fn parse(content: &[u8]) -> Result<CsvSource, Error> {
     crate::limits::Limits::table(rows.len(), names.len()).map_err(|error| Error::Limit {
         resource: error.resource,
         limit: error.limit,
+        actual: error.actual,
     })?;
     Ok(CsvSource {
         names,

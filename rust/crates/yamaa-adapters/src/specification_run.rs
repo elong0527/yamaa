@@ -250,7 +250,7 @@ pub(crate) fn decode_source(
         | yamaa_core::specification::SourceProfile::Sas7bdat => {
             let table = crate::sas_source::parse(bytes, source).map_err(Error::SasSource)?;
             if odm {
-                project_odm(source, table)?
+                project_odm(table)?
             } else {
                 table
             }
@@ -321,7 +321,7 @@ pub(crate) fn typed_source_error(error: crate::typed_csv::Error) -> Error {
     }
 }
 
-fn project_odm(source: &SourceDeclaration, table: ArrowTable) -> Result<ArrowTable, Error> {
+fn project_odm(table: ArrowTable) -> Result<ArrowTable, Error> {
     use yamaa_core::table::{Column, TableAccess, TableSchema};
     let fields = table
         .schema()
@@ -449,7 +449,7 @@ mod width_tests {
         let mut writer = ArrowWriter::try_new(&mut bytes, schema, Some(properties)).unwrap();
         writer.write(&batch).unwrap();
         writer.close().unwrap();
-        let table = decode_parquet(&source, &bytes, None, false).unwrap();
+        let table = decode_parquet(&source, &bytes, false).unwrap();
         assert_eq!(table.row_count(), 5000);
         assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Int(0));
         assert_eq!(table.cell(4999, 0).unwrap(), ValueRef::Int(4999));
@@ -483,7 +483,12 @@ mod width_tests {
             let mut writer = ArrowWriter::try_new(&mut bytes, schema, None).unwrap();
             writer.write(&batch).unwrap();
             writer.close().unwrap();
-            let result = decode_source(&source, &bytes, None);
+            let result = decode_source(
+                &source,
+                &bytes,
+                yamaa_core::specification::SourceInterpretation::Ordinary,
+                None,
+            );
             if width == 1_024 {
                 let table = result.unwrap();
                 assert_eq!(table.schema().columns().len(), 1_024);
@@ -528,23 +533,30 @@ mod width_tests {
             };
             // One complete header plus one row must fit: the old 64-header
             // allowance refused this in-range table before width admission.
-            let limits = yamaa_core::producer_build::DecodeLimits {
-                rows: yamaa_core::capacity::SOURCE_ROWS,
-                cells: 1_024,
-                storage_bytes: 1_000_000,
-                work_bytes: 1_000_000,
-            };
-            let table = decode_source(&source, bytes.as_bytes(), Some(limits)).unwrap();
+            let table = decode_source(
+                &source,
+                bytes.as_bytes(),
+                yamaa_core::specification::SourceInterpretation::Ordinary,
+                None,
+            )
+            .unwrap();
             assert_eq!(table.schema().columns().len(), 1_024);
             assert_eq!(table.cell(0, 1_023).unwrap(), ValueRef::Str("x"));
             let excess = format!("{},EXCESS\n", names.join(","));
             assert!(matches!(
-                decode_source(&source, excess.as_bytes(), None),
-                Err(Error::Source(TextTableError::Table(TableError::Limit {
-                    resource: "columns",
-                    limit: 1_024,
-                    required: Some(1_025)
-                })))
+                decode_source(
+                    &source,
+                    excess.as_bytes(),
+                    yamaa_core::specification::SourceInterpretation::Ordinary,
+                    None
+                ),
+                Err(Error::Source(TextTableError::Csv(
+                    crate::csv_source::Error::Limit {
+                        resource: "columns",
+                        limit: 1_024,
+                        actual: Some(1_025)
+                    }
+                )))
             ));
         }
     }
