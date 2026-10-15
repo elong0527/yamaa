@@ -1783,7 +1783,19 @@ impl DatasetPlan {
                         return Err(PlanError::InvalidBounds);
                     }
                 }
-                Check::ScopedRowCount(check) => check.validate(width)?,
+                Check::ScopedRowCount(check) => {
+                    check.validate(width)?;
+                    for predicate in check.filter.iter().chain(&check.when) {
+                        verification_predicates::validate(
+                            predicate,
+                            &source,
+                            &secondary,
+                            &intermediates,
+                            &output,
+                            &templates,
+                        )?;
+                    }
+                }
                 Check::WideRowCount { min, max } => {
                     if (min.is_none() && max.is_none())
                         || matches!((min, max), (Some(a), Some(b)) if a > b)
