@@ -577,7 +577,7 @@ fn compiler_refusals_retain_the_same_capacity_on_plain_and_environment_routes() 
                 assert_eq!(
                     serde_json::from_str::<serde_json::Value>(&issue.context).unwrap(),
                     json!({
-                        "stage":"prepare", "code":"compiler_limit", "resource":resource, "limit":limit, "actual":actual,
+                        "stage":"prepare", "code":"compiler_limit", "resource":resource, "limit":limit, "actual":actual, "incomplete_checks_from":"specification",
                     })
                 );
             }
@@ -641,7 +641,7 @@ fn inherited_and_decoder_refusals_keep_resource_phase_on_both_public_routes() {
                 assert_eq!(issues[0].phase, "engine");
                 assert_eq!(issues[0].condition, "engine_rejected");
                 assert_eq!(issues[0].requirement, None);
-                let mut expected = json!({"code":"resource_limit","stage":stage,"phase":phase,"resource":resource,"limit":limit});
+                let mut expected = json!({"code":"resource_limit","stage":stage,"phase":phase,"resource":resource,"limit":limit,"incomplete_checks_from":"specification"});
                 if resource == "numeric_digits" {
                     expected["actual"] = json!(4097);
                 }
