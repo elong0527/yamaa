@@ -1,128 +1,82 @@
-# Benchmark factory
+# Benchmark proposals and review
 
-An agentic loop for creating and maintaining yamaa benchmarks. It
-adapts the AutoBenchmark recipe
-(https://facebookresearch.github.io/RAM/blogs/autobench/) to this
-repository: a research agent drafts a benchmark change, solvers
-attempt it, and judges review it, with a human directing what to
-build and gating what ships.
+Use this workflow to create, enhance, combine, retire or recalibrate a benchmark.
+[AGENTS.md](../../AGENTS.md) supplies repository rules;
+[benchmarks/AGENTS.md](../../benchmarks/AGENTS.md) owns benchmark layout, metadata,
+authoring and expected-data discipline. The
+[contributor guide](../../CONTRIBUTING.md) owns verification commands. This page
+adds the proposal and review process, rather than another validator.
 
-A run's work item is either a **creation** (a new benchmark closing
-a coverage gap) or **maintenance** of existing benchmarks: enhance
-(new variables or edge cases), combine (merge overlaps into
-variants), retire (remove with evidence), or recalibrate (harden
-or clarify from pilot results).
+Candidate coverage gaps live in [the issue backlog](https://github.com/elong0527/yamaa/issues/2477).
+Check current benchmark contents before proposing a gap or overlap: a directory
+name alone cannot establish missing or redundant coverage.
 
-## Why this fits yamaa
+## Work item
 
-AutoBenchmark asks a research agent to emit a Harbor-compatible
-evaluation package: task instructions, the evidence the solver sees, a
-reference solution, and machine-checkable grading criteria. That is
-already what `evaluations/harbor/build.py` assembles from a directory
-under `benchmarks/`. Two yamaa properties make the loop stronger here
-than in the paper:
+Open a focused issue containing:
 
-- **The engine is a free correctness oracle.** The agent proposes
-  `spec.yaml`; running it through the engine produces the artifact the
-  golden file must match. Correctness is mechanical, not LLM-judged.
-- **The verifier already detects reward hacking.** The paper holds out
-  solvers to check that difficulty transfers. `evaluations/harbor`
-  goes further: the held-out rerun drops every third subject and the
-  changed-input challenge renames subjects and alters values, so a
-  script that hard-codes rows fails. A generated benchmark inherits
-  both checks unchanged.
+- The change type and target benchmarks, with one derivation or failure pattern
+  to measure. Name the intended output, standard and clinical domain.
+- The public rule and exact external source/version supporting the derivation.
+  State sponsor-specific decisions explicitly rather than assuming them.
+- Nearby benchmarks and the behavior that makes the proposal distinct.
+- Independently invented inputs, including the missing values, ties, boundaries
+  or incomplete dates needed to distinguish correct behavior.
+- The scope exclusions and concrete acceptance criteria.
 
-The paper's headline finding shapes the loop below: fully autonomous
-runs produce saturated, low-validity benchmarks, while fine-grained
-human direction (a detailed spec plus curated grounding material)
-roughly halves solver scores. The human therefore owns *what* to build
-and *whether* it ships; the agent owns the drafting and the revisions.
+Useful source entry points are [CDISC standards](https://www.cdisc.org/standards),
+[admiral](https://pharmaverse.github.io/admiral/reference/),
+[admiralonco](https://pharmaverse.github.io/admiralonco/),
+[PHUSE scripts](https://github.com/phuse-org/phuse-scripts) and the
+[synthetic submission pilot](https://github.com/RConsortium/submissions-pilot7-synthetic-data).
+Cite the specific material actually used in the issue; this repository does not
+maintain a parallel bibliography or dated gap report.
 
-## The loop
+## Draft and validate
 
-```
-Stage 0  HUMAN DIRECTION      work item: create / enhance / combine /
-                              retire / recalibrate (task-spec.md); for
-                              create, curate example data
-        |
-Stage 1  PROPOSAL             research agent drafts the change:
-                              a new benchmarks/<name>/, or edits to
-                              existing ones (proposer.md)
-        |
-Stage 2  MECHANICAL ADMISSION repo validators, the engine, drift
-                              checks, oracle/nop smoke; failures go
-                              back to Stage 1 with the log attached
-        |
-Stage 3  DIFFICULTY PILOT     run 1-2 solver models on the candidate;
-                              saturated  -> harden fixtures (Stage 1)
-                              models fail, oracle passes -> clarify the
-                              prompt (Stage 1)
-        |
-Stage 4  JUDGE REVIEW         LLM judges score the five criteria in
-                              judges.md, plus the maintenance checks
-                              for enhance/combine/retire; revise or
-                              reject accordingly
-        |
-Stage 5  HUMAN GATE           lifecycle draft -> reviewed -> finalized
-                              stays a human decision; so does any
-                              retire or combine
-```
+Read the target benchmarks end to end, including expected artifacts and their
+Harbor materials. Write the inputs and independently reproduce expected values
+from the stated rule. Then implement the specification and compare its result
+with that independent truth. Engine output cannot establish a golden value.
 
-Stages 2 and the Harbor half of Stage 3 reuse existing machinery; this
-folder supplies the parts the repository does not have yet: the task
-spec template, the proposer instructions, the judge rubrics, and the
-scaffolding script.
+Follow the benchmark area guide for mechanical checks and the
+[Harbor guide](../../evaluations/harbor/README.md) for prompt, reference-solution
+and changed-input checks. A reference solution must solve the task from its
+prompt and inputs without consulting the yamaa specification or expected files.
+Keep relevant oracle and grading controls unchanged while editing task content.
 
-## Files
+When a maintenance change adds rows or columns, preserve existing expected values
+except where the work item explicitly changes their meaning. Name every moved
+value and its independent justification in the PR. Update the data description,
+metadata, prompts and both host reference solutions together. Reset changed
+content to the draft lifecycle state defined by the benchmark area guide.
 
-| File | Role |
-|---|---|
-| `task-spec.md` | The Stage 0/1 contract: work-item types, fixed rules, and the per-run human direction slots. |
-| `proposer.md` | Instructions for the research agent that drafts a benchmark or a maintenance change. |
-| `judges.md` | The five review criteria adapted to yamaa, plus maintenance checks, with verdict format. |
-| `factory.sh` | Portable scaffolding and checks: `scaffold`, `validate`, `packet`, `retire-check`, `drift-check`. |
-| `gap-report.md` | Sourced proposals: new benchmarks to add, and existing ones to enhance, combine, or retire. |
-| `references.md` | Curated external grounding sources (PharmaSUG, pharmaverse, CDISC TAUGs, FDA/PHUSE, ODM-to-SDTM/define.xml/ARM): work items cite these when claiming real-world relevance. |
+For a combine or retire proposal, map every original behavior and edge case to
+its surviving witness. Search repository references before deleting a directory;
+update all callers and metadata in the same change. No original expected data
+may disappear merely because two case names sound similar.
 
-## Running one cycle
+## Difficulty and review
 
-1. Open the work-item issue (title `[work-item] <benchmark>: <change>`,
-   label `work-item`, body from `task-spec.md`'s Human direction).
-   For a creation, curate the example input data yourself: the paper
-   shows this is the highest-leverage input. For maintenance, name
-   the target benchmark(s) and the intended end state.
-2. Hand the work-item issue and `proposer.md` to a research agent. It
-   writes a new `benchmarks/<name>/` or edits existing ones,
-   following `../benchmarks/AGENTS.md`.
-3. `./factory.sh validate <name>` runs the mechanical admission
-   (Stage 2). Fix or regenerate until clean.
-4. Build the Harbor task and pilot it (Stage 3):
-   `python evaluations/harbor/build.py --benchmarks <name> ...` then
-   `python evaluations/harbor/smoke.py`. The pilot needs Docker and a
-   model key; it is the only stage that leaves this machine.
-5. Score the candidate against `judges.md` (Stage 4), revise, and keep
-   the best accepted revision as the checkpoint for the next round.
-6. Open the pull request. A human moves the lifecycle badge from
-   `draft` to `reviewed` to `finalized` (Stage 5). PRs from
-   maintenance work items use the `[benchmark-maintain]` title
-   prefix.
+Where agent evaluation is relevant, pilot the candidate using the Harbor
+workflow. Inspect trajectories as well as scores. If solvers all pass, add a
+meaningful edge case; if a reference passes while solvers fail on ambiguous
+instructions, clarify the prompt. Keep the best reviewed revision rather than
+building on a rejected one. Do not manufacture difficulty through ambiguity or
+hidden sponsor conventions.
 
-## What the loop does not do
+Review each criterion as **pass**, **revise** or **fail**, citing a concrete
+fixture, source or prompt line:
 
-- It never rewrites a golden file from the engine's output. A golden
-  is an independent contract: reproduce it by hand or in a short
-  script and compare, per `../benchmarks/AGENTS.md`. `factory.sh` has
-  no regenerate-expected command on purpose.
-- It never writes the grader. `evaluations/harbor/grade.py` is reused
-  unchanged; the agent's job is the task content, not the rubric.
-- It never finalizes. The `finalized` badge is a human decision, as is
-  any retirement proposed in `gap-report.md`.
+| Criterion | Evidence required |
+| --- | --- |
+| Validity | A real, sourced derivation or failure pattern distinct from existing coverage. |
+| Correctness | Independently reproduced expectations and exact positive or negative results. |
+| Feasibility | Reference solutions can derive the full result from the prompt and inputs alone. |
+| Usefulness | A named coverage gap and, where measured, informative solver behavior. |
+| No leakage | No answer or implementation recipe in task materials; changed-input controls pass. |
 
-## Portability
-
-Everything the loop needs besides the repository itself is in this
-folder: two markdown contracts, one rubric, and one POSIX shell script
-with no dependencies beyond what the repo already uses (`uv`, `python3`,
-`git`). The Docker/model stages shell out to `evaluations/harbor` and
-degrade gracefully when those are unavailable: Stages 0-2 and 4 run
-anywhere.
+A failure rejects the revision; a revise verdict identifies the concrete next
+change. A passing technical review supports the lifecycle decision described in
+the benchmark guide. Record the decision and validation in the PR, not in a
+checked-in review packet, run ledger or generated report.

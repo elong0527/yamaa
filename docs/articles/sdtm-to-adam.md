@@ -1,17 +1,20 @@
 # SDTM to ADaM derivation recipe
 
-Canonical recipe for deriving ADaM datasets from SDTM with the yamaa engine.
+Derive ADaM datasets from SDTM with one specification per output dataset. The
+[introduction](intro.md) explains the language; the
+[style contract](https://github.com/elong0527/yamaa/blob/main/rules/specification/style.md)
+owns authoring conventions.
 
 - create exactly one spec per output dataset (e.g. `adsl.yaml`); keep temporary
   values and ordered calculation steps as derivations in that spec, not as
   `adsl-s1.yaml`, `adsl-final.yaml`, or other staged dataset files
 - establish dependency to avoid duplicate logic (e.g. the rest of the ADaM specs should depend on adsl.yaml)
-- create `run.py` to run the pipeline within 30 lines of code using the yamaa Python engine.
-- keep study-owned orchestration beside the study; do not add renderers,
-  conversion utilities, or other study support files under `.github/scripts`
+- keep orchestration small: call the Python or R package for each final dataset
+- keep study-owned orchestration and comparison code beside the study
 - verify equivalence of all data with a tolerance at 1e-10.
 - Equivalence means 100% of columns and 100% of cells match, with zero validation issues.
-- Comparison lives in a separate `compare.py` (not in `run.py`), which reports matched/total columns and cells per dataset and exits nonzero on any mismatch.
+- Keep comparison separate from study orchestration. Report matched and total
+  columns and cells per dataset, and exit nonzero on any mismatch.
 - Always verify the derivation against the latest yamaa repo before declaring equivalence.
   
 The original pilot source code may be read to understand intent, but
@@ -21,7 +24,8 @@ the yamaa spec must be built as a robust and succinct yamaa spec.
 
 - **Input** The project's `data/sdtm/` holds the staged SDTM
   inputs as parquet, one file per domain (e.g. `dm.parquet`, `ae.parquet`).
-- **yamaa** learn yamaa structure from project github README file. 
+- **yamaa** Install the supported [Python](https://github.com/elong0527/yamaa/blob/main/python/README.md)
+  or [R](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md) package.
 
 ## 2. Spec authoring conventions
 
@@ -75,8 +79,10 @@ multiple YAML files for one output dataset. Instead:
 
 1. Reduce the blocker to the smallest single-spec example and verify it against
    the latest yamaa revision.
-2. If it still fails, create a yamaa GitHub issue with the `pilot-dry-run`
-   label. Include the reduced specification, the diagnostic or timeout, and
-   the required before/after behavior.
+2. If it still fails, prepare a yamaa GitHub issue with the `pilot-dry-run`
+   label, a public or invented reproduction, the diagnostic or timeout, and
+   the required before/after behavior. Follow the
+   [private-study feedback process](https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md#reporting-findings-from-private-studies)
+   before publishing study-derived findings.
 3. Leave the output dataset out of the study run until that issue is resolved;
    do not commit its staged workaround as the intended derivation.

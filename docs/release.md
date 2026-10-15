@@ -7,7 +7,7 @@ open gates live in GitHub issues and pull requests, not here.
 ## Supported platforms
 
 - CPython 3.12, 3.13 and 3.14 wheels and source builds on Linux x86_64,
-  macOS arm64 and Windows x64 (18 combinations).
+  macOS arm64 and Windows x64.
 - R 4.6.1 source builds on the same three hosts, each passing strict
   `R CMD check` with **Status: OK**.
 - Other runtimes and architectures, free-threaded Python, musl and R binary
@@ -16,10 +16,10 @@ open gates live in GitHub issues and pull requests, not here.
 
 `.github/workflows/native.yml` builds, installs and tests every supported
 combination nightly on main and on manual dispatch. A release is cut from a
-commit whose nightly native run passed.
+commit whose complete native run passed.
 
 Python, R and Cargo versions move together;
-`tools/packaging/check_shared_release_versions.py` checks that they agree. The
+`tools.packaging.check_shared_release_versions` checks that they agree. The
 previous Python release is the `yamaa-py-0.3.0` tag.
 
 ## Publication
@@ -29,8 +29,8 @@ passed, push the coordinated tag `yamaa-v0.4.0` at that exact commit.
 `.github/workflows/release.yml` accepts a completed nightly main run, a main
 dispatch, or a same-repository `qualification/issue-*` push for the peeled tag
 commit. It requires all installed lanes, shared Rust/math, complete cohort
-comparisons and strict R package checks to have passed. Installed-only branch
-dispatches cannot release.
+comparisons and strict R package checks to have passed. Branch dispatches cannot
+release.
 
 The workflow downloads the qualified artifacts and publishes their unchanged
 bytes: one wheel per supported OS, the tested Linux Python sdist and the tested
@@ -41,6 +41,21 @@ release is never overwritten. The release includes committed notes from
 This route uses the workflow's GitHub token and needs no package-index
 credentials. PyPI publication is separate and requires configured authentication;
 the GitHub release assets remain the documented standalone download route.
+
+## Source package contents
+
+Python and R source packages carry the same Rust workspace, static ReadStat
+bridge and patched YAML parser. SAS and Transport decoding runs in the shared
+adapter over captured source bytes; it needs no host reader fallback or dynamic
+ReadStat installation. The [ReadStat integration](https://github.com/elong0527/yamaa/blob/main/rust/crates/yamaa-adapters/vendor/readstat/README.md)
+and [YAML parser provenance](https://github.com/elong0527/yamaa/blob/main/rust/vendor/saphyr-parser/PROVENANCE.md)
+own their source inventories, patches and licenses. Both parser authors' MIT
+notices remain in the distributed `LICENSE-YAML.txt`.
+
+Native qualification exercises the static source bridge on every supported
+platform and compares both installed hosts with independently authored binary
+fixtures and exact saved bytes. The [SAS source contract](https://github.com/elong0527/yamaa/blob/main/rules/storage/sas.md)
+owns decoding behavior.
 
 ## Approved decisions
 
@@ -75,6 +90,25 @@ the GitHub release assets remain the documented standalone download route.
 Host behavior and source installation commands live in the
 [Python](https://github.com/elong0527/yamaa/blob/main/python/README.md) and
 [R](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md) guides.
+
+## Resource refusals
+
+Capacity refusals retain `engine_rejected`, a null requirement and the authored
+paths. Compiler refusals identify `code: compiler_limit`, `stage: prepare`, the
+resource, its integer limit and actual usage when counted. Numeric policy
+refusals use `code: numeric_policy`; preparation and YAML resource refusals use
+`code: resource_limit` and retain their phase. Check and Build return the same
+preparation facts, with or without a project environment.
+
+Typed resource refusals also identify `incomplete_checks_from`, the earliest
+lifecycle scope without complete check results: `specification` for capture and
+preparation, `source_binding` for input admission and binding, `data` for
+execution and verification, or `output` for serialization and publication.
+Build/report boundaries use `build` when no narrower scope is available; other
+boundaries retain their stage name. Earlier completed checks remain valid. A
+refusal does not enumerate which individual requirements ran, execute later
+checks, or make static Check read study data. Reduce the exhausted resource and
+rerun to obtain remaining findings.
 
 ## Resource limits
 
