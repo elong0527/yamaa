@@ -3896,21 +3896,40 @@ class TestSpecNames(unittest.TestCase):
             "columns": [],
             "rows": [{"id": "row"}, {"id": "row", "dataset": "MISSING"}],
         }
-
         errors = CONTROLS.names(spec, "example/spec.yaml")
+        facts = [(error.condition, error.path, error.context) for error in errors]
+        for path in ('input.ADSL', 'domain', 'rows[1].id', 'rows[0].id'):
+            self.assertIn(('duplicate_identifier', 'example/spec.yaml.' + path,
+                {'identifier': 'row' if path.startswith('rows') else 'ADSL'}), facts)
+        self.assertIn(('driver_unavailable', 'example/spec.yaml.base',
+            {'dataset': 'MISSING'}), facts)
+        self.assertIn(('driver_unavailable', 'example/spec.yaml.rows[1].dataset',
+            {'dataset': 'MISSING', 'row': 'row'}), facts)
 
-        self.assertIn('duplicate_identifier', [error.condition for error in errors])
-        self.assertIn('driver_unavailable', [error.condition for error in errors])
-        spec['domain'] = 'OUT'
-        spec['base'] = 'ADSL'
-        spec['keys'] = ['ID']
-        spec['columns'] = [{'name': 'ID'}]
+        # Earlier root failures cannot stand in for later lookup obligations.
+        # Isolate each original assertion with complete, otherwise valid names.
+        spec.update(domain='OUT', base='ADSL', keys=['ID'], columns=[{'name': 'ID'}])
         spec['output']['columns'] = ['ID']
         spec.pop('rows')
-        spec['intermediates'][0]['dataset'] = 'ADSL'
-        additional = CONTROLS.names(spec, 'example/spec.yaml')
-        self.assertTrue(additional)
-        self.assertIn('ADSL', '\n'.join(additional))
+        for declarations, expected in (
+            ([{'id': 'LOOK', 'dataset': 'MISSING'}], [
+                ('unknown_field', 'intermediates[0].dataset',
+                 {'identifier': 'MISSING', 'intermediate': 'LOOK'})]),
+            ([{'id': 'LOOK', 'dataset': 'ADSL'}, {'id': 'LOOK', 'dataset': 'ADSL'}], [
+                ('duplicate_identifier', 'intermediates[1].id', {'identifier': 'LOOK'}),
+                ('duplicate_identifier', 'intermediates[0].id', {'identifier': 'LOOK'})]),
+            ([{'id': 'ADSL', 'dataset': 'ADSL'}], [
+                ('duplicate_identifier', 'intermediates[0].id', {'identifier': 'ADSL'}),
+                ('duplicate_identifier', 'input.ADSL', {'identifier': 'ADSL'})]),
+            ([{'id': 'OUT', 'dataset': 'ADSL'}], [
+                ('duplicate_identifier', 'intermediates[0].id', {'identifier': 'OUT'}),
+                ('duplicate_identifier', 'domain', {'identifier': 'OUT'})]),
+        ):
+            with self.subTest(declarations=declarations):
+                spec['intermediates'] = declarations
+                findings = CONTROLS.names(spec, 'example/spec.yaml')
+                self.assertEqual([(error.condition, error.path.removeprefix('example/spec.yaml.'),
+                    error.context) for error in findings], expected)
 
     def test_accepts_intermediate_row_driver(self):
         # REQ-1262: a row template may name a named intermediate as

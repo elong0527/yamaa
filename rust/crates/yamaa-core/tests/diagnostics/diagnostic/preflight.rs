@@ -1051,3 +1051,57 @@ pub(super) fn intermediate_reached() -> BTreeSet<ConditionCode> {
     }
     reached
 }
+
+pub(super) fn namespace_reached() -> BTreeSet<ConditionCode> {
+    let mut reached = BTreeSet::new();
+    for duplicate_row in [false, true] {
+        let mut fields = base(
+            "TEST",
+            inputs(),
+            vec![column("ID", Some(source()))],
+            vec![Text("ID")],
+        );
+        fields.push(("base", Text("SRC")));
+        let expected = if duplicate_row {
+            fields.push((
+                "rows",
+                List(
+                    (0..2)
+                        .map(|_| {
+                            Map(vec![
+                                ("id", Text("repeated")),
+                                ("dataset", Text("SRC")),
+                                ("derivations", Map(vec![])),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ));
+            vec![(
+                "duplicate_identifier",
+                Some("REQ-1056"),
+                vec!["rows[1].id", "rows[0].id"],
+                vec![("identifier", text("repeated"))],
+            )]
+        } else {
+            fields.push((
+                "intermediates",
+                List(vec![Map(vec![
+                    ("id", Text("LOOK")),
+                    ("dataset", Text("ABSENT")),
+                ])]),
+            ));
+            vec![(
+                "unknown_field",
+                Some("REQ-0079"),
+                vec!["intermediates[0].dataset"],
+                vec![
+                    ("identifier", text("ABSENT")),
+                    ("intermediate", text("LOOK")),
+                ],
+            )]
+        };
+        reached.extend(check(fields, expected));
+    }
+    reached
+}

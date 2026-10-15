@@ -32,6 +32,7 @@ pub(super) fn declaration_findings(
     let mut findings = Vec::new();
     let mut bytes = 0usize;
     let mut identifiers = BTreeMap::<&str, String>::new();
+    let domain = text(d, field(d, d.root(), "domain")?)?;
     for (index, &item) in items.iter().enumerate() {
         let path = format!("intermediates[{index}]");
         let name = text(d, field(d, item, "id")?)?;
@@ -53,6 +54,7 @@ pub(super) fn declaration_findings(
                 .iter()
                 .find(|source| source.name == name)
                 .map(|_| format!("input.{name}"))
+                .or_else(|| (name == domain).then(|| "domain".into()))
         }) {
             admit_finding()?;
             findings.push(PreflightFinding::Scalar(crate::diagnostic::Diagnostic {
@@ -68,6 +70,16 @@ pub(super) fn declaration_findings(
             }));
         } else {
             identifiers.insert(name, format!("{path}.id"));
+        }
+        if !sources.iter().any(|source| source.name == dataset)
+            && !(dataset == "SELF" && present(d, d.root(), "rows"))
+        {
+            admit_finding()?;
+            let mut finding =
+                LookupFinding::new(&format!("{path}.dataset"), C::IntermediateDatasetReference);
+            finding.text("identifier", dataset);
+            finding.text("intermediate", name);
+            findings.push(PreflightFinding::Scalar(finding.diagnostic()));
         }
         if is_rename_only(d, item) {
             admit_finding()?;
