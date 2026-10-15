@@ -1,4 +1,4 @@
-//! Closed closed specification submission metadata. No IO or execution grant.
+//! Bounded closed specification submission metadata. No IO or execution grant.
 use crate::schema::{Document, DocumentNode as N};
 
 mod decode;
@@ -6,12 +6,57 @@ mod model;
 pub use decode::decode;
 pub use model::*;
 
+#[derive(Clone, Copy, Debug)]
+pub struct Limits {
+    pub fields: usize,
+    pub columns: usize,
+    pub declarations: usize,
+    pub work: usize,
+    pub nodes: usize,
+    pub depth: usize,
+    pub list_items: usize,
+    pub text_bytes: usize,
+    pub escaped_bytes: usize,
+    pub path_segments: usize,
+    pub findings: usize,
+}
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            fields: 65_536,
+            columns: 16_384,
+            declarations: 16_385,
+            work: 67_108_864,
+            nodes: 131_072,
+            depth: 64,
+            list_items: 131_072,
+            text_bytes: 8_388_608,
+            escaped_bytes: 83_886_080,
+            path_segments: 655_360,
+            findings: 65_536,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Resource {
+    Fields,
+    Columns,
+    Declarations,
+    Work,
+    Nodes,
+    Depth,
+    ListItems,
+    TextBytes,
+    EscapedBytes,
+    PathSegments,
+    Findings,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Cause {
     Shape {
         node: usize,
     },
-    Resource(crate::limits::LimitExceeded),
+    Limit(Resource),
     /// Complete admitted structural findings, never a fitting prefix.
     Findings(Vec<Finding>),
 }
@@ -51,21 +96,39 @@ impl<'a> Locations<'a> {
 
 /// Admit every root/column field and key comparison before any location buffer
 /// grows. The declaration scan grants no structural or semantic acceptance.
-pub fn locate(input: &Document, root: usize) -> Result<Locations<'_>, Error<'_>> {
+pub fn locate(
+    input: &Document,
+    root: usize,
+    mut limits: Limits,
+) -> Result<Locations<'_>, Error<'_>> {
     let refuse = |cause| Error { input, cause };
     let fields = match input.nodes().get(root) {
         Some(N::Mapping(fields)) => fields,
         _ => return Err(refuse(Cause::Shape { node: root })),
     };
-    let scan = |fields: &[(usize, usize)]| -> Result<(), Cause> {
+    let scan = |limits: &mut Limits, fields: &[(usize, usize)]| -> Result<(), Cause> {
+        limits.fields = limits
+            .fields
+            .checked_sub(fields.len())
+            .ok_or(Cause::Limit(Resource::Fields))?;
+        limits.work = fields
+            .len()
+            .checked_mul(16)
+            .and_then(|n| limits.work.checked_sub(n))
+            .ok_or(Cause::Limit(Resource::Work))?;
         for &(key, _) in fields {
-            if !matches!(input.nodes()[key], N::Text(_)) {
+            let N::Text(text) = &input.nodes()[key] else {
                 return Err(Cause::Shape { node: key });
-            }
+            };
+            limits.work = text
+                .len()
+                .checked_mul(8)
+                .and_then(|n| limits.work.checked_sub(n))
+                .ok_or(Cause::Limit(Resource::Work))?;
         }
         Ok(())
     };
-    scan(fields).map_err(refuse)?;
+    scan(&mut limits, fields).map_err(refuse)?;
     let dataset = occurrence(input, root, FieldName::Submission);
     let columns_origin = occurrence(input, root, FieldName::Columns);
     let columns = match columns_origin.node {
@@ -75,14 +138,36 @@ pub fn locate(input: &Document, root: usize) -> Result<Locations<'_>, Error<'_>>
             _ => return Err(refuse(Cause::Shape { node })),
         },
     };
-    crate::limits::Limits::columns(columns.len())
-        .map_err(|error| refuse(Cause::Resource(error)))?;
+    limits.columns = limits
+        .columns
+        .checked_sub(columns.len())
+        .ok_or_else(|| refuse(Cause::Limit(Resource::Columns)))?;
+    limits.work = columns
+        .len()
+        .checked_mul(16)
+        .and_then(|n| limits.work.checked_sub(n))
+        .ok_or_else(|| refuse(Cause::Limit(Resource::Work)))?;
     for &node in columns {
         let N::Mapping(fields) = &input.nodes()[node] else {
             return Err(refuse(Cause::Shape { node }));
         };
-        scan(fields).map_err(refuse)?;
+        scan(&mut limits, fields).map_err(refuse)?;
     }
+    // Count the whole declaration set before owning even location facts.
+    let mut count = usize::from(dataset.node.is_some());
+    for &node in columns {
+        count = count
+            .checked_add(usize::from(
+                occurrence(input, node, FieldName::Submission)
+                    .node
+                    .is_some(),
+            ))
+            .ok_or_else(|| refuse(Cause::Limit(Resource::Declarations)))?;
+    }
+    limits
+        .declarations
+        .checked_sub(count)
+        .ok_or_else(|| refuse(Cause::Limit(Resource::Declarations)))?;
     let mut owned = Vec::with_capacity(columns.len());
     for &node in columns {
         owned.push(ColumnLocation {

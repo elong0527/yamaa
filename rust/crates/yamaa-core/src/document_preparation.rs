@@ -1,6 +1,6 @@
 //! One decoded entry selects the standalone or inherited preparation lifecycle.
 //! Codecs retain physical source/location authority; this application owns no IO.
-use crate::schema::{Document, SchemaStructure};
+use crate::schema::{Document, NormalizationBudget, SchemaStructure};
 use crate::{inheritance_capture, project_preparation::Source, standalone_preparation};
 
 /// Entry source admission is distinct from parent capture admission. The borrowed
@@ -53,7 +53,7 @@ pub type PreparationResult<E, X, R, L> = Result<Prepared<R, L>, Error<E, X, R>>;
 
 /// Decode once, then test raw parent presence without a preceding normalization
 /// or version/default gate. Both routes retain their own existing checkpoint and
-/// source authority. Null/scalar/empty parents still select inheritance.
+/// cumulative budget semantics. Null/scalar/empty parents still select inheritance.
 pub fn prepare<E, D, P>(
     schema: &SchemaStructure,
     source: Source,
@@ -61,6 +61,7 @@ pub fn prepare<E, D, P>(
     entry: &mut E,
     parents: &mut D,
     capture: &mut P,
+    limits: inheritance_capture::Limits,
 ) -> PreparationResult<P::Error, E::Error, E::Raw, E::Locations>
 where
     E: EntryCodec,
@@ -72,13 +73,24 @@ where
         .field(E::document(&raw).root(), "parents")
         .is_some()
     {
-        let prepared =
-            inheritance_capture::prepare(schema, &source, display_path, &raw, capture, parents)
-                .map_err(Error::Inherited)?;
+        let prepared = inheritance_capture::prepare(
+            schema,
+            &source,
+            display_path,
+            &raw,
+            capture,
+            parents,
+            limits,
+        )
+        .map_err(Error::Inherited)?;
         Content::Inherited { raw, prepared }
     } else {
         let (raw, locations) = E::into_parts(raw);
-        let prepared = match standalone_preparation::prepare(schema, raw) {
+        let prepared = match standalone_preparation::prepare(
+            schema,
+            raw,
+            &mut NormalizationBudget::for_application(limits.normalization),
+        ) {
             Ok(prepared) => prepared,
             Err(error) => return Err(Error::Standalone { source, error }),
         };

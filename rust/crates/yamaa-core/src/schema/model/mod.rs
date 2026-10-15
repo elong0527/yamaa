@@ -2,7 +2,9 @@
 //! metadata relationships, expression payload semantics or execution support.
 mod rules;
 
-use super::{Document, DocumentNode as N, SchemaContext, SchemaDiagnostic, ValidationError};
+use super::{
+    Document, DocumentNode as N, SchemaContext, SchemaDiagnostic, ValidationBudget, ValidationError,
+};
 use crate::diagnostic::ConditionCode;
 use std::vec;
 
@@ -44,11 +46,14 @@ pub struct SpecificationDocument {
 
 impl SpecificationDocument {
     /// Consume the document only after every structural finding has been collected.
+    /// Related schema passes can share this budget; failed union branches retain charges.
     pub fn admit(
         document: Document,
+        budget: &mut ValidationBudget,
     ) -> Result<Result<Self, Vec<SchemaDiagnostic>>, ValidationError> {
         let diagnostics = Run {
             document: &document,
+            budget,
         }
         .check(document.root(), Kind::Object(rules::SPECIFICATION), "", 0)?;
         Ok(if diagnostics.is_empty() {
@@ -85,9 +90,12 @@ impl SpecificationDocument {
 
 struct Run<'a> {
     document: &'a Document,
+    budget: &'a mut ValidationBudget,
 }
 impl Run<'_> {
     fn path(&mut self, parent: &str, child: &str) -> Result<String, ValidationError> {
+        self.budget
+            .text(parent.len().saturating_add(child.len()).saturating_add(1))?;
         Ok(if parent.is_empty() {
             child.into()
         } else {
@@ -99,11 +107,11 @@ impl Run<'_> {
         path: &str,
         reason: impl Into<String>,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
-        Ok(vec![super::validation::diagnostic(
+        Ok(vec![self.budget.diagnostic(
             path,
             ConditionCode::SchemaModelInvalidValue,
             vec![("reason", SchemaContext::Text(reason.into()))],
-        )])
+        )?])
     }
     fn owned_finding(
         &mut self,
@@ -111,16 +119,17 @@ impl Run<'_> {
         code: ConditionCode,
         reason: impl Into<String>,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
-        Ok(vec![super::validation::diagnostic(
+        Ok(vec![self.budget.diagnostic(
             path,
             code,
             vec![("reason", SchemaContext::Text(reason.into()))],
-        )])
+        )?])
     }
     fn key(&mut self, id: usize) -> Result<String, ValidationError> {
         // Model error locations encode bool keys as integer locations, unlike
         // schema diagnostics. The key remains a bool and is still rejected.
         let node = &self.document.nodes()[id];
+        self.budget.work(node.length().unwrap_or(1))?;
         match node {
             N::Boolean(true) => Ok("1".into()),
             N::Boolean(false) => Ok("0".into()),
@@ -134,7 +143,8 @@ impl Run<'_> {
         path: &str,
         depth: usize,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
-        super::validation::depth(depth)?;
+        self.budget.depth(depth)?;
+        self.budget.work(1)?;
         let node = &self.document.nodes()[id];
         match kind {
             Kind::Optional(inner) if !matches!(node, N::Null) => {
@@ -201,6 +211,11 @@ impl Run<'_> {
                 }
             }
             Kind::Enum(values) => {
+                self.budget.work(
+                    values
+                        .len()
+                        .saturating_mul(node.length().unwrap_or(1).saturating_add(1)),
+                )?;
                 if matches!(node, N::Text(text) if values.contains(&text.as_str())) {
                     return Ok(Vec::new());
                 }
@@ -217,6 +232,7 @@ impl Run<'_> {
                 let N::Text(text) = node else {
                     return self.finding(path, "Input should be a valid string");
                 };
+                self.budget.work(text.len())?;
                 if matches!(kind, Kind::NonemptyText) && text.is_empty() {
                     return self.finding(path, "String should have at least 1 character");
                 }
@@ -284,6 +300,11 @@ impl Run<'_> {
         let mut result = Vec::new();
         // Match the public model's field order, followed by authored extra-field order.
         for field in model.fields {
+            self.budget.work(
+                entries
+                    .len()
+                    .saturating_mul(field.name.len().saturating_add(1)),
+            )?;
             let value = self.document.field(id, field.name);
             if value.is_some() || field.required {
                 let p = self.path(path, field.name)?;
@@ -300,6 +321,12 @@ impl Run<'_> {
         }
         for &(key, _) in entries {
             let name = self.key(key)?;
+            self.budget.work(
+                model
+                    .fields
+                    .len()
+                    .saturating_mul(name.len().saturating_add(1)),
+            )?;
             if !matches!(self.document.nodes()[key], N::Text(_)) {
                 let p = self.path(path, &name)?;
                 result.extend(self.finding(&p, "Keys should be strings")?);

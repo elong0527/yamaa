@@ -2,6 +2,7 @@
 //!
 //! This trusted typed service receives bounded, structurally admitted documents.
 //! It owns no source reader, lock verifier, import mechanism or callable port.
+use crate::project_limits::{AdmissionError, Budget, Limit, Limits};
 use crate::value::{ColumnType, Value, ValueType};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -75,6 +76,7 @@ pub struct CallArgument {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CallFinding {
+    Limit(Limit),
     DuplicateArgument {
         argument: usize,
     },
@@ -99,8 +101,8 @@ pub struct Function {
 }
 impl Function {
     /// The environment has already admitted the complete definition collection
-    /// once. Transfer its definitions without repeating admission or copying
-    /// their test cases.
+    /// under its cumulative policy. Transfer its definitions without a second
+    /// independently budgeted admission or copying their test cases.
     pub(crate) fn from_admitted(language: Language, definition: Definition) -> Self {
         Self {
             language,
@@ -154,6 +156,9 @@ impl Function {
     /// Missing permissions govern invocation; an explicit missing literal is legal
     /// for a non-accepting parameter and causes a runtime short circuit.
     pub fn bind_call(&self, arguments: &[CallArgument]) -> Vec<CallFinding> {
+        if let Err(limit) = Budget::new(Limits::default()).arguments(&self.definition, arguments) {
+            return std::vec![CallFinding::Limit(limit)];
+        }
         let mut findings = Vec::new();
         let mut names = BTreeSet::new();
         for (argument, item) in arguments.iter().enumerate() {
@@ -182,7 +187,20 @@ impl Function {
         }
         findings
     }
-    pub fn admit(language: Language, definition: Definition) -> Result<Self, Vec<Finding>> {
+    pub fn admit(
+        language: Language,
+        definition: Definition,
+    ) -> Result<Self, AdmissionError<Finding>> {
+        Self::admit_with_limits(language, definition, Limits::default())
+    }
+    pub fn admit_with_limits(
+        language: Language,
+        definition: Definition,
+        limits: Limits,
+    ) -> Result<Self, AdmissionError<Finding>> {
+        Budget::new(limits)
+            .function(&definition)
+            .map_err(AdmissionError::Limit)?;
         let findings = validate(language, &definition);
         if findings.is_empty() {
             Ok(Self {
@@ -190,7 +208,7 @@ impl Function {
                 definition,
             })
         } else {
-            Err(findings)
+            Err(AdmissionError::Findings(findings))
         }
     }
 }

@@ -2,8 +2,8 @@
 //! The codec owns physical source limits and exact occurrence-location authority.
 use crate::project_preparation::Source;
 use crate::schema::{
-    Document, NormalizationError, NormalizedDocument, SchemaDiagnostic, SchemaStructure,
-    ValidationError,
+    Document, NormalizationBudget, NormalizationError, NormalizationLimits, NormalizedDocument,
+    SchemaDiagnostic, SchemaStructure, ValidationError,
 };
 
 /// A physical codec decodes this exact held source once. Its locations must
@@ -22,8 +22,25 @@ pub enum Selection<'a> {
     StructuralRoot,
     NamedClass(&'a str),
 }
+#[derive(Clone, Copy, Debug)]
+pub struct Limits {
+    /// Existing identity-byte policy applies only to explicit named selection.
+    pub class_name_bytes: usize,
+    /// Fresh per-document scope, shared by type-query binding and normalization.
+    pub normalization: NormalizationLimits,
+}
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            class_name_bytes: 65_536,
+            normalization: Default::default(),
+        }
+    }
+}
 #[derive(Debug, thiserror::Error)]
 pub enum Error<E> {
+    #[error("structural preparation class name limit")]
+    ClassNameLimit,
     #[error("structural preparation unknown class: {0:?}")]
     UnknownClass(String),
     #[error("structural preparation versioned root required")]
@@ -106,11 +123,15 @@ pub fn prepare<P: DecodePort>(
     schema: &SchemaStructure,
     source: Source,
     selection: Selection<'_>,
+    limits: Limits,
     decoder: &mut P,
 ) -> Result<Prepared<P::Locations>, Error<P::Error>> {
     let class_name = match selection {
         Selection::StructuralRoot => &schema.root_class().name,
         Selection::NamedClass(name) => {
+            if name.len() > limits.class_name_bytes {
+                return Err(Error::ClassNameLimit);
+            }
             let class = schema
                 .class_named(name)
                 .ok_or_else(|| Error::UnknownClass(name.into()))?;
@@ -128,13 +149,16 @@ pub fn prepare<P: DecodePort>(
         document,
         locations,
     } = decoder.decode(&source).map_err(Error::Decode)?;
+    // Preserve the existing fresh per-document policy. Project metadata's
+    // cumulative source/node/semantic quotas remain the outer application's scope.
+    let mut budget = NormalizationBudget::new(limits.normalization);
     let normalized = match selection {
-        Selection::StructuralRoot => schema.normalize_document(&document),
+        Selection::StructuralRoot => schema.normalize_document(&document, &mut budget),
         Selection::NamedClass(_) => {
             let types = schema
-                .parse_query_types(&[class_name.into()])
+                .parse_query_types(&[class_name.into()], budget.validation_scope())
                 .map_err(Error::Validation)?;
-            schema.normalize_types(&types, &document, document.root(), false)
+            schema.normalize_types(&types, &document, document.root(), false, &mut budget)
         }
     };
     let normalized = match normalized {

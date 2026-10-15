@@ -12,23 +12,54 @@ use std::collections::BTreeSet;
 pub enum Error {
     #[error("project codelist diagnostics invalid observation")]
     InvalidObservation,
+    #[error("project codelist diagnostics limit")]
+    Limit,
     #[error("project codelist diagnostics projection")]
     Projection,
 }
-/// Validate all retained observation geometry before materializing contexts.
+struct Budget(usize);
+impl Budget {
+    fn text(&mut self, text: &str) -> Result<(), Error> {
+        let charge = text
+            .len()
+            .checked_mul(12)
+            .and_then(|n| n.checked_add(128))
+            .ok_or(Error::Limit)?;
+        self.0 = self.0.checked_sub(charge).ok_or(Error::Limit)?;
+        Ok(())
+    }
+    fn value(&mut self, value: &Value) -> Result<(), Error> {
+        self.text(match value {
+            Value::Str(text) => text,
+            _ => "01234567890123456789012345678901",
+        })
+    }
+}
+/// Admit all observation geometry and cumulative escaping cost before allocating
+/// a diagnostic path or context tree. Other check families are left untouched.
 pub fn diagnostics<'a>(
     compiled: &'a PreparedSpecification,
     records: &'a [CheckRecord],
+    maximum: usize,
 ) -> Result<Vec<Diagnostic<'a>>, Error> {
+    if records.len() > 65_536 {
+        return Err(Error::Limit);
+    }
+    let mut budget = Budget(maximum);
+    if compiled.key_names().count() > 65_536 {
+        return Err(Error::Limit);
+    }
     let names: Vec<_> = compiled.key_names().collect();
     let mut unique = BTreeSet::new();
     for name in &names {
+        budget.text(name)?;
         if name.is_empty() || !unique.insert(*name) {
             return Err(Error::InvalidObservation);
         }
     }
     let mut paths = BTreeSet::new();
     for record in records {
+        budget.text(record.path.as_str())?;
         let check = compiled.column_check(record.path.as_str());
         let Some(observation) = record.codelist.as_ref() else {
             if matches!(
@@ -40,10 +71,13 @@ pub fn diagnostics<'a>(
             }
             continue;
         };
-
+        budget.text(observation.id.as_str())?;
         let Some((id, _)) = check.and_then(|check| check.codelist(observation.id.as_str())) else {
             return Err(Error::InvalidObservation);
         };
+        if record.offending_rows.len() > 65_536 || observation.values.len() > 65_536 {
+            return Err(Error::Limit);
+        }
         if id != observation.id.as_str()
             || record.code != ConditionCode::VerificationCodelistFailed
             || record.failed_count != observation.values.len()
@@ -57,9 +91,10 @@ pub fn diagnostics<'a>(
         if record.failed_count == 0 {
             continue;
         }
-        compiled
+        let column = compiled
             .verification_target(record.path.as_str())
             .ok_or(Error::InvalidObservation)?;
+        budget.text(column)?;
         let mut previous = None;
         for (row, value) in record.offending_rows.iter().zip(&observation.values) {
             if row.values.as_slice().len() != names.len()
@@ -75,6 +110,11 @@ pub fn diagnostics<'a>(
                 return Err(Error::InvalidObservation);
             }
             previous = Some(row.position);
+            for (name, key) in names.iter().zip(row.values.as_slice()) {
+                budget.text(name)?;
+                budget.value(key)?;
+            }
+            budget.value(value)?;
         }
     }
     let mut diagnostics = Vec::new();
@@ -111,7 +151,10 @@ pub fn diagnostics<'a>(
         let context: Context<'a> = [
             ("column", Fact::Text(column)),
             ("codelist", Fact::Text(id)),
-            ("failure_count", Fact::Unsigned(record.failed_count)),
+            (
+                "failure_count",
+                Fact::Integer(i64::try_from(record.failed_count).expect("bounded observations")),
+            ),
             ("keys", Fact::Sequence(keys)),
             ("values", Fact::Sequence(values)),
         ]
