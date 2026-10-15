@@ -77,6 +77,7 @@ impl<T: TableAccess + ?Sized> EvaluationContext for Context<'_, '_, T> {
         let owned = match binding.read {
             Read::Joined(ref read) => Some(
                 joined::read(
+                    self.table,
                     read,
                     self.assignment,
                     self.candidate,

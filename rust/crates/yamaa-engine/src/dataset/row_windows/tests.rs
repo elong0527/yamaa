@@ -239,6 +239,7 @@ fn grouped_postwindow_filters_use_contextual_join_and_named_lookup_reads_lazily(
                             }
                         } else {
                             Read::Joined(Box::new(JoinedRead {
+                                record_keys: None,
                                 source: AggregateSource::Primary,
                                 column: 1,
                                 keys: vec![MatchKey {

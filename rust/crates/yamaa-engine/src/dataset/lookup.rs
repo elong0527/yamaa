@@ -321,8 +321,9 @@ fn select<E>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(super) fn read_joined<E>(
-    table: &dyn TableAccess<Error = E>,
+pub(super) fn read_joined<T: TableAccess + ?Sized>(
+    current: &T,
+    table: &dyn TableAccess<Error = T::Error>,
     source: usize,
     joined: &yamaa_core::dataset::JoinedRead,
     assignment: &Assignment,
@@ -333,17 +334,28 @@ pub(super) fn read_joined<E>(
     filter: Option<&yamaa_core::bound_expression::BoundPredicate>,
     selection: Option<&SourceSelection>,
     handlers: &mut HandlerCounter,
-) -> Result<Value, Box<ExecutionError<E>>> {
-    let keys = joined
-        .keys
-        .iter()
-        .map(|key| {
-            (
-                key.source_column,
-                ValueRef::from(&candidate.values[key.output_column]),
-            )
-        })
-        .collect::<Vec<_>>();
+) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    let mut keys = Vec::new();
+    for (index, key) in joined.keys.iter().enumerate() {
+        let value = if let Some(records) = &joined.record_keys {
+            budget.work(1, 1)?;
+            let source_row = candidate.members[0];
+            let value = current.cell(source_row, records[index]).map_err(|error| {
+                Box::new(ExecutionError::Cell {
+                    path: assignment.path.clone(),
+                    source_row,
+                    error,
+                })
+            })?;
+            if let ValueRef::Str(text) = value {
+                budget.scalar_text(text.len())?;
+            }
+            value
+        } else {
+            ValueRef::from(&candidate.values[key.output_column])
+        };
+        keys.push((key.source_column, value));
+    }
     read_matching(
         table,
         source,

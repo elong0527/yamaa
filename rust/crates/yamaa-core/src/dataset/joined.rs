@@ -5,6 +5,8 @@ pub struct JoinedRead {
     pub source: AggregateSource,
     pub column: usize,
     pub keys: Vec<MatchKey>,
+    /// Row-template joins read these raw driver fields; column joins read output keys.
+    pub record_keys: Option<Vec<usize>>,
     pub name: String,
     pub schema: alloc::sync::Arc<TableSchema>,
 }
@@ -15,8 +17,11 @@ impl JoinedRead {
         secondary: &[SecondarySource],
         output: &TableSchema,
         available: &[bool],
+        mode: &RowMode,
     ) -> Result<(), PlanError> {
-        let _ = primary;
+        if self.record_keys.is_some() && matches!(mode.local_mode(), RowMode::Keys) {
+            return Err(PlanError::InvalidLookup);
+        }
         let donor = match self.source {
             AggregateSource::Primary => &self.schema,
             AggregateSource::Secondary(index) => {
@@ -26,17 +31,40 @@ impl JoinedRead {
         if self.column >= donor.columns().len() || self.keys.is_empty() {
             return Err(PlanError::InvalidLookup);
         }
+        if self
+            .record_keys
+            .as_ref()
+            .is_some_and(|keys| keys.len() != self.keys.len())
+        {
+            return Err(PlanError::InvalidLookup);
+        }
         for (index, key) in self.keys.iter().enumerate() {
+            if key.output_column >= output.columns().len() {
+                return Err(PlanError::InvalidLookup);
+            }
             let field = donor
                 .columns()
                 .get(key.source_column)
                 .ok_or(PlanError::InvalidLookup)?;
-            let output_field = output
-                .columns()
-                .get(key.output_column)
-                .ok_or(PlanError::InvalidLookup)?;
-            if !available.get(key.output_column).copied().unwrap_or(false)
-                || !crate::key_relation::comparable(field.kind.into(), output_field.kind.into())
+            let current = if let Some(keys) = &self.record_keys {
+                let column = keys[index];
+                if matches!(mode.local_mode(), RowMode::Groups(group) if !group.contains(&column)) {
+                    return Err(PlanError::NonGroupSource);
+                }
+                primary
+                    .columns()
+                    .get(column)
+                    .ok_or(PlanError::InvalidLookup)?
+            } else {
+                if !available.get(key.output_column).copied().unwrap_or(false) {
+                    return Err(PlanError::InvalidLookup);
+                }
+                output
+                    .columns()
+                    .get(key.output_column)
+                    .ok_or(PlanError::InvalidLookup)?
+            };
+            if !crate::key_relation::comparable(field.kind.into(), current.kind.into())
                 || self.keys[..index]
                     .iter()
                     .any(|prior| prior.source_column == key.source_column)
@@ -145,4 +173,53 @@ pub(super) fn validate_sources(
         _ => (),
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{table::Column, value::ColumnType};
+    #[test]
+    fn raw_join_keys_validate_current_record_coordinates_and_group_membership() {
+        let schema = alloc::sync::Arc::new(
+            TableSchema::new(vec![Column {
+                name: "K".into(),
+                kind: ColumnType::Str,
+            }])
+            .unwrap(),
+        );
+        let output = TableSchema::new(vec![Column {
+            name: "K".into(),
+            kind: ColumnType::Int,
+        }])
+        .unwrap();
+        let mut read = JoinedRead {
+            source: AggregateSource::Primary,
+            column: 0,
+            keys: vec![MatchKey {
+                source_column: 0,
+                output_column: 0,
+            }],
+            record_keys: Some(vec![0]),
+            name: "RIGHT".into(),
+            schema: schema.clone(),
+        };
+        assert!(read
+            .validate(&schema, &[], &output, &[false], &RowMode::Records)
+            .is_ok());
+        assert_eq!(
+            read.validate(&schema, &[], &output, &[false], &RowMode::Groups(vec![])),
+            Err(PlanError::NonGroupSource)
+        );
+        read.record_keys = Some(vec![1]);
+        assert_eq!(
+            read.validate(&schema, &[], &output, &[false], &RowMode::Records),
+            Err(PlanError::InvalidLookup)
+        );
+        read.record_keys = Some(vec![]);
+        assert_eq!(
+            read.validate(&schema, &[], &output, &[false], &RowMode::Records),
+            Err(PlanError::InvalidLookup)
+        );
+    }
 }

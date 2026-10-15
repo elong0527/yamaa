@@ -70,6 +70,7 @@ impl<T: TableAccess + ?Sized> EvaluationContext for Context<'_, '_, T> {
         let owned = match read {
             FlagRead::Read(Read::Joined(read)) => Some(
                 joined::read(
+                    self.table,
                     read,
                     self.assignment,
                     self.candidate,

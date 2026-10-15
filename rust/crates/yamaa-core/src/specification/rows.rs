@@ -1327,6 +1327,9 @@ impl Rows {
                 &secondary,
                 &template.driver,
             )?;
+            let row_catalog = row_catalog
+                .with_row_joins(&template.driver, template.groups.as_deref())
+                .map_err(BindError::Catalog)?;
             let mode = match &template.groups {
                 None => RowMode::Records,
                 Some(groups) => RowMode::Groups(
@@ -1611,7 +1614,7 @@ impl Rows {
                     };
                     if lookup_match.is_some()
                         || matches!(binding.read, Read::Column(column) if deferred.get(column).copied().unwrap_or(false))
-                        || matches!(&binding.read, Read::Joined(read) if read.keys.iter().any(|key| deferred.get(key.output_column).copied().unwrap_or(true)))
+                        || matches!(&binding.read, Read::Joined(read) if read.record_keys.is_none() && read.keys.iter().any(|key| deferred.get(key.output_column).copied().unwrap_or(true)))
                     {
                         let mut context: crate::diagnostic::Context = [
                             (

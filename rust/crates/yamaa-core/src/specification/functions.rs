@@ -596,6 +596,7 @@ pub(super) fn bind_findings(
             Ok(match error.kind {
                 crate::project_call_binding::Kind::Joined(cause) => match cause {
                     reference_binding::JoinedFinding::UnknownField => BindFinding::UnknownReference { path, name: name.clone() },
+                    reference_binding::JoinedFinding::CurrentKey { identifier, finding } => BindFinding::QualifiedReference { path, name: identifier, row: row.map(String::from), finding },
                     reference_binding::JoinedFinding::UnavailableKey { .. } => BindFinding::ProjectFunction(FunctionFinding { path, function: call.call.name.clone(), argument: Some(argument.name.clone()), node: argument.node, cause: Cause::RowPhase { identifier: name.clone(), row: row.ok_or(BindError::Internal)?.into() } }),
                     reference_binding::JoinedFinding::NoApplicableKeys { dataset, keys } => {
                         let mut finding = source_expressions::SourceFinding::new(C::ImplicitSourceNoApplicableKeys, &path, &[("dataset", &dataset), ("hint", "declare an explicit `intermediate:` with `source`/`key` pairs")]);

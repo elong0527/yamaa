@@ -2347,6 +2347,47 @@ local({
   cat("original namespace declarations preserve complete paired public refusals before source reads\n")
 })
 
+local({
+  assert_row_join_issues <- function(actual,expected) {
+    stopifnot(identical(names(actual),fixture_strings(host_truth[["issue_columns"]])),
+      nrow(actual)==length(expected))
+    for (i in seq_along(expected)) {
+      finding <- expected[[i]]
+      context <- jsonlite::fromJSON(actual$context[[i]],simplifyVector=FALSE)
+      stopifnot(identical(actual$phase[[i]],finding$phase),
+        identical(actual$condition[[i]],finding$condition),
+        identical(actual$requirement[[i]],finding$requirement),
+        identical(actual$spec_paths[[i]],fixture_strings(finding$spec_paths)),
+        identical(context[sort(names(context))],finding$context[sort(names(finding$context))]))
+    }
+  }
+  stopifnot(length(host_truth[["row_join_keys"]])==11L)
+  for (truth in host_truth[["row_join_keys"]]) {
+    directory <- tempfile("yamaa-row-join-keys-"); dir.create(directory)
+    entry <- file.path(directory,"spec.yaml")
+    writeBin(charToRaw(truth$specification),entry)
+    assert_row_join_issues(yamaa_check(entry)$issues,truth$check_issues)
+    for (name in names(truth$inputs)) {
+      path <- file.path(directory,name); dir.create(dirname(path),recursive=TRUE,showWarnings=FALSE)
+      writeBin(charToRaw(truth$inputs[[name]]),path)
+    }
+    for (attempt in 1:2) {
+      assert_row_join_issues(yamaa_check(entry)$issues,truth$check_issues)
+      result <- yamaa_domain(entry)
+      assert_row_join_issues(result$issues,truth$issues)
+      if (!is.null(truth$csv)) {
+        stopifnot(!is.null(result$output),identical(result$save(),TRUE),
+          identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
+        unlink(file.path(directory,"out.csv"))
+      } else stopifnot(is.null(result$output),
+        inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        !file.exists(file.path(directory,"out.csv")))
+    }
+    unlink(directory,recursive=TRUE)
+  }
+  cat("implicit row joins preserve raw driver keys while column and named lookups preserve constructed keys without Python\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)
