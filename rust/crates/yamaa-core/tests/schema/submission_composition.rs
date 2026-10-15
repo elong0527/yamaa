@@ -1,7 +1,7 @@
 //! Independent metadata arenas exercise complete multi-domain work admission.
 use yamaa_core::{
     project_terminology::Catalogue,
-    schema::{Document, DocumentLimits, DocumentNode as N},
+    schema::{Document, DocumentNode as N},
     submission_composition::{self, Input},
     submission_document,
 };
@@ -121,8 +121,7 @@ fn compose(
     documents: &[Document],
 ) -> Result<submission_composition::Study, Vec<submission_composition::Finding>> {
     let environment = environment(documents.len());
-    let declared =
-        submission_document::decode(&environment, environment.root(), Default::default()).unwrap();
+    let declared = submission_document::decode(&environment, environment.root()).unwrap();
     let sources: Vec<_> = (0..documents.len())
         .map(|index| format!("d{index}.yaml"))
         .collect();

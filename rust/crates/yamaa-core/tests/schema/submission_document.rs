@@ -1,7 +1,7 @@
 use yamaa_core::{
     project_environment::Submission,
-    schema::{Document, DocumentLimits, DocumentNode as N},
-    submission_document::{self, Cause, Limits, Resource},
+    schema::{Document, DocumentNode as N},
+    submission_document::{self, Cause},
 };
 
 fn declarations() -> Document {
@@ -29,7 +29,7 @@ fn declarations() -> Document {
 #[test]
 fn borrowed_declarations_keep_original_occurrences_and_authored_section_order() {
     let input = declarations();
-    let facts = submission_document::locate(&input, 10, Limits::default()).unwrap();
+    let facts = submission_document::locate(&input, 10).unwrap();
     assert!(std::ptr::eq(facts.input(), &input));
     assert_eq!(facts.study(), Some(3));
     assert_eq!(
@@ -44,42 +44,28 @@ fn borrowed_declarations_keep_original_occurrences_and_authored_section_order() 
 }
 
 #[test]
-fn limited_location_scans_preserve_the_exact_input_without_partial_facts() {
+fn repeated_location_scans_preserve_exact_input_and_complete_facts() {
     let input = declarations();
-    for (limits, resource) in [
-        (
-            Limits {
-                fields: 4,
-                ..Limits::default()
-            },
-            Resource::Fields,
-        ),
-        (
-            Limits {
-                work: 0,
-                ..Limits::default()
-            },
-            Resource::Work,
-        ),
-        (
-            Limits {
-                declarations: 2,
-                ..Limits::default()
-            },
-            Resource::Declarations,
-        ),
-    ] {
-        let error = submission_document::locate(&input, 10, limits).unwrap_err();
-        assert!(std::ptr::eq(error.input, &input));
-        assert_eq!(error.cause, Cause::Limit(resource));
-        assert_eq!(error.input.field(10, "sdtm"), Some(7));
+    for _ in 0..3 {
+        let facts = submission_document::locate(&input, 10).unwrap();
+        assert!(std::ptr::eq(facts.input(), &input));
+        assert_eq!(facts.study(), Some(3));
+        assert_eq!(
+            facts.sections(),
+            [
+                (Submission::Send, 1),
+                (Submission::Adam, 5),
+                (Submission::Sdtm, 7)
+            ]
+        );
+        assert_eq!(facts.input().field(10, "sdtm"), Some(7));
     }
 }
 
 #[test]
 fn absent_declarations_and_original_shape_refusals_remain_distinct() {
     let empty = Document::new(vec![N::Mapping(vec![])], 0).unwrap();
-    let facts = submission_document::locate(&empty, 0, Limits::default()).unwrap();
+    let facts = submission_document::locate(&empty, 0).unwrap();
     assert_eq!(facts.study(), None);
     assert!(facts.sections().is_empty());
     let input = Document::new(
@@ -88,7 +74,7 @@ fn absent_declarations_and_original_shape_refusals_remain_distinct() {
     )
     .unwrap();
     for (root, node) in [(0, 0), (2, 0), (99, 99)] {
-        let error = submission_document::locate(&input, root, Limits::default()).unwrap_err();
+        let error = submission_document::locate(&input, root).unwrap_err();
         assert!(std::ptr::eq(error.input, &input));
         assert_eq!(error.cause, Cause::Shape { node });
     }
@@ -214,7 +200,7 @@ fn complete_owned_metadata_preserves_order_overrides_and_occurrences_after_input
     let root = input.root();
     let study_node = input.field(root, "study").unwrap();
     let id_node = input.field(study_node, "id").unwrap();
-    let owned = submission_document::decode(&input, root, Limits::default()).unwrap();
+    let owned = submission_document::decode(&input, root).unwrap();
     drop(input);
     assert_eq!(owned.root(), root);
     let study = owned.study().unwrap();
@@ -333,7 +319,7 @@ fn every_shipped_guide_spelling_is_closed_metadata_not_family_composition() {
         let section = a.section(text);
         let root = a.map(vec![("sdtm", section)]);
         let input = a.finish(root);
-        let owned = submission_document::decode(&input, root, Limits::default()).unwrap();
+        let owned = submission_document::decode(&input, root).unwrap();
         assert_eq!(owned.sections()[0].standard.name.value, expected);
         assert_eq!(owned.sections()[0].standard.name.value.name(), text);
         assert!(owned.study().is_none()); // missing generator prerequisites remain a separate use case.
@@ -345,7 +331,7 @@ fn absent_declarations_and_explicit_default_values_have_distinct_origin_facts() 
     let language = a.text("r");
     let root = a.map(vec![("language", language)]);
     let input = a.finish(root);
-    let owned = submission_document::decode(&input, root, Limits::default()).unwrap();
+    let owned = submission_document::decode(&input, root).unwrap();
     assert!(owned.study().is_none());
     assert!(owned.sections().is_empty());
     let mut a = Arena::default();
@@ -367,7 +353,7 @@ fn absent_declarations_and_explicit_default_values_have_distinct_origin_facts() 
     ]);
     let root = a.map(vec![("sdtm", section)]);
     let input = a.finish(root);
-    let owned = submission_document::decode(&input, root, Limits::default()).unwrap();
+    let owned = submission_document::decode(&input, root).unwrap();
     let s = &owned.sections()[0];
     for (origin, expected) in [
         (s.documents.origin, documents),
@@ -427,7 +413,7 @@ fn invalid() -> Document {
 #[test]
 fn structural_findings_are_complete_ordered_and_only_supported_causes_are_portable() {
     let input = invalid();
-    let error = submission_document::decode(&input, input.root(), Limits::default()).unwrap_err();
+    let error = submission_document::decode(&input, input.root()).unwrap_err();
     assert!(std::ptr::eq(error.input, &input));
     let Cause::Findings(findings) = error.cause else {
         panic!("expected complete structural findings")
@@ -481,99 +467,27 @@ fn structural_findings_are_complete_ordered_and_only_supported_causes_are_portab
     assert!(matches!(error.input.nodes()[findings[7].node], N::Null));
 }
 #[test]
-fn full_finding_and_path_limits_refuse_instead_of_reporting_a_fitting_prefix() {
+fn complete_findings_preserve_original_invalid_input() {
     let input = invalid();
-    for (limits, resource) in [
-        (
-            Limits {
-                findings: 19,
-                ..Limits::default()
-            },
-            Resource::Findings,
-        ),
-        (
-            Limits {
-                path_segments: 0,
-                ..Limits::default()
-            },
-            Resource::PathSegments,
-        ),
-    ] {
-        let error = submission_document::decode(&input, input.root(), limits).unwrap_err();
+    for _ in 0..2 {
+        let error = submission_document::decode(&input, input.root()).unwrap_err();
         assert!(std::ptr::eq(error.input, &input));
-        assert_eq!(error.cause, Cause::Limit(resource));
         assert!(error.input.field(error.input.root(), "adam").is_some());
+        assert!(matches!(error.cause, Cause::Findings(v) if v.len() == 20));
     }
-    assert!(
-        matches!(submission_document::decode(&input, input.root(), Limits { findings: 20, ..Limits::default() }).unwrap_err().cause, Cause::Findings(v) if v.len() == 20)
-    );
 }
+
 #[test]
-fn whole_model_limits_keep_original_input_without_partial_owned_results() {
+fn independent_whole_model_decodes_keep_all_sections() {
     let input = full();
-    for (limits, resource) in [
-        (
-            Limits {
-                fields: 1,
-                ..Limits::default()
-            },
-            Resource::Fields,
-        ),
-        (
-            Limits {
-                declarations: 3,
-                ..Limits::default()
-            },
-            Resource::Declarations,
-        ),
-        (
-            Limits {
-                nodes: 1,
-                ..Limits::default()
-            },
-            Resource::Nodes,
-        ),
-        (
-            Limits {
-                depth: 1,
-                ..Limits::default()
-            },
-            Resource::Depth,
-        ),
-        (
-            Limits {
-                list_items: 1,
-                ..Limits::default()
-            },
-            Resource::ListItems,
-        ),
-        (
-            Limits {
-                text_bytes: 1,
-                ..Limits::default()
-            },
-            Resource::TextBytes,
-        ),
-        (
-            Limits {
-                escaped_bytes: 1,
-                ..Limits::default()
-            },
-            Resource::EscapedBytes,
-        ),
-        (
-            Limits {
-                work: 1,
-                ..Limits::default()
-            },
-            Resource::Work,
-        ),
-    ] {
-        let error = submission_document::decode(&input, input.root(), limits).unwrap_err();
-        assert!(std::ptr::eq(error.input, &input));
-        assert_eq!(error.cause, Cause::Limit(resource));
+    for _ in 0..2 {
+        let owner = submission_document::decode(&input, input.root()).unwrap();
+        assert_eq!(owner.sections().len(), 3);
+        assert_eq!(owner.study().unwrap().id.value, "STUDY.alpha-1");
+        assert_eq!(owner.sections()[1].documents.value.len(), 3);
     }
 }
+
 #[test]
 fn null_optional_fields_are_original_shape_findings_not_absent_defaults() {
     let mut a = Arena::default();
@@ -596,7 +510,7 @@ fn null_optional_fields_are_original_shape_findings_not_absent_defaults() {
     let section = a.map(fields);
     let root = a.map(vec![("send", section)]);
     let input = a.finish(root);
-    let error = submission_document::decode(&input, root, Limits::default()).unwrap_err();
+    let error = submission_document::decode(&input, root).unwrap_err();
     let Cause::Findings(findings) = error.cause else {
         panic!("expected findings")
     };
@@ -631,7 +545,7 @@ fn scalar_container_and_nontext_key_refusals_preserve_original_shapes() {
         let node = a.node(scalar);
         let root = a.map(vec![("study", node)]);
         let input = a.finish(root);
-        let error = submission_document::decode(&input, root, Limits::default()).unwrap_err();
+        let error = submission_document::decode(&input, root).unwrap_err();
         assert!(std::ptr::eq(error.input, &input));
         assert!(
             matches!(error.cause, Cause::Findings(v) if v.len() == 1 && v[0].node == node && v[0].kind == Kind::ExpectedMapping && v[0].requirement().is_none())
@@ -643,9 +557,7 @@ fn scalar_container_and_nontext_key_refusals_preserve_original_shapes() {
     let study = a.node(N::Mapping(vec![(key, value)]));
     let root = a.map(vec![("study", study)]);
     let input = a.finish(root);
-    let Cause::Findings(findings) = submission_document::decode(&input, root, Limits::default())
-        .unwrap_err()
-        .cause
+    let Cause::Findings(findings) = submission_document::decode(&input, root).unwrap_err().cause
     else {
         panic!("findings")
     };
@@ -657,7 +569,7 @@ fn scalar_container_and_nontext_key_refusals_preserve_original_shapes() {
         .all(|f| f.kind == Kind::Missing && f.origin.unwrap().node.is_none()));
 }
 #[test]
-fn document_transport_depth_and_decoder_depth_refusals_remain_distinct() {
+fn fixed_document_depth_and_submission_shape_refusals_remain_distinct() {
     let mut nodes = vec![N::Text("original deep scalar".into())];
     let mut child = 0;
     for _ in 0..70 {
@@ -682,26 +594,7 @@ fn document_transport_depth_and_decoder_depth_refusals_remain_distinct() {
     }
     let root = a.map(vec![("study", child)]);
     let input = a.finish(root);
-    let error = submission_document::decode(
-        &input,
-        root,
-        Limits {
-            depth: 5,
-            ..Limits::default()
-        },
-    )
-    .unwrap_err();
-    assert_eq!(error.cause, Cause::Limit(Resource::Depth));
-    assert!(std::ptr::eq(error.input, &input));
-    let error = submission_document::decode(
-        &input,
-        root,
-        Limits {
-            depth: usize::MAX,
-            ..Limits::default()
-        },
-    )
-    .unwrap_err();
+    let error = submission_document::decode(&input, root).unwrap_err();
     assert!(
         matches!(error.cause, Cause::Findings(v) if v.len() == 1 && v[0].kind == Kind::ExpectedMapping)
     );
@@ -712,9 +605,7 @@ fn unknown_fields_and_nontext_keys_retain_exact_container_and_key_occurrences() 
     let input = invalid();
     let root = input.root();
     let section = input.field(root, "adam").unwrap();
-    let Cause::Findings(findings) = submission_document::decode(&input, root, Limits::default())
-        .unwrap_err()
-        .cause
+    let Cause::Findings(findings) = submission_document::decode(&input, root).unwrap_err().cause
     else {
         panic!("findings")
     };
@@ -734,9 +625,7 @@ fn unknown_fields_and_nontext_keys_retain_exact_container_and_key_occurrences() 
     let value = a.node(N::Null);
     let root = a.node(N::Mapping(vec![(key, value)]));
     let input = a.finish(root);
-    let Cause::Findings(findings) = submission_document::decode(&input, root, Limits::default())
-        .unwrap_err()
-        .cause
+    let Cause::Findings(findings) = submission_document::decode(&input, root).unwrap_err().cause
     else {
         panic!("findings")
     };
@@ -761,7 +650,7 @@ fn present_metadata_description_is_optional_and_draft_status_is_retained() {
     ]);
     let root = a.map(vec![("adam", section)]);
     let input = a.finish(root);
-    let owned = submission_document::decode(&input, root, Limits::default()).unwrap();
+    let owned = submission_document::decode(&input, root).unwrap();
     assert_eq!(
         owned.sections()[0].standard.status.value,
         GuideStatus::Draft
@@ -775,7 +664,7 @@ fn present_metadata_description_is_optional_and_draft_status_is_retained() {
         .is_none());
 }
 #[test]
-fn default_text_and_empty_root_work_are_admitted_before_ownership() {
+fn default_text_and_empty_root_remain_owned_without_authored_values() {
     let mut a = Arena::default();
     let guide = a.guide("SDTMIG");
     let specs = a.node(N::Sequence(vec![]));
@@ -787,55 +676,17 @@ fn default_text_and_empty_root_work_are_admitted_before_ownership() {
     ]);
     let root = a.map(vec![("sdtm", section)]);
     let input = a.finish(root);
-    let source_bytes = input
-        .nodes()
-        .iter()
-        .filter_map(|v| {
-            if let N::Text(text) = v {
-                Some(text.len())
-            } else {
-                None
-            }
-        })
-        .sum();
-    let error = submission_document::decode(
-        &input,
-        root,
-        Limits {
-            text_bytes: source_bytes,
-            ..Limits::default()
-        },
-    )
-    .unwrap_err();
-    assert_eq!(error.cause, Cause::Limit(Resource::TextBytes));
-    let owned = submission_document::decode(
-        &input,
-        root,
-        Limits {
-            text_bytes: source_bytes + 2,
-            ..Limits::default()
-        },
-    )
-    .unwrap();
+    let owned = submission_document::decode(&input, root).unwrap();
     assert_eq!(owned.sections()[0].xml_lang.value, "en");
     assert_eq!(owned.sections()[0].xml_lang.origin.node, None);
     let empty = Document::new(vec![N::Mapping(vec![])], 0).unwrap();
-    assert_eq!(
-        submission_document::decode(
-            &empty,
-            0,
-            Limits {
-                work: 0,
-                ..Limits::default()
-            }
-        )
-        .unwrap_err()
-        .cause,
-        Cause::Limit(Resource::Work)
-    );
+    let owned = submission_document::decode(&empty, 0).unwrap();
+    assert!(owned.sections().is_empty());
+    assert!(owned.study().is_none());
 }
+
 #[test]
-fn control_and_unicode_text_survive_ownership_while_complete_escaping_capacity_is_bounded() {
+fn control_and_unicode_text_survive_original_document_ownership() {
     let mut a = Arena::default();
     let study = a.text_map(&[
         ("id", "STUDY"),
@@ -845,43 +696,7 @@ fn control_and_unicode_text_survive_ownership_while_complete_escaping_capacity_i
     ]);
     let root = a.map(vec![("study", study)]);
     let input = a.finish(root);
-    let text_bytes: usize = input
-        .nodes()
-        .iter()
-        .filter_map(|v| {
-            if let N::Text(text) = v {
-                Some(text.len())
-            } else {
-                None
-            }
-        })
-        .sum();
-    let texts = input
-        .nodes()
-        .iter()
-        .filter(|v| matches!(v, N::Text(_)))
-        .count();
-    let escaped = text_bytes * 10 + texts * 2;
-    let error = submission_document::decode(
-        &input,
-        root,
-        Limits {
-            escaped_bytes: escaped - 1,
-            ..Limits::default()
-        },
-    )
-    .unwrap_err();
-    assert_eq!(error.cause, Cause::Limit(Resource::EscapedBytes));
-    assert!(std::ptr::eq(error.input, &input));
-    let owned = submission_document::decode(
-        &input,
-        root,
-        Limits {
-            escaped_bytes: escaped,
-            ..Limits::default()
-        },
-    )
-    .unwrap();
+    let owned = submission_document::decode(&input, root).unwrap();
     drop(input);
     assert_eq!(owned.study().unwrap().name.value, "A\nB\t'\\");
     assert_eq!(owned.study().unwrap().description.value, "é < 漢字 & 😀");
@@ -947,7 +762,7 @@ fn malformed_document_lists() -> (Document, Vec<DocumentItemFact>) {
 #[test]
 fn malformed_document_items_retain_actual_occurrences_in_every_family_and_position() {
     let (input, expected) = malformed_document_lists();
-    let error = submission_document::decode(&input, input.root(), Limits::default()).unwrap_err();
+    let error = submission_document::decode(&input, input.root()).unwrap_err();
     assert!(std::ptr::eq(error.input, &input));
     let Cause::Findings(findings) = error.cause else {
         panic!("complete shape findings")
@@ -989,41 +804,18 @@ fn malformed_document_items_retain_actual_occurrences_in_every_family_and_positi
 }
 
 #[test]
-fn document_item_finding_and_path_capacities_admit_the_complete_set_or_keep_raw_input() {
-    let (input, _) = malformed_document_lists();
-    for (limits, resource) in [
-        (
-            Limits {
-                findings: 5,
-                ..Limits::default()
-            },
-            Resource::Findings,
-        ),
-        (
-            Limits {
-                path_segments: 17,
-                ..Limits::default()
-            },
-            Resource::PathSegments,
-        ),
-    ] {
-        let error = submission_document::decode(&input, input.root(), limits).unwrap_err();
-        assert!(std::ptr::eq(error.input, &input));
-        assert_eq!(error.cause, Cause::Limit(resource));
-        assert_eq!(error.input, &input);
-    }
-    let error = submission_document::decode(
-        &input,
-        input.root(),
-        Limits {
-            findings: 6,
-            path_segments: 18,
-            ..Limits::default()
-        },
-    )
-    .unwrap_err();
+fn all_malformed_document_items_keep_the_original_input_and_nodes() {
+    let (input, expected) = malformed_document_lists();
+    let error = submission_document::decode(&input, input.root()).unwrap_err();
     assert!(std::ptr::eq(error.input, &input));
-    assert!(matches!(error.cause, Cause::Findings(v) if v.len() == 6));
+    let Cause::Findings(findings) = error.cause else {
+        panic!("complete findings")
+    };
+    assert_eq!(findings.len(), 6);
+    assert_eq!(
+        findings.iter().map(|v| v.node).collect::<Vec<_>>(),
+        expected.iter().map(|v| v.node).collect::<Vec<_>>()
+    );
 }
 
 #[test]
@@ -1039,7 +831,7 @@ fn valid_document_fields_and_omitted_defaults_remain_owned_after_original_input_
         .iter()
         .map(|&node| ["id", "kind", "link", "title"].map(|name| input.field(node, name).unwrap()))
         .collect::<Vec<_>>();
-    let owned = submission_document::decode(&input, input.root(), Limits::default()).unwrap();
+    let owned = submission_document::decode(&input, input.root()).unwrap();
     drop(input);
     let docs = &owned.sections()[1].documents;
     assert_eq!(docs.origin.container, adam);
@@ -1086,7 +878,7 @@ fn approved_source_system_version_is_admitted_for_every_section() {
         let section = a.node(N::Mapping(fields));
         let root = a.map(vec![(family, section)]);
         let input = a.finish(root);
-        let owned = submission_document::decode(&input, root, Limits::default()).unwrap();
+        let owned = submission_document::decode(&input, root).unwrap();
         drop(input);
         let section = &owned.sections()[0];
         let field = section.source_system_version.as_ref().unwrap();
@@ -1109,7 +901,7 @@ fn approved_source_system_version_is_admitted_for_every_section() {
 #[test]
 fn omitted_submission_version_uses_actual_generator_without_creating_an_authored_field() {
     let input = full();
-    let owned = submission_document::decode(&input, input.root(), Limits::default()).unwrap();
+    let owned = submission_document::decode(&input, input.root()).unwrap();
     for section in owned.sections() {
         assert!(section.source_system_version.is_none());
         for installed in ["0.3.0", "0.4.0.dev7"] {
@@ -1141,7 +933,7 @@ fn submission_version_refusals_preserve_exact_nodes_and_do_not_choose_defaults()
         let section = a.node(N::Mapping(fields));
         let root = a.map(vec![("adam", section)]);
         let input = a.finish(root);
-        let error = submission_document::decode(&input, root, Limits::default()).unwrap_err();
+        let error = submission_document::decode(&input, root).unwrap_err();
         assert!(std::ptr::eq(error.input, &input));
         let Cause::Findings(findings) = error.cause else {
             panic!("findings")
@@ -1159,7 +951,7 @@ fn submission_version_refusals_preserve_exact_nodes_and_do_not_choose_defaults()
 }
 
 #[test]
-fn submission_version_text_is_admitted_before_ownership_under_complete_quotas() {
+fn full_submission_version_text_keeps_its_authored_origin_after_ownership() {
     let mut a = Arena::default();
     a.section("SENDIG");
     let N::Mapping(mut fields) = a.0.pop().unwrap() else {
@@ -1171,42 +963,11 @@ fn submission_version_text_is_admitted_before_ownership_under_complete_quotas() 
     let section = a.node(N::Mapping(fields));
     let root = a.map(vec![("send", section)]);
     let input = a.finish(root);
-    for (limits, resource) in [
-        (
-            Limits {
-                text_bytes: 4095,
-                ..Limits::default()
-            },
-            Resource::TextBytes,
-        ),
-        (
-            Limits {
-                escaped_bytes: 4095,
-                ..Limits::default()
-            },
-            Resource::EscapedBytes,
-        ),
-        (
-            Limits {
-                work: 4095,
-                ..Limits::default()
-            },
-            Resource::Work,
-        ),
-    ] {
-        let error = submission_document::decode(&input, root, limits).unwrap_err();
-        assert!(std::ptr::eq(error.input, &input));
-        assert_eq!(error.cause, Cause::Limit(resource));
-        assert_eq!(input.field(section, "source_system_version"), Some(version));
-    }
-    let owned = submission_document::decode(&input, root, Limits::default()).unwrap();
-    assert_eq!(
-        owned.sections()[0]
-            .source_system_version
-            .as_ref()
-            .unwrap()
-            .value
-            .len(),
-        4096
-    );
+    assert_eq!(input.field(section, "source_system_version"), Some(version));
+    let owned = submission_document::decode(&input, root).unwrap();
+    drop(input);
+    let selected = owned.sections()[0].source_system_version.as_ref().unwrap();
+    assert_eq!(selected.value, "v".repeat(4096));
+    assert_eq!(selected.origin.node, Some(version));
+    assert_eq!(selected.origin.key, Some(key));
 }

@@ -1,8 +1,7 @@
-use yamaa_core::regex::{CompileError, MatchLimits, Resource};
-use yamaa_core::schema::{ConstraintBudget, ConstraintError, ConstraintViolation as C};
+use yamaa_core::regex::{CompileError, Resource};
+use yamaa_core::schema::{ConstraintError, ConstraintViolation as C};
 use yamaa_core::schema::{
-    Descriptor, DescriptorBudget, DescriptorError, DescriptorIssue as I, DescriptorLimits,
-    DescriptorResource, DescriptorUsage, Document, DocumentLimits, DocumentNode as N,
+    Descriptor, DescriptorError, DescriptorIssue as I, Document, DocumentNode as N,
 };
 
 enum V {
@@ -43,13 +42,7 @@ fn document(value: V) -> Document {
 
 fn admit(value: V, class_field: bool) -> yamaa_core::schema::DescriptorReport {
     let d = document(value);
-    Descriptor::admit(
-        &d,
-        d.root(),
-        class_field,
-        &mut DescriptorBudget::new(DescriptorLimits::default()),
-    )
-    .unwrap()
+    Descriptor::admit(&d, d.root(), class_field).unwrap()
 }
 
 #[test]
@@ -67,13 +60,7 @@ fn descriptor_union_references_and_explicit_null_default_retain_written_order() 
         ("description", V::Text("A field")),
         ("default", V::Null),
     ]));
-    let report = Descriptor::admit(
-        &d,
-        d.root(),
-        true,
-        &mut DescriptorBudget::new(DescriptorLimits::default()),
-    )
-    .unwrap();
+    let report = Descriptor::admit(&d, d.root(), true).unwrap();
     assert!(report.issues().is_empty());
     assert_eq!(
         report.references(),
@@ -185,13 +172,7 @@ fn constraints_retain_empty_choices_unicode_lengths_and_arbitrary_width_bounds()
     let (text, pattern) = descriptor.pattern().unwrap();
     assert_eq!(text, "a|bc");
     for (value, expected) in [("a", true), ("bc", true), ("abc", false), ("bc\n", false)] {
-        assert_eq!(
-            pattern
-                .full_match(value, MatchLimits::default())
-                .unwrap()
-                .is_some(),
-            expected
-        );
+        assert_eq!(pattern.full_match(value).unwrap().is_some(), expected);
     }
     let descriptor = admit(
         V::Map(vec![
@@ -234,133 +215,51 @@ fn invalid_pattern_is_a_finding_but_resource_refusal_is_not() {
     assert!(
         matches!(repaired_by_wrapper.issues(), [I::InvalidPattern { pattern, .. }] if pattern == "a)|(?:b")
     );
-    let d = document(V::Map(vec![
-        ("type", V::Text("str")),
-        ("pattern", V::Text("ab")),
-    ]));
-    let limits = DescriptorLimits {
-        regex: yamaa_core::regex::CompileLimits {
-            bytes: 1,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    assert_eq!(
-        Descriptor::admit(&d, d.root(), false, &mut DescriptorBudget::new(limits)).unwrap_err(),
-        DescriptorError::Regex(CompileError::Limit {
-            resource: Resource::PatternBytes,
-            limit: 1
-        })
-    );
-}
-
-#[test]
-fn cumulative_descriptor_charges_survive_failed_admission_and_fresh_attempts_reset() {
-    let d = document(V::Map(vec![
-        ("type", V::Text("str")),
-        ("pattern", V::Text("[")),
-    ]));
-    for (limits, resource, limit, prefix) in [
-        (
-            DescriptorLimits {
-                descriptors: 1,
-                ..Default::default()
-            },
-            DescriptorResource::Descriptors,
-            1,
-            DescriptorUsage {
-                descriptors: 1,
-                input_nodes: 5,
-                input_text_bytes: 15,
-                type_bytes: 3,
-                pattern_bytes: 1,
-            },
-        ),
-        (
-            DescriptorLimits {
-                type_bytes: 5,
-                ..Default::default()
-            },
-            DescriptorResource::TypeBytes,
-            5,
-            DescriptorUsage {
-                descriptors: 2,
-                input_nodes: 10,
-                input_text_bytes: 30,
-                type_bytes: 3,
-                pattern_bytes: 1,
-            },
-        ),
-        (
-            DescriptorLimits {
-                pattern_bytes: 1,
-                ..Default::default()
-            },
-            DescriptorResource::PatternBytes,
-            1,
-            DescriptorUsage {
-                descriptors: 2,
-                input_nodes: 10,
-                input_text_bytes: 30,
-                type_bytes: 6,
-                pattern_bytes: 1,
-            },
-        ),
-    ] {
-        let mut budget = DescriptorBudget::new(limits);
-        assert!(matches!(
-            Descriptor::admit(&d, d.root(), false, &mut budget)
-                .unwrap()
-                .issues(),
-            [I::InvalidPattern { .. }]
-        ));
-        assert_eq!(
-            Descriptor::admit(&d, d.root(), false, &mut budget).unwrap_err(),
-            DescriptorError::Limit { resource, limit }
-        );
-        assert_eq!(budget.used(), prefix);
-        assert!(Descriptor::admit(&d, d.root(), false, &mut DescriptorBudget::new(limits)).is_ok());
-    }
-}
-
-#[test]
-fn individually_legal_patterns_cannot_restart_shared_width_analysis() {
-    let pattern = format!("(a){}(?<=\\1)", "(a|aa)".repeat(8));
+    let pattern = format!("{}a{}", "(".repeat(129), ")".repeat(129));
     let d = document(V::Map(vec![
         ("type", V::Text("str")),
         ("pattern", V::Owned(pattern)),
     ]));
-    let mut budget = DescriptorBudget::new(DescriptorLimits::default());
-    let mut refusal = None;
-    for _ in 0..512 {
-        match Descriptor::admit(&d, d.root(), false, &mut budget) {
-            Ok(report) => assert!(report.issues().is_empty()),
-            Err(error) => {
-                refusal = Some(error);
-                break;
-            }
-        }
-    }
     assert!(matches!(
-        refusal,
-        Some(DescriptorError::Regex(CompileError::Limit {
-            resource: Resource::WidthWork | Resource::WidthCells,
-            ..
+        Descriptor::admit(&d, d.root(), false),
+        Err(DescriptorError::Regex(CompileError::Limit {
+            resource: Resource::Depth,
+            limit: 128
         }))
     ));
-    assert!(Descriptor::admit(
-        &d,
-        d.root(),
-        false,
-        &mut DescriptorBudget::new(DescriptorLimits::default())
-    )
-    .unwrap()
-    .issues()
-    .is_empty());
 }
 
 #[test]
-fn repeated_metadata_is_bounded_even_when_strings_are_empty_or_not_retained() {
+fn repeated_invalid_descriptors_keep_the_same_authored_pattern_finding() {
+    let d = document(V::Map(vec![
+        ("type", V::Text("str")),
+        ("pattern", V::Text("[")),
+    ]));
+    for _ in 0..3 {
+        assert!(
+            matches!(Descriptor::admit(&d,d.root(),false).unwrap().issues(),[I::InvalidPattern{pattern,..}] if pattern=="[")
+        );
+    }
+}
+
+#[test]
+fn independent_descriptor_pattern_admissions_keep_exact_lookbehind_metadata() {
+    let pattern = format!("(a){}(?<=\\1)", "(a|aa)".repeat(8));
+    let d = document(V::Map(vec![
+        ("type", V::Text("str")),
+        ("pattern", V::Owned(pattern.clone())),
+    ]));
+    for _ in 0..3 {
+        let descriptor = Descriptor::admit(&d, d.root(), false)
+            .unwrap()
+            .into_descriptor()
+            .unwrap();
+        assert_eq!(descriptor.pattern().unwrap().0, pattern);
+    }
+}
+
+#[test]
+fn repeated_empty_metadata_and_invalid_description_remain_complete() {
     let d = document(V::Map(vec![
         ("type", V::Text("str")),
         (
@@ -368,47 +267,23 @@ fn repeated_metadata_is_bounded_even_when_strings_are_empty_or_not_retained() {
             V::List(vec![V::Text(""), V::Text(""), V::Text("")]),
         ),
     ]));
-    let limits = DescriptorLimits {
-        input_nodes: 15,
-        ..Default::default()
-    };
-    let mut budget = DescriptorBudget::new(limits);
-    assert!(Descriptor::admit(&d, d.root(), false, &mut budget)
-        .unwrap()
-        .issues()
-        .is_empty());
-    assert_eq!(budget.used().input_nodes, 8);
-    assert_eq!(
-        Descriptor::admit(&d, d.root(), false, &mut budget).unwrap_err(),
-        DescriptorError::Limit {
-            resource: DescriptorResource::InputNodes,
-            limit: 15
-        }
-    );
-    assert!(Descriptor::admit(&d, d.root(), false, &mut DescriptorBudget::new(limits)).is_ok());
-
+    for _ in 0..2 {
+        let descriptor = Descriptor::admit(&d, d.root(), false)
+            .unwrap()
+            .into_descriptor()
+            .unwrap();
+        assert_eq!(descriptor.permitted().unwrap(), ["", "", ""]);
+    }
     let d = document(V::Map(vec![
         ("type", V::Text("str")),
         ("description", V::Text("    ")),
     ]));
-    let mut budget = DescriptorBudget::new(DescriptorLimits {
-        input_text_bytes: 43,
-        ..Default::default()
-    });
-    assert_eq!(
-        Descriptor::admit(&d, d.root(), false, &mut budget)
-            .unwrap()
-            .issues(),
-        [I::Description]
-    );
-    assert_eq!(budget.used().input_text_bytes, 22);
-    assert_eq!(
-        Descriptor::admit(&d, d.root(), false, &mut budget).unwrap_err(),
-        DescriptorError::Limit {
-            resource: DescriptorResource::InputTextBytes,
-            limit: 43
-        }
-    );
+    for _ in 0..2 {
+        assert_eq!(
+            Descriptor::admit(&d, d.root(), false).unwrap().issues(),
+            [I::Description]
+        );
+    }
 }
 
 #[test]
@@ -424,15 +299,12 @@ fn value_constraints_report_every_failure_in_declared_contract_order() {
     )
     .into_descriptor()
     .unwrap();
-    let mut budget = ConstraintBudget::new(1_000, MatchLimits::default());
     assert_eq!(
-        descriptor
-            .check_constraints(&N::Text("é".into()), MatchLimits::default(), &mut budget)
-            .unwrap(),
+        descriptor.check_constraints(&N::Text("é".into())).unwrap(),
         [C::ValueNotPermitted, C::PatternMismatch, C::MinimumLength]
     );
     assert!(descriptor
-        .check_constraints(&N::Text("aa".into()), MatchLimits::default(), &mut budget)
+        .check_constraints(&N::Text("aa".into()))
         .unwrap()
         .is_empty());
     let descriptor = admit(
@@ -442,17 +314,11 @@ fn value_constraints_report_every_failure_in_declared_contract_order() {
     .into_descriptor()
     .unwrap();
     assert!(descriptor
-        .check_constraints(
-            &N::Text("e\u{301}".into()),
-            MatchLimits::default(),
-            &mut budget
-        )
+        .check_constraints(&N::Text("e\u{301}".into()))
         .unwrap()
         .is_empty());
     assert_eq!(
-        descriptor
-            .check_constraints(&N::Text("😀".into()), MatchLimits::default(), &mut budget)
-            .unwrap(),
+        descriptor.check_constraints(&N::Text("😀".into())).unwrap(),
         [C::MinimumLength]
     );
     let descriptor = admit(
@@ -462,19 +328,17 @@ fn value_constraints_report_every_failure_in_declared_contract_order() {
     .into_descriptor()
     .unwrap();
     assert!(descriptor
-        .check_constraints(&N::Sequence(vec![]), MatchLimits::default(), &mut budget)
+        .check_constraints(&N::Sequence(vec![]))
         .unwrap()
         .is_empty());
     assert_eq!(
-        descriptor
-            .check_constraints(&N::Sequence(vec![0]), MatchLimits::default(), &mut budget)
-            .unwrap(),
+        descriptor.check_constraints(&N::Sequence(vec![0])).unwrap(),
         [C::InvalidSize]
     );
 }
 
 #[test]
-fn constraint_work_and_regex_limits_remain_distinct_from_mismatches() {
+fn fixed_regex_work_refusal_remains_distinct_from_constraint_mismatches() {
     let descriptor = admit(
         V::Map(vec![
             ("type", V::Text("str")),
@@ -484,21 +348,8 @@ fn constraint_work_and_regex_limits_remain_distinct_from_mismatches() {
     )
     .into_descriptor()
     .unwrap();
-    let value = N::Text("a".into());
-    assert_eq!(
-        descriptor.check_constraints(
-            &value,
-            MatchLimits::default(),
-            &mut ConstraintBudget::new(3, MatchLimits::default())
-        ),
-        Err(ConstraintError::Work { limit: 3 })
-    );
     assert!(descriptor
-        .check_constraints(
-            &value,
-            MatchLimits::default(),
-            &mut ConstraintBudget::new(4, MatchLimits::default())
-        )
+        .check_constraints(&N::Text("a".into()))
         .unwrap()
         .is_empty());
     let descriptor = admit(
@@ -507,34 +358,20 @@ fn constraint_work_and_regex_limits_remain_distinct_from_mismatches() {
     )
     .into_descriptor()
     .unwrap();
-    let mut baseline = ConstraintBudget::new(100, MatchLimits::default());
-    descriptor
-        .check_constraints(&value, MatchLimits::default(), &mut baseline)
-        .unwrap();
-    let limits = MatchLimits {
-        work: baseline.used().regex.work * 2 - 1,
-        ..Default::default()
-    };
-    let mut budget = ConstraintBudget::new(100, limits);
     assert!(descriptor
-        .check_constraints(&value, MatchLimits::default(), &mut budget)
+        .check_constraints(&N::Text("a".into()))
         .unwrap()
         .is_empty());
-    let prefix = budget.used();
+    let long = N::Text("a".repeat(1_000_000));
     assert!(matches!(
-        descriptor.check_constraints(&value, MatchLimits::default(), &mut budget),
+        descriptor.check_constraints(&long),
         Err(ConstraintError::Regex(yamaa_core::regex::MatchError {
             resource: Resource::Work,
-            ..
+            limit: 1_000_000
         }))
     ));
-    assert!(budget.used().regex.work >= prefix.regex.work);
     assert!(descriptor
-        .check_constraints(
-            &value,
-            MatchLimits::default(),
-            &mut ConstraintBudget::new(100, limits)
-        )
+        .check_constraints(&N::Text("a".into()))
         .unwrap()
         .is_empty());
 }

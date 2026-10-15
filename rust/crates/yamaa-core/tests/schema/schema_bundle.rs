@@ -1,6 +1,6 @@
 use yamaa_core::schema::{
-    BundleError, BundleIssueKind as I, BundleLimits, BundleResource, Document, DocumentLimits,
-    DocumentNode as N, SchemaAliasKind, SchemaModule, SchemaShape, SchemaStructure,
+    BundleError, BundleIssueKind as I, Document, DocumentNode as N, SchemaAliasKind, SchemaModule,
+    SchemaShape, SchemaStructure,
 };
 
 enum V {
@@ -112,9 +112,7 @@ fn complete_bundle_resolves_forward_names_and_preserves_reused_default_origin() 
         vec![("root_class", V::List(vec![reuse("shared")]))],
         &["schema_shared.yaml"],
     );
-    let bundle =
-        SchemaStructure::admit(vec![shared, root], 1, "root_class", BundleLimits::default())
-            .unwrap();
+    let bundle = SchemaStructure::admit(vec![shared, root], 1, "root_class").unwrap();
     assert_eq!(bundle.version(), "1.0");
     assert_eq!(
         bundle
@@ -171,8 +169,7 @@ fn registry_contributions_merge_after_complete_include_loading() {
         )],
         &[],
     );
-    let bundle =
-        SchemaStructure::admit(vec![root, more], 0, "root_class", BundleLimits::default()).unwrap();
+    let bundle = SchemaStructure::admit(vec![root, more], 0, "root_class").unwrap();
     assert_eq!(bundle.aliases()[0].kind, SchemaAliasKind::Registry(0));
     assert_eq!(
         bundle.registries()[0]
@@ -196,10 +193,7 @@ fn include_and_field_reuse_cycles_do_not_become_recursive_aliases() {
     );
     let b = module("schema_b.yaml", vec![], &["schema_a.yaml"]);
     assert_eq!(
-        kinds(
-            SchemaStructure::admit(vec![a, b], 0, "root_class", BundleLimits::default())
-                .unwrap_err()
-        ),
+        kinds(SchemaStructure::admit(vec![a, b], 0, "root_class").unwrap_err()),
         [I::IncludeCycle(vec![
             "schema_a.yaml".into(),
             "schema_b.yaml".into(),
@@ -216,10 +210,7 @@ fn include_and_field_reuse_cycles_do_not_become_recursive_aliases() {
         &[],
     );
     assert_eq!(
-        kinds(
-            SchemaStructure::admit(vec![root], 0, "root_class", BundleLimits::default())
-                .unwrap_err()
-        ),
+        kinds(SchemaStructure::admit(vec![root], 0, "root_class").unwrap_err()),
         [I::FieldsFromCycle(vec![
             "root_class".into(),
             "a".into(),
@@ -244,10 +235,7 @@ fn duplicate_reused_fields_and_unknown_types_preserve_stage_order() {
         &[],
     );
     assert_eq!(
-        kinds(
-            SchemaStructure::admit(vec![root], 0, "root_class", BundleLimits::default())
-                .unwrap_err()
-        ),
+        kinds(SchemaStructure::admit(vec![root], 0, "root_class").unwrap_err()),
         [
             I::DuplicateField("id".into()),
             I::EmptyRegistry,
@@ -273,10 +261,7 @@ fn duplicate_registry_entries_and_closed_include_names_are_rejected() {
         &[],
     );
     assert_eq!(
-        kinds(
-            SchemaStructure::admit(vec![root, more], 0, "root_class", BundleLimits::default())
-                .unwrap_err()
-        ),
+        kinds(SchemaStructure::admit(vec![root, more], 0, "root_class").unwrap_err()),
         [I::DuplicateRegistryEntry("one".into())]
     );
     for include in [
@@ -292,11 +277,7 @@ fn duplicate_registry_entries_and_closed_include_names_are_rejected() {
             &[include],
         );
         assert!(matches!(
-            kinds(
-                SchemaStructure::admit(vec![root], 0, "root_class", BundleLimits::default())
-                    .unwrap_err()
-            )
-            .as_slice(),
+            kinds(SchemaStructure::admit(vec![root], 0, "root_class").unwrap_err()).as_slice(),
             [I::UnsafeInclude { .. }]
         ));
     }
@@ -306,16 +287,13 @@ fn duplicate_registry_entries_and_closed_include_names_are_rejected() {
         &["schema_missing.yaml"],
     );
     assert_eq!(
-        kinds(
-            SchemaStructure::admit(vec![root], 0, "root_class", BundleLimits::default())
-                .unwrap_err()
-        ),
+        kinds(SchemaStructure::admit(vec![root], 0, "root_class").unwrap_err()),
         [I::MissingInclude("schema_missing.yaml".into())]
     );
 }
 
 #[test]
-fn reuse_and_input_budgets_bound_expansion_and_allow_independent_retry() {
+fn independent_bundle_admissions_keep_reused_fields() {
     let root = module(
         "schema.yaml",
         vec![
@@ -324,58 +302,10 @@ fn reuse_and_input_budgets_bound_expansion_and_allow_independent_retry() {
         ],
         &[],
     );
-    for (limits, resource, limit) in [
-        (
-            BundleLimits {
-                modules: 0,
-                ..Default::default()
-            },
-            BundleResource::Modules,
-            0,
-        ),
-        (
-            BundleLimits {
-                input_nodes: 0,
-                ..Default::default()
-            },
-            BundleResource::InputNodes,
-            0,
-        ),
-        (
-            BundleLimits {
-                input_text_bytes: 0,
-                ..Default::default()
-            },
-            BundleResource::InputTextBytes,
-            0,
-        ),
-        (
-            BundleLimits {
-                work: 0,
-                ..Default::default()
-            },
-            BundleResource::Work,
-            0,
-        ),
-        (
-            BundleLimits {
-                expanded_fields: 1,
-                ..Default::default()
-            },
-            BundleResource::ExpandedFields,
-            1,
-        ),
-    ] {
-        assert!(
-            matches!(SchemaStructure::admit(vec![root.clone()],0,"root_class",limits),Err(BundleError::Limit {resource:r,limit:l}) if r==resource && l==limit)
-        );
-        assert!(SchemaStructure::admit(
-            vec![root.clone()],
-            0,
-            "root_class",
-            BundleLimits::default()
-        )
-        .is_ok());
+    for _ in 0..3 {
+        let schema = SchemaStructure::admit(vec![root.clone()], 0, "root_class").unwrap();
+        assert_eq!(schema.root_class().fields.len(), 1);
+        assert_eq!(schema.root_class().fields[0].name, "id");
     }
 }
 
@@ -401,10 +331,7 @@ fn cross_module_registry_duplicates_use_exact_decoded_scalar_key_equality() {
             &[],
         );
         assert_eq!(
-            kinds(
-                SchemaStructure::admit(vec![root, more], 0, "root_class", BundleLimits::default())
-                    .unwrap_err()
-            ),
+            kinds(SchemaStructure::admit(vec![root, more], 0, "root_class").unwrap_err()),
             [I::DuplicateRegistryEntry("<non-text>".into())]
         );
     }
@@ -427,10 +354,7 @@ fn cross_module_registry_duplicates_use_exact_decoded_scalar_key_equality() {
         )],
         &[],
     );
-    let result = kinds(
-        SchemaStructure::admit(vec![root, more], 0, "root_class", BundleLimits::default())
-            .unwrap_err(),
-    );
+    let result = kinds(SchemaStructure::admit(vec![root, more], 0, "root_class").unwrap_err());
     assert!(!result
         .iter()
         .any(|kind| matches!(kind, I::DuplicateRegistryEntry(_))));

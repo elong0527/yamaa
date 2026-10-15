@@ -1,4 +1,4 @@
-use yamaa_core::schema::{TypeError, TypeExpression, TypeLimits, TypeNode, TypeResource};
+use yamaa_core::schema::{TypeError, TypeExpression, TypeNode, TypeResource};
 
 #[test]
 fn authored_nested_type_arena_retains_occurrences_and_original_spans() {
@@ -74,59 +74,16 @@ fn malformed_types_and_string_encoded_unions_are_rejected() {
 }
 
 #[test]
-fn independent_byte_node_and_depth_limits_refuse_then_fresh_parse_succeeds() {
-    for (limits, resource, limit, text) in [
-        (
-            TypeLimits {
-                bytes: 2,
-                ..TypeLimits::default()
-            },
-            TypeResource::Bytes,
-            2,
-            "str",
-        ),
-        (
-            TypeLimits {
-                nodes: 2,
-                ..TypeLimits::default()
-            },
-            TypeResource::Nodes,
-            2,
-            "dict[str,int]",
-        ),
-        (
-            TypeLimits {
-                depth: 1,
-                ..TypeLimits::default()
-            },
-            TypeResource::Depth,
-            1,
-            "list[str]",
-        ),
-        (
-            TypeLimits {
-                nodes: 0,
-                ..TypeLimits::default()
-            },
-            TypeResource::Nodes,
-            0,
-            "str",
-        ),
-    ] {
-        assert_eq!(
-            TypeExpression::parse(text),
-            Err(TypeError::Limit { resource, limit })
-        );
-        assert!(TypeExpression::parse(text).is_ok());
-    }
-    let admitted = format!("{}str{}", "list[".repeat(63), "]".repeat(63));
+fn fixed_type_depth_refuses_the_next_layer_and_fresh_parse_succeeds() {
+    let admitted = format!("{}str{}", "list[".repeat(127), "]".repeat(127));
     assert!(TypeExpression::parse(&admitted).is_ok());
     let too_deep = format!("list[{admitted}]");
     assert_eq!(
         TypeExpression::parse(&too_deep),
         Err(TypeError::Limit {
             resource: TypeResource::Depth,
-            limit: 64
+            limit: 128
         })
     );
+    assert!(TypeExpression::parse("dict[str,int]").is_ok());
 }

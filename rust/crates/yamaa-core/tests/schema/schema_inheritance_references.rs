@@ -1,7 +1,6 @@
 use yamaa_core::schema::{
-    BundleLimits, Document, DocumentLimits, DocumentNode as N, InheritanceReference,
-    InheritanceReferenceError, InheritanceReferenceKind as K, NormalizationBudget,
-    NormalizationLimits, SchemaModule, SchemaStructure,
+    Document, DocumentNode as N, InheritanceReference, InheritanceReferenceError,
+    InheritanceReferenceKind as K, SchemaModule, SchemaStructure,
 };
 
 #[derive(Clone)]
@@ -162,28 +161,21 @@ fn schema() -> SchemaStructure {
         }],
         0,
         "root_class",
-        BundleLimits::default(),
     )
     .unwrap()
 }
-fn budget() -> NormalizationBudget {
-    NormalizationBudget::new(NormalizationLimits::default())
-}
+
 fn refs(
     schema: &SchemaStructure,
     value: V,
     types: &[&str],
     scope: Option<(&str, &str)>,
-    budget: &mut NormalizationBudget,
 ) -> Result<Vec<InheritanceReference>, InheritanceReferenceError> {
     let input = document(value);
     let types = schema
-        .parse_query_types(
-            &types.iter().map(|s| (*s).into()).collect::<Vec<_>>(),
-            budget.validation_scope(),
-        )
+        .parse_query_types(&types.iter().map(|s| (*s).into()).collect::<Vec<_>>())
         .unwrap();
-    schema.inheritance_references(&types, &input, input.root(), scope, budget)
+    schema.inheritance_references(&types, &input, input.root(), scope)
 }
 fn variable(name: &str) -> InheritanceReference {
     InheritanceReference {
@@ -229,7 +221,7 @@ fn identifiers_are_references_only_in_semantic_roles() {
         ),
     ]);
     assert_eq!(
-        refs(&schema, input, &["root_class"], None, &mut budget()).unwrap(),
+        refs(&schema, input, &["root_class"], None).unwrap(),
         vec![
             dataset("DM"),
             variable("ID"),
@@ -239,7 +231,7 @@ fn identifiers_are_references_only_in_semantic_roles() {
         ]
     );
     assert_eq!(
-        refs(&schema, text("DM"), &["identifier"], None, &mut budget()).unwrap(),
+        refs(&schema, text("DM"), &["identifier"], None).unwrap(),
         vec![]
     );
 }
@@ -248,33 +240,19 @@ fn identifiers_are_references_only_in_semantic_roles() {
 fn first_matching_union_and_registry_payloads_preserve_literal_boundaries() {
     let schema = schema();
     assert_eq!(
-        refs(&schema, text("A"), &["literal_first"], None, &mut budget()).unwrap(),
+        refs(&schema, text("A"), &["literal_first"], None).unwrap(),
         vec![]
     );
     assert_eq!(
-        refs(
-            &schema,
-            text("A"),
-            &["reference_first"],
-            None,
-            &mut budget()
-        )
-        .unwrap(),
+        refs(&schema, text("A"), &["reference_first"], None).unwrap(),
         vec![variable("A")]
     );
     assert_eq!(
-        refs(
-            &schema,
-            text("A"),
-            &["int", "variable"],
-            None,
-            &mut budget()
-        )
-        .unwrap(),
+        refs(&schema, text("A"), &["int", "variable"], None).unwrap(),
         vec![variable("A")]
     );
     assert_eq!(
-        refs(&schema, text("A"), &["recursive"], None, &mut budget()).unwrap(),
+        refs(&schema, text("A"), &["recursive"], None).unwrap(),
         vec![]
     );
     let input = List(vec![
@@ -286,7 +264,7 @@ fn first_matching_union_and_registry_payloads_preserve_literal_boundaries() {
         )]),
     ]);
     assert_eq!(
-        refs(&schema, input, &["list[expression]"], None, &mut budget()).unwrap(),
+        refs(&schema, input, &["list[expression]"], None).unwrap(),
         vec![variable("DM.X"), variable("OTHER")]
     );
 }
@@ -299,8 +277,7 @@ fn dictionaries_visit_values_and_scope_survives_containers() {
             &schema,
             Map(vec![("KEY_LITERAL", text("A")), ("OTHER_KEY", text("A"))]),
             &["dict[str, variable]"],
-            None,
-            &mut budget()
+            None
         )
         .unwrap(),
         vec![variable("A")]
@@ -310,8 +287,7 @@ fn dictionaries_visit_values_and_scope_survives_containers() {
             &schema,
             List(vec![text("A"), text("B")]),
             &["list[identifier]"],
-            Some(("output_class", "columns")),
-            &mut budget()
+            Some(("output_class", "columns"))
         )
         .unwrap(),
         vec![variable("A"), variable("B")]
@@ -322,8 +298,7 @@ fn dictionaries_visit_values_and_scope_survives_containers() {
             &schema,
             List(vec![text("A"), V::Integer]),
             &["list[variable]"],
-            None,
-            &mut budget()
+            None
         )
         .unwrap(),
         vec![]
@@ -361,7 +336,7 @@ fn closed_languages_retain_field_and_record_count_dependencies() {
         ),
     ] {
         assert_eq!(
-            refs(&schema, text(input), &[kind], None, &mut budget()).unwrap(),
+            refs(&schema, text(input), &[kind], None).unwrap(),
             expected,
             "{kind}: {input}"
         );
@@ -381,36 +356,24 @@ fn malformed_language_has_no_partial_dependencies() {
         ("string_template", "{A..B}"),
     ] {
         assert_eq!(
-            refs(&schema, text(input), &[kind], None, &mut budget()).unwrap(),
+            refs(&schema, text(input), &[kind], None).unwrap(),
             vec![],
             "{kind}: {input}"
         );
     }
     for input in ["{{literal}}", "plain unicode café", ""] {
-        assert!(refs(
-            &schema,
-            text(input),
-            &["string_template"],
-            None,
-            &mut budget()
-        )
-        .unwrap()
-        .is_empty());
+        assert!(refs(&schema, text(input), &["string_template"], None)
+            .unwrap()
+            .is_empty());
     }
 }
 
 #[test]
 fn parser_refusal_is_not_an_empty_reference_set() {
     let schema = schema();
-    let input = format!("{}A{}", "(".repeat(70), ")".repeat(70));
+    let input = format!("{}A{}", "(".repeat(129), ")".repeat(129));
     assert!(matches!(
-        refs(
-            &schema,
-            text(&input),
-            &["numeric_expression"],
-            None,
-            &mut budget()
-        ),
+        refs(&schema, text(&input), &["numeric_expression"], None),
         Err(InheritanceReferenceError::Numeric(
             yamaa_core::numeric_parser::ParseError::Limit { .. }
         ))
@@ -418,29 +381,20 @@ fn parser_refusal_is_not_an_empty_reference_set() {
 }
 
 #[test]
-fn failed_attempts_keep_request_budget_and_fresh_request_recovers() {
+fn independent_reference_requests_keep_written_identifiers() {
     let schema = schema();
     let input = document(text("A + B"));
     let types = schema
-        .parse_query_types(&["numeric_expression".into()], budget().validation_scope())
+        .parse_query_types(&["numeric_expression".into()])
         .unwrap();
-    let mut limits = NormalizationLimits::default();
-    limits.validation.work = 100;
-    let mut shared = NormalizationBudget::new(limits);
-    assert!(schema
-        .inheritance_references(&types, &input, input.root(), None, &mut shared)
-        .is_err());
-    let used = shared.work_used();
-    assert!(used > 0);
-    assert!(schema
-        .inheritance_references(&types, &input, input.root(), None, &mut shared)
-        .is_err());
-    assert_eq!(
-        schema
-            .inheritance_references(&types, &input, input.root(), None, &mut budget())
-            .unwrap(),
-        vec![variable("A"), variable("B")]
-    );
+    for _ in 0..3 {
+        assert_eq!(
+            schema
+                .inheritance_references(&types, &input, input.root(), None)
+                .unwrap(),
+            vec![variable("A"), variable("B")]
+        );
+    }
 }
 
 fn column(name: &str, derivation: V) -> V {
@@ -524,9 +478,7 @@ fn prunes_dead_sources_follows_count_and_stably_orders_without_changing_output()
         ),
         ("intermediates", List(vec![])),
     ]));
-    let result = schema
-        .resolve_inheritance_dependencies(&input, &mut budget())
-        .unwrap();
+    let result = schema.resolve_inheritance_dependencies(&input).unwrap();
     let expected = document(Map(vec![
         ("base", text("DM")),
         (
@@ -623,9 +575,7 @@ fn rows_and_assertions_are_roots_and_lookup_matching_inputs_precede_users() {
             ]),
         ),
     ]));
-    let result = schema
-        .resolve_inheritance_dependencies(&input, &mut budget())
-        .unwrap();
+    let result = schema.resolve_inheritance_dependencies(&input).unwrap();
     let d = &result.document;
     assert_eq!(
         keys(d, d.field(d.root(), "input").unwrap()),
@@ -661,7 +611,7 @@ fn unknown_dependencies_are_lexical_and_precede_cycle_reporting() {
         ),
     ]));
     assert_eq!(
-        schema().resolve_inheritance_dependencies(&input, &mut budget()),
+        schema().resolve_inheritance_dependencies(&input),
         Err(E::Invalid(vec![
             I::Unknown {
                 column: "X".into(),
@@ -674,13 +624,12 @@ fn unknown_dependencies_are_lexical_and_precede_cycle_reporting() {
         ]))
     );
     let E::Invalid(issues) = schema()
-        .resolve_inheritance_dependencies(&input, &mut budget())
+        .resolve_inheritance_dependencies(&input)
         .unwrap_err()
     else {
         panic!("expected completed dependency findings")
     };
-    let diagnostics =
-        yamaa_core::diagnostic::inheritance_dependency_diagnostics(&issues, 4096).unwrap();
+    let diagnostics = yamaa_core::diagnostic::inheritance_dependency_diagnostics(&issues);
     assert_eq!(diagnostics.len(), 2);
     assert_eq!(diagnostics[0].spec_paths, ["columns.X.derivation"]);
     assert_eq!(diagnostics[1].spec_paths, ["columns.X.derivation"]);
@@ -716,7 +665,7 @@ fn cycle_reports_all_unscheduled_columns_in_original_order() {
         ),
     ]));
     assert_eq!(
-        schema().resolve_inheritance_dependencies(&input, &mut budget()),
+        schema().resolve_inheritance_dependencies(&input),
         Err(E::Invalid(vec![I::Cycle {
             columns: vec!["DOWNSTREAM".into(), "A".into(), "B".into()],
             cycle: vec!["A".into(), "B".into(), "A".into()],
@@ -726,7 +675,7 @@ fn cycle_reports_all_unscheduled_columns_in_original_order() {
 }
 
 #[test]
-fn dependency_pass_refuses_shared_storage_exhaustion_without_partial_document() {
+fn independent_dependency_requests_keep_the_complete_document() {
     let schema = schema();
     let input = document(Map(vec![
         ("output", Map(vec![("columns", List(vec![text("A")]))])),
@@ -735,44 +684,31 @@ fn dependency_pass_refuses_shared_storage_exhaustion_without_partial_document() 
             List(vec![column("A", operation("literal", "constant"))]),
         ),
     ]));
-    let mut limits = NormalizationLimits::default();
-    limits.storage.nodes = 3;
-    let mut shared = NormalizationBudget::new(limits);
-    assert!(schema
-        .resolve_inheritance_dependencies(&input, &mut shared)
-        .is_err());
-    assert!(schema
-        .resolve_inheritance_dependencies(&input, &mut shared)
-        .is_err());
-    assert!(schema
-        .resolve_inheritance_dependencies(&input, &mut budget())
-        .is_ok());
+    let first = schema.resolve_inheritance_dependencies(&input).unwrap();
+    let second = schema.resolve_inheritance_dependencies(&input).unwrap();
+    assert_eq!(first, second);
+    assert_eq!(names(&first.document, "columns", "name"), vec!["A"]);
 }
 
 #[test]
-fn dependency_findings_share_the_request_diagnostic_quota() {
-    use yamaa_core::schema::{
-        InheritanceDependencyError as E, NormalizationError as N, ValidationError,
-    };
-    let schema = schema();
+fn unknown_dependency_retains_its_authored_column_and_name() {
+    use yamaa_core::schema::{InheritanceDependencyError as E, InheritanceDependencyIssue as I};
     let input = document(Map(vec![
         ("output", Map(vec![("columns", List(vec![text("X")]))])),
         ("columns", List(vec![column("X", text("MISSING"))])),
     ]));
-    let mut limits = NormalizationLimits::default();
-    limits.validation.diagnostics = 0;
-    let mut shared = NormalizationBudget::new(limits);
     assert_eq!(
-        schema.resolve_inheritance_dependencies(&input, &mut shared),
-        Err(E::Normalization(N::Validation(
-            ValidationError::Diagnostics { limit: 0 }
-        )))
+        schema().resolve_inheritance_dependencies(&input),
+        Err(E::Invalid(vec![I::Unknown {
+            column: "X".into(),
+            dependency: "MISSING".into()
+        }]))
     );
 }
 
 #[test]
 fn inheritance_and_graph_analysis_match_independently_declared_schedules() {
-    use yamaa_core::dependency_analysis::{analyze, Limits};
+    use yamaa_core::dependency_analysis::analyze;
     let cases = [
         (vec![vec![2], vec![2], vec![], vec![]], vec![2, 0, 1, 3]),
         (vec![vec![2, 1], vec![3], vec![3], vec![]], vec![3, 1, 2, 0]),
@@ -808,9 +744,7 @@ fn inheritance_and_graph_analysis_match_independently_declared_schedules() {
             ),
             ("columns", List(columns)),
         ]));
-        let normalized = schema()
-            .resolve_inheritance_dependencies(&input, &mut budget())
-            .unwrap();
+        let normalized = schema().resolve_inheritance_dependencies(&input).unwrap();
         let expected_names: Vec<_> = expected
             .iter()
             .map(|&index| column_names[index].as_str())
@@ -819,7 +753,7 @@ fn inheritance_and_graph_analysis_match_independently_declared_schedules() {
             names(&normalized.document, "columns", "name"),
             expected_names
         );
-        let analyzed = analyze(&graph, Limits::default()).unwrap();
+        let analyzed = analyze(&graph).unwrap();
         assert_eq!(analyzed.order, expected);
         assert_eq!(analyzed.cycle, None);
     }
@@ -828,7 +762,7 @@ fn inheritance_and_graph_analysis_match_independently_declared_schedules() {
 #[test]
 fn shared_schedule_keeps_inheritance_residuals_distinct_from_first_cycle() {
     use yamaa_core::{
-        dependency_analysis::{analyze, Limits},
+        dependency_analysis::analyze,
         schema::{InheritanceDependencyError as E, InheritanceDependencyIssue as I},
     };
     let input = document(Map(vec![
@@ -857,28 +791,20 @@ fn shared_schedule_keeps_inheritance_residuals_distinct_from_first_cycle() {
         ),
     ]));
     assert_eq!(
-        schema().resolve_inheritance_dependencies(&input, &mut budget()),
+        schema().resolve_inheritance_dependencies(&input),
         Err(E::Invalid(vec![I::Cycle {
             columns: vec!["DOWNSTREAM".into(), "A".into(), "B".into(), "SELF".into()],
             cycle: vec!["A".into(), "B".into(), "A".into()],
             paths: vec!["columns.A.derivation".into(), "columns.B.derivation".into()],
         }]))
     );
-    let analyzed = analyze(
-        &[vec![1], vec![2], vec![1], vec![], vec![4], vec![3]],
-        Limits::default(),
-    )
-    .unwrap();
+    let analyzed = analyze(&[vec![1], vec![2], vec![1], vec![], vec![4], vec![3]]).unwrap();
     assert_eq!(analyzed.order, vec![3, 5]);
     assert_eq!(analyzed.cycle, Some(vec![1, 2, 1]));
 }
 
 #[test]
-fn inheritance_scheduler_storage_and_early_work_refusals_publish_no_document() {
-    use yamaa_core::schema::{
-        ConstraintError, InheritanceDependencyError as E, NormalizationError as N,
-        NormalizationResource, ValidationError,
-    };
+fn independent_scheduler_requests_keep_authored_column_order_and_input() {
     let input = document(Map(vec![
         (
             "output",
@@ -892,59 +818,22 @@ fn inheritance_scheduler_storage_and_early_work_refusals_publish_no_document() {
             ]),
         ),
     ]));
+    let original = input.clone();
     let schema = schema();
-    let mut limits = NormalizationLimits::default();
-    limits.storage.edges = 17;
-    let mut constrained = NormalizationBudget::new(limits);
-    assert_eq!(
-        schema.resolve_inheritance_dependencies(&input, &mut constrained),
-        Err(E::Normalization(N::Limit {
-            resource: NormalizationResource::Edges,
-            limit: 17
-        }))
-    );
-    // The extra scheduler slots are refused before the first emission; only
-    // the admitted declarations, reachability and emitted-state storage remain.
-    assert_eq!(constrained.storage_used().2, 12);
-    let before_schedule = constrained.work_used();
-    // Independent columns require the legacy scans [A], [A, B], [A, B].
-    // Refuse before A, then while scanning for B, without reserving a later
-    // emission or beginning the normalized document copy.
-    for (extra_work, emitted) in [(0, 0), (2, 1)] {
-        let mut limits = NormalizationLimits::default();
-        limits.validation.work = before_schedule + extra_work;
-        let mut constrained = NormalizationBudget::new(limits);
+    for _ in 0..2 {
         assert_eq!(
-            schema.resolve_inheritance_dependencies(&input, &mut constrained),
-            Err(E::Normalization(N::Validation(
-                ValidationError::Constraint(ConstraintError::Work {
-                    limit: before_schedule + extra_work
-                })
-            )))
+            names(
+                &schema
+                    .resolve_inheritance_dependencies(&input)
+                    .unwrap()
+                    .document,
+                "columns",
+                "name"
+            ),
+            vec!["A", "B"]
         );
-        assert_eq!(constrained.storage_used().2, 18 + emitted);
     }
-    let mut limits = NormalizationLimits::default();
-    limits.validation.work = 0;
-    let mut constrained = NormalizationBudget::new(limits);
-    assert_eq!(
-        schema.resolve_inheritance_dependencies(&input, &mut constrained),
-        Err(E::Normalization(N::Validation(
-            ValidationError::Constraint(ConstraintError::Work { limit: 0 })
-        )))
-    );
-    assert_eq!(constrained.storage_used(), (0, 0, 0));
-    assert_eq!(
-        names(
-            &schema
-                .resolve_inheritance_dependencies(&input, &mut budget())
-                .unwrap()
-                .document,
-            "columns",
-            "name"
-        ),
-        vec!["A", "B"]
-    );
+    assert_eq!(input, original);
 }
 
 #[test]
@@ -968,7 +857,7 @@ fn aggregate_binding_scope_preserves_filters_external_reads_and_invalid_forward_
         ]),
     )]);
     assert_eq!(
-        refs(&schema, aggregate, &["expression"], None, &mut budget()).unwrap(),
+        refs(&schema, aggregate, &["expression"], None).unwrap(),
         vec![
             predicate_variable("A"),
             variable("DM.X"),
@@ -989,7 +878,7 @@ fn aggregate_binding_scope_preserves_filters_external_reads_and_invalid_forward_
         ]),
     )]);
     assert_eq!(
-        refs(&schema, forward, &["expression"], None, &mut budget()).unwrap(),
+        refs(&schema, forward, &["expression"], None).unwrap(),
         vec![variable("B"), variable("DM.X")]
     );
 }

@@ -1,5 +1,5 @@
 use yamaa_core::{
-    schema::{Document, DocumentLimits, DocumentNode as N},
+    schema::{Document, DocumentNode as N},
     specification_submission_document::{self as submission, *},
 };
 
@@ -68,10 +68,10 @@ impl Arena {
     }
 }
 fn decode(input: &Document) -> Declarations {
-    submission::decode(input, input.root(), Limits::default()).unwrap()
+    submission::decode(input, input.root()).unwrap()
 }
 fn findings(input: &Document) -> Vec<Finding> {
-    let error = submission::decode(input, input.root(), Limits::default()).unwrap_err();
+    let error = submission::decode(input, input.root()).unwrap_err();
     assert!(std::ptr::eq(input, error.input));
     match error.cause {
         Cause::Findings(values) => values,
@@ -91,7 +91,7 @@ fn locations_borrow_original_ordered_occurrences_without_accepting_nulls() {
     let second = a.column("A", "int", None);
     let root = a.root(Some(null_two), vec![first, second]);
     let input = a.finish(root);
-    let locations = submission::locate(&input, root, Limits::default()).unwrap();
+    let locations = submission::locate(&input, root).unwrap();
     assert!(std::ptr::eq(locations.input(), &input));
     assert_eq!(locations.dataset().unwrap().node, Some(null_two));
     assert_eq!(
@@ -113,7 +113,7 @@ fn locations_borrow_original_ordered_occurrences_without_accepting_nulls() {
     );
 }
 #[test]
-fn locations_admit_whole_columns_fields_work_and_declarations_before_growth() {
+fn locations_keep_every_column_and_original_submission_occurrence() {
     let mut a = Arena::default();
     let one = a.node(N::Null);
     let two = a.node(N::Null);
@@ -121,45 +121,24 @@ fn locations_admit_whole_columns_fields_work_and_declarations_before_growth() {
     let second = a.column("B", "str", Some(two));
     let root = a.root(None, vec![first, second]);
     let input = a.finish(root);
-    for (limits, resource) in [
-        (
-            Limits {
-                fields: 6,
-                ..Limits::default()
-            },
-            Resource::Fields,
-        ),
-        (
-            Limits {
-                columns: 1,
-                ..Limits::default()
-            },
-            Resource::Columns,
-        ),
-        (
-            Limits {
-                declarations: 1,
-                ..Limits::default()
-            },
-            Resource::Declarations,
-        ),
-        (
-            Limits {
-                work: 1,
-                ..Limits::default()
-            },
-            Resource::Work,
-        ),
-    ] {
-        let error = submission::locate(&input, root, limits).unwrap_err();
-        assert!(std::ptr::eq(error.input, &input));
-        assert_eq!(error.cause, Cause::Limit(resource));
-    }
+    let locations = submission::locate(&input, root).unwrap();
+    assert!(std::ptr::eq(locations.input(), &input));
+    assert_eq!(
+        locations
+            .columns()
+            .iter()
+            .map(|v| v.node)
+            .collect::<Vec<_>>(),
+        [first, second]
+    );
+    assert_eq!(locations.columns()[0].submission.node, Some(one));
+    assert_eq!(locations.columns()[1].submission.node, Some(two));
 }
+
 #[test]
 fn locations_absence_and_original_shapes_remain_distinct() {
     let empty = Document::new(vec![N::Mapping(vec![])], 0).unwrap();
-    let locations = submission::locate(&empty, 0, Limits::default()).unwrap();
+    let locations = submission::locate(&empty, 0).unwrap();
     assert!(locations.dataset().is_none());
     assert!(locations.columns().is_empty());
     let input = Document::new(
@@ -168,7 +147,7 @@ fn locations_absence_and_original_shapes_remain_distinct() {
     )
     .unwrap();
     for (root, node) in [(0, 0), (2, 0), (99, 99)] {
-        let error = submission::locate(&input, root, Limits::default()).unwrap_err();
+        let error = submission::locate(&input, root).unwrap_err();
         assert_eq!(error.cause, Cause::Shape { node });
         assert!(std::ptr::eq(error.input, &input));
     }
@@ -177,9 +156,7 @@ fn locations_absence_and_original_shapes_remain_distinct() {
     let root = a.map(vec![("columns", scalar)]);
     let input = a.finish(root);
     assert_eq!(
-        submission::locate(&input, root, Limits::default())
-            .unwrap_err()
-            .cause,
+        submission::locate(&input, root).unwrap_err().cause,
         Cause::Shape { node: scalar }
     );
 }
@@ -763,82 +740,27 @@ fn malformed_lists_nested_objects_and_integer_kinds_refuse_without_partial_accep
     assert!(values.iter().all(|v| v.requirement().is_none()));
 }
 #[test]
-fn each_capacity_refusal_retains_exact_input_and_never_returns_fitting_findings() {
+fn valid_metadata_is_owned_and_invalid_metadata_keeps_complete_original_findings() {
     let mut a = Arena::default();
     let dataset = a.dataset("SPECIAL PURPOSE", None);
     let sub = a.texts(&[("core", "Req")]);
     let column = a.column("A", "str", Some(sub));
     let root = a.root(Some(dataset), vec![column]);
     let input = a.finish(root);
-    for (limits, resource) in [
-        (
-            Limits {
-                fields: 2,
-                ..Limits::default()
-            },
-            Resource::Fields,
-        ),
-        (
-            Limits {
-                columns: 0,
-                ..Limits::default()
-            },
-            Resource::Columns,
-        ),
-        (
-            Limits {
-                declarations: 1,
-                ..Limits::default()
-            },
-            Resource::Declarations,
-        ),
-        (
-            Limits {
-                work: 128,
-                ..Limits::default()
-            },
-            Resource::Work,
-        ),
-        (
-            Limits {
-                nodes: 3,
-                ..Limits::default()
-            },
-            Resource::Nodes,
-        ),
-        (
-            Limits {
-                depth: 3,
-                ..Limits::default()
-            },
-            Resource::Depth,
-        ),
-        (
-            Limits {
-                list_items: 2,
-                ..Limits::default()
-            },
-            Resource::ListItems,
-        ),
-        (
-            Limits {
-                text_bytes: 20,
-                ..Limits::default()
-            },
-            Resource::TextBytes,
-        ),
-        (
-            Limits {
-                escaped_bytes: 200,
-                ..Limits::default()
-            },
-            Resource::EscapedBytes,
-        ),
-    ] {
-        let error = submission::decode(&input, root, limits).unwrap_err();
-        assert!(std::ptr::eq(error.input, &input));
-        assert_eq!(error.cause, Cause::Limit(resource));
-    }
+    let owner = decode(&input);
+    assert_eq!(owner.dataset().unwrap().origin.node, Some(dataset));
+    assert_eq!(columns(&owner)[0].node, column);
+    assert_eq!(
+        columns(&owner)[0]
+            .submission
+            .as_ref()
+            .unwrap()
+            .core
+            .as_ref()
+            .unwrap()
+            .value,
+        Core::Required
+    );
     let mut a = Arena::default();
     let core = a.text("wrong");
     let list = a.text("wrong-list");
@@ -846,30 +768,22 @@ fn each_capacity_refusal_retains_exact_input_and_never_returns_fitting_findings(
     let column = a.column("A", "str", Some(sub));
     let root = a.root(None, vec![column]);
     let input = a.finish(root);
-    for (limits, resource) in [
-        (
-            Limits {
-                findings: 1,
-                ..Limits::default()
-            },
-            Resource::Findings,
-        ),
-        (
-            Limits {
-                path_segments: 4,
-                ..Limits::default()
-            },
-            Resource::PathSegments,
-        ),
-    ] {
-        let error = submission::decode(&input, root, limits).unwrap_err();
-        assert!(std::ptr::eq(error.input, &input));
-        assert_eq!(error.cause, Cause::Limit(resource));
-    }
-    assert_eq!(findings(&input).len(), 2);
+    let error = submission::decode(&input, root).unwrap_err();
+    assert!(std::ptr::eq(error.input, &input));
+    let Cause::Findings(findings) = error.cause else {
+        panic!("complete findings")
+    };
+    assert_eq!(
+        findings
+            .iter()
+            .map(|v| (v.node, v.kind))
+            .collect::<Vec<_>>(),
+        [(core, Kind::InvalidChoice), (list, Kind::InvalidIdentifier)]
+    );
 }
+
 #[test]
-fn malformed_deep_unknown_values_use_bounded_native_walk_before_findings() {
+fn malformed_deep_unknown_values_keep_the_authored_unknown_field() {
     let mut a = Arena::default();
     let mut value = a.text("deep");
     for _ in 0..10 {
@@ -879,19 +793,16 @@ fn malformed_deep_unknown_values_use_bounded_native_walk_before_findings() {
     let column = a.column("A", "str", Some(sub));
     let root = a.root(None, vec![column]);
     let input = a.finish(root);
-    let error = submission::decode(
-        &input,
-        root,
-        Limits {
-            depth: 7,
-            ..Limits::default()
-        },
-    )
-    .unwrap_err();
-    assert_eq!(error.cause, Cause::Limit(Resource::Depth));
+    let error = submission::decode(&input, root).unwrap_err();
     assert!(std::ptr::eq(error.input, &input));
-    assert_eq!(findings(&input)[0].kind, Kind::UnknownField);
+    let Cause::Findings(findings) = error.cause else {
+        panic!("complete findings")
+    };
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].kind, Kind::UnknownField);
+    assert_eq!(findings[0].node, value);
 }
+
 #[test]
 fn zero_and_negative_arbitrary_integer_declarations_await_semantic_range_checks() {
     for value in ["0", "-1", "9223372036854775808"] {
@@ -953,7 +864,7 @@ fn deepest_page_failure_retains_complete_closed_path_and_original_field_facts() 
     assert_eq!(values[2].node, refs);
 }
 #[test]
-fn cumulative_late_text_and_findings_limits_do_not_reset_between_columns() {
+fn later_column_text_and_findings_are_preserved_completely() {
     let mut a = Arena::default();
     let first_sub = a.texts(&[("comment", "first bounded declaration")]);
     let second_sub = a.texts(&[("comment", "second bounded declaration")]);
@@ -961,19 +872,23 @@ fn cumulative_late_text_and_findings_limits_do_not_reset_between_columns() {
     let second = a.column("B", "str", Some(second_sub));
     let root = a.root(None, vec![first, second]);
     let input = a.finish(root);
-    // Total selected key/scalar text is independently 116 bytes. Each column
-    // fits this quota alone, but the retained whole declaration set does not.
-    let error = submission::decode(
-        &input,
-        root,
-        Limits {
-            text_bytes: 90,
-            ..Limits::default()
-        },
-    )
-    .unwrap_err();
-    assert_eq!(error.cause, Cause::Limit(Resource::TextBytes));
-    assert!(std::ptr::eq(error.input, &input));
+    let owner = decode(&input);
+    for (column, expected) in columns(&owner)
+        .iter()
+        .zip(["first bounded declaration", "second bounded declaration"])
+    {
+        let Comment::Plain(comment) = column
+            .submission
+            .as_ref()
+            .unwrap()
+            .comment
+            .as_ref()
+            .unwrap()
+        else {
+            panic!("plain comment")
+        };
+        assert_eq!(comment.value, expected);
+    }
     let mut a = Arena::default();
     let one = a.texts(&[("core", "wrong")]);
     let two = a.texts(&[("core", "wrong")]);
@@ -981,19 +896,19 @@ fn cumulative_late_text_and_findings_limits_do_not_reset_between_columns() {
     let second = a.column("B", "str", Some(two));
     let root = a.root(None, vec![first, second]);
     let input = a.finish(root);
-    let error = submission::decode(
-        &input,
-        root,
-        Limits {
-            findings: 1,
-            ..Limits::default()
-        },
-    )
-    .unwrap_err();
-    assert_eq!(error.cause, Cause::Limit(Resource::Findings));
+    let error = submission::decode(&input, root).unwrap_err();
     assert!(std::ptr::eq(error.input, &input));
-    assert_eq!(findings(&input).len(), 2);
+    let Cause::Findings(findings) = error.cause else {
+        panic!("complete findings")
+    };
+    assert_eq!(findings.len(), 2);
+    assert!(findings
+        .iter()
+        .all(|finding| finding.kind == Kind::InvalidChoice));
+    assert_eq!(findings[0].node, input.field(one, "core").unwrap());
+    assert_eq!(findings[1].node, input.field(two, "core").unwrap());
 }
+
 #[test]
 fn root_scalar_column_scalar_and_non_text_root_key_keep_transport_facts() {
     let mut a = Arena::default();
@@ -1009,7 +924,7 @@ fn root_scalar_column_scalar_and_non_text_root_key_keep_transport_facts() {
     assert_eq!(values[0].origin.unwrap().key, None);
     assert_eq!(values[0].origin.unwrap().node, Some(scalar));
     for root in [scalar, usize::MAX] {
-        let error = submission::decode(&input, root, Limits::default()).unwrap_err();
+        let error = submission::decode(&input, root).unwrap_err();
         assert_eq!(error.cause, Cause::Shape { node: root });
         assert!(std::ptr::eq(error.input, &input));
     }

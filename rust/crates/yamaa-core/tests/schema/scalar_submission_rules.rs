@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use yamaa_core::{
     diagnostic::{ScalarSubmissionRule as Rule, SCALAR_SUBMISSION_RULES},
-    schema::{Document, DocumentLimits, DocumentNode as N},
+    schema::{Document, DocumentNode as N},
     specification_submission_document as spec, submission_document as environment,
 };
 
@@ -66,7 +66,7 @@ fn actual_raw_decoder_findings_reach_every_scalar_owner_and_keep_shape_uncited()
     ]);
     let root = a.map(&[("study", study), ("sdtm", section)]);
     let input = a.finish(root);
-    let error = environment::decode(&input, root, environment::Limits::default()).unwrap_err();
+    let error = environment::decode(&input, root).unwrap_err();
     assert!(std::ptr::eq(error.input, &input));
     let environment::Cause::Findings(findings) = error.cause else {
         panic!("raw findings")
@@ -140,7 +140,7 @@ fn actual_raw_decoder_findings_reach_every_scalar_owner_and_keep_shape_uncited()
     let columns = a.node(N::Sequence(vec![column, second]));
     let root = a.map(&[("submission", dataset), ("columns", columns)]);
     let input = a.finish(root);
-    let error = spec::decode(&input, root, spec::Limits::default()).unwrap_err();
+    let error = spec::decode(&input, root).unwrap_err();
     assert!(std::ptr::eq(error.input, &input));
     let spec::Cause::Findings(findings) = error.cause else {
         panic!("raw findings")

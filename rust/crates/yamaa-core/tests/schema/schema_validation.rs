@@ -1,8 +1,7 @@
 use yamaa_core::schema::{
-    BundleLimits, ConstraintError, Document, DocumentKind, DocumentLimits, DocumentNode as N,
-    NormalizationBudget, NormalizationError, NormalizationLimits, NormalizationResource,
+    Document, DocumentKind, DocumentNode as N, NormalizationError, NormalizationResource,
     NormalizedDocument, SchemaContext as C, SchemaDiagnostic, SchemaModule, SchemaSource,
-    SchemaStructure, ValidationBudget, ValidationError, ValidationLimits,
+    SchemaStructure,
 };
 
 enum V {
@@ -68,16 +67,12 @@ fn bundle(fields: Vec<V>, declarations: Vec<(&'static str, V)>) -> SchemaStructu
         }],
         0,
         "root_class",
-        BundleLimits::default(),
     )
     .unwrap()
 }
-fn budget() -> ValidationBudget {
-    ValidationBudget::new(ValidationLimits::default())
-}
 
 #[test]
-fn invalid_or_interrupted_default_preparation_never_bypasses_normalization_admission() {
+fn invalid_default_preparation_never_bypasses_normalization_admission() {
     let mut schema = bundle(
         vec![Map(vec![(
             "value",
@@ -86,34 +81,18 @@ fn invalid_or_interrupted_default_preparation_never_bypasses_normalization_admis
         vec![],
     );
     let input = document(Map(vec![("schema_version", Text("1.0"))]));
-    let mut exhausted = ValidationBudget::new(ValidationLimits {
-        work: 0,
-        ..ValidationLimits::default()
-    });
-    assert_eq!(
-        schema.prepare_defaults(&mut exhausted),
-        Err(ValidationError::Constraint(ConstraintError::Work {
-            limit: 0
-        }))
-    );
     assert!(matches!(
-        schema.normalize_document(
-            &input,
-            &mut NormalizationBudget::new(NormalizationLimits::default())
-        ),
+        schema.normalize_document(&input),
         Err(NormalizationError::Defaults(_))
     ));
-    let findings = schema.prepare_defaults(&mut budget()).unwrap();
+    let findings = schema.prepare_defaults().unwrap();
     assert_eq!(findings.len(), 1);
     assert_eq!(
         findings[0].diagnostics[0].definition().condition,
         "invalid_field_type"
     );
     assert!(matches!(
-        schema.normalize_document(
-            &input,
-            &mut NormalizationBudget::new(NormalizationLimits::default())
-        ),
+        schema.normalize_document(&input),
         Err(NormalizationError::Defaults(_))
     ));
 }
@@ -132,14 +111,7 @@ fn validate(
         .unwrap()
         .descriptor;
     schema
-        .validate_descriptor(
-            descriptor,
-            &input,
-            input.root(),
-            field,
-            fragment,
-            &mut budget(),
-        )
+        .validate_descriptor(descriptor, &input, input.root(), field, fragment)
         .unwrap()
 }
 fn findings(diagnostics: &[SchemaDiagnostic]) -> Vec<(&str, &str)> {
@@ -150,7 +122,7 @@ fn findings(diagnostics: &[SchemaDiagnostic]) -> Vec<(&str, &str)> {
 }
 
 #[test]
-fn incompatible_decoded_values_keep_all_portable_kinds_under_the_shared_text_budget() {
+fn incompatible_decoded_values_keep_all_portable_kinds() {
     let schema = bundle(vec![field("value", "int"), field("text", "str")], vec![]);
     for (value, kind, name, field) in [
         (Null, DocumentKind::Null, "null", "value"),
@@ -168,28 +140,13 @@ fn incompatible_decoded_values_keep_all_portable_kinds_under_the_shared_text_bud
     }
     let input = document(Null);
     let descriptor = schema.root_class().fields[1].descriptor;
-    for limit in [29, 30] {
-        let mut budget = ValidationBudget::new(ValidationLimits {
-            diagnostic_text_bytes: limit,
-            ..ValidationLimits::default()
-        });
-        let result = schema.validate_descriptor(
-            descriptor,
-            &input,
-            input.root(),
-            "value",
-            false,
-            &mut budget,
-        );
-        if limit == 29 {
-            assert_eq!(result, Err(ValidationError::DiagnosticText { limit }));
-        } else {
-            assert_eq!(
-                result.unwrap()[0].context[1],
-                ("actual", C::ValueKind(DocumentKind::Null))
-            );
-        }
-    }
+    let result = schema
+        .validate_descriptor(descriptor, &input, input.root(), "value", false)
+        .unwrap();
+    assert_eq!(
+        result[0].context[1],
+        ("actual", C::ValueKind(DocumentKind::Null))
+    );
 }
 
 #[test]
@@ -209,7 +166,7 @@ fn version_precedes_field_findings_and_classes_keep_schema_then_input_order() {
         ("count", Bool(true)),
         ("schema_version", Text("old")),
     ]));
-    let result = schema.validate_document(&input, &mut budget()).unwrap();
+    let result = schema.validate_document(&input).unwrap();
     assert_eq!(
         findings(&result),
         [("schema_version", "schema_version_mismatch")]
@@ -220,7 +177,7 @@ fn version_precedes_field_findings_and_classes_keep_schema_then_input_order() {
         ("count", Bool(true)),
         ("schema_version", Text("1.0")),
     ]));
-    let result = schema.validate_document(&input, &mut budget()).unwrap();
+    let result = schema.validate_document(&input).unwrap();
     assert_eq!(
         findings(&result),
         [
@@ -237,9 +194,7 @@ fn version_precedes_field_findings_and_classes_keep_schema_then_input_order() {
         ]
     );
     for value in [Null, List(vec![]), Map(vec![])] {
-        let result = schema
-            .validate_document(&document(value), &mut budget())
-            .unwrap();
+        let result = schema.validate_document(&document(value)).unwrap();
         assert_eq!(findings(&result), [("$", "invalid_field_type")]);
     }
 }
@@ -407,7 +362,7 @@ fn defaults_resolve_forward_aliases_and_return_the_declaring_descriptor() {
         ],
         vec![("later", descriptor("str"))],
     );
-    let result = schema.validate_defaults(&mut budget()).unwrap();
+    let result = schema.validate_defaults().unwrap();
     assert_eq!(result.len(), 1);
     assert_eq!(
         schema.descriptors()[result[0].descriptor].path,
@@ -496,7 +451,7 @@ fn typed_dictionary_keys_have_independent_key_and_value_paths() {
 }
 
 #[test]
-fn failed_union_attempts_consume_shared_budget_and_fresh_attempts_are_independent() {
+fn independent_union_attempts_do_not_publish_failed_alternative_findings() {
     let schema = bundle(
         vec![Map(vec![(
             "choice",
@@ -506,83 +461,9 @@ fn failed_union_attempts_consume_shared_budget_and_fresh_attempts_are_independen
     );
     let descriptor = schema.root_class().fields[1].descriptor;
     let input = document(Text("valid"));
-    let mut shared = budget();
-    assert!(schema
-        .validate_descriptor(
-            descriptor,
-            &input,
-            input.root(),
-            "choice",
-            false,
-            &mut shared
-        )
-        .unwrap()
-        .is_empty());
-    assert_eq!(shared.diagnostics_used(), 1);
-    let work = shared.work_used();
-    assert!(schema
-        .validate_descriptor(
-            descriptor,
-            &input,
-            input.root(),
-            "choice",
-            false,
-            &mut shared
-        )
-        .unwrap()
-        .is_empty());
-    assert_eq!(shared.diagnostics_used(), 2);
-    assert_eq!(shared.work_used(), work * 2);
-    for (limits, expected) in [
-        (
-            ValidationLimits {
-                work: 0,
-                ..Default::default()
-            },
-            ValidationError::Constraint(ConstraintError::Work { limit: 0 }),
-        ),
-        (
-            ValidationLimits {
-                diagnostics: 0,
-                ..Default::default()
-            },
-            ValidationError::Diagnostics { limit: 0 },
-        ),
-        (
-            ValidationLimits {
-                diagnostic_text_bytes: 0,
-                ..Default::default()
-            },
-            ValidationError::DiagnosticText { limit: 0 },
-        ),
-        (
-            ValidationLimits {
-                depth: 0,
-                ..Default::default()
-            },
-            ValidationError::Depth { limit: 0 },
-        ),
-    ] {
-        assert_eq!(
-            schema.validate_descriptor(
-                descriptor,
-                &input,
-                input.root(),
-                "choice",
-                false,
-                &mut ValidationBudget::new(limits)
-            ),
-            Err(expected)
-        );
+    for _ in 0..3 {
         assert!(schema
-            .validate_descriptor(
-                descriptor,
-                &input,
-                input.root(),
-                "choice",
-                false,
-                &mut budget()
-            )
+            .validate_descriptor(descriptor, &input, input.root(), "choice", false)
             .unwrap()
             .is_empty());
     }
@@ -603,13 +484,7 @@ fn normalize(
         .unwrap()
         .descriptor;
     schema
-        .normalize_descriptor(
-            descriptor,
-            &input,
-            input.root(),
-            fragment,
-            &mut NormalizationBudget::new(NormalizationLimits::default()),
-        )
+        .normalize_descriptor(descriptor, &input, input.root(), fragment)
         .unwrap()
 }
 
@@ -836,21 +711,11 @@ fn recursive_defaults_are_resource_refusals_instead_of_silently_truncated_object
     );
     let input = document(Map(vec![]));
     let descriptor = schema.root_class().fields[1].descriptor;
-    let limits = NormalizationLimits {
-        depth: 24,
-        ..Default::default()
-    };
     assert_eq!(
-        schema.normalize_descriptor(
-            descriptor,
-            &input,
-            input.root(),
-            false,
-            &mut NormalizationBudget::new(limits)
-        ),
+        schema.normalize_descriptor(descriptor, &input, input.root(), false),
         Err(NormalizationError::Limit {
             resource: NormalizationResource::Depth,
-            limit: 24
+            limit: 128
         })
     );
     assert_value(
@@ -872,18 +737,15 @@ fn normalization_validates_written_constraints_and_defaults_before_allocating_ou
         vec![],
     );
     let input = document(Text("bad"));
-    let mut budget = NormalizationBudget::new(NormalizationLimits::default());
     assert!(matches!(
         schema.normalize_descriptor(
             schema.root_class().fields[1].descriptor,
             &input,
             input.root(),
-            false,
-            &mut budget
+            false
         ),
         Err(NormalizationError::Invalid(_))
     ));
-    assert_eq!(budget.storage_used(), (0, 0, 0));
     let invalid_defaults = bundle(
         vec![Map(vec![(
             "bad",
@@ -896,16 +758,14 @@ fn normalization_validates_written_constraints_and_defaults_before_allocating_ou
             invalid_defaults.root_class().fields[1].descriptor,
             &document(Text("valid")),
             0,
-            true,
-            &mut budget
+            true
         ),
         Err(NormalizationError::Defaults(_))
     ));
-    assert_eq!(budget.storage_used(), (0, 0, 0));
 }
 
 #[test]
-fn normalization_storage_limits_span_calls_without_mutating_sources() {
+fn independent_normalization_keeps_complete_results_and_original_input() {
     let schema = bundle(
         vec![Map(vec![(
             "value",
@@ -916,66 +776,15 @@ fn normalization_storage_limits_span_calls_without_mutating_sources() {
     let input = document(Text("DM"));
     let before = input.clone();
     let descriptor = schema.root_class().fields[1].descriptor;
-    let limits = NormalizationLimits {
-        storage: DocumentLimits {
-            nodes: 2,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    let mut shared = NormalizationBudget::new(limits);
-    assert!(schema
-        .normalize_descriptor(descriptor, &input, input.root(), false, &mut shared)
-        .is_ok());
-    assert_eq!(shared.storage_used(), (2, 2, 1));
-    assert_eq!(
-        schema.normalize_descriptor(descriptor, &input, input.root(), false, &mut shared),
-        Err(NormalizationError::Limit {
-            resource: NormalizationResource::Nodes,
-            limit: 2
-        })
-    );
+    let first = schema
+        .normalize_descriptor(descriptor, &input, input.root(), false)
+        .unwrap();
+    let second = schema
+        .normalize_descriptor(descriptor, &input, input.root(), false)
+        .unwrap();
+    assert_eq!(first, second);
     assert_eq!(input, before);
-    assert!(schema
-        .normalize_descriptor(
-            descriptor,
-            &input,
-            input.root(),
-            false,
-            &mut NormalizationBudget::new(limits)
-        )
-        .is_ok());
-    for (storage, resource) in [
-        (
-            DocumentLimits {
-                text_bytes: 0,
-                ..Default::default()
-            },
-            NormalizationResource::TextBytes,
-        ),
-        (
-            DocumentLimits {
-                edges: 0,
-                ..Default::default()
-            },
-            NormalizationResource::Edges,
-        ),
-    ] {
-        let limits = NormalizationLimits {
-            storage,
-            ..Default::default()
-        };
-        assert_eq!(
-            schema.normalize_descriptor(
-                descriptor,
-                &input,
-                input.root(),
-                false,
-                &mut NormalizationBudget::new(limits)
-            ),
-            Err(NormalizationError::Limit { resource, limit: 0 })
-        );
-    }
+    assert_value(&first.document, List(vec![Text("DM")]));
 }
 
 #[test]
@@ -1009,12 +818,7 @@ fn whole_document_normalization_keeps_schema_order_and_nested_default_provenance
         ("explicit", Text("written")),
         ("schema_version", Text("1.0")),
     ]));
-    let result = schema
-        .normalize_document(
-            &input,
-            &mut NormalizationBudget::new(NormalizationLimits::default()),
-        )
-        .unwrap();
+    let result = schema.normalize_document(&input).unwrap();
     assert_value(
         &result.document,
         Map(vec![
@@ -1093,7 +897,6 @@ fn shorthand_checks_the_written_member_without_reinterpreting_generated_fields()
         &input,
         input.root(),
         false,
-        &mut NormalizationBudget::new(NormalizationLimits::default()),
     );
     assert!(
         matches!(result, Err(NormalizationError::Invalid(ref findings)) if findings[0].definition().condition == "value_not_permitted")
@@ -1173,7 +976,7 @@ fn compound_path_quotes_escape_only_the_required_characters_without_normalizatio
 }
 
 #[test]
-fn compound_path_allocation_is_charged_before_large_invalid_labels_are_built() {
+fn invalid_compound_labels_keep_the_complete_authored_path() {
     let schema = bundle(
         vec![field("items", "list[record]")],
         vec![("record", List(vec![field("name", "str")]))],
@@ -1183,58 +986,20 @@ fn compound_path_allocation_is_charged_before_large_invalid_labels_are_built() {
         List(vec![Text("oversized-label")]),
     )])]));
     let descriptor = schema.root_class().fields[1].descriptor;
-    let limits = ValidationLimits {
-        diagnostic_text_bytes: 5,
-        ..Default::default()
-    };
-    assert_eq!(
-        schema.validate_descriptor(
-            descriptor,
-            &input,
-            input.root(),
-            "items",
-            false,
-            &mut ValidationBudget::new(limits)
-        ),
-        Err(ValidationError::DiagnosticText { limit: 5 })
-    );
-    assert_eq!(
-        schema
-            .validate_descriptor(
-                descriptor,
-                &input,
-                input.root(),
-                "items",
-                false,
-                &mut budget()
-            )
-            .unwrap()[0]
-            .definition()
-            .condition,
-        "invalid_field_type"
-    );
+    let result = schema
+        .validate_descriptor(descriptor, &input, input.root(), "items", false)
+        .unwrap();
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].definition().condition, "invalid_field_type");
+    assert_eq!(result[0].path, "items.['oversized-label'].name");
 }
 
 #[test]
-fn quoted_diagnostic_text_reuses_unicode_spelling_and_cumulative_budget() {
+fn quoted_diagnostic_text_preserves_each_complete_unicode_spelling() {
     use yamaa_core::schema::quoted_diagnostic_text;
-    let mut limits = budget();
-    assert_eq!(
-        quoted_diagnostic_text("a'b", &mut limits).unwrap(),
-        "\"a'b\""
-    );
-    assert_eq!(
-        quoted_diagnostic_text("\u{a0}\n\u{1f600}", &mut limits).unwrap(),
-        "'\\xa0\\n😀'"
-    );
-    let mut limits = ValidationBudget::new(ValidationLimits {
-        diagnostic_text_bytes: 7,
-        ..Default::default()
-    });
-    assert_eq!(quoted_diagnostic_text("a", &mut limits).unwrap(), "'a'");
-    assert_eq!(quoted_diagnostic_text("b", &mut limits).unwrap(), "'b'");
-    assert_eq!(
-        quoted_diagnostic_text("c", &mut limits),
-        Err(ValidationError::DiagnosticText { limit: 7 })
-    );
+    assert_eq!(quoted_diagnostic_text("a'b"), "\"a'b\"");
+    assert_eq!(quoted_diagnostic_text("\u{a0}\n\u{1f600}"), "'\\xa0\\n😀'");
+    for value in ["a", "b", "c"] {
+        assert_eq!(quoted_diagnostic_text(value), format!("'{value}'"));
+    }
 }

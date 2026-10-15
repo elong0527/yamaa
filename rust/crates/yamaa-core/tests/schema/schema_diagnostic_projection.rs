@@ -1,9 +1,8 @@
 use yamaa_core::schema::{
-    admit_schema_diagnostics, schema_diagnostic_kind_label, BundleLimits, Document,
-    DocumentKind as K, DocumentLimits, DocumentNode as N, NormalizationBudget, NormalizationLimits,
-    SchemaContext as C, SchemaDiagnostic, SchemaDiagnosticBudget as Budget,
-    SchemaDiagnosticError as E, SchemaDiagnosticReport, SchemaDiagnosticValue as V, SchemaModule,
-    SchemaSource, SchemaStructure, ValidationBudget, ValidationLimits,
+    admit_schema_diagnostics, schema_diagnostic_kind_label, Document, DocumentKind as K,
+    DocumentNode as N, SchemaContext as C, SchemaDiagnostic, SchemaDiagnosticError as E,
+    SchemaDiagnosticReport, SchemaDiagnosticValue as V, SchemaModule, SchemaSource,
+    SchemaStructure,
 };
 
 const BIG: &str = "922337203685477580812345678901234567890";
@@ -78,7 +77,7 @@ fn schema() -> SchemaStructure {
             ),
         ])),
     };
-    SchemaStructure::admit(vec![shared, root], 1, "root_class", BundleLimits::default()).unwrap()
+    SchemaStructure::admit(vec![shared, root], 1, "root_class").unwrap()
 }
 fn issue(path: &str, context: Vec<(&'static str, C)>) -> SchemaDiagnostic {
     SchemaDiagnostic {
@@ -118,24 +117,10 @@ fn actual_constraints_preserve_whole_ordered_report_and_reused_descriptor_facts(
     assert_eq!(located.path, "root_class.value");
     let input = document(Text("bad\"\nλ"));
     let findings = schema
-        .validate_descriptor(
-            descriptor,
-            &input,
-            input.root(),
-            "value",
-            false,
-            &mut ValidationBudget::new(ValidationLimits::default()),
-        )
+        .validate_descriptor(descriptor, &input, input.root(), "value", false)
         .unwrap();
     let origins = [("source", "held/parent.yaml"), ("entry", "held/entry.yaml")];
-    let report = admit_schema_diagnostics(
-        &schema,
-        Some(&input),
-        &findings,
-        &origins,
-        &mut Budget::new(),
-    )
-    .unwrap();
+    let report = admit_schema_diagnostics(&schema, Some(&input), &findings, &origins).unwrap();
     assert!(std::ptr::eq(report.schema(), &schema));
     assert!(std::ptr::eq(report.document().unwrap(), &input));
     assert_eq!(report.findings().as_ptr(), findings.as_ptr());
@@ -212,12 +197,9 @@ fn actual_constraints_preserve_whole_ordered_report_and_reused_descriptor_facts(
             items.root(),
             "items",
             false,
-            &mut ValidationBudget::new(ValidationLimits::default()),
         )
         .unwrap();
-    let report =
-        admit_schema_diagnostics(&schema, Some(&items), &findings, &[], &mut Budget::new())
-            .unwrap();
+    let report = admit_schema_diagnostics(&schema, Some(&items), &findings, &[]).unwrap();
     assert_eq!(
         records(&report),
         vec![(
@@ -233,9 +215,7 @@ fn actual_constraints_preserve_whole_ordered_report_and_reused_descriptor_facts(
 #[test]
 fn default_references_use_the_explicit_held_declaring_module_arena() {
     let schema = schema();
-    let defaults = schema
-        .validate_defaults(&mut ValidationBudget::new(ValidationLimits::default()))
-        .unwrap();
+    let defaults = schema.validate_defaults().unwrap();
     let descriptor = schema.root_class().fields[0].descriptor;
     let diagnostics = &defaults
         .iter()
@@ -244,9 +224,7 @@ fn default_references_use_the_explicit_held_declaring_module_arena() {
         .diagnostics;
     let located = &schema.descriptors()[descriptor];
     let input = &schema.modules()[located.module].document;
-    let report =
-        admit_schema_diagnostics(&schema, Some(input), diagnostics, &[], &mut Budget::new())
-            .unwrap();
+    let report = admit_schema_diagnostics(&schema, Some(input), diagnostics, &[]).unwrap();
     assert_eq!(
         records(&report),
         vec![
@@ -279,15 +257,12 @@ fn default_references_use_the_explicit_held_declaring_module_arena() {
             ),
         ]
     );
-    let Err(error) = admit_schema_diagnostics(&schema, None, diagnostics, &[], &mut Budget::new())
-    else {
+    let Err(error) = admit_schema_diagnostics(&schema, None, diagnostics, &[]) else {
         panic!("arena required")
     };
     assert_eq!(error, E::InvalidContext);
     let other = document(Text("unrelated source"));
-    let Err(error) =
-        admit_schema_diagnostics(&schema, Some(&other), diagnostics, &[], &mut Budget::new())
-    else {
+    let Err(error) = admit_schema_diagnostics(&schema, Some(&other), diagnostics, &[]) else {
         panic!("wrong node arena")
     };
     assert_eq!(error, E::InvalidContext);
@@ -312,9 +287,7 @@ fn scalar_values_counts_and_both_kind_vocabularies_are_core_owned_and_borrowed()
                 ("absent", C::Null),
             ],
         )];
-        let report =
-            admit_schema_diagnostics(&schema, Some(&input), &findings, &[], &mut Budget::new())
-                .unwrap();
+        let report = admit_schema_diagnostics(&schema, Some(&input), &findings, &[]).unwrap();
         let expected = match &input.nodes()[0] {
             N::Null => V::Null,
             N::Boolean(v) => V::Boolean(*v),
@@ -354,8 +327,7 @@ fn scalar_values_counts_and_both_kind_vocabularies_are_core_owned_and_borrowed()
             "kind",
             vec![("value", C::ValueKind(kind)), ("layer", C::LayerKind(kind))],
         )];
-        let report =
-            admit_schema_diagnostics(&schema, None, &findings, &[], &mut Budget::new()).unwrap();
+        let report = admit_schema_diagnostics(&schema, None, &findings, &[]).unwrap();
         assert_eq!(
             records(&report),
             vec![(
@@ -406,16 +378,10 @@ fn normalized_default_occurrences_keep_the_pass_arena_and_original_origin_author
         }],
         0,
         "root_class",
-        BundleLimits::default(),
     )
     .unwrap();
     let raw = document(Map(vec![("schema_version", Text("1.0"))]));
-    let normalized = schema
-        .normalize_document(
-            &raw,
-            &mut NormalizationBudget::new(NormalizationLimits::default()),
-        )
-        .unwrap();
+    let normalized = schema.normalize_document(&raw).unwrap();
     let value = normalized
         .document
         .field(normalized.document.root(), "value")
@@ -437,17 +403,10 @@ fn normalized_default_occurrences_keep_the_pass_arena_and_original_origin_author
             value,
             "value",
             false,
-            &mut ValidationBudget::new(ValidationLimits::default()),
         )
         .unwrap();
-    let report = admit_schema_diagnostics(
-        &schema,
-        Some(&normalized.document),
-        &findings,
-        &[],
-        &mut Budget::new(),
-    )
-    .unwrap();
+    let report =
+        admit_schema_diagnostics(&schema, Some(&normalized.document), &findings, &[]).unwrap();
     assert!(std::ptr::eq(
         report.document().unwrap(),
         &normalized.document
@@ -466,9 +425,7 @@ fn normalized_default_occurrences_keep_the_pass_arena_and_original_origin_author
         )]
     );
     assert_eq!(normalized.origins.as_ptr(), origin_pointer);
-    let Err(error) =
-        admit_schema_diagnostics(&schema, Some(&raw), &findings, &[], &mut Budget::new())
-    else {
+    let Err(error) = admit_schema_diagnostics(&schema, Some(&raw), &findings, &[]) else {
         panic!("raw arena cannot resolve normalized occurrence")
     };
     assert_eq!(error, E::InvalidContext);
@@ -494,9 +451,7 @@ fn invalid_nodes_descriptors_and_duplicate_keys_refuse_without_a_partial_report(
             issue("earlier", vec![("ok", C::Text("admitted".into()))]),
             issue("later", vec![("bad", context)]),
         ];
-        let Err(error) =
-            admit_schema_diagnostics(&schema, Some(&input), &findings, &[], &mut Budget::new())
-        else {
+        let Err(error) = admit_schema_diagnostics(&schema, Some(&input), &findings, &[]) else {
             panic!("invalid context")
         };
         assert_eq!(error, E::InvalidContext);
@@ -507,9 +462,7 @@ fn invalid_nodes_descriptors_and_duplicate_keys_refuse_without_a_partial_report(
         (vec![], vec![("source", "first"), ("source", "second")]),
     ] {
         let findings = [issue("later", fields)];
-        let Err(error) =
-            admit_schema_diagnostics(&schema, None, &findings, &origins, &mut Budget::new())
-        else {
+        let Err(error) = admit_schema_diagnostics(&schema, None, &findings, &origins) else {
             panic!("duplicate context")
         };
         assert_eq!(error, E::InvalidContext);
@@ -517,18 +470,14 @@ fn invalid_nodes_descriptors_and_duplicate_keys_refuse_without_a_partial_report(
 }
 
 #[test]
-fn whole_report_and_reused_budget_admission_preserve_exact_quota_and_error_order() {
+fn repeated_projection_keeps_all_facts_and_missing_arenas_refuse() {
     let schema = schema();
     let findings = [SchemaDiagnostic {
         path: "p".into(),
         code: yamaa_core::diagnostic::ConditionCode::SchemaInvalidFieldType,
         context: vec![("k", C::Text("v".into()))],
     }];
-    // Independent cost: 128 initial + 128 record + 8 path + 110 condition +
-    // 50 requirement + 8 context name + 8 value + 2 context field.
-    let total = 442;
-    let mut budget = Budget::with_limit(total);
-    let report = admit_schema_diagnostics(&schema, None, &findings, &[], &mut budget).unwrap();
+    let report = admit_schema_diagnostics(&schema, None, &findings, &[]).unwrap();
     assert_eq!(
         records(&report),
         vec![(
@@ -539,43 +488,23 @@ fn whole_report_and_reused_budget_admission_preserve_exact_quota_and_error_order
             vec![("k", V::Text("v"))]
         )]
     );
-    assert_eq!(budget.bytes_used(), total);
-    let Err(error) = admit_schema_diagnostics(&schema, None, &findings, &[], &mut budget) else {
-        panic!("shared budget exhausted")
-    };
-    assert_eq!(error, E::Limit);
-    let Err(error) = admit_schema_diagnostics(
-        &schema,
-        None,
-        &findings,
-        &[],
-        &mut Budget::with_limit(total - 1),
-    ) else {
-        panic!("one byte short")
-    };
-    assert_eq!(error, E::Limit);
-    let mut late = findings.to_vec();
-    late.extend(findings.iter().cloned());
-    let Err(error) =
-        admit_schema_diagnostics(&schema, None, &late, &[], &mut Budget::with_limit(total))
-    else {
-        panic!("whole report refused")
-    };
-    assert_eq!(error, E::Limit);
+    assert_eq!(
+        records(&admit_schema_diagnostics(&schema, None, &findings, &[]).unwrap()),
+        records(&report)
+    );
+    let late = [findings[0].clone(), findings[0].clone()];
+    let repeated = admit_schema_diagnostics(&schema, None, &late, &[]).unwrap();
+    assert_eq!(
+        records(&repeated),
+        [records(&report), records(&report)].concat()
+    );
     let invalid = [issue("bad", vec![("value", C::InputValue(0))])];
-    let Err(error) =
-        admit_schema_diagnostics(&schema, None, &invalid, &[], &mut Budget::with_limit(0))
-    else {
-        panic!("quota first")
-    };
-    assert_eq!(error, E::Limit);
-    let Err(error) = admit_schema_diagnostics(&schema, None, &invalid, &[], &mut Budget::new())
-    else {
+    let Err(error) = admit_schema_diagnostics(&schema, None, &invalid, &[]) else {
         panic!("missing arena")
     };
     assert_eq!(error, E::InvalidContext);
     assert_eq!(
-        admit_schema_diagnostics(&schema, None, &[], &[], &mut Budget::with_limit(0))
+        admit_schema_diagnostics(&schema, None, &[], &[])
             .unwrap()
             .iter()
             .len(),

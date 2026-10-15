@@ -1,7 +1,4 @@
-use yamaa_core::schema::{
-    Document, DocumentLimits, DocumentNode as N, SpecificationDocument, ValidationBudget,
-    ValidationError, ValidationLimits,
-};
+use yamaa_core::schema::{Document, DocumentNode as N, SpecificationDocument};
 
 fn document() -> Document {
     let mut nodes = Vec::new();
@@ -41,13 +38,9 @@ fn document() -> Document {
 fn admitted_model_owns_unchanged_occurrences_without_claiming_execution() {
     let document = document();
     let expected = document.clone();
-    let mut budget = ValidationBudget::new(ValidationLimits::default());
-    let model = SpecificationDocument::admit(document, &mut budget)
-        .unwrap()
-        .unwrap();
+    let model = SpecificationDocument::admit(document).unwrap().unwrap();
     assert_eq!(model.document(), &expected);
     assert_eq!(model.default_driver(), None);
-    assert!(budget.work_used() > 0);
     assert_eq!(
         model.document().field(model.document().root(), "base"),
         None
@@ -55,48 +48,23 @@ fn admitted_model_owns_unchanged_occurrences_without_claiming_execution() {
 }
 
 #[test]
-fn resource_failures_never_become_authored_diagnostics_or_partial_models() {
-    for limits in [
-        ValidationLimits {
-            work: 0,
-            ..ValidationLimits::default()
-        },
-        ValidationLimits {
-            depth: 0,
-            ..ValidationLimits::default()
-        },
-        ValidationLimits {
-            diagnostic_text_bytes: 0,
-            ..ValidationLimits::default()
-        },
-    ] {
-        assert!(
-            SpecificationDocument::admit(document(), &mut ValidationBudget::new(limits)).is_err()
-        );
-    }
+fn invalid_models_keep_all_authored_findings_without_a_partial_model() {
     let empty = Document::new(vec![N::Mapping(vec![])], 0).unwrap();
-    let mut budget = ValidationBudget::new(ValidationLimits {
-        diagnostics: 0,
-        ..ValidationLimits::default()
-    });
-    assert_eq!(
-        SpecificationDocument::admit(empty, &mut budget),
-        Err(ValidationError::Diagnostics { limit: 0 })
-    );
+    let findings = SpecificationDocument::admit(empty).unwrap().unwrap_err();
+    assert!(!findings.is_empty());
+    assert!(findings.iter().all(|finding| !finding.path.is_empty()));
+    assert!(SpecificationDocument::admit(document()).unwrap().is_ok());
 }
 
 #[test]
-fn related_admissions_share_the_request_work_budget() {
-    let mut measured = ValidationBudget::new(ValidationLimits::default());
-    SpecificationDocument::admit(document(), &mut measured)
+fn independent_admissions_preserve_the_same_occurrences() {
+    let input = document();
+    let first = SpecificationDocument::admit(input.clone())
         .unwrap()
         .unwrap();
-    let mut budget = ValidationBudget::new(ValidationLimits {
-        work: measured.work_used(),
-        ..ValidationLimits::default()
-    });
-    SpecificationDocument::admit(document(), &mut budget)
+    let second = SpecificationDocument::admit(input.clone())
         .unwrap()
         .unwrap();
-    assert!(SpecificationDocument::admit(document(), &mut budget).is_err());
+    assert_eq!(first.document(), &input);
+    assert_eq!(second.document(), &input);
 }

@@ -1,6 +1,5 @@
 use yamaa_core::schema::{
-    BundleLimits, Document, DocumentLimits, DocumentNode as N, NormalizationBudget,
-    NormalizationError, NormalizationLimits, NormalizationResource, SchemaModule, SchemaStructure,
+    Document, DocumentNode as N, NormalizationError, SchemaModule, SchemaStructure,
 };
 
 #[derive(Clone)]
@@ -164,13 +163,10 @@ fn schema() -> SchemaStructure {
         }],
         0,
         "root_class",
-        BundleLimits::default(),
     )
     .unwrap()
 }
-fn budget() -> NormalizationBudget {
-    NormalizationBudget::new(NormalizationLimits::default())
-}
+
 fn check(actual: &Document, expected: V) {
     fn same(a: &Document, x: usize, b: &Document, y: usize) {
         match (&a.nodes()[x], &b.nodes()[y]) {
@@ -199,7 +195,6 @@ fn compose(old: V, new: V) -> yamaa_core::schema::ComposedValue {
         s.root_class().fields[0].descriptor,
         &document(old),
         &document(new),
-        &mut budget(),
     )
     .unwrap()
 }
@@ -297,12 +292,7 @@ fn retained_and_replaced_leaves_point_to_their_original_occurrences() {
     let originals = [old.clone(), new.clone()];
     let s = schema();
     let value = s
-        .compose_descriptor(
-            s.root_class().fields[0].descriptor,
-            &old,
-            &new,
-            &mut budget(),
-        )
+        .compose_descriptor(s.root_class().fields[0].descriptor, &old, &new)
         .unwrap();
     assert_eq!(old, originals[0]);
     assert_eq!(new, originals[1]);
@@ -322,34 +312,15 @@ fn retained_and_replaced_leaves_point_to_their_original_occurrences() {
     }
 }
 #[test]
-fn cumulative_storage_and_depth_limits_refuse_without_refunding_prior_work() {
+fn independent_compositions_preserve_the_written_override() {
     let old = document(Map(vec![("label", Text("old"))]));
     let new = document(Map(vec![("label", Text("new"))]));
-    let s = schema();
-    let id = s.root_class().fields[0].descriptor;
-    let mut limits = NormalizationLimits::default();
-    limits.storage.nodes = 3;
-    let mut shared = NormalizationBudget::new(limits);
-    s.compose_descriptor(id, &old, &new, &mut shared).unwrap();
-    let charged = shared.storage_used();
-    assert!(matches!(
-        s.compose_descriptor(id, &old, &new, &mut shared),
-        Err(NormalizationError::Limit {
-            resource: NormalizationResource::Nodes,
-            ..
-        })
-    ));
-    assert!(shared.storage_used().0 >= charged.0);
-    s.compose_descriptor(id, &old, &new, &mut NormalizationBudget::new(limits))
-        .unwrap();
-    limits.depth = 0;
-    assert!(matches!(
-        s.compose_descriptor(id, &old, &new, &mut NormalizationBudget::new(limits)),
-        Err(NormalizationError::Limit {
-            resource: NormalizationResource::Depth,
-            ..
-        })
-    ));
+    let schema = schema();
+    let id = schema.root_class().fields[0].descriptor;
+    let first = schema.compose_descriptor(id, &old, &new).unwrap();
+    let second = schema.compose_descriptor(id, &old, &new).unwrap();
+    assert_eq!(first, second);
+    check(&first.document, Map(vec![("label", Text("new"))]));
 }
 
 #[test]
@@ -444,9 +415,7 @@ fn layers_keep_keyed_order_replace_ordinary_fields_and_track_written_provenance(
         ])),
     ];
     let original = layers.clone();
-    let result = schema()
-        .compose_layer_fragments(&layers, &mut budget())
-        .unwrap();
+    let result = schema().compose_layer_fragments(&layers).unwrap();
     assert!(result.diagnostics.is_empty());
     assert_eq!(layers, original);
     check(
@@ -534,9 +503,7 @@ fn introduced_invalid_null_values_and_required_clears_fail_in_contribution_order
         ("keys", Null),
         ("output", Null),
     ]))];
-    let result = schema()
-        .compose_layer_fragments(&layers, &mut budget())
-        .unwrap();
+    let result = schema().compose_layer_fragments(&layers).unwrap();
     assert_eq!(
         result
             .diagnostics
@@ -587,7 +554,7 @@ fn introducing_null_values_survive_all_boundaries_and_empty_children() {
     ]));
     let child = document(Map(vec![("schema_version", Text("1.0"))]));
     let result = schema()
-        .compose_layer_fragments(&[first.clone(), child], &mut budget())
+        .compose_layer_fragments(&[first.clone(), child])
         .unwrap();
     assert!(result.diagnostics.is_empty());
     for path in [
@@ -613,7 +580,7 @@ fn introducing_null_values_survive_all_boundaries_and_empty_children() {
         List(vec![Map(vec![("id", Text("LOOK"))])]),
     )]));
     let result = schema()
-        .compose_layer_fragments(&[same_member, first], &mut budget())
+        .compose_layer_fragments(&[same_member, first])
         .unwrap();
     assert!(result.diagnostics.is_empty());
     assert_eq!(
@@ -642,7 +609,7 @@ fn inherited_literal_or_null_handler_is_cleared_and_can_be_introduced_again() {
             List(vec![Map(vec![("id", Text("LOOK")), ("no_match", Null)])]),
         )]));
         let result = schema()
-            .compose_layer_fragments(&[first.clone(), next.clone()], &mut budget())
+            .compose_layer_fragments(&[first.clone(), next.clone()])
             .unwrap();
         assert!(result.diagnostics.is_empty());
         check(
@@ -657,7 +624,7 @@ fn inherited_literal_or_null_handler_is_cleared_and_can_be_introduced_again() {
             .iter()
             .any(|p| p.path == "intermediates.LOOK.no_match"));
         let result = schema()
-            .compose_layer_fragments(&[first, next.clone(), next], &mut budget())
+            .compose_layer_fragments(&[first, next.clone(), next])
             .unwrap();
         assert!(result.diagnostics.is_empty());
         check(
@@ -687,7 +654,7 @@ fn invalid_introduced_null_collections_keep_value_findings_when_later_replaced()
         ("intermediates", Null),
     ]));
     let result = schema()
-        .compose_layer_fragments(std::slice::from_ref(&first), &mut budget())
+        .compose_layer_fragments(std::slice::from_ref(&first))
         .unwrap();
     assert_eq!(result.diagnostics.len(), 3);
     for (finding, path) in result
@@ -703,9 +670,7 @@ fn invalid_introduced_null_collections_keep_value_findings_when_later_replaced()
         ("rows", List(vec![])),
         ("intermediates", List(vec![])),
     ]));
-    let result = schema()
-        .compose_layer_fragments(&[first, next], &mut budget())
-        .unwrap();
+    let result = schema().compose_layer_fragments(&[first, next]).unwrap();
     assert_eq!(result.diagnostics.len(), 3);
     check(
         &result.document,
@@ -735,32 +700,17 @@ fn malformed_collection_shapes_and_duplicate_identifiers_are_refused() {
             List(vec![Map(vec![("label", Text("no identity"))])]),
         )]),
     ] {
-        assert!(schema
-            .compose_layer_fragments(&[document(value)], &mut budget())
-            .is_err());
+        assert!(schema.compose_layer_fragments(&[document(value)]).is_err());
     }
 }
 
 #[test]
-fn layer_requests_share_storage_and_a_fresh_request_recovers() {
+fn independent_layer_requests_keep_the_same_version_and_occurrences() {
     let layers = [document(Map(vec![("schema_version", Text("1.0"))]))];
     let schema = schema();
-    let mut limits = NormalizationLimits::default();
-    limits.storage.nodes = 4;
-    let mut shared = NormalizationBudget::new(limits);
-    schema
-        .compose_layer_fragments(&layers, &mut shared)
-        .unwrap();
-    assert!(matches!(
-        schema.compose_layer_fragments(&layers, &mut shared),
-        Err(NormalizationError::Limit {
-            resource: NormalizationResource::Nodes,
-            ..
-        })
-    ));
-    schema
-        .compose_layer_fragments(&layers, &mut NormalizationBudget::new(limits))
-        .unwrap();
+    let first = schema.compose_layer_fragments(&layers).unwrap();
+    let second = schema.compose_layer_fragments(&layers).unwrap();
+    assert_eq!(first, second);
 }
 
 #[test]
@@ -791,7 +741,7 @@ fn complete_composition_materializes_defaults_once_and_keeps_written_provenance(
             ])]),
         )])),
     ];
-    let result = schema().compose_layers(&layers, &mut budget()).unwrap();
+    let result = schema().compose_layers(&layers).unwrap();
     assert!(result.diagnostics.is_empty());
     check(
         &result.document,
@@ -846,7 +796,7 @@ fn materialization_failure_precedes_collected_clear_diagnostics_without_partial_
     let Err(yamaa_core::schema::LayerCompositionError {
         error: NormalizationError::Invalid(diagnostics),
         ..
-    }) = schema().compose_layers(&layers, &mut budget())
+    }) = schema().compose_layers(&layers)
     else {
         panic!("expected normalization failure")
     };
@@ -860,7 +810,7 @@ fn materialization_failure_precedes_collected_clear_diagnostics_without_partial_
     let Err(yamaa_core::schema::LayerCompositionError {
         error: NormalizationError::Invalid(diagnostics),
         ..
-    }) = schema().compose_layers(&layers, &mut budget())
+    }) = schema().compose_layers(&layers)
     else {
         panic!("expected clear failure")
     };

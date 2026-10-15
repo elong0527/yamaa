@@ -1,7 +1,6 @@
 use yamaa_core::schema::{
-    BundleLimits, Document, DocumentLimits, DocumentNode as N, ExpandedWindows,
-    NormalizationBudget, NormalizationError, NormalizationLimits, NormalizationResource,
-    SchemaContext, SchemaModule, SchemaStructure, WindowReference,
+    Document, DocumentNode as N, ExpandedWindows, NormalizationError, SchemaContext, SchemaModule,
+    SchemaStructure, WindowReference,
 };
 
 #[derive(Clone)]
@@ -87,13 +86,10 @@ fn schema() -> SchemaStructure {
         }],
         0,
         "root_class",
-        BundleLimits::default(),
     )
     .unwrap()
 }
-fn budget() -> NormalizationBudget {
-    NormalizationBudget::new(NormalizationLimits::default())
-}
+
 fn window() -> V {
     Map(vec![("order_by", List(vec![Text("SEQ")]))])
 }
@@ -133,9 +129,7 @@ fn expands_independent_copies_keeps_order_scope_and_definition_origins() {
         column("SECOND", Text("VISITS")),
     ]));
     let original = input.clone();
-    let result = schema()
-        .expand_named_windows(&input, true, &mut budget())
-        .unwrap();
+    let result = schema().expand_named_windows(&input, true).unwrap();
     let expected = document(Map(vec![
         (
             "columns",
@@ -178,9 +172,7 @@ fn non_strict_expansion_precedes_pruning_and_strict_failure_names_surviving_use(
         column("LIVE", Text("VISITS")),
     ]));
     let schema = schema();
-    let expanded = schema
-        .expand_named_windows(&input, false, &mut budget())
-        .unwrap();
+    let expanded = schema.expand_named_windows(&input, false).unwrap();
     assert!(expanded
         .document
         .field(expanded.document.root(), "windows")
@@ -190,9 +182,8 @@ fn non_strict_expansion_precedes_pruning_and_strict_failure_names_surviving_use(
         N::Text("UNKNOWN".into())
     );
     assert_eq!(expanded.references.len(), 1);
-    let NormalizationError::Invalid(findings) = schema
-        .expand_named_windows(&input, true, &mut budget())
-        .unwrap_err()
+    let NormalizationError::Invalid(findings) =
+        schema.expand_named_windows(&input, true).unwrap_err()
     else {
         panic!()
     };
@@ -209,9 +200,7 @@ fn non_strict_expansion_precedes_pruning_and_strict_failure_names_surviving_use(
     );
     // Independently authored post-pruning input: unknown references are absent.
     let alive = document(input_value_live());
-    assert!(schema
-        .expand_named_windows(&alive, true, &mut budget())
-        .is_ok());
+    assert!(schema.expand_named_windows(&alive, true).is_ok());
 }
 fn input_value_live() -> V {
     input(vec![column("LIVE", Text("VISITS"))])
@@ -224,9 +213,8 @@ fn unused_malformed_definition_precedes_reference_errors() {
         ("columns", List(vec![column("A", Text("UNKNOWN"))])),
     ]));
     for strict in [false, true] {
-        let NormalizationError::Invalid(findings) = schema()
-            .expand_named_windows(&input, strict, &mut budget())
-            .unwrap_err()
+        let NormalizationError::Invalid(findings) =
+            schema().expand_named_windows(&input, strict).unwrap_err()
         else {
             panic!()
         };
@@ -244,9 +232,8 @@ fn strict_unknown_diagnostics_keep_column_declaration_order() {
             column("A", Text("FIRST")),
         ]),
     )]));
-    let NormalizationError::Invalid(findings) = schema()
-        .expand_named_windows(&input, true, &mut budget())
-        .unwrap_err()
+    let NormalizationError::Invalid(findings) =
+        schema().expand_named_windows(&input, true).unwrap_err()
     else {
         panic!()
     };
@@ -260,36 +247,10 @@ fn strict_unknown_diagnostics_keep_column_declaration_order() {
 }
 
 #[test]
-fn repeated_expansion_charges_cumulative_storage_and_failed_calls_do_not_refund() {
+fn repeated_window_expansion_preserves_complete_independent_results() {
     let schema = schema();
     let input = document(input_value_live());
-    let mut limited = NormalizationBudget::new(NormalizationLimits {
-        storage: DocumentLimits {
-            nodes: 3,
-            ..DocumentLimits::default()
-        },
-        ..NormalizationLimits::default()
-    });
-    assert_eq!(
-        schema.expand_named_windows(&input, true, &mut limited),
-        Err(NormalizationError::Limit {
-            resource: NormalizationResource::Nodes,
-            limit: 3
-        })
-    );
-    assert_eq!(limited.storage_used().0, 3);
-    assert!(schema
-        .expand_named_windows(&input, true, &mut limited)
-        .is_err());
-    assert_eq!(limited.storage_used().0, 3);
-    let mut shared = budget();
-    let first = schema
-        .expand_named_windows(&input, true, &mut shared)
-        .unwrap();
-    let used = shared.storage_used();
-    let second = schema
-        .expand_named_windows(&input, true, &mut shared)
-        .unwrap();
+    let first = schema.expand_named_windows(&input, true).unwrap();
+    let second = schema.expand_named_windows(&input, true).unwrap();
     assert_eq!(first, second);
-    assert_eq!(shared.storage_used(), (used.0 * 2, used.1 * 2, used.2 * 2));
 }

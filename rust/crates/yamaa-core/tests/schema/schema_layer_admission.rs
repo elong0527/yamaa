@@ -1,8 +1,6 @@
 use yamaa_core::schema::{
-    BundleLimits, Document, DocumentKind as K, DocumentLimits, DocumentNode as N,
-    NormalizationBudget, NormalizationError, NormalizationLimits, NormalizationResource,
-    SchemaContext as C, SchemaDiagnostic, SchemaModule, SchemaSource, SchemaStructure,
-    ValidationError,
+    Document, DocumentKind as K, DocumentNode as N, NormalizationError, SchemaContext as C,
+    SchemaDiagnostic, SchemaModule, SchemaSource, SchemaStructure,
 };
 
 #[derive(Clone)]
@@ -122,19 +120,16 @@ fn schema_with_identifier(identifier_type: V) -> SchemaStructure {
         }],
         0,
         "root_class",
-        BundleLimits::default(),
     )
     .unwrap()
 }
-fn budget() -> NormalizationBudget {
-    NormalizationBudget::new(NormalizationLimits::default())
-}
+
 fn layer(mut fields: Vec<(&'static str, V)>) -> Document {
     fields.insert(0, ("schema_version", Text("1.0")));
     document(Map(fields))
 }
 fn diagnostics(input: Document) -> Vec<SchemaDiagnostic> {
-    match schema().normalize_layer(&input, &mut budget()) {
+    match schema().normalize_layer(&input) {
         Err(NormalizationError::Invalid(findings)) => findings,
         other => panic!("expected ordered findings, got {other:?}"),
     }
@@ -418,7 +413,7 @@ fn normalization_preserves_clears_defers_column_defaults_and_owns_shorthand() {
                 Map(vec![("SRC", Text("data.csv")), ("EMPTY", Map(vec![]))]),
             ),
         ]);
-        schema().normalize_layer(&input, &mut budget()).unwrap()
+        schema().normalize_layer(&input).unwrap()
     };
     let expected = layer(vec![
         (
@@ -462,7 +457,7 @@ fn normalization_preserves_clears_defers_column_defaults_and_owns_shorthand() {
 fn generated_input_path_and_container_point_to_original_shorthand() {
     let input = layer(vec![("input", Map(vec![("SRC", Text("data.csv"))]))]);
     let source = get(&input, get(&input, input.root(), "input"), "SRC");
-    let output = schema().normalize_layer(&input, &mut budget()).unwrap();
+    let output = schema().normalize_layer(&input).unwrap();
     let doc = &output.document;
     let member = get(doc, get(doc, doc.root(), "input"), "SRC");
     let N::Mapping(entries) = &doc.nodes()[member] else {
@@ -477,56 +472,24 @@ fn generated_input_path_and_container_point_to_original_shorthand() {
 }
 
 #[test]
-fn invalid_attempts_retain_diagnostic_budget_but_fresh_attempts_succeed() {
+fn repeated_invalid_layers_retain_the_same_complete_findings() {
     let schema = schema();
     let input = layer(vec![("output", Int("2"))]);
-    let mut limits = NormalizationLimits::default();
-    limits.validation.diagnostics = 1;
-    let mut shared = NormalizationBudget::new(limits);
-    assert!(matches!(
-        schema.normalize_layer(&input, &mut shared),
-        Err(NormalizationError::Invalid(_))
-    ));
-    assert_eq!(shared.storage_used(), (0, 0, 0));
-    assert!(shared.work_used() > 0);
-    assert_eq!(
-        schema.normalize_layer(&input, &mut shared),
-        Err(NormalizationError::Validation(
-            ValidationError::Diagnostics { limit: 1 }
-        ))
-    );
-    assert!(matches!(
-        schema.normalize_layer(&input, &mut NormalizationBudget::new(limits)),
-        Err(NormalizationError::Invalid(_))
-    ));
+    let first = schema.normalize_layer(&input).unwrap_err();
+    assert!(matches!(&first, NormalizationError::Invalid(_)));
+    assert_eq!(schema.normalize_layer(&input).unwrap_err(), first);
 }
 
 #[test]
-fn storage_and_depth_limits_prevent_publication_and_do_not_poison_fresh_requests() {
+fn independent_normalized_layers_keep_the_complete_authored_column() {
     let schema = schema();
     let input = layer(vec![(
         "columns",
         List(vec![Map(vec![("name", Text("X"))])]),
     )]);
-    let mut limits = NormalizationLimits::default();
-    limits.storage.nodes = 0;
-    assert_eq!(
-        schema.normalize_layer(&input, &mut NormalizationBudget::new(limits)),
-        Err(NormalizationError::Limit {
-            resource: NormalizationResource::Nodes,
-            limit: 0
-        })
-    );
-    limits = NormalizationLimits::default();
-    limits.depth = 1;
-    assert_eq!(
-        schema.normalize_layer(&input, &mut NormalizationBudget::new(limits)),
-        Err(NormalizationError::Limit {
-            resource: NormalizationResource::Depth,
-            limit: 1
-        })
-    );
-    assert!(schema.normalize_layer(&input, &mut budget()).is_ok());
+    let first = schema.normalize_layer(&input).unwrap();
+    let second = schema.normalize_layer(&input).unwrap();
+    assert_eq!(first, second);
 }
 
 #[test]
@@ -550,14 +513,13 @@ fn empty_collections_and_input_shorthand_do_not_require_unused_member_classes() 
         }],
         0,
         "root_class",
-        BundleLimits::default(),
     )
     .unwrap();
     let input = layer(vec![
         ("columns", List(vec![])),
         ("input", Map(vec![("SRC", Text("data.csv"))])),
     ]);
-    let output = schema.normalize_layer(&input, &mut budget()).unwrap();
+    let output = schema.normalize_layer(&input).unwrap();
     assert_document(
         &output.document,
         &layer(vec![
@@ -635,7 +597,7 @@ fn stringified_input_collisions_keep_first_position_and_last_value_with_origins(
             (Text("None"), Text("last-null.csv")),
         ]),
     )]);
-    let output = schema.normalize_layer(&input, &mut budget()).unwrap();
+    let output = schema.normalize_layer(&input).unwrap();
     assert_document(
         &output.document,
         &layer(vec![(
@@ -672,8 +634,7 @@ fn overwritten_input_members_are_still_validated_before_key_selection() {
             (Text("2"), Map(vec![("path", Text("last.csv"))])),
         ]),
     )]);
-    let Err(NormalizationError::Invalid(findings)) = schema.normalize_layer(&input, &mut budget())
-    else {
+    let Err(NormalizationError::Invalid(findings)) = schema.normalize_layer(&input) else {
         panic!("shadowed invalid member must fail")
     };
     assert_eq!(paths(&findings), [("input[2].path", "invalid_field_type")]);

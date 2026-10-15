@@ -2,12 +2,9 @@
 use crate::support::id_source_schema as source;
 use yamaa_core::{
     dataset::{DatasetPlan, Expression},
-    schema::{
-        Document, DocumentLimits, DocumentNode as N, SpecificationDocument, ValidationBudget,
-    },
+    schema::{Document, DocumentNode as N, SpecificationDocument},
     specification::{
-        BindError, BindFinding, CompilationLimits, PreflightFinding, PrepareError,
-        PreparedSpecification,
+        BindError, BindFinding, PreflightFinding, PrepareError, PreparedSpecification,
     },
     value::{ColumnType, Value},
 };
@@ -121,9 +118,7 @@ fn operation_document_with_rows(
     let mut nodes = Vec::new();
     let root = tree.append(&mut nodes);
     let document = Document::new(nodes, root).unwrap();
-    SpecificationDocument::admit(document, &mut ValidationBudget::new(Default::default()))
-        .unwrap()
-        .unwrap()
+    SpecificationDocument::admit(document).unwrap().unwrap()
 }
 
 #[test]
@@ -393,25 +388,15 @@ fn compiler_retains_admission_binding_and_resource_boundaries() {
     assert!(!prepared.source().empty_string_present);
     assert!(prepared.source().text_is_missing(""));
     assert!(!prepared.source().text_is_missing("NA"));
-    assert!(matches!(
-        PreparedSpecification::prepare_with_limits(
-            &document("ID + 1", "input.csv"),
-            CompilationLimits {
-                columns: 1,
-                ..Default::default()
-            }
-        ),
-        Err(PrepareError::Limit(
-            yamaa_core::specification::CompilerLimit {
-                resource: "columns",
-                ..
-            }
-        ))
-    ));
+    let prepared = PreparedSpecification::prepare(&document("ID + 1", "input.csv")).unwrap();
+    assert_eq!(
+        prepared.bind(&source()).unwrap().output().columns().len(),
+        2
+    );
 }
 
 #[test]
-fn parquet_type_field_limit_precedes_allocating_semantic_findings() {
+fn parquet_type_declarations_keep_all_semantic_findings() {
     let original = document("ID + 1", "source.parquet");
     let d = original.document();
     let inputs = d.field(d.root(), "input").unwrap();
@@ -447,35 +432,11 @@ fn parquet_type_field_limit_precedes_allocating_semantic_findings() {
     }
     let mut ordered = Vec::new();
     let root = copy(&nodes, d.root(), &mut ordered);
-    let model = SpecificationDocument::admit(
-        Document::new(ordered, root).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap();
-    assert!(matches!(
-        PreparedSpecification::prepare_with_limits(
-            &model,
-            CompilationLimits {
-                source_fields: 1,
-                ..Default::default()
-            }
-        ),
-        Err(PrepareError::Limit(
-            yamaa_core::specification::CompilerLimit {
-                resource: "source_fields",
-                ..
-            }
-        ))
-    ));
-    let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare_with_limits(
-        &model,
-        CompilationLimits {
-            source_fields: 2,
-            ..Default::default()
-        },
-    ) else {
-        panic!("at the exact field limit the declarations remain semantic findings");
+    let model = SpecificationDocument::admit(Document::new(ordered, root).unwrap())
+        .unwrap()
+        .unwrap();
+    let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare(&model) else {
+        panic!("all redundant parquet type declarations remain semantic findings");
     };
     assert_eq!(findings.len(), 2);
     assert!(findings.iter().all(|f| matches!(
@@ -549,9 +510,7 @@ fn window_settings(
     let mut ordered = Vec::new();
     let root = copy_node(&nodes, input.root(), &mut ordered);
     let doc = Document::new(ordered, root).unwrap();
-    SpecificationDocument::admit(doc, &mut ValidationBudget::new(Default::default()))
-        .unwrap()
-        .unwrap()
+    SpecificationDocument::admit(doc).unwrap().unwrap()
 }
 
 #[test]
@@ -570,22 +529,6 @@ fn window_compiler_binds_output_dependencies_without_engine_or_records() {
     assert_eq!(
         window.filter.as_ref().unwrap().plan().spec_path(),
         "columns.VALUE.derivation.row_number.window.filter"
-    );
-    let policy = CompilationLimits {
-        source_fields: 0,
-        ..Default::default()
-    };
-    let Err(PrepareError::Limit(refusal)) =
-        PreparedSpecification::prepare_with_limits(&window_document("ID > 0"), policy)
-    else {
-        panic!("window order must retain its declaration quota")
-    };
-    assert_eq!(refusal.resource, "window_order");
-    assert_eq!(refusal.limit, 0);
-    assert_eq!(refusal.actual, Some(1));
-    assert_eq!(
-        refusal.spec_paths,
-        ["columns.VALUE.derivation.row_number.window.order_by"]
     );
     let qualified = PreparedSpecification::prepare(&window_document("SRC.ID > 0"))
         .unwrap()
@@ -912,7 +855,7 @@ fn row_filter_carrier_findings_remain_normative_including_dead_branches() {
 }
 
 #[test]
-fn row_filters_charge_the_whole_document_before_predicate_parsing() {
+fn row_filters_retain_both_deferred_grammar_findings() {
     use Tree::*;
     let rows = List(
         ["first", "second"]
@@ -951,30 +894,23 @@ fn row_filters_charge_the_whole_document_before_predicate_parsing() {
         None,
         Some(rows),
     );
-    for (limit, actual, path) in [(3, 4, "rows[0].filter"), (7, 8, "rows[1].filter")] {
-        let Err(PrepareError::Limit(refusal)) = PreparedSpecification::prepare_with_limits(
-            &document,
-            CompilationLimits {
-                numeric_bytes: limit,
-                ..Default::default()
-            },
-        ) else {
-            panic!("row filter must refuse before grammar parsing")
+    let prepared = PreparedSpecification::prepare(&document).unwrap();
+    let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
+        panic!("both authored row filters must retain their grammar failures");
+    };
+    assert_eq!(findings.len(), 2);
+    for (finding, path) in findings.iter().zip(["rows[0].filter", "rows[1].filter"]) {
+        let BindFinding::Lookup(finding) = finding else {
+            panic!("row predicate finding")
         };
-        assert_eq!(refusal.resource, "numeric_bytes");
-        assert_eq!(refusal.limit, limit);
-        assert_eq!(refusal.actual, Some(actual));
-        assert_eq!(refusal.spec_paths, [path]);
+        let diagnostic = finding.diagnostic();
+        assert_eq!(
+            diagnostic.code,
+            yamaa_core::diagnostic::ConditionCode::PredicateInvalidExpression
+        );
+        assert_eq!(diagnostic.spec_paths, [path]);
+        assert_eq!(diagnostic.context["predicate"], serde_json::json!("ID >"));
     }
-    // Grammar findings remain retained for post-ingestion binding when aggregate text fits.
-    assert!(PreparedSpecification::prepare_with_limits(
-        &document,
-        CompilationLimits {
-            numeric_bytes: 8,
-            ..Default::default()
-        }
-    )
-    .is_ok());
 }
 
 #[test]
@@ -1016,7 +952,7 @@ fn record_and_group_filters_promote_their_complete_row_local_default() {
 }
 
 #[test]
-fn source_filters_charge_compilation_before_admission_and_retain_carrier_findings() {
+fn source_filters_bind_valid_text_and_retain_carrier_findings() {
     let document = operation_document(
         "source",
         Tree::Map(vec![
@@ -1025,21 +961,10 @@ fn source_filters_charge_compilation_before_admission_and_retain_carrier_finding
         ]),
         "input.csv",
     );
-    assert!(matches!(
-        PreparedSpecification::prepare_with_limits(
-            &document,
-            CompilationLimits {
-                numeric_bytes: 0,
-                ..Default::default()
-            }
-        ),
-        Err(PrepareError::Limit(
-            yamaa_core::specification::CompilerLimit {
-                resource: "numeric_bytes",
-                ..
-            }
-        ))
-    ));
+    PreparedSpecification::prepare(&document)
+        .unwrap()
+        .bind(&source())
+        .unwrap();
     let document = operation_document(
         "source",
         Tree::Map(vec![
@@ -1078,7 +1003,7 @@ fn source_filters_charge_compilation_before_admission_and_retain_carrier_finding
 }
 
 #[test]
-fn selection_metadata_and_filters_are_bounded_before_owned_compilation() {
+fn selection_filters_retain_their_decorated_operand_path() {
     let payload = Tree::Map(vec![(
         "sources",
         Tree::List(vec![Tree::Map(vec![
@@ -1087,26 +1012,27 @@ fn selection_metadata_and_filters_are_bounded_before_owned_compilation() {
         ])]),
     )]);
     let document = operation_document("first_available", payload, "input.csv");
-    for (limits, name) in [
-        (
-            CompilationLimits {
-                source_operands: 0,
-                ..Default::default()
-            },
-            "source_operands",
-        ),
-        (
-            CompilationLimits {
-                numeric_bytes: 0,
-                ..Default::default()
-            },
-            "numeric_bytes",
-        ),
-    ] {
-        assert!(
-            matches!(PreparedSpecification::prepare_with_limits(&document,limits),Err(PrepareError::Limit(resource)) if resource.resource ==name)
-        );
-    }
+    let prepared = PreparedSpecification::prepare(&document).unwrap();
+    let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
+        panic!("deferred selection grammar")
+    };
+    assert_eq!(findings.len(), 1);
+    let BindFinding::Source(finding) = &findings[0] else {
+        panic!("source grammar")
+    };
+    let diagnostic = finding.diagnostic();
+    assert_eq!(
+        diagnostic.code,
+        yamaa_core::diagnostic::ConditionCode::PredicateInvalidExpression
+    );
+    assert_eq!(
+        diagnostic.spec_paths,
+        ["columns.VALUE.derivation.first_available.sources[0].filter"]
+    );
+    assert_eq!(
+        diagnostic.context["predicate"],
+        serde_json::json!("SRC.ID =")
+    );
 }
 
 #[test]
@@ -1196,12 +1122,9 @@ fn unqualified_key_source_absence_is_an_admitted_key_expression() {
     };
     let key = keys[0];
     nodes[key] = N::Text("VALUE".into());
-    let document = SpecificationDocument::admit(
-        Document::new(nodes, raw.root()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap();
+    let document = SpecificationDocument::admit(Document::new(nodes, raw.root()).unwrap())
+        .unwrap()
+        .unwrap();
     let prepared = PreparedSpecification::prepare(&document).unwrap();
     let plan = prepared.bind(&source()).unwrap();
     assert!(matches!(&plan.templates()[0].assignments[0].expression,
@@ -1252,7 +1175,7 @@ fn first_available_retains_collection_and_decorated_operand_paths() {
 }
 
 #[test]
-fn assertion_text_budget_precedes_deferred_grammar_and_charges_both_predicates() {
+fn assertion_keeps_both_predicates_and_the_deferred_grammar_finding() {
     use Tree::*;
     let when = "ID = 1";
     let require = "ID >";
@@ -1295,38 +1218,13 @@ fn assertion_text_budget_precedes_deferred_grammar_and_charges_both_predicates()
     ]);
     let mut nodes = Vec::new();
     let root = tree.append(&mut nodes);
-    let document = SpecificationDocument::admit(
-        Document::new(nodes, root).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap();
-    let bytes = when.len() + require.len();
-    assert!(matches!(
-        PreparedSpecification::prepare_with_limits(
-            &document,
-            CompilationLimits {
-                numeric_bytes: bytes - 1,
-                ..Default::default()
-            }
-        ),
-        Err(PrepareError::Limit(
-            yamaa_core::specification::CompilerLimit {
-                resource: "numeric_bytes",
-                ..
-            }
-        ))
-    ));
-    let plan = PreparedSpecification::prepare_with_limits(
-        &document,
-        CompilationLimits {
-            numeric_bytes: bytes,
-            ..Default::default()
-        },
-    )
-    .unwrap()
-    .bind(&source())
-    .unwrap();
+    let document = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap();
+    let plan = PreparedSpecification::prepare(&document)
+        .unwrap()
+        .bind(&source())
+        .unwrap();
     assert!(matches!(
         &plan.verifications()[0].check,
         yamaa_core::dataset::Check::PredicateDeclaration(_)
@@ -1391,12 +1289,9 @@ fn verification_document(kind: &str, check: Tree<'_>, column: bool) -> Specifica
     }
     let mut nodes = Vec::new();
     let root = Map(tree).append(&mut nodes);
-    SpecificationDocument::admit(
-        Document::new(nodes, root).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap()
+    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap()
 }
 #[test]
 fn malformed_assert_carriers_and_numeric_bounds_are_typed_declaration_findings() {
@@ -1479,6 +1374,13 @@ fn malformed_assert_carriers_and_numeric_bounds_are_typed_declaration_findings()
 }
 
 fn wide_document(columns: usize, typed_fields: usize) -> SpecificationDocument {
+    wide_document_with_projection(columns, typed_fields, columns)
+}
+fn wide_document_with_projection(
+    columns: usize,
+    typed_fields: usize,
+    projected: usize,
+) -> SpecificationDocument {
     use Tree::*;
     let column_names: Vec<_> = (1..columns).map(|i| format!("C{i:04}")).collect();
     let field_names: Vec<_> = (1..=typed_fields).map(|i| format!("F{i:04}")).collect();
@@ -1528,7 +1430,14 @@ fn wide_document(columns: usize, typed_fields: usize) -> SpecificationDocument {
                 ("path", Text("result.csv")),
                 (
                     "columns",
-                    List(names.iter().map(|name| Text(name)).collect()),
+                    List(
+                        names
+                            .iter()
+                            .cycle()
+                            .take(projected)
+                            .map(|name| Text(name))
+                            .collect(),
+                    ),
                 ),
             ]),
         ),
@@ -1537,54 +1446,35 @@ fn wide_document(columns: usize, typed_fields: usize) -> SpecificationDocument {
     let mut nodes = Vec::new();
     let root = tree.append(&mut nodes);
     let document = Document::new(nodes, root).unwrap();
-    SpecificationDocument::admit(document, &mut ValidationBudget::new(Default::default()))
-        .unwrap()
-        .unwrap()
+    SpecificationDocument::admit(document).unwrap().unwrap()
 }
 
 #[test]
-fn column_ceilings_admit_1024_and_refuse_1025() {
-    // #2185 / #2288: the default compiler ceilings for declared columns,
-    // output columns and typed source fields are 1,024; the key and input
-    // counts are separate limits and stay where they were.
-    let limits = CompilationLimits::default();
-    assert_eq!(limits.columns, 1_024);
-    assert_eq!(limits.projected_columns, 1_024);
-    assert_eq!(limits.source_fields, 1_024);
-    assert_eq!(limits.keys, 64);
-    assert_eq!(limits.inputs, 16);
-
+fn fixed_column_ceilings_admit_1024_and_refuse_1025() {
     PreparedSpecification::prepare(&wide_document(1_024, 0)).unwrap();
     let Err(PrepareError::Limit(resource)) =
         PreparedSpecification::prepare(&wide_document(1_025, 0))
     else {
-        panic!("1,025 declared columns must hit a compiler limit");
+        panic!("1,025 declared columns must hit the fixed compiler bound");
     };
     assert_eq!(resource.resource, "columns");
     assert_eq!(resource.limit, 1024);
     assert_eq!(resource.actual, Some(1025));
     assert_eq!(resource.spec_paths, ["columns"]);
-
-    let Err(PrepareError::Limit(resource)) = PreparedSpecification::prepare_with_limits(
-        &wide_document(1_025, 0),
-        CompilationLimits {
-            columns: 1_025,
-            ..limits
-        },
-    ) else {
-        panic!("1,025 projected columns must hit their own compiler limit");
+    let Err(PrepareError::Limit(resource)) =
+        PreparedSpecification::prepare(&wide_document_with_projection(1_024, 0, 1_025))
+    else {
+        panic!("1,025 projected columns must hit their fixed bound independently");
     };
     assert_eq!(resource.resource, "projected_columns");
     assert_eq!(resource.limit, 1024);
     assert_eq!(resource.actual, Some(1025));
     assert_eq!(resource.spec_paths, ["output.columns"]);
-
-    // Typed fields carry their own ceiling, independent of the column count.
     PreparedSpecification::prepare(&wide_document(2, 1_024)).unwrap();
     let Err(PrepareError::Limit(resource)) =
         PreparedSpecification::prepare(&wide_document(2, 1_025))
     else {
-        panic!("1,025 typed fields must hit a compiler limit");
+        panic!("1,025 typed source fields must hit the fixed compiler bound");
     };
     assert_eq!(resource.resource, "source_fields");
     assert_eq!(resource.limit, 1024);

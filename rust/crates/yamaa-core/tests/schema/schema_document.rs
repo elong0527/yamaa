@@ -1,5 +1,5 @@
 use yamaa_core::schema::{
-    Document, DocumentError, DocumentKind, DocumentLimits, DocumentNode as N, DocumentResource,
+    Document, DocumentError, DocumentKind, DocumentNode as N, DocumentResource,
 };
 
 #[test]
@@ -134,52 +134,18 @@ fn scalar_mapping_key_equality_is_exact_without_lossy_integer_promotion() {
 }
 
 #[test]
-fn storage_limits_are_independent_and_do_not_leak_between_documents() {
-    for (limits, resource, limit) in [
-        (
-            DocumentLimits {
-                nodes: 1,
-                ..DocumentLimits::default()
-            },
-            DocumentResource::Nodes,
-            1,
-        ),
-        (
-            DocumentLimits {
-                text_bytes: 1,
-                ..DocumentLimits::default()
-            },
-            DocumentResource::TextBytes,
-            1,
-        ),
-        (
-            DocumentLimits {
-                edges: 0,
-                ..DocumentLimits::default()
-            },
-            DocumentResource::Edges,
-            0,
-        ),
-        (
-            DocumentLimits {
-                depth: 1,
-                ..DocumentLimits::default()
-            },
-            DocumentResource::Depth,
-            1,
-        ),
-    ] {
-        let nodes = vec![N::Text("😀".into()), N::Sequence(vec![0])];
-        assert_eq!(
-            Document::new(nodes.clone(), 1),
-            Err(DocumentError::Limit { resource, limit })
-        );
-        assert!(Document::new(nodes, 1).is_ok());
-    }
+fn fixed_decoded_depth_refuses_the_next_layer_and_independent_documents_stay_exact() {
+    let nodes = vec![N::Text("😀".into()), N::Sequence(vec![0])];
+    let one = Document::new(nodes.clone(), 1).unwrap();
+    let two = Document::new(nodes.clone(), 1).unwrap();
+    assert_eq!(one.nodes(), nodes);
+    assert_eq!(one, two);
     let mut nodes = vec![N::Null];
-    for i in 0..64 {
+    for i in 0..63 {
         nodes.push(N::Sequence(vec![i]));
     }
+    assert!(Document::new(nodes.clone(), 63).is_ok());
+    nodes.push(N::Sequence(vec![63]));
     assert_eq!(
         Document::new(nodes, 64),
         Err(DocumentError::Limit {
