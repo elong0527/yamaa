@@ -2,7 +2,7 @@ use yamaa_core::{
     project_environment::{Draft, Environment, ExecutionEnvironment},
     project_function::Language,
     project_terminology::{Codelist, DataType, Item, Source},
-    schema::{Document, DocumentNode as N, SpecificationDocument, ValidationBudget},
+    schema::{Document, DocumentNode as N, SpecificationDocument},
     table::{Column, TableSchema},
     value::{ColumnType, Value},
 };
@@ -115,12 +115,9 @@ pub fn spec(
     }
     let mut nodes = vec![];
     let root = append(m(fields), &mut nodes);
-    SpecificationDocument::admit(
-        Document::new(nodes, root, Default::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap()
+    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap()
 }
 pub fn environment(extensible: bool) -> ExecutionEnvironment {
     Environment::admit(

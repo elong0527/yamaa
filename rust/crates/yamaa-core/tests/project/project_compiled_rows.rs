@@ -2,10 +2,7 @@
 use crate::support::project_call_compiler as support;
 use std::cell::RefCell;
 use support::{call, function, specification_with_rows, Tree};
-use yamaa_core::{
-    dataset::Limits,
-    function_invocation::{Argument, FunctionPort, HostError},
-};
+use yamaa_core::function_invocation::{Argument, FunctionPort, HostError};
 use yamaa_core::{
     function_signature::{InvocationPlan, ProjectInvocationPlan},
     schema::DocumentNode as N,
@@ -124,22 +121,7 @@ fn compiled_row_defaults_execute_in_each_template_order_and_repeat_without_cache
     };
     for _ in 0..2 {
         let result = plan
-            .execute_observed_functions(
-                &table,
-                &[],
-                &mut bindings,
-                Limits {
-                    source_rows: 100,
-                    output_rows: 100,
-                    output_cells: 1000,
-                    key_cells: 1000,
-                    work_cells: 10000,
-                    scalar_text_bytes: 10000,
-                    output_text_bytes: 10000,
-                    identity_cells: 10000,
-                    identity_text_bytes: 10000,
-                },
-            )
+            .execute(&table, &[], &mut bindings, None)
             .result
             .unwrap();
         assert_eq!(result.dataset.row_count(), 2);

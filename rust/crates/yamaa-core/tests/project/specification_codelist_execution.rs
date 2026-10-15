@@ -1,10 +1,7 @@
 use crate::support::project_codelist_compiler as support;
 use std::{cell::RefCell, convert::Infallible};
 use support::{environment, schema, spec};
-use yamaa_core::{
-    dataset::{ExecutionError, Limits},
-    project_domain,
-};
+use yamaa_core::{dataset::ExecutionError, project_domain};
 use yamaa_core::{
     table::{CellError, TableAccess, TableSchema, ValueRef},
     value::Value,
@@ -37,19 +34,7 @@ impl TableAccess for Table {
         })
     }
 }
-fn limits() -> Limits {
-    Limits {
-        source_rows: 10,
-        output_rows: 10,
-        output_cells: 100,
-        key_cells: 100,
-        work_cells: 1000,
-        scalar_text_bytes: 1000,
-        output_text_bytes: 1000,
-        identity_cells: 100,
-        identity_text_bytes: 1000,
-    }
-}
+
 #[test]
 fn owned_checked_environment_executes_fixed_codelists_before_later_cells_in_both_plan_forms() {
     for rows in [false, true] {
@@ -63,7 +48,12 @@ fn owned_checked_environment_executes_fixed_codelists_before_later_cells_in_both
             bad: true,
         };
         let plan = checked.compiled().bind(&table.schema).unwrap();
-        let attempt = plan.execute_observed(&table, limits());
+        let attempt = plan.execute(
+            &table,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
         let ExecutionError::VerificationFailures(records) = *attempt.result.unwrap_err() else {
             panic!("fixed-list failure")
         };
@@ -101,7 +91,13 @@ fn missing_cells_pass_repeated_compiled_builds_and_keep_complete_check_observati
             .compiled()
             .bind(&table.schema)
             .unwrap()
-            .execute(&table, limits())
+            .execute(
+                &table,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
+            )
+            .result
             .unwrap();
         assert_eq!(
             result.dataset.rows(),

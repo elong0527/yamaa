@@ -11,7 +11,7 @@ use yamaa_core::{
 use yamaa_core::{
     dataset::{
         Assignment, BoundProjectFunction, DatasetPlan, ExecutionError, Expression,
-        FunctionArgument, FunctionInput, Limits, PlanError, RowMode, RowTemplate,
+        FunctionArgument, FunctionInput, PlanError, RowMode, RowTemplate,
     },
     function_invocation::{Argument, FailureKind, FunctionPort, HostError},
     project_activation::{ActivatedFunction, ActivationPort, Bindings},
@@ -128,19 +128,7 @@ fn plan(
         vec![],
     )
 }
-fn limits() -> Limits {
-    Limits {
-        source_rows: 100,
-        output_rows: 100,
-        output_cells: 1000,
-        key_cells: 1000,
-        work_cells: 10000,
-        scalar_text_bytes: 10000,
-        output_text_bytes: 10000,
-        identity_cells: 10000,
-        identity_text_bytes: 10000,
-    }
-}
+
 struct Callbacks {
     signature: Option<ProjectInvocationPlan>,
     calls: Vec<Vec<(String, Value)>>,
@@ -203,7 +191,7 @@ fn closed_versionless_slots_defaults_full_i64_and_repeated_invocations() {
     let mut callbacks = callbacks();
     for _ in 0..2 {
         let result = plan
-            .execute_observed_functions(&source, &[], &mut callbacks, limits())
+            .execute(&source, &[], &mut callbacks, None)
             .result
             .unwrap();
         assert_eq!(result.dataset.cell(0, 1).unwrap(), ValueRef::Int(i64::MAX));
@@ -269,7 +257,7 @@ fn every_signature_mismatch_precedes_even_schema_cardinality_and_empty_table_obs
             let mut callbacks = callbacks();
             callbacks.signature = incompatible;
             let error = plan
-                .execute_observed_functions(&source, &[], &mut callbacks, limits())
+                .execute(&source, &[], &mut callbacks, None)
                 .result
                 .unwrap_err();
             assert_eq!(*error, ExecutionError::FunctionBinding { slot: 0 });
@@ -290,7 +278,7 @@ fn present_missing_short_circuits_without_host_call_or_default_substitution() {
     .unwrap();
     let mut callbacks = callbacks();
     let result = plan
-        .execute_observed_functions(&source, &[], &mut callbacks, limits())
+        .execute(&source, &[], &mut callbacks, None)
         .result
         .unwrap();
     assert_eq!(result.dataset.cell(0, 1).unwrap(), ValueRef::Missing);
@@ -309,7 +297,7 @@ fn original_host_failure_keeps_versionless_identity_and_row_without_retry_or_out
     let mut callbacks = callbacks();
     callbacks.result = Err("original owned host payload");
     let error = plan
-        .execute_observed_functions(&source, &[], &mut callbacks, limits())
+        .execute(&source, &[], &mut callbacks, None)
         .result
         .unwrap_err();
     let ExecutionError::ProjectFunction {
@@ -396,7 +384,7 @@ fn opposite_zero_default_is_a_binding_mismatch_before_any_table_or_callback_effe
         let mut callbacks = callbacks();
         callbacks.signature = Some(make(activated));
         let error = plan
-            .execute_observed_functions(&source, &[], &mut callbacks, limits())
+            .execute(&source, &[], &mut callbacks, None)
             .result
             .unwrap_err();
         assert_eq!(*error, ExecutionError::FunctionBinding { slot: 0 });
@@ -484,7 +472,7 @@ fn different_nodes_local_zero_projects_to_their_exact_union_handle() {
         let mut bindings = Bindings::projected(&activated, &projection, &plans, &mut port).unwrap();
         assert!(bindings.project_signature(1).is_none());
         let result = node_plan
-            .execute_observed_functions(&source, &[], &mut bindings, limits())
+            .execute(&source, &[], &mut bindings, None)
             .result
             .unwrap();
         assert_eq!(result.dataset.cell(0, 1).unwrap(), ValueRef::Int(expected));
@@ -530,7 +518,7 @@ fn projected_handles_still_preflight_the_actual_node_before_any_table_observatio
     .unwrap();
     let source = table(vec![Value::Int(7)]);
     let error = consumer
-        .execute_observed_functions(&source, &[], &mut bindings, limits())
+        .execute(&source, &[], &mut bindings, None)
         .result
         .unwrap_err();
     assert_eq!(*error, ExecutionError::FunctionBinding { slot: 0 });
@@ -552,7 +540,7 @@ fn projected_invocations_preserve_missing_short_circuit_and_original_failure_wit
     let source = table(vec![Value::Missing]);
     let mut bindings = Bindings::projected(&activated, &[1], &expected, &mut port).unwrap();
     let result = node_plan
-        .execute_observed_functions(&source, &[], &mut bindings, limits())
+        .execute(&source, &[], &mut bindings, None)
         .result
         .unwrap();
     assert_eq!(result.dataset.cell(0, 1).unwrap(), ValueRef::Missing);
@@ -562,7 +550,7 @@ fn projected_invocations_preserve_missing_short_circuit_and_original_failure_wit
     let mut bindings = Bindings::projected(&activated, &[1], &expected, &mut port).unwrap();
     let source = table(vec![Value::Int(7), Value::Int(8)]);
     let error = node_plan
-        .execute_observed_functions(&source, &[], &mut bindings, limits())
+        .execute(&source, &[], &mut bindings, None)
         .result
         .unwrap_err();
     assert!(

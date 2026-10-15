@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use yamaa_core::dataset::{
-    Assignment, Check, ColumnVerifications, DatasetPlan, ExecutionError, Expression, Limits,
-    Resource, RowMode, RowTemplate, Verification,
+    Assignment, Check, ColumnVerifications, DatasetPlan, ExecutionError, Expression, RowMode,
+    RowTemplate, Verification,
 };
 use yamaa_core::{
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
@@ -91,19 +91,7 @@ fn setup(values: Vec<Value>, kind: ColumnType, accepted: Vec<Value>) -> (Table, 
     .unwrap();
     (table, plan)
 }
-fn limits() -> Limits {
-    Limits {
-        source_rows: 10,
-        output_rows: 10,
-        output_cells: 100,
-        key_cells: 100,
-        work_cells: 1000,
-        scalar_text_bytes: 1000,
-        output_text_bytes: 1000,
-        identity_cells: 100,
-        identity_text_bytes: 1000,
-    }
-}
+
 #[test]
 fn failing_checkpoint_keeps_full_original_values_and_keys_before_later_source_reads() {
     let (source, plan) = setup(
@@ -115,7 +103,12 @@ fn failing_checkpoint_keeps_full_original_values_and_keys_before_later_source_re
         ColumnType::Str,
         vec![Value::Str("F".into())],
     );
-    let attempt = plan.execute_observed(&source, limits());
+    let attempt = plan.execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     let ExecutionError::VerificationFailures(records) = *attempt.result.unwrap_err() else {
         panic!("wrong failure")
     };
@@ -147,8 +140,15 @@ fn exact_numeric_failure_and_missing_success_keep_the_column_boundary() {
         ColumnType::Float,
         vec![Value::Int(9_007_199_254_740_993)],
     );
-    let ExecutionError::VerificationFailures(records) =
-        *plan.execute_observed(&source, limits()).result.unwrap_err()
+    let ExecutionError::VerificationFailures(records) = *plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err()
     else {
         panic!("wide code rounded")
     };
@@ -161,7 +161,15 @@ fn exact_numeric_failure_and_missing_success_keep_the_column_boundary() {
         ColumnType::Float,
         vec![Value::float(-0.0), Value::Int(1)],
     );
-    let result = plan.execute_observed(&source, limits()).result.unwrap();
+    let result = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(result.dataset.rows().len(), 3);
     assert!(result.verifications[0]
         .codelist
@@ -172,44 +180,31 @@ fn exact_numeric_failure_and_missing_success_keep_the_column_boundary() {
     assert!(source.reads.borrow().iter().any(|&(_, column)| column == 2));
 }
 #[test]
-fn retained_value_text_and_empty_list_scans_consume_the_existing_cumulative_quotas() {
-    let (source, plan) = setup(
-        vec![Value::Str("oversized".into())],
-        ColumnType::Str,
-        vec![Value::Str("F".into())],
-    );
-    let mut quota = limits();
-    quota.identity_text_bytes = 8;
-    assert!(matches!(
-        *plan.execute_observed(&source, quota).result.unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::IdentityTextBytes,
-            ..
-        }
-    ));
+fn empty_codelist_accepts_missing_values_without_skipping_the_checkpoint() {
     let (source, plan) = setup(
         vec![Value::Missing, Value::Missing],
         ColumnType::Str,
         vec![],
     );
-    assert!(plan.execute_observed(&source, limits()).result.is_ok());
-    let control = plan.clone().with_column_verifications(vec![]).unwrap();
-    let smallest = (1..100)
-        .find(|&work| {
-            let mut quota = limits();
-            quota.work_cells = work;
-            control.execute_observed(&source, quota).result.is_ok()
-        })
-        .expect("bounded control did not execute");
-    let mut quota = limits();
-    quota.work_cells = smallest;
-    assert!(matches!(
-        *plan.execute_observed(&source, quota).result.unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::WorkCells,
-            ..
-        }
-    ));
+    let execution = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
+    assert_eq!(execution.dataset.rows().len(), 2);
+    assert_eq!(execution.verifications.len(), 1);
+    assert_eq!(execution.verifications[0].evaluated_count, 2);
+    assert_eq!(execution.verifications[0].failed_count, 0);
+    assert!(execution.verifications[0]
+        .codelist
+        .as_ref()
+        .unwrap()
+        .values
+        .is_empty());
 }
 
 #[test]
@@ -248,8 +243,15 @@ fn value_scopes_prove_a_string_discriminator_and_wait_for_its_completed_value() 
         );
     }
     let plan = base.with_column_verifications(groups(check(2))).unwrap();
-    let ExecutionError::VerificationFailures(records) =
-        *plan.execute(&table, limits()).unwrap_err()
+    let ExecutionError::VerificationFailures(records) = *plan
+        .execute(
+            &table,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err()
     else {
         panic!("selected terminology failure")
     };
@@ -302,8 +304,15 @@ fn effective_length_scopes_reject_foreign_owners_and_check_a_later_completed_dis
     let plan = base
         .with_column_verifications(group(check(2, "4")))
         .unwrap();
-    let ExecutionError::VerificationFailures(records) =
-        *plan.execute(&table, limits()).unwrap_err()
+    let ExecutionError::VerificationFailures(records) = *plan
+        .execute(
+            &table,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err()
     else {
         panic!("scoped length failure")
     };

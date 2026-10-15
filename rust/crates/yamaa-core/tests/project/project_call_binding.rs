@@ -3,7 +3,7 @@ use yamaa_core::{
     dataset::FunctionInput,
     project_call_binding::{bind, Context, Error, Kind, SourceMode},
     project_call_document::{Argument, Call, Input},
-    project_calls::{Limits, LocatedCall, ProjectCalls},
+    project_calls::{LocatedCall, ProjectCalls},
     project_function::{Case, Definition, Function, Language, Parameter},
     reference_binding::{Catalog, Dataset, Diagnostic, Field},
     reference_scope::{Finding as ScopeFinding, Phase, Reach, Scope},
@@ -64,7 +64,6 @@ fn prepared(input: Input) -> ProjectCalls {
                 }],
             },
         }],
-        Limits::default(),
     )
     .unwrap()
 }
@@ -87,7 +86,6 @@ fn catalog(kind: ColumnType) -> Catalog {
                 },
             ],
         }],
-        Default::default(),
     )
     .unwrap()
 }
@@ -218,7 +216,7 @@ fn unresolved_bare_and_wrong_driver_references_keep_existing_diagnostic_priority
 
 #[test]
 fn missing_and_full_width_literals_need_no_reference_bindings() {
-    let empty = Catalog::compile(&[], &[], Default::default()).unwrap();
+    let empty = Catalog::compile(&[], &[]).unwrap();
     for value in [Value::Missing, Value::Int(i64::MIN), Value::Int(i64::MAX)] {
         let calls = prepared(Input::Literal(value.clone()));
         let bound = bind(&calls, 0, &empty, column_context(SourceMode::Record)).unwrap();

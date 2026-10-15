@@ -126,25 +126,3 @@ fn root_metadata_rejects_the_governed_has_no_data_key() {
     );
     assert_eq!(diagnostics[0].spec_paths, ["metadata.has_no_data"]);
 }
-#[test]
-fn compiler_terminology_quota_refuses_the_entire_environment_plan() {
-    let doc = spec("SEX", "str", None, false, None);
-    assert!(matches!(
-        PreparedSpecification::prepare_with_environment_limits(
-            &doc,
-            &environment(false),
-            Default::default(),
-            yamaa_core::project_limits::Limits {
-                text_bytes: 1,
-                ..Default::default()
-            }
-        ),
-        Err(PrepareError::Limit(
-            yamaa_core::specification::CompilerLimit {
-                resource: "text_bytes",
-                limit: 1,
-                ..
-            }
-        ))
-    ));
-}
