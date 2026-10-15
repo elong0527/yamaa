@@ -1,5 +1,8 @@
 # Window Rank Over Intermediate Records
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-window-intermediate-rank.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** rank each subject's adverse events by severity, worst first.
 
 **Input:** `spec.yaml` builds one record per row of `input/ae.csv`,
@@ -26,3 +29,5 @@ record's severity is scored MILD = 1, MODERATE = 2, SEVERE = 3, so the
 window reads the scored severity together with the stored subject
 and onset date; when two records tie on every ordering rule, the
 earlier source record comes first.
+
+**Standard:** ADaM | **Domain:** ADAE

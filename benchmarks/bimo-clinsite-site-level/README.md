@@ -1,5 +1,8 @@
 # Clinical Site Data at Site Level
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/bimo-clinsite-site-level.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build one record per clinical site for a Bioresearch Monitoring
 (BIMO) submission, with the site identifier (`SITEID`), the assigned
 treatment arm (`ARM`), the number of treated subjects (`SAFPOP`), and the
@@ -24,3 +27,5 @@ treated flag.
 row names it. A site with only untreated subjects still gets a record, with
 no arm value and a treated count of zero, while a site named by no subject
 row gets no record at all.
+
+**Standard:** BIMO | **Domain:** CLINSITE

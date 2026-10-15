@@ -1,5 +1,8 @@
 # Adverse Event Incidence Results
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/ars-ae-incidence-results.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** emit long-format adverse event incidence results, retaining the
 analysis definition with every value in an Analysis Results Standard (ARS)
 style dataset.
@@ -25,3 +28,5 @@ and safety flag, and adverse event analysis records with emergence flag.
 treatment group without qualifying events retains both result rows at 0;
 a group without safety subjects has no result rows. This flat results
 dataset illustrates ARS analysis-to-result linkage, not an ARS document.
+
+**Standard:** ARS | **Domain:** RESULTS

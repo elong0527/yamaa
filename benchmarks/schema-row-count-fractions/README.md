@@ -1,5 +1,8 @@
 # Row Count Bounds
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-row-count-fractions.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** bound the rows a filter matches, by count and by share: upper
 and lower count bounds, upper and lower share bounds, per-group share
 bounds with an inclusive edge, and a deliberately violated warning.
@@ -35,3 +38,5 @@ The warning log records `LOG_VERSION`, `ARTIFACT`, `SEVERITY`,
 `CONDITION`, `REQUIREMENT`, `SPEC_PATH`, `VERIFICATION_ID`,
 `FAILURE_COUNT`, `OFFENDING_KEYS`, and `DETAILS`. A dataset-level check
 has no offending rows, so it carries an empty key set.
+
+**Standard:** ADaM | **Domain:** ADSL

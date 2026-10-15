@@ -1,0 +1,2 @@
+# Preserve committed expected CSV bytes for installed measurements on Windows.
+expected/*.csv text eol=lf

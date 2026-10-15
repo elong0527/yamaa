@@ -1,5 +1,8 @@
 # Numeric Functions
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-numeric-functions.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** apply `CEIL`, `FLOOR`, `TRUNC`, `EXP`, `MOD`,
 `GREATEST`, `LEAST`, and `COALESCE` to carried values.
 
@@ -30,3 +33,5 @@ output unchanged (a blank stays blank).
 **Note:** a blank input gives a blank result, except that the
 largest-or-smallest choice skips blanks and the first-present
 choice moves to the next value.
+
+**Standard:** ADaM | **Domain:** ADSL

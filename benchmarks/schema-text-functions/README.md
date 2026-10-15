@@ -1,5 +1,8 @@
 # Text Operations
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-text-functions.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** derive `UPPERTXT`, `LOWERTXT`, `EQUALFL`, `LEASTTXT`,
 `GREATESTTXT`, `MAPCAT`, `TEXTSEQ`, `MINTXT`, and `MAXTXT` for each
 subject from the collected text and a comparison text.
@@ -41,3 +44,5 @@ spelling of the same word (an accented letter stored as one
 character, or as the base letter plus a combining accent) are
 different values. The flag, the earlier and later values, the
 sequence, and the minimum and maximum all follow scalar order.
+
+**Standard:** ADaM | **Domain:** ADSL

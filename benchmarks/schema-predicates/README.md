@@ -1,5 +1,8 @@
 # Predicates
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-predicates.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** show which branch of a first-match `case` a record takes when
 an input is missing: a comparison with a missing value is unknown
 rather than false, and only a true condition selects a branch.
@@ -30,3 +33,5 @@ be written in lower case.
 comparison with a missing value is unknown, and so is its negation, so
 a missing value never satisfies a "not" test either; only an explicit
 test for missingness catches it.
+
+**Standard:** CDISC | **Domain:** ADSL

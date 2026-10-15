@@ -1,5 +1,8 @@
 # Derived Intermediate Rank
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-lookup-intermediate-derived-filter.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** select each subject's disposition record by ordering on a rank
 derived per donor record.
 
@@ -22,3 +25,5 @@ representative numeric value lands in `DSVALUE`, and the computed rank is
 read through `EOT.EOT_FALLBACK` into `EOT_FALLBACK`. The numbers are
 written with the shortest digits that read back as the same value, so
 `0.30000000000000004` is not rounded to `0.3`.
+
+**Standard:** ADaM | **Domain:** ADSL

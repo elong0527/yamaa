@@ -1,0 +1,2 @@
+# Preserve the committed CSV bytes for installed exact-output checks on Windows.
+expected/*.csv text eol=lf

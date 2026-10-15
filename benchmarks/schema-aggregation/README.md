@@ -1,5 +1,8 @@
 # Subject Dose Aggregation
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-aggregation.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** summarize each subject's dosing records three ways: a qualified
 reduction over the dosing table, a filtered and a per-record-derived
 variant of it, and an unqualified reduction over the built rows that is
@@ -29,3 +32,5 @@ for subject `03` is missing while `NDOSEVAL` is `0`. A subject with no
 records at all (subject `04`) reads every qualified reduction as missing,
 including both counts. An empty group after filtering (`PLACDOSE` for
 subject `01`) also reads as missing.
+
+**Standard:** ADaM | **Domain:** ADSL

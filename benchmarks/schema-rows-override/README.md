@@ -1,5 +1,8 @@
 # One Template Replacing a Column Default
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-rows-override.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** show that a single row template can replace a column's
 stated default for its own rows while every other template keeps it:
 weight records gain a body-mass-index record computed from baseline
@@ -31,3 +34,5 @@ if it had been written inside the template. The collected template
 therefore carries weight records through unchanged: the replacement
 never leaks onto them, while the body-mass-index template divides
 each weight by its own subject's baseline height.
+
+**Standard:** ADaM | **Domain:** ADVS

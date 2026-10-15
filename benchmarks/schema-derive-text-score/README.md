@@ -1,5 +1,8 @@
 # Derive Text Score
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-derive-text-score.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** demonstrate the per-record `derive` step of an aggregation:
 convert text questionnaire responses to numbers, then sum them.
 
@@ -18,3 +21,5 @@ record for the first item (`PF01`) gets one score record.
 **Note:** there is no separate text-to-number step. Declaring each
 record's response as a decimal number is what converts it, one record
 at a time, before the sum runs.
+
+**Standard:** ADaM | **Domain:** ADQS

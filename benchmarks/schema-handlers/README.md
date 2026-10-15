@@ -1,5 +1,8 @@
 # Stated Fallbacks
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-handlers.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** derive vital-signs analysis values where each fragile read
 states its fallback beside it: an unmapped or absent test code, a
 collected result that cannot be read as a whole number, and a subject
@@ -26,3 +29,5 @@ and start date.
 **Note:** each fallback is stated beside the read it guards, so the
 run completes with the stated answers instead of failing; a read
 whose condition never occurs keeps its ordinary value.
+
+**Standard:** ADaM | **Domain:** ADVS

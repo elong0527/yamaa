@@ -1,5 +1,8 @@
 # One Collected Answer per Subject
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-odm-item-subject.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** derive `SEX` and `AGE` for one record per subject, each from the
 one record that holds the subject's answer.
 
@@ -17,3 +20,5 @@ collected item, carrying the visit (`StudyEventOID`), the form, the item
 **Note:** an answer is read only when exactly one record holds it, so two
 records of one question at one visit stop the run even when they agree.
 Items the record does not read, such as a weight, play no part.
+
+**Standard:** SDTM | **Domain:** DM

@@ -1,5 +1,8 @@
 # Birth Date Completion
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-birth-date.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** complete a collected birth date to the first and last
 day of its month and read how much was collected.
 
@@ -33,3 +36,5 @@ collected.
 while a complete date is never moved. Precision follows the
 collected text through completion, and the study day counts a
 collected day exactly as a supplied one would count.
+
+**Standard:** ADaM | **Domain:** ADSL
