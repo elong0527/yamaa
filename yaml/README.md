@@ -40,7 +40,6 @@ replay the same parser vectors.
 | [benchmarks/](../benchmarks/README.md) | Specifications, inputs, and expected outcomes |
 | [conformance/](conformance/) | Shared language fixtures |
 | [grammar/](grammar/README.md) | Closed grammars and parser vectors |
-| [agents.md](agents.md) | Maintenance instructions |
 
 ## Execution overview
 

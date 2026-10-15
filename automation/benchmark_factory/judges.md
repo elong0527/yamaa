@@ -76,7 +76,7 @@ inputs alone?*
 
 - Pass: the prompt never names schema vocabulary, derivation verbs,
   or the spec's structure; the README's data-contract portion obeys
-  the prose rules in `benchmarks/agents.md`; fixtures contain no
+  the prose rules in `benchmarks/AGENTS.md`; fixtures contain no
   row a solver could memorize into a correct answer under the
   held-out rerun (every third subject dropped) and the changed-input
   challenge.

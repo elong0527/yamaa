@@ -16,7 +16,7 @@ feedback until it is accepted or rejected.
 
 ## Required reading, in order
 
-1. `benchmarks/agents.md` -- the layout, README, and golden contracts.
+1. `benchmarks/AGENTS.md` -- the layout, README, and golden contracts.
 2. `benchmarks/README.md` -- the index; your benchmark must not
    duplicate an existing one.
 3. `automation/benchmark_prompt.md` -- the prompt recipe, if the
@@ -39,7 +39,7 @@ feedback until it is accepted or rejected.
    the edge cases the task spec lists. Every edge case in the task
    spec must have at least one fixture row that exercises it, and no
    fixture row may exist only to pad the file.
-3. **Write `spec.yaml`.** Follow `benchmarks/agents.md`: keys declared,
+3. **Write `spec.yaml`.** Follow `benchmarks/AGENTS.md`: keys declared,
    columns in dependency order, no intermediate columns in
    `output.columns`. For a negative benchmark, write the spec so the
    engine rejects it in the phase the task spec names, and write
@@ -98,7 +98,7 @@ When a draft comes back with solver trajectories or judge verdicts:
   The grader reads those as no value.
 - New vocabulary introduced to serve one benchmark. Expressions
   enter the language through the admission policy in
-  `benchmarks/agents.md`, not through a benchmark draft.
+  `benchmarks/AGENTS.md`, not through a benchmark draft.
 
 ## What you deliver
 
@@ -134,7 +134,7 @@ plus the prompt-tier and reference-solution tests in
 `python/tests/test_harbor_evaluation.py`.
 
 **Combine.** One surviving directory, variants as `spec_<variant>.yaml`
-per `benchmarks/agents.md`. The merged README's data contract must
+per `benchmarks/AGENTS.md`. The merged README's data contract must
 cover every variant's columns. The index keeps one row. Update the
 prompts. Run `factory.sh retire-check` on each absorbed benchmark;
 only a human deletes the absorbed directories.

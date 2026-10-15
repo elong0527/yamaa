@@ -37,7 +37,7 @@ type first; the rest of the spec is read against it.
 
 The proposed benchmark must satisfy, in order:
 
-1. **Layout.** `benchmarks/<name>/` follows `../benchmarks/agents.md`:
+1. **Layout.** `benchmarks/<name>/` follows `../benchmarks/AGENTS.md`:
    `README.md`, `spec.yaml` (or the applicable `spec_<variant>.yaml`
    files), `input/*.csv`, `expected/*.csv` (or `expected/error.yaml`
    for a negative benchmark), `run.py` and `run.R` for positive
@@ -74,7 +74,7 @@ The proposed benchmark must satisfy, in order:
 8. **Maintenance golden discipline.** For enhance/combine/
    recalibrate, diff the golden before and after: every moved value
    is named in the proposal report with its reason, per
-   `../benchmarks/agents.md` ("changing a golden file is a
+   `../benchmarks/AGENTS.md` ("changing a golden file is a
    decision"). Unmoved values must be byte-identical; verify with
    `git diff`.
 9. **Prompt parity.** After any maintenance change, the Harbor

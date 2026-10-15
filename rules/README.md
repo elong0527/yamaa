@@ -79,12 +79,52 @@ owns the sequence of a run.
 | --- | --- | --- |
 | [Schema language](reference/schema-language.md) | normative | Define schema notation, registries, constraints, and canonical shorthand expansion. |
 
+## Terminology
+
+One term per concept across all rules, schema comments, and messages
+(folded here from the former `yaml/agents.md`):
+
+- **specification** -- the YAML file under review. `study` and `document` stay
+  project-level (resources and submission contracts), never names for the YAML.
+- **input dataset** / **output dataset** -- state the role whenever it matters.
+  Bare `dataset` appears only as a key name. `table` means a documentation
+  table, never data.
+- **row template** -- one `rows` entry, building a group of output rows. Bare
+  `template` means a string template (text operations).
+- **record** -- input side (a file or input dataset row). **row** -- output side
+  (an output record under construction or built).
+- **column** -- dataset level. **field** -- file and schema level (ingestion and
+  format profiles). **variable** -- an expression-level name (schema language).
+- **path notation** -- `row.dataset`, `root.input`, `expression.source`
+  (binding notation). Never `row_class.` or `root_class.`.
+- **driver** -- the dataset whose records drive row construction: the root
+  `base` without row templates, or the explicit row template's `dataset`.
+  The term is allowed in normative text, schema descriptions, and
+  user-facing messages.
+
+A field that holds a predicate is named for how it treats the three truth
+values, so one name never covers two treatments:
+
+| Field | Treatment |
+| --- | --- |
+| `filter` | Keeps the rows or records whose result is `TRUE`. |
+| `when` | `TRUE` selects a branch, row, or group; `FALSE` and `UNKNOWN` are treated alike and select nothing (`case`, `assert`, `row_count`). |
+| `require` | The result must be `TRUE`; `FALSE` and `UNKNOWN` fail (`assert`). |
+| `condition` | Each of `TRUE`, `FALSE`, and `UNKNOWN` has its own result (`flag`). |
+
+`expr` holds an expression in a closed text grammar that produces a value
+(`compute`, `aggregate`), never a predicate. `then` and `otherwise` hold
+values (`case`), never predicates.
+
 ## Requirement identity
 
-Requirements are defined once as `**REQ-0001.**`. IDs remain stable across
+Requirements are defined once as `**REQ-0001.**`. Give every requirement a
+permanent global `REQ-NNNN` ID and list its owning contract in this index.
+IDs remain stable across
 file moves and section reordering. Allocate new IDs above the largest assigned
 number; never renumber or reuse a retired ID. Delete retired rule blocks;
 Git history preserves their former definitions and retirement decisions.
+Historical citations and retirement records remain in Git history.
 Normative `must`, `must not`, `should`, and `may` have their usual requirement
 meanings.
 Every contract has Requirements; contracts with distinct failure rules also
