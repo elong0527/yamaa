@@ -43,10 +43,8 @@ impl Refusal {
                 .expect("resource finding"),
         ]
     }
-    pub(crate) fn value(&self, stage: &str, code: &str) -> Option<Value> {
-        Some(crate::specification_diagnostics::portable_diagnostic(
-            self.diagnostic(stage, code),
-        ))
+    pub(crate) fn value(&self, stage: &str, code: &str) -> Value {
+        crate::specification_diagnostics::portable_diagnostic(self.diagnostic(stage, code))
     }
 }
 pub(crate) fn resource_name(resource: Resource) -> &'static str {
@@ -196,11 +194,7 @@ pub(crate) fn source_findings(
         } else if let Error::Sources(errors) = error {
             pending.extend(errors.iter().rev().map(|(source, error)| (source, error)));
         } else if let Some(refusal) = self::source(error, source) {
-            findings.push(
-                refusal
-                    .value("ingest", "source_limit")
-                    .expect("resource diagnostic"),
-            );
+            findings.push(refusal.value("ingest", "source_limit"));
         } else {
             return Ok(None);
         }
@@ -366,7 +360,7 @@ mod tests {
                 refusal,
                 Refusal::new(resource, limit, Some(actual), vec!["input.XW".into()])
             );
-            let value = refusal.value("ingest", "source_limit").unwrap();
+            let value = refusal.value("ingest", "source_limit");
             assert_eq!(value["context"]["resource"], resource);
             assert_eq!(value["context"]["limit"], serde_json::json!(limit));
             assert_eq!(value["context"]["actual"], serde_json::json!(actual));

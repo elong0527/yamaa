@@ -123,7 +123,7 @@ fn rounding_operand_admission_checks_target_source_and_nested_depth_before_execu
         Err(PlanError::InvalidSource)
     );
     let mut nested = Expression::Source(0);
-    for _ in 0..64 {
+    for _ in 0..128 {
         nested = wrap(0, nested);
     }
     assert!(make(nested.clone()).is_ok());

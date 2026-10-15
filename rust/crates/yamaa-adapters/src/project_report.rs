@@ -523,11 +523,7 @@ pub fn build_result<'a, C, E>(
                                 run.compiled().sources(),
                                 run.compiled().driver_index(),
                             ) {
-                                diagnostics.push(
-                                    refusal
-                                        .value("execute", "execution_limit")
-                                        .ok_or_else(invalid)?,
-                                );
+                                diagnostics.push(refusal.value("execute", "execution_limit"));
                             } else {
                                 let outcome = crate::dataset_result::semantic_condition(other)
                                     .map_err(|_| Error::Execution(other))?;
@@ -635,9 +631,7 @@ pub fn build_result<'a, C, E>(
                                 failure,
                                 run.compiled().sources(),
                             )
-                            .and_then(|refusal| {
-                                Some(vec![refusal.value("ingest", "source_limit")?])
-                            }),
+                            .map(|refusal| vec![refusal.value("ingest", "source_limit")]),
                         }
                         .ok_or(Error::Source(error))?;
                         diagnostics.extend(findings);

@@ -228,7 +228,7 @@ pub fn failure<E>(
                     run.compiled().sources(),
                     run.compiled().driver_index(),
                 )
-                .and_then(|refusal| refusal.value("execute", "execution_limit"))
+                .map(|refusal| refusal.value("execute", "execution_limit"))
                 .ok_or(Error::UnsupportedOutcome)?],
                 _ => return Err(Error::UnsupportedOutcome),
             }
