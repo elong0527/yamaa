@@ -1,12 +1,11 @@
 //! Closed string-template parsing and whole-output admission, without data effects.
 use crate::{
-    diagnostic::{ConditionCode as C, Diagnostic},
+    diagnostic::{ConditionCode as C, ContextValue as V, Diagnostic},
     numeric_parser::SourceSpan,
     table::ValueRef,
     value::Value,
 };
-use serde_json::Value as V;
-use std::vec;
+use alloc::{format, string::String, vec, vec::Vec};
 pub const MAX_DECLARATION_BYTES: usize = 16_777_216;
 pub const MAX_COMPILE_WORK: usize = 100_000_000;
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -25,20 +24,15 @@ pub struct StringTemplate {
     deferred: Option<Diagnostic>,
     syntax_failure_span: Option<SourceSpan>,
 }
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AdmissionError {
-    #[error("text template shape")]
     Shape,
-    #[error("text template limit")]
     Limit,
-    #[error("text template work: limit={limit:?}, actual={actual:?}")]
     Work { limit: usize, actual: Option<usize> },
 }
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MaterializeError {
-    #[error("text template shape")]
     Shape,
-    #[error("text template limit")]
     Limit,
 }
 /// One counter shared by every declaration in a compilation request.
@@ -158,9 +152,9 @@ impl StringTemplate {
             }
         }
         if let Some((reason, placeholder, syntax_failure_span)) = invalid {
-            let mut context = vec![("reason", V::String(reason.into()))];
+            let mut context = vec![("reason", V::Scalar(Value::Str(reason.into())))];
             if let Some(name) = placeholder {
-                context.push(("placeholder", V::String(name.into())));
+                context.push(("placeholder", V::Scalar(Value::Str(name.into()))));
             }
             let deferred = Some(diagnostic(C::TemplateInvalid, &path, context));
             return Ok(Self {
@@ -257,9 +251,9 @@ impl StringTemplate {
             C::StrCaseInput,
             &format!("{}.template", self.path),
             [
-                ("source", V::String(source.clone())),
-                ("expected", V::String("str".into())),
-                ("actual", V::String(actual.into())),
+                ("source", V::Scalar(Value::Str(source.clone()))),
+                ("expected", V::Scalar(Value::Str("str".into()))),
+                ("actual", V::Scalar(Value::Str(actual.into()))),
             ],
         ))
     }
@@ -268,14 +262,17 @@ impl StringTemplate {
         Some(diagnostic(
             C::ExtractUnknown,
             &format!("{}.template", self.path),
-            [("identifier", V::String(source.clone()))],
+            [("identifier", V::Scalar(Value::Str(source.clone())))],
         ))
     }
     pub fn missing_diagnostic(&self, index: usize) -> Option<Diagnostic> {
         Some(diagnostic(
             C::StrCaseMissing,
             &self.path,
-            [("variable", V::String(self.identifiers.get(index)?.clone()))],
+            [(
+                "variable",
+                V::Scalar(Value::Str(self.identifiers.get(index)?.clone())),
+            )],
         ))
     }
     /// Values are in occurrence order, deliberately allowing repeated independent reads.

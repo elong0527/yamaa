@@ -2,11 +2,10 @@
 use super::*;
 use crate::{
     bound_expression::BoundPredicate,
-    diagnostic::{ConditionCode as C, Diagnostic},
+    diagnostic::{ConditionCode as C, ContextValue, Diagnostic},
     predicate_compiler,
     value::Value,
 };
-use serde_json::Value as JsonValue;
 mod row_sources;
 pub(super) use row_sources::bind as bind_row;
 
@@ -30,7 +29,12 @@ impl SourceFinding {
     pub(super) fn texts(&mut self, name: &str, values: Vec<String>) {
         self.0.context.insert(
             name.into(),
-            JsonValue::Array(values.into_iter().map(JsonValue::String).collect()),
+            ContextValue::Sequence(
+                values
+                    .into_iter()
+                    .map(|value| ContextValue::Scalar(Value::Str(value)))
+                    .collect(),
+            ),
         );
     }
     pub fn diagnostic(&self) -> Diagnostic {
@@ -45,7 +49,12 @@ impl SourceFinding {
             spec_paths: vec![path.into()],
             context: fields
                 .iter()
-                .map(|(name, value)| ((*name).into(), JsonValue::String((*value).into())))
+                .map(|(name, value)| {
+                    (
+                        (*name).into(),
+                        ContextValue::Scalar(Value::Str((*value).into())),
+                    )
+                })
                 .collect(),
             source_span: None,
             operand_route: None,
@@ -218,14 +227,21 @@ impl Declaration {
                 code: C::SourceSelectionUnpaired,
                 spec_paths: vec![path.into()],
                 context: [
-                    ("operation".into(), JsonValue::String("source".into())),
+                    (
+                        "operation".into(),
+                        ContextValue::Scalar(Value::Str("source".into())),
+                    ),
                     (
                         "declared".into(),
-                        JsonValue::Array(vec![JsonValue::String(declared.into())]),
+                        ContextValue::Sequence(vec![ContextValue::Scalar(Value::Str(
+                            declared.into(),
+                        ))]),
                     ),
                     (
                         "missing".into(),
-                        JsonValue::Array(vec![JsonValue::String(missing.into())]),
+                        ContextValue::Sequence(vec![ContextValue::Scalar(Value::Str(
+                            missing.into(),
+                        ))]),
                     ),
                 ]
                 .into(),
@@ -304,7 +320,7 @@ impl Declaration {
         };
         let start = findings.len();
         let mut bindings = Vec::new();
-        let mut seen = std::collections::BTreeSet::new();
+        let mut seen = alloc::collections::BTreeSet::new();
         for name in plan.identifiers() {
             if !seen.insert(name) {
                 continue;
@@ -399,7 +415,7 @@ impl Declaration {
         };
         let start = findings.len();
         let mut bindings = Vec::new();
-        let mut seen = std::collections::BTreeSet::new();
+        let mut seen = alloc::collections::BTreeSet::new();
         for name in plan.identifiers() {
             if !seen.insert(name) {
                 continue;
@@ -472,7 +488,7 @@ impl Declaration {
     ) -> Expression {
         if self.absent.is_some() || self.keep.is_some() {
             Expression::SourceBinding {
-                source: std::boxed::Box::new(crate::dataset::Assignment {
+                source: alloc::boxed::Box::new(crate::dataset::Assignment {
                     column,
                     expression,
                     path: path.into(),
@@ -669,10 +685,10 @@ pub(super) fn bind(
                         );
                         finding.0.context.insert(
                             "keys".into(),
-                            JsonValue::Array(
+                            ContextValue::Sequence(
                                 key_names
                                     .iter()
-                                    .map(|name| JsonValue::String((*name).into()))
+                                    .map(|name| ContextValue::Scalar(Value::Str((*name).into())))
                                     .collect(),
                             ),
                         );
@@ -885,10 +901,10 @@ pub(super) fn bind_implicit(
             );
             finding.0.context.insert(
                 "keys".into(),
-                JsonValue::Array(
+                ContextValue::Sequence(
                     key_names
                         .iter()
-                        .map(|name| JsonValue::String((*name).into()))
+                        .map(|name| ContextValue::Scalar(Value::Str((*name).into())))
                         .collect(),
                 ),
             );

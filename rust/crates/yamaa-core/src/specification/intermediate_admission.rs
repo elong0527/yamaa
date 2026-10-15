@@ -1,5 +1,6 @@
 //! Source-independent intermediate admission and owned applicable-key inference.
 use super::*;
+use crate::value::Value;
 use crate::{diagnostic::ConditionCode as C, key_relation::Inference, value::ColumnType};
 
 /// A missing handler alone leaves the input relation unchanged (REQ-1248).
@@ -59,7 +60,11 @@ pub(super) fn declaration_findings(
             findings.push(PreflightFinding::Scalar(crate::diagnostic::Diagnostic {
                 code: C::IntermediateIdentifierCollision,
                 spec_paths: vec![format!("{path}.id"), previous],
-                context: [("identifier".into(), serde_json::Value::String(name.into()))].into(),
+                context: [(
+                    "identifier".into(),
+                    crate::diagnostic::ContextValue::Scalar(Value::Str(name.into())),
+                )]
+                .into(),
                 source_span: None,
                 operand_route: None,
             }));

@@ -1,15 +1,14 @@
 //! Predicate evaluation facts and stable structural routes without host formatting.
-use super::{ConditionCode as C, Context, Diagnostic};
+use super::{ConditionCode as C, Context, ContextValue as V, Diagnostic};
 use crate::{
     predicate::{Condition, ErrorKind, EvaluationError, LimitError, Route},
-    value::ValueType,
+    value::{Value, ValueType},
 };
-use serde_json::Value as V;
+use alloc::{format, string::String, vec};
 
 pub const MAX_PREDICATE_DIAGNOSTIC_BYTES: usize = 16_777_216;
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PredicateGrammarDiagnosticError {
-    #[error("diagnostic predicate output limit")]
     OutputLimit,
 }
 /// Native resolver/resource failures remain borrowed and never acquire an
@@ -36,7 +35,7 @@ impl Budget {
     }
 }
 fn text(s: &str) -> V {
-    V::String(s.into())
+    V::Scalar(Value::Str(s.into()))
 }
 fn kind(t: ValueType) -> &'static str {
     match t {
@@ -175,10 +174,3 @@ impl Condition {
         })
     }
 }
-
-impl<E: std::fmt::Debug> std::fmt::Display for PredicateDiagnosticError<'_, E> {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "diagnostic projection: {self:?}")
-    }
-}
-impl<E: std::fmt::Debug> std::error::Error for PredicateDiagnosticError<'_, E> {}

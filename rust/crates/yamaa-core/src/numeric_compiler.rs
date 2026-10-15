@@ -5,6 +5,8 @@
 //! Compiled trees are private, so parse and resolution budgets cannot be bypassed
 //! by mutation. Budgets bound structure and call counts, not resolver running time.
 
+use alloc::{boxed::Box, string::String, vec::Vec};
+
 use crate::evaluation::{EvaluationError, NumericNode, NumericPlan, NumericResolver, Operand};
 use crate::numeric::{
     BinaryOperator, IntegralFunction, MathFunction, Number, SelectionFunction, UnaryOperator,
@@ -52,21 +54,17 @@ pub struct UnsupportedFunction {
 
 /// Distinguish invalid syntax, parser policy, unsupported features and call policy.
 /// None of these outcomes runs a resolver or selects a language lifecycle handler.
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CompileError {
-    #[error("numeric compiler parse: {0:?}")]
     Parse(ParseError),
-    #[error("numeric compiler unsupported: functions={functions:?}")]
     Unsupported { functions: Vec<UnsupportedFunction> },
-    #[error("numeric compiler resolution limit: limit={limit:?}, required={required:?}")]
     ResolutionLimit { limit: usize, required: usize },
 }
 
 /// Evaluator failure plus the exact source extent of the failed semantic node.
 /// Group parentheses do not replace an inner node's span. An operator/call failure
 /// spans the whole expression/call; a leaf failure spans only its written token.
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-#[error("numeric compiler: source_span={source_span:?}, evaluation={evaluation:?}")]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CompiledEvaluationError<E> {
     pub source_span: SourceSpan,
     pub evaluation: Box<EvaluationError<E>>,

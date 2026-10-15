@@ -1,7 +1,10 @@
 //! Output-declaration findings retain their validation vocabulary at the cause.
 use super::{OutputFinding, MAX_OUTPUT_DECIMALS};
-use crate::diagnostic::{ConditionCode as C, Diagnostic};
-use serde_json::Value as V;
+use crate::{
+    diagnostic::{ConditionCode as C, ContextValue as V, Diagnostic},
+    value::Value,
+};
+use alloc::{format, vec};
 
 impl OutputFinding {
     /// This represents the existing finding. The caller still reaches output
@@ -12,13 +15,13 @@ impl OutputFinding {
                 C::OutputUnknownProfile,
                 "output.path".into(),
                 vec![
-                    ("path", V::String(path.clone())),
+                    ("path", V::Scalar(Value::Str(path.clone()))),
                     (
                         "permitted",
-                        V::Array(
+                        V::Sequence(
                             [".csv", ".parquet"]
                                 .into_iter()
-                                .map(|s| V::String(s.into()))
+                                .map(|s| V::Scalar(Value::Str(s.into())))
                                 .collect(),
                         ),
                     ),
@@ -30,46 +33,45 @@ impl OutputFinding {
                 vec![
                     (
                         "expected",
-                        V::String(format!("an integer from 0 through {MAX_OUTPUT_DECIMALS}")),
+                        V::Scalar(Value::Str(format!(
+                            "an integer from 0 through {MAX_OUTPUT_DECIMALS}"
+                        ))),
                     ),
-                    (
-                        "actual",
-                        V::Number((value.clone()).parse().expect("canonical integer")),
-                    ),
+                    ("actual", V::Integer(value.clone())),
                 ],
             ),
             Self::DecimalsNotApplicable { path } => (
                 C::OutputDecimalsNotApplicable,
                 "output.decimals".into(),
                 vec![
-                    ("path", V::String(path.clone())),
-                    ("profile", V::String("parquet".into())),
+                    ("path", V::Scalar(Value::Str(path.clone()))),
+                    ("profile", V::Scalar(Value::Str("parquet".into()))),
                 ],
             ),
             Self::DuplicateColumn { position, name } => (
                 C::OutputDuplicateColumn,
                 format!("output.columns[{position}]"),
-                vec![("column", V::String(name.clone()))],
+                vec![("column", V::Scalar(Value::Str(name.clone())))],
             ),
             Self::UndeclaredColumn { position, name } => (
                 C::OutputUndeclaredColumn,
                 format!("output.columns[{position}]"),
-                vec![("column", V::String(name.clone()))],
+                vec![("column", V::Scalar(Value::Str(name.clone())))],
             ),
             Self::InternalKey { position, name } => (
                 C::OutputInternalKey,
                 format!("keys[{position}]"),
-                vec![("column", V::String(name.clone()))],
+                vec![("column", V::Scalar(Value::Str(name.clone())))],
             ),
             Self::DuplicateOrderTerm { position, name } => (
                 C::OutputDuplicateOrderTerm,
                 format!("output.order_by[{position}]"),
-                vec![("column", V::String(name.clone()))],
+                vec![("column", V::Scalar(Value::Str(name.clone())))],
             ),
             Self::UndeclaredOrderColumn { position, name } => (
                 C::OutputUndeclaredOrderColumn,
                 format!("output.order_by[{position}]"),
-                vec![("column", V::String(name.clone()))],
+                vec![("column", V::Scalar(Value::Str(name.clone())))],
             ),
         };
         Diagnostic {

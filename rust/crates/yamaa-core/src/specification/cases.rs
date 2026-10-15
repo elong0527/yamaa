@@ -10,14 +10,14 @@ use crate::{
 pub(super) struct Branch {
     when: Option<Result<Plan, InvalidPredicate>>,
     pub(super) path: String,
-    pub(super) operation: std::boxed::Box<Operation>,
+    pub(super) operation: alloc::boxed::Box<Operation>,
 }
 impl Branch {
     pub(super) fn value(operation: Operation, path: String) -> Self {
         Self {
             when: None,
             path,
-            operation: std::boxed::Box::new(operation),
+            operation: alloc::boxed::Box::new(operation),
         }
     }
     pub(super) fn predicate(&self) -> Option<&Result<Plan, InvalidPredicate>> {
@@ -542,7 +542,7 @@ pub(super) fn bind(
         if let Some(expression) = expression {
             result.push(CaseBranch {
                 when,
-                assignment: std::boxed::Box::new(Assignment {
+                assignment: alloc::boxed::Box::new(Assignment {
                     column,
                     expression,
                     path: branch.path.clone(),

@@ -1,7 +1,7 @@
 //! Classified host packaging facts projected without metadata or version effects.
-use super::Diagnostic;
-use crate::application_issue;
-use serde_json::Value as JsonValue;
+use super::{ContextValue, Diagnostic};
+use crate::{application_issue, value::Value};
+use alloc::{string::String, vec::Vec};
 
 pub const MAX_LOCK_DIAGNOSTIC_BYTES: usize = 16_777_216;
 const MAX_FINDINGS: usize = 2_049;
@@ -62,11 +62,9 @@ pub struct LockOrigins<'a> {
     /// Authored spelling from the retained raw root, not a resolved executable path.
     pub written: &'a str,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LockDiagnosticError {
-    #[error("diagnostic project lock invalid context")]
     InvalidContext,
-    #[error("diagnostic project lock limit")]
     Limit,
 }
 struct Budget(usize);
@@ -162,7 +160,7 @@ pub fn lock_diagnostics_with_limit(
             return Err(Limit);
         }
     }
-    let scalar = |text: &str| JsonValue::String(text.into());
+    let scalar = |text: &str| ContextValue::Scalar(Value::Str(text.into()));
     Ok(findings
         .iter()
         .map(|finding| {
@@ -176,13 +174,16 @@ pub fn lock_diagnostics_with_limit(
                     ("reason".into(), scalar(finding.reason.as_str())),
                     (
                         "expected".into(),
-                        JsonValue::Array(
+                        ContextValue::Sequence(
                             finding.expected.iter().map(|text| scalar(text)).collect(),
                         ),
                     ),
                     (
                         "actual".into(),
-                        finding.actual.as_deref().map_or(JsonValue::Null, scalar),
+                        finding
+                            .actual
+                            .as_deref()
+                            .map_or(ContextValue::Scalar(Value::Missing), scalar),
                     ),
                 ]
                 .into(),

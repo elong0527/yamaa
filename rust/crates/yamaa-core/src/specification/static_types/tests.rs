@@ -404,7 +404,7 @@ fn only_ungrouped_filters_refuse_direct_and_transitive_window_reads() {
             assert_eq!(findings[0].code, C::RowFilterPhaseBoundary);
             assert_eq!(
                 findings[0].context["identifier"],
-                serde_json::Value::String("ALIAS".into())
+                crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str("ALIAS".into()))
             );
         }
     }
@@ -459,7 +459,7 @@ fn a_deferred_lookup_match_has_its_authored_filter_phase_witness() {
     ] {
         assert_eq!(
             findings[0].context[key],
-            serde_json::Value::String(expected.into())
+            crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(expected.into()))
         );
     }
 }
@@ -594,7 +594,7 @@ fn input_backed_defaults_join_self_donors_while_self_backed_columns_stay_late() 
                 assert_eq!(finding.spec_paths, ["intermediates[0].filter"]);
                 assert_eq!(
                     finding.context["identifier"],
-                    serde_json::Value::String(name.into())
+                    crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(name.into()))
                 );
             }
         }

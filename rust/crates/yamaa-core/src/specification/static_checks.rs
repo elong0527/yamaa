@@ -12,13 +12,15 @@ fn charge(used: &mut usize, amount: usize) -> Result<(), PrepareError> {
         })?;
     Ok(())
 }
-fn context_bytes(value: &serde_json::Value, used: &mut usize) -> Result<(), PrepareError> {
-    use serde_json::Value as V;
-    charge(used, std::mem::size_of::<V>())?;
+fn context_bytes(
+    value: &crate::diagnostic::ContextValue,
+    used: &mut usize,
+) -> Result<(), PrepareError> {
+    use crate::{diagnostic::ContextValue as V, value::Value};
+    charge(used, core::mem::size_of::<V>())?;
     match value {
-        V::String(text) => charge(used, text.len())?,
-        V::Number(number) => charge(used, number.as_str().len())?,
-        V::Array(values) => {
+        V::Scalar(Value::Str(text)) | V::Integer(text) => charge(used, text.len())?,
+        V::Sequence(values) => {
             for value in values {
                 context_bytes(value, used)?;
             }
@@ -180,7 +182,7 @@ impl PreparedSpecification {
             for diagnostic in diagnostics {
                 // Charge all retained path and context text before extending the collection.
                 // Source-model and parser admission bound each individual finding already.
-                charge(&mut bytes, std::mem::size_of::<Diagnostic>())?;
+                charge(&mut bytes, core::mem::size_of::<Diagnostic>())?;
                 for path in &diagnostic.spec_paths {
                     charge(&mut bytes, path.len())?;
                 }

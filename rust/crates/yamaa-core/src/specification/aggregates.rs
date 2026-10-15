@@ -1,5 +1,6 @@
 //! R013 declarations select one of the three admitted relation contexts.
 use super::*;
+use crate::value::Value;
 use crate::{
     aggregate_compiler::{compile_aggregate, AggregateCompileError, CompiledAggregate},
     bound_expression::{Binding, BoundPredicate, Read},
@@ -10,7 +11,8 @@ use crate::{
     diagnostic::{AggregateContextCause as Cause, AggregateEmptyKey, AggregateFinding as Finding},
     reference_scope::Phase,
 };
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
+use alloc::string::ToString;
 
 #[derive(Clone, Debug)]
 pub(super) struct Declaration {
@@ -427,10 +429,12 @@ pub(super) fn prepare(
             );
             value.context.insert(
                 "relations".into(),
-                serde_json::Value::Array(
+                crate::diagnostic::ContextValue::Sequence(
                     derive_relations
                         .iter()
-                        .map(|relation| serde_json::Value::String(relation.clone()))
+                        .map(|relation| {
+                            crate::diagnostic::ContextValue::Scalar(Value::Str(relation.clone()))
+                        })
                         .collect(),
                 ),
             );
@@ -835,7 +839,7 @@ pub(super) fn bind(
         }
     }
     let mut bindings = Vec::new();
-    let mut seen = std::collections::BTreeSet::new();
+    let mut seen = alloc::collections::BTreeSet::new();
     for name in compiled.identifiers() {
         if !seen.insert(name) {
             continue;
@@ -891,7 +895,7 @@ pub(super) fn bind(
     let filter = match &declaration.filter {
         Some((_, Ok(plan))) => {
             let mut bound = Vec::new();
-            let mut seen = std::collections::BTreeSet::new();
+            let mut seen = alloc::collections::BTreeSet::new();
             for name in plan.identifiers() {
                 if !seen.insert(name) {
                     continue;
@@ -1180,7 +1184,7 @@ pub(super) fn bind(
     .map_err(|_| BindError::Internal)?
     .with_record_operations(range, derivations, derived_schema);
     let _ = output;
-    Ok(Some(Expression::Aggregate(std::boxed::Box::new(bound))))
+    Ok(Some(Expression::Aggregate(alloc::boxed::Box::new(bound))))
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -1,13 +1,13 @@
 //! Classified dataset failures, borrowed without replaying table or host effects.
 use super::{
-    ConditionCode as C, Context, Diagnostic, ProjectionBudget, ProjectionError,
+    ConditionCode as C, Context, ContextValue, Diagnostic, ProjectionBudget, ProjectionError,
     MAX_PROJECTION_BYTES,
 };
 use crate::{
     reduction::NumericReducer,
     value::{Value, ValueType},
 };
-use serde_json::Value as JsonValue;
+use alloc::{string::ToString, vec};
 
 /// Facts retained by a failed dataset attempt. Identity, matched keys and
 /// partition observations remain attached to that attempt outside this finding.
@@ -44,13 +44,13 @@ pub enum DatasetFinding<'a> {
     },
 }
 
-fn text(value: &str) -> JsonValue {
-    JsonValue::String(value.into())
+fn text(value: &str) -> ContextValue {
+    ContextValue::Scalar(Value::Str(value.into()))
 }
-fn count(value: usize) -> JsonValue {
+fn count(value: usize) -> ContextValue {
     match i64::try_from(value) {
-        Ok(value) => JsonValue::from(value),
-        Err(_) => JsonValue::from(value),
+        Ok(value) => ContextValue::Scalar(Value::Int(value)),
+        Err(_) => ContextValue::Integer(value.to_string()),
     }
 }
 fn type_name(value: ValueType) -> &'static str {
@@ -196,7 +196,7 @@ impl DatasetFinding<'_> {
                 [
                     ("column".into(), text(column)),
                     ("operation".into(), text("baseline_flag")),
-                    ("date".into(), JsonValue::String(date)),
+                    ("date".into(), ContextValue::Scalar(Value::Str(date))),
                     ("match_count".into(), count(number)),
                 ]
                 .into()

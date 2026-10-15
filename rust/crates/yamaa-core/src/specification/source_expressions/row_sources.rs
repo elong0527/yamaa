@@ -86,7 +86,7 @@ pub(in crate::specification) fn bind(
                             })
                             .collect(),
                     )
-                    .map(std::sync::Arc::new)
+                    .map(alloc::sync::Arc::new)
                 })
                 .transpose()
                 .map_err(|_| BindError::Internal)?

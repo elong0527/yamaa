@@ -6,6 +6,7 @@ use super::{
     SchemaStructure, TypeExpression, TypeNode, ValidationError,
 };
 use crate::{aggregate_parser, numeric_parser, predicate_parser};
+use alloc::{format, string::String, vec::Vec};
 
 /// Namespace selected by a schema role, rather than by the spelling of a string.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -26,15 +27,11 @@ pub struct InheritanceReference {
 }
 
 /// Policy refusals must not turn an expensive live expression into a dead declaration.
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InheritanceReferenceError {
-    #[error("schema inheritance references normalization: {0:?}")]
     Normalization(NormalizationError),
-    #[error("schema inheritance references numeric: {0:?}")]
     Numeric(numeric_parser::ParseError),
-    #[error("schema inheritance references aggregate: {0:?}")]
     Aggregate(aggregate_parser::ParseError),
-    #[error("schema inheritance references predicate: {0:?}")]
     Predicate(predicate_parser::ParseError),
 }
 impl From<NormalizationError> for InheritanceReferenceError {

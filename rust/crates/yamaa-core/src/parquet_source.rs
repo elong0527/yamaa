@@ -4,7 +4,7 @@ use crate::{
     table::{Column, TableSchema},
     value::ColumnType,
 };
-use std::collections::BTreeSet;
+use alloc::{collections::BTreeSet, string::String, vec::Vec};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Physical {
@@ -59,17 +59,19 @@ pub struct Field {
     pub stored_type: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error {
-    #[error("parquet source invalid")]
     Invalid,
-    #[error("parquet source empty name: field={field:?}")]
-    EmptyName { field: usize },
-    #[error("parquet source duplicate name: field={field:?}")]
-    DuplicateName { field: String },
-    #[error("parquet source unsupported: field={field:?}, stored_type={stored_type:?}")]
-    Unsupported { field: String, stored_type: String },
-    #[error("parquet source value: field={field:?}, row={row:?}, value={value:?}")]
+    EmptyName {
+        field: usize,
+    },
+    DuplicateName {
+        field: String,
+    },
+    Unsupported {
+        field: String,
+        stored_type: String,
+    },
     Value {
         field: String,
         row: usize,

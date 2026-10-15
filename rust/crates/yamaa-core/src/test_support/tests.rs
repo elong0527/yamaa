@@ -14,12 +14,12 @@ use crate::{
     table::{CellError, Column, TableAccess, TableSchema},
     value::{ColumnType, Value, ValueType},
 };
+use alloc::{boxed::Box, collections::BTreeMap, rc::Rc, sync::Arc, vec, vec::Vec};
 use function_invocation::FailureKind;
 use function_invocation::FunctionPort;
 use function_invocation::HostError;
 use output::{OutputReport, SaveError};
 use run::{CapturedAttempt, PortError, RunError};
-use std::{collections::BTreeMap, rc::Rc, sync::Arc, vec};
 
 /// Deliberately neither Clone nor Send/Sync. Its allocated token pins identity.
 #[derive(Debug)]
@@ -461,7 +461,7 @@ fn callbacks_borrow_metadata_and_move_original_failures_with_exact_mapped_argume
         )
         .unwrap(),
     );
-    assert!(std::ptr::eq(
+    assert!(core::ptr::eq(
         functions.signature(0).unwrap(),
         &functions.legacy[0]
     ));
@@ -550,7 +550,7 @@ fn versionless_callbacks_use_the_same_script_and_preserve_signed_zero_observatio
         )
         .unwrap(),
     );
-    assert!(std::ptr::eq(
+    assert!(core::ptr::eq(
         functions.project_signature(0).unwrap(),
         &functions.project[0]
     ));

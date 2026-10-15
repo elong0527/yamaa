@@ -1,5 +1,5 @@
 //! Owned reference catalogs and output-reference validation, without data access.
-use std::collections::BTreeMap;
+use alloc::{collections::BTreeMap, string::String, vec};
 
 use crate::value::ColumnType;
 mod joined_binding;
@@ -43,33 +43,21 @@ impl Default for Limits {
 }
 
 /// Rejected metadata or resource policy; unresolved language names are results.
-#[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Error {
-    #[error(
-        "reference binding limit: resource={resource:?}, limit={limit:?}, required={required:?}"
-    )]
     Limit {
         resource: &'static str,
         limit: usize,
         required: usize,
     },
-    #[error("reference binding size overflow")]
     SizeOverflow,
-    #[error("reference binding empty name")]
     EmptyName,
-    #[error("reference binding duplicate output")]
     DuplicateOutput,
-    #[error("reference binding duplicate dataset")]
     DuplicateDataset,
-    #[error("reference binding duplicate field")]
     DuplicateField,
-    #[error("reference binding invalid available output")]
     InvalidAvailableOutput,
-    #[error("reference binding invalid candidate dataset")]
     InvalidCandidateDataset,
-    #[error("reference binding qualified output query")]
     QualifiedOutputQuery,
-    #[error("reference binding bare qualified query")]
     BareQualifiedQuery,
 }
 
@@ -117,15 +105,15 @@ pub struct Catalog {
 #[derive(Debug)]
 struct RowJoinScope {
     driver: String,
-    groups: Option<std::vec::Vec<String>>,
+    groups: Option<alloc::vec::Vec<String>>,
 }
 #[derive(Debug)]
 pub(crate) struct JoinedRelation {
     pub source: usize,
     pub fields: BTreeMap<String, (usize, ColumnType)>,
     pub inference: crate::key_relation::Inference,
-    pub keys: std::vec::Vec<(String, usize)>,
-    pub schema: std::sync::Arc<crate::table::TableSchema>,
+    pub keys: alloc::vec::Vec<(String, usize)>,
+    pub schema: alloc::sync::Arc<crate::table::TableSchema>,
 }
 
 /// A kept relation used by a scalar callback, with its original key dependencies.
@@ -133,7 +121,7 @@ pub(crate) struct JoinedRelation {
 pub(crate) struct SelectedRelation {
     pub index: usize,
     pub fields: BTreeMap<String, (usize, ColumnType)>,
-    pub dependencies: std::vec::Vec<usize>,
+    pub dependencies: alloc::vec::Vec<usize>,
 }
 pub(crate) type SelectedRead<'a> = (crate::bound_expression::Read, ColumnType, &'a [usize]);
 
@@ -167,7 +155,7 @@ impl Catalog {
     }
     pub(crate) fn with_selected(
         mut self,
-        selected: std::vec::Vec<(String, SelectedRelation)>,
+        selected: alloc::vec::Vec<(String, SelectedRelation)>,
     ) -> Result<Self, Error> {
         limit(
             "datasets",
@@ -318,11 +306,11 @@ impl Catalog {
                     .map(String::from)
                     .ok_or(Error::InvalidAvailableOutput)
             })
-            .collect::<Result<std::vec::Vec<_>, _>>()?;
+            .collect::<Result<alloc::vec::Vec<_>, _>>()?;
         let retained_keys = keys
             .iter()
             .map(|name| (name.clone(), self.outputs[name].0))
-            .collect::<std::vec::Vec<_>>();
+            .collect::<alloc::vec::Vec<_>>();
         let mut bytes = 0usize;
         for (source, relation) in relations {
             bytes = bytes
@@ -338,7 +326,7 @@ impl Catalog {
             let names = keys
                 .iter()
                 .map(String::as_str)
-                .collect::<std::vec::Vec<_>>();
+                .collect::<alloc::vec::Vec<_>>();
             let inference =
                 crate::key_relation::infer(&self, &names, relation.fields, Default::default())?;
             let fields = relation
@@ -347,7 +335,7 @@ impl Catalog {
                 .enumerate()
                 .map(|(index, field)| (field.name.into(), (index, field.column_type)))
                 .collect();
-            let schema = std::sync::Arc::new(
+            let schema = alloc::sync::Arc::new(
                 crate::table::TableSchema::new(
                     relation
                         .fields
@@ -373,12 +361,12 @@ impl Catalog {
         }
         Ok(self)
     }
-    pub(crate) fn output_names(&self) -> std::vec::Vec<&str> {
+    pub(crate) fn output_names(&self) -> alloc::vec::Vec<&str> {
         let mut names = self
             .outputs
             .iter()
             .map(|(name, (index, _))| (*index, name.as_str()))
-            .collect::<std::vec::Vec<_>>();
+            .collect::<alloc::vec::Vec<_>>();
         names.sort_unstable_by_key(|(index, _)| *index);
         names.into_iter().map(|(_, name)| name).collect()
     }
@@ -412,7 +400,7 @@ impl Catalog {
         Ok(if owners.next().is_none() { first } else { None })
     }
     /// Borrow a declared relation's fields in stored column order.
-    pub(crate) fn fields(&self, name: &str) -> Option<std::vec::Vec<Field<'_>>> {
+    pub(crate) fn fields(&self, name: &str) -> Option<alloc::vec::Vec<Field<'_>>> {
         let dataset = self.datasets.get(name)?;
         let mut fields = dataset
             .fields
@@ -426,7 +414,7 @@ impl Catalog {
                     },
                 )
             })
-            .collect::<std::vec::Vec<_>>();
+            .collect::<alloc::vec::Vec<_>>();
         fields.sort_unstable_by_key(|(index, _)| *index);
         Some(fields.into_iter().map(|(_, field)| field).collect())
     }
@@ -463,7 +451,7 @@ impl Catalog {
             .iter()
             .map(|field| field.name)
             .chain(datasets.iter().flat_map(|dataset| {
-                std::iter::once(dataset.name).chain(dataset.fields.iter().map(|field| field.name))
+                core::iter::once(dataset.name).chain(dataset.fields.iter().map(|field| field.name))
             }));
         let bytes = names.clone().try_fold(0usize, |bytes, name| {
             bytes.checked_add(name.len()).ok_or(Error::SizeOverflow)

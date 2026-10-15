@@ -6,7 +6,12 @@ use super::{
     Document, DocumentNode as N, SchemaContext, SchemaDiagnostic, ValidationBudget, ValidationError,
 };
 use crate::diagnostic::ConditionCode;
-use std::vec;
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 
 #[derive(Clone, Copy)]
 enum Kind {

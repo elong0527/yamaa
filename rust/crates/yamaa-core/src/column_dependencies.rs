@@ -1,16 +1,13 @@
 //! Column-phase dependency rules over already-bound declaration indices.
-use std::vec;
+use alloc::{vec, vec::Vec};
 
 use crate::dependency_analysis::{self, Limits};
 
 /// Invalid compiler metadata or resource policy, separate from language diagnostics.
-#[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Error {
-    #[error("column dependencies graph: {0:?}")]
     Graph(dependency_analysis::Error),
-    #[error("column dependencies invalid key: key={key:?}")]
     InvalidKey { key: usize },
-    #[error("column dependencies duplicate key: key={key:?}")]
     DuplicateKey { key: usize },
 }
 

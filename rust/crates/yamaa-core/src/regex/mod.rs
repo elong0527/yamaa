@@ -1,7 +1,7 @@
 //! Bounded, host-independent R022 pattern compilation and matching.
 //! Shared by schema constraints, predicates and completed-string column checks.
 
-use std::vec;
+use alloc::{string::String, vec, vec::Vec};
 mod identifier_data;
 mod identifiers;
 mod parser;
@@ -61,13 +61,10 @@ pub enum Resource {
 }
 
 /// Invalid syntax owns REQ-0827. Unsupported features never masquerade as invalid syntax.
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CompileError {
-    #[error("regex invalid: byte={byte:?}, reason={reason:?}")]
     Invalid { byte: usize, reason: &'static str },
-    #[error("regex limit: resource={resource:?}, limit={limit:?}")]
     Limit { resource: Resource, limit: usize },
-    #[error("regex unsupported: byte={byte:?}, feature={feature:?}")]
     Unsupported { byte: usize, feature: &'static str },
 }
 
@@ -95,8 +92,7 @@ impl Default for MatchLimits {
 }
 
 /// A policy refusal cannot be confused with no match.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
-#[error("regex: resource={resource:?}, limit={limit:?}")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MatchError {
     pub resource: Resource,
     pub limit: usize,
@@ -196,7 +192,7 @@ struct Node {
     kind: Kind,
     byte: usize,
     width: Width,
-    captures: std::ops::Range<usize>,
+    captures: core::ops::Range<usize>,
 }
 
 /// Immutable postorder arena. Compilation never resolves fields or calls a host.
@@ -289,7 +285,7 @@ impl Pattern {
         let offsets: Vec<_> = subject
             .char_indices()
             .map(|(i, _)| i)
-            .chain(std::iter::once(subject.len()))
+            .chain(core::iter::once(subject.len()))
             .collect();
         for start in 0..=if full { 0 } else { chars.len() } {
             budget.work(1)?;
@@ -330,8 +326,8 @@ impl Pattern {
                 match task {
                     Task::FinishGroup(number, start) => {
                         state.captures[number] = Some((
-                            std::cmp::min(start, state.at),
-                            std::cmp::max(start, state.at),
+                            core::cmp::min(start, state.at),
+                            core::cmp::max(start, state.at),
                         ));
                     }
                     Task::RepeatEnd { id, count, before } => {

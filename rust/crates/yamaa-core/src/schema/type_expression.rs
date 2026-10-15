@@ -1,6 +1,7 @@
 //! REQ-0261/0262 type syntax. Unions are ordered descriptor lists, not strings.
 
-use std::ops::Range;
+use alloc::{string::String, vec::Vec};
+use core::ops::Range;
 
 /// One immutable type occurrence; children precede their containing type.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -38,11 +39,11 @@ pub enum TypeResource {
 }
 
 /// Byte locations refer to the original, untrimmed UTF-8 expression.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TypeError {
-    #[error("schema type expression invalid: byte={byte:?}")]
-    Invalid { byte: usize },
-    #[error("schema type expression limit: resource={resource:?}, limit={limit:?}")]
+    Invalid {
+        byte: usize,
+    },
     Limit {
         resource: TypeResource,
         limit: usize,

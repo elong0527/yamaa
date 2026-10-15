@@ -3,11 +3,14 @@
 use super::*;
 use crate::{
     dataset::{Check, Verification},
-    diagnostic::{ConditionCode as C, Diagnostic},
+    diagnostic::{ConditionCode as C, ContextValue as V, Diagnostic},
     value::Value,
 };
-use serde_json::Value as V;
-use std::collections::{BTreeMap, BTreeSet};
+use alloc::{
+    borrow::ToOwned,
+    collections::{BTreeMap, BTreeSet},
+    string::ToString,
+};
 
 fn present_field(d: &Document, node: usize, name: &str) -> Option<usize> {
     d.field(node, name)
@@ -21,15 +24,15 @@ fn string<'a>(d: &'a Document, node: usize, name: &str) -> Option<&'a str> {
 }
 fn scalar(d: &Document, node: usize) -> V {
     match &d.nodes()[node] {
-        N::Integer(value) => V::Number((value.clone()).parse().expect("canonical integer")),
-        N::Boolean(value) => V::Bool(*value),
+        N::Integer(value) => V::Integer(value.clone()),
+        N::Boolean(value) => V::Scalar(Value::Bool(*value)),
         N::Text(value) => s(value),
-        N::Float(value) => V::from(Value::float(*value)),
-        _ => V::Null,
+        N::Float(value) => V::Scalar(Value::float(*value)),
+        _ => V::Scalar(Value::Missing),
     }
 }
 fn s(value: &str) -> V {
-    V::String(value.into())
+    V::Scalar(Value::Str(value.into()))
 }
 fn finding(code: C, path: &str, fields: &[(&str, V)]) -> PreflightFinding {
     PreflightFinding::Scalar(Diagnostic {
@@ -49,7 +52,7 @@ fn checks(d: &Document, column: usize, name: &str) -> Vec<usize> {
     };
     let entries = match &d.nodes()[id] {
         N::Sequence(entries) => entries.as_slice(),
-        _ => std::slice::from_ref(&id),
+        _ => core::slice::from_ref(&id),
     };
     entries.iter().filter_map(|&id| d.field(id, name)).collect()
 }
@@ -338,8 +341,8 @@ pub(super) fn admit(
                 C::SubmissionReferenceRepeating,
                 "submission",
                 &[
-                    ("reference_data", V::Bool(true)),
-                    ("repeating", V::Bool(true)),
+                    ("reference_data", V::Scalar(Value::Bool(true))),
+                    ("repeating", V::Scalar(Value::Bool(true))),
                 ],
             ));
         }
@@ -541,7 +544,7 @@ pub(super) fn admit(
                         ("origin_type", s(&origin)),
                         (
                             "admitted",
-                            V::Array(admitted.iter().map(|kind| s(kind)).collect()),
+                            V::Sequence(admitted.iter().map(|kind| s(kind)).collect()),
                         ),
                     ],
                 ));

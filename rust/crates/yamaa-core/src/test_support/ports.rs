@@ -2,12 +2,12 @@
 use super::*;
 use crate::function_signature::InvocationPlan;
 use crate::function_signature::ProjectInvocationPlan;
+use alloc::{collections::VecDeque, sync::Arc};
 use function_invocation::Argument;
 use function_invocation::FunctionPort;
 use function_invocation::HostError;
 use output::{ArtifactEncoder, ArtifactPort};
 use run::{SourceDecoder, SourcePort};
-use std::{collections::VecDeque, sync::Arc};
 
 pub struct MetadataCaptureStep<E> {
     pub kind: metadata::Kind,

@@ -25,16 +25,16 @@ impl NumericReducer {
 /// Caller retains expression/source/path context. Argument indices include missing
 /// values. IncompatibleInputType maps to validation/REQ-0510; arithmetic retains
 /// the scalar diagnostic. CountOverflow is a capacity failure, not language truth.
-#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ReductionError {
-    #[error("reduction incompatible input type: argument={argument:?}, actual={actual:?}")]
-    IncompatibleInputType { argument: usize, actual: ValueType },
-    #[error("reduction arithmetic: argument={argument:?}, error={error:?}")]
+    IncompatibleInputType {
+        argument: usize,
+        actual: ValueType,
+    },
     Arithmetic {
         argument: usize,
         error: ArithmeticError,
     },
-    #[error("reduction count overflow")]
     CountOverflow,
 }
 

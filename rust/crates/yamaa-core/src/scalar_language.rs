@@ -1,11 +1,10 @@
 //! Raw scalar extremes and concatenation validation, before output conversion.
 use crate::{
-    diagnostic::{ConditionCode, Diagnostic},
+    diagnostic::{ConditionCode, ContextValue, Diagnostic},
     value::{compare_present, ColumnType, ComparisonError, Value},
 };
-use serde_json::Value as JsonValue;
-use std::cmp::Ordering;
-use std::vec;
+use alloc::{format, string::String, vec, vec::Vec};
+use core::cmp::Ordering;
 /// Missing operands are skipped; equality keeps the first authored value.
 pub fn replace_extreme(
     selected: &Value,
@@ -35,7 +34,7 @@ pub fn concat_diagnostic(path: &str, index: usize, value: &Value) -> Option<Diag
         Value::Missing => (
             ConditionCode::StrCaseMissing,
             String::from(path),
-            vec![("variable", JsonValue::String(source))],
+            vec![("variable", ContextValue::Scalar(Value::Str(source)))],
         ),
         other => {
             let actual = match other {
@@ -50,9 +49,9 @@ pub fn concat_diagnostic(path: &str, index: usize, value: &Value) -> Option<Diag
                 ConditionCode::StrCaseInput,
                 format!("{path}.{source}"),
                 vec![
-                    ("source", JsonValue::String(source)),
-                    ("expected", JsonValue::String("str".into())),
-                    ("actual", JsonValue::String(actual.into())),
+                    ("source", ContextValue::Scalar(Value::Str(source))),
+                    ("expected", ContextValue::Scalar(Value::Str("str".into()))),
+                    ("actual", ContextValue::Scalar(Value::Str(actual.into()))),
                 ],
             )
         }
@@ -79,8 +78,14 @@ fn kind_name(kind: ColumnType) -> &'static str {
     }
 }
 pub fn incomparable_diagnostic(sources: &[String], types: &[ColumnType], path: &str) -> Diagnostic {
-    let texts =
-        |items: Vec<String>| JsonValue::Array(items.into_iter().map(JsonValue::String).collect());
+    let texts = |items: Vec<String>| {
+        ContextValue::Sequence(
+            items
+                .into_iter()
+                .map(|value| ContextValue::Scalar(Value::Str(value)))
+                .collect(),
+        )
+    };
     Diagnostic {
         code: ConditionCode::ExtremeIncomparable,
         spec_paths: vec![path.into()],

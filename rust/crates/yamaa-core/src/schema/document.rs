@@ -1,8 +1,13 @@
 //! Owned decoded documents retain mapping order and arbitrary-width integers.
 //! Parsing YAML, including duplicate keys and non-finite normalization, is an adapter concern.
 
+use alloc::{
+    collections::BTreeSet,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 use num_bigint::BigInt;
-use std::{collections::BTreeSet, vec};
 
 /// One decoded occurrence. Children precede parents and have exactly one owner.
 #[derive(Clone, Debug, PartialEq)]
@@ -100,25 +105,16 @@ pub enum DocumentResource {
 }
 
 /// Invalid caller-authored arenas are transport defects, not authored schema errors.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DocumentError {
-    #[error("schema document invalid root")]
     InvalidRoot,
-    #[error("schema document invalid child")]
     InvalidChild,
-    #[error("schema document shared child")]
     SharedChild,
-    #[error("schema document unreachable node")]
     UnreachableNode,
-    #[error("schema document invalid integer")]
     InvalidInteger,
-    #[error("schema document non finite")]
     NonFinite,
-    #[error("schema document non scalar key")]
     NonScalarKey,
-    #[error("schema document duplicate key")]
     DuplicateKey,
-    #[error("schema document limit: resource={resource:?}, limit={limit:?}")]
     Limit {
         resource: DocumentResource,
         limit: usize,

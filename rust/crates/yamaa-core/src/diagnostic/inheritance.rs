@@ -1,8 +1,10 @@
 //! Pure inheritance traversal causes with original declaring-file provenance.
 use super::{
-    ConditionCode as C, Diagnostic, ProjectionBudget, ProjectionError, MAX_PROJECTION_BYTES,
+    ConditionCode as C, ContextValue, Diagnostic, ProjectionBudget, ProjectionError,
+    MAX_PROJECTION_BYTES,
 };
-use serde_json::Value as JsonValue;
+use crate::value::Value;
+use alloc::{string::String, vec};
 
 /// Borrow facts retained by the traversal. This grants no source authority and
 /// leaves opaque host errors, schema-arena findings and policy failures separate.
@@ -28,8 +30,8 @@ pub enum InheritanceFinding<'a> {
     },
 }
 
-fn text(value: &str) -> JsonValue {
-    JsonValue::String(value.into())
+fn text(value: &str) -> ContextValue {
+    ContextValue::Scalar(Value::Str(value.into()))
 }
 
 impl InheritanceFinding<'_> {
@@ -128,7 +130,7 @@ impl InheritanceFinding<'_> {
                 );
                 context.insert(
                     "cycle".into(),
-                    JsonValue::Array(path.iter().map(|s| text(s)).collect()),
+                    ContextValue::Sequence(path.iter().map(|s| text(s)).collect()),
                 );
                 context.insert("source".into(), text(&path[path.len() - 2]));
                 (C::InheritanceCycle, "parents")

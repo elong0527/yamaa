@@ -9,8 +9,8 @@ use crate::{
     table::{CellError, TableAccess, TableSchema, ValueRef},
     value::Value,
 };
-use std::rc::Rc;
-use std::{
+use alloc::{rc::Rc, string::String, vec::Vec};
+use core::{
     cell::{Ref, RefCell},
     marker::PhantomData,
 };
@@ -193,7 +193,7 @@ impl EventLog {
 
 /// Immutable owned rows with observable schema/cardinality/cell access.
 /// Types are fixture declarations, not a codec or a conversion policy.
-pub struct FixtureTable<E = std::convert::Infallible> {
+pub struct FixtureTable<E = core::convert::Infallible> {
     schema: TableSchema,
     rows: Vec<Vec<Value>>,
     log: EventLog,

@@ -1,4 +1,5 @@
 //! Qualified stored-field scope and grouping rules over immutable catalog metadata.
+use alloc::vec::Vec;
 
 use crate::{
     reference_binding::{Binding, Catalog, Error},

@@ -236,7 +236,7 @@ pub(super) fn bind(
         return Err(BindError::Internal);
     };
     Ok(bound.map(|expression| Expression::StrPad {
-        source: std::boxed::Box::new(Assignment {
+        source: alloc::boxed::Box::new(Assignment {
             column,
             path,
             expression,
@@ -283,7 +283,7 @@ pub(super) fn bind_row(
         return Err(BindError::Internal);
     };
     Ok(bound.map(|expression| Expression::StrPad {
-        source: std::boxed::Box::new(Assignment {
+        source: alloc::boxed::Box::new(Assignment {
             column,
             path,
             expression,

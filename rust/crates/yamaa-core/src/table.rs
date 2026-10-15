@@ -1,6 +1,6 @@
 //! Borrowed, normalized cells and ordered schema, independent of storage.
 
-use std::collections::BTreeSet;
+use alloc::{collections::BTreeSet, string::String, vec::Vec};
 
 use crate::{
     temporal::{Date, DateTime},
@@ -60,11 +60,9 @@ pub struct Column {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TableSchema(Vec<Column>);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SchemaError {
-    #[error("table column {column} has an empty name")]
     EmptyName { column: usize },
-    #[error("table column {column} repeats an earlier name")]
     DuplicateName { column: usize },
 }
 
@@ -90,11 +88,9 @@ impl TableSchema {
 }
 
 /// Port failures and invalid coordinates never stand in for a missing cell.
-#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum CellError<E> {
-    #[error("table cell ({row}, {column}) is out of bounds")]
     OutOfBounds { row: usize, column: usize },
-    #[error("table access failed: {0:?}")]
     Access(E),
 }
 

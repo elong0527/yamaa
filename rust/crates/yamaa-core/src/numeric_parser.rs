@@ -4,7 +4,7 @@
 //! grammar function; acceptance does not imply evaluator support. Resource limits
 //! are parser policy, separate from language conditions and lifecycle handlers.
 
-use std::collections::BTreeSet;
+use alloc::{collections::BTreeSet, string::String, vec::Vec};
 
 use crate::numeric::{BinaryOperator, UnaryOperator};
 
@@ -55,15 +55,12 @@ pub enum ParseResource {
 }
 
 /// Grammar-owned failure context, retaining the written function name as a span.
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GrammarFailure {
-    #[error("numeric parser invalid expression")]
     InvalidExpression,
-    #[error("numeric parser prohibited construct: construct={construct:?}")]
-    ProhibitedConstruct { construct: &'static str },
-    #[error(
-        "numeric parser prohibited function: name={name:?}, argument_count={argument_count:?}"
-    )]
+    ProhibitedConstruct {
+        construct: &'static str,
+    },
     ProhibitedFunction {
         name: SourceSpan,
         argument_count: Option<usize>,
@@ -86,14 +83,12 @@ impl GrammarFailure {
 }
 
 /// A grammar failure or a separate resource-policy outcome. No handler is applied.
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ParseError {
-    #[error("numeric parser grammar: position={position:?}, failure={failure:?}")]
     Grammar {
         position: SourcePosition,
         failure: GrammarFailure,
     },
-    #[error("numeric parser limit: position={position:?}, resource={resource:?}, limit={limit:?}")]
     Limit {
         position: SourcePosition,
         resource: ParseResource,
@@ -229,8 +224,8 @@ impl ParsedNumeric {
         root: usize,
     ) -> Self {
         use crate::aggregate_parser::ParsedKind as A;
-        use std::collections::BTreeMap;
-        let mut pending = std::vec![root];
+        use alloc::collections::BTreeMap;
+        let mut pending = alloc::vec![root];
         let mut selected = Vec::new();
         while let Some(id) = pending.pop() {
             selected.push(id);

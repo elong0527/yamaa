@@ -7,6 +7,11 @@ use crate::conversion::{convert, ConversionError};
 use crate::evaluation::NumericResolver;
 use crate::numeric_compiler::{CompiledEvaluationError, CompiledNumeric};
 use crate::value::{ColumnType, Value};
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+    vec::Vec,
+};
 
 /// Handler sites supported by this application slice, not the full language registry.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -48,8 +53,7 @@ pub struct HandlerCount {
 }
 
 /// Explicit resource failure rather than wrapped or saturated audit data.
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-#[error("handler count overflow at {spec_path} for {handler:?}")]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HandlerCountOverflow {
     pub spec_path: String,
     pub handler: HandlerKind,
@@ -136,23 +140,19 @@ pub use crate::conversion::LiteralHandler;
 
 /// Failures retain original expression provenance or completed-result conversion data.
 /// Accounting overflow is a resource failure, not a normative conversion condition.
-#[derive(Debug, PartialEq, thiserror::Error)]
+#[derive(Debug, PartialEq)]
 pub enum NumericLifecycleError<E> {
-    #[error("numeric lifecycle evaluation: {0:?}")]
     Evaluation(CompiledEvaluationError<E>),
-    #[error("numeric lifecycle conversion: spec_path={spec_path:?}, error={error:?}")]
     Conversion {
         spec_path: String,
         error: ConversionError,
     },
-    #[error("numeric lifecycle handler conversion: spec_path={spec_path:?}, column_path={column_path:?}, original={original:?}, replacement={replacement:?}")]
     HandlerConversion {
         spec_path: String,
         column_path: String,
         original: ConversionError,
         replacement: ConversionError,
     },
-    #[error("numeric lifecycle accounting: error={error:?}, column_path={column_path:?}, original={original:?}")]
     Accounting {
         error: HandlerCountOverflow,
         column_path: String,
@@ -161,7 +161,6 @@ pub enum NumericLifecycleError<E> {
 }
 
 /// Shared completed-value recovery failures; expression errors never enter this stage.
-#[derive(Debug)]
 pub(crate) enum ConversionRecoveryError {
     Conversion {
         spec_path: String,
@@ -301,13 +300,6 @@ impl NumericDerivation {
         })
     }
 }
-
-impl std::fmt::Display for ConversionRecoveryError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "numeric lifecycle: {self:?}")
-    }
-}
-impl std::error::Error for ConversionRecoveryError {}
 
 #[cfg(test)]
 mod tests {

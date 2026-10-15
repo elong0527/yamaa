@@ -4,7 +4,7 @@ use super::{
     NormalizationBudget, NormalizationError, NormalizationResource, SchemaAliasKind, SchemaField,
     SchemaShape, SchemaStructure, SpecificationDocument, TypeExpression, TypeNode, ValidationError,
 };
-use std::collections::BTreeMap;
+use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
 
 /// An admitted expression dictionary path and its exact normalized occurrence.
 /// Construction is private; arbitrary metadata keys cannot invent a resource use.

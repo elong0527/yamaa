@@ -3,6 +3,7 @@ use crate::{
     aggregate_parser::{parse_aggregate, ParseError, ParsedAggregate, ParsedKind, Reducer},
     numeric_compiler::{compile_aggregate_subtree, CompileError, CompileLimits, CompiledNumeric},
 };
+use alloc::{string::String, vec::Vec};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum AggregateOperand {
@@ -70,13 +71,10 @@ impl CompiledAggregate {
         self.work
     }
 }
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AggregateCompileError {
-    #[error("aggregate compiler parse: {0:?}")]
     Parse(ParseError),
-    #[error("aggregate compiler numeric: {0:?}")]
     Numeric(CompileError),
-    #[error("aggregate compiler metadata limit: limit={limit:?}, required={required:?}")]
     MetadataLimit {
         limit: usize,
         required: Option<usize>,

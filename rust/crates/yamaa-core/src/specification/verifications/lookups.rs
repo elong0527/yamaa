@@ -15,7 +15,7 @@ fn unknown(predicate: &BoundPredicate, name: &str) -> Diagnostic {
         spec_paths: vec![predicate.plan().spec_path().into()],
         context: [(
             "identifier".into(),
-            JsonValue::from(Value::Str(name.into())),
+            ContextValue::Scalar(Value::Str(name.into())),
         )]
         .into(),
         source_span: None,

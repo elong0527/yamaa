@@ -1,20 +1,19 @@
 //! Own original-document preflight vocabulary and authored geometry at its cause.
 use super::PreflightFinding;
 use crate::{
-    diagnostic::{ConditionCode as C, Context, Diagnostic},
-    value::ColumnType,
+    diagnostic::{ConditionCode as C, Context, ContextValue as V, Diagnostic},
+    value::{ColumnType, Value},
 };
-use serde_json::Value as V;
-use std::vec;
+use alloc::{format, string::String, vec, vec::Vec};
 
 fn text(value: &str) -> V {
-    V::String(value.into())
+    V::Scalar(Value::Str(value.into()))
 }
 fn optional_text(value: &Option<String>) -> V {
-    value.as_deref().map_or(V::Null, text)
+    value.as_deref().map_or(V::Scalar(Value::Missing), text)
 }
 fn texts(values: &[String]) -> V {
-    V::Array(values.iter().map(|value| text(value)).collect())
+    V::Sequence(values.iter().map(|value| text(value)).collect())
 }
 fn context<const N: usize>(fields: [(&str, V); N]) -> Context {
     fields
@@ -43,9 +42,8 @@ impl PreflightFinding {
                 diagnostic.spec_paths.iter().for_each(|path| visit(path));
                 fn values(value: &V, visit: &mut impl FnMut(&str)) {
                     match value {
-                        V::String(text) => visit(text),
-                        V::Number(number) => visit(number.as_str()),
-                        V::Array(items) => items.iter().for_each(|value| values(value, visit)),
+                        V::Scalar(Value::Str(text)) | V::Integer(text) => visit(text),
+                        V::Sequence(items) => items.iter().for_each(|value| values(value, visit)),
                         _ => (),
                     }
                 }
@@ -162,12 +160,9 @@ impl PreflightFinding {
                 C::LiteralIntegerOverflow,
                 vec![path.clone()],
                 context([
-                    (
-                        "actual",
-                        V::Number((value.clone()).parse().expect("canonical integer")),
-                    ),
-                    ("minimum", V::from(i64::MIN)),
-                    ("maximum", V::from(i64::MAX)),
+                    ("actual", V::Integer(value.clone())),
+                    ("minimum", V::Scalar(Value::Int(i64::MIN))),
+                    ("maximum", V::Scalar(Value::Int(i64::MAX))),
                 ]),
             ),
             Self::Log(finding) => return finding.diagnostic(),
@@ -277,7 +272,7 @@ impl PreflightFinding {
                 vec!["base".into()],
                 match dataset {
                     Some(dataset) => context([("dataset", text(dataset))]),
-                    None => context([("row", V::Null)]),
+                    None => context([("row", V::Scalar(Value::Missing))]),
                 },
             ),
             Self::DomainInputCollision { domain } => (

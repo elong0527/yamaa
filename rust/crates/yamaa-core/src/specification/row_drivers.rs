@@ -80,7 +80,7 @@ pub(super) fn extend_catalog(
     secondary: &[crate::dataset::SecondarySource],
     driver: &str,
 ) -> Result<Catalog, BindError> {
-    let fields = std::iter::once(primary)
+    let fields = core::iter::once(primary)
         .chain(secondary.iter().map(|source| &source.schema))
         .map(|schema| {
             schema
@@ -93,7 +93,7 @@ pub(super) fn extend_catalog(
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
-    let relations = std::iter::once(name)
+    let relations = core::iter::once(name)
         .chain(secondary.iter().map(|source| source.name.as_str()))
         .enumerate()
         .filter(|(_, name)| *name != driver)

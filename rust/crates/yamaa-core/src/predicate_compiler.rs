@@ -1,5 +1,6 @@
 //! Lower bounded original predicate syntax into the shared executable plan.
 //! No identifier resolution, constant folding or host semantic objects occur here.
+use alloc::vec::Vec;
 
 use crate::{
     predicate::{self, Node, Plan, Scalar},
@@ -13,14 +14,11 @@ pub struct Limits {
     pub plan: predicate::Limits,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error {
-    #[error("predicate compiler parse: {0:?}")]
     Parse(predicate_parser::ParseError),
-    #[error("predicate compiler plan: {0:?}")]
     Plan(predicate::PlanError),
     /// Parser/compiler structural disagreement, never a language diagnostic.
-    #[error("predicate compiler internal")]
     Internal,
 }
 

@@ -1,6 +1,6 @@
 //! Pattern grammar and static validation, independent of a matching host library.
 use super::*;
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
 
 /// Build an arena, resolve all backreferences, then qualify fixed-width lookbehind.
 pub(super) fn compile(
@@ -113,7 +113,7 @@ impl Parser<'_> {
         kind: Kind,
         byte: usize,
         width: Width,
-        captures: std::ops::Range<usize>,
+        captures: core::ops::Range<usize>,
     ) -> Result<usize, CompileError> {
         if self.nodes.len() >= self.limits.nodes {
             return Err(self.limit(Resource::Nodes, self.limits.nodes));

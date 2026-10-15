@@ -1,19 +1,19 @@
 //! Construct diagnostic context at the numeric/conversion semantic boundary.
 
-use super::{ConditionCode, Context, Diagnostic};
+use super::{ConditionCode, Context, ContextValue, Diagnostic};
 use crate::{
-    conversion::{ConversionError, ConversionReason},
+    conversion::{ConversionError, ConversionReason, ConversionValue},
     evaluation::{EvaluationErrorKind, NumericCondition, Operand},
     numeric::{ArithmeticError, ArithmeticErrorKind},
     numeric_compiler::CompiledEvaluationError,
     value::{ColumnType, Value, ValueType},
 };
-use serde_json::Value as JsonValue;
+use alloc::{format, string::String, string::ToString, vec};
 
-fn scalar(value: Value) -> JsonValue {
-    JsonValue::from(value)
+fn scalar(value: Value) -> ContextValue {
+    ContextValue::Scalar(value)
 }
-fn text(value: impl Into<String>) -> JsonValue {
+fn text(value: impl Into<String>) -> ContextValue {
     scalar(Value::Str(value.into()))
 }
 fn type_name(value: ValueType) -> &'static str {
@@ -54,7 +54,13 @@ impl ConversionError {
                 text(self.source_type().map_or("missing", type_name)),
             ),
             ("to".into(), text(target_name(self.target))),
-            ("value".into(), self.value),
+            (
+                "value".into(),
+                match self.value {
+                    ConversionValue::Runtime(value) => scalar(value),
+                    ConversionValue::Integer(integer) => ContextValue::Integer(integer),
+                },
+            ),
         ]);
         Diagnostic {
             code,

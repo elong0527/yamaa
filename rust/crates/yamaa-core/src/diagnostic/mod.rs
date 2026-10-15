@@ -1,5 +1,4 @@
-//! Typed semantic diagnostics and canonical owned JSON context.
-//! Public issue envelopes and host exceptions belong to adapters.
+//! Portable semantic diagnostics. Serialization and host exceptions stay outside core.
 //!
 //! Registry keys identify causes, not public condition strings: the language uses
 //! `conversion_failed` for several requirements. Migrated causes cover numeric
@@ -7,9 +6,9 @@
 //! original-document preflight and output declarations. Other families retain their existing error types
 //! until their semantics and provenance migrate here.
 
-use std::collections::BTreeMap;
+use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
-use crate::numeric_parser::SourceSpan;
+use crate::{numeric_parser::SourceSpan, value::Value};
 
 mod dataset;
 pub use dataset::DatasetFinding;
@@ -43,11 +42,9 @@ pub use project_lock::{
 
 /// Context projection failures are resource/representation refusals, never a
 /// replacement semantic cause. Admission precedes every owned context copy.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProjectionError {
-    #[error("diagnostic limit")]
     Limit,
-    #[error("diagnostic invalid context")]
     InvalidContext,
 }
 
@@ -521,8 +518,18 @@ conditions! {
     ParquetFieldValueInvalid => ("ingest", "source_field_value_invalid", Some("REQ-1041")),
 }
 
-/// JSON context retains arbitrary-width integer numbers and ordered sequences.
-pub type Context = BTreeMap<String, serde_json::Value>;
+/// Owned context retains scalar kinds and ordered sequences. Diagnostic integers
+/// can exceed runtime i64; their canonical decimal text must not be narrowed by a
+/// host or mistaken for a successful scalar result.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ContextValue {
+    Scalar(Value),
+    Integer(String),
+    Sequence(Vec<ContextValue>),
+    Object(BTreeMap<String, ContextValue>),
+}
+
+pub type Context = BTreeMap<String, ContextValue>;
 
 /// Owned semantic data from the failure site. Missing optional geometry means
 /// unavailable, not zero; ordered paths/routes preserve the original evaluation.

@@ -349,7 +349,7 @@ pub(super) fn bind(
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Expression>, BindError> {
     let mut operands = Vec::new();
-    for (name, field) in std::iter::once((operation.source(), "source")).chain(
+    for (name, field) in core::iter::once((operation.source(), "source")).chain(
         operation
             .bound_source()
             .map(|source| (source, "not_before")),
@@ -400,7 +400,7 @@ pub(super) fn bind_row(
     intermediates: &[Option<crate::dataset::Intermediate>],
 ) -> Result<Option<Expression>, BindError> {
     let mut operands = Vec::new();
-    for (name, field) in std::iter::once((operation.source(), "source")).chain(
+    for (name, field) in core::iter::once((operation.source(), "source")).chain(
         operation
             .bound_source()
             .map(|source| (source, "not_before")),

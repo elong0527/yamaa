@@ -2,10 +2,10 @@
 use super::*;
 use crate::{
     bound_expression::BoundPredicate,
-    diagnostic::{ConditionCode, Diagnostic},
+    diagnostic::{ConditionCode, ContextValue, Diagnostic},
     predicate_compiler,
+    value::Value,
 };
-use serde_json::Value as JsonValue;
 
 #[derive(Debug)]
 pub(super) struct RootFilter {
@@ -65,7 +65,7 @@ impl RootFilter {
             Err(error) => return Err(BindError::PredicatePolicy(error.clone())),
         };
         let start = findings.len();
-        let mut seen = std::collections::BTreeSet::new();
+        let mut seen = alloc::collections::BTreeSet::new();
         let mut bindings = Vec::new();
         for identifier in plan.identifiers() {
             if !seen.insert(identifier) {
@@ -81,7 +81,9 @@ impl RootFilter {
                         ("required_phase", "row_filter"),
                     ]
                     .into_iter()
-                    .map(|(name, text)| (name.into(), JsonValue::String(text.into())))
+                    .map(|(name, text)| {
+                        (name.into(), ContextValue::Scalar(Value::Str(text.into())))
+                    })
                     .collect(),
                     source_span: None,
                     operand_route: None,

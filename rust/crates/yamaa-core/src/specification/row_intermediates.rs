@@ -30,7 +30,7 @@ pub(super) fn admit_sources(
         fields = fields.checked_add(1).ok_or_else(overflow)?;
         bytes = bytes
             .checked_add(column.name.len())
-            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<crate::table::Column>()))
+            .and_then(|bytes| bytes.checked_add(core::mem::size_of::<crate::table::Column>()))
             .ok_or_else(overflow)?;
     }
     let mut reads = 0usize;
@@ -134,7 +134,7 @@ pub(super) fn admit(d: &Document, templates: usize) -> Result<(), PrepareError> 
         };
         bytes
             .checked_add(text)?
-            .checked_add(std::mem::size_of::<N>())
+            .checked_add(core::mem::size_of::<N>())
     });
     let expanded = bytes
         .and_then(|bytes| bytes.checked_mul(templates.checked_add(1)?))

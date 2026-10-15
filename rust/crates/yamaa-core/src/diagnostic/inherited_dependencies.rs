@@ -1,8 +1,7 @@
 //! Complete inherited-column dependency findings, admitted before any projection.
-use super::{ConditionCode as C, Diagnostic, ProjectionBudget, ProjectionError};
-use crate::schema::InheritanceDependencyIssue as Issue;
-use serde_json::Value as JsonValue;
-use std::vec;
+use super::{ConditionCode as C, ContextValue, Diagnostic, ProjectionBudget, ProjectionError};
+use crate::{schema::InheritanceDependencyIssue as Issue, value::Value};
+use alloc::{format, vec, vec::Vec};
 
 /// Preserve all dependency findings in the resolver's order. Cycle membership is
 /// the unresolved authored column list, rather than a closed traversal loop.
@@ -47,8 +46,14 @@ pub fn inheritance_dependency_diagnostics(
             let mut context = super::Context::new();
             let (code, spec_paths) = match issue {
                 Issue::Unknown { column, dependency } => {
-                    context.insert("column".into(), JsonValue::String(column.clone()));
-                    context.insert("dependency".into(), JsonValue::String(dependency.clone()));
+                    context.insert(
+                        "column".into(),
+                        ContextValue::Scalar(Value::Str(column.clone())),
+                    );
+                    context.insert(
+                        "dependency".into(),
+                        ContextValue::Scalar(Value::Str(dependency.clone())),
+                    );
                     (
                         C::InheritanceUnknownDependency,
                         vec![format!("columns.{column}.derivation")],
@@ -57,10 +62,10 @@ pub fn inheritance_dependency_diagnostics(
                 Issue::Cycle { columns, paths, .. } => {
                     context.insert(
                         "cycle".into(),
-                        JsonValue::Array(
+                        ContextValue::Sequence(
                             columns
                                 .iter()
-                                .map(|column| JsonValue::String(column.clone()))
+                                .map(|column| ContextValue::Scalar(Value::Str(column.clone())))
                                 .collect(),
                         ),
                     );

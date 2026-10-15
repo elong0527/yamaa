@@ -14,7 +14,7 @@ use crate::{
     table::{Column, TableSchema},
     value::ColumnType,
 };
-use std::{collections::BTreeMap, vec};
+use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
 
 mod compiler_limits;
 pub use compiler_limits::CompilerLimit;
@@ -72,19 +72,13 @@ pub struct UnsupportedFeature {
     pub operation: String,
     pub path: String,
 }
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum PrepareError {
-    #[error("specification limit: {0:?}")]
     Limit(CompilerLimit),
-    #[error("specification unsupported: {0:?}")]
     Unsupported(Vec<UnsupportedFeature>),
-    #[error("specification numeric: path={path:?}, error={error:?}")]
     Numeric { path: String, error: CompileError },
-    #[error("specification invalid: {0:?}")]
     Invalid(Vec<PreflightFinding>),
-    #[error("specification output schema: {0:?}")]
     OutputSchema(crate::table::SchemaError),
-    #[error("specification internal")]
     Internal,
 }
 /// Default width policy shared by compilation, producer contracts and host decoders.
@@ -149,7 +143,7 @@ pub enum PreflightFinding {
         value: String,
     },
     ProjectFunction(FunctionFinding),
-    ProjectCodelist(std::boxed::Box<crate::project_codelist_binding::Finding>),
+    ProjectCodelist(alloc::boxed::Box<crate::project_codelist_binding::Finding>),
     RowPhase {
         path: String,
         identifier: String,
@@ -217,27 +211,17 @@ pub enum PreflightFinding {
         dataset: String,
     },
 }
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum BindError {
-    #[error("specification internal")]
     Internal,
-    #[error("specification predicate diagnostic limit")]
     PredicateDiagnosticLimit,
-    #[error("specification source count")]
     SourceCount,
-    #[error("specification predicate policy: {0:?}")]
     PredicatePolicy(crate::predicate_compiler::Error),
-    #[error("specification invalid predicate binding: {0:?}")]
     InvalidPredicateBinding(crate::bound_expression::BindingError),
-    #[error("specification invalid: {0:?}")]
     Invalid(Vec<BindFinding>),
-    #[error("specification catalog: {0:?}")]
     Catalog(reference_binding::Error),
-    #[error("specification dependency policy: {0:?}")]
     DependencyPolicy(column_dependencies::Error),
-    #[error("specification invalid numeric binding: {0:?}")]
     InvalidNumericBinding(crate::bound_expression::BindingError),
-    #[error("specification invalid plan: {0:?}")]
     InvalidPlan(crate::dataset::PlanError),
 }
 #[derive(Debug)]
@@ -360,10 +344,10 @@ impl SourceDeclaration {
 }
 #[derive(Clone, Debug)]
 enum Operation {
-    Odm(std::boxed::Box<odm::Declaration>),
-    Aggregate(std::boxed::Box<aggregates::Declaration>),
-    MappingCut(std::boxed::Box<mapping_cut::Declaration>),
-    Scalar(std::boxed::Box<scalar::Declaration>),
+    Odm(alloc::boxed::Box<odm::Declaration>),
+    Aggregate(alloc::boxed::Box<aggregates::Declaration>),
+    MappingCut(alloc::boxed::Box<mapping_cut::Declaration>),
+    Scalar(alloc::boxed::Box<scalar::Declaration>),
     StrContains(crate::text_extract::StringExtract),
     Flag(flags::Declaration),
     StrExtract(crate::text_extract::StringExtract),
@@ -371,9 +355,9 @@ enum Operation {
     Case(Vec<cases::Branch>),
     ProjectFunction(usize),
     Literal(crate::value::Value),
-    Window(std::boxed::Box<windows::Declaration>),
-    Source(std::boxed::Box<source_expressions::Declaration>),
-    FirstAvailable(std::boxed::Box<source_expressions::FirstAvailable>),
+    Window(alloc::boxed::Box<windows::Declaration>),
+    Source(alloc::boxed::Box<source_expressions::Declaration>),
+    FirstAvailable(alloc::boxed::Box<source_expressions::FirstAvailable>),
     Compute(CompiledNumeric),
     Round(crate::dataset::Rounding),
     Temporal(crate::dataset::Temporal),
@@ -705,7 +689,7 @@ fn preflight(spec: &SpecificationDocument) -> Result<Vec<PreflightFinding>, Prep
             finding.spec_paths.push(format!("rows[{previous}].id"));
             finding.context.insert(
                 "identifier".into(),
-                serde_json::Value::String(identity.into()),
+                crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(identity.into())),
             );
             findings.push(PreflightFinding::Scalar(finding));
         }
@@ -1199,7 +1183,9 @@ impl PreparedSpecification {
                     spec_paths: vec![format!("{prefix}.encoding")],
                     context: crate::diagnostic::Context::from([(
                         "dataset".into(),
-                        serde_json::Value::String(text(d, name)?.into()),
+                        crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(
+                            text(d, name)?.into(),
+                        )),
                     )]),
                     source_span: None,
                     operand_route: None,
@@ -1506,9 +1492,9 @@ impl PreparedSpecification {
                         &mut extra,
                         &intermediates,
                     )?;
-                    Some(Operation::Source(std::boxed::Box::new(source)))
+                    Some(Operation::Source(alloc::boxed::Box::new(source)))
                 }
-                "mapping" | "cut" => Some(Operation::MappingCut(std::boxed::Box::new(
+                "mapping" | "cut" => Some(Operation::MappingCut(alloc::boxed::Box::new(
                     mapping_cut::prepare(d, payload, op, &path, &intermediates, &mut extra)?,
                 ))),
                 "first_available" => {
@@ -1519,14 +1505,14 @@ impl PreparedSpecification {
                         &mut extra,
                         &intermediates,
                     )?;
-                    Some(Operation::FirstAvailable(std::boxed::Box::new(selection)))
+                    Some(Operation::FirstAvailable(alloc::boxed::Box::new(selection)))
                 }
                 "row_number"
                 | "rank"
                 | "row_value"
                 | "previous_non_missing"
                 | "locf"
-                | "baseline_flag" => Some(Operation::Window(std::boxed::Box::new(
+                | "baseline_flag" => Some(Operation::Window(alloc::boxed::Box::new(
                     windows::Declaration::prepare(d, payload, op, &path, limits, &mut extra)?,
                 ))),
                 _ => match derivations::prepare_value_with_driver(
@@ -1670,7 +1656,7 @@ impl PreparedSpecification {
             })
     }
     pub fn verification_identity(&self, path: &str) -> Option<&str> {
-        std::iter::once(&self.verifications)
+        core::iter::once(&self.verifications)
             .chain(&self.column_verifications)
             .find_map(|group| {
                 group
@@ -2201,10 +2187,10 @@ impl PreparedSpecification {
                                 } => crate::dataset::SelectionRead::Collect {
                                     column,
                                     identifier,
-                                    filter: filter.map(std::boxed::Box::new),
+                                    filter: filter.map(alloc::boxed::Box::new),
                                 },
                                 expression => crate::dataset::SelectionRead::Expression(
-                                    std::boxed::Box::new(crate::dataset::Assignment {
+                                    alloc::boxed::Box::new(crate::dataset::Assignment {
                                         column,
                                         expression,
                                         path: operand_path.clone(),
@@ -2217,7 +2203,7 @@ impl PreparedSpecification {
                             });
                         }
                     }
-                    Some(Expression::FirstAvailable(std::boxed::Box::new(
+                    Some(Expression::FirstAvailable(alloc::boxed::Box::new(
                         crate::dataset::FirstAvailable::new(operands, selection.missing.clone()),
                     )))
                 }

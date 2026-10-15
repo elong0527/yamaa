@@ -1186,8 +1186,6 @@ dependencies = [
  "libm",
  "num-bigint",
  "ryu",
- "serde_json",
- "thiserror",
 ]
 
 [[package]]

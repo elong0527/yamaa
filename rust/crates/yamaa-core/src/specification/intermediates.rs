@@ -5,7 +5,7 @@ use crate::{
     predicate_compiler,
     value::Value,
 };
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 type UniqueDeclarations = Vec<(String, Vec<(String, String)>, Option<String>)>;
 
@@ -25,10 +25,10 @@ struct Declaration {
     unique: UniqueDeclarations,
     derivations: Vec<intermediate_derivations::Derivation>,
     driver_prohibited: Vec<String>,
-    driver_keys: Option<std::sync::Arc<TableSchema>>,
+    driver_keys: Option<alloc::sync::Arc<TableSchema>>,
 }
 #[derive(Debug, Default)]
-pub(super) struct Declarations(std::sync::Arc<Vec<Declaration>>, Option<String>);
+pub(super) struct Declarations(alloc::sync::Arc<Vec<Declaration>>, Option<String>);
 impl Declarations {
     pub(super) fn owns_filter_type_finding(&self, finding: &crate::diagnostic::Diagnostic) -> bool {
         use crate::diagnostic::ConditionCode as C;
@@ -85,7 +85,7 @@ impl Declarations {
         Ok(())
     }
     pub(super) fn for_reader(&self, reader: &str) -> Self {
-        Self(std::sync::Arc::clone(&self.0), Some(reader.into()))
+        Self(alloc::sync::Arc::clone(&self.0), Some(reader.into()))
     }
     pub(super) fn reader(&self) -> Option<&str> {
         self.1.as_deref()
@@ -285,7 +285,7 @@ impl Declarations {
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
-        let driver_key_schema = std::sync::Arc::new(
+        let driver_key_schema = alloc::sync::Arc::new(
             TableSchema::new(
                 keys.iter()
                     .map(|&key| output.columns()[key].clone())
@@ -309,7 +309,7 @@ impl Declarations {
                             .is_some_and(|node| text(d, node).is_ok_and(|driver| driver == name))
                     })
                 });
-            let driver_keys = row_driver.then(|| std::sync::Arc::clone(&driver_key_schema));
+            let driver_keys = row_driver.then(|| alloc::sync::Arc::clone(&driver_key_schema));
             let range = intermediate_range::prepare(d, id, &path, name)?;
             let columns = intermediate_range::prepare_columns(d, id, limits)?;
             let dataset = text(d, field(d, id, "dataset")?)?;
@@ -493,7 +493,7 @@ impl Declarations {
                 .field(id, "verifications")
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
             {
-                let mut identities = std::collections::BTreeSet::new();
+                let mut identities = alloc::collections::BTreeSet::new();
                 for (check_index, &check) in sequence(d, checks)?.iter().enumerate() {
                     let payload = field(d, check, "unique")?;
                     let check_path = format!("{path}.verifications[{check_index}].unique");
@@ -551,7 +551,7 @@ impl Declarations {
             let derivations = intermediate_derivations::prepare(
                 d, id, &path, dataset, limits, project, extraction, templates, &result,
             )?;
-            std::sync::Arc::get_mut(&mut result.0)
+            alloc::sync::Arc::get_mut(&mut result.0)
                 .ok_or(PrepareError::Internal)?
                 .push(Declaration {
                     name: name.into(),
@@ -672,7 +672,7 @@ impl Declarations {
                     column_type: column.kind,
                 })
                 .collect::<Vec<_>>();
-            let current_sources = std::iter::once(driver)
+            let current_sources = core::iter::once(driver)
                 .chain((0..sources.len()).filter(|&index| index != driver))
                 .collect::<Vec<_>>();
             let source_fields = current_sources

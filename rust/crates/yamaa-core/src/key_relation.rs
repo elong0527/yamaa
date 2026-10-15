@@ -1,5 +1,5 @@
 //! Declared key type compatibility and ordered applicable-key inference, without records.
-use std::collections::BTreeMap;
+use alloc::{collections::BTreeMap, vec::Vec};
 
 use crate::{
     reference_binding::{Catalog, Error, Field},
@@ -205,7 +205,7 @@ mod tests {
         assert_eq!(
             infer(&catalog, &["D", "A", "B"], &fields, Limits::default()),
             Ok(Inference::Keys {
-                keys: std::vec![1, 2]
+                keys: alloc::vec![1, 2]
             })
         );
         let fields = [
@@ -298,7 +298,7 @@ mod tests {
         assert_eq!(
             infer(&catalog, &["A", "A"], &fields, Limits::default()),
             Ok(Inference::Keys {
-                keys: std::vec![0, 1]
+                keys: alloc::vec![0, 1]
             })
         );
     }

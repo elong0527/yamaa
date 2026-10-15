@@ -8,13 +8,13 @@ pub(super) fn admit<'a>(
     for (schema, name) in relations {
         required = required
             .checked_add(name.len())
-            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<TableSchema>()))
-            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<String>()))
+            .and_then(|bytes| bytes.checked_add(core::mem::size_of::<TableSchema>()))
+            .and_then(|bytes| bytes.checked_add(core::mem::size_of::<String>()))
             .ok_or_else(overflow)?;
         for column in schema.columns() {
             required = required
                 .checked_add(column.name.len())
-                .and_then(|bytes| bytes.checked_add(std::mem::size_of::<crate::table::Column>()))
+                .and_then(|bytes| bytes.checked_add(core::mem::size_of::<crate::table::Column>()))
                 .ok_or_else(overflow)?;
         }
         if required > METADATA_BYTES {
@@ -40,8 +40,10 @@ mod tests {
             kind: crate::value::ColumnType::Str,
         }])
         .unwrap();
-        assert!(admit(std::iter::repeat_n((&schema, "SRC"), 2)).is_ok());
-        assert!(matches!(admit(std::iter::repeat_n((&schema, "SRC"), 4097)),
-            Err(BindError::Catalog(reference_binding::Error::Limit { resource: "intermediate_source_metadata", limit: METADATA_BYTES, required })) if required > METADATA_BYTES));
+        assert!(admit(core::iter::repeat_n((&schema, "SRC"), 2)).is_ok());
+        assert!(
+            matches!(admit(core::iter::repeat_n((&schema, "SRC"), 4097)),
+            Err(BindError::Catalog(reference_binding::Error::Limit { resource: "intermediate_source_metadata", limit: METADATA_BYTES, required })) if required > METADATA_BYTES)
+        );
     }
 }

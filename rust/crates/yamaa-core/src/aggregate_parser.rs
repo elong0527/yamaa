@@ -5,7 +5,7 @@
 use crate::numeric::{BinaryOperator, UnaryOperator};
 use crate::numeric_parser::{self, tokenize, NumericFunction, Token, TokenKind};
 pub use crate::numeric_parser::{ParseLimits, ParseResource, SourcePosition, SourceSpan};
-use std::collections::BTreeSet;
+use alloc::{collections::BTreeSet, string::String, vec::Vec};
 
 /// Closed reducer vocabulary; parsing does not advertise execution support.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -45,21 +45,20 @@ impl Reducer {
 }
 
 /// Aggregate validation failure with only grammar-owned context.
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GrammarFailure {
-    #[error("aggregate parser invalid expression")]
     InvalidExpression,
-    #[error("aggregate parser prohibited construct: construct={construct:?}")]
-    ProhibitedConstruct { construct: &'static str },
-    #[error(
-        "aggregate parser prohibited function: name={name:?}, argument_count={argument_count:?}"
-    )]
+    ProhibitedConstruct {
+        construct: &'static str,
+    },
     ProhibitedFunction {
         name: SourceSpan,
         argument_count: Option<usize>,
     },
-    #[error("aggregate parser nested reduction: outer={outer:?}, inner={inner:?}")]
-    NestedReduction { outer: Reducer, inner: Reducer },
+    NestedReduction {
+        outer: Reducer,
+        inner: Reducer,
+    },
 }
 impl GrammarFailure {
     /// Stable language condition, independent of diagnostic rendering.
@@ -76,16 +75,12 @@ impl GrammarFailure {
 }
 
 /// Resource exhaustion remains distinct from language validation.
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ParseError {
-    #[error("aggregate parser grammar: position={position:?}, failure={failure:?}")]
     Grammar {
         position: SourcePosition,
         failure: GrammarFailure,
     },
-    #[error(
-        "aggregate parser limit: position={position:?}, resource={resource:?}, limit={limit:?}"
-    )]
     Limit {
         position: SourcePosition,
         resource: ParseResource,
@@ -243,7 +238,7 @@ pub fn parse_aggregate(text: &str, mut limits: ParseLimits) -> Result<ParsedAggr
     let mut seen = BTreeSet::new();
     let mut seen_stars = BTreeSet::new();
     let mut seen_ungrouped = BTreeSet::new();
-    let mut pending = std::vec![(root, false)];
+    let mut pending = alloc::vec![(root, false)];
     while let Some((id, reduced)) = pending.pop() {
         let node = &parser.nodes[id];
         let spelling = &text[node.span.start..node.span.end];

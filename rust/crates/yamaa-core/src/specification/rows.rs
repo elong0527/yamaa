@@ -46,14 +46,14 @@ struct Template {
 fn deferred_odm_contexts(
     declarations: &[Template],
     templates: &[RowTemplate],
-) -> Result<std::rc::Rc<[crate::dataset::OdmTemplateScope]>, BindError> {
+) -> Result<alloc::rc::Rc<[crate::dataset::OdmTemplateScope]>, BindError> {
     declarations
         .iter()
         .try_fold(0usize, |used, template| {
             used.checked_add(template.id.len()).and_then(|used| {
                 used.checked_add(
-                    std::mem::size_of::<crate::dataset::OdmTemplateScope>()
-                        + 8 * std::mem::size_of::<usize>(),
+                    core::mem::size_of::<crate::dataset::OdmTemplateScope>()
+                        + 8 * core::mem::size_of::<usize>(),
                 )
             })
         })
@@ -360,7 +360,7 @@ fn select_defaults(
     columns: &[usize],
     output: &TableSchema,
     rows: &[usize],
-    filter_defaults: std::collections::BTreeSet<usize>,
+    filter_defaults: alloc::collections::BTreeSet<usize>,
     project: Option<&functions::Prepared>,
     string_templates: &str_template::Prepared,
 ) -> Result<Vec<usize>, PrepareError> {
@@ -415,7 +415,7 @@ fn select_defaults(
             break;
         }
     }
-    let mut selected = std::vec![false; columns.len()];
+    let mut selected = alloc::vec![false; columns.len()];
     // A column ODM default owns the enclosing template's item scope and row
     // identity even when no row overrides or filter reference it.
     for (column, &node) in columns.iter().enumerate() {
@@ -1032,7 +1032,7 @@ impl Rows {
         &self,
         calls: &crate::project_calls::ProjectCalls,
     ) -> Result<Vec<usize>, PrepareError> {
-        let mut uses = std::vec![0usize; calls.calls().len()];
+        let mut uses = alloc::vec![0usize; calls.calls().len()];
         // A row label can appear in each argument finding and its projected context.
         // Admit the cumulative copies before source binding can construct findings.
         let mut row_context = 0usize;
@@ -1401,7 +1401,7 @@ impl Rows {
             let grouped = template.groups.is_some();
             // Qualified grouped-filter failures precede derivation binding, as in reference planning.
             if let Some(plan) = predicate.filter(|_| grouped) {
-                let mut seen = std::collections::BTreeSet::new();
+                let mut seen = alloc::collections::BTreeSet::new();
                 for identifier in plan
                     .identifiers()
                     .into_iter()
@@ -1431,7 +1431,7 @@ impl Rows {
                 .iter()
                 .map(|d| d.column)
                 .collect::<Vec<_>>();
-            let mut graph = std::vec![Vec::new(); output.columns().len()];
+            let mut graph = alloc::vec![Vec::new(); output.columns().len()];
             let mut assignments = BTreeMap::new();
             // Reference planning validates one complete row template's authored
             // derivations before resolving any of that template's references.
@@ -1473,7 +1473,7 @@ impl Rows {
             let analyzed = crate::dependency_analysis::analyze(&graph, Default::default())
                 .map_err(|_| BindError::Internal)?;
             if let Some(cycle) = analyzed.cycle {
-                let mut paths = std::vec![""; output.columns().len()];
+                let mut paths = alloc::vec![""; output.columns().len()];
                 for declaration in &template.declarations {
                     paths[declaration.column] = declaration.path.as_str();
                 }
@@ -1492,7 +1492,7 @@ impl Rows {
                     findings.push(BindFinding::Dependencies {
                         columns: output.columns().iter().map(|c| c.name.clone()).collect(),
                         paths: paths.into_iter().map(String::from).collect(),
-                        diagnostics: std::vec![column_dependencies::Diagnostic::Cycle {
+                        diagnostics: alloc::vec![column_dependencies::Diagnostic::Cycle {
                             columns: cycle
                         }],
                     });
@@ -1506,7 +1506,7 @@ impl Rows {
             let mut bindings = Vec::new();
             let before_filter = findings.len();
             if let Some(plan) = predicate {
-                let mut seen = std::collections::BTreeSet::new();
+                let mut seen = alloc::collections::BTreeSet::new();
                 for identifier in plan.identifiers() {
                     if !seen.insert(identifier) {
                         continue;
@@ -1632,23 +1632,36 @@ impl Rows {
                         let mut context: crate::diagnostic::Context = [
                             (
                                 "identifier".into(),
-                                serde_json::Value::String(binding.name.clone()),
+                                crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(
+                                    binding.name.clone(),
+                                )),
                             ),
-                            ("row".into(), serde_json::Value::String(template.id.clone())),
+                            (
+                                "row".into(),
+                                crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(
+                                    template.id.clone(),
+                                )),
+                            ),
                             (
                                 "available_phase".into(),
-                                serde_json::Value::String("window_derivation".into()),
+                                crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(
+                                    "window_derivation".into(),
+                                )),
                             ),
                             (
                                 "required_phase".into(),
-                                serde_json::Value::String("row_filter".into()),
+                                crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(
+                                    "row_filter".into(),
+                                )),
                             ),
                         ]
                         .into();
                         if let Some(column) = lookup_match {
                             context.insert(
                                 "lookup_match".into(),
-                                serde_json::Value::String(output.columns()[column].name.clone()),
+                                crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(
+                                    output.columns()[column].name.clone(),
+                                )),
                             );
                         }
                         findings.push(BindFinding::Scalar(crate::diagnostic::Diagnostic {
@@ -1666,23 +1679,23 @@ impl Rows {
                     RowMode::IntermediateDriver {
                         index,
                         source: driver_index,
-                        mode: std::boxed::Box::new(mode),
+                        mode: alloc::boxed::Box::new(mode),
                     }
                 } else if driver_index == 0 {
                     mode
                 } else {
                     RowMode::Driver {
                         source: driver_index,
-                        mode: std::boxed::Box::new(mode),
+                        mode: alloc::boxed::Box::new(mode),
                     }
                 },
                 assignments,
                 filter,
             });
         }
-        let mut odm_contexts: Option<std::rc::Rc<[crate::dataset::OdmTemplateScope]>> = None;
+        let mut odm_contexts: Option<alloc::rc::Rc<[crate::dataset::OdmTemplateScope]>> = None;
         let mut columns = Vec::new();
-        let mut dependencies = std::vec![None; output.columns().len()];
+        let mut dependencies = alloc::vec![None; output.columns().len()];
         for declaration in &self.columns {
             if let RowOperation::Shared(branch) = &declaration.operation {
                 if let Operation::StrPad(operation) = branch.operation.as_ref() {
@@ -1721,7 +1734,7 @@ impl Rows {
         let analyzed = column_dependencies::analyze(&dependencies, keys, true, Default::default())
             .map_err(|_| BindError::Internal)?;
         if !analyzed.diagnostics.is_empty() {
-            let mut paths = std::vec![String::new(); output.columns().len()];
+            let mut paths = alloc::vec![String::new(); output.columns().len()];
             for declaration in &self.columns {
                 paths[declaration.column] = declaration.path.clone();
             }
@@ -1791,7 +1804,7 @@ impl Rows {
             let plan = plan.with_row_contexts(contexts)?;
             // Repeated defaults in several templates share one declaration and
             // one counter. Only effective row declarations register handlers.
-            let mut seen = std::collections::BTreeSet::new();
+            let mut seen = alloc::collections::BTreeSet::new();
             let handlers = self
                 .templates
                 .iter()

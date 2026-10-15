@@ -4,6 +4,7 @@
 
 use super::{Descriptor, DocumentNode};
 use crate::regex::{MatchBudget, MatchError, MatchLimits, MatchUsage};
+use alloc::vec::Vec;
 
 /// Constraint order is values, pattern, minimum length, then exact size.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -15,11 +16,9 @@ pub enum ConstraintViolation {
 }
 
 /// Logical validation work and regex matching retain independent request ceilings.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConstraintError {
-    #[error("schema constraints work: limit={limit:?}")]
     Work { limit: usize },
-    #[error("schema constraints regex: {0:?}")]
     Regex(MatchError),
 }
 

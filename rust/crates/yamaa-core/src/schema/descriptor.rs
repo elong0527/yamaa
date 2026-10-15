@@ -2,7 +2,11 @@
 
 use super::{Document, DocumentNode, TypeError, TypeExpression, TypeLimits};
 use crate::regex;
-use std::vec;
+use alloc::{
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 
 /// Ordered structural findings retain source occurrence ids where rendering needs them.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -80,18 +84,14 @@ pub enum DescriptorResource {
 }
 
 /// Policy and unsupported-language outcomes are never structural schema diagnostics.
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DescriptorError {
-    #[error("schema descriptor invalid node")]
     InvalidNode,
-    #[error("schema descriptor limit: resource={resource:?}, limit={limit:?}")]
     Limit {
         resource: DescriptorResource,
         limit: usize,
     },
-    #[error("schema descriptor type limit: {0:?}")]
     TypeLimit(TypeError),
-    #[error("schema descriptor regex: {0:?}")]
     Regex(regex::CompileError),
 }
 
