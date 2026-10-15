@@ -19,42 +19,9 @@ pub struct Dataset<'a> {
     pub fields: &'a [Field<'a>],
 }
 
-/// Trusted catalog/query policies, independent of language error conditions.
-#[derive(Clone, Copy, Debug)]
-pub struct Limits {
-    pub outputs: usize,
-    pub datasets: usize,
-    pub fields: usize,
-    pub catalog_bytes: usize,
-    pub reference_bytes: usize,
-}
-
-impl Default for Limits {
-    /// Bound owned metadata and individual lookups without granting access to data.
-    fn default() -> Self {
-        Self {
-            outputs: 4096,
-            datasets: 256,
-            fields: 65_536,
-            catalog_bytes: 1_048_576,
-            reference_bytes: 65_536,
-        }
-    }
-}
-
-/// Rejected metadata or resource policy; unresolved language names are results.
+/// Rejected metadata or query shape; unresolved language names are results.
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum Error {
-    #[error(
-        "reference binding limit: resource={resource:?}, limit={limit:?}, required={required:?}"
-    )]
-    Limit {
-        resource: &'static str,
-        limit: usize,
-        required: usize,
-    },
-    #[error("reference binding size overflow")]
-    SizeOverflow,
     #[error("reference binding empty name")]
     EmptyName,
     #[error("reference binding duplicate output")]
@@ -109,7 +76,6 @@ pub struct Catalog {
     record_derivation: bool,
     outputs: BTreeMap<String, (usize, ColumnType)>,
     datasets: BTreeMap<String, DatasetCatalog>,
-    limits: Limits,
     selected: BTreeMap<String, SelectedRelation>,
     joined: BTreeMap<String, JoinedRelation>,
     row_joins: Option<RowJoinScope>,
@@ -143,19 +109,6 @@ struct DatasetCatalog {
     fields: BTreeMap<String, (usize, ColumnType)>,
 }
 
-/// Enforce a named budget without collapsing a resource failure into a language error.
-fn limit(resource: &'static str, required: usize, allowed: usize) -> Result<(), Error> {
-    if required > allowed {
-        Err(Error::Limit {
-            resource,
-            limit: allowed,
-            required,
-        })
-    } else {
-        Ok(())
-    }
-}
-
 impl Catalog {
     /// Donor compilers explicitly admit current-record fields before using scalar expressions.
     pub(crate) fn with_record_derivation(mut self) -> Self {
@@ -169,26 +122,6 @@ impl Catalog {
         mut self,
         selected: std::vec::Vec<(String, SelectedRelation)>,
     ) -> Result<Self, Error> {
-        limit(
-            "datasets",
-            self.datasets
-                .len()
-                .checked_add(selected.len())
-                .ok_or(Error::SizeOverflow)?,
-            self.limits.datasets,
-        )?;
-        let mut fields = self
-            .datasets
-            .values()
-            .map(|dataset| dataset.fields.len())
-            .sum::<usize>();
-        let mut bytes = self.outputs.keys().map(String::len).sum::<usize>();
-        for (name, dataset) in &self.datasets {
-            bytes = bytes.checked_add(name.len()).ok_or(Error::SizeOverflow)?;
-            for field in dataset.fields.keys() {
-                bytes = bytes.checked_add(field.len()).ok_or(Error::SizeOverflow)?;
-            }
-        }
         for (name, relation) in selected {
             if name.is_empty() {
                 return Err(Error::EmptyName);
@@ -196,33 +129,19 @@ impl Catalog {
             if self.datasets.contains_key(&name) || self.selected.contains_key(&name) {
                 return Err(Error::DuplicateDataset);
             }
-            fields = fields
-                .checked_add(relation.fields.len())
-                .and_then(|n| n.checked_add(relation.dependencies.len()))
-                .ok_or(Error::SizeOverflow)?;
-            limit("fields", fields, self.limits.fields)?;
-            bytes = bytes.checked_add(name.len()).ok_or(Error::SizeOverflow)?;
-            for field in relation.fields.keys() {
-                bytes = bytes.checked_add(field.len()).ok_or(Error::SizeOverflow)?;
-            }
-            limit("catalog_bytes", bytes, self.limits.catalog_bytes)?;
             self.selected.insert(name, relation);
         }
         Ok(self)
     }
 
-    pub(crate) fn selected_read(
-        &self,
-        name: &str,
-    ) -> Result<Option<Result<SelectedRead<'_>, Diagnostic>>, Error> {
-        limit("reference_bytes", name.len(), self.limits.reference_bytes)?;
+    pub(crate) fn selected_read(&self, name: &str) -> Option<Result<SelectedRead<'_>, Diagnostic>> {
         let Some((owner, field)) = name.split_once('.') else {
-            return Ok(None);
+            return None;
         };
         let Some(relation) = self.selected.get(owner) else {
-            return Ok(None);
+            return None;
         };
-        Ok(Some(
+        Some(
             relation
                 .fields
                 .get(field)
@@ -237,7 +156,7 @@ impl Catalog {
                     )
                 })
                 .ok_or(Diagnostic::UnknownField),
-        ))
+        )
     }
     /// Stored and augmented donor fields obey the current declaration's order.
     pub(crate) fn restrict_record_fields(&mut self, available: &[usize]) {
@@ -266,40 +185,29 @@ impl Catalog {
     pub(crate) fn joined(&self, name: &str) -> Option<&JoinedRelation> {
         self.joined.get(name)
     }
-    pub(crate) fn type_of(&self, name: &str) -> Result<Option<ColumnType>, Error> {
-        let bound = self.bind(name)?.map(|binding| match binding {
+    pub(crate) fn type_of(&self, name: &str) -> Option<ColumnType> {
+        let bound = self.bind(name).map(|binding| match binding {
             Binding::Output { column_type, .. } | Binding::Dataset { column_type, .. } => {
                 column_type
             }
         });
-        Ok(bound.or_else(|| {
+        bound.or_else(|| {
             name.split_once('.').and_then(|(relation, field)| {
                 self.joined(relation)?
                     .fields
                     .get(field)
                     .map(|(_, kind)| *kind)
             })
-        }))
+        })
     }
 
     /// Row-template implicit joins match raw driver fields, independently of output derivations.
-    pub(crate) fn with_row_joins(
-        mut self,
-        driver: &str,
-        groups: Option<&[String]>,
-    ) -> Result<Self, Error> {
-        let bytes = groups
-            .into_iter()
-            .flatten()
-            .try_fold(driver.len(), |n, name| {
-                n.checked_add(name.len()).ok_or(Error::SizeOverflow)
-            })?;
-        limit("scope_context_bytes", bytes, self.limits.catalog_bytes)?;
+    pub(crate) fn with_row_joins(mut self, driver: &str, groups: Option<&[String]>) -> Self {
         self.row_joins = Some(RowJoinScope {
             driver: driver.into(),
             groups: groups.map(<[String]>::to_vec),
         });
-        Ok(self)
+        self
     }
 
     /// Retain pure donor schemas and inferred current-output equality metadata.
@@ -323,24 +231,12 @@ impl Catalog {
             .iter()
             .map(|name| (name.clone(), self.outputs[name].0))
             .collect::<std::vec::Vec<_>>();
-        let mut bytes = 0usize;
         for (source, relation) in relations {
-            bytes = bytes
-                .checked_add(relation.name.len())
-                .and_then(|bytes| {
-                    relation.fields.iter().try_fold(bytes, |bytes, field| {
-                        bytes.checked_add(field.name.len())?.checked_add(64)
-                    })
-                })
-                .and_then(|bytes| bytes.checked_add(retained_keys.len().checked_mul(64)?))
-                .ok_or(Error::SizeOverflow)?;
-            limit("joined_catalog_bytes", bytes, self.limits.catalog_bytes)?;
             let names = keys
                 .iter()
                 .map(String::as_str)
                 .collect::<std::vec::Vec<_>>();
-            let inference =
-                crate::key_relation::infer(&self, &names, relation.fields, Default::default())?;
+            let inference = crate::key_relation::infer(&self, &names, relation.fields)?;
             let fields = relation
                 .fields
                 .iter()
@@ -389,8 +285,7 @@ impl Catalog {
             .map(|(name, _)| name.as_str())
     }
     /// Suggest a qualifier only when exactly one admitted dataset owns a bare field.
-    pub(crate) fn unique_field_owner(&self, field: &str) -> Result<Option<&str>, Error> {
-        limit("reference_bytes", field.len(), self.limits.reference_bytes)?;
+    pub(crate) fn unique_field_owner(&self, field: &str) -> Option<&str> {
         let mut owners = self
             .datasets
             .iter()
@@ -409,7 +304,11 @@ impl Catalog {
                     .map(|(name, _)| name.as_str()),
             );
         let first = owners.next();
-        Ok(if owners.next().is_none() { first } else { None })
+        if owners.next().is_none() {
+            first
+        } else {
+            None
+        }
     }
     /// Borrow a declared relation's fields in stored column order.
     pub(crate) fn fields(&self, name: &str) -> Option<std::vec::Vec<Field<'_>>> {
@@ -445,30 +344,14 @@ impl Catalog {
             .map(|dataset| dataset.fields.contains_key(field))
     }
 
-    /// Admit resource budgets and nonempty names before allocating reusable name indexes.
-    pub fn compile(
-        outputs: &[Field<'_>],
-        datasets: &[Dataset<'_>],
-        limits: Limits,
-    ) -> Result<Self, Error> {
-        limit("outputs", outputs.len(), limits.outputs)?;
-        limit("datasets", datasets.len(), limits.datasets)?;
-        let fields = datasets.iter().try_fold(0usize, |count, dataset| {
-            count
-                .checked_add(dataset.fields.len())
-                .ok_or(Error::SizeOverflow)
-        })?;
-        limit("fields", fields, limits.fields)?;
+    /// Validate nonempty names before allocating reusable name indexes.
+    pub fn compile(outputs: &[Field<'_>], datasets: &[Dataset<'_>]) -> Result<Self, Error> {
         let names = outputs
             .iter()
             .map(|field| field.name)
             .chain(datasets.iter().flat_map(|dataset| {
                 std::iter::once(dataset.name).chain(dataset.fields.iter().map(|field| field.name))
             }));
-        let bytes = names.clone().try_fold(0usize, |bytes, name| {
-            bytes.checked_add(name.len()).ok_or(Error::SizeOverflow)
-        })?;
-        limit("catalog_bytes", bytes, limits.catalog_bytes)?;
         if names.clone().any(str::is_empty) {
             return Err(Error::EmptyName);
         }
@@ -503,7 +386,6 @@ impl Catalog {
             record_derivation: false,
             outputs: output_index,
             datasets: dataset_index,
-            limits,
             selected: BTreeMap::new(),
             joined: BTreeMap::new(),
             row_joins: None,
@@ -511,16 +393,14 @@ impl Catalog {
     }
 
     /// Resolve a declared relation without inventing a stored field, including empty schemas.
-    pub fn bind_relation(&self, name: &str) -> Result<Option<usize>, Error> {
-        limit("reference_bytes", name.len(), self.limits.reference_bytes)?;
-        Ok(self.datasets.get(name).map(|dataset| dataset.index))
+    pub fn bind_relation(&self, name: &str) -> Option<usize> {
+        self.datasets.get(name).map(|dataset| dataset.index)
     }
 
     /// Resolve bare outputs or a dataset plus its exact stored suffix (REQ-0103/1265).
     /// A dotted suffix is a field only when literally present; it is never an ODM path.
-    pub fn bind(&self, name: &str) -> Result<Option<Binding>, Error> {
-        limit("reference_bytes", name.len(), self.limits.reference_bytes)?;
-        Ok(if let Some((qualifier, field)) = name.split_once('.') {
+    pub fn bind(&self, name: &str) -> Option<Binding> {
+        if let Some((qualifier, field)) = name.split_once('.') {
             self.datasets.get(qualifier).and_then(|dataset| {
                 dataset
                     .fields
@@ -538,7 +418,7 @@ impl Catalog {
                     column,
                     column_type,
                 })
-        })
+        }
     }
 
     /// Check one bare reference in unknown-name, phase, then expected-type order.
@@ -552,17 +432,14 @@ impl Catalog {
         available: Option<&[usize]>,
         candidates: &[usize],
     ) -> Result<Option<Diagnostic>, Error> {
-        limit("reference_bytes", name.len(), self.limits.reference_bytes)?;
         if name.contains('.') {
             return Err(Error::QualifiedOutputQuery);
         }
         if let Some(available) = available {
-            limit("available_outputs", available.len(), self.limits.outputs)?;
             if available.iter().any(|&index| index >= self.outputs.len()) {
                 return Err(Error::InvalidAvailableOutput);
             }
         }
-        limit("candidate_datasets", candidates.len(), self.limits.datasets)?;
         if candidates.iter().any(|&index| index >= self.datasets.len()) {
             return Err(Error::InvalidCandidateDataset);
         }
