@@ -1,5 +1,5 @@
 //! Source-site projection for typed development observations, with no parsing.
-use serde_json::{json, Value};
+use yamaa_core::json::{json, Value};
 use yamaa_core::numeric_parser::SourceSpan;
 
 pub fn span(text: &str, site: SourceSpan) -> Value {
