@@ -98,7 +98,7 @@ def formal_review(number=NUMBER, head=HEAD, base=OTHER):
         # the typed PR review receipt identifies them, not an actionable count.
         "body": (
             "\n\n<details>\n<summary>Nitpick comments: 1</summary>\n</details>\n"
-            "<details>\n<summary>📥 Commits</summary>\n\n"
+            "<details>\n<summary>\U0001f4e5 Commits</summary>\n\n"
             "Reviewing files that changed from the base of the PR and between "
             f"{base} and {head}.\n\n</details>\n\n"
             "<!-- This is an auto-generated comment by CodeRabbit for review status -->"
@@ -776,7 +776,9 @@ class FormalReviewRange(unittest.TestCase):
                         if line.startswith("Reviewing files")
                     )
                 else:
-                    start = body.index("<details>\n<summary>📥 Commits</summary>")
+                    start = body.index(
+                        "<details>\n<summary>\U0001f4e5 Commits</summary>"
+                    )
                     end = body.index("</details>", start) + len("</details>")
                     quoted = body[start:end]
                 review["body"] = body.replace(quoted, f"{opening}\n{quoted}\n{closing}")

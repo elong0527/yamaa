@@ -72,7 +72,7 @@ def formal_review(number, head, base):
         "commit_id": head,
         "submitted_at": "2026-10-15T14:16:03Z",
         "body": (
-            "<details>\n<summary>📥 Commits</summary>\n\n"
+            "<details>\n<summary>\U0001f4e5 Commits</summary>\n\n"
             "Reviewing files that changed from the base of the PR and between "
             f"{base} and {head}.\n\n</details>\n"
             "<!-- This is an auto-generated comment by CodeRabbit for review status -->"

@@ -36,7 +36,7 @@ WALKTHROUGH = "<!-- walkthrough_start -->"
 FORMAL_REVIEW = (
     "<!-- This is an auto-generated comment by CodeRabbit for review status -->"
 )
-COMMITS_HEADER = "<summary>📥 Commits</summary>"
+COMMITS_HEADER = "<summary>\U0001f4e5 Commits</summary>"
 COMMITS_SECTION = re.compile(
     r"(?m)^<details>\r?\n"
     + re.escape(COMMITS_HEADER)
