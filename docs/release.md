@@ -131,7 +131,7 @@ field counts toward the source width.
 
 Validation and normalization use one fixed allowance set for every
 preparation request: 302,514,176 logical work units, 1,310,720 attempted
-diagnostics and 134,217,728 bytes of diagnostic text — the former layered
+diagnostics and 134,217,728 bytes of diagnostic text: the former layered
 maximums, now applied flat. The allowance does not grow with the decoded
 input size, inheritance does not multiply it, and no stage receives a size
 credit; schema-bundle admission has no work ceiling at all and keeps only
