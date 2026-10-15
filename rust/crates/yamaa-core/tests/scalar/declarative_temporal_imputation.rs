@@ -112,6 +112,44 @@ fn independent_partial_dates_preserve_precision_and_calendar_bound_intervals() {
         Ok(S::Recovered { handler: "invalid" })
     );
 }
+
+#[test]
+fn original_zero_year_month_prefix_retains_both_operation_diagnostics() {
+    use yamaa_core::diagnostic::ContextValue;
+    for (kind, name) in [
+        (
+            date_policy_kind(P::Year, D::Position("first")),
+            "date_impute",
+        ),
+        (K::DatePrecision, "date_precision"),
+    ] {
+        let path = format!("columns.DATE.derivation.{name}");
+        let op = Imputation::new(kind, "S".into(), None, path.clone(), None, None).unwrap();
+        let error = op.source_value(ValueRef::Str("0000-01")).unwrap_err();
+        assert_eq!(error.definition().condition, "invalid_date_text");
+        assert_eq!(error.definition().requirement, Some("REQ-0588"));
+        assert_eq!(error.spec_paths, [path]);
+        assert_eq!(
+            error.context,
+            [
+                (
+                    "operation".into(),
+                    ContextValue::Scalar(Value::Str(name.into()))
+                ),
+                (
+                    "source".into(),
+                    ContextValue::Scalar(Value::Str("S".into()))
+                ),
+                (
+                    "value".into(),
+                    ContextValue::Scalar(Value::Str("0000-01".into()))
+                ),
+            ]
+            .into()
+        );
+    }
+}
+
 #[test]
 fn datetime_edges_precision_and_explicit_date_conversion_are_field_copies() {
     for (rule, expected) in [
