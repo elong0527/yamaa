@@ -1,7 +1,5 @@
 # Build SDTM subject visits from ODM extracts
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-sv-subject-visits.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build the SDTM subject visits (SV) domain from Operational Data
 Model (ODM) item data plus a demographics (DM) extract, naming for each
 visit the study events its subjects attended, when each visit started and
@@ -44,5 +42,3 @@ visits retain separate identities.
 
 **Provenance:** the fixtures are hand-built from a realistic EDC visit
 flow with plausible ODM naming, not records from a real study.
-
-**Standard:** SDTM | **Domain:** SV

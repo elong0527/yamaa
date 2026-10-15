@@ -1,8 +1,5 @@
 # Lab-Specific Reference Ranges
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-lb-lab-specific-ranges.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** pick the reference range the way a multi-lab study does -- by
 lab, test, sex and age band, and by the period the range was in effect --
 and flag each result: `LBSTNRLO`, `LBSTNRHI`, and `LBNRIND`.
@@ -40,5 +37,3 @@ against the new limits -- and a subject whose age falls on an age-band
 boundary takes the band that starts at that age. Each output row is built
 from one `IT.LB.LBDTC` item, with the other items of its panel read
 alongside; `LBSEQ` is the panel's repeat key.
-
-**Standard:** SDTM | **Domain:** LB

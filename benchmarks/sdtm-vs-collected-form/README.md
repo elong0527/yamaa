@@ -1,8 +1,5 @@
 # Collected Vital Signs Form
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-vs-collected-form.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build one record per test from the wide vital signs
 form collected at each visit, carrying `VSTESTCD`,
 `VSTEST`, `VSORRES`, `VSORRESU`, `VSSTRESN`, `VSSTRESC`,
@@ -51,5 +48,3 @@ blood pressure not-done flag with its reason, each as its own item.
 within each visit. A not-done blood pressure still produces its two records
 so the reason is kept, but they carry no result, unit, position,
 or standardized value.
-
-**Standard:** SDTM | **Domain:** VS

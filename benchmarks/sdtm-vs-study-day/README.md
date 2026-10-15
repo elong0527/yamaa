@@ -1,8 +1,5 @@
 # Visit Study Day
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-vs-study-day.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** carry each collected vital-signs result with its test,
 result, and collection date, and add the visit number, the trial
 period, and the study day: `VSTESTCD`, `VSORRES`, `VSDTC`,
@@ -37,5 +34,3 @@ subject's elements with their start and end dates.
 follows the collection date, so an unscheduled visit still falls in
 an epoch, and a planned visit with no collection date has a visit
 number but no epoch.
-
-**Standard:** SDTM | **Domain:** VS

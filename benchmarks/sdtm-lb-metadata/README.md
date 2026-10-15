@@ -1,8 +1,5 @@
 # Value-Level Metadata
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-lb-metadata.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build one record per collected glucose and creatinine
 result, with per-test submission metadata: each `LBTESTCD` value
 gets its own codelist and origin for `LBORRESU`, overriding the
@@ -34,8 +31,6 @@ the collection date rides along in the same visit group.
 records are only results actually reported. The per-value
 submission metadata is validated when the specification loads;
 the engine output is unaffected by it.
-
-**Standard:** SDTM | **Domain:** LB
 
 `submission-spec.yaml` and `submission-environment.yaml` are a separate,
 independently completed submission witness over the original executable

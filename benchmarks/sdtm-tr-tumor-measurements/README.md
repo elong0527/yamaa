@@ -1,7 +1,5 @@
 # Tumor Measurements
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-tr-tumor-measurements.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build one record per collected tumor assessment, carrying
 the collected test, result, unit, method, evaluator, and visit
 through and adding the standardized numeric result, text result,
@@ -52,5 +50,3 @@ any other diameter. A lesion too small to measure is not a zero: it
 takes the study's conventional 5 mm, and a lesion not assessed
 stays out of every standardized column rather than counting as
 zero.
-
-**Standard:** SDTM | **Domain:** TR
