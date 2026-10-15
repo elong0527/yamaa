@@ -218,6 +218,17 @@ def test_missing_installed_version_is_a_finding_without_guessing_or_stopping_oth
     assert result == (m.Finding("project", "invalid_installed_version", ("1",)),)
 
 
+def test_marker_and_identity_quotas_reject_before_installed_version_reads():
+    for raw in [
+        lock(("yamaa", "0.2.0", ['sys_platform == "linux"'] * 65)),
+        lock(("yamaa", "1" * 2049, None)),
+    ]:
+        trace = []
+        with pytest.raises(m.InvalidLock):
+            verify(raw, ["math.sqrt"], {"yamaa": "0.2.0"}, {}, trace)
+        assert not any(item[0] == "version" for item in trace)
+
+
 def test_existing_repository_uv_lock_identifies_yamaa_and_a_called_distribution():
     raw = (Path(__file__).resolve().parents[2] / "uv.lock").read_bytes()
     versions = {
@@ -441,6 +452,19 @@ def test_missing_noncallable_and_duplicate_declarations_never_run_target(
         m.resolve_callable("yamaa_locked_test_module.target", ["x", "x"])
 
 
+def test_resolution_bounds_precede_import(monkeypatch):
+    def unreachable(_):
+        raise AssertionError("metadata limit must precede import")
+
+    monkeypatch.setattr(m.importlib, "import_module", unreachable)
+    for call, parameters in [
+        ("a" * 2049 + ".run", []),
+        ("installed.run", ["x"] * 1025),
+    ]:
+        with pytest.raises(m.InvalidBinding):
+            m.resolve_callable(call, parameters)
+
+
 def editable_metadata(tmp_path, distribution, root, *, lines=None):
     import json
 
@@ -607,20 +631,17 @@ def test_distribution_with_stdlib_root_name_is_version_checked_before_exemption(
     ]
 
 
-def test_many_recorded_import_lines_are_not_executed_before_a_real_editable_path(
-    tmp_path, monkeypatch
+@pytest.mark.parametrize("lines", [("x" * 16385), ("import nonexistent_hook\n" * 65)])
+def test_editable_path_bytes_and_line_counts_are_bounded_before_module_discovery(
+    tmp_path, monkeypatch, lines
 ):
-    dist, source = editable_metadata(tmp_path, "Clinical-Programs", "project_bmi")
-    pth = next(entry for entry in dist.files if entry.suffix == ".pth")
-    Path(pth.locate()).write_text(
-        "import nonexistent_hook\n" * 1000 + str(source) + "\n"
+    dist, _ = editable_metadata(
+        tmp_path, "Clinical-Programs", "project_bmi", lines=lines
     )
     monkeypatch.setattr(m.metadata, "packages_distributions", dict)
     monkeypatch.setattr(m.metadata, "distributions", lambda: iter([dist]))
-    assert m._installed_providers(("project_bmi",)) == {
-        "project_bmi": ["Clinical-Programs"]
-    }
-    assert "nonexistent_hook" not in sys.modules
+    with pytest.raises(m.InvalidLock):
+        m._installed_providers(("project_bmi",))
     assert "project_bmi" not in sys.modules
 
 

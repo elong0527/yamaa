@@ -1,7 +1,7 @@
 use super::*;
 
 fn values(source: &str) -> Vec<SourceText> {
-    scan(source.as_bytes())
+    scan(source.as_bytes(), ScanLimits::default())
         .unwrap()
         .into_iter()
         .filter_map(|event| match event.event {
@@ -17,8 +17,11 @@ fn unicode(text: &str) -> SourceText {
 
 #[test]
 fn preserves_lexemes_styles_duplicates_and_document_boundaries() {
-    let events =
-        scan(b"x: 9007199254740993\nx: 9223372036854775808\ny: 'true'\n---\nfalse\n").unwrap();
+    let events = scan(
+        b"x: 9007199254740993\nx: 9223372036854775808\ny: 'true'\n---\nfalse\n",
+        ScanLimits::default(),
+    )
+    .unwrap();
     let scalars: Vec<_> = events
         .iter()
         .filter_map(|event| match &event.event {
@@ -65,7 +68,11 @@ fn preserves_lexemes_styles_duplicates_and_document_boundaries() {
 
 #[test]
 fn retains_forbidden_metadata_for_document_admission() {
-    let events = scan(b"x: &label !!str 1\ny: *label\nz: {<<: 2, '<<': 3}\n").unwrap();
+    let events = scan(
+        b"x: &label !!str 1\ny: *label\nz: {<<: 2, '<<': 3}\n",
+        ScanLimits::default(),
+    )
+    .unwrap();
     assert!(events.iter().any(|e| matches!(&e.event,
         SourceEvent::Scalar(_, _, 1, Some(tag)) if tag.handle == "tag:yaml.org,2002:" && tag.suffix == "str"
     )));
@@ -165,7 +172,10 @@ fn later_syntax_error_wins_over_earlier_surrogate() {
         r#"["\uD800\U00110000"]"#,
     ] {
         assert!(
-            matches!(scan(source.as_bytes()), Err(ScanFailure::Syntax { .. })),
+            matches!(
+                scan(source.as_bytes(), ScanLimits::default()),
+                Err(ScanFailure::Syntax { .. })
+            ),
             "{source}"
         );
     }
@@ -175,7 +185,7 @@ fn later_syntax_error_wins_over_earlier_surrogate() {
 fn non_surrogate_bad_escapes_remain_syntax_errors() {
     for source in [r#""\UFFFFFFFF""#, r#""\uZZZZ""#, r#""\U00110000""#] {
         assert!(matches!(
-            scan(source.as_bytes()),
+            scan(source.as_bytes(), ScanLimits::default()),
             Err(ScanFailure::Syntax { .. })
         ));
     }
@@ -184,7 +194,7 @@ fn non_surrogate_bad_escapes_remain_syntax_errors() {
 #[test]
 fn ascii_rejection_precedes_yaml_and_has_original_coordinates() {
     assert_eq!(
-        scan(b"x: [\n y: \xff"),
+        scan(b"x: [\n y: \xff", ScanLimits::default()),
         Err(ScanFailure::NonAscii(SourcePosition {
             offset: 9,
             line: 2,
@@ -194,26 +204,89 @@ fn ascii_rejection_precedes_yaml_and_has_original_coordinates() {
 }
 
 #[test]
-fn fixed_scanner_depth_is_inclusive_and_recovery_keeps_every_occurrence() {
-    for depth in [
-        Limits::YAML_DEPTH - 1,
-        Limits::YAML_DEPTH,
-        Limits::YAML_DEPTH + 1,
-    ] {
-        let source = format!("{}1{}", "[".repeat(depth), "]".repeat(depth));
-        let result = scan(source.as_bytes());
-        if depth <= Limits::YAML_DEPTH {
-            assert!(result.is_ok());
-        } else {
-            assert_scan_limit(result, "yaml_depth", Limits::YAML_DEPTH);
-        }
+fn failed_recovery_never_returns_a_partial_or_repaired_document() {
+    let source = br#"["\uD800", "\uDFFF"]"#;
+    for passes in 0..4 {
+        let limits = ScanLimits {
+            parse_bytes: passes * source.len(),
+            ..ScanLimits::default()
+        };
+        assert_scan_limit(scan(source, limits), "parse_bytes", limits.parse_bytes);
     }
-    assert_eq!(
-        values(r#"["\uD800", "\uDFFF"]"#),
-        [
-            SourceText::Invalid(vec![0xd800]),
-            SourceText::Invalid(vec![0xdfff])
-        ]
+    assert!(scan(
+        source,
+        ScanLimits {
+            parse_bytes: 4 * source.len(),
+            ..ScanLimits::default()
+        }
+    )
+    .is_ok());
+}
+
+#[test]
+fn enforces_source_event_depth_and_decoded_limits() {
+    assert_scan_limit(
+        scan(
+            b"abc",
+            ScanLimits {
+                source_bytes: 2,
+                ..ScanLimits::default()
+            },
+        ),
+        "source_bytes",
+        2,
+    );
+    assert_scan_limit(
+        scan(
+            b"abc",
+            ScanLimits {
+                events: 1,
+                ..ScanLimits::default()
+            },
+        ),
+        "events",
+        1,
+    );
+    assert_scan_limit(
+        scan(
+            b"[[[1]]]",
+            ScanLimits {
+                depth: 2,
+                ..ScanLimits::default()
+            },
+        ),
+        "depth",
+        2,
+    );
+    assert_scan_limit(
+        scan(
+            b"abc",
+            ScanLimits {
+                decoded_bytes: 2,
+                ..ScanLimits::default()
+            },
+        ),
+        "decoded_bytes",
+        2,
+    );
+    assert!(scan(
+        b"[[1]]",
+        ScanLimits {
+            depth: 2,
+            ..ScanLimits::default()
+        }
+    )
+    .is_ok());
+    assert_scan_limit(
+        scan(
+            b"",
+            ScanLimits {
+                parse_bytes: 0,
+                ..ScanLimits::default()
+            },
+        ),
+        "parse_bytes",
+        0,
     );
 }
 

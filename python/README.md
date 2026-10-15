@@ -20,32 +20,8 @@ checked.issues
 
 `environment` is optional. Pass a declared host environment explicitly when the
 study uses project functions or terminology. Paths resolve relative to their
-original declaring YAML layer by default. Set `relative_to: entry` on an input
-dataset or `output` declaration to select the study entry's directory under the
-[local path policy](../rules/storage/resources.md). An input setting applies to
-both its data path and producer `schema` link; output settings cover all logs
-and the primary artifact.
+original declaring YAML layer under the [local path policy](../rules/storage/resources.md).
 There is no upward project-root discovery or public backend selector in this API.
-
-A shared parent can use each study's own inputs and save in its own output folder:
-
-```yaml
-input:
-  DM: {path: input/dm.csv, relative_to: entry}
-output:
-  path: output/adsl.csv
-  relative_to: entry
-  columns: [USUBJID]
-```
-
-Each study's entry inherits that parent. `save()` publishes its held bytes at
-the selected study destinations without rerunning the build. A producer linked
-through `schema` uses its own entry file, which may also inherit shared code.
-
-Project functions need their installed callable and declared conformance tests.
-The environment's packaging `lock` is optional. Declare it to verify installed
-called-package versions before activation; omit it to use the installed packages
-without a version audit. A declared lock must exist and be valid.
 
 Inputs can use CSV, Parquet, SAS datasets (`.sas7bdat`), or SAS Transport v5/v8
 (`.xpt`). SAS inputs explicitly declare `encoding`, for example
@@ -80,10 +56,9 @@ writes remain if a later target fails. There is no whole-run file rollback.
 
 ## Implementation limits
 
-The shared `domain`, `check` and `define` engine calls use the same
-[resource policies](../docs/release.md#resource-limits) in Python and R.
-That page owns the engine's capacity limits and refusal details. These are
-implementation policies, not language constraints or process-memory guarantees.
+The shared hosts use the same [resource policies](../docs/release.md#resource-limits).
+That page owns all capacity limits and refusal details. These are implementation
+policies, not language constraints or process-memory guarantees.
 
 ## Define documents
 
@@ -116,8 +91,6 @@ print(written.output_path, written.row_count)
 These helpers read ODM 1.3/2.0 XML or TAR inputs into the fixed
 clinical-item schema. They preserve source order and absent/null/empty values,
 and the Parquet writer uses bounded batches and atomic publication. Their
-`max_archive_members`, `max_expanded_bytes` and `max_xml_depth` options govern
-parsing; parser refusals raise `ODMError`. Their
 [private implementation](src/yamaa/_odm/README.md) imports only file/schema
 libraries. Internal row
 models, iterators, binding plans and contexts are not public authoring APIs.

@@ -562,19 +562,15 @@ validation with `ambiguous_dictionary`.
 
 ### Regular expressions: Errors
 
-The portable matcher applies the fixed implementation policy documented in
-`docs/release.md` under Resource limits: 1,000,000 interpreter
-steps per complete match call. Each match starts a fresh counter covering search
-starts, backtracking, and nested assertions. This implementation boundary is
-separate from the regex grammar.
+Matching also has explicit implementation budgets. The default portable matcher
+admits at most 1,048,576 subject bytes, 1,000,000 work units, and 1,000,000
+cumulative logical state cells per call. Dataset execution additionally charges
+matching against the attempt's cumulative predicate budgets. Trusted callers may
+select different bounds; these quotas do not restrict the regex grammar.
 
-Predicate `LIKE` lowers its validated literal and wildcard tokens directly to
-this matcher and applies the same fresh per-match step counter. Its `%` and `_`
-wildcards still match all Unicode scalars, including line terminators, under
-[Predicates](predicates.md#req-0176).
-
-A matching step refusal is reported as `engine_rejected`, with
-`resource: regex_steps`, the applied `limit`, and `actual` when known.
+A matching budget refusal is reported as `engine_rejected`, with `resource`
+(`predicate_regex_subject_bytes`, `predicate_regex_work`, or
+`predicate_regex_state_cells`), the applied `limit`, and `actual` when known.
 For a column `matches` check, `spec_paths` names its declaring pattern, such as
 `columns.TERM.verifications[0].matches.pattern`. A refused match cannot be treated
 as an unmatched string or a skipped verification.

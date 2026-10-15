@@ -4,6 +4,7 @@ use yamaa_core::{
     value::Value,
 };
 
+pub const MAX_SCALAR_BYTES: usize = 1_048_576;
 /// A logical scalar, not a vector: tag 0 missing, 1 int, 2 float, 3 str, 4 bool.
 /// Integers use canonical ASCII decimal; float bits use eight little-endian bytes.
 /// Tags 5/6 carry whole epoch days/seconds as exact binary64 little-endian bytes.
@@ -16,6 +17,9 @@ pub struct ScalarBytes {
 
 /// Admit a byte payload with no locale, R string pointer or sentinel assumption.
 pub fn decode(tag: i32, bytes: &[u8]) -> Result<Value, &'static str> {
+    if bytes.len() > MAX_SCALAR_BYTES {
+        return Err("scalar exceeds byte limit");
+    }
     Ok(match tag {
         0 if bytes.is_empty() => Value::Missing,
         1 => {
@@ -62,7 +66,7 @@ pub fn decode(tag: i32, bytes: &[u8]) -> Result<Value, &'static str> {
     })
 }
 /// Encode normalized host values; temporal precision is dropped only here.
-pub fn encode(value: Value) -> ScalarBytes {
+pub fn encode(value: Value) -> Result<ScalarBytes, &'static str> {
     let (tag, payload) = match value {
         Value::Missing => (0, vec![]),
         Value::Int(n) => (1, n.to_string().into_bytes()),
@@ -82,6 +86,9 @@ pub fn encode(value: Value) -> ScalarBytes {
                 .to_vec(),
         ),
     };
-    ScalarBytes { tag, payload }
+    if payload.len() > MAX_SCALAR_BYTES {
+        return Err("scalar exceeds byte limit");
+    }
+    Ok(ScalarBytes { tag, payload })
 }
 pub use yamaa_core::scalar_operator::{exact_float, operate, operator_code};

@@ -24,6 +24,13 @@ from packaging.markers import InvalidMarker, Marker
 from packaging.utils import InvalidName, canonicalize_name
 from packaging.version import InvalidVersion, Version
 
+_MAX_BYTES = 16_777_216
+_MAX_RECORDS = 65_536
+_MAX_CALLS = 1_024
+_MAX_MARKER_BYTES = 2_048
+_MAX_MARKERS = 64
+_MAX_IDENTITY_BYTES = 2_048
+
 
 def _installed_providers(roots: Sequence[str]) -> Mapping[str, list[str]]:
     """Supplement installed import names with non-executable editable metadata.
@@ -37,13 +44,23 @@ def _installed_providers(roots: Sequence[str]) -> Mapping[str, list[str]]:
         for root, names in metadata.packages_distributions().items()
         if root in roots
     }
-    for distribution in metadata.distributions():
+    remaining_files = _MAX_RECORDS
+    remaining_metadata = _MAX_BYTES
+    remaining_probes = 262_144
+    for index, distribution in enumerate(metadata.distributions()):
+        if index >= _MAX_RECORDS:
+            raise InvalidLock("installed distribution count limit")
         try:
             raw = distribution.read_text("direct_url.json")
         except UnicodeDecodeError as error:
             raise InvalidLock("invalid editable metadata") from error
         if raw is None:
             continue
+        if len(raw.encode("utf-8")) > 16_384:
+            raise InvalidLock("editable metadata byte limit")
+        remaining_metadata -= len(raw.encode("utf-8"))
+        if remaining_metadata < 0:
+            raise InvalidLock("installed metadata cumulative byte limit")
         try:
             direct = json.loads(raw)
         except (ValueError, RecursionError) as error:
@@ -55,8 +72,8 @@ def _installed_providers(roots: Sequence[str]) -> Mapping[str, list[str]]:
         ):
             continue
         url = direct.get("url")
-        if not isinstance(url, str):
-            raise InvalidLock("invalid editable source identity")
+        if not isinstance(url, str) or len(url.encode("utf-8")) > _MAX_IDENTITY_BYTES:
+            raise InvalidLock("editable source identity limit")
         parsed = urlsplit(url)
         if (
             parsed.scheme != "file"
@@ -67,30 +84,46 @@ def _installed_providers(roots: Sequence[str]) -> Mapping[str, list[str]]:
             raise InvalidLock("editable source is not a local file URL")
         project = Path(url2pathname(parsed.path)).resolve()
         name = distribution.metadata.get("Name")
-        if not isinstance(name, str):
-            raise InvalidLock("invalid editable distribution identity")
+        if not isinstance(name, str) or len(name.encode("utf-8")) > _MAX_IDENTITY_BYTES:
+            raise InvalidLock("editable distribution identity limit")
         for entry in distribution.files or ():
+            remaining_files -= 1
+            if remaining_files < 0:
+                raise InvalidLock("editable file metadata limit")
             if entry.suffix != ".pth":
                 continue
             installed = Path(entry.locate())
             try:
-                held = installed.read_bytes()
+                with installed.open("rb") as stream:
+                    held = stream.read(16_385)
             except FileNotFoundError:
                 # RECORD can outlive an editable path file. Its absence cannot
                 # identify a provider or obstruct other called distributions.
                 continue
+            if len(held) > 16_384:
+                raise InvalidLock("editable path metadata byte limit")
+            remaining_metadata -= len(held)
+            if remaining_metadata < 0:
+                raise InvalidLock("installed metadata cumulative byte limit")
             try:
                 lines = held.decode("utf-8").splitlines()
             except UnicodeDecodeError as error:
                 raise InvalidLock("invalid editable path metadata") from error
+            if len(lines) > 64:
+                raise InvalidLock("editable path count limit")
             for line in lines:
                 line = line.strip()
                 if not line or line.startswith(("#", "import ", "import\t")):
                     continue
+                if len(line.encode("utf-8")) > _MAX_IDENTITY_BYTES:
+                    raise InvalidLock("editable path identity limit")
                 path = (installed.parent / line).resolve()
                 if not path.is_relative_to(project):
                     continue
                 for root in roots:
+                    remaining_probes -= 1
+                    if remaining_probes < 0:
+                        raise InvalidLock("editable module discovery work limit")
                     if (path / root).is_dir() or (path / (root + ".py")).is_file():
                         names = mapping.setdefault(root, [])
                         if name not in names:
@@ -107,10 +140,12 @@ class Finding:
 
 
 class InvalidLock(ValueError):
-    """Held bytes cannot be interpreted as a uv packaging lock."""
+    """Held bytes cannot be interpreted as a bounded uv packaging lock."""
 
 
 def _read(raw: bytes) -> dict:
+    if len(raw) > _MAX_BYTES:
+        raise InvalidLock("lock byte limit")
     try:
         document = tomllib.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, tomllib.TOMLDecodeError, RecursionError) as error:
@@ -118,7 +153,7 @@ def _read(raw: bytes) -> dict:
     records = document.get("package")
     if type(document.get("version")) is not int or document["version"] != 1:
         raise InvalidLock("unsupported uv lock format")
-    if not isinstance(records, list):
+    if not isinstance(records, list) or len(records) > _MAX_RECORDS:
         raise InvalidLock("invalid uv package array")
     return document
 
@@ -127,12 +162,12 @@ def _selected(record: dict, environment: Mapping[str, str] | None) -> bool:
     markers = record.get("resolution-markers")
     if markers is None:
         return True
-    if not isinstance(markers, list) or not markers:
+    if not isinstance(markers, list) or not markers or len(markers) > _MAX_MARKERS:
         raise InvalidLock("invalid resolution markers")
     results = []
     for text in markers:
-        if not isinstance(text, str):
-            raise InvalidLock("invalid resolution marker")
+        if not isinstance(text, str) or len(text.encode("utf-8")) > _MAX_MARKER_BYTES:
+            raise InvalidLock("resolution marker byte limit")
         try:
             results.append(
                 Marker(text).evaluate(environment=environment, context="lock_file")
@@ -159,6 +194,8 @@ def verify_versions(
     """
     if not calls:
         return ()
+    if len(calls) > _MAX_CALLS:
+        raise InvalidLock("called-function limit")
     document = _read(raw)
     version = metadata.version if installed_version is None else installed_version
     needed = {"yamaa"}
@@ -178,10 +215,15 @@ def verify_versions(
                 findings.append(Finding(root, "distribution_not_identified"))
                 continue
             for distribution in distributions:
-                if not isinstance(distribution, str):
-                    raise InvalidLock("invalid installed distribution identity")
+                if (
+                    not isinstance(distribution, str)
+                    or len(distribution.encode("utf-8")) > _MAX_IDENTITY_BYTES
+                ):
+                    raise InvalidLock("installed distribution identity limit")
                 try:
                     needed.add(canonicalize_name(distribution, validate=True))
+                    if len(needed) > _MAX_CALLS + 1:
+                        raise InvalidLock("called-distribution limit")
                 except InvalidName as error:
                     raise InvalidLock(
                         "invalid installed distribution identity"
@@ -190,6 +232,8 @@ def verify_versions(
     for record in document["package"]:
         if not isinstance(record, dict) or not isinstance(record.get("name"), str):
             raise InvalidLock("invalid uv package identity")
+        if len(record["name"].encode("utf-8")) > _MAX_IDENTITY_BYTES:
+            raise InvalidLock("uv package identity limit")
         try:
             name = canonicalize_name(record["name"], validate=True)
         except InvalidName as error:
@@ -204,6 +248,8 @@ def verify_versions(
             raw_version = record.get("version")
             if not isinstance(raw_version, str):
                 raise InvalidLock("called package has no locked version")
+            if len(raw_version.encode("utf-8")) > _MAX_IDENTITY_BYTES:
+                raise InvalidLock("locked version text limit")
             try:
                 expected.add(Version(raw_version))
             except InvalidVersion as error:
@@ -226,6 +272,8 @@ def verify_versions(
         if not isinstance(actual, str):
             findings.append(Finding(name, "invalid_installed_version", choices))
             continue
+        if len(actual.encode("utf-8")) > _MAX_IDENTITY_BYTES:
+            raise InvalidLock("installed version text limit")
         try:
             parsed = Version(actual)
         except InvalidVersion:
@@ -298,6 +346,8 @@ def resolve_callable(call: str, parameters: Sequence[str]):
     Import exceptions and interrupts keep their identity. Unavailable concrete
     signatures are binding failures, with the original exception as their cause.
     """
+    if len(call.encode("utf-8")) > _MAX_IDENTITY_BYTES or len(parameters) > _MAX_CALLS:
+        raise InvalidBinding(call, "callable metadata limit")
     module, separator, name = call.rpartition(".")
     if not separator or not module or not name:
         raise InvalidBinding(call, "callable must be module-qualified")

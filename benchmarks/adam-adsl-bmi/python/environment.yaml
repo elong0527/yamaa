@@ -1,5 +1,6 @@
 schema_version: '1.0'
 language: python
+lock: uv.lock
 functions:
   bmi:
     function: yamaa_benchmarks.bmi

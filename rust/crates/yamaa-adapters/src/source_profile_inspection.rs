@@ -10,7 +10,7 @@ pub(crate) fn inspect(
 ) -> Option<(ResourceFailure, String)> {
     let origin = document.written_input_origin(dataset, "path")?;
     let error = resources
-        .inspect_from(origin.base_source, origin.written)
+        .inspect_from(origin.declaring_source, origin.written)
         .err()?;
     let failure = yamaa_core::specification_run::SourcePort::resource_failure(resources, &error)?;
     Some((

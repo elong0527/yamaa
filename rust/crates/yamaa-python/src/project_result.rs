@@ -8,7 +8,8 @@ use pyo3::{
 };
 use std::sync::Arc;
 use yamaa_adapters::{
-    callback::details,
+    callback::CallbackError,
+    project_function_diagnostics::HostDetails,
     project_report::{self, Classified},
 };
 
@@ -17,6 +18,24 @@ pub struct Result {
     formatted: Option<yamaa_adapters::specification_report::BuildResult>,
     refusal: &'static str,
     refusal_details: Option<yamaa_adapters::resource_diagnostics::Refusal>,
+}
+fn details(error: &CallbackError) -> Option<HostDetails<'_>> {
+    match error {
+        CallbackError::Exception {
+            class,
+            message,
+            truncated,
+        } => Some(HostDetails::Exception {
+            class,
+            message,
+            truncated: *truncated,
+        }),
+        CallbackError::Rejected { reason, returned } => Some(HostDetails::Rejected {
+            reason,
+            returned: returned.as_deref(),
+        }),
+        CallbackError::Boundary(_) => None,
+    }
 }
 pub(super) fn prepare(
     py: Python<'_>,
@@ -29,6 +48,7 @@ pub(super) fn prepare(
     })?;
     let mut failures = Vec::new();
     yamaa_adapters::project_attempt::visit_host_failures(&state, |_, error| failures.push(error));
+    let mut budget = yamaa_adapters::specification_check::MAX_ISSUE_BYTES;
     let mut ordinary = Vec::new();
     let mut refusal = "";
     let mut refusal_details = None;
@@ -39,9 +59,46 @@ pub(super) fn prepare(
             }
             _ => None,
         };
+        let value = projection.as_ref().or(match error {
+            HostError::Result(value) => Some(value),
+            _ => None,
+        });
+        if let Some(facts) = value.and_then(details) {
+            let texts = match facts {
+                HostDetails::Exception { class, message, .. } => [Some(class), Some(message)],
+                HostDetails::Rejected { reason, returned } => [Some(reason), returned],
+            };
+            for text in texts.into_iter().flatten() {
+                let remaining = text
+                    .len()
+                    .checked_mul(12)
+                    .and_then(|size| size.checked_add(128))
+                    .and_then(|charge| budget.checked_sub(charge));
+                let Some(remaining) = remaining else {
+                    refusal = "report_limit";
+                    refusal_details = Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+                        "diagnostic_bytes",
+                        yamaa_adapters::specification_check::MAX_ISSUE_BYTES,
+                        text.len()
+                            .checked_mul(12)
+                            .and_then(|n| n.checked_add(128))
+                            .and_then(|charge| {
+                                (yamaa_adapters::specification_check::MAX_ISSUE_BYTES - budget)
+                                    .checked_add(charge)
+                            }),
+                        Vec::new(),
+                    ));
+                    break;
+                };
+                budget = remaining;
+            }
+        }
         ordinary.push(projection);
+        if !refusal.is_empty() {
+            break;
+        }
     }
-    let formatted = {
+    let formatted = if refusal.is_empty() {
         let facts = failures
             .iter()
             .zip(&ordinary)
@@ -83,13 +140,18 @@ pub(super) fn prepare(
                     project_report::Error::Source(_) => "source_boundary",
                     project_report::Error::Execution(_) => "execution_boundary",
                     project_report::Error::Report(
+                        yamaa_adapters::specification_report::Error::OutputLimit,
+                    ) => "report_limit",
+                    project_report::Error::Report(
                         yamaa_adapters::specification_report::Error::ResourceLimit(_),
-                    ) => "output_limit",
+                    ) => "report_limit",
                     project_report::Error::Report(_) => "report_refusal",
                 };
                 None
             }
         }
+    } else {
+        None
     };
     Ok(Result {
         carrier: Attempt {
