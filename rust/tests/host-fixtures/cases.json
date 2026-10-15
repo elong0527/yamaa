@@ -722,6 +722,190 @@
           },
           "invalid_count": 0
         }
+      ],
+      "inheritance_nulls": [
+        {
+          "name": "standalone_missing",
+          "spec": "schema_version: '1.0'\ndomain: NC\nkeys: [ID]\nbase: OBS\ninput:\n  OBS: {path: obs.csv, types: {ID: int}}\n  REF: ref.csv\noutput: {path: result.csv, columns: [ID, CODE, LABEL]}\nintermediates:\n  - id: LOOK\n    dataset: REF\n    key: {CODE: CODE}\n    no_match: null\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: OBS.ID}\n  - {name: CODE, type: str, label: Code, derivation: OBS.CODE}\n  - {name: LABEL, type: str, label: Label, derivation: LOOK.LABEL}\n",
+          "parents": {},
+          "inputs": {
+            "obs.csv": "ID,CODE\n1,A\n2,B\n3,Z\n",
+            "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n"
+          },
+          "check_condition": null,
+          "run_condition": null,
+          "csv": "ID,CODE,LABEL\n1,A,Alpha\n2,B,Beta\n3,Z,\n",
+          "no_match_count": 1
+        },
+        {
+          "name": "explicit_empty_parents",
+          "spec": "schema_version: '1.0'\nparents: []\ndomain: NC\nkeys: [ID]\nbase: OBS\ninput:\n  OBS: {path: obs.csv, types: {ID: int}}\n  REF: ref.csv\noutput: {path: result.csv, columns: [ID, CODE, LABEL]}\nintermediates:\n  - id: LOOK\n    dataset: REF\n    key: {CODE: CODE}\n    no_match: null\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: OBS.ID}\n  - {name: CODE, type: str, label: Code, derivation: OBS.CODE}\n  - {name: LABEL, type: str, label: Label, derivation: LOOK.LABEL}\n",
+          "parents": {},
+          "inputs": {
+            "obs.csv": "ID,CODE\n1,A\n2,B\n3,Z\n",
+            "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n"
+          },
+          "check_condition": null,
+          "run_condition": null,
+          "csv": "ID,CODE,LABEL\n1,A,Alpha\n2,B,Beta\n3,Z,\n",
+          "no_match_count": 1
+        },
+        {
+          "name": "empty_child",
+          "spec": "schema_version: '1.0'\nparents: parent.yaml\n",
+          "parents": {
+            "parent.yaml": "schema_version: '1.0'\ndomain: NC\nkeys: [ID]\nbase: OBS\ninput:\n  OBS: {path: obs.csv, types: {ID: int}}\n  REF: ref.csv\noutput: {path: result.csv, columns: [ID, CODE, LABEL]}\nintermediates:\n  - id: LOOK\n    dataset: REF\n    key: {CODE: CODE}\n    no_match: null\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: OBS.ID}\n  - {name: CODE, type: str, label: Code, derivation: OBS.CODE}\n  - {name: LABEL, type: str, label: Label, derivation: LOOK.LABEL}\n"
+          },
+          "inputs": {
+            "obs.csv": "ID,CODE\n1,A\n2,B\n3,Z\n",
+            "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n"
+          },
+          "check_condition": null,
+          "run_condition": null,
+          "csv": "ID,CODE,LABEL\n1,A,Alpha\n2,B,Beta\n3,Z,\n",
+          "no_match_count": 1
+        },
+        {
+          "name": "first_field_on_inherited_member",
+          "spec": "schema_version: '1.0'\nparents: parent.yaml\nintermediates: [{id: LOOK, no_match: null}]\n",
+          "parents": {
+            "parent.yaml": "schema_version: '1.0'\ndomain: NC\nkeys: [ID]\nbase: OBS\ninput:\n  OBS: {path: obs.csv, types: {ID: int}}\n  REF: ref.csv\noutput: {path: result.csv, columns: [ID, CODE, LABEL]}\nintermediates:\n  - id: LOOK\n    dataset: REF\n    key: {CODE: CODE}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: OBS.ID}\n  - {name: CODE, type: str, label: Code, derivation: OBS.CODE}\n  - {name: LABEL, type: str, label: Label, derivation: LOOK.LABEL}\n"
+          },
+          "inputs": {
+            "obs.csv": "ID,CODE\n1,A\n2,B\n3,Z\n",
+            "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n"
+          },
+          "check_condition": null,
+          "run_condition": null,
+          "csv": "ID,CODE,LABEL\n1,A,Alpha\n2,B,Beta\n3,Z,\n",
+          "no_match_count": 1
+        },
+        {
+          "name": "clear_inherited_literal",
+          "spec": "schema_version: '1.0'\nparents: parent.yaml\nintermediates: [{id: LOOK, no_match: null}]\n",
+          "parents": {
+            "parent.yaml": "schema_version: '1.0'\ndomain: NC\nkeys: [ID]\nbase: OBS\ninput:\n  OBS: {path: obs.csv, types: {ID: int}}\n  REF: ref.csv\noutput: {path: result.csv, columns: [ID, CODE, LABEL]}\nintermediates:\n  - id: LOOK\n    dataset: REF\n    key: {CODE: CODE}\n    no_match: UNKNOWN\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: OBS.ID}\n  - {name: CODE, type: str, label: Code, derivation: OBS.CODE}\n  - {name: LABEL, type: str, label: Label, derivation: LOOK.LABEL}\n"
+          },
+          "inputs": {
+            "obs.csv": "ID,CODE\n1,A\n2,B\n3,Z\n",
+            "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n"
+          },
+          "check_condition": null,
+          "run_condition": "unmatched_key",
+          "csv": null,
+          "no_match_count": 0
+        },
+        {
+          "name": "clear_inherited_missing",
+          "spec": "schema_version: '1.0'\nparents: parent.yaml\nintermediates: [{id: LOOK, no_match: null}]\n",
+          "parents": {
+            "parent.yaml": "schema_version: '1.0'\ndomain: NC\nkeys: [ID]\nbase: OBS\ninput:\n  OBS: {path: obs.csv, types: {ID: int}}\n  REF: ref.csv\noutput: {path: result.csv, columns: [ID, CODE, LABEL]}\nintermediates:\n  - id: LOOK\n    dataset: REF\n    key: {CODE: CODE}\n    no_match: null\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: OBS.ID}\n  - {name: CODE, type: str, label: Code, derivation: OBS.CODE}\n  - {name: LABEL, type: str, label: Label, derivation: LOOK.LABEL}\n"
+          },
+          "inputs": {
+            "obs.csv": "ID,CODE\n1,A\n2,B\n3,Z\n",
+            "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n"
+          },
+          "check_condition": null,
+          "run_condition": "unmatched_key",
+          "csv": null,
+          "no_match_count": 0
+        },
+        {
+          "name": "introduce_after_clear",
+          "spec": "schema_version: '1.0'\nparents: parent.yaml\nintermediates: [{id: LOOK, no_match: null}]\n",
+          "parents": {
+            "parent.yaml": "schema_version: '1.0'\nparents: base.yaml\nintermediates: [{id: LOOK, no_match: null}]\n",
+            "base.yaml": "schema_version: '1.0'\ndomain: NC\nkeys: [ID]\nbase: OBS\ninput:\n  OBS: {path: obs.csv, types: {ID: int}}\n  REF: ref.csv\noutput: {path: result.csv, columns: [ID, CODE, LABEL]}\nintermediates:\n  - id: LOOK\n    dataset: REF\n    key: {CODE: CODE}\n    no_match: UNKNOWN\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: OBS.ID}\n  - {name: CODE, type: str, label: Code, derivation: OBS.CODE}\n  - {name: LABEL, type: str, label: Label, derivation: LOOK.LABEL}\n"
+          },
+          "inputs": {
+            "obs.csv": "ID,CODE\n1,A\n2,B\n3,Z\n",
+            "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n"
+          },
+          "check_condition": null,
+          "run_condition": null,
+          "csv": "ID,CODE,LABEL\n1,A,Alpha\n2,B,Beta\n3,Z,\n",
+          "no_match_count": 1
+        },
+        {
+          "name": "invalid_label",
+          "spec": "schema_version: '1.0'\nparents: []\ndomain: NC\nkeys: [ID]\nbase: OBS\ninput:\n  OBS: {path: obs.csv, types: {ID: int}}\n  REF: ref.csv\noutput: {path: result.csv, columns: [ID, CODE, LABEL]}\nintermediates:\n  - id: LOOK\n    dataset: REF\n    key: {CODE: CODE}\n    no_match: null\ncolumns:\n  - {name: ID, type: int, label: null, derivation: OBS.ID}\n  - {name: CODE, type: str, label: Code, derivation: OBS.CODE}\n  - {name: LABEL, type: str, label: Label, derivation: LOOK.LABEL}\n",
+          "parents": {},
+          "inputs": {
+            "obs.csv": "ID,CODE\n1,A\n2,B\n3,Z\n",
+            "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n"
+          },
+          "check_condition": "invalid_field_type",
+          "run_condition": "invalid_field_type",
+          "csv": null,
+          "no_match_count": 0
+        },
+        {
+          "name": "required_type",
+          "spec": "schema_version: '1.0'\nparents: []\ndomain: NC\nkeys: [ID]\nbase: OBS\ninput:\n  OBS: {path: obs.csv, types: {ID: int}}\n  REF: ref.csv\noutput: {path: result.csv, columns: [ID, CODE, LABEL]}\nintermediates:\n  - id: LOOK\n    dataset: REF\n    key: {CODE: CODE}\n    no_match: null\ncolumns:\n  - {name: ID, type: null, label: Identifier, derivation: OBS.ID}\n  - {name: CODE, type: str, label: Code, derivation: OBS.CODE}\n  - {name: LABEL, type: str, label: Label, derivation: LOOK.LABEL}\n",
+          "parents": {},
+          "inputs": {
+            "obs.csv": "ID,CODE\n1,A\n2,B\n3,Z\n",
+            "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n"
+          },
+          "check_condition": "invalid_clear",
+          "run_condition": "invalid_clear",
+          "csv": null,
+          "no_match_count": 0
+        },
+        {
+          "name": "invalid_root_window",
+          "spec": "schema_version: '1.0'\nparents: []\ndomain: NC\nwindows: null\nkeys: [ID]\nbase: OBS\ninput:\n  OBS: {path: obs.csv, types: {ID: int}}\n  REF: ref.csv\noutput: {path: result.csv, columns: [ID, CODE, LABEL]}\nintermediates:\n  - id: LOOK\n    dataset: REF\n    key: {CODE: CODE}\n    no_match: null\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: OBS.ID}\n  - {name: CODE, type: str, label: Code, derivation: OBS.CODE}\n  - {name: LABEL, type: str, label: Label, derivation: LOOK.LABEL}\n",
+          "parents": {},
+          "inputs": {
+            "obs.csv": "ID,CODE\n1,A\n2,B\n3,Z\n",
+            "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n"
+          },
+          "check_condition": "invalid_field_type",
+          "run_condition": "invalid_field_type",
+          "csv": null,
+          "no_match_count": 0
+        },
+        {
+          "name": "invalid_intermediate_filter",
+          "spec": "schema_version: '1.0'\nparents: []\ndomain: NC\nkeys: [ID]\nbase: OBS\ninput:\n  OBS: {path: obs.csv, types: {ID: int}}\n  REF: ref.csv\noutput: {path: result.csv, columns: [ID, CODE, LABEL]}\nintermediates:\n  - id: LOOK\n    dataset: REF\n    key: {CODE: CODE}\n    no_match: null\n    filter: null\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: OBS.ID}\n  - {name: CODE, type: str, label: Code, derivation: OBS.CODE}\n  - {name: LABEL, type: str, label: Label, derivation: LOOK.LABEL}\n",
+          "parents": {},
+          "inputs": {
+            "obs.csv": "ID,CODE\n1,A\n2,B\n3,Z\n",
+            "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n"
+          },
+          "check_condition": "invalid_field_type",
+          "run_condition": "invalid_field_type",
+          "csv": null,
+          "no_match_count": 0
+        },
+        {
+          "name": "invalid_unused_rename_parent",
+          "spec": "schema_version: '1.0'\ndomain: NC\nkeys: [ID]\nbase: OBS\ninput:\n  OBS: {path: obs.csv, types: {ID: int}}\n  REF: ref.csv\noutput: {path: result.csv, columns: [ID, CODE, LABEL]}\nintermediates:\n  - {id: UNUSED, dataset: REF, no_match: null}\n  - id: LOOK\n    dataset: REF\n    key: {CODE: CODE}\n    no_match: null\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: OBS.ID}\n  - {name: CODE, type: str, label: Code, derivation: OBS.CODE}\n  - {name: LABEL, type: str, label: Label, derivation: LOOK.LABEL}\n",
+          "parents": {},
+          "inputs": {
+            "obs.csv": "ID,CODE\n1,A\n2,B\n3,Z\n",
+            "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n"
+          },
+          "check_condition": "rename_only_intermediate",
+          "run_condition": "rename_only_intermediate",
+          "csv": null,
+          "no_match_count": 0
+        },
+        {
+          "name": "invalid_unused_rename_empty_child",
+          "spec": "schema_version: '1.0'\nparents: parent.yaml\n",
+          "parents": {
+            "parent.yaml": "schema_version: '1.0'\ndomain: NC\nkeys: [ID]\nbase: OBS\ninput:\n  OBS: {path: obs.csv, types: {ID: int}}\n  REF: ref.csv\noutput: {path: result.csv, columns: [ID, CODE, LABEL]}\nintermediates:\n  - {id: UNUSED, dataset: REF, no_match: null}\n  - id: LOOK\n    dataset: REF\n    key: {CODE: CODE}\n    no_match: null\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: OBS.ID}\n  - {name: CODE, type: str, label: Code, derivation: OBS.CODE}\n  - {name: LABEL, type: str, label: Label, derivation: LOOK.LABEL}\n"
+          },
+          "inputs": {
+            "obs.csv": "ID,CODE\n1,A\n2,B\n3,Z\n",
+            "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n"
+          },
+          "check_condition": "rename_only_intermediate",
+          "run_condition": "rename_only_intermediate",
+          "csv": null,
+          "no_match_count": 0
+        }
       ]
     },
     "file-resources": {

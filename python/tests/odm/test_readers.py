@@ -136,6 +136,32 @@ def test_element_child_inside_value_is_rejected_not_truncated(
         list(iter_odm_records(source))
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        '<x:Value xmlns:x="urn:example">PD-L1</x:Value>',
+        '<Value xmlns="">PD-L1</Value>',
+    ],
+)
+def test_value_child_in_foreign_namespace_is_rejected_not_dropped(
+    tmp_path: Path, value: str
+) -> None:
+    # A `Value` element outside the ODM namespace names the item's value;
+    # ignoring it as a foreign extension silently presented a supplied
+    # value as absent (value null, ValuePresent false).
+    source = tmp_path / "foreign-value.xml"
+    source.write_text(
+        ODM_20.replace(
+            '<ItemData ItemOID="I.TEST"><Value>PD-L1</Value></ItemData>',
+            f'<ItemData ItemOID="I.TEST">{value}</ItemData>',
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ODMError, match="Value child is in an unsupported namespace"):
+        list(iter_odm_records(source))
+
+
 @pytest.mark.parametrize("annotation", ["<!-- c -->", "<?pi data?>"])
 def test_comment_or_pi_inside_item_data_is_ignored(
     tmp_path: Path, annotation: str
@@ -232,6 +258,90 @@ def test_nested_clinical_data_is_rejected(tmp_path: Path) -> None:
     )
 
     with pytest.raises(ODMError, match="nested ClinicalData is not supported"):
+        list(iter_odm_records(source))
+
+
+def test_nested_study_is_rejected(tmp_path: Path) -> None:
+    # ClinicalData/SubjectData/StudyEventData/FormData all reject nesting;
+    # Study must too: without a guard the inner Study OID silently replaces
+    # the outer one, so the definitions that follow are keyed to the inner
+    # study and every clinical row loses its metadata names.
+    source = tmp_path / "nested-study.xml"
+    source.write_text(
+        ODM_13.replace(
+            '<Study OID="S.13">',
+            '<Study OID="S.13"><Study OID="EVIL">',
+        ).replace(
+            "</Study>\n  <ClinicalData",
+            "</Study></Study>\n  <ClinicalData",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ODMError, match="nested Study is not supported"):
+        list(iter_odm_records(source))
+
+
+def test_nested_metadata_version_is_rejected(tmp_path: Path) -> None:
+    # A nested MetaDataVersion end clears the version context, so a
+    # definition written after it in the outer version would be reported
+    # as appearing outside any MetaDataVersion; reject the nesting instead.
+    source = tmp_path / "nested-metadata-version.xml"
+    source.write_text(
+        ODM_13.replace(
+            '<MetaDataVersion OID="M.13" Name="Metadata">',
+            '<MetaDataVersion OID="M.13" Name="Metadata">'
+            '<MetaDataVersion OID="EVIL.M">',
+        ).replace(
+            "</MetaDataVersion>",
+            "</MetaDataVersion></MetaDataVersion>",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ODMError, match="nested MetaDataVersion is not supported"):
+        list(iter_odm_records(source))
+
+
+def test_nested_study_inside_clinical_data_is_rejected(tmp_path: Path) -> None:
+    # A ClinicalData block nested inside a Study does not clear the active
+    # study context, so a Study inside it is still nested: the clinical-phase
+    # gate must not bypass the active-context check.
+    source = tmp_path / "nested-study-in-clinical.xml"
+    source.write_text(
+        ODM_13.replace(
+            '<Study OID="S.13">',
+            '<Study OID="S.13">'
+            '<ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13">'
+            '<Study OID="EVIL"></Study>'
+            "</ClinicalData>",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ODMError, match="nested Study is not supported"):
+        list(iter_odm_records(source))
+
+
+def test_nested_metadata_version_inside_clinical_data_is_rejected(
+    tmp_path: Path,
+) -> None:
+    # Same bypass for MetaDataVersion: a ClinicalData block nested inside a
+    # MetaDataVersion leaves the version context active, so a MetaDataVersion
+    # inside it is nested and must be rejected.
+    source = tmp_path / "nested-metadata-version-in-clinical.xml"
+    source.write_text(
+        ODM_13.replace(
+            '<MetaDataVersion OID="M.13" Name="Metadata">',
+            '<MetaDataVersion OID="M.13" Name="Metadata">'
+            '<ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13">'
+            '<MetaDataVersion OID="EVIL.M"></MetaDataVersion>'
+            "</ClinicalData>",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ODMError, match="nested MetaDataVersion is not supported"):
         list(iter_odm_records(source))
 
 

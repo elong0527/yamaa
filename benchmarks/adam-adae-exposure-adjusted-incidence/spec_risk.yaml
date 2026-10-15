@@ -1,0 +1,143 @@
+schema_version: '1.0'
+domain: ADRISK
+keys:
+- STUDYID
+- USUBJID
+- AEDECOD
+input:
+  ADSL:
+    path: input/adsl.csv
+    types:
+      TRTSDT: date
+      TRTEDT: date
+  ADAE:
+    path: input/adae.csv
+    types:
+      ASEQ: int
+      ASTDT: date
+base: ADSL
+
+output:
+  path: adrisk.csv
+  columns:
+  - STUDYID
+  - USUBJID
+  - TRT01A
+  - AEDECOD
+  - FIRSTDT
+  - EVENTN
+  - RISKDAYS
+  order_by:
+  - STUDYID
+  - USUBJID
+  - AEDECOD
+
+intermediates:
+- id: FIRST
+  dataset: ADAE
+  key:
+  - STUDYID
+  - USUBJID
+  - AEDECOD
+  filter: ADAE.ASTDT >= ADSL.TRTSDT AND ADAE.POSTDAYS <= 30
+  order_by:
+  - ADAE.ASTDT
+  - ADAE.ASEQ
+  keep: first
+  no_match: null
+  derivations:
+    POSTDAYS:
+      date_diff:
+        start: ADSL.TRTEDT
+        end: ASTDT
+        unit: day
+
+columns:
+- name: STUDYID
+  type: str
+  label: Study Identifier
+  derivation: ADSL.STUDYID
+
+- name: USUBJID
+  type: str
+  label: Unique Subject Identifier
+  derivation: ADSL.USUBJID
+
+- name: TRT01A
+  type: str
+  label: Actual Treatment for Period 01
+  derivation: ADSL.TRT01A
+
+- name: AEDECOD
+  type: str
+  label: Dictionary Derived Event Term
+
+- name: FIRSTDT
+  type: date
+  label: First Onset Within the Collection Window
+  derivation: FIRST.ASTDT
+
+- name: EVENTN
+  type: int
+  label: Subject Has an Eligible Event
+  derivation:
+    case:
+    - when: FIRSTDT IS NOT NULL
+      then: {literal: 1}
+    - otherwise: {literal: 0}
+
+- name: FULLDAYS
+  type: int
+  label: Full Collection Window Days
+  derivation:
+    date_diff:
+      start: ADSL.TRTSDT
+      end: ADSL.TRTEDT
+      unit: day
+      bounds: inclusive
+
+- name: EVENTDAYS
+  type: int
+  label: Days to First Eligible Onset
+  derivation:
+    date_diff:
+      start: ADSL.TRTSDT
+      end: FIRSTDT
+      unit: day
+      bounds: inclusive
+
+- name: RISKDAYS
+  type: int
+  label: Time at Risk in Days
+  derivation:
+    case:
+    - when: EVENTN = 1
+      then: EVENTDAYS
+    - otherwise:
+        compute:
+          expr: FULLDAYS + 30
+  verifications:
+    range:
+      min: 1
+
+rows:
+- id: diarrhoea
+  dataset: ADSL
+  derivations:
+    AEDECOD: {literal: DIARRHOEA}
+
+- id: headache
+  dataset: ADSL
+  derivations:
+    AEDECOD: {literal: HEADACHE}
+
+verifications:
+- unique:
+    columns:
+    - STUDYID
+    - USUBJID
+    - AEDECOD
+- assert:
+    id: event-status-agrees-with-onset
+    require: (EVENTN = 1 AND FIRSTDT IS NOT NULL)
+      OR (EVENTN = 0 AND FIRSTDT IS NULL)
