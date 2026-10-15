@@ -1,8 +1,5 @@
 # Classify a Result, Its Shift from Baseline, and Two Criteria
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adlb-shift-criteria.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive `ANRIND`, `BASE`, `BNRIND`, `SHIFT1`, `R2BASE`,
 `CRIT1`, `CRIT1FL`, `CRIT2`, and `CRIT2FL`: mark where each analysis
 value sits against its normal range, how that mark moved since
@@ -59,5 +56,3 @@ mark and the criteria rest on the record's own value and limits;
 each criterion text and its flag always arrive together, as do the mark
 and the shift. A record that breaks these pairings stops the run, and
 no output is written.
-
-**Standard:** ADaM | **Domain:** ADLB

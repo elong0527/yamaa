@@ -1,8 +1,5 @@
 # ATC Classes for Coded Medications
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adcm-atc-classes.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** carry each medication's coded name (`CMDECOD`) and its
 Anatomical Therapeutic Chemical (ATC) classes at levels 1 to 4 into
 ADCM, as `ATC1`-`ATC4` (class names) and `ATC1CD`-`ATC4CD` (codes),
@@ -27,5 +24,3 @@ its class name.
 medication with no coded name and no path records keeps all eight
 ATC columns empty. Path rows that name no level from `ATC1` to
 `ATC4`, or that point at no medication record, change nothing.
-
-**Standard:** ADaM | **Domain:** ADCM

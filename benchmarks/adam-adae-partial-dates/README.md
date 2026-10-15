@@ -1,8 +1,5 @@
 # Partial Date Imputation
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adae-partial-dates.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** one row per adverse event (AE) with an analysis start date
 (`ASTDT`) completed from the collected start at whatever precision
 it was collected, a flag (`ASTDTF`) marking the dates whose day was
@@ -41,5 +38,3 @@ allows can satisfy that, so the event is left without an analysis
 date rather than moved into a month nobody recorded. A fully
 collected date is left exactly as collected even when it falls
 before `TRTSDT`, because there is nothing about it to choose.
-
-**Standard:** ADaM | **Domain:** ADAE

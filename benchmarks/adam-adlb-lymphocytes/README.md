@@ -1,8 +1,5 @@
 # Derive absolute differential records
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adlb-lymphocytes.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** add absolute differential records (`LYMPH`, `NEUT`,
 `MONO`, `EOS`, `BASO`) whose analysis value (`AVAL`) is the
 white blood cell count times the matching differential fraction,
@@ -33,5 +30,3 @@ contributing parameter may appear at most once within a subject
 and visit; a subject and visit with repeated `WBC` or fraction
 results stops the run instead of using a value picked by amount
 or position.
-
-**Standard:** ADaM | **Domain:** ADLB

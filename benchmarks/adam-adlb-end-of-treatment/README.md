@@ -1,8 +1,5 @@
 # Flag the End-of-Treatment Laboratory Record
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adlb-end-of-treatment.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** mark each subject's end-of-treatment record for every laboratory
 test (`EOTFL`), carrying the protocol endpoint qualifier it rests on
 (`ENDPOINT`).
@@ -29,5 +26,3 @@ the flag even when its result is missing, and a group with a single record
 still gets the flag. Other
 qualifiers on the same record, and endpoint qualifiers for records the
 laboratory data does not hold, change nothing.
-
-**Standard:** ADaM | **Domain:** ADLB

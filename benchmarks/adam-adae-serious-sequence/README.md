@@ -1,8 +1,5 @@
 # Serious Event Sequence
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adae-serious-sequence.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** number each subject's serious events (`AESER` is `Y`) in
 onset order as `SERSEQ`, so the earliest serious event carries 1.
 
@@ -21,5 +18,3 @@ collected).
 
 **Note:** numbering restarts for each subject, so a subject with no
 serious event keeps every record unnumbered.
-
-**Standard:** ADaM | **Domain:** ADAE
