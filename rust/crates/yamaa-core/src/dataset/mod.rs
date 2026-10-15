@@ -2113,7 +2113,6 @@ mod admission_boundaries;
 #[cfg(test)]
 mod donor_admission_tests;
 
-mod metadata_types;
 mod verification_predicates;
 
 mod execution;

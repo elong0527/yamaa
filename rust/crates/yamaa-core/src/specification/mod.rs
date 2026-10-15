@@ -2209,5 +2209,3 @@ fn output_profile(path: &str) -> Option<&'static str> {
         None
     }
 }
-
-mod metadata;

@@ -69,12 +69,7 @@ impl Node {
     pub fn sources(&self) -> &[crate::specification::SourceDeclaration] {
         self.compiled.sources()
     }
-    pub fn source_interpretation(
-        &self,
-        index: usize,
-    ) -> Option<crate::specification::SourceInterpretation> {
-        self.compiled.source_interpretation(index)
-    }
+
     pub fn called_functions(&self) -> &[usize] {
         self.compiled.called_functions()
     }
@@ -110,31 +105,7 @@ impl PreparedGraph {
     pub fn environment(&self) -> &ExecutionEnvironment {
         &self.environment
     }
-    /// Header/type-only binding over the complete retained graph. This never
-    /// releases a node compilation owner or accepts data or execution ports.
-    pub fn check_source_schemas(
-        &self,
-        schemas: &[Vec<TableSchema>],
-    ) -> Result<Vec<(usize, crate::diagnostic::Diagnostic)>, MetadataBindingError> {
-        if schemas.len() != self.nodes.len()
-            || schemas
-                .iter()
-                .zip(&self.nodes)
-                .any(|(schemas, node)| schemas.len() != node.compiled.sources().len())
-        {
-            return Err(MetadataBindingError::Identity);
-        }
-        let mut diagnostics = Vec::new();
-        for (index, (schemas, node)) in schemas.iter().zip(&self.nodes).enumerate() {
-            let schemas = schemas.iter().collect::<Vec<_>>();
-            let findings = node
-                .compiled
-                .metadata_source_findings(&schemas)
-                .map_err(|error| MetadataBindingError::Binding { node: index, error })?;
-            diagnostics.extend(findings.into_iter().map(|finding| (index, finding)));
-        }
-        Ok(diagnostics)
-    }
+
     /// Static findings borrow the complete sealed closure in canonical node
     /// order. No standalone compiled node or execution plan is exposed.
     pub fn check_findings(
@@ -159,19 +130,6 @@ impl PreparedGraph {
     pub(crate) fn plans(&self) -> impl ExactSizeIterator<Item = &PreparedSpecification> {
         self.nodes.iter().map(|node| &node.compiled)
     }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum MetadataBindingError {
-    #[error("producer graph identity")]
-    Identity,
-    #[error("producer graph projection")]
-    Projection,
-    #[error("producer graph binding: node={node:?}, error={error:?}")]
-    Binding {
-        node: usize,
-        error: crate::specification::BindError,
-    },
 }
 
 fn boundary(node: Option<usize>, reason: &'static str) -> Error {

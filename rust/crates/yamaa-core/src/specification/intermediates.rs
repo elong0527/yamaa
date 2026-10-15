@@ -50,25 +50,6 @@ impl Declarations {
         self.0.iter().any(|declaration| declaration.path == path)
     }
 
-    pub(super) fn failed_metadata_names<'a>(
-        &'a self,
-        findings: &[crate::diagnostic::Diagnostic],
-    ) -> BTreeSet<&'a str> {
-        self.0
-            .iter()
-            .filter(|item| {
-                findings.iter().any(|finding| {
-                    finding.spec_paths.iter().any(|path| {
-                        path == &item.path
-                            || path.strip_prefix(&item.path).is_some_and(|suffix| {
-                                suffix.starts_with('.') || suffix.starts_with('[')
-                            })
-                    })
-                })
-            })
-            .map(|item| item.name.as_str())
-            .collect()
-    }
     pub(super) fn add_call_uses(&self, uses: &mut [usize]) -> Result<(), PrepareError> {
         let mut calls = Vec::new();
         for item in self.0.iter() {
