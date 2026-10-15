@@ -1,7 +1,7 @@
 //! REQ-1259's closed static comparison types, without evaluating expressions.
 use crate::{
     key_relation::ComparableType,
-    reference_binding::{Binding, Catalog, Error},
+    reference_binding::{Binding, Catalog},
     value::ColumnType,
 };
 
@@ -25,17 +25,11 @@ pub enum Expression<'a> {
     Unresolved,
 }
 
-/// Bound operation names before returning an unknown result; source limits belong to the catalog.
-pub const MAX_OPERATION_BYTES: usize = 65_536;
-
 /// Select only the rule's known types; unknown types explicitly defer comparison to runtime.
-pub fn result_type(
-    catalog: &Catalog,
-    expression: Expression<'_>,
-) -> Result<Option<ComparableType>, Error> {
+pub fn result_type(catalog: &Catalog, expression: Expression<'_>) -> Option<ComparableType> {
     use ColumnType::{Date, DateTime, Float, Int, Str};
-    let kind = match expression {
-        Expression::Source(name) => catalog.bind(name)?.map(|binding| match binding {
+    match expression {
+        Expression::Source(name) => catalog.bind(name).map(|binding| match binding {
             Binding::Output { column_type, .. } | Binding::Dataset { column_type, .. } => {
                 column_type.into()
             }
@@ -47,29 +41,17 @@ pub fn result_type(
             LiteralKind::Bool => Some(ComparableType::Boolean),
             LiteralKind::Missing | LiteralKind::Other => None,
         },
-        Expression::Operation(name) => {
-            if name.len() > MAX_OPERATION_BYTES {
-                return Err(Error::Limit {
-                    resource: "operation_bytes",
-                    limit: MAX_OPERATION_BYTES,
-                    required: name.len(),
-                });
-            }
-            match name {
-                "date_impute" | "to_date" => Some(Date.into()),
-                "datetime_impute" => Some(DateTime.into()),
-                "date_diff" | "rank" | "row_number" | "study_day" | "to_epoch_day" => {
-                    Some(Int.into())
-                }
-                "compute" => Some(crate::numeric_compiler::NUMERIC_RESULT_TYPE.into()),
-                "round_half_away_from_zero" => Some(Float.into()),
-                "baseline_flag" | "cut" | "date_precision" | "datetime_precision" | "str_case"
-                | "str_concat" | "str_extract" | "str_pad" | "str_template" => Some(Str.into()),
-                "str_contains" => Some(ComparableType::Boolean),
-                _ => None,
-            }
-        }
+        Expression::Operation(name) => match name {
+            "date_impute" | "to_date" => Some(Date.into()),
+            "datetime_impute" => Some(DateTime.into()),
+            "date_diff" | "rank" | "row_number" | "study_day" | "to_epoch_day" => Some(Int.into()),
+            "compute" => Some(crate::numeric_compiler::NUMERIC_RESULT_TYPE.into()),
+            "round_half_away_from_zero" => Some(Float.into()),
+            "baseline_flag" | "cut" | "date_precision" | "datetime_precision" | "str_case"
+            | "str_concat" | "str_extract" | "str_pad" | "str_template" => Some(Str.into()),
+            "str_contains" => Some(ComparableType::Boolean),
+            _ => None,
+        },
         Expression::Unresolved => None,
-    };
-    Ok(kind)
+    }
 }

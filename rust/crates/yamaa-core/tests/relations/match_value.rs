@@ -1,69 +1,40 @@
 use yamaa_core::{
     key_relation::ComparableType,
-    match_value::{result_type, Expression, LiteralKind, MAX_OPERATION_BYTES},
-    reference_binding::{Catalog, Error, Field, Limits},
+    match_value::{result_type, Expression, LiteralKind},
+    reference_binding::{Catalog, Field},
     value::ColumnType,
 };
 
-/// Unknown operation names cannot bypass UTF-8 resource admission; catalogs retain their own policy.
+/// Unknown names defer comparison without changing the immutable catalog's known types.
 #[test]
-fn limits_precede_unknown_results_and_do_not_poison_catalog() {
+fn unknown_results_do_not_poison_catalog() {
     let catalog = Catalog::compile(
         &[Field {
             name: "A",
             column_type: ColumnType::Int,
         }],
         &[],
-        Limits {
-            reference_bytes: 3,
-            ..Limits::default()
-        },
     )
     .unwrap();
-    assert_eq!(
-        result_type(&catalog, Expression::Source("éé")),
-        Err(Error::Limit {
-            resource: "reference_bytes",
-            limit: 3,
-            required: 4,
-        })
-    );
-    assert_eq!(result_type(&catalog, Expression::Source("xxx")), Ok(None));
-    assert_eq!(
-        result_type(
-            &catalog,
-            Expression::Operation(&"é".repeat(MAX_OPERATION_BYTES / 2))
-        ),
-        Ok(None)
-    );
-    assert_eq!(
-        result_type(
-            &catalog,
-            Expression::Operation(&"é".repeat(MAX_OPERATION_BYTES / 2 + 1))
-        ),
-        Err(Error::Limit {
-            resource: "operation_bytes",
-            limit: MAX_OPERATION_BYTES,
-            required: MAX_OPERATION_BYTES + 2,
-        })
-    );
+    assert_eq!(result_type(&catalog, Expression::Source("éé")), None);
+    assert_eq!(result_type(&catalog, Expression::Source("xxx")), None);
     assert_eq!(
         result_type(&catalog, Expression::Source("A")),
-        Ok(Some(ColumnType::Int.into()))
+        Some(ColumnType::Int.into())
     );
     assert_eq!(
         result_type(&catalog, Expression::Literal(LiteralKind::Bool)),
-        Ok(Some(ComparableType::Boolean))
+        Some(ComparableType::Boolean)
     );
     assert_eq!(
         result_type(&catalog, Expression::Literal(LiteralKind::Missing)),
-        Ok(None)
+        None
     );
 }
 
 #[test]
 fn operations_outside_the_complete_req1259_table_defer_comparison() {
-    let catalog = Catalog::compile(&[], &[], Limits::default()).unwrap();
+    let catalog = Catalog::compile(&[], &[]).unwrap();
     for name in [
         "date_shift",
         "datetime_shift",
@@ -80,7 +51,7 @@ fn operations_outside_the_complete_req1259_table_defer_comparison() {
     ] {
         assert_eq!(
             result_type(&catalog, Expression::Operation(name)),
-            Ok(None),
+            None,
             "{name}"
         );
     }
