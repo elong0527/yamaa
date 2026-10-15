@@ -643,6 +643,21 @@ def test_repeated_row_derivations_move_to_column_level(
     ]
 
 
+def test_repeated_row_derivation_positions_ignore_stray_row_entries(
+    tmp_path: Path,
+) -> None:
+    # A stray non-mapping row entry shifts the raw sequence index of every
+    # template after it; positions must name the entry as written, not its
+    # index among the mapping entries alone.
+    stray = REPEATED.replace("rows:\n  - id: a\n", "rows:\n  - stray\n\n  - id: a\n")
+    findings = check_file(_spec(tmp_path, stray), orders=ORDERS)
+    assert [(item.name, item.spec_path) for item in findings] == [
+        ("repeated_row_derivation", "rows[1].derivations.STUDYID"),
+        ("repeated_row_derivation", "rows[1].derivations.USUBJID"),
+        ("repeated_row_derivation", "rows[1].derivations.DOMAIN"),
+    ]
+
+
 def test_repeated_row_derivation_needs_every_template(tmp_path: Path) -> None:
     partial = REPEATED.replace(
         "  - id: b\n    derivations:\n      STUDYID: DM.STUDYID\n",
@@ -797,6 +812,21 @@ def test_redundant_intermediate_reads_the_dataset_directly(
     assert [item.name for item in remaining] == ["redundant_intermediate"]
 
 
+def test_redundant_intermediate_positions_ignore_stray_entries(
+    tmp_path: Path,
+) -> None:
+    # A stray non-mapping intermediate must not shift the raw index (and
+    # the `no_match` entry) read for the intermediates after it.
+    stray = REDUNDANT.replace(
+        "intermediates:\n  - id: ADSL1\n",
+        "intermediates:\n  - stray\n\n  - id: ADSL1\n",
+    )
+    findings = check_file(_spec(tmp_path, stray), orders=ORDERS)
+    assert [(item.name, item.spec_path, item.requirement) for item in findings] == [
+        ("redundant_intermediate", "intermediates[1]", "REQ-1289"),
+    ]
+
+
 def test_redundant_intermediate_keeps_narrowing_lookups(
     tmp_path: Path,
 ) -> None:
@@ -894,6 +924,28 @@ def test_missing_output_column_labels(tmp_path: Path) -> None:
     changed, remaining = fix_file(path, orders=ORDERS)
     assert changed is False
     assert [item.name for item in remaining] == ["missing_label"]
+
+
+def test_missing_label_positions_ignore_stray_column_entries(
+    tmp_path: Path,
+) -> None:
+    # A stray non-mapping column entry shifts the raw index of the columns
+    # after it; the finding must point at the unlabeled column's own name
+    # line, not at the column that filtered indexing lands on.
+    stray = MISSING_LABEL.replace(
+        "columns:\n  - name: STUDYID\n", "columns:\n  - stray\n\n  - name: STUDYID\n"
+    )
+    path = _spec(tmp_path, stray)
+    findings = check_file(path, orders=ORDERS)
+    assert [(item.name, item.spec_path, item.requirement) for item in findings] == [
+        ("missing_label", "columns[2]", "REQ-1290"),
+    ]
+    age_line = next(
+        number
+        for number, line in enumerate(stray.splitlines(), start=1)
+        if line.strip() == "- name: AGE"
+    )
+    assert findings[0].line == age_line
 
 
 def test_missing_label_skips_internal_and_inherited_columns(
