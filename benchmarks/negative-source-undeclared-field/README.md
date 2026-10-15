@@ -1,5 +1,8 @@
 # Reject Undeclared Field
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-source-undeclared-field.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** carry the age in `AGE` for each subject.
 
 **Input:** collected demographics carrying age (`AGE`) for each
@@ -11,6 +14,8 @@ subject.
   the copy asks for a field named `AGEYRS`, which the collected
   demographics do not have, so the run is rejected before any data
   is read and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

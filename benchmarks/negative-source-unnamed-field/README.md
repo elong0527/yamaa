@@ -1,5 +1,8 @@
 # Reject Unnamed Field
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-source-unnamed-field.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** carry the enrollment site (`SITEID`) for each subject.
 
 **Input:** collected demographics listing carrying a site field
@@ -15,6 +18,8 @@ The unnamed field can be asked for by no name, and readers
 disagree about whether the field is there at all: one reports
 three fields in every record and another four. The run is
 rejected and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

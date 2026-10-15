@@ -1,5 +1,8 @@
 # Reject Unknown Case
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-str-case-unknown.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** derive the site name (`SITE`) for analysis use with only its
 first letter capitalized.
 
@@ -14,6 +17,8 @@ recorded in capitals.
 The requested case, `capitalize`, is none of the four cases a site name
 can be put in: upper, lower, sentence, and title. The request is
 rejected before any data is read, and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

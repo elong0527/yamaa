@@ -1,5 +1,8 @@
 # Reject Numeric Filter
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-row-number-filter.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** number collected laboratory results within each subject,
 with `VISITSEQ` giving the collection sequence for each result.
 
@@ -15,6 +18,8 @@ result (`LBSTRESN`) and the collection sequence.
   instead of a comparison, so which results it selects is
   undefined, and the run is rejected before any data is read and
   no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

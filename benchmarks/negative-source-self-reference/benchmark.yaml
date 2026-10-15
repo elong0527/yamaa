@@ -1,6 +1,0 @@
-lifecycle: reviewed
-standard: ADaM
-domain: ADLB
-validation:
-  rule: R002
-  validator: name_contract

@@ -1,6 +1,0 @@
-lifecycle: reviewed
-standard: ADaM
-domain: ADAE
-validation:
-  rule: R005
-  validator: name_contract

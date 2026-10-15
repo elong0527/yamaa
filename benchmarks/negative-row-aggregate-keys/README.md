@@ -1,5 +1,8 @@
 # Reject a subject-wide count inside a one-race row
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-row-aggregate-keys.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** attempt one supplemental Demographics (SUPPDM) record per
 reported race (`QVAL`) for each subject who marked more than one race,
 deciding "more than one" by counting the subject's race rows.
@@ -18,6 +21,8 @@ different races would count one for each and be dropped, while a race
 marked twice would count two and be kept. Asking the count to span the
 whole subject does not widen it, so the run is rejected before any data
 is read.
+
+**Standard:** SDTM | **Domain:** SUPPDM
 
 ## How to fix
 

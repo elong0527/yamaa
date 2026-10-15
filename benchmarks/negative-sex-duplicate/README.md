@@ -1,5 +1,8 @@
 # Reject Duplicate Sex
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-sex-duplicate.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build one Demographics (DM) record per subject carrying sex
 (SEX) and age (AGE).
 
@@ -15,6 +18,8 @@ entered more than once repeats its items under a new visit repeat key
   two different answers has no single recorded sex and one record cannot
   carry both, so the run is rejected and no artifact is accepted.
 - **AGE**: age in whole years as collected; blank when missing.
+
+**Standard:** SDTM | **Domain:** DM
 
 ## How to fix
 

@@ -1,5 +1,8 @@
 # Reject Self Reference
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-source-self-reference.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build analysis records for alanine aminotransferase
 (`ALT`), aspartate aminotransferase (`AST`), and their ratio
 (`ASTALT`), carrying `ADT` and `AVAL` for each subject, date, and
@@ -22,6 +25,8 @@ The aspartate values the ratio reaches for are the values this run
 is producing under the same name. Nothing can distinguish the
 record being written from the record being read back, so the run
 is rejected before any data is read and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

@@ -1,5 +1,8 @@
 # Reject Study Datetime
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-study-day-datetime.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build one record per subject carrying `RFSTD`, `DTHDTM`,
 and `DTHDY`.
 
@@ -21,6 +24,8 @@ A study day counts calendar dates, and a moment is not one:
 widening the moment into a date would choose silently between two
 adjacent days, so no reader may do so. The request is rejected
 before any data is read, and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

@@ -1,5 +1,8 @@
 # Reject a Record the Extract Repeats
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-odm-repeated-record.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** derive `SEX` for one record per subject from the subject's
 collected answer.
 
@@ -15,6 +18,8 @@ of two users.
 The two records agree on the subject, visit, form, repeat, and item, and
 differ only in the user field, which is the vendor's own and identifies no
 record. The run stops and reports that the input repeats one record.
+
+**Standard:** SDTM | **Domain:** DM
 
 ## How to fix
 

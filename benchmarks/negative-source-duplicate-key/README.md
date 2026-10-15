@@ -1,5 +1,8 @@
 # Reject Duplicate Key
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-source-duplicate-key.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build one record per subject carrying the actual
 treatment for period 01 (`TRT01A`).
 
@@ -15,6 +18,8 @@ When more than one analysis-subject record shares one subject's
 identifiers, nothing says which treatment applies. Taking either
 one would report a treatment the study data does not single out,
 so the run is rejected with no artifact accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

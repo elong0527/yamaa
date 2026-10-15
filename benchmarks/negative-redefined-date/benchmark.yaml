@@ -1,6 +1,0 @@
-lifecycle: reviewed
-standard: ADaM
-domain: ADSL
-validation:
-  rule: R014
-  validator: source_contract

@@ -1,6 +1,0 @@
-lifecycle: reviewed
-standard: SDTM
-domain: VS
-validation:
-  rule: R005
-  validator: name_contract

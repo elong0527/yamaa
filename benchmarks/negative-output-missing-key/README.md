@@ -1,5 +1,8 @@
 # Reject a Missing Output Key
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-output-missing-key.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** carry an analysis date (`ADT`), study day (`ADY`), and measured
 value (`AVAL`) into analysis visits (`AVISIT`).
 
@@ -15,6 +18,8 @@ study day that can be missing.
 **Note:** analysis visit is part of each record's identity. A record with
 no study day has no analysis visit, so the completed dataset fails its
 identity check and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADVS
 
 ## How to fix
 

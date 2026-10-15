@@ -1,6 +1,0 @@
-lifecycle: draft
-standard: ADaM
-domain: ADEX
-validation:
-  rule: R014
-  validator: source_contract

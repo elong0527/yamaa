@@ -1,5 +1,8 @@
 # Reject Non-Numeric Sum
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-sum-non-numeric.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build one analysis record per collected adverse event,
 carrying `ASEV` and adding `SEVTOT`.
 
@@ -19,6 +22,8 @@ Ordering the words and totalling their positions would be a real
 rule, but it is a different one, and the request never states the
 numbers it would use. The run is rejected before any data is read,
 so no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 

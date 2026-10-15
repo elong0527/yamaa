@@ -1,8 +1,0 @@
-lifecycle: reviewed
-standard: ADaM
-domain: ADSL
-validation:
-  rule: R012
-  validator: string_template
-covers:
-- str_template

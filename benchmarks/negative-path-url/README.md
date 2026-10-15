@@ -1,5 +1,8 @@
 # Reject URL Path
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-path-url.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** attempt one record per subject and laboratory test
 carrying the collected result in `AVAL` and the upper limit of
 normal for that test and the subject's sex in `ANRHI`.
@@ -25,6 +28,8 @@ one study could read different limits while recording the same
 request. A run opens only stored files, never a web address, so
 the run is rejected before any data is read and no artifact is
 accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

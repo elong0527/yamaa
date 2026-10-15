@@ -1,5 +1,8 @@
 # Reject Cleared Property
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-property-clear.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** prepare subject-level records keyed by the subject
 identifier (`USUBJID`).
 
@@ -15,6 +18,8 @@ identifier used to key the output.
 parent file, and this file clears it. Every column must keep a data
 type, so the run is rejected before any data is read and no
 artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

@@ -1,5 +1,8 @@
 # Reject Post-CR PR
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-pr-after-cr.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** carry each collected tumor assessment into an analysis
 record holding the assessment date (`ADT`) and the recorded
 response (`AVALC`), rejecting a partial response (PR) recorded
@@ -24,6 +27,8 @@ subject is a fault in the collected data: the whole run is rejected
 and no artifact is accepted, and the expected output records the
 completed rows presented to that check. A partial response that
 later becomes complete is ordinary and passes.
+
+**Standard:** ADaM | **Domain:** ADRS
 
 ## How to fix
 

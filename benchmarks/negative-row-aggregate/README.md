@@ -1,5 +1,8 @@
 # Reject Row Aggregate
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-row-aggregate.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** attempt the total of each subject's collected results
 (`AVALTOT`), written as the row formula `SUM(AVAL)`.
 
@@ -18,6 +21,8 @@ parameter code, and the collected numeric result (`LBSTRESN`).
 one record at a time and cannot reach the other records it would
 have to total, so the run is rejected before any data is read and
 no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

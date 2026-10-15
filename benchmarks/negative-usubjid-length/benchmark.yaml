@@ -1,6 +1,0 @@
-lifecycle: reviewed
-standard: SDTM
-domain: DM
-covers:
-- str_concat
-- verify:max_length

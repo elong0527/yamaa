@@ -1,5 +1,7 @@
 # Reject Transport Container Output
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-output-transport.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** attempt one record for every subject carrying the collected
 age (`AGE`) and sex (`SEX`), written to a SAS Transport file.
 
@@ -20,6 +22,8 @@ language admits. A transport file is produced by the packaging step
 that assembles a submission from published results, not by this
 run, so the run is rejected before any data is read and no result
 is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

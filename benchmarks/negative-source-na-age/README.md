@@ -1,5 +1,8 @@
 # Reject NA Age
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-source-na-age.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** carry `AGE` unchanged for analysis, keeping the collected
 age for each subject.
 
@@ -10,6 +13,8 @@ age for each subject.
 - `AGE` would contain the collected age copied from the collected
   records, but a stored age of `NA` is not a number, so the run stops
   while reading the stored value and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

@@ -1,6 +1,0 @@
-lifecycle: draft
-standard: SDTM
-domain: SUPPDM
-validation:
-  rule: R013
-  validator: aggregate_expression

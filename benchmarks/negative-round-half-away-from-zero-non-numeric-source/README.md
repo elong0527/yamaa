@@ -1,5 +1,8 @@
 # Reject rounding a coded value
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-round-half-away-from-zero-non-numeric-source.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build `RNDVAL` by rounding a value to one decimal place
 with ties half away from zero.
 
@@ -12,6 +15,8 @@ with ties half away from zero.
 
 Rounding a coded value has no meaning, so the run is rejected
 before any data is read and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

@@ -1,5 +1,8 @@
 # Reject Zero Division
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-zero-division.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** work out `PCHG`, the percent change from baseline, from
 the collected result in `AVAL` and its baseline in `BASE`.
 
@@ -20,6 +23,8 @@ baseline it is compared with (`LBBLRESN`).
 **Note:** a zero baseline leaves the percentage with no value.
 Leaving it missing would assume a rule the request never stated, so
 the run fails and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

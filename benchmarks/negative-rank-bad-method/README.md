@@ -1,5 +1,8 @@
 # Reject Invalid Ranking
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-rank-bad-method.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** rank each subject's adverse events (AEs) by reported
 severity, carrying through `AESEV` and numbering the events in
 `SEVRANK`.
@@ -18,6 +21,8 @@ severity (`AESEV`).
 instead of one of the two named methods. No reader may guess which
 method a structure means, so the run is rejected before any data is
 read and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 

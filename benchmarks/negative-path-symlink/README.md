@@ -1,5 +1,8 @@
 # Reject Symlink Path
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-path-symlink.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build analysis records for laboratory tests carrying
 `SEX`, `AVAL`, and `ANRHI`, with the upper limit chosen for each
 test and sex.
@@ -23,6 +26,8 @@ another file. Where it points can be changed without changing the
 study, so the limits that were reviewed and the limits that are
 read need not be the same. The run is rejected before any data is
 read and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

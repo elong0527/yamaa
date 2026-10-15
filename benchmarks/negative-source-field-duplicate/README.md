@@ -1,5 +1,8 @@
 # Reject Duplicate Field
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-source-field-duplicate.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build a subject-level listing carrying `SITEID` and
 `SEX`.
 
@@ -18,6 +21,8 @@ no single answer is defensible there.
 
 The run is rejected when the listing is read and no artifact is
 accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

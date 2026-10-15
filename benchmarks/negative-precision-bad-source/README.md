@@ -1,5 +1,8 @@
 # Reject Non-Date Flag
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-precision-bad-source.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** one analysis record for each collected event, carrying
 the start-date completeness flag `ASTDTF`.
 
@@ -14,6 +17,8 @@ the start-date completeness flag `ASTDTF`.
   that is neither a date nor the beginning of one has no
   completeness to report, so the run stops when it tries to read
   precision from it and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 

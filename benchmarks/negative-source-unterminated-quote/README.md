@@ -1,5 +1,8 @@
 # Reject Unterminated Quote
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-source-unterminated-quote.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** carry the investigator comment (`CMNT`) for each subject,
 one record per subject.
 
@@ -16,6 +19,8 @@ says its text continues past the end of the file. Where that record
 ends, and therefore how many subjects the listing holds, depends on
 how far a reader chooses to read, so the run is rejected while
 reading the listing and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

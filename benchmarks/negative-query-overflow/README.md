@@ -1,5 +1,8 @@
 # Reject Slot Overflow
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-query-overflow.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** show for each adverse event the reported term (`AETERM`),
 the coded term (`AEDECOD`), and the two safety groupings
 (`SMQ01NAM`, `SMQ01CD`, `SMQ02NAM`, `SMQ02CD`).
@@ -27,6 +30,8 @@ dictionary entries in the same place has no single answer: choosing
 either entry would drop the other, and which one was dropped would
 depend on the order the dictionary happened to be stored in. The run
 is therefore rejected and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 

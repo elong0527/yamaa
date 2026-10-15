@@ -1,5 +1,8 @@
 # Reject Tied Baseline
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-tied-baseline.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** mark the baseline record of each subject and parameter
 with `ABLFL` and repeat its value with `BASE`.
 
@@ -23,6 +26,8 @@ subject treatment start dates from ADSL (`TRTSDT`).
 **Note:** results sharing one collection date can tie for latest,
 and either candidate gives the parameter a different baseline. The
 run fails and no dataset is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 
