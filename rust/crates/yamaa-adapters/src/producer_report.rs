@@ -6,7 +6,7 @@ use crate::{
     report_storage::StoredReport,
     specification_report::{self as report, Error, Identity},
 };
-use serde_json::{json, Value};
+use yamaa_core::json::{json, Value};
 use yamaa_core::{
     dataset::{CheckRecord, Execution},
     producer_build::ReportPort,
@@ -893,7 +893,7 @@ mod tests {
         assert_eq!(findings[0]["context"]["value"], value);
         assert_eq!(
             findings[0]["spec_paths"],
-            serde_json::json!(["input.RAW.types.N"])
+            yamaa_core::json::json!(["input.RAW.types.N"])
         );
     }
     #[test]
@@ -980,12 +980,18 @@ mod tests {
             assert!(decoded_finding(&mut findings, &source, &error).unwrap());
             assert_eq!(findings.len(), 1);
             assert_eq!(findings[0]["context"]["resource"], resource);
-            assert_eq!(findings[0]["context"]["limit"], serde_json::json!(limit));
+            assert_eq!(
+                findings[0]["context"]["limit"],
+                yamaa_core::json::json!(limit)
+            );
             assert_eq!(
                 findings[0]["context"]["actual"],
-                serde_json::json!(actual.unwrap())
+                yamaa_core::json::json!(actual.unwrap())
             );
-            assert_eq!(findings[0]["spec_paths"], serde_json::json!(["input.XW"]));
+            assert_eq!(
+                findings[0]["spec_paths"],
+                yamaa_core::json::json!(["input.XW"])
+            );
         }
     }
 }

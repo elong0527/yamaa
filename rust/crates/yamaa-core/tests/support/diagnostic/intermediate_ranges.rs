@@ -1,8 +1,8 @@
 //! Original declarations reach range and projection causes with complete context.
 use crate::support::document::Tree;
 use crate::support::table_schema as schema;
-use serde_json::Value as JsonValue;
 use std::collections::BTreeSet;
+use yamaa_core::json::Value as JsonValue;
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
     schema::{Document, SpecificationDocument},

@@ -379,7 +379,7 @@ mod root_read_tests {
         assert_eq!(issues[0].requirement.as_deref(), definition.requirement);
         assert_eq!(
             issues[0].context,
-            serde_json::json!({"cause":"unreadable", "path":path}).to_string()
+            yamaa_core::json::json!({"cause":"unreadable", "path":path}).to_string()
         );
 
         assert_eq!(owner.error() as *const file_project::Error, original);

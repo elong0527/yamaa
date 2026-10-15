@@ -1492,23 +1492,26 @@ impl Rows {
                         let mut context: crate::diagnostic::Context = [
                             (
                                 "identifier".into(),
-                                serde_json::Value::String(binding.name.clone()),
+                                crate::json::Value::String(binding.name.clone()),
                             ),
-                            ("row".into(), serde_json::Value::String(template.id.clone())),
+                            (
+                                "row".into(),
+                                crate::json::Value::String(template.id.clone()),
+                            ),
                             (
                                 "available_phase".into(),
-                                serde_json::Value::String("window_derivation".into()),
+                                crate::json::Value::String("window_derivation".into()),
                             ),
                             (
                                 "required_phase".into(),
-                                serde_json::Value::String("row_filter".into()),
+                                crate::json::Value::String("row_filter".into()),
                             ),
                         ]
                         .into();
                         if let Some(column) = lookup_match {
                             context.insert(
                                 "lookup_match".into(),
-                                serde_json::Value::String(output.columns()[column].name.clone()),
+                                crate::json::Value::String(output.columns()[column].name.clone()),
                             );
                         }
                         findings.push(BindFinding::Scalar(crate::diagnostic::Diagnostic {

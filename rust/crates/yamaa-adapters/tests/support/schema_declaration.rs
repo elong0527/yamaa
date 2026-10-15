@@ -1,9 +1,9 @@
 //! Project only core-admitted findings from the retained authored arenas.
-use serde_json::{json, Map, Number, Value};
 use yamaa_adapters::{
     specification_source::{CapturedSchema, Source},
     yaml_decode::decode_yaml,
 };
+use yamaa_core::json::{json, Map, Number, Value};
 use yamaa_core::schema::{admit_schema_diagnostics, SchemaDiagnosticValue as V};
 
 fn value(value: V<'_>) -> Value {

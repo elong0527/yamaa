@@ -5,12 +5,12 @@ use crate::{
     issue_rows::Issue,
     specification_report::{self, BuildResult, Identity},
 };
-use serde_json::Value;
 use std::{
     any::Any,
     panic::{catch_unwind, AssertUnwindSafe},
 };
 use yamaa_core::domain_entry::{self, Request};
+use yamaa_core::json::Value;
 
 pub type Failure = Vec<Issue>;
 
@@ -79,7 +79,7 @@ pub(crate) fn resource_failure(stage: &str, error: &crate::file_resources::Error
 }
 pub(crate) fn publication_failure(error: &crate::file_publication::Error) -> Failure {
     use crate::file_publication::Error as E;
-    use serde_json::Value as JsonValue;
+    use yamaa_core::json::Value as JsonValue;
 
     let code = match error {
         E::Cleanup { .. } => "cleanup_incomplete",
@@ -193,7 +193,7 @@ pub(crate) fn preparation_failure(message: String) -> Failure {
                 for issue in &mut issues {
                     let mut context: Value =
                         serde_json::from_str(&issue.context).expect("resource context");
-                    context["phase"] = serde_json::json!(phase);
+                    context["phase"] = yamaa_core::json::json!(phase);
                     issue.context = context.to_string();
                 }
             }
@@ -229,9 +229,9 @@ fn publication_at(
         issue.spec_paths = vec![format!("output.{field}")];
         let mut context: Value =
             serde_json::from_str(&issue.context).expect("native issue context");
-        context["path"] = serde_json::json!(path);
-        context["entered"] = serde_json::json!(attempt.entered);
-        context["completed"] = serde_json::json!(attempt.completed);
+        context["path"] = yamaa_core::json::json!(path);
+        context["entered"] = yamaa_core::json::json!(attempt.entered);
+        context["completed"] = yamaa_core::json::json!(attempt.completed);
         issue.context = context.to_string();
     }
     issues

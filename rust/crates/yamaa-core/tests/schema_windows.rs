@@ -348,7 +348,7 @@ mod schema {
 
         #[test]
         fn aggregate_derive_windows_fail_preflight_at_the_nested_operation_path() {
-            use serde_json::Value as JsonValue;
+            use yamaa_core::json::Value as JsonValue;
             use yamaa_core::{diagnostic::ConditionCode, specification::PreflightFinding};
 
             for operation in [
@@ -618,7 +618,7 @@ mod schema {
                 diagnostic.context,
                 [("dataset", "SRC"), ("path", "input.bad")]
                     .into_iter()
-                    .map(|(key, value)| (key.into(), serde_json::Value::String(value.into())))
+                    .map(|(key, value)| (key.into(), yamaa_core::json::Value::String(value.into())))
                     .collect()
             );
             let prepared =
@@ -1105,11 +1105,11 @@ mod schema {
                 assert_eq!(diagnostic.context.len(), 2);
                 assert_eq!(
                     diagnostic.context["predicate"],
-                    serde_json::Value::String(filter.into())
+                    yamaa_core::json::Value::String(filter.into())
                 );
                 assert_eq!(
                     diagnostic.context["position"],
-                    serde_json::Value::Number((position).parse().expect("canonical integer"))
+                    yamaa_core::json::Value::Number((position).parse().expect("canonical integer"))
                 );
             }
         }
@@ -1174,7 +1174,10 @@ mod schema {
                     yamaa_core::diagnostic::ConditionCode::PredicateInvalidExpression
                 );
                 assert_eq!(diagnostic.spec_paths, [path]);
-                assert_eq!(diagnostic.context["predicate"], serde_json::json!("ID >"));
+                assert_eq!(
+                    diagnostic.context["predicate"],
+                    yamaa_core::json::json!("ID >")
+                );
             }
         }
 
@@ -1261,11 +1264,11 @@ mod schema {
             assert_eq!(diagnostic.context.len(), 2);
             assert_eq!(
                 diagnostic.context["predicate"],
-                serde_json::Value::String("SRC.ID = 9223372036854775808".into())
+                yamaa_core::json::Value::String("SRC.ID = 9223372036854775808".into())
             );
             assert_eq!(
                 diagnostic.context["position"],
-                serde_json::Value::Number(("9").parse().expect("canonical integer"))
+                yamaa_core::json::Value::Number(("9").parse().expect("canonical integer"))
             );
         }
 
@@ -1298,7 +1301,7 @@ mod schema {
             );
             assert_eq!(
                 diagnostic.context["predicate"],
-                serde_json::json!("SRC.ID =")
+                yamaa_core::json::json!("SRC.ID =")
             );
         }
 
@@ -1580,8 +1583,8 @@ mod schema {
         }
         #[test]
         fn malformed_assert_carriers_and_numeric_bounds_are_typed_declaration_findings() {
-            use serde_json::Value as V;
             use yamaa_core::diagnostic::ConditionCode as C;
+            use yamaa_core::json::Value as V;
 
             let checks = [
                 (

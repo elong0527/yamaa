@@ -52,7 +52,7 @@ impl Error {
     pub fn into_message(self) -> String {
         match self {
             Self::Resource(error) => error.message().into(),
-            Self::Inventory(_) => serde_json::json!({
+            Self::Inventory(_) => yamaa_core::json::json!({
                 "protocol": "specification/prototype",
                 "outcome": { "status": "rejected", "stage": "prepare", "code": "inventory" },
             })
@@ -63,7 +63,7 @@ impl Error {
             }
             Self::ResourceFinding { diagnostic, .. }
             | Self::PreparationFinding { diagnostic, .. } => {
-                serde_json::json!({
+                yamaa_core::json::json!({
                     "protocol": "specification/prototype",
                     "outcome": {
                         "status": "invalid",
@@ -315,7 +315,7 @@ mod profile_inspection_tests {
             if kind == 0 || kind == 3 {
                 assert_eq!(
                     issue.context["path"],
-                    serde_json::Value::String("input/unknown".into())
+                    yamaa_core::json::Value::String("input/unknown".into())
                 );
             }
             match kind {
@@ -510,7 +510,11 @@ mod dispatch_policy_tests {
         assert_eq!(diagnostic.spec_paths, [field]);
         assert_eq!(
             diagnostic.context,
-            [("path".into(), serde_json::Value::String(written.into()))].into()
+            [(
+                "path".into(),
+                yamaa_core::json::Value::String(written.into())
+            )]
+            .into()
         );
     }
     #[test]
@@ -576,12 +580,12 @@ mod dispatch_policy_tests {
             panic!("changed dictionary keeps original preparation error");
         };
         let message = crate::specification_diagnostics::inheritance_failure_ref(&error).unwrap();
-        let finding = &serde_json::from_str::<serde_json::Value>(&message).unwrap()["outcome"]
-            ["diagnostics"][0];
+        let finding = &serde_json::from_str::<yamaa_core::json::Value>(&message).unwrap()
+            ["outcome"]["diagnostics"][0];
         let definition = yamaa_core::diagnostic::ConditionCode::ResourceContentChanged.definition();
         assert_eq!(
             finding,
-            &serde_json::json!({
+            &yamaa_core::json::json!({
                 "phase":definition.phase, "condition":definition.condition, "requirement":definition.requirement,
                 "spec_paths":["columns.ID.derivation.mapping.dict"], "context":{"path":"dict.yaml"},
             })
@@ -651,7 +655,11 @@ mod dispatch_policy_tests {
         );
         assert_eq!(
             diagnostic.context,
-            [("path".into(), serde_json::Value::String("dict.yaml".into()))].into()
+            [(
+                "path".into(),
+                yamaa_core::json::Value::String("dict.yaml".into())
+            )]
+            .into()
         );
         assert_eq!(resources.capture_reads(), 2);
         assert_eq!(resources.resolve("root.yaml").unwrap(), original);
@@ -688,7 +696,7 @@ mod dispatch_policy_tests {
             diagnostic.context,
             [(
                 "path".into(),
-                serde_json::Value::String("../parent/base.yaml".into())
+                yamaa_core::json::Value::String("../parent/base.yaml".into())
             )]
             .into()
         );

@@ -1,7 +1,7 @@
 //! Actual aggregate preparation and joined row binding reach their new causes.
 use crate::support::document::Tree as T;
-use serde_json::Value as JsonValue;
 use std::collections::BTreeSet;
+use yamaa_core::json::Value as JsonValue;
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
     schema::{Document, SpecificationDocument},

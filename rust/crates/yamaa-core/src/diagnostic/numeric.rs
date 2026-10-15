@@ -1,6 +1,7 @@
 //! Construct diagnostic context at the numeric/conversion semantic boundary.
 
 use super::{ConditionCode, Context, Diagnostic};
+use crate::json::Value as JsonValue;
 use crate::{
     conversion::{ConversionError, ConversionReason},
     evaluation::{EvaluationErrorKind, NumericCondition, Operand},
@@ -8,7 +9,6 @@ use crate::{
     numeric_compiler::CompiledEvaluationError,
     value::{ColumnType, Value, ValueType},
 };
-use serde_json::Value as JsonValue;
 
 fn scalar(value: Value) -> JsonValue {
     JsonValue::from(value)

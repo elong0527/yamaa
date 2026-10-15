@@ -1,6 +1,6 @@
 //! Represent core-admitted schema findings without reparsing source YAML.
 use crate::specification_source::CapturedFindings;
-use serde_json::{json, Map, Number, Value};
+use yamaa_core::json::{json, Map, Number, Value};
 pub(crate) use yamaa_core::schema::SchemaDiagnosticError as Error;
 use yamaa_core::schema::{
     admit_schema_diagnostics, Document, SchemaDiagnostic, SchemaDiagnosticValue as V,

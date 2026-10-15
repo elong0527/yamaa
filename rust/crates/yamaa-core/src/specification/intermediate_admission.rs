@@ -45,7 +45,7 @@ pub(super) fn declaration_findings(
             findings.push(PreflightFinding::Scalar(crate::diagnostic::Diagnostic {
                 code: C::IntermediateIdentifierCollision,
                 spec_paths: vec![format!("{path}.id"), previous],
-                context: [("identifier".into(), serde_json::Value::String(name.into()))].into(),
+                context: [("identifier".into(), crate::json::Value::String(name.into()))].into(),
                 source_span: None,
                 operand_route: None,
             }));

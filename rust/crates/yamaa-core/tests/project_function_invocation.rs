@@ -405,8 +405,8 @@ mod project {
     }
     mod producer_admission {
         use crate::support::producer as support;
-        use serde_json::Value as V;
         use support::{candidate, consumer, document, producer, Tree};
+        use yamaa_core::json::Value as V;
         use yamaa_core::schema::DocumentNode as N;
         use yamaa_core::{
             diagnostic::Diagnostic,

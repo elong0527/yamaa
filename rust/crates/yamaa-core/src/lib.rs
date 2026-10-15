@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 
 pub mod application_issue;
+pub mod json;
 
 pub mod aggregate_compiler;
 pub mod aggregate_parser;

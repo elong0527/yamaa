@@ -1,6 +1,6 @@
 //! Exercise the original-document compiler, not constructed failure enum values.
-use serde_json::Value as V;
 use std::collections::BTreeSet;
+use yamaa_core::json::Value as V;
 use yamaa_core::{
     diagnostic::ConditionCode,
     schema::{Document, DocumentNode as N, SpecificationDocument},

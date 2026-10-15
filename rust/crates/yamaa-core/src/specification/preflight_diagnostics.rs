@@ -1,10 +1,10 @@
 //! Own original-document preflight vocabulary and authored geometry at its cause.
 use super::PreflightFinding;
+use crate::json::Value as V;
 use crate::{
     diagnostic::{ConditionCode as C, Context, Diagnostic},
     value::ColumnType,
 };
-use serde_json::Value as V;
 use std::vec;
 
 fn text(value: &str) -> V {

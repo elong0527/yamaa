@@ -1,5 +1,5 @@
-use serde_json::Value as V;
 use std::collections::BTreeSet;
+use yamaa_core::json::Value as V;
 use yamaa_core::{diagnostic::ConditionCode, text_template::StringTemplate};
 pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();

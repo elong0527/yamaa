@@ -1207,7 +1207,7 @@ mod relations {
 
         #[test]
         fn aggregate_type_projection_omits_only_the_intermediate_owner() {
-            use serde_json::Value as JsonValue;
+            use yamaa_core::json::Value as JsonValue;
 
             let types = RelationRangeTypes {
                 value: ValueType::Date,
@@ -1565,11 +1565,11 @@ mod relations {
                 assert_eq!(diagnostic.context.len(), 2);
                 assert_eq!(
                     diagnostic.context["row"],
-                    serde_json::Value::String("second".into())
+                    yamaa_core::json::Value::String("second".into())
                 );
                 assert_eq!(
                     diagnostic.context["dataset"],
-                    serde_json::Value::from(
+                    yamaa_core::json::Value::from(
                         expected
                             .map(|v| Value::Str(v.into()))
                             .unwrap_or(Value::Missing)
@@ -1614,7 +1614,7 @@ mod relations {
                     diagnostic.context,
                     std::collections::BTreeMap::from([(
                         "identifier".into(),
-                        serde_json::Value::String("DONOR.ID".into())
+                        yamaa_core::json::Value::String("DONOR.ID".into())
                     )])
                 );
             }
@@ -1675,7 +1675,7 @@ mod relations {
                     d.context,
                     std::collections::BTreeMap::from([(
                         "identifier".into(),
-                        serde_json::Value::String("P.ABSENT".into())
+                        yamaa_core::json::Value::String("P.ABSENT".into())
                     )])
                 );
             }
@@ -2388,8 +2388,8 @@ mod relations {
         }
     }
     mod verification_logs {
-        use serde_json::Value as Json;
         use std::collections::BTreeMap;
+        use yamaa_core::json::Value as Json;
         use yamaa_core::{
             dataset::VerificationSeverity,
             table::{TableAccess, ValueRef},

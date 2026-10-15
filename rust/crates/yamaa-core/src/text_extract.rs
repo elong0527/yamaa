@@ -1,11 +1,11 @@
 //! Extraction through the shared portable pattern and matcher authorities.
+use crate::json::Value as V;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     regex,
     table::ValueRef,
     value::Value,
 };
-use serde_json::Value as V;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct StringExtract {

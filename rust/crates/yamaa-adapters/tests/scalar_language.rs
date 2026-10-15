@@ -63,19 +63,19 @@ mod scalar {
                 fs::remove_dir_all(&self.0).unwrap();
             }
         }
-        fn golden(fixture: &Fixture) -> serde_json::Value {
+        fn golden(fixture: &Fixture) -> yamaa_core::json::Value {
             let expected = yamaa_adapters::yaml_decode::decode_yaml(
                 &fs::read(fixture.0.join("expected/error.yaml")).unwrap(),
             )
             .unwrap()
             .document;
-            fn json(d: &yamaa_core::schema::Document, id: usize) -> serde_json::Value {
+            fn json(d: &yamaa_core::schema::Document, id: usize) -> yamaa_core::json::Value {
                 use yamaa_core::schema::DocumentNode as N;
                 match &d.nodes()[id] {
-                    N::Null => serde_json::Value::Null,
-                    N::Text(value) => serde_json::json!(value),
+                    N::Null => yamaa_core::json::Value::Null,
+                    N::Text(value) => yamaa_core::json::json!(value),
                     N::Integer(value) => value.parse::<i64>().unwrap().into(),
-                    N::Float(value) => serde_json::json!(value),
+                    N::Float(value) => yamaa_core::json::json!(value),
                     N::Boolean(value) => (*value).into(),
                     N::Sequence(items) => items.iter().map(|id| json(d, *id)).collect(),
                     N::Mapping(items) => items
@@ -92,8 +92,8 @@ mod scalar {
             json(&expected, expected.root())
         }
 
-        fn issue_json(issue: &yamaa_adapters::issue_rows::Issue) -> serde_json::Value {
-            serde_json::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":serde_json::from_str::<serde_json::Value>(&issue.context).unwrap()})
+        fn issue_json(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
+            yamaa_core::json::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap()})
         }
         fn bespoke(source: &str, input: &[u8]) -> Fixture {
             let fixture = Fixture::new("adam-adae-text-cleanup");
@@ -148,7 +148,10 @@ mod scalar {
             let mut result = fixture.run();
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             let observed = result.observations();
-            assert_eq!(observed["handler_counts"][0]["count"], serde_json::json!(2));
+            assert_eq!(
+                observed["handler_counts"][0]["count"],
+                yamaa_core::json::json!(2)
+            );
             assert!(result.save().unwrap());
             assert_eq!(
                 fs::read(fixture.0.join("adae.csv")).unwrap(),
@@ -241,7 +244,7 @@ mod scalar {
     );
             let mut result = fixture.run();
             assert!(result.issues().is_empty(), "{:?}", result.issues());
-            let counts = serde_json::json!([
+            let counts = yamaa_core::json::json!([
                 {"spec_path": "columns.RESULT.derivation.str_concat.missing", "handler": "missing", "count": 1},
                 {"spec_path": "columns.RESULT.derivation.str_concat.sources[0].source.absent", "handler": "absent", "count": 1},
             ]);
@@ -267,7 +270,7 @@ mod scalar {
             assert_eq!(result.issues().len(), 1);
             assert_eq!(
                 issue_json(&result.issues()[0]),
-                serde_json::json!({"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0308","spec_paths":["columns.RESULT.derivation.str_concat.sources[1]"],"context":{"source":"sources[1]","expected":"str","actual":"int"}})
+                yamaa_core::json::json!({"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0308","spec_paths":["columns.RESULT.derivation.str_concat.sources[1]"],"context":{"source":"sources[1]","expected":"str","actual":"int"}})
             );
             assert!(!fixture.0.join("output.csv").exists());
         }
@@ -297,7 +300,7 @@ mod scalar {
                 );
                 assert_eq!(
                     issue_json(issue)["context"]["value"],
-                    serde_json::json!(expected)
+                    yamaa_core::json::json!(expected)
                 );
             }
         }
@@ -328,7 +331,7 @@ mod scalar {
                 assert_eq!(issue["phase"], "convert");
                 assert_eq!(issue["condition"], "conversion_failed");
                 assert_eq!(issue["requirement"], "REQ-0013");
-                assert_eq!(issue["context"]["value"], serde_json::json!(expected));
+                assert_eq!(issue["context"]["value"], yamaa_core::json::json!(expected));
                 assert!(result.output().is_none());
                 for _ in 0..2 {
                     assert!(result.save().is_err());
@@ -505,7 +508,7 @@ mod scalar {
             assert_eq!(result.issues()[0].condition, "multiple_matches");
             assert_eq!(result.issues()[0].requirement.as_deref(), Some("REQ-0127"));
             assert_eq!(result.issues()[0].spec_paths, ["rows[0].filter"]);
-            let context: serde_json::Value =
+            let context: yamaa_core::json::Value =
                 serde_json::from_str(&result.issues()[0].context).unwrap();
             assert_eq!(context["match_count"], 2);
             assert!(result.save().is_err());
@@ -737,7 +740,7 @@ rows:
             ] {
                 assert!(
                     counts.contains(
-                        &serde_json::json!({"spec_path":path,"handler":handler,"count":count})
+                        &yamaa_core::json::json!({"spec_path":path,"handler":handler,"count":count})
                     ),
                     "{counts:?}"
                 );
@@ -870,7 +873,10 @@ rows:
             assert!(result.output().is_some());
             assert_eq!(result.log_table(false).unwrap().rows(), 4);
             assert_eq!(result.log_table(true).unwrap().rows(), 1);
-            assert_eq!(result.observations()["artifacts"], serde_json::json!([]));
+            assert_eq!(
+                result.observations()["artifacts"],
+                yamaa_core::json::json!([])
+            );
             for name in ["adsl.csv", "adsl-checks.csv", "adsl-warnings.csv"] {
                 assert!(!study.0.join(name).exists());
             }
@@ -896,18 +902,18 @@ rows:
                         .collect::<Vec<_>>(),
                     ["adsl-checks", "adsl-warnings", "adsl"]
                 );
-                let mut expected: serde_json::Value = serde_json::from_str(include_str!(
+                let mut expected: yamaa_core::json::Value = serde_json::from_str(include_str!(
                     "fixtures/specs/schema-verification-log.json"
                 ))
                 .unwrap();
-                expected["runtime"] = serde_json::json!("test");
-                expected["runtime_version"] = serde_json::json!("test");
-                expected["engine_version"] = serde_json::json!(yamaa_core::VERSION);
-                expected["example"] = serde_json::json!("logs");
+                expected["runtime"] = yamaa_core::json::json!("test");
+                expected["runtime_version"] = yamaa_core::json::json!("test");
+                expected["engine_version"] = yamaa_core::json::json!(yamaa_core::VERSION);
+                expected["example"] = yamaa_core::json::json!("logs");
                 for group in ["nodes", "tables", "verifications", "callbacks"] {
                     for record in expected[group].as_array_mut().unwrap() {
                         record["specification"] =
-                            serde_json::json!(study.0.join("spec.yaml").to_str().unwrap());
+                            yamaa_core::json::json!(study.0.join("spec.yaml").to_str().unwrap());
                     }
                 }
                 assert_eq!(result.observations(), expected);
@@ -962,7 +968,10 @@ rows:
                 fs::read(study.0.join("adsl-warnings.csv")).unwrap(),
                 b"old warnings"
             );
-            assert_eq!(result.observations()["artifacts"], serde_json::json!([]));
+            assert_eq!(
+                result.observations()["artifacts"],
+                yamaa_core::json::json!([])
+            );
             fs::create_dir(study.0.join("absent")).unwrap();
             assert!(result.save().unwrap());
             assert!(result.issues().is_empty());
@@ -1057,7 +1066,7 @@ rows:
                     Some(b"PAR1".as_slice())
                 );
             }
-            let warning: serde_json::Value =
+            let warning: yamaa_core::json::Value =
                 serde_json::from_str(report["artifacts"][1]["records"][1].as_str().unwrap())
                     .unwrap();
             assert_eq!(warning[7], 1);

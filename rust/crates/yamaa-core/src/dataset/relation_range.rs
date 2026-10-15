@@ -29,7 +29,7 @@ impl RelationRangeTypes {
         intermediate: Option<&str>,
     ) -> crate::diagnostic::Diagnostic {
         use crate::diagnostic::{ConditionCode, Diagnostic};
-        use serde_json::Value as JsonValue;
+        use crate::json::Value as JsonValue;
         let name = |kind| match kind {
             ValueType::Str => "str",
             ValueType::Int => "int",

@@ -49,7 +49,7 @@ mod tests {
             })
             .unwrap();
         let run = PreparedRun::prepare(document).unwrap();
-        let expected: serde_json::Value = serde_json::from_str(include_str!(
+        let expected: yamaa_core::json::Value = serde_json::from_str(include_str!(
             "../tests/fixtures/check_invalid_regex_truth.json"
         ))
         .unwrap();

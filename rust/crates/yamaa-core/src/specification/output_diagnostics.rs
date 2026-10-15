@@ -1,7 +1,7 @@
 //! Output-declaration findings retain their validation vocabulary at the cause.
 use super::{OutputFinding, MAX_OUTPUT_DECIMALS};
 use crate::diagnostic::{ConditionCode as C, Diagnostic};
-use serde_json::Value as V;
+use crate::json::Value as V;
 
 impl OutputFinding {
     /// This represents the existing finding. The caller still reaches output

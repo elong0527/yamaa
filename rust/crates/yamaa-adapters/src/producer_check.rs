@@ -1,7 +1,7 @@
 //! Complete static graph diagnostics borrowed from sealed metadata ownership.
 //! Projection refusal retains the exact original preparation error beside it.
 use crate::{file_graph::FileGraph, file_workflow, issue_rows::Issue};
-use serde_json::Value as JsonValue;
+use yamaa_core::json::Value as JsonValue;
 use yamaa_core::{diagnostic::Diagnostic, specification::PrepareError};
 
 #[derive(Debug)]
@@ -306,7 +306,7 @@ fn inheritance_issues<'a>(
         .map_err(|_| Error::Original(owner))?;
     // Typed cause selection precedes projection; this protocol check validates
     // completeness, never chooses a preparation/execution route from error text.
-    let value: serde_json::Value = serde_json::from_str(&encoded).map_err(|_| invalid())?;
+    let value: yamaa_core::json::Value = serde_json::from_str(&encoded).map_err(|_| invalid())?;
     let outcome = &value["outcome"];
     if outcome["status"] != "invalid" {
         return Err(Error::Original(owner));

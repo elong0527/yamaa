@@ -1835,7 +1835,7 @@ mod preparation {
 
         #[test]
         fn real_traversal_failures_project_canonical_causes_and_original_provenance() {
-            use serde_json::Value as C;
+            use yamaa_core::json::Value as C;
             use yamaa_core::value::Value as S;
             fn check(
                 error: &Error<(&str, u32)>,
@@ -2001,7 +2001,7 @@ mod preparation {
                 let diagnostic = error.diagnostic().unwrap().unwrap();
                 assert_eq!(
                     diagnostic.context["path"],
-                    serde_json::json!("p".repeat(512))
+                    yamaa_core::json::json!("p".repeat(512))
                 );
             }
             let Error::Unavailable { declaring, path } = &error else {
@@ -2015,7 +2015,7 @@ mod preparation {
             };
             assert_eq!(
                 cycle.diagnostic().unwrap().unwrap().context["cycle"],
-                serde_json::json!(["entry", "base", "entry"])
+                yamaa_core::json::json!(["entry", "base", "entry"])
             );
         }
 

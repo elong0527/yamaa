@@ -914,7 +914,7 @@ mod project {
     }
     mod project_environment_diagnostics {
         use crate::support::project_environment as support;
-        use serde_json::Value as JsonValue;
+        use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             project_environment::{self, Draft, Finding, LockKind, LockReference},
             project_environment_diagnostics::{diagnostics, Error},
@@ -1252,8 +1252,8 @@ mod project {
     }
     mod project_environment_projection {
         use crate::support::project_environment as support;
-        use serde_json::Value as CV;
         use std::collections::BTreeMap;
+        use yamaa_core::json::Value as CV;
         use yamaa_core::{
             diagnostic::{ConditionCode as C, Diagnostic},
             project_environment::{self, Draft, Finding, LockKind, LockReference},

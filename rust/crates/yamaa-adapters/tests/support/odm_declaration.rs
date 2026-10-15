@@ -1,10 +1,10 @@
 //! Typed fixture projections reuse production preparation and diagnostic representation.
-use serde_json::{json, Value};
 use yamaa_adapters::{
     shipped_schema, specification_diagnostics,
     specification_run::{Error, PreparedRun},
     specification_source::Source,
 };
+use yamaa_core::json::{json, Value};
 fn projected_findings(
     error: &Error,
     source: Option<&yamaa_core::specification::SourceDeclaration>,
@@ -55,7 +55,7 @@ pub fn observe(source: &str, headers: &[Vec<String>]) -> Value {
         .collect::<Vec<_>>();
     let mut issues = Vec::new();
     let mut schemas = Vec::new();
-    let mut catalog = serde_json::Map::new();
+    let mut catalog = yamaa_core::json::Map::new();
     for (index, (source, names)) in run.compiled().sources().iter().zip(headers).enumerate() {
         let odm = run.compiled().source_interpretation(index) == Some(SourceInterpretation::Odm);
         let exposed = if odm {

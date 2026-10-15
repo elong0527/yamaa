@@ -1,8 +1,8 @@
 //! Independently authored arenas reach submission detectors and portable boundary policy.
 #![allow(unused_imports)]
 pub(crate) use crate::support::document::Tree;
-pub(crate) use serde_json::Value as JsonValue;
 pub(crate) use std::{collections::BTreeSet, convert::Infallible};
+pub(crate) use yamaa_core::json::Value as JsonValue;
 pub(crate) use yamaa_core::{
     define_diagnostics::{self, TargetRelation},
     diagnostic::ConditionCode,

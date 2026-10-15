@@ -1,5 +1,5 @@
 //! Private typed parser observations for independent differential fixtures.
-use serde_json::{json, Value};
+use yamaa_core::json::{json, Value};
 use yamaa_core::{
     predicate::Comparison,
     predicate_parser::{

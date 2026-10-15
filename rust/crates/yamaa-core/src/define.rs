@@ -1,6 +1,7 @@
 //! Define preparation and one-shot publication over retained native snapshots.
 //! This service owns admission, composition, rendering and effect order. Ports
 //! observe file geometry and codecs without interpreting submission declarations.
+use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode, Diagnostic},
     limits::Limits,
@@ -11,7 +12,6 @@ use crate::{
     submission_document,
     table::TableAccess,
 };
-use serde_json::Value as JsonValue;
 use std::vec;
 
 pub struct EnvironmentView<'a> {

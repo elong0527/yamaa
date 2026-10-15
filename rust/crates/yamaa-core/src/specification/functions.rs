@@ -1,5 +1,6 @@
 //! Versionless call preparation and retained diagnostic projection.
 use super::*;
+use crate::json::Value as V;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     project_call_document::{self, Input},
@@ -7,7 +8,6 @@ use crate::{
     project_function::{CallFinding, Function},
     value::ValueType,
 };
-use serde_json::Value as V;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Cause {

@@ -673,7 +673,7 @@ fn preflight(spec: &SpecificationDocument) -> Result<Vec<PreflightFinding>, Prep
             finding.spec_paths.push(format!("rows[{previous}].id"));
             finding.context.insert(
                 "identifier".into(),
-                serde_json::Value::String(identity.into()),
+                crate::json::Value::String(identity.into()),
             );
             findings.push(PreflightFinding::Scalar(finding));
         }
@@ -983,7 +983,7 @@ impl PreparedSpecification {
                     spec_paths: vec![format!("{prefix}.encoding")],
                     context: crate::diagnostic::Context::from([(
                         "dataset".into(),
-                        serde_json::Value::String(text(d, name)?.into()),
+                        crate::json::Value::String(text(d, name)?.into()),
                     )]),
                     source_span: None,
                     operand_route: None,

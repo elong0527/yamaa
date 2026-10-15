@@ -1814,7 +1814,7 @@ mod project {
         }
     }
     mod project_codelist_binding {
-        use serde_json::Value as JsonValue;
+        use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             dataset::Check,
             project_codelist_binding::{bind, AllowedValues, Binding, Cause},

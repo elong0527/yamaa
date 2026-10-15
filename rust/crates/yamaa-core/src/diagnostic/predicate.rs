@@ -1,11 +1,11 @@
 //! Predicate evaluation facts and stable structural routes without host formatting.
 use super::{ConditionCode as C, Context, Diagnostic};
+use crate::json::Value as V;
 use crate::{
     predicate::{Condition, ErrorKind, EvaluationError, Route},
     regex,
     value::ValueType,
 };
-use serde_json::Value as V;
 
 /// Native resolver/resource failures remain borrowed and never acquire an
 /// invented predicate condition when diagnostic inspection cannot represent them.

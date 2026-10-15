@@ -1,6 +1,6 @@
 //! Owned five-field issue records shared by the build and static-check facades.
 //! Context is encoded in Rust so host data-frame conversion cannot narrow it.
-use serde_json::Value;
+use yamaa_core::json::Value;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Issue {
@@ -68,7 +68,7 @@ impl Issue {
     }
 
     pub fn as_value(&self) -> Value {
-        serde_json::to_value(self).expect("owned issue fields serialize")
+        yamaa_core::json::to_value(self).expect("owned issue fields serialize")
     }
 
     /// Retained report observations expose admitted context data while installed
@@ -119,7 +119,7 @@ pub(crate) fn collect(issues: impl IntoIterator<Item = Issue>) -> Vec<Issue> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
+    use yamaa_core::json::json;
 
     #[test]
     fn context_retains_full_integer_range_unicode_and_nested_values() {

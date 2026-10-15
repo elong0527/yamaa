@@ -633,7 +633,7 @@ mod schema {
                 assert_eq!(diagnostic.definition().requirement, Some("REQ-0070"));
                 assert_eq!(
                     diagnostic.context["dependency"],
-                    serde_json::Value::String(expected.into())
+                    yamaa_core::json::Value::String(expected.into())
                 );
             }
         }

@@ -1,6 +1,6 @@
 //! Representation of typed execution causes in the portable issue shape.
 use crate::dataset_result::DatasetError as Error;
-use serde_json::Value;
+use yamaa_core::json::Value;
 use yamaa_core::table::CellError;
 pub(crate) type Diagnostic = Value;
 pub(crate) fn project(diagnostic: yamaa_core::diagnostic::Diagnostic) -> Result<Box<Value>, Error> {

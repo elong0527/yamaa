@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
-pub(crate) use serde_json::Value as V;
 pub(crate) use std::collections::BTreeSet;
+pub(crate) use yamaa_core::json::Value as V;
 pub(crate) use yamaa_core::{
     diagnostic::{ConditionCode, Context},
     parquet_source::{self as p, Converted, Field, Logical, Physical, Representation},

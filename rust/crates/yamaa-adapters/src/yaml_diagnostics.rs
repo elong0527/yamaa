@@ -1,6 +1,6 @@
 //! Authored YAML findings and complete retained report encoding.
 use crate::yaml_decode::DecodeFailure;
-use serde_json::{json, Value};
+use yamaa_core::json::{json, Value};
 
 pub(crate) fn encode_outcome(protocol: &str, outcome: Value) -> String {
     json!({"protocol":protocol,"outcome":outcome}).to_string()

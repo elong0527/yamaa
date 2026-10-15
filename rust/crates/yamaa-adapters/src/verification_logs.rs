@@ -3,8 +3,8 @@
 use crate::{
     public_table::PublicTable, specification_report::Error, specification_run_view::RunView,
 };
-use serde_json::{json, Value};
 use std::{collections::BTreeMap, sync::Arc};
+use yamaa_core::json::{json, Value};
 use yamaa_core::{
     dataset::VerificationSeverity,
     table::TableAccess,

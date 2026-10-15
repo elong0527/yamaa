@@ -5,7 +5,7 @@ use crate::{
     project_source::{CapturedEnvironment, Origin},
     report_scalar::ScalarValue,
 };
-use serde_json::{json, Value as Json};
+use yamaa_core::json::{json, Value as Json};
 use yamaa_core::project_activation::{BindingOutcome, LockObservation, Observations, TestOutcome};
 use yamaa_core::{
     project_environment::ExecutionEnvironment, project_function::Function, value::Value,
@@ -65,7 +65,7 @@ pub enum Error {
     Projection,
 }
 fn scalar(value: &Value) -> Result<Json, Error> {
-    serde_json::to_value(ScalarValue::from_core(value.clone())).map_err(|_| Error::Projection)
+    yamaa_core::json::to_value(ScalarValue::from_core(value.clone())).map_err(|_| Error::Projection)
 }
 fn function(run: &dyn ActivationView, selected: usize) -> Result<(&Function, &str), Error> {
     let index = *run
@@ -164,7 +164,7 @@ pub fn activation(run: &dyn ActivationView, observed: &Observations) -> Result<J
         let (function, source) = function(run, observed.function)?;
         let definition = function.definition();
         let case = &definition.tests[observed.case];
-        let args = case.args.iter().map(|(name, value)| Ok((name.clone(), scalar(value)?))).collect::<Result<serde_json::Map<_, _>, Error>>()?;
+        let args = case.args.iter().map(|(name, value)| Ok((name.clone(), scalar(value)?))).collect::<Result<yamaa_core::json::Map<_, _>, Error>>()?;
         Ok(json!({"function":definition.name, "call":definition.function, "source":source, "case":case.id, "args":args,
             "expected":scalar(&case.result)?, "comparison_decimals":definition.comparison_decimals,
             "outcome":match observed.outcome { TestOutcome::Attempted => "attempted", TestOutcome::Passed => "passed", TestOutcome::ResultMismatch => "result_mismatch", TestOutcome::InvocationFailed => "invocation_failed", TestOutcome::Interrupted => "interrupted" },

@@ -31,7 +31,7 @@ impl IntermediateUnique {
         duplicate_count: usize,
     ) -> crate::diagnostic::Diagnostic {
         use crate::diagnostic::{ConditionCode, Diagnostic};
-        use serde_json::Value as JsonValue;
+        use crate::json::Value as JsonValue;
         let mut context = std::collections::BTreeMap::from([
             (
                 "intermediate".into(),

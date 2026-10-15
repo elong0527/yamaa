@@ -1,8 +1,8 @@
 //! Bounded packaging-lock syntax at the host adapter boundary, never core planning.
 //! R hosts can inspect renv JSON without adding an R JSON runtime dependency.
 use crate::yaml_decode::{decode_yaml, DecodeFailure};
-use serde_json::Value;
 use std::collections::BTreeMap;
+use yamaa_core::json::Value;
 
 pub use yamaa_core::diagnostic::{LockFinding as Finding, LockReason as Reason};
 #[derive(Debug)]

@@ -4,8 +4,8 @@ mod support;
 mod execution {
     mod declarative_text_case {
         use crate::support::text_schema as schema;
-        use serde_json::Value as JsonValue;
         use std::{cell::RefCell, rc::Rc};
+        use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{dataset::ExecutionError, numeric_lifecycle::HandlerKind};
         use yamaa_core::{
             dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate},
@@ -282,8 +282,8 @@ mod execution {
     }
     mod declarative_text_extract {
         use crate::support::text_schema as schema;
-        use serde_json::Value as JsonValue;
         use std::{cell::RefCell, rc::Rc};
+        use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate},
             diagnostic::ConditionCode,
@@ -995,8 +995,8 @@ mod execution {
         }
     }
     mod declarative_text_template {
-        use serde_json::Value as JsonValue;
         use std::{cell::RefCell, rc::Rc};
+        use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{dataset::ExecutionError, numeric_lifecycle::HandlerKind};
         use yamaa_core::{
             dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate},

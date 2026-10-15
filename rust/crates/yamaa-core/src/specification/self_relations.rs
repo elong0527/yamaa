@@ -15,7 +15,7 @@ pub(super) fn declaration_findings(
     items: &[usize],
 ) -> Result<Vec<PreflightFinding>, PrepareError> {
     use crate::diagnostic::{ConditionCode as C, Diagnostic};
-    use serde_json::Value as JsonValue;
+    use crate::json::Value as JsonValue;
     let mut findings = Vec::new();
 
     for (index, &item) in items.iter().enumerate() {
@@ -182,14 +182,14 @@ impl<'a> FirstTemplate<'a> {
                 operand_route: None,
                 spec_paths: vec![path.into()],
                 context: [
-                    ("identifier".into(), serde_json::Value::String(name)),
+                    ("identifier".into(), crate::json::Value::String(name)),
                     (
                         "available_phase".into(),
-                        serde_json::Value::String("completed_prior_row_template".into()),
+                        crate::json::Value::String("completed_prior_row_template".into()),
                     ),
                     (
                         "required_phase".into(),
-                        serde_json::Value::String("row_construction".into()),
+                        crate::json::Value::String("row_construction".into()),
                     ),
                 ]
                 .into_iter()

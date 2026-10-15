@@ -1,5 +1,5 @@
-use serde_json::Value as JsonValue;
 use std::collections::BTreeSet;
+use yamaa_core::json::Value as JsonValue;
 use yamaa_core::{
     diagnostic::ConditionCode,
     project_environment::{self, Draft},

@@ -3,12 +3,12 @@
 mod support;
 mod declaration {
     mod schema_capture {
-        use serde_json::{json, Value};
         use yamaa_adapters::{
             specification_diagnostics::capture_failure,
             specification_source::{CapturedSchema, Error, Source},
             yaml_decode::SourcePosition,
         };
+        use yamaa_core::json::{json, Value};
         use yamaa_core::schema::{
             BundleError, BundleIssue, BundleIssueKind, DocumentNode as N, NormalizationError,
             SchemaSource,
@@ -222,7 +222,7 @@ mod declaration {
     }
     mod schema_declaration_fixture {
         use crate::support::schema_declaration as fixture;
-        use serde_json::json;
+        use yamaa_core::json::json;
 
         const SCHEMA: &str = "version: '1.0'\nroot_class:\n  - needed: {type: str, required: true}\n  - count: {type: int}\n  - items: {type: 'list[int]'}\n";
 
@@ -296,11 +296,11 @@ mod declaration {
         }
     }
     mod schema_diagnostic_projection {
-        use serde_json::{json, Value};
         use yamaa_adapters::{
             specification_diagnostics::capture_failure,
             specification_source::{CapturedSchema, Error, Source},
         };
+        use yamaa_core::json::{json, Value};
 
         const BIG: &str = "922337203685477580812345678901234567890";
         fn source(identity: &str, text: &str) -> Source {
@@ -484,8 +484,8 @@ mod declaration {
 
         #[test]
         fn standalone_findings_retain_source_and_resolve_context_without_host_interpretation() {
-            use serde_json::{json, Value};
             use yamaa_adapters::specification_diagnostics::capture_failure;
+            use yamaa_core::json::{json, Value};
             let cases = [
                 (
                     VALID.replace("'1.0'", "'99.0'"),
@@ -540,8 +540,8 @@ mod declaration {
 
         #[test]
         fn window_expansion_findings_use_the_retained_normalized_arena() {
-            use serde_json::{json, Value};
             use yamaa_adapters::specification_diagnostics::capture_failure;
+            use yamaa_core::json::{json, Value};
             let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../../../benchmarks/negative-unknown-window");
             let raw = std::fs::read(root.join("spec.yaml")).unwrap();
@@ -570,8 +570,8 @@ mod declaration {
 
         #[test]
         fn large_invalid_version_retains_its_complete_language_finding() {
-            use serde_json::{json, Value};
             use yamaa_adapters::specification_diagnostics::capture_failure;
+            use yamaa_core::json::{json, Value};
             let version = "x".repeat(2_800_000);
             let text = format!("schema_version: '{version}'\n");
             let error = shipped_schema::capture()
@@ -588,8 +588,8 @@ mod declaration {
 
         #[test]
         fn source_failures_preserve_independent_decoder_findings_before_any_host_effect() {
-            use serde_json::{json, Value};
             use yamaa_adapters::specification_diagnostics::inheritance_failure;
+            use yamaa_core::json::{json, Value};
             let mut count = 0;
             for row in
                 serde_json::from_str::<Vec<Value>>(include_str!("fixtures/yaml_transport.json"))
@@ -688,8 +688,8 @@ mod declaration {
         }
         #[test]
         fn inherited_layer_and_composed_findings_resolve_without_exposing_context_arenas() {
-            use serde_json::{json, Value};
             use yamaa_adapters::specification_diagnostics::inheritance_failure;
+            use yamaa_core::json::{json, Value};
             let entry = format!("{VALID}parents: parent.yaml\n");
             let invalid_parent = "schema_version: '1.0'\ndomain: bad-name\n";
             let outcome: Value = serde_json::from_str(
@@ -754,7 +754,6 @@ mod declaration {
     }
     mod standalone_preparation {
         //! Existing YAML representation and independent complete outcomes around engine delegation.
-        use serde_json::{json, Value};
         use std::sync::Arc;
         use yamaa_adapters::{
             specification_diagnostics::capture_failure,
@@ -764,6 +763,7 @@ mod declaration {
             yaml_decode::{decode_yaml, DecodeFailure},
         };
         use yamaa_core::inheritance::{Source as Identity, SourceError};
+        use yamaa_core::json::{json, Value};
         use yamaa_core::schema::{DocumentNode as N, NormalizationError, SchemaSource};
 
         const SCHEMA: &str = "version: '1.0'\nroot_class:\n  - schema_version: {type: str}\n  - domain: {type: [str, int], default: DEFAULT}\n  - input: {type: dict}\n  - keys: {type: 'list[str]'}\n  - output: {type: dict}\n  - columns: {type: 'list[column_class]'}\n  - windows: {type: 'dict[str, window_spec]'}\ncolumn_class:\n  - name: {type: str}\n  - type: {type: str}\n  - derivation: {type: handled_expression_class}\nhandled_expression_class:\n  - value: {type: expression}\nexpression: {registry: expressions}\nexpressions:\n  row_number:\n    - window: {type: window_selection}\nwindow_selection: {type: [str, window_spec]}\nwindow_spec:\n  - group_by: {type: 'list[str]'}\n  - order_by: {type: 'list[order_term]'}\norder_term:\n  - variable: {type: str}\n";
@@ -1133,10 +1133,10 @@ mod declaration {
         assert_eq!(rows[0].condition, "invalid_predicate", "{path}");
         assert_eq!(rows[0].requirement.as_deref(), Some("REQ-0188"), "{path}");
         assert_eq!(rows[0].spec_paths, [path], "{path}");
-        let context: serde_json::Value = serde_json::from_str(&rows[0].context).unwrap();
+        let context: yamaa_core::json::Value = serde_json::from_str(&rows[0].context).unwrap();
         assert_eq!(
             context,
-            serde_json::json!({"position": position, "predicate": predicate, "suggestion": suggestion}),
+            yamaa_core::json::json!({"position": position, "predicate": predicate, "suggestion": suggestion}),
             "{path}"
         );
     }
@@ -1163,12 +1163,12 @@ mod declaration {
             // false values. Observe native findings directly instead of replaying
             // them through the former JSON-line semantic fixture executable.
             for false_value in [
-                serde_json::json!("N"),
-                serde_json::json!(i64::MIN),
-                serde_json::json!(i64::MAX),
-                serde_json::json!(false),
-                serde_json::json!(true),
-                serde_json::json!("N\0U"),
+                yamaa_core::json::json!("N"),
+                yamaa_core::json::json!(i64::MIN),
+                yamaa_core::json::json!(i64::MAX),
+                yamaa_core::json::json!(false),
+                yamaa_core::json::json!(true),
+                yamaa_core::json::json!("N\0U"),
             ] {
                 let text = format!(
             "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{DM: never-read.csv}}\noutput: {{path: result.csv, columns: [ID, B, F]}}\ncolumns:\n  - {{name: ID, type: str, derivation: DM.ID}}\n  - {{name: B, type: int, derivation: {{literal: 2}}}}\n  - {{name: F, type: str, derivation: {{flag: {{condition: 'B > 1', false_value: {false_value}}}}}}}\n"
@@ -1186,14 +1186,18 @@ mod declaration {
                 assert_eq!(rows[0].condition, "missing_value_required");
                 assert_eq!(rows[0].requirement.as_deref(), Some("REQ-1258"));
                 assert_eq!(rows[0].spec_paths, ["columns.F.derivation.flag.missing"]);
-                let context: serde_json::Value = serde_json::from_str(&rows[0].context).unwrap();
-                assert_eq!(context, serde_json::json!({"false_value": false_value}));
+                let context: yamaa_core::json::Value =
+                    serde_json::from_str(&rows[0].context).unwrap();
+                assert_eq!(
+                    context,
+                    yamaa_core::json::json!({"false_value": false_value})
+                );
             }
         }
     }
     mod string_template_syntax_fixture {
         use crate::support::string_template_syntax as fixture;
-        use serde_json::json;
+        use yamaa_core::json::json;
 
         #[test]
         fn typed_occurrences_preserve_escaped_text_spans_and_repeated_bindings() {
@@ -1896,7 +1900,7 @@ mod declaration {
                     )
                 );
             }
-            use serde_json::Value as JsonValue;
+            use yamaa_core::json::Value as JsonValue;
             assert_eq!(
                 projected[0].context["value"],
                 JsonValue::Number(("9223372036854775808").parse().expect("canonical integer"))
@@ -1918,7 +1922,6 @@ mod declaration {
     mod structural_preparation {
         //! Independent reports/effects through the live environment metadata route.
 
-        use serde_json::{json, Value};
         use std::{rc::Rc, sync::Arc};
         use yamaa_adapters::{
             issue_rows::Issue,
@@ -1927,6 +1930,7 @@ mod declaration {
             specification_source::{CapturedSchema, Error, Source},
             yaml_decode::{decode_yaml, DecodeFailure},
         };
+        use yamaa_core::json::{json, Value};
         use yamaa_core::{
             project_environment::LockKind,
             project_function::Language,
@@ -2447,8 +2451,8 @@ mod declaration {
                     assert_eq!(issue.requirement.as_deref(), Some(requirement));
                     assert_eq!(issue.spec_paths, [path]);
                     assert_eq!(
-                        serde_json::from_str::<serde_json::Value>(&issue.context).unwrap(),
-                        serde_json::json!({"argument":"x", "cause":"missing_required_argument", "function":"project_value"})
+                        serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap(),
+                        yamaa_core::json::json!({"argument":"x", "cause":"missing_required_argument", "function":"project_value"})
                     );
                 }
             }

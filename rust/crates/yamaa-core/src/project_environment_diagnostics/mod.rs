@@ -1,5 +1,6 @@
 //! Project admission findings retain their typed input and authored field paths.
 //! Resource exhaustion and host failures remain outside semantic vocabulary.
+use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     project_environment::{Draft, Finding, LockKind},
@@ -7,7 +8,6 @@ use crate::{
     project_terminology::{Fault, Finding as T},
     value::Value,
 };
-use serde_json::Value as JsonValue;
 use std::vec;
 
 pub mod projection;

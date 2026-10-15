@@ -466,9 +466,11 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
 }
 
 /// Borrow a retained non-host failure for the complete project report formatter.
-pub(crate) fn semantic_condition<E>(error: &ExecutionError<E>) -> Result<serde_json::Value, Error> {
+pub(crate) fn semantic_condition<E>(
+    error: &ExecutionError<E>,
+) -> Result<yamaa_core::json::Value, Error> {
     let outcome = semantic_failure(error, false)?;
-    serde_json::to_value(outcome).map_err(|_| Error::Internal)
+    yamaa_core::json::to_value(outcome).map_err(|_| Error::Internal)
 }
 
 /// Encode the admitted execution attempt, retaining typed results for publication.

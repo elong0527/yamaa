@@ -1,10 +1,10 @@
 #![allow(unused_imports)]
-pub(crate) use serde_json::Value as V;
 pub(crate) use std::collections::BTreeSet;
 pub(crate) use yamaa_core::diagnostic::{
     lock_diagnostics, ConditionCode, LockDiagnosticError as E, LockFinding, LockOrigins,
     LockReason as R,
 };
+pub(crate) use yamaa_core::json::Value as V;
 pub(crate) fn text(value: &str) -> V {
     V::String(value.into())
 }

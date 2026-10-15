@@ -1,5 +1,5 @@
-use serde_json::Value as C;
 use std::collections::BTreeSet;
+use yamaa_core::json::Value as C;
 use yamaa_core::{csv_source::parse, diagnostic::ConditionCode};
 pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
@@ -109,7 +109,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
 
 pub(crate) fn typing_reached() -> std::collections::BTreeSet<yamaa_core::diagnostic::ConditionCode>
 {
-    use serde_json::Value as JsonValue;
+    use yamaa_core::json::Value as JsonValue;
     use yamaa_core::{
         csv_source, diagnostic::Context, typed_csv::PreparedTypes, value::ColumnType,
     };

@@ -2545,7 +2545,7 @@ mod project {
 
         #[test]
         fn recursive_and_self_cycles_retain_closed_identity_route_without_compiling_calls() {
-            use serde_json::Value as V;
+            use yamaa_core::json::Value as V;
 
             let a = document(&[("B", Some("/b"))], Some("unknown"));
             let b = document(&[("C", Some("/c"))], None);

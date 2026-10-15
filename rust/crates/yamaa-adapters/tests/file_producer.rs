@@ -266,8 +266,8 @@ columns:
                 );
                 assert_eq!(issue.spec_paths, ["input.FIRST.ordinal"]);
                 assert_eq!(
-                    serde_json::from_str::<serde_json::Value>(&issue.context).unwrap(),
-                    serde_json::json!({"dataset":"FIRST", "field":"ID"})
+                    serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap(),
+                    yamaa_core::json::json!({"dataset":"FIRST", "field":"ID"})
                 );
             }
         }
@@ -305,7 +305,7 @@ columns:
                     );
                     assert_eq!(
                         result.observations()["publication"],
-                        serde_json::json!({"status":"success","entered":[{"node":1,"published":true},{"node":0,"published":true}],"error":null})
+                        yamaa_core::json::json!({"status":"success","entered":[{"node":1,"published":true},{"node":0,"published":true}],"error":null})
                     );
                     assert_eq!(result.output().unwrap(), output);
                     assert!(result.issues().is_empty());
@@ -380,7 +380,7 @@ columns:
                 assert!(result.output().is_some());
                 assert_eq!(
                     result.observations()["publication"]["entered"],
-                    serde_json::json!([])
+                    yamaa_core::json::json!([])
                 );
             }
         }
@@ -832,12 +832,12 @@ columns:
             assert_eq!(value["outcome"], "success");
             assert_eq!(
                 value["activation"],
-                serde_json::json!({"lock":"not_requested","bindings":[],"tests":[]})
+                yamaa_core::json::json!({"lock":"not_requested","bindings":[],"tests":[]})
             );
             assert_eq!(value["artifacts"][0]["profile"], "parquet");
             assert_eq!(
                 value["artifacts"][0]["records"],
-                serde_json::json!(["[\"ID\", \"VALUE\"]", "[1, 13]", "[2, 17]"])
+                yamaa_core::json::json!(["[\"ID\", \"VALUE\"]", "[1, 13]", "[2, 17]"])
             );
             assert_eq!(value["artifacts"][1]["content"], "ID,VALUE\n1,13\n2,17\n");
         }
@@ -1378,7 +1378,7 @@ columns:
                     runtime,
                     ..report_id()
                 };
-                let expected = serde_json::Value::Array((0..filter_count).map(|index| serde_json::json!({
+                let expected = yamaa_core::json::Value::Array((0..filter_count).map(|index| yamaa_core::json::json!({
                     "phase": "validation", "condition": "incompatible_input_type",
                     "requirement": "REQ-0190", "spec_paths": [format!("intermediates[{index}].filter")],
                     "context": {"left_type": "date", "right_type": "str"},
@@ -1729,10 +1729,10 @@ columns:
                 assert_eq!(report["outcome"], "failure");
                 assert_eq!(report["diagnostics"].as_array().unwrap().len(), 1);
                 assert_eq!(report["diagnostics"][0]["condition"], condition);
-                assert_eq!(report["artifacts"], serde_json::json!([]));
+                assert_eq!(report["artifacts"], yamaa_core::json::json!([]));
                 if !matches!(mode, Mode::LiveFailure) {
                     assert!(attempt.graph.nodes.is_empty());
-                    assert_eq!(report["source_reads"], serde_json::json!([]));
+                    assert_eq!(report["source_reads"], yamaa_core::json::json!([]));
                     assert_eq!(
                         report["diagnostics"][0]["context"]["source"],
                         "held/environment.yaml"
@@ -1745,11 +1745,11 @@ columns:
                     assert_eq!(attempt.graph.nodes.len(), 1);
                     assert_eq!(
                         report["diagnostics"][0]["spec_paths"],
-                        serde_json::json!(["columns.VALUE.derivation.function"])
+                        yamaa_core::json::json!(["columns.VALUE.derivation.function"])
                     );
                     assert_eq!(
                         report["diagnostics"][0]["context"]["keys"],
-                        serde_json::json!([{"ID":1}])
+                        yamaa_core::json::json!([{"ID":1}])
                     );
                 }
                 assert_eq!(
@@ -1887,8 +1887,8 @@ columns:
             name: &str,
             columns: &[&str],
             rows: &[&[&str]],
-        ) -> serde_json::Value {
-            use serde_json::json;
+        ) -> yamaa_core::json::Value {
+            use yamaa_core::json::json;
             let kinds = columns
                 .iter()
                 .map(|&column| if column == "ID" { "int" } else { "float" })
@@ -1898,8 +1898,8 @@ columns:
         }
         #[test]
         fn native_complete_reports_pin_independent_rounded_truth_and_union_after_all_owners_drop() {
-            use serde_json::json;
             use yamaa_adapters::producer_report::attempt_report;
+            use yamaa_core::json::json;
             let study = Study::new();
             study.rounded();
             let mut build = study.build(Language::Python);
@@ -1986,8 +1986,8 @@ columns:
 
         #[test]
         fn complete_failed_reports_keep_entered_producer_and_consumer_check_and_source_prefixes() {
-            use serde_json::json;
             use yamaa_adapters::producer_report::attempt_report;
+            use yamaa_core::json::json;
             for mode in 0..4 {
                 let study = Study::new();
                 study.rounded();
@@ -2288,7 +2288,7 @@ columns:
             assert_eq!(report["artifacts"].as_array().unwrap().len(), 2);
             assert_eq!(
                 report["tables"][0]["rows"][0][1],
-                serde_json::json!({"type":"str","value":text})
+                yamaa_core::json::json!({"type":"str","value":text})
             );
             assert!(!study.0.join("generated").exists());
         }
