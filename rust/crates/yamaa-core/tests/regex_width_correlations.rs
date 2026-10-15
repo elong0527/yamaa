@@ -146,3 +146,89 @@ fn flat_capture_dependency_chains_keep_each_new_width_choice() {
         }
     );
 }
+
+#[test]
+fn repeated_body_choices_do_not_bind_independent_incoming_captures() {
+    // The sixty incoming captures form thirty independent pairs of width one
+    // or two. Captures 61 and 62 belong to the repeated body; their shared
+    // choice must be unioned for earlier iterations without binding the thirty
+    // incoming choices. The body still varies, so repeating it twice varies.
+    let mut source = "(?:(a)|(bb))".repeat(30);
+    let byte = source.len();
+    source.push_str("(?<=(?:");
+    append_references(&mut source, 62);
+    source.push_str("(?:(c)|(dd))){2})");
+
+    assert_eq!(
+        Pattern::compile(&source).unwrap_err(),
+        CompileError::Invalid {
+            byte,
+            reason: "variable-length lookbehind",
+        }
+    );
+}
+
+#[test]
+fn alternative_width_unions_keep_independent_incoming_choices() {
+    // Both lookbehind arms preserve the incoming captures. Their widths are
+    // the same thirty-pair sum, or that sum plus one. The complete range is
+    // therefore thirty through sixty-one, independent of which arm is used.
+    let mut source = "(?:(a)|(bb))".repeat(30);
+    let byte = source.len();
+    source.push_str("(?<=(?:");
+    append_references(&mut source, 60);
+    source.push('|');
+    append_references(&mut source, 60);
+    source.push_str("c))");
+
+    assert_eq!(
+        Pattern::compile(&source).unwrap_err(),
+        CompileError::Invalid {
+            byte,
+            reason: "variable-length lookbehind",
+        }
+    );
+}
+
+#[test]
+fn independent_empty_optional_iterations_leave_every_capture_unentered() {
+    // Each only-capturing arm consumes zero and cannot commit an optional
+    // iteration. All thirty references must therefore consume zero, even
+    // though the blocks can independently stop or consume b or bb.
+    let mut source = "^".to_owned() + &"(?:(?=(a))|b|bb){0,1}".repeat(30);
+    source.push_str("(?<=");
+    append_references(&mut source, 30);
+    source.push_str(")c$");
+
+    let pattern = Pattern::compile(&source).unwrap();
+    for subject in ["c".to_owned(), "b".repeat(30) + "c"] {
+        let found = pattern.full_match(&subject).unwrap().unwrap();
+        assert_eq!(found.groups.len(), 31);
+        assert_eq!(found.groups[0], Some(subject.as_str()));
+        assert!(found.groups[1..].iter().all(Option::is_none));
+    }
+}
+
+#[test]
+fn flat_capture_pairs_retain_a_fresh_choice_at_every_dependency() {
+    // Each new pair captures either a, or the preceding pair followed by b.
+    // Unlike a noncapturing alternative, the arms change referenced capture
+    // participation. At stage n the pair has width one through n; 1500 stages
+    // use 2999 captures while preserving shallow grammar nesting.
+    let mut source = "(a)".to_owned();
+    let mut previous = r"\1".to_owned();
+    for first in (2..3000).step_by(2) {
+        write!(source, r"(?:(a)|({previous}b))").unwrap();
+        previous = format!(r"\{first}\{second}", second = first + 1);
+    }
+    let byte = source.len();
+    write!(source, "(?<={previous})").unwrap();
+
+    assert_eq!(
+        Pattern::compile(&source).unwrap_err(),
+        CompileError::Invalid {
+            byte,
+            reason: "variable-length lookbehind",
+        }
+    );
+}
