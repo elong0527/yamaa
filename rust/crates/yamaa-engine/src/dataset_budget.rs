@@ -54,6 +54,98 @@ impl Budget {
     pub(crate) fn used_work(&self) -> usize {
         self.runtime.used().work
     }
+    /// A caller may tighten a node policy after earlier graph effects. Refuse
+    /// against those already admitted counters before entering a new reservation.
+    pub(crate) fn admit_prefix<E>(
+        limits: Limits,
+        prior: crate::execution_work::Usage,
+    ) -> Result<(), Box<ExecutionError<E>>> {
+        for (resource, limit, required) in [
+            (Resource::WorkCells, limits.work_cells, prior.runtime.work),
+            (
+                Resource::PredicateResolutions,
+                limits.work_cells,
+                prior.runtime.resolutions,
+            ),
+            (
+                Resource::ScalarTextBytes,
+                limits.scalar_text_bytes,
+                prior.runtime.text_bytes,
+            ),
+            (
+                Resource::PredicateLikeWork,
+                limits.work_cells,
+                prior.runtime.like_work,
+            ),
+            (
+                Resource::PredicateRegexSubjectBytes,
+                limits.scalar_text_bytes,
+                prior.runtime.regex.subject_bytes,
+            ),
+            (
+                Resource::PredicateRegexWork,
+                limits.work_cells,
+                prior.runtime.regex.work,
+            ),
+            (
+                Resource::PredicateRegexStateCells,
+                limits.work_cells,
+                prior.runtime.regex.state_cells,
+            ),
+            (
+                Resource::OutputTextBytes,
+                limits.output_text_bytes,
+                prior.output_text_bytes,
+            ),
+            (
+                Resource::IdentityCells,
+                limits.identity_cells,
+                prior.identity_cells,
+            ),
+            (
+                Resource::IdentityTextBytes,
+                limits.identity_text_bytes,
+                prior.identity_text_bytes,
+            ),
+        ] {
+            if required > limit {
+                return Err(Box::new(ExecutionError::Limit {
+                    resource,
+                    limit,
+                    required: Some(required),
+                }));
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn pooled(limits: Limits, prior: crate::execution_work::Usage) -> Self {
+        let mut budget = Self::new(limits);
+        let quotas = predicate::Usage {
+            work: limits.work_cells,
+            resolutions: limits.work_cells,
+            text_bytes: limits.scalar_text_bytes,
+            like_work: limits.work_cells,
+            regex: yamaa_core::regex::MatchUsage {
+                subject_bytes: limits.scalar_text_bytes,
+                work: limits.work_cells,
+                state_cells: limits.work_cells,
+            },
+        };
+        budget.runtime = predicate::Budget::with_usage(quotas, prior.runtime);
+        budget.output_text = prior.output_text_bytes;
+        budget.identity_cells = prior.identity_cells;
+        budget.identity_text = prior.identity_text_bytes;
+        budget
+    }
+    pub(crate) fn usage(&self) -> crate::execution_work::Usage {
+        crate::execution_work::Usage {
+            runtime: self.runtime.used(),
+            output_text_bytes: self.output_text,
+            identity_cells: self.identity_cells,
+            identity_text_bytes: self.identity_text,
+            ..Default::default()
+        }
+    }
 
     /// Charge logical table visits before reads, folds or verification scans begin.
     pub(crate) fn work<E>(

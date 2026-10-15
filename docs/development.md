@@ -66,7 +66,15 @@ later are sufficient to read the help inventory; individual checks need the
 tools listed there.
 
 Use Rust 1.90.0 and the canonical `rust/Cargo.lock`. Python and R source archives
-stage the unchanged workspace and lock. From the repository root:
+stage the unchanged workspace and lock.
+
+The local crates.io patch in `rust/vendor/saphyr-parser` retains the released
+0.2.1 library with a narrow compact flow pair scanner fix. Its provenance,
+source diff, regression controls and both authors' licenses travel with Python
+and R source packages; archive guards compare the original bytes. Python wheels
+and installed R packages retain both MIT notices in `LICENSE-YAML.txt`.
+
+From the repository root:
 
 ```sh
 make help
@@ -205,3 +213,19 @@ PR feedback does not establish complete installed or release qualification. [Rel
 separates merged implementation, qualified revisions, pending decisions and
 publication. Keep current guidance here and there; retain historical plans in
 Git and put new evidence in the relevant PR/issue and qualification records.
+
+## SAS reader packaging
+
+SAS and Transport source decoding belongs to the shared Rust adapter. It uses
+a vendored read-only subset of MIT-licensed ReadStat 1.1.9 compiled statically
+by pinned `cc`, with a C bridge for ReadStat unions/bitfields and memory IO over
+the captured source snapshot. Both Python and R source builds include the same
+vendor sources and license under `yamaa-adapters/vendor/readstat`. No host
+reader fallback or dynamic ReadStat installation is used. The
+[vendor inventory](https://github.com/elong0527/yamaa/blob/main/rust/crates/yamaa-adapters/vendor/readstat/README.md) owns
+the upstream commit, local admission patches, portable ABI and encoding choice.
+[SAS source profiles](articles/rules.md#storage) fixes the declared encoding,
+physical type defaults, narrowing, missing, padding, and epoch contracts.
+Native release qualification must exercise this static bridge on Linux, macOS
+and Windows and compare both installed hosts against the independently authored
+binary fixtures and exact saved bytes.

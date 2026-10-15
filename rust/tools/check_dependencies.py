@@ -32,6 +32,7 @@ ALLOWED = {
         "snap",
         "rustix",
         "windows-sys",
+        "cc",
     },
     "yamaa-python": {
         "yamaa-engine",

@@ -31,6 +31,10 @@ def stage(destination: Path):
     )
     backend = importlib.util.module_from_spec(backend_spec)
     backend_spec.loader.exec_module(backend)
+    for original in backend.local_patch_sources(WORKSPACE):
+        target = rust / original.relative_to(WORKSPACE)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(original, target)
     for relative, original in backend.native_test_fixtures(WORKSPACE):
         target = destination / "src" / relative
         target.parent.mkdir(parents=True, exist_ok=True)

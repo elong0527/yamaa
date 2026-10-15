@@ -19,6 +19,7 @@
   "dataset_class": [
     "path",
     "types",
+    "encoding",
     "schema",
     "empty_string",
     "ordinal"

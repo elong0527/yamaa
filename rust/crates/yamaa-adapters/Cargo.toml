@@ -49,6 +49,10 @@ windows-sys = { version = "=0.61.2", features = ["Wdk_Foundation", "Wdk_Storage_
 [dev-dependencies]
 yamaa-engine = { path = "../yamaa-engine", features = ["test-support"] }
 
+[build-dependencies]
+# Builds the reviewed vendored read-only ReadStat subset on every native host.
+cc = "=1.7.0"
+
 # Integration targets are finite and explicit; support files are never discovered as binaries.
 [[test]]
 name = "declaration_tests"

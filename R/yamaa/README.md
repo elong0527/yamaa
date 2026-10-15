@@ -34,6 +34,15 @@ decoder `phase` alongside the resource bound in context. `yamaa_check` reads no 
 Resource paths resolve from their original declaring YAML layer under the
 [local-path policy](../../rules/storage/resources.md).
 
+Inputs can use CSV, Parquet, SAS datasets (`.sas7bdat`), or SAS Transport v5/v8
+(`.xpt`). SAS inputs explicitly declare `encoding`, for example
+`{path: input/dm.xpt, encoding: windows-1252, types: {SEQ: int, VISITDT: date}}`.
+Character fields default to `str`, numeric fields to `float`; numeric `types`
+narrowing requires exact integral values. See the
+[SAS source contract](../../rules/storage/sas.md) for missing values, character
+padding, supported encodings and 1960 date/datetime epochs. Outputs remain CSV
+or Parquet.
+
 Integer output uses `yamaa_int64_vector`, preserving the complete signed 64-bit
 range and missingness separately. Ordinary text uses character vectors; columns
 containing NUL use lossless `yamaa_utf8_vector`. Subsetting preserves the exact
@@ -49,18 +58,22 @@ A failed Define Save raises `yamaa_define_error`. See the
 ## Implementation limits
 
 The shared engine admits up to 1,024 declared columns, output columns and fields
-in each input's `types`. CSV, Parquet, Arrow imports and producer contracts use
+in each input's `types`. CSV, Parquet, SAS, Arrow imports and producer contracts use
 the same width ceiling. An `ordinal` adds one field and counts toward this bound.
 Specifications still admit at most 64 keys and 16 inputs.
 
-Width does not override aggregate budgets: the default source allowance is
-2,097,152 cells and output allowance is 1,048,576 cells. At 1,024 fields these
-allow at most 2,048 source rows and 1,024 output rows, before other limits apply.
+The public hosts use the longitudinal profile: 10,000,000 source or output
+rows, 640,000,000 source or output cells, 1 GiB scalar text, 512 MiB output
+text and 1 GiB encoded input/output. CSV admission includes its header in the
+field and record quotas. Finite report and producer budgets account for the
+same profile. Execution permits 2,000,000,000 logical work units; producer nodes
+share cumulative allowances, and expensive plans can exhaust work before size.
+
 Validation and normalization share 67,108,864 logical work units; complex or
-inherited specifications can exhaust this budget below the width ceiling.
-These are implementation policies, not language constraints or process-memory
-guarantees. Broader capacity and inheritance work remains tracked in
-[#2185](https://github.com/elong0527/yamaa/issues/2185) and
+inherited specifications can exhaust this separate preparation budget below
+the width ceiling. These are implementation policies, not language constraints
+or process-memory guarantees. Layered work policy and release acceptance remain
+tracked in [#2300](https://github.com/elong0527/yamaa/issues/2300) and
 [#2288](https://github.com/elong0527/yamaa/issues/2288).
 
 ## Source installation

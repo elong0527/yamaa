@@ -300,6 +300,25 @@ pub struct Budget {
 }
 
 impl Budget {
+    /// Resume one application's already admitted counters without replaying effects.
+    pub fn with_usage(limits: Usage, used: Usage) -> Self {
+        assert!(used.work <= limits.work);
+        assert!(used.resolutions <= limits.resolutions);
+        assert!(used.text_bytes <= limits.text_bytes);
+        assert!(used.like_work <= limits.like_work);
+        Self {
+            limits,
+            used,
+            regex: regex::MatchBudget::with_usage(
+                regex::MatchLimits {
+                    subject_bytes: limits.regex.subject_bytes,
+                    work: limits.regex.work,
+                    state_cells: limits.regex.state_cells,
+                },
+                used.regex,
+            ),
+        }
+    }
     /// Start an explicit accounting scope; callers own its lifetime.
     pub fn new(limits: Usage) -> Self {
         Self {

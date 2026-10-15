@@ -3,7 +3,8 @@
 pub const IDENTITY_BYTES: usize = 65_536;
 pub const REPLY_BYTES: usize = 16_777_216;
 pub const RECORDS: usize = 65_536;
-pub const SOURCE_BYTES: usize = 67_108_864;
+// Original encoded study sources coexist with the admitted preparation metadata.
+pub const SOURCE_BYTES: usize = yamaa_engine::capacity::SOURCE_BYTES + 64 * 1024 * 1024;
 pub const FUNCTIONS: usize = 1024;
 pub const VERSION_FINDINGS: usize = 2_049;
 

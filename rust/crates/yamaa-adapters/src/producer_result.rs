@@ -439,6 +439,15 @@ fn prepare_observations<'a, E>(
     output_allowed: bool,
 ) -> Result<RootResult, Error<'a, E>> {
     let mut budget = Budget::new(maximum);
+    prepare_observations_with_budget(attempt, observations, maximum, output_allowed, &mut budget)
+}
+fn prepare_observations_with_budget<'a, E>(
+    attempt: &'a NativeAttempt<E>,
+    observations: StoredReport,
+    maximum: usize,
+    output_allowed: bool,
+    budget: &mut Budget,
+) -> Result<RootResult, Error<'a, E>> {
     let diagnostics =
         observations["diagnostics"]
             .as_array()
@@ -474,7 +483,7 @@ fn prepare_observations<'a, E>(
         )));
     }
     let output = if attempt.accepted() && output_allowed {
-        match root_output(attempt, &mut budget) {
+        match root_output(attempt, budget) {
             Ok(output) => Some(output),
             Err(error) => {
                 return Err(Error::Output {
@@ -1501,5 +1510,160 @@ mod log_tests {
                 assert!(!study.0.join("generated/producer.csv").exists());
             }
         }
+    }
+
+    fn projection_fixture(study: &Study, rows: usize, extra_columns: usize, payload: &str) {
+        let id_type = if extra_columns == 0 { "int" } else { "str" };
+        let csv = format!(
+            "ID,VALUE\n{}",
+            (1..=rows)
+                .map(|id| format!("{id},1.234\n"))
+                .collect::<String>()
+        );
+        study.write("input.csv", csv);
+        study.write("producer.yaml", format!(
+            "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput: {{SRC: {{path: input.csv, types: {{ID: {id_type}, VALUE: float}}}}}}\ncolumns:\n  - {{name: ID, type: {id_type}, label: Identifier, derivation: SRC.ID}}\n  - {{name: VALUE, type: float, label: Value, derivation: SRC.VALUE}}\noutput: {{path: generated/producer.csv, columns: [ID, VALUE], decimals: 2}}\n"
+        ));
+        let (extra, projection) = if extra_columns == 0 {
+            (
+                format!("  - {{name: PAYLOAD, type: str, label: Payload, derivation: {{literal: '{payload}'}}}}\n"),
+                "ID, VALUE, PAYLOAD".to_owned(),
+            )
+        } else {
+            let names = (0..extra_columns)
+                .map(|index| format!("EXTRA{index}"))
+                .collect::<Vec<_>>();
+            let columns = names.iter().map(|name| format!(
+                "  - {{name: {name}, type: str, label: Extra value, derivation: {{literal: null}}}}\n"
+            )).collect::<String>();
+            (columns, format!("ID, VALUE, {}", names.join(", ")))
+        };
+        study.write("root.yaml", format!(
+            "schema_version: '1.0'\ndomain: TEST\nbase: FIRST\nkeys: [ID]\ninput:\n  FIRST: {{path: generated/producer.csv, schema: producer.yaml}}\n  SECOND: {{path: generated/producer.csv, schema: ./producer.yaml}}\nintermediates: [{{id: SECOND_REFERENCE, dataset: SECOND, key: [ID], no_match: null}}]\ncolumns:\n  - {{name: ID, type: {id_type}, label: Identifier, derivation: FIRST.ID}}\n  - {{name: FIRST_VALUE, type: float, label: First value, derivation: FIRST.VALUE}}\n  - {{name: SECOND_VALUE, type: float, label: Second value, derivation: SECOND_REFERENCE.VALUE}}\n  - {{name: VALUE, type: float, label: Value, derivation: {{compute: {{expr: 'FIRST_VALUE + SECOND_VALUE'}}}}}}\n{extra}output: {{path: generated/root.csv, columns: [{projection}], decimals: 2}}\n"
+        ));
+    }
+
+    fn selected_projection_refusal(
+        rows: usize,
+        extra_columns: usize,
+        payload: &str,
+        bytes: usize,
+        cells: usize,
+    ) {
+        let study = Study::new();
+        projection_fixture(&study, rows, extra_columns, payload);
+        let owned = study.owned(Language::Python, Default::default());
+        assert!(owned.accepted());
+        assert_eq!(
+            owned
+                .graph
+                .nodes
+                .iter()
+                .map(|node| node.node)
+                .collect::<Vec<_>>(),
+            [1, 0]
+        );
+        let output = owned.graph.nodes[1]
+            .output
+            .as_ref()
+            .unwrap()
+            .as_ref()
+            .unwrap();
+        let artifact = output.artifact().unwrap();
+        let expected = if extra_columns == 0 {
+            format!(
+                "ID,VALUE,PAYLOAD\n{}",
+                (1..=rows)
+                    .map(|id| { format!("{id},2.46,{payload}\n") })
+                    .collect::<String>()
+            )
+        } else {
+            let names = (0..extra_columns)
+                .map(|index| format!("EXTRA{index}"))
+                .collect::<Vec<_>>();
+            format!(
+                "ID,VALUE,{}\n{}",
+                names.join(","),
+                (1..=rows)
+                    .map(|id| { format!("{id},2.46{}\n", ",".repeat(extra_columns)) })
+                    .collect::<String>()
+            )
+        };
+        assert_eq!(artifact.bytes(), expected.as_bytes());
+        assert_eq!(
+            owned.graph.nodes[1]
+                .dataset
+                .result
+                .as_ref()
+                .unwrap()
+                .result
+                .as_ref()
+                .unwrap()
+                .dataset
+                .schema()
+                .columns()
+                .len(),
+            4 + if extra_columns == 0 { 1 } else { extra_columns }
+        );
+        study.remove_inputs();
+        for _ in 0..2 {
+            let maximum = yamaa_engine::capacity::REPORT_ENCODED_BYTES;
+            let observations = producer_report::attempt_report(&owned, id(), maximum).unwrap();
+            assert_eq!(observations["outcome"], "success");
+            assert_eq!(observations["artifacts"].as_array().unwrap().len(), 2);
+            assert!(observations["error"].is_null());
+            let mut budget = Budget::selected_projection_limits(
+                bytes,
+                cells,
+                yamaa_engine::capacity::REPORT_WORK,
+            );
+            let error = match prepare_observations_with_budget(
+                &owned,
+                observations,
+                maximum,
+                true,
+                &mut budget,
+            ) {
+                Err(error) => error,
+                Ok(_) => panic!("the selected copy budget must refuse this projection"),
+            };
+            let Error::Output {
+                attempt,
+                observations,
+                error,
+            } = error
+            else {
+                panic!("projection refusal must retain the original complete attempt");
+            };
+            assert!(std::ptr::eq(attempt, &*owned));
+            assert_eq!(error, TableError::OutputLimit);
+            assert!(attempt.accepted());
+            assert_eq!(observations["outcome"], "success");
+            assert_eq!(observations["artifacts"].as_array().unwrap().len(), 2);
+            assert!(observations["error"].is_null());
+            assert_eq!(artifact.bytes(), expected.as_bytes());
+            // No partial RootResult can grant Save after this refusal.
+            assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
+        }
+    }
+
+    #[test]
+    fn selected_copy_cells_refusal_keeps_original_large_attempt_and_artifacts() {
+        // The original 23,000 x 63 x 3 geometry exceeds the former 4 Mi-cell
+        // policy. The other capacities are deliberately sufficient here.
+        selected_projection_refusal(23_000, 59, "", 1 << 30, 4_194_304);
+    }
+
+    #[test]
+    fn selected_copy_bytes_refusal_keeps_original_large_attempt_and_artifacts() {
+        // Select an explicit 8 MiB retained-copy policy independently of the
+        // larger approved public defaults and the original accepted attempt.
+        selected_projection_refusal(
+            4_095,
+            0,
+            &"x".repeat(2_048),
+            8_388_608,
+            yamaa_engine::capacity::REPORT_CELLS,
+        );
     }
 }

@@ -262,7 +262,7 @@ pub(crate) struct PreparedLogs {
     pub(crate) failure: Option<Error>,
 }
 /// Conservative graph shares admit record/context/table ownership before any
-/// codec or report copy grows. Ordinary single-domain defaults are unchanged.
+/// codec or report copy grows. Public defaults follow the longitudinal profile.
 #[derive(Clone, Copy)]
 pub(crate) struct PreparationLimits {
     pub(crate) core: core::Limits,
@@ -274,11 +274,16 @@ pub(crate) struct PreparationLimits {
 impl Default for PreparationLimits {
     fn default() -> Self {
         Self {
-            core: Default::default(),
-            output_bytes: 8_388_608,
-            total_output_bytes: 16_777_216,
-            report_bytes: 16_777_216,
-            observation_bytes: 8_388_608,
+            core: core::Limits {
+                records: yamaa_engine::capacity::OUTPUT_ROWS,
+                cells: yamaa_engine::capacity::REPORT_CELLS,
+                text: yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+                json_nodes: yamaa_engine::capacity::REPORT_CELLS,
+            },
+            output_bytes: yamaa_engine::capacity::SOURCE_BYTES,
+            total_output_bytes: yamaa_engine::capacity::SOURCE_BYTES,
+            report_bytes: yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+            observation_bytes: yamaa_engine::capacity::REPORT_ENCODED_BYTES,
         }
     }
 }

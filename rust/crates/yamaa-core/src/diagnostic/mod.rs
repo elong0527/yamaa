@@ -304,6 +304,8 @@ conditions! {
     PreflightDomainInputCollision => ("validation", "duplicate_identifier", Some("REQ-0080")),
     PreflightRedundantSourceType => ("validation", "redundant_field_type", Some("REQ-0533")),
     SourceUnknownProfile => ("validation", "source_profile_unknown", Some("REQ-0852")),
+    SasSourceEncoding => ("validation", "source_encoding_required", Some("REQ-1311")),
+    SasInvalid => ("ingest", "source_sas_invalid", Some("REQ-1317")),
     SourceOrdinalCollision => ("validation", "ordinal_field_collision", Some("REQ-1294")),
     SourceEmptyStringPresentUnsupported => ("validation", "empty_string_present_unsupported", Some("REQ-1161")),
     ProducerInvalidContract => ("validation", "invalid_producer_contract", Some("REQ-0534")),

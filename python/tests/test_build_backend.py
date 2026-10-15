@@ -114,6 +114,58 @@ def test_intact_member_archive_preserved(tmp_path: Path) -> None:
     assert payloads["pkg-0.1/rust/crates/foo/build.rs"] == b"fn main() {}\n"
 
 
+@pytest.mark.parametrize("tampered", [False, True])
+def test_readstat_native_sources_and_license_are_verified_and_restored(
+    tmp_path: Path, tampered: bool
+) -> None:
+    workspace = _make_workspace(tmp_path)
+    adapter = workspace / "crates/yamaa-adapters"
+    (workspace / "crates/foo").rename(adapter)
+    (workspace / "Cargo.toml").write_bytes(
+        b'[workspace]\nmembers = ["crates/yamaa-adapters"]\n'
+    )
+    vendor = adapter / "vendor/readstat"
+    vendor.mkdir(parents=True)
+    (vendor / "reader.c").write_bytes(b"int reader(void) { return 0; }\n")
+    (vendor / "reader.h").write_bytes(b"int reader(void);\n")
+    (vendor / "LICENSE").write_bytes(b"independent-license-bytes\n")
+    entries = list(_BASE_ENTRIES)
+    native_path = "pkg-0.1/rust/crates/yamaa-adapters/vendor/readstat/reader.c"
+    if tampered:
+        entries.append((native_path, b"altered-native-source\n"))
+    archive = _make_archive(tmp_path / "sdist.tar.gz", entries)
+    if tampered:
+        with pytest.raises(ValueError, match="changed a restored member source"):
+            preserve_workspace(archive, workspace)
+    else:
+        preserve_workspace(archive, workspace)
+        payloads = _archive_payloads(archive)
+        assert payloads[native_path] == (vendor / "reader.c").read_bytes()
+        assert (
+            payloads[native_path.removesuffix("reader.c") + "reader.h"]
+            == (vendor / "reader.h").read_bytes()
+        )
+        assert (
+            payloads[native_path.removesuffix("reader.c") + "LICENSE"]
+            == (vendor / "LICENSE").read_bytes()
+        )
+
+
+def test_readstat_vendor_parent_symlink_cannot_archive_external_sources(tmp_path):
+    workspace = _make_workspace(tmp_path)
+    adapter = workspace / "crates/yamaa-adapters"
+    (workspace / "crates/foo").rename(adapter)
+    external = tmp_path / "external/readstat"
+    external.mkdir(parents=True)
+    (external / "reader.c").write_bytes(b"external-native-source\n")
+    try:
+        (adapter / "vendor").symlink_to(external.parent, target_is_directory=True)
+    except OSError:
+        pytest.skip("directory symlinks unavailable")
+    with pytest.raises(ValueError, match="vendor sources must not be symlinks"):
+        list(_BACKEND_MODULE.member_sources(adapter))
+
+
 @pytest.mark.parametrize("manifest_present", [False, True])
 def test_missing_member_build_script_restored(
     tmp_path: Path, manifest_present: bool
