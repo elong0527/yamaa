@@ -432,6 +432,39 @@ def test_literal_and_source_spellings(tmp_path: Path) -> None:
     assert remaining == ["source_form", "literal_form", "source_form"]
 
 
+def test_literal_block_form_reports_any_value_shape(tmp_path: Path) -> None:
+    # REQ-1250 names the block form itself: a literal holding a collection,
+    # or a scalar written on the line below `literal:`, parses to the same
+    # value as the canonical {literal: X} and is reported the same way.
+    for block in (
+        "    derivation:\n      literal: [1, 2]\n",
+        "    derivation:\n      literal: {a: 1}\n",
+        "    derivation:\n      literal:\n        DM\n",
+    ):
+        path = _spec(
+            tmp_path,
+            CANONICAL.replace("    derivation: DM.USUBJID\n", block),
+        )
+        assert [
+            (item.name, item.spec_path) for item in check_file(path, orders=ORDERS)
+        ] == [("literal_form", "columns[1].derivation")]
+
+
+def test_literal_flow_form_on_following_line_is_not_reported(
+    tmp_path: Path,
+) -> None:
+    # A flow-form mapping remains the canonical spelling even when it is
+    # written on the line below `derivation:`; only block form is reported.
+    path = _spec(
+        tmp_path,
+        CANONICAL.replace(
+            "    derivation: DM.USUBJID\n",
+            "    derivation:\n      {literal: [1, 2]}\n",
+        ),
+    )
+    assert _names(path) == []
+
+
 def test_sources_outside_the_shorthand_positions_keep_the_mapping(
     tmp_path: Path,
 ) -> None:
