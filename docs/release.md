@@ -256,9 +256,24 @@ the original verdict bytes. Exact artifact references and replay scope are in th
 [handoff](release-handoff.md#candidate-implementation-and-scoped-installed-controls).
 
 The Linux performance campaign
-[38657181920](https://github.com/elong0527/yamaa/actions/runs/38657181920)
-is still collecting at the same frozen source `46ee4dcb`; no measured results are
-recorded here. Later documentation commits must retain that measured source.
+[38657181920](https://github.com/elong0527/yamaa/actions/runs/38657181920),
+attempt 1, measures frozen source `46ee4dcb0f7ffe5cd8a95b477d242cfadcf0c689`.
+Its installed Python 3.12 wheel collector
+[job 116178873002](https://github.com/elong0527/yamaa/actions/runs/38657181920/job/116178873002)
+passed and retained the original collection in
+[artifact 11943075352](https://github.com/elong0527/yamaa/actions/runs/38657181920/artifacts/11943075352).
+The R source collector and independent 54-cell Linux coverage audit are pending;
+the Python job alone does not establish the complete measurement gate. No
+latency or RSS values are asserted before the original observations are reviewed.
+Later documentation commits must retain that measured source.
+
+When recording the numbers, report separate cold and warm distributions for
+Build and both held Saves. Cold RSS has ten actual process-lifetime child peaks;
+warm RSS has one actual child peak covering three warmups and thirty measured
+repetitions. Keep that one peak as one observation. It is not thirty independent
+memory samples. RSS covers the complete declared child lifecycle; it does not
+attribute memory to an individual Build or Save boundary.
+
 Final postmerge main qualification, assertion migration under #2289 and release
 package/tag selection and publication remain pending under #2288.
 
@@ -270,6 +285,14 @@ and R and the two reviewed path-history exclusions. Runnable host entries descri
 metadata. Each installed inventory must supply actual passing results for the
 same current active set; the earlier JSON observations keep their original
 source/run/attempt/artifact identities and do not qualify a later source.
+
+The PK/QT additions in
+[#2376](https://github.com/elong0527/yamaa/pull/2376), candidate source
+`3baef533a182b2bd707060a3b23854f39e17e3ae`, have 329 authored cases and
+327 active cases, with the same two exclusions. That authored inventory must
+receive new installed observations on every final release tuple. The earlier
+`46ee4dcb` qualification above remains a 319-active-case observation; its
+denominator cannot be relabeled to include later additions.
 
 New native audit snapshots retain exact-source benchmark specification paths in
 `source.json` and the exclusion configuration in

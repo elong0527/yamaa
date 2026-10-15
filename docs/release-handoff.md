@@ -112,8 +112,25 @@ run, attempt and producing-job identities remain unchanged.
 
 Linux performance
 [run 38657181920](https://github.com/elong0527/yamaa/actions/runs/38657181920)
-is still collecting at frozen source `46ee4dcb`; no measured results are asserted
-here. A later documentation commit must retain that measured revision.
+uses attempt 1 at frozen source `46ee4dcb0f7ffe5cd8a95b477d242cfadcf0c689`.
+The installed Python 3.12 wheel collector passed; its original collection is
+[artifact 11943075352](https://github.com/elong0527/yamaa/actions/runs/38657181920/artifacts/11943075352),
+produced by
+[job 116178873002](https://github.com/elong0527/yamaa/actions/runs/38657181920/job/116178873002).
+It uses the exact Linux candidate wheel from native artifact `11936644695`
+listed below. The R collector and independent 54-cell coverage audit remain
+pending. No complete measured result is asserted here. Record reviewed
+latency/RSS in the [release guide](release.md#qualification-and-retained-records)
+after that gate passes, preserving the measured revision and each original
+producing job, artifact, package and attempt identity.
+
+The later PK/QT candidate
+[#2376](https://github.com/elong0527/yamaa/pull/2376), source
+`3baef533a182b2bd707060a3b23854f39e17e3ae`, expands the authored inventory to
+329 cases, 327 active and two excluded. Its final installed observations are
+pending. Keep the 319-active-case candidate results above at their original
+source; coverage of newly authored cases requires fresh evidence.
+
 Final postmerge main/native qualification and its independent audit/replay,
 remaining assertion migration under #2289, Linux measurements, exact release
 package/tag selection and publication remain pending. Candidate qualification
