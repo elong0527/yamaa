@@ -45,6 +45,7 @@ pub struct RejectedGraph {
     environment: CapturedEnvironment,
     resources: Resources,
 }
+
 impl RejectedGraph {
     pub fn error(&self) -> &Error {
         &self.error
@@ -415,4 +416,36 @@ fn collect_nodes(
         .verify_captured()
         .map_err(|(identity, error)| Error::Snapshot { identity, error })?;
     Ok(nodes)
+}
+
+#[cfg(test)]
+mod inventory_rejection_tests {
+    use super::*;
+
+    #[test]
+    fn producer_workflow_keeps_inventory_failure_in_the_preparation_stage() {
+        use yamaa_core::project_function::Language;
+        let error = || {
+            file_preparation::Error::Inventory(
+                yamaa_core::submission_inventory::MetadataError::Shape,
+            )
+        };
+        let (_, environment) = OwnedEnvironment::without_environment(Language::Python).into_parts();
+        let base = crate::file_resources::caller_path(&std::env::current_dir().unwrap()).unwrap();
+        let rejected = crate::file_workflow::SelectionError::Preparation(
+            crate::file_workflow::Error::Graph(Box::new(RejectedGraph {
+                error: Error::Document(error()),
+                entry: Some("spec.yaml".into()),
+                origin: None,
+                documents: Vec::new(),
+                schema: crate::shipped_schema::capture().unwrap(),
+                environment,
+                resources: Resources::for_entry(&base).unwrap(),
+            })),
+        );
+        assert_eq!(
+            crate::project_application::selection_failure(&rejected, Language::Python),
+            crate::file_application::preparation_failure(error().into_message())
+        );
+    }
 }

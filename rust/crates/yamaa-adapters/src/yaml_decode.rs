@@ -262,6 +262,74 @@ fn key_label(node: &Node) -> Result<String, DecodeFailure> {
     }
 }
 
+// Keep only borrowed node identities and small indices on the traversal stack.
+// A long ancestor key is rendered once per actual issue, never for each valid
+// descendant or queued sibling. Source admission has already bounded depth.
+enum PathSegment {
+    Key,
+    Field(usize),
+    Index(usize),
+}
+
+fn unicode_path(nodes: &[Node], segments: &[PathSegment]) -> Result<String, DecodeFailure> {
+    use std::fmt::Write;
+    let mut path = String::from("$");
+    for segment in segments {
+        match *segment {
+            PathSegment::Key => path.push_str(".<key>"),
+            PathSegment::Field(key) => {
+                path.push('.');
+                path.push_str(&key_label(&nodes[key])?);
+            }
+            PathSegment::Index(index) => {
+                write!(path, "[{index}]").expect("writing to an owned string");
+            }
+        }
+    }
+    Ok(path)
+}
+
+fn unicode_issues(
+    nodes: &[Node],
+    id: usize,
+    segments: &mut Vec<PathSegment>,
+    issues: &mut Vec<UnicodeIssue>,
+) -> Result<(), DecodeFailure> {
+    match &nodes[id].value {
+        Value::InvalidText(points) => {
+            let (offset, &code_point) = points
+                .iter()
+                .enumerate()
+                .find(|(_, point)| (0xd800..=0xdfff).contains(*point))
+                .ok_or(DecodeFailure::Internal)?;
+            issues.push(UnicodeIssue {
+                path: unicode_path(nodes, segments)?,
+                code_point,
+                offset,
+            });
+        }
+        Value::Sequence(items) => {
+            for (index, &item) in items.iter().enumerate() {
+                segments.push(PathSegment::Index(index));
+                unicode_issues(nodes, item, segments, issues)?;
+                segments.pop();
+            }
+        }
+        Value::Mapping(entries) => {
+            for &(key, value) in entries {
+                segments.push(PathSegment::Key);
+                unicode_issues(nodes, key, segments, issues)?;
+                segments.pop();
+                segments.push(PathSegment::Field(key));
+                unicode_issues(nodes, value, segments, issues)?;
+                segments.pop();
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 fn check_unicode(nodes: &[Node], root: usize) -> Result<(), DecodeFailure> {
     if !nodes
         .iter()
@@ -269,37 +337,8 @@ fn check_unicode(nodes: &[Node], root: usize) -> Result<(), DecodeFailure> {
     {
         return Ok(());
     }
-    let mut pending = vec![(root, "$".into())];
     let mut issues = Vec::new();
-    while let Some((id, path)) = pending.pop() {
-        match &nodes[id].value {
-            Value::InvalidText(points) => {
-                let (offset, &code_point) = points
-                    .iter()
-                    .enumerate()
-                    .find(|(_, point)| (0xd800..=0xdfff).contains(*point))
-                    .ok_or(DecodeFailure::Internal)?;
-                issues.push(UnicodeIssue {
-                    path,
-                    code_point,
-                    offset,
-                });
-            }
-            Value::Sequence(items) => {
-                for (index, &item) in items.iter().enumerate().rev() {
-                    pending.push((item, format!("{path}[{index}]")));
-                }
-            }
-            Value::Mapping(entries) => {
-                for &(key, value) in entries.iter().rev() {
-                    let label = key_label(&nodes[key])?;
-                    pending.push((value, format!("{path}.{label}")));
-                    pending.push((key, format!("{path}.<key>")));
-                }
-            }
-            _ => {}
-        }
-    }
+    unicode_issues(nodes, root, &mut Vec::new(), &mut issues)?;
     Err(DecodeFailure::InvalidText(issues))
 }
 

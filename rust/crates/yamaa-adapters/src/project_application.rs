@@ -191,7 +191,9 @@ pub fn selection_failure(error: &crate::file_workflow::SelectionError, host: Lan
                     .map(file_application::preparation_failure)
                     .unwrap_or_else(|_| refused("prepare"))
             }
-            crate::file_preparation::Error::Inventory(_) => refused("inventory"),
+            crate::file_preparation::Error::Inventory(_) => {
+                file_application::rejected("prepare", "inventory")
+            }
             crate::file_preparation::Error::Compile(error) => {
                 file_application::preparation_failure(crate::specification_diagnostics::failure(
                     error, None,
@@ -249,7 +251,7 @@ fn workflow_failure(error: &crate::file_workflow::Error) -> Failure {
                 error, None,
             )),
             G::Document(D::Compile(_)) => refused("prepare"),
-            G::Document(D::Inventory(_)) => refused("inventory"),
+            G::Document(D::Inventory(_)) => file_application::rejected("prepare", "inventory"),
             G::Graph(crate::producer_graph::Error::Graph(
                 yamaa_core::producer_graph::Error::Compilation {
                     error: error @ (PrepareError::Limit(_) | PrepareError::Numeric { .. }),
@@ -306,6 +308,26 @@ fn preparation_boundary(
 #[cfg(test)]
 mod resource_tests {
     use super::*;
+    #[test]
+    fn inventory_rejection_retains_the_preparation_stage_and_inventory_cause() {
+        let inventory = || {
+            crate::file_preparation::Error::Inventory(
+                yamaa_core::submission_inventory::MetadataError::Shape,
+            )
+        };
+        let original = file_application::preparation_failure(inventory().into_message());
+        let project = failure(
+            &Error::Project(file_project::Error::Document(inventory())),
+            Language::Python,
+        );
+        assert_eq!(project, original);
+        assert_eq!(project.len(), 1);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&project[0].context).unwrap(),
+            serde_json::json!({"stage":"prepare", "code":"inventory"})
+        );
+    }
+
     #[test]
     fn layered_validation_depth_refusal_keeps_its_preparation_outcome_on_both_routes() {
         use yamaa_core::schema::ValidationError;

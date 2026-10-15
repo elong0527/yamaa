@@ -812,6 +812,8 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
+        "rust/crates/yamaa-adapters/tests/project_environment.rs",
+        "rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs",
         "python/tests/installed/installed_original_specifications.py"
       ]
     },
@@ -821,6 +823,8 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
+        "rust/crates/yamaa-adapters/tests/project_environment.rs",
+        "rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs",
         "python/tests/installed/installed_original_specifications.py"
       ]
     },

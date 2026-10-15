@@ -406,6 +406,40 @@ fn unicode_findings_use_original_paths_and_scalar_offsets() {
 }
 
 #[test]
+fn unicode_paths_render_only_findings_under_long_keys_and_wide_valid_mappings() {
+    use std::fmt::Write;
+    let key = "x".repeat(1024 * 1024);
+    let mut source = format!("? {key}\n: {{");
+    for index in 0..4096 {
+        write!(source, "valid{index}: 1, ").unwrap();
+    }
+    source.push_str(r#"last: "a\uD800"}"#);
+    assert!(source.len() < Limits::SPEC_BYTES);
+    assert_eq!(
+        error(&source),
+        DecodeFailure::InvalidText(vec![UnicodeIssue {
+            path: format!("$.{key}.last"),
+            code_point: 0xd800,
+            offset: 1,
+        }])
+    );
+}
+
+#[test]
+fn unicode_admission_retains_all_raw_findings_in_original_order() {
+    let count = Limits::FINDINGS + 1;
+    let source = format!("[{}]", vec![r#""\uD800""#; count].join(","));
+    let DecodeFailure::InvalidText(issues) = error(&source) else {
+        panic!("expected complete raw Unicode observations")
+    };
+    assert_eq!(issues.len(), count);
+    for (index, issue) in issues.iter().enumerate() {
+        assert_eq!(issue.path, format!("$[{index}]"));
+        assert_eq!((issue.code_point, issue.offset), (0xd800, 0));
+    }
+}
+
+#[test]
 fn private_use_keys_remain_distinct_from_recovered_invalid_keys() {
     let expected = vec![UnicodeIssue {
         path: "$.<key>".into(),

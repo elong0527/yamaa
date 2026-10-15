@@ -39,8 +39,7 @@ pub(crate) fn spec_findings(
     source: Option<&yamaa_core::specification::SourceDeclaration>,
 ) -> Option<Vec<serde_json::Value>> {
     yamaa_adapters::specification_diagnostics::findings(error, source)
-        .ok()
-        .flatten()
+        .expect("valid authored source finding context")
 }
 
 pub(crate) fn text(d: &Document, id: usize) -> &str {

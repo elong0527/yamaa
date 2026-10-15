@@ -11,12 +11,12 @@ pub(super) enum Error {
 }
 
 fn exact_stream(mut reader: impl Read, expected: usize) -> Result<Vec<u8>, Error> {
-    let mut result = Vec::with_capacity(expected);
+    let mut result = Vec::new();
     let mut buffer = [0u8; 8192];
     loop {
         let remaining = expected - result.len();
-        // One extra byte detects a lying length; memory does not grow with the
-        // stream. The page header supplies `expected`.
+        // One extra byte detects a lying length without growing the result past
+        // the page header's `expected` size.
         let length = buffer.len().min(remaining.saturating_add(1));
         let read = reader
             .read(&mut buffer[..length])
@@ -35,7 +35,137 @@ fn exact_stream(mut reader: impl Read, expected: usize) -> Result<Vec<u8>, Error
     }
 }
 
+fn take<'a>(input: &mut &'a [u8], length: usize) -> Result<&'a [u8], Error> {
+    let (head, tail) = input.split_at_checked(length).ok_or(Error::Malformed)?;
+    *input = tail;
+    Ok(head)
+}
+
+fn expanded(written: &mut usize, length: usize, expected: usize) -> Result<(), Error> {
+    *written = written
+        .checked_add(length)
+        .filter(|&length| length <= expected)
+        .ok_or(Error::Malformed)?;
+    Ok(())
+}
+
+// Raw Snappy and LZ4 require contiguous destinations. Prove their actual output
+// lengths from borrowed tags before allowing a header to size that destination.
+fn snappy_length(mut input: &[u8], expected: usize) -> Result<(), Error> {
+    if snap::raw::decompress_len(input).map_err(|_| Error::Malformed)? != expected {
+        return Err(Error::Malformed);
+    }
+    while take(&mut input, 1)?[0] & 128 != 0 {}
+    let mut written = 0usize;
+    while !input.is_empty() {
+        let tag = take(&mut input, 1)?[0];
+        let (length, offset) = match tag & 3 {
+            0 => {
+                let raw = usize::from(tag >> 2);
+                let length = if raw < 60 {
+                    raw + 1
+                } else {
+                    let octets = take(&mut input, raw - 59)?;
+                    let mut value = [0u8; 4];
+                    value[..octets.len()].copy_from_slice(octets);
+                    (u32::from_le_bytes(value) as usize)
+                        .checked_add(1)
+                        .ok_or(Error::Malformed)?
+                };
+                take(&mut input, length)?;
+                (length, None)
+            }
+            1 => (
+                usize::from((tag >> 2) & 7) + 4,
+                Some((usize::from(tag & 224) << 3) | usize::from(take(&mut input, 1)?[0])),
+            ),
+            2 => (
+                usize::from(tag >> 2) + 1,
+                Some(u16::from_le_bytes(take(&mut input, 2)?.try_into().unwrap()) as usize),
+            ),
+            _ => (
+                usize::from(tag >> 2) + 1,
+                Some(u32::from_le_bytes(take(&mut input, 4)?.try_into().unwrap()) as usize),
+            ),
+        };
+        if offset.is_some_and(|offset| offset == 0 || offset > written) {
+            return Err(Error::Malformed);
+        }
+        expanded(&mut written, length, expected)?;
+    }
+    if written == expected {
+        Ok(())
+    } else {
+        Err(Error::Malformed)
+    }
+}
+
+fn lz4_length(mut input: &[u8], expected: usize) -> Result<(), Error> {
+    fn length(input: &mut &[u8], base: u8) -> Result<usize, Error> {
+        let mut length = usize::from(base);
+        if base == 15 {
+            loop {
+                let extra = take(input, 1)?[0];
+                length = length
+                    .checked_add(usize::from(extra))
+                    .ok_or(Error::Malformed)?;
+                if extra != 255 {
+                    break;
+                }
+            }
+        }
+        Ok(length)
+    }
+    let mut written = 0usize;
+    while !input.is_empty() {
+        let token = take(&mut input, 1)?[0];
+        let literals = length(&mut input, token >> 4)?;
+        take(&mut input, literals)?;
+        expanded(&mut written, literals, expected)?;
+        if input.is_empty() {
+            break;
+        }
+        let offset = u16::from_le_bytes(take(&mut input, 2)?.try_into().unwrap()) as usize;
+        if offset == 0 || offset > written {
+            return Err(Error::Malformed);
+        }
+        let matched = length(&mut input, token & 15)?
+            .checked_add(4)
+            .ok_or(Error::Malformed)?;
+        expanded(&mut written, matched, expected)?;
+    }
+    if written == expected {
+        Ok(())
+    } else {
+        Err(Error::Malformed)
+    }
+}
+
+fn fixed_length(codec: i64, mut input: &[u8], expected: usize) -> Result<(), Error> {
+    match codec {
+        1 => snappy_length(input, expected),
+        7 => lz4_length(input, expected),
+        5 => {
+            let mut written = 0usize;
+            while !input.is_empty() {
+                let header = take(&mut input, 8)?;
+                let decoded = u32::from_be_bytes(header[..4].try_into().unwrap()) as usize;
+                let encoded = u32::from_be_bytes(header[4..].try_into().unwrap()) as usize;
+                lz4_length(take(&mut input, encoded)?, decoded)?;
+                expanded(&mut written, decoded, expected)?;
+            }
+            if written == expected {
+                Ok(())
+            } else {
+                Err(Error::Malformed)
+            }
+        }
+        _ => Err(Error::Malformed),
+    }
+}
+
 fn fixed_codec(codec: i64, mut input: &[u8], expected: usize) -> Result<Vec<u8>, Error> {
+    fixed_length(codec, input, expected)?;
     let mut output = vec![0; expected];
     let written = match codec {
         1 => snap::raw::Decoder::new()
@@ -104,13 +234,8 @@ fn brotli_window(input: &[u8]) -> Result<(), Error> {
 }
 
 fn zstd(input: &[u8], expected: usize) -> Result<Vec<u8>, Error> {
-    let mut result = vec![0; expected];
-    let written =
-        zstd::bulk::decompress_to_buffer(input, &mut result).map_err(|_| Error::Malformed)?;
-    if written != expected {
-        return Err(Error::Malformed);
-    }
-    Ok(result)
+    let reader = zstd::stream::read::Decoder::new(input).map_err(|_| Error::Malformed)?;
+    exact_stream(reader, expected)
 }
 
 /// Validate every actual byte of expansion using the same immutable page body.
@@ -123,6 +248,10 @@ fn verify(page: &Page<'_>) -> Result<(), Error> {
 
 /// Decode the exact page size before validating its encoded values.
 pub(super) fn decode(page: &Page<'_>) -> Result<Vec<u8>, Error> {
+    // Parquet PageHeader.uncompressed_page_size is a signed 32-bit field.
+    // The compact scanner retains i64 integers, so enforce that physical
+    // representation before any codec allocates or constructs its decoder.
+    i32::try_from(page.decoded_bytes).map_err(|_| Error::Malformed)?;
     let prefix = page.uncompressed_prefix;
     if prefix > page.decoded_bytes || prefix > page.body.len() {
         return Err(Error::Malformed);
@@ -203,6 +332,96 @@ mod tests {
             assert_eq!(decode(&page(bytes, codec, plain.len())).unwrap(), plain);
         }
     }
+    #[test]
+    fn advertised_page_sizes_do_not_allocate_before_actual_expansion_is_checked() {
+        for codec in 0..=7 {
+            assert_eq!(
+                decode(&page(&[], codec, i32::MAX as usize + 1)),
+                Err(Error::Malformed)
+            );
+        }
+        // These tiny streams claim a legal but enormous page. Invalid raw tags
+        // and short streaming output must be rejected without allocating it.
+        for codec in [1, 2, 4, 5, 6, 7] {
+            assert_eq!(
+                decode(&page(&[0], codec, i32::MAX as usize)),
+                Err(Error::Malformed)
+            );
+        }
+        assert_eq!(
+            decode(&page(&[255, 255, 255, 255, 7], 1, i32::MAX as usize)),
+            Err(Error::Malformed)
+        );
+        assert_eq!(
+            decode(&page(
+                &[127, 255, 255, 255, 0, 0, 0, 0],
+                5,
+                i32::MAX as usize
+            )),
+            Err(Error::Malformed)
+        );
+        let empty_gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default())
+            .finish()
+            .unwrap();
+        let empty_zstd = zstd::stream::encode_all(&[][..], 1).unwrap();
+        for (body, codec) in [(empty_gzip, 2), (empty_zstd, 6)] {
+            assert_eq!(
+                decode(&page(&body, codec, i32::MAX as usize)),
+                Err(Error::Malformed)
+            );
+        }
+        assert_eq!(exact_stream(&[][..], usize::MAX), Err(Error::Malformed));
+    }
+
+    #[test]
+    fn raw_codec_preflight_handles_copy_forms_extended_lengths_and_invalid_offsets() {
+        // One literal x, followed by an overlapping four-byte copy. The three
+        // independently authored streams exercise each Snappy copy tag.
+        for bytes in [
+            &[5, 0, b'x', 1, 1][..],
+            &[5, 0, b'x', 14, 1, 0][..],
+            &[5, 0, b'x', 15, 1, 0, 0, 0][..],
+        ] {
+            assert_eq!(fixed_codec(1, bytes, 5).unwrap(), b"xxxxx");
+        }
+        let mut long_literal = vec![64, 240, 63];
+        long_literal.extend([b'x'; 64]);
+        assert_eq!(fixed_codec(1, &long_literal, 64).unwrap(), [b'x'; 64]);
+        for bytes in [&[5, 0, b'x', 1, 0][..], &[5, 0, b'x', 1, 2][..]] {
+            assert_eq!(fixed_codec(1, bytes, 5), Err(Error::Malformed));
+        }
+        let mut long_literal = vec![0xf0, 49];
+        long_literal.extend([b'x'; 64]);
+        assert_eq!(fixed_codec(7, &long_literal, 64).unwrap(), [b'x'; 64]);
+        for bytes in [&[0x10, b'x', 0, 0][..], &[0x10, b'x', 2, 0][..]] {
+            assert_eq!(fixed_codec(7, bytes, 5), Err(Error::Malformed));
+        }
+        let mut truncated_lz4 = long_literal;
+        truncated_lz4.pop();
+        assert_eq!(fixed_codec(7, &truncated_lz4, 64), Err(Error::Malformed));
+    }
+
+    #[test]
+    fn raw_codec_preflight_preserves_empty_literal_and_repeated_encoder_outputs() {
+        let mut state = 0x1234_5678u32;
+        for length in [0usize, 1, 4, 59, 60, 61, 256, 4096, 65_536] {
+            let literals: Vec<_> = (0..length)
+                .map(|_| {
+                    state ^= state << 13;
+                    state ^= state >> 17;
+                    state ^= state << 5;
+                    state as u8
+                })
+                .collect();
+            for plain in [literals, vec![b'x'; length]] {
+                let snappy = snap::raw::Encoder::new().compress_vec(&plain).unwrap();
+                let lz4 = lz4_flex::block::compress(&plain);
+                assert_eq!(fixed_codec(1, &snappy, length).unwrap(), plain);
+                assert_eq!(fixed_codec(7, &lz4, length).unwrap(), plain);
+            }
+        }
+    }
+
     #[test]
     fn malformed_compression_is_distinct_from_unavailable_codecs() {
         assert_eq!(verify(&page(&[0x91, 30], 4, 1)), Err(Error::Malformed));

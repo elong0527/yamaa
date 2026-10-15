@@ -156,6 +156,7 @@ pub(super) fn admit(
             })?;
             let mut index = 0;
             let mut previous = 0;
+            let mut reconstructed = 0usize;
             let mut stored = 0usize;
             let (suffix_offset, suffix_count) =
                 scan(&bytes[offset..], 32, expected_values, |value| {
@@ -165,6 +166,12 @@ pub(super) fn admit(
                         return Err(Error::Malformed);
                     }
                     previous = prefix.checked_add(suffix).ok_or(Error::Malformed)?;
+                    // These are the actual bytes the physical decoder will
+                    // retain, before Arrow's signed-32-bit offsets are built.
+                    reconstructed = reconstructed
+                        .checked_add(previous)
+                        .filter(|&total| total <= i32::MAX as usize)
+                        .ok_or(Error::Malformed)?;
                     stored = stored.checked_add(suffix).ok_or(Error::Malformed)?;
                     index += 1;
                     Ok(())
@@ -298,5 +305,27 @@ mod tests {
         let mut bad = progression(0, 0, 2);
         bad.extend(progression(0, 0, 1));
         assert_eq!(admit(&bad, 7, 32, 3), Err(Error::Malformed));
+    }
+
+    #[test]
+    fn prefix_expansion_admits_actual_arrow_offset_boundary_before_copying_values() {
+        // Each string appends 1024 bytes to its predecessor. Only about 2 MiB
+        // is stored, while the sum of the actual reconstructed values crosses
+        // signed-32-bit Arrow offsets between these two independently derived
+        // triangular totals.
+        for count in [2047usize, 2048] {
+            let total = 1024 * count * (count + 1) / 2;
+            let mut bytes = progression(0, 1024, count);
+            bytes.extend(progression(1024, 0, count));
+            bytes.resize(bytes.len() + 1024 * count, b'x');
+            assert_eq!(
+                admit(&bytes, 7, 32, count),
+                if total <= i32::MAX as usize {
+                    Ok(())
+                } else {
+                    Err(Error::Malformed)
+                }
+            );
+        }
     }
 }
