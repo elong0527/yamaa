@@ -25,6 +25,7 @@ struct Declaration {
     unique: UniqueDeclarations,
     derivations: Vec<intermediate_derivations::Derivation>,
     driver_prohibited: Vec<String>,
+    driver_keys: Option<alloc::sync::Arc<TableSchema>>,
 }
 #[derive(Debug, Default)]
 pub(super) struct Declarations(alloc::sync::Arc<Vec<Declaration>>, Option<String>);
@@ -123,6 +124,9 @@ impl Declarations {
             .iter()
             .any(|item| item.name == name && item.keep.is_some())
     }
+    pub(super) fn driver_keys(&self, index: usize) -> Option<&TableSchema> {
+        self.0.get(index)?.driver_keys.as_deref()
+    }
     pub(super) fn driver_findings(
         &self,
         name: &str,
@@ -215,6 +219,8 @@ impl Declarations {
         d: &Document,
         sources: &[SourceDeclaration],
         driver: usize,
+        output: &TableSchema,
+        keys: &[usize],
         limits: CompilationLimits,
         project: Option<&functions::Prepared>,
         extraction: &str_extract::Prepared,
@@ -245,9 +251,29 @@ impl Declarations {
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
+        let driver_key_schema = alloc::sync::Arc::new(
+            TableSchema::new(
+                keys.iter()
+                    .map(|&key| output.columns()[key].clone())
+                    .collect(),
+            )
+            .map_err(|_| PrepareError::Internal)?,
+        );
         for (index, &id) in items.iter().enumerate() {
             let path = format!("intermediates[{index}]");
             let name = text(d, field(d, id, "id")?)?;
+            let row_driver = d
+                .field(d.root(), "rows")
+                .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                .map(|rows| sequence(d, rows))
+                .transpose()?
+                .is_some_and(|rows| {
+                    rows.iter().any(|&row| {
+                        d.field(row, "dataset")
+                            .is_some_and(|node| text(d, node).is_ok_and(|driver| driver == name))
+                    })
+                });
+            let driver_keys = row_driver.then(|| alloc::sync::Arc::clone(&driver_key_schema));
             let range = intermediate_range::prepare(d, id, &path, name)?;
             let columns = intermediate_range::prepare_columns(d, id, limits)?;
             let dataset = text(d, field(d, id, "dataset")?)?;
@@ -503,6 +529,7 @@ impl Declarations {
                     unique,
                     derivations,
                     driver_prohibited,
+                    driver_keys,
                 });
         }
         Ok(result)
@@ -633,6 +660,7 @@ impl Declarations {
             let catalog = Catalog::compile(&output_fields, &datasets, Default::default())
                 .map_err(BindError::Catalog)?;
             let default_keys = if item.keys.is_none() {
+                let before_keys = findings.len();
                 match intermediate_admission::inferred_keys(
                     &catalog,
                     output,
@@ -644,6 +672,11 @@ impl Declarations {
                     findings,
                 )? {
                     Some(keys) => keys,
+                    None if item.driver_keys.is_some() => {
+                        // A driver traverses donor records, without selecting by output keys.
+                        findings.truncate(before_keys);
+                        Vec::new()
+                    }
                     None => {
                         result.push(None);
                         continue;

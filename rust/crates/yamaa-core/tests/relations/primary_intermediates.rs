@@ -100,3 +100,50 @@ fn only_exact_original_schema_and_a_named_primary_relation_are_admitted() {
     };
     assert_eq!(make(item), Err(PlanError::InvalidIntermediate));
 }
+
+#[test]
+fn empty_lookup_keys_are_admitted_only_for_the_actual_driver_and_never_for_scalar_reads() {
+    let mut item = selector();
+    item.keys.clear();
+    item.no_match = None;
+    let driver = |index| RowMode::IntermediateDriver {
+        index,
+        source: 0,
+        mode: Box::new(RowMode::Records),
+    };
+    let make = |mode, read| {
+        DatasetPlan::new_with_intermediates(
+            SourceSchemas {
+                primary: schema(),
+                secondary: vec![],
+            },
+            vec![item.clone()],
+            schema(),
+            vec![RowTemplate {
+                mode,
+                assignments: vec![assign(0, Expression::Source(0)), assign(1, read)],
+                filter: None,
+            }],
+            vec![],
+            vec![0],
+            vec![],
+        )
+    };
+    assert!(make(driver(0), Expression::Source(1)).is_ok());
+    for mode in [RowMode::Records, driver(1)] {
+        assert_eq!(
+            make(mode, Expression::Source(1)),
+            Err(PlanError::InvalidIntermediate)
+        );
+    }
+    assert_eq!(
+        make(
+            driver(0),
+            Expression::Intermediate {
+                index: 0,
+                column: 1
+            }
+        ),
+        Err(PlanError::InvalidIntermediate)
+    );
+}

@@ -2815,5 +2815,37 @@ class NamespaceAdmission(unittest.TestCase):
                     self.assertEqual(entry.read_bytes(), original)
 
 
+class IntermediateRowDrivers(unittest.TestCase):
+    def test_source_only_driver_records_preserve_lookup_key_admission(self):
+        import yamaa
+
+        for case in TRUTH["intermediate_row_drivers"]:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                for name, content in case["inputs"].items():
+                    source = root / name
+                    source.parent.mkdir(parents=True, exist_ok=True)
+                    source.write_text(content, encoding="ascii")
+                entry = root / "spec.yaml"
+                entry.write_text(case["specification"], encoding="ascii")
+                for _ in range(2):
+                    checked = yamaa.check(entry)
+                    result = yamaa.domain(entry)
+                    for frame, expected in ((checked.issues, case["check_issues"]),
+                                            (result.issues, case["issues"])):
+                        rows = frame.to_dicts()
+                        for row in rows:
+                            row["context"] = json.loads(row["context"])
+                        self.assertEqual(rows, expected)
+                    if case["csv"] is not None:
+                        self.assertTrue(result.save())
+                        self.assertEqual((root / "out.csv").read_bytes(), case["csv"].encode("ascii"))
+                    else:
+                        self.assertIsNone(result.output)
+                        with self.assertRaises(yamaa.DomainError):
+                            result.save()
+                        self.assertFalse((root / "out.csv").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
