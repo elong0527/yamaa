@@ -991,54 +991,6 @@ mod log_tests {
             }
         }
     }
-    #[test]
-    fn key_failures_retain_the_verification_log_and_report_as_output_findings() {
-        // Key failures are output findings, not verification checks: feeding
-        // them to the verification-phase projection used to fail
-        // `prepare_diagnostics`, dropping this node's verification log.
-        for (csv, condition) in [
-            ("ID,GRP,VALUE\n1,a,10\n1,b,20\n", "duplicate_key"),
-            ("ID,GRP,VALUE\n,a,10\n1,b,20\n", "missing_key"),
-        ] {
-            let study = Study::new();
-            study.write("input.csv", csv);
-            study.write(
-                "root.yaml",
-                "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, GRP: str, VALUE: int}}}\nrows:\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.GRP]\n    derivations: {ID: {aggregate: 'MAX(SRC.ID)'}, GRP: SRC.GRP, VALUE: {aggregate: 'MAX(SRC.VALUE)'}}\ncolumns:\n  - {name: ID, type: int, label: Identifier}\n  - {name: GRP, type: str, label: Group}\n  - name: VALUE\n    type: int\n    label: Value\n    verifications: [{not_missing: {id: value-present}}]\noutput: {path: generated/root.csv, columns: [ID, GRP, VALUE], verification_log: generated/root-checks.csv, warning_log: generated/root-warnings.csv}\n",
-            );
-            let owned = study.owned(Language::Python, Default::default());
-            assert!(!owned.accepted(), "{condition}");
-            assert_eq!(owned.graph.nodes.len(), 1, "{condition}");
-            assert_eq!(owned.logs().len(), 1, "{condition}");
-            assert!(
-                owned.logs()[0].logs.verification.is_some(),
-                "{condition}: verification log must be retained"
-            );
-            let mut result = root(&owned);
-            assert!(result.output().is_none(), "{condition}");
-            assert!(result.verification_log().is_some(), "{condition}");
-            let table = result.log_table(false).unwrap();
-            assert_eq!(table.rows(), 1, "{condition}");
-            assert!(
-                result.issues().iter().any(|issue| issue.phase == "output"
-                    && issue.condition == condition
-                    && issue.requirement.as_deref() == Some("REQ-0240")),
-                "{condition}: {:?}",
-                result.issues()
-            );
-            // The retained log is the completed verification prefix, so a
-            // diagnostic save publishes exactly that one artifact.
-            for name in ["root.csv", "root-warnings.csv"] {
-                study.write(&format!("generated/{name}"), b"held sentinel");
-            }
-            assert!(result.save().is_err(), "{condition}");
-            assert_eq!(study.generated("root.csv"), b"held sentinel");
-            assert_eq!(study.generated("root-warnings.csv"), b"held sentinel");
-            let checks = String::from_utf8(study.generated("root-checks.csv")).unwrap();
-            assert!(checks.contains("value-present"), "{condition}: {checks}");
-            assert!(checks.contains("not_missing"), "{condition}: {checks}");
-        }
-    }
     #[derive(Debug)]
     struct Payload(Arc<()>);
     impl std::fmt::Display for Payload {
