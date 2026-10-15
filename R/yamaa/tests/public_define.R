@@ -3,6 +3,7 @@ library(yamaa)
 host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
   system.file("host-fixtures",package="yamaa",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
+source(file.path(host_fixture_root,"context.R"),local=TRUE)
 host_truth <- read_host_fixture(host_fixture_root,"public-define")
 fixtures <- system.file("define-fixtures", package = "yamaa", mustWork = TRUE)
 artifacts <- get(".define_artifacts", envir = asNamespace("yamaa"))
@@ -326,7 +327,7 @@ for (case in host_truth[["xml_text_cases"]]) {
       identical(result$issues$condition[[i]], expected[["condition"]]),
       identical(result$issues$requirement[[i]], expected[["requirement"]]),
       identical(result$issues$spec_paths[[i]], fixture_strings(expected[["spec_paths"]])),
-      identical(jsonlite::fromJSON(result$issues$context[[i]], simplifyVector = FALSE), expected[["context"]]))
+      context_equal(jsonlite::fromJSON(result$issues$context[[i]], simplifyVector = FALSE), expected[["context"]]))
   }
   if (length(case[["issues"]])) {
     stopifnot(refused(result), length(artifacts(result)) == 0L)
