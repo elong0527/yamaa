@@ -336,3 +336,92 @@ fn row_contains_keeps_boolean_conversion_failure_and_refuses_every_save() {
         }
     }
 }
+
+#[test]
+fn csv_text_regex_declarations_are_reported_without_source_capture() {
+    for (expression, suffix, condition, requirement) in [
+        (
+            "{str_extract: {source: SRC.TEXT, pattern: 'a)|(b'}}",
+            "str_extract.pattern",
+            "invalid_regex",
+            "REQ-0827",
+        ),
+        (
+            "{str_extract: {source: SRC.TEXT, pattern: '[z-a]'}}",
+            "str_extract.pattern",
+            "invalid_regex",
+            "REQ-0827",
+        ),
+        (
+            "{str_extract: {source: SRC.TEXT, pattern: '[]a(]'}}",
+            "str_extract.pattern",
+            "invalid_regex",
+            "REQ-0827",
+        ),
+        (
+            "{str_extract: {source: SRC.TEXT, pattern: '(a)', group: 2}}",
+            "str_extract.group",
+            "regex_group_out_of_range",
+            "REQ-0816",
+        ),
+        (
+            "{str_contains: {source: SRC.TEXT, pattern: 'a)|(b'}}",
+            "str_contains.pattern",
+            "invalid_regex",
+            "REQ-0827",
+        ),
+        (
+            "{case: [{when: 'SRC.I > 0', then: {str_extract: {source: SRC.TEXT, pattern: 'a)|(b'}}}, {otherwise: {literal: x}}]}",
+            "case[0].then.str_extract.pattern",
+            "invalid_regex",
+            "REQ-0827",
+        ),
+    ] {
+        for typed in [false, true] {
+            let source = spec(expression, "str");
+            let source = if typed {
+                source.replace("I: int, F: float, D: date", "I: int, F: float, D: date, TEXT: str")
+            } else {
+                source
+            };
+            let fixture = bespoke(&source, b"ID,I,F,D,TEXT\na,1,1,2025-01-01,ab\n");
+            fs::remove_file(fixture.0.join("input.csv")).unwrap();
+            let path = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
+            let identity = Identity {
+                runtime: "test",
+                runtime_version: "test",
+                engine_version: yamaa_core::VERSION,
+                example: "regex-preflight",
+                specification: &path,
+                base_directory: ".",
+            };
+            let checked = file_application::check(
+                Request { specification: &path, environment: None },
+                identity,
+            );
+            assert_eq!(checked.len(), 1, "{expression}: {checked:?}");
+            assert_eq!(checked[0].condition, condition);
+            assert_eq!(checked[0].requirement.as_deref(), Some(requirement));
+            assert_eq!(checked[0].spec_paths, [format!("columns.RESULT.derivation.{suffix}")]);
+            assert_eq!(attempt(&fixture).err().unwrap(), checked);
+            assert!(!fixture.0.join("output.csv").exists());
+        }
+    }
+}
+
+#[test]
+fn nontext_csv_source_type_precedes_regex_declaration_findings() {
+    let fixture = bespoke(
+        &spec("{str_extract: {source: SRC.I, pattern: 'a)|(b'}}", "str"),
+        b"ID,I,F,D\na,1,1,2025-01-01\n",
+    );
+    fs::remove_file(fixture.0.join("input.csv")).unwrap();
+    let issues = attempt(&fixture).err().unwrap();
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert_eq!(issues[0].condition, "incompatible_input_type");
+    assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0308"));
+    assert_eq!(
+        issues[0].spec_paths,
+        ["columns.RESULT.derivation.str_extract.source"]
+    );
+}
