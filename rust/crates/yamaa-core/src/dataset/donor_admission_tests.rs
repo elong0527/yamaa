@@ -51,8 +51,7 @@ fn predicate() -> crate::predicate::Plan {
 fn numeric(column: usize) -> Expression {
     Expression::Compute(
         BoundNumeric::new(
-            crate::numeric_compiler::compile_numeric("LATER + 1", "donor.compute.expr")
-            .unwrap(),
+            crate::numeric_compiler::compile_numeric("LATER + 1", "donor.compute.expr").unwrap(),
             vec![Binding {
                 name: "LATER".into(),
                 read: Read::Source(column),

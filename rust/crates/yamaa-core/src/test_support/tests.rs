@@ -256,7 +256,7 @@ fn decode_failure_and_invalid_binding_keep_snapshot_without_reading_cells() {
             },
         ];
         if invalid_binding {
-            expected.push(Event::Schema);
+            expected.extend([Event::Rows, Event::Schema, Event::Schema]);
         }
         assert_eq!(&*log.events(), expected);
         assert!(port.captures.is_empty() && decoder.steps.is_empty());

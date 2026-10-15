@@ -71,8 +71,7 @@ fn plan(expression: &str, name: &str, column: usize) -> DatasetPlan {
             ],
             filter: Some(
                 BoundPredicate::new(
-                    crate::predicate_compiler::compile(expression, "row.filter")
-                    .unwrap(),
+                    crate::predicate_compiler::compile(expression, "row.filter").unwrap(),
                     vec![Binding {
                         name: name.into(),
                         read: Read::Column(column),
@@ -129,7 +128,13 @@ fn grouped_window_filter_runs_once_after_complete_windows_without_renumbering() 
         };
         assert_eq!(
             plan(expression, name, column)
-                .execute(&table, &[], &mut crate::function_invocation::NoFunctions::new(), None).result
+                .execute(
+                    &table,
+                    &[],
+                    &mut crate::function_invocation::NoFunctions::new(),
+                    None
+                )
+                .result
                 .unwrap()
                 .dataset
                 .rows(),
@@ -197,11 +202,14 @@ fn grouped_postwindow_filters_use_contextual_join_and_named_lookup_reads_lazily(
         let mut template = plan("SEQ > 1", "SEQ", 1).templates()[0].clone();
         template.filter = Some(
             BoundPredicate::new_contextual(
-                crate::predicate_compiler::compile(if keep {
+                crate::predicate_compiler::compile(
+                    if keep {
                         "SEQ > 1 AND MATCH = 2"
                     } else {
                         "SEQ < 0 AND MATCH = 2"
-                    }, "row.filter")
+                    },
+                    "row.filter",
+                )
                 .unwrap(),
                 vec![
                     Binding {
@@ -253,7 +261,16 @@ fn grouped_postwindow_filters_use_contextual_join_and_named_lookup_reads_lazily(
             vec![]
         };
         assert_eq!(
-            plan.execute(&table, &[], &mut crate::function_invocation::NoFunctions::new(), None).result.unwrap().dataset.rows(),
+            plan.execute(
+                &table,
+                &[],
+                &mut crate::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap()
+            .dataset
+            .rows(),
             expected
         );
         // The source value column is captured once. Contextual evaluation over

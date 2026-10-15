@@ -446,9 +446,9 @@ mod tests {
             (Value::Int(i64::MIN), "-9223372036854775808"),
             (Value::Int(i64::MAX), "9223372036854775807"),
             (Value::float(-0.0), "-0"),
-            (Value::Date("2024-02".parse().unwrap()), "\"2024-02-01\""),
+            (Value::Date("2024-02-01".parse().unwrap()), "\"2024-02-01\""),
             (
-                Value::DateTime("2024-02-29T03:04".parse().unwrap()),
+                Value::DateTime("2024-02-29T03:04:00".parse().unwrap()),
                 "\"2024-02-29T03:04:00\"",
             ),
         ];
