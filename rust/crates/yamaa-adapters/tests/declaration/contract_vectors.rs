@@ -687,14 +687,10 @@ fn unchanged_independent_rational_rounding_corpus_matches_both_native_policies()
     assert_eq!(seen.len(), 2936);
 }
 
-#[path = "../../examples/support/aggregate_syntax.rs"]
-mod aggregate_fixture;
-#[path = "../../examples/support/numeric_syntax.rs"]
-mod numeric_fixture;
-#[path = "../../examples/support/predicate_syntax.rs"]
-mod predicate_fixture;
-#[path = "../../examples/support/syntax_spans.rs"]
-mod syntax_spans;
+use crate::support::{
+    aggregate_syntax as aggregate_fixture, numeric_syntax as numeric_fixture,
+    predicate_syntax as predicate_fixture,
+};
 
 fn syntax_outcome(family: &str, text: &str) -> Json {
     let mut observed = match family {

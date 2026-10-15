@@ -28,8 +28,15 @@ def validate_schema_sources(root: Path):
             errors.append(f"ERROR: {label}.includes: expected file names")
             continue
         for name in includes:
-            if not isinstance(name, str) or re.fullmatch(r"schema(?:_[a-z0-9_]+)?\.yaml", name) is None:
-                errors.append(f"ERROR: {label}.includes: expected a local schema file name")
+            if (
+                not isinstance(name, str)
+                or re.fullmatch(r"schema(?:_[a-z0-9_]+)?\.yaml", name) is None
+            ):
+                errors.append(
+                    f"ERROR: {label}.includes: expected a local schema file name"
+                )
             elif not (directory / name).is_file():
-                errors.append(f"ERROR: {label}.includes: missing schema source {name!r}")
+                errors.append(
+                    f"ERROR: {label}.includes: missing schema source {name!r}"
+                )
     return errors

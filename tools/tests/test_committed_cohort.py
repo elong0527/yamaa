@@ -234,6 +234,27 @@ class CompletePublicTruth(unittest.TestCase):
             ).passed
         )
 
+    def test_complete_negative_truth_rejects_an_unrelated_output_finding(self):
+        original = cohort.read(ROOT / cohort.TRUTH_PATHS["negative-integer-overflow"])
+        changed = copy.deepcopy(original)
+        changed["diagnostics"].append(
+            {
+                "phase": "validation",
+                "condition": "undeclared_column",
+                "spec_paths": ["output.columns"],
+                "requirement": "REQ-test",
+                "context": {"column": "UNRELATED"},
+            }
+        )
+        verdict = cohort.reports.compare_reports(
+            cohort.reports.parse_report(json.dumps(original)),
+            cohort.reports.parse_report(json.dumps(changed)),
+        )
+        self.assertFalse(verdict.passed)
+        self.assertTrue(
+            any(f.kind == "report.diagnostics.count" for f in verdict.findings)
+        )
+
     def test_exact_scalar_bits_and_missing_empty_are_preserved(self):
         observe = cohort.reports.observe_scalar
         for value in (-(2**63), 2**63 - 1, 2**53 + 1):

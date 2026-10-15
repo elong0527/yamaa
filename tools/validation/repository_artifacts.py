@@ -10,71 +10,6 @@ from tools.validation.editorial import example_spec_paths
 KEY_COLUMN_ORDER = ("DOMAIN", "STUDYID", "USUBJID")
 
 
-def example_entry_specs(example_dir: Path):
-    paths = example_spec_paths(example_dir)
-    named = set()
-    for path in paths:
-        try:
-            with open(path, "r", encoding="utf-8") as handle:
-                spec = yaml.load(handle, Loader=UniqueKeyLoader)
-        except (OSError, UnicodeError, yaml.YAMLError):
-            continue
-        if not isinstance(spec, dict):
-            continue
-        parents = spec.get("parents", [])
-        if isinstance(parents, str):
-            parents = [parents]
-        for parent in parents:
-            if isinstance(parent, str) and parent:
-                named.add(Path(parent).name)
-        inputs = spec.get("input", {})
-        if isinstance(inputs, dict):
-            for source in inputs.values():
-                if (
-                    isinstance(source, dict)
-                    and isinstance(source.get("schema"), str)
-                    and source["schema"]
-                ):
-                    named.add(Path(source["schema"]).name)
-    return [path for path in paths if path.name not in named]
-
-
-def example_artifact_owners(example_dir: Path):
-    """Map each artifact an example's specs declare to the files declaring it.
-
-    Only an entry and a producer kept beside it own a golden: a spec another
-    reads through `input.*.schema` is part of the example, so the artifact it
-    produces sits in `expected/` next to the entry's. An inheritance level
-    owns nothing of its own; the entry that resolves it does.
-    """
-    documents = {}
-    for path in example_spec_paths(example_dir):
-        try:
-            with open(path, "r", encoding="utf-8") as handle:
-                documents[path.name] = yaml.load(handle, Loader=UniqueKeyLoader)
-        except (OSError, UnicodeError, yaml.YAMLError):
-            continue
-    owners_of = {path.name for path in example_entry_specs(example_dir)}
-    for spec in documents.values():
-        inputs = spec.get("input") if isinstance(spec, dict) else None
-        if not isinstance(inputs, dict):
-            continue
-        for source in inputs.values():
-            if isinstance(source, dict) and isinstance(source.get("schema"), str):
-                owners_of.add(Path(source["schema"]).name)
-    artifacts = {}
-    for name in sorted(owners_of):
-        spec = documents.get(name)
-        output = spec.get("output") if isinstance(spec, dict) else None
-        if not isinstance(output, dict):
-            continue
-        for field in ("path", "warning_log", "verification_log"):
-            if isinstance(output.get(field), str):
-                artifact = PurePosixPath(output[field]).name
-                artifacts.setdefault(artifact, set()).add(name)
-    return artifacts
-
-
 def _key_column_order_errors(names, label):
     """Check populated key columns keep DOMAIN, STUDYID, USUBJID in order.
 
@@ -95,7 +30,7 @@ def _key_column_order_errors(names, label):
 def validate_key_column_order(root: Path):
     """Keep DOMAIN, STUDYID, USUBJID in that order across benchmark artifacts.
 
-    Checks each entry spec's declared `columns`, its `output.columns`
+    Checks each authored spec's declared `columns`, its `output.columns`
     artifact order, and the golden CSV header, so the column order the
     GitHub Action verifies stays consistent everywhere a benchmark's
     columns are populated.
@@ -107,7 +42,7 @@ def validate_key_column_order(root: Path):
     for ex_dir in sorted(examples_dir.iterdir()):
         if not ex_dir.is_dir() or ex_dir.name.startswith("."):
             continue
-        for spec_path in example_entry_specs(ex_dir):
+        for spec_path in example_spec_paths(ex_dir):
             try:
                 with open(spec_path, "r", encoding="utf-8") as handle:
                     spec = yaml.load(handle, Loader=UniqueKeyLoader)
@@ -176,7 +111,9 @@ def validate_examples_csv(root: Path):
         inherited = False
         for path in example_spec_paths(example):
             try:
-                document = yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
+                document = yaml.load(
+                    path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader
+                )
             except (OSError, UnicodeError, yaml.YAMLError):
                 continue
             if not isinstance(document, dict):
@@ -188,7 +125,9 @@ def validate_examples_csv(root: Path):
             for key in ("path", "warning_log", "verification_log"):
                 name = output.get(key)
                 if isinstance(name, str):
-                    declarations[PurePosixPath(name).name] = output.get("columns") if key == "path" else None
+                    declarations[PurePosixPath(name).name] = (
+                        output.get("columns") if key == "path" else None
+                    )
         for path in sorted((example / "expected").glob("*.csv")):
             label = path.relative_to(root)
             try:
@@ -205,14 +144,24 @@ def validate_examples_csv(root: Path):
                 errors.append(f"ERROR: {label}: duplicate column header")
             for number, row in enumerate(rows[1:], 2):
                 if len(row) != len(header):
-                    errors.append(f"ERROR: {label}:{number}: expected {len(header)} fields, got {len(row)}")
+                    errors.append(
+                        f"ERROR: {label}:{number}: expected {len(header)} fields, got {len(row)}"
+                    )
             if inherited:
                 # Resolving parents is a language operation owned by the Rust suite.
                 continue
             if path.name not in declarations:
-                errors.append(f"ERROR: {label}: no authored output declares this artifact")
+                errors.append(
+                    f"ERROR: {label}: no authored output declares this artifact"
+                )
             else:
                 expected = declarations[path.name]
-                if isinstance(expected, list) and all(isinstance(name, str) for name in expected) and header != expected:
-                    errors.append(f"ERROR: {label}: header {header!r} does not match output columns {expected!r}")
+                if (
+                    isinstance(expected, list)
+                    and all(isinstance(name, str) for name in expected)
+                    and header != expected
+                ):
+                    errors.append(
+                        f"ERROR: {label}: header {header!r} does not match output columns {expected!r}"
+                    )
     return errors

@@ -219,7 +219,6 @@ class TestTextSourceBoundary(unittest.TestCase):
             error.encode("ascii")
 
 
-
 class TestConditionRegistry(unittest.TestCase):
     def setUp(self):
         self.root = ROOT
@@ -483,14 +482,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
         self.assertIn("operations/text.md", errors[0])
         self.assertIn("the grammar block is not the one", errors[0])
 
-
-
-
-
     # -- the vocabulary is one source --------------------------------------
-
-
-
 
     # -- the file is machine-checkable -------------------------------------
 
@@ -593,7 +585,6 @@ class TestValidatorCLI(unittest.TestCase):
     def tearDown(self):
         self.test_dir.cleanup()
 
-
     def test_cli_help(self):
         result = subprocess.run(
             [sys.executable, "-m", "tools.validation.validate_repository", "--help"],
@@ -605,7 +596,13 @@ class TestValidatorCLI(unittest.TestCase):
 
     def test_cli_missing_schema_fails(self):
         result = subprocess.run(
-            [sys.executable, "-m", "tools.validation.validate_repository", "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -619,7 +616,13 @@ class TestValidatorCLI(unittest.TestCase):
         bad_yaml.write_text("a: 1\na: 2\n")
 
         result = subprocess.run(
-            [sys.executable, "-m", "tools.validation.validate_repository", "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -635,14 +638,19 @@ class TestValidatorCLI(unittest.TestCase):
         bad_yaml.write_text("a: 1\n  b: 2\n")
 
         result = subprocess.run(
-            [sys.executable, "-m", "tools.validation.validate_repository", "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("ERROR", result.stdout)
         self.assertIn("syntax.yaml", result.stdout)
-
 
     def test_schema_shared_include_is_not_a_cycle(self):
         yaml_dir = self.root_dir / "yaml"
@@ -660,7 +668,13 @@ class TestValidatorCLI(unittest.TestCase):
         (yaml_dir / "schema_shared.yaml").write_text('version: "1.0"\n')
 
         result = subprocess.run(
-            [sys.executable, "-m", "tools.validation.validate_repository", "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -676,7 +690,13 @@ class TestValidatorCLI(unittest.TestCase):
         (self.root_dir / "outside.yaml").write_text('version: "1.0"\n')
 
         result = subprocess.run(
-            [sys.executable, "-m", "tools.validation.validate_repository", "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -694,7 +714,13 @@ class TestValidatorCLI(unittest.TestCase):
         (yaml_dir / "schema_link.yaml").symlink_to("schema_real.yaml")
 
         result = subprocess.run(
-            [sys.executable, "-m", "tools.validation.validate_repository", "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -711,7 +737,13 @@ class TestValidatorCLI(unittest.TestCase):
         (yaml_dir / "schema_extra.yaml").write_text("- not\n- a\n- mapping\n")
 
         result = subprocess.run(
-            [sys.executable, "-m", "tools.validation.validate_repository", "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -729,28 +761,31 @@ class TestValidatorCLI(unittest.TestCase):
         (yaml_dir / "other.yaml").write_text('version: "1.0"\n')
 
         result = subprocess.run(
-            [sys.executable, "-m", "tools.validation.validate_repository", "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("local schema file name", result.stdout)
 
-
-
-
-
-
-
-
-
-
     def test_documentation_missing_readme(self):
         ex_dir = self.root_dir / "benchmarks" / "bad-example"
         ex_dir.mkdir(parents=True, exist_ok=True)
         # missing everything
         result = subprocess.run(
-            [sys.executable, "-m", "tools.validation.check_documentation", "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.check_documentation",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -767,14 +802,18 @@ class TestValidatorCLI(unittest.TestCase):
         (ex_dir / "expected" / "error.yaml").write_text("{}")
 
         result = subprocess.run(
-            [sys.executable, "-m", "tools.validation.check_documentation", "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.check_documentation",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("How to fix", result.stdout)
-
-
 
     def test_example_layout_positive_has_error(self):
         ex_dir = self.root_dir / "benchmarks" / "positive-bad"
@@ -786,7 +825,13 @@ class TestValidatorCLI(unittest.TestCase):
         (ex_dir / "expected" / "error.yaml").write_text("{}")
 
         result = subprocess.run(
-            [sys.executable, "-m", "tools.validation.validate_repository", "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -801,7 +846,13 @@ class TestValidatorCLI(unittest.TestCase):
         )
 
         result = subprocess.run(
-            [sys.executable, "-m", "tools.validation.check_documentation", "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.check_documentation",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -818,7 +869,13 @@ class TestValidatorCLI(unittest.TestCase):
         )
 
         result = subprocess.run(
-            [sys.executable, "-m", "tools.validation.check_documentation", "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.check_documentation",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -862,7 +919,9 @@ class TestValidatorCLI(unittest.TestCase):
             "[![Lifecycle: draft](https://example.com/badge)](https://example.com/lifecycle)\n"
         )
         (good_ex / "spec.yaml").write_text("{}")
-        (good_ex / "benchmark.yaml").write_text("lifecycle: draft\nstandard: TEST\ndomain: TEST\n")
+        (good_ex / "benchmark.yaml").write_text(
+            "lifecycle: draft\nstandard: TEST\ndomain: TEST\n"
+        )
         self.assertEqual(OWNER_EDITORIAL.validate_examples_index(self.root_dir), [])
         # A case the derived index cannot render is reported, not dropped.
         (good_ex / "benchmark.yaml").unlink()
@@ -902,7 +961,13 @@ class TestValidatorCLI(unittest.TestCase):
         )
 
         result = subprocess.run(
-            [sys.executable, "-m", "tools.validation.validate_repository", "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -939,11 +1004,12 @@ class TestValidatorCLI(unittest.TestCase):
         errors = OWNER_REPOSITORY_ARTIFACTS.validate_examples_csv(self.root_dir)
 
         message = "\n".join(errors)
-        self.assertIn("producer-stray/expected/other.csv: no authored output declares this artifact", message)
+        self.assertIn(
+            "producer-stray/expected/other.csv: no authored output declares this artifact",
+            message,
+        )
         self.assertNotIn("dm.csv: expected artifact name", message)
         self.assertNotIn("supp.csv: expected artifact name", message)
-
-
 
     def test_layout_rejects_base_spec_mixed_with_variants(self):
         ex_dir = self.root_dir / "benchmarks" / "mixed-specs"
@@ -961,20 +1027,6 @@ class TestValidatorCLI(unittest.TestCase):
         errors = OWNER_REPOSITORY_STRUCTURE.validate_examples_layout(self.root_dir)
         self.assertTrue(errors)
         self.assertIn("cannot mix", "\n".join(errors))
-
-
-    def test_schema_linked_spec_files_are_producers_not_entries(self):
-        ex_dir = self.root_dir / "benchmarks" / "producer-specs"
-        (ex_dir / "input").mkdir(parents=True)
-        (ex_dir / "expected").mkdir()
-        (ex_dir / "expected" / "out.csv").write_text("value\n1\n")
-        (ex_dir / "spec_dm.yaml").write_text("value: valid\n")
-        (ex_dir / "spec_suppdm.yaml").write_text(
-            "value: valid\ninput:\n  DM: {path: dm.csv, schema: spec_dm.yaml}\n"
-        )
-
-        entries = OWNER_REPOSITORY_ARTIFACTS.example_entry_specs(ex_dir)
-        self.assertEqual([path.name for path in entries], ["spec_suppdm.yaml"])
 
     def test_readme_is_a_data_contract_without_badge_configuration(self):
         ex_dir = self.root_dir / "benchmarks" / "metadata-owned"
@@ -1040,11 +1092,6 @@ class TestValidatorCLI(unittest.TestCase):
         errors = OWNER_EDITORIAL.validate_example_readmes(self.root_dir)
         self.assertIn("maximum is 79", "\n".join(errors))
 
-
-
-
-
-
     def test_expected_error_contract_rejects_bad_phase_and_path(self):
         ex_dir = self.root_dir / "benchmarks" / "negative-contract"
         (ex_dir / "expected").mkdir(parents=True)
@@ -1062,7 +1109,6 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertIn("phase", message)
         self.assertIn("snake-case", message)
         self.assertIn("context", message)
-
 
     def test_readme_contract_rejects_schema_vocabulary_and_extra_section(self):
         ex_dir = self.root_dir / "benchmarks" / "readme-contract"

@@ -92,34 +92,6 @@ def load_validation_fixtures(root: Path):
     return fixtures, errors
 
 
-
-
-
-
-
-
-EXPECTED_ERROR_PHASES = {
-    "parse",
-    "planning",
-    "engine",
-    "validation",
-    "ingest",
-    "row_construction",
-    "derivation",
-    "output",
-    "verification",
-    "bind",
-    "join",
-    "mapping",
-    "cut",
-    "extract",
-    "template",
-    "impute",
-    "convert",
-    "final",
-}
-
-
 def load_condition_registry(root: Path):
     relative_path = Path("yaml/conditions.yaml")
     path = root / relative_path
@@ -174,7 +146,8 @@ def validate_condition_registry(root: Path, registry):
             isinstance(phases, list)
             and phases
             and all(
-                isinstance(phase, str) and phase in EXPECTED_ERROR_PHASES
+                isinstance(phase, str)
+                and re.fullmatch(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*", phase)
                 for phase in phases
             )
             and phases == sorted(set(phases))
@@ -216,10 +189,21 @@ def validate_condition_registry(root: Path, registry):
     return errors
 
 
-
-
 def validate_expected_error_contracts(root: Path):
     errors = []
+    vocabulary_root = root if (root / "yaml/conditions.yaml").is_file() else ROOT
+    registry, _ = load_condition_registry(vocabulary_root)
+    conditions = registry.get("conditions", {}) if isinstance(registry, dict) else {}
+    phases = {
+        phase
+        for registration in (
+            conditions.values() if isinstance(conditions, dict) else ()
+        )
+        if isinstance(registration, dict)
+        and isinstance(registration.get("phases"), list)
+        for phase in registration["phases"]
+        if isinstance(phase, str)
+    }
     examples_dir = root / "benchmarks"
     if not examples_dir.exists():
         return errors
@@ -244,11 +228,8 @@ def validate_expected_error_contracts(root: Path):
         )
         for field in unknown:
             errors.append(f"ERROR: {label}.{field}: unknown field")
-        if contract.get("phase") not in EXPECTED_ERROR_PHASES:
-            errors.append(
-                f"ERROR: {label}.phase: expected one of "
-                f"{sorted(EXPECTED_ERROR_PHASES)!r}"
-            )
+        if contract.get("phase") not in phases:
+            errors.append(f"ERROR: {label}.phase: expected one of {sorted(phases)!r}")
         condition = contract.get("condition")
         if not (
             isinstance(condition, str)
@@ -269,5 +250,3 @@ def validate_expected_error_contracts(root: Path):
             errors.append(f"ERROR: {label}.context: expected a mapping")
 
     return errors
-
-

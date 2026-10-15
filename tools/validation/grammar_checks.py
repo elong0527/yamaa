@@ -345,6 +345,7 @@ def validate_grammar_contracts(root: Path):
         errors.extend(validate_grammar_contract(root, contract))
     return errors
 
+
 def grammar_vocabulary_errors(contract, document, label):
     """Check declaration format; the Rust suite checks the declared language."""
     vocabulary = document.get("vocabulary")
@@ -356,23 +357,44 @@ def grammar_vocabulary_errors(contract, document, label):
         if not isinstance(functions, dict):
             return [f"ERROR: {label}: vocabulary.function is missing"]
         for name, arity in functions.items():
-            if not isinstance(arity, dict) or set(arity) != {"min_arguments", "max_arguments"}:
-                errors.append(f"ERROR: {label}: function {name} must declare min_arguments and max_arguments")
+            if not isinstance(arity, dict) or set(arity) != {
+                "min_arguments",
+                "max_arguments",
+            }:
+                errors.append(
+                    f"ERROR: {label}: function {name} must declare min_arguments and max_arguments"
+                )
                 continue
             lower, upper = arity["min_arguments"], arity["max_arguments"]
-            if type(lower) is not int or lower < 1 or (upper is not None and (type(upper) is not int or upper < lower)):
-                errors.append(f"ERROR: {label}: function {name} has invalid argument bounds")
+            if (
+                type(lower) is not int
+                or lower < 1
+                or (upper is not None and (type(upper) is not int or upper < lower))
+            ):
+                errors.append(
+                    f"ERROR: {label}: function {name} has invalid argument bounds"
+                )
     elif contract == "aggregate":
         reducers = vocabulary.get("reducer")
         if not isinstance(reducers, dict):
             return [f"ERROR: {label}: vocabulary.reducer is missing"]
         for name, declaration in reducers.items():
-            arguments = declaration.get("argument") if isinstance(declaration, dict) else None
-            if not isinstance(arguments, list) or not arguments or any(value not in {"expr", "star"} for value in arguments):
-                errors.append(f"ERROR: {label}: reducer {name} must declare its argument forms")
+            arguments = (
+                declaration.get("argument") if isinstance(declaration, dict) else None
+            )
+            if (
+                not isinstance(arguments, list)
+                or not arguments
+                or any(value not in {"expr", "star"} for value in arguments)
+            ):
+                errors.append(
+                    f"ERROR: {label}: reducer {name} must declare its argument forms"
+                )
     elif contract == "predicate":
         reserved = document.get("reserved")
-        if not isinstance(reserved, list) or not all(isinstance(name, str) for name in reserved):
+        if not isinstance(reserved, list) or not all(
+            isinstance(name, str) for name in reserved
+        ):
             errors.append(f"ERROR: {label}: reserved must be a list of names")
         elif len(reserved) != len(set(reserved)):
             errors.append(f"ERROR: {label}: duplicate reserved name")
@@ -410,11 +432,12 @@ def grammar_case_errors(contract, case, label):
     if "condition" in case:
         errors.append(f"ERROR: {label}: an accepted text records no condition")
     identifiers = case.get("identifiers")
-    if not isinstance(identifiers, list) or not all(isinstance(name, str) for name in identifiers):
+    if not isinstance(identifiers, list) or not all(
+        isinstance(name, str) for name in identifiers
+    ):
         errors.append(f"ERROR: {label}: identifiers must be a list of names")
     elif identifiers != sorted(set(identifiers)):
         errors.append(f"ERROR: {label}: identifiers must be unique sorted names")
     if not isinstance(case.get("shape"), str):
         errors.append(f"ERROR: {label}: shape must be a string")
     return errors
-

@@ -138,3 +138,37 @@ fn clean_declarations_still_defer_actual_dataset_fields_and_values_to_build() {
             .is_empty()
     );
 }
+
+#[test]
+fn flag_missing_value_findings_preserve_original_scalar_kind_and_nul_bytes() {
+    // The retired repository validator's flag assertion used these exact
+    // false values. Observe native findings directly instead of replaying
+    // them through the former JSON-line semantic fixture executable.
+    for false_value in [
+        serde_json::json!("N"),
+        serde_json::json!(i64::MIN),
+        serde_json::json!(i64::MAX),
+        serde_json::json!(false),
+        serde_json::json!(true),
+        serde_json::json!("N\0U"),
+    ] {
+        let text = format!(
+            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{DM: never-read.csv}}\noutput: {{path: result.csv, columns: [ID, B, F]}}\ncolumns:\n  - {{name: ID, type: str, derivation: DM.ID}}\n  - {{name: B, type: int, derivation: {{literal: 2}}}}\n  - {{name: F, type: str, derivation: {{flag: {{condition: 'B > 1', false_value: {false_value}}}}}}}\n"
+        );
+        let document = shipped_schema::capture()
+            .unwrap()
+            .prepare_standalone(Source {
+                identity: "spec.yaml".into(),
+                bytes: text.into_bytes(),
+            })
+            .unwrap();
+        let run = PreparedRun::prepare(document).unwrap();
+        let rows = specification_check::issue_rows(&run).unwrap();
+        assert_eq!(rows.len(), 1, "{false_value}: {rows:?}");
+        assert_eq!(rows[0].condition, "missing_value_required");
+        assert_eq!(rows[0].requirement.as_deref(), Some("REQ-1258"));
+        assert_eq!(rows[0].spec_paths, ["columns.F.derivation.flag.missing"]);
+        let context: serde_json::Value = serde_json::from_str(&rows[0].context).unwrap();
+        assert_eq!(context, serde_json::json!({"false_value": false_value}));
+    }
+}

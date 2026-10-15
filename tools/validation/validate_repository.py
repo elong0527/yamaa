@@ -29,7 +29,9 @@ def check_yaml_files(root: Path):
             continue
         label = path.relative_to(root)
         try:
-            document = yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
+            document = yaml.load(
+                path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader
+            )
             errors.extend(validate_unicode_scalars(document, str(label)))
         except (OSError, UnicodeError, yaml.YAMLError, ValueError) as error:
             message = str(error)
@@ -54,14 +56,18 @@ def check_yaml_files(root: Path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", type=Path, default=ROOT, help="Repository root directory")
+    parser.add_argument(
+        "--root", type=Path, default=ROOT, help="Repository root directory"
+    )
     args = parser.parse_args()
     errors = check_yaml_files(args.root)
     for error in errors:
         print(error)
     if errors:
         return 1
-    print("PASS: Repository sources and layout are clean; native suites own language conformance.")
+    print(
+        "PASS: Repository sources and layout are clean; native suites own language conformance."
+    )
     return 0
 
 

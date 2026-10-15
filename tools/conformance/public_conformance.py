@@ -723,7 +723,9 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
             if registration is None:
                 result["findings"].append("validation fixture lacks case registration")
             elif "blocked_by" in registration:
-                result["findings"].append("validation fixture still declares a release blocker")
+                result["findings"].append(
+                    "validation fixture still declares a release blocker"
+                )
             paths = want["spec_paths"]
 
             def matches_path(actual, expected):
