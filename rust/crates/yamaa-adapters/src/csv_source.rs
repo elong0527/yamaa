@@ -13,7 +13,7 @@ pub enum TextTableError {
 /// callers must not silently route those declarations through this text-only helper.
 pub fn parse_text_table(content: &[u8]) -> Result<crate::arrow_table::ArrowTable, TextTableError> {
     use crate::arrow_table::{physical_schema, ArrowTable, TableError};
-    use arrow_array::{ArrayRef, RecordBatch, StringArray};
+    use arrow_array::{ArrayRef, RecordBatch};
     use std::sync::Arc;
     use yamaa_core::{
         table::{Column, TableSchema},
@@ -35,11 +35,13 @@ pub fn parse_text_table(content: &[u8]) -> Result<crate::arrow_table::ArrowTable
     .expect("CSV admission established nonempty unique header names");
     let arrays: Vec<ArrayRef> = (0..columns)
         .map(|column| {
-            Arc::new(StringArray::from_iter(
+            crate::arrow_table::string_array(
                 parsed.records.iter().map(|row| row[column].as_deref()),
-            )) as ArrayRef
+            )
+            .map(|array| Arc::new(array) as ArrayRef)
+            .map_err(|error| TextTableError::Table(TableError::Arrow(error)))
         })
-        .collect();
+        .collect::<Result<_, _>>()?;
     let batch = RecordBatch::try_new(physical_schema(&schema), arrays)
         .map_err(|error| TextTableError::Table(TableError::Arrow(error)))?;
     ArrowTable::try_new(schema, vec![batch]).map_err(TextTableError::Table)

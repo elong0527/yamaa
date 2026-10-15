@@ -1,8 +1,6 @@
 //! Copied IPC streams for installed hosts. No files, callbacks or fallback.
 use crate::arrow_table::{date_array, datetime_array, physical_schema, ArrowTable};
-use arrow_array::{
-    ArrayRef, Float64Array, Int64Array, RecordBatch, RecordBatchOptions, StringArray,
-};
+use arrow_array::{ArrayRef, Float64Array, Int64Array, RecordBatch, RecordBatchOptions};
 use arrow_ipc::{reader::StreamReader, writer::StreamWriter, MessageHeader, MetadataVersion};
 use arrow_schema::DataType;
 use serde::Serialize;
@@ -25,6 +23,9 @@ pub enum TableError {
         limit: usize,
         required: Option<usize>,
     },
+    Representation {
+        representation: &'static str,
+    },
     InvalidStream,
     InvalidTable,
     OutputIo,
@@ -35,6 +36,7 @@ impl fmt::Display for TableError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             Self::Limit { .. } => "table geometry exceeds fixed limit",
+            Self::Representation { representation } => representation,
             Self::InvalidStream => "invalid or unsupported table IPC stream",
             Self::InvalidTable => "invalid table schema or value",
             Self::OutputIo => "table IPC output write failed",
@@ -69,8 +71,7 @@ pub fn table_round_trip(input: &[u8]) -> Result<Vec<u8>, Error> {
             .map_err(|_| Error::OutputIo)?;
         let mut start = 0;
         for batch in table.batches() {
-            let clean =
-                sanitized_batch(&table, start, batch.num_rows()).map_err(|_| Error::Internal)?;
+            let clean = sanitized_batch(&table, start, batch.num_rows()).map_err(batch_error)?;
             writer.write(&clean).map_err(|_| Error::OutputIo)?;
             start += batch.num_rows();
         }
@@ -230,7 +231,7 @@ impl<T: TableAccess<Error = std::convert::Infallible>> Iterator for DatasetBatch
         }
         let rows = self.batch_rows.min(self.table.row_count() - self.start);
         let result = sanitized_batch(self.table, self.start, rows)
-            .map_err(|_| Error::Internal)
+            .map_err(batch_error)
             .and_then(|batch| match self.projection {
                 Some(projection) => batch.project(projection).map_err(|_| Error::InvalidTable),
                 None => Ok(batch),
@@ -473,6 +474,19 @@ pub(crate) fn preflight(mut input: &[u8]) -> Result<SnapshotShape, Error> {
     }
 }
 
+fn batch_error(error: arrow_schema::ArrowError) -> Error {
+    match error {
+        arrow_schema::ArrowError::CastError(message)
+            if message == crate::arrow_table::UTF8_OFFSETS =>
+        {
+            Error::Representation {
+                representation: crate::arrow_table::UTF8_OFFSETS,
+            }
+        }
+        _ => Error::Internal,
+    }
+}
+
 /// Rebuild visible values into fresh arrays, removing all masked physical payloads
 /// and out-of-slice buffers before the public IPC writer sees them.
 pub(crate) fn sanitized_batch<T: TableAccess<Error = std::convert::Infallible>>(
@@ -485,10 +499,12 @@ pub(crate) fn sanitized_batch<T: TableAccess<Error = std::convert::Infallible>>(
         let values =
             (start..start + rows).map(|row| table.cell(row, column).expect("validated coordinate"));
         arrays.push(match field.kind {
-            ColumnType::Str => Arc::new(StringArray::from_iter(values.map(|v| match v {
-                ValueRef::Str(v) => Some(v),
-                _ => None,
-            }))),
+            ColumnType::Str => {
+                Arc::new(crate::arrow_table::string_array(values.map(|v| match v {
+                    ValueRef::Str(v) => Some(v),
+                    _ => None,
+                }))?)
+            }
             ColumnType::Int => Arc::new(Int64Array::from_iter(values.map(|v| match v {
                 ValueRef::Int(v) => Some(v),
                 _ => None,

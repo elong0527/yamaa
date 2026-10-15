@@ -49,6 +49,29 @@ pub enum TemporalCellError {
     Range,
 }
 
+/// The canonical Arrow Utf8 array stores signed 32-bit byte offsets.
+pub(crate) const UTF8_OFFSETS: &str = "Arrow Utf8 signed 32-bit offsets";
+pub(crate) fn fits_utf8_offsets(lengths: impl IntoIterator<Item = usize>) -> bool {
+    lengths
+        .into_iter()
+        .try_fold(0usize, |total, length| {
+            total
+                .checked_add(length)
+                .filter(|&sum| i32::try_from(sum).is_ok())
+        })
+        .is_some()
+}
+/// Check physical offset representability before copying any visible string data.
+pub(crate) fn string_array<'a>(
+    values: impl IntoIterator<Item = Option<&'a str>>,
+) -> Result<StringArray, ArrowError> {
+    let values = values.into_iter().collect::<Vec<_>>();
+    if !fits_utf8_offsets(values.iter().flatten().map(|value| value.len())) {
+        return Err(ArrowError::CastError(UTF8_OFFSETS.into()));
+    }
+    Ok(StringArray::from(values))
+}
+
 /// Immutable arrays own/reference their buffers independently of input handles.
 /// Empty chunks are retained; row lookup skips them without changing record order.
 #[derive(Debug)]
@@ -436,5 +459,26 @@ impl TableAccess for ArrowTable {
             )
             .expect("validated temporal cell"),
         })
+    }
+}
+
+#[cfg(test)]
+mod offset_tests {
+    use super::*;
+    #[test]
+    fn canonical_utf8_offsets_preserve_unicode_nulls_and_real_integer_boundaries() {
+        let maximum = i32::MAX as usize;
+        for lengths in [vec![], vec![maximum - 1], vec![maximum], vec![maximum, 0]] {
+            assert!(fits_utf8_offsets(lengths));
+        }
+        for lengths in [vec![maximum, 1], vec![usize::MAX], vec![usize::MAX, 1]] {
+            assert!(!fits_utf8_offsets(lengths));
+        }
+        let values = string_array([Some("é"), None, Some("🙂"), Some("")]).unwrap();
+        assert_eq!(
+            values.iter().collect::<Vec<_>>(),
+            [Some("é"), None, Some("🙂"), Some("")]
+        );
+        assert_eq!(values.value_offsets(), [0, 2, 2, 6, 6]);
     }
 }
