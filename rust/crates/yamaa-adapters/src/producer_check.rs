@@ -1,10 +1,10 @@
 //! Complete static graph diagnostics borrowed from sealed metadata ownership.
 //! Projection refusal retains the exact original preparation error beside it.
 use crate::{file_graph::FileGraph, file_workflow, issue_rows::Issue};
+use serde_json::Value as JsonValue;
 use yamaa_core::{
-    diagnostic::{ContextValue, Diagnostic},
+    diagnostic::Diagnostic,
     specification::{PrepareError, VerificationDeclarationFinding as Finding},
-    value::Value,
 };
 
 #[derive(Debug)]
@@ -168,7 +168,7 @@ fn issue(
         for (key, text) in [("source", source), ("entry", entry)] {
             if diagnostic
                 .context
-                .insert(key.into(), ContextValue::Scalar(Value::Str(text.into())))
+                .insert(key.into(), JsonValue::String(text.into()))
                 .is_some()
             {
                 return Err(invalid());
@@ -230,13 +230,13 @@ pub fn prepared_with_limit(graph: &FileGraph, maximum: usize) -> Result<Vec<Issu
                     .spec_paths
                     .iter()
                     .map(|path| match document.declaring_source(path) {
-                        Some(source) => ContextValue::Scalar(Value::Str(source.into())),
-                        None => ContextValue::Scalar(Value::Missing),
+                        Some(source) => JsonValue::String(source.into()),
+                        None => JsonValue::Null,
                     })
                     .collect();
                 if diagnostic
                     .context
-                    .insert("declaring_sources".into(), ContextValue::Sequence(origins))
+                    .insert("declaring_sources".into(), JsonValue::Array(origins))
                     .is_some()
                 {
                     return Err(invalid());

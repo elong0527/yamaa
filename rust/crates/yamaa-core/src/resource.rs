@@ -1,21 +1,25 @@
 //! Classified resource failures; filesystem authority remains with the resource port.
-use alloc::{format, string::String, vec};
 
-use crate::{
-    diagnostic::{ConditionCode, ContextValue, Diagnostic},
-    value::Value,
-};
+use crate::diagnostic::{ConditionCode, Diagnostic};
+use serde_json::Value as JsonValue;
 
 /// A resource adapter reports an observed cause explicitly. An arbitrary host
 /// exception, panic or resource limit is never inferred to be one of these causes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ResourceFailure {
+    #[error("resource missing")]
     Missing,
+    #[error("resource not regular file")]
     NotRegularFile,
+    #[error("resource uri scheme")]
     UriScheme,
+    #[error("resource backslash")]
     Backslash,
+    #[error("resource empty segment")]
     EmptySegment,
+    #[error("resource symlink")]
     Symlink,
+    #[error("resource content changed")]
     ContentChanged,
 }
 impl ResourceFailure {
@@ -37,11 +41,7 @@ impl ResourceFailure {
         Diagnostic {
             code: self.code(),
             spec_paths: vec![field.into()],
-            context: [(
-                String::from("path"),
-                ContextValue::Scalar(Value::Str(written_path.into())),
-            )]
-            .into(),
+            context: [(String::from("path"), JsonValue::String(written_path.into()))].into(),
             source_span: None,
             operand_route: None,
         }
@@ -54,14 +54,8 @@ impl ResourceFailure {
             code: self.code(),
             spec_paths: vec![format!("input.{dataset}.path")],
             context: [
-                (
-                    String::from("dataset"),
-                    ContextValue::Scalar(Value::Str(dataset.into())),
-                ),
-                (
-                    String::from("path"),
-                    ContextValue::Scalar(Value::Str(written_path.into())),
-                ),
+                (String::from("dataset"), JsonValue::String(dataset.into())),
+                (String::from("path"), JsonValue::String(written_path.into())),
             ]
             .into(),
             source_span: None,

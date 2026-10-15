@@ -606,10 +606,9 @@ pub fn build_result<'a, C, E>(
                         .document()
                         .written_source_path(&source.name)
                         .ok_or(report::Error::InvalidObservation)?;
-                    crate::specification_diagnostics::portable_diagnostic(
+                    Ok(crate::specification_diagnostics::portable_diagnostic(
                         failure.diagnostic(&source.name, written),
-                    )
-                    .ok_or(report::Error::InvalidObservation)
+                    ))
                 };
                 match error {
                     PortError::Capture(_) => {
@@ -680,7 +679,7 @@ pub fn build_result<'a, C, E>(
                                     yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
                                 )
                                 .map_err(report::Error::from)?
-                                .and_then(|findings| {
+                                .map(|findings| {
                                     findings
                                         .into_iter()
                                         .map(crate::specification_diagnostics::portable_diagnostic)

@@ -3,7 +3,6 @@
 use crate::specification_service::boundary;
 use extendr_api::prelude::*;
 
-#[cfg(any(unix, windows))]
 pub(crate) mod platform {
     use super::*;
     use crate::project_activation::Error as HostError;
@@ -821,31 +820,11 @@ pub(crate) mod platform {
 
 #[extendr]
 fn prepare_producer_file(specification: Raw, environment: Raw) -> List {
-    boundary(|| {
-        #[cfg(any(unix, windows))]
-        {
-            platform::prepare(specification, environment)
-        }
-        #[cfg(not(any(unix, windows)))]
-        {
-            let _ = (specification, environment);
-            Err("native producer preparation unavailable on this platform".into())
-        }
-    })
+    boundary(|| platform::prepare(specification, environment))
 }
 #[extendr]
 fn producer_status(handle: Robj) -> List {
-    boundary(|| {
-        #[cfg(any(unix, windows))]
-        {
-            platform::status(handle)
-        }
-        #[cfg(not(any(unix, windows)))]
-        {
-            let _ = handle;
-            Err("native producer handles unavailable".into())
-        }
-    })
+    boundary(|| platform::status(handle))
 }
 #[extendr]
 fn producer_build(
@@ -855,114 +834,34 @@ fn producer_build(
     resolve: Function,
     report_bytes: i32,
 ) -> List {
-    boundary(|| {
-        #[cfg(any(unix, windows))]
-        {
-            platform::build(handle, metadata, verify, resolve, report_bytes)
-        }
-        #[cfg(not(any(unix, windows)))]
-        {
-            let _ = (handle, metadata, verify, resolve, report_bytes);
-            Err("native producer builds unavailable".into())
-        }
-    })
+    boundary(|| platform::build(handle, metadata, verify, resolve, report_bytes))
 }
 #[extendr]
 fn producer_report(handle: Robj, formatter: Function, maximum: i32) -> List {
-    boundary(|| {
-        #[cfg(any(unix, windows))]
-        {
-            platform::report(handle, formatter, maximum)
-        }
-        #[cfg(not(any(unix, windows)))]
-        {
-            let _ = (handle, formatter, maximum);
-            Err("native producer reports unavailable".into())
-        }
-    })
+    boundary(|| platform::report(handle, formatter, maximum))
 }
 #[extendr]
 fn producer_observations(handle: Robj) -> List {
-    boundary(|| {
-        #[cfg(any(unix, windows))]
-        {
-            platform::observations(handle)
-        }
-        #[cfg(not(any(unix, windows)))]
-        {
-            let _ = handle;
-            Err("native producer reports unavailable".into())
-        }
-    })
+    boundary(|| platform::observations(handle))
 }
 #[extendr]
 fn producer_retained(handle: Robj) -> List {
-    boundary(|| {
-        #[cfg(any(unix, windows))]
-        {
-            platform::retained(handle)
-        }
-        #[cfg(not(any(unix, windows)))]
-        {
-            let _ = handle;
-            Err("native producer evidence unavailable".into())
-        }
-    })
+    boundary(|| platform::retained(handle))
 }
 #[extendr]
 fn producer_interrupt(handle: Robj) -> List {
-    boundary(|| {
-        #[cfg(any(unix, windows))]
-        {
-            platform::interrupt(handle)
-        }
-        #[cfg(not(any(unix, windows)))]
-        {
-            let _ = handle;
-            Err("native producer evidence unavailable".into())
-        }
-    })
+    boundary(|| platform::interrupt(handle))
 }
 #[extendr]
 fn producer_artifact(handle: Robj, node: i32) -> List {
-    boundary(|| {
-        #[cfg(any(unix, windows))]
-        {
-            platform::artifact(handle, node)
-        }
-        #[cfg(not(any(unix, windows)))]
-        {
-            let _ = (handle, node);
-            Err("native producer evidence unavailable".into())
-        }
-    })
+    boundary(|| platform::artifact(handle, node))
 }
 #[extendr]
 fn producer_rejected_sources(handle: Robj) -> List {
-    boundary(|| {
-        #[cfg(any(unix, windows))]
-        {
-            platform::rejected_sources(handle)
-        }
-        #[cfg(not(any(unix, windows)))]
-        {
-            let _ = handle;
-            Err("native producer evidence unavailable".into())
-        }
-    })
+    boundary(|| platform::rejected_sources(handle))
 }
 #[extendr]
 fn producer_rejection_issues(handle: Robj, maximum: i32) -> List {
-    boundary(|| {
-        #[cfg(any(unix, windows))]
-        {
-            platform::rejection_issues(handle, maximum)
-        }
-        #[cfg(not(any(unix, windows)))]
-        {
-            let _ = (handle, maximum);
-            Err("native producer evidence unavailable".into())
-        }
-    })
+    boundary(|| platform::rejection_issues(handle, maximum))
 }
 extendr_module! { mod file_producer; fn prepare_producer_file; fn producer_status; fn producer_build; fn producer_report; fn producer_observations; fn producer_retained; fn producer_interrupt; fn producer_artifact; fn producer_rejected_sources; fn producer_rejection_issues; }

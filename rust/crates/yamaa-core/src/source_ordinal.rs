@@ -4,19 +4,25 @@ use crate::{
     table::{Column, TableSchema},
     value::ColumnType,
 };
-use alloc::string::String;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
     pub columns: usize,
     pub cells: usize,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
+    #[error("source ordinal collision")]
     Collision,
+    #[error("source ordinal invalid name")]
     InvalidName,
+    #[error("source ordinal invalid table")]
     InvalidTable,
+    #[error("source ordinal limit")]
     Limit,
+    #[error(
+        "source ordinal resource limit: resource={resource:?}, limit={limit:?}, actual={actual:?}"
+    )]
     ResourceLimit {
         resource: &'static str,
         limit: usize,

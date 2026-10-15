@@ -16,7 +16,7 @@ impl DatasetPlan {
         declarations: Vec<ConversionHandler>,
     ) -> Result<Self, PlanError> {
         let mut sites = BTreeMap::new();
-        let mut paths = alloc::collections::BTreeSet::new();
+        let mut paths = std::collections::BTreeSet::new();
         for (index, declaration) in declarations.iter().enumerate() {
             if declaration.assignment_path.is_empty()
                 || declaration.handler.spec_path.is_empty()

@@ -4,10 +4,11 @@ use super::{
     ComposedLayers, Document, DocumentNode as N, NormalizationBudget, NormalizationError,
     NormalizationResource, SchemaStructure, ValidationError,
 };
-use alloc::{collections::BTreeMap, vec::Vec};
+use std::collections::BTreeMap;
 
 /// Diagnostic node references address this retained composed input, not a layer.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+#[error("schema layer materialization: error={error:?}, context_document={context_document:?}")]
 pub struct LayerCompositionError {
     pub error: NormalizationError,
     pub context_document: Option<Document>,

@@ -6,7 +6,7 @@ use crate::{
     table::ValueRef,
     value::{ColumnType, Value, ValueType},
 };
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use std::collections::BTreeMap;
 
 use crate::function_signature::{
     FunctionIdentity, InvocationPlan, LogicalSignature, Presence, ProjectFunctionIdentity,
@@ -21,9 +21,11 @@ pub struct Argument<'a> {
 }
 
 /// Preserve opaque host failures separately from rejected host representations.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum HostError<E> {
+    #[error("function invocation raised: {0:?}")]
     Raised(E),
+    #[error("function invocation invalid result: {0:?}")]
     InvalidResult(E),
 }
 
@@ -52,10 +54,10 @@ pub trait FunctionPort {
 }
 
 /// No implicit function authority, shared by every non-function execution path.
-pub struct NoFunctions<E>(core::marker::PhantomData<E>);
+pub struct NoFunctions<E>(std::marker::PhantomData<E>);
 impl<E> NoFunctions<E> {
     pub const fn new() -> Self {
-        Self(core::marker::PhantomData)
+        Self(std::marker::PhantomData)
     }
 }
 impl<E> Default for NoFunctions<E> {
@@ -92,7 +94,8 @@ pub enum FailureKind<E> {
 }
 
 /// Fatal failures bypass conversion handlers and retain the exact host payload.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, thiserror::Error)]
+#[error("function invocation: identity={identity:?}, kind={kind:?}")]
 pub struct InvocationFailure<E, I = FunctionIdentity> {
     pub identity: I,
     pub kind: FailureKind<E>,

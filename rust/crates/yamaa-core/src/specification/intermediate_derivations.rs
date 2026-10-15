@@ -383,8 +383,8 @@ pub(super) fn bind(
         sources
             .iter()
             .zip(schemas)
-            .flat_map(|(source, schema)| core::iter::repeat_n((*schema, source.name.as_str()), 4))
-            .chain(core::iter::repeat_n((outer_output, "output"), 2))
+            .flat_map(|(source, schema)| std::iter::repeat_n((*schema, source.name.as_str()), 4))
+            .chain(std::iter::repeat_n((outer_output, "output"), 2))
             .chain(
                 previous
                     .iter()
@@ -580,7 +580,7 @@ pub(super) fn bind(
         .collect::<Vec<_>>();
     let mut dataset_fields = Vec::new();
     let mut dataset_names = Vec::new();
-    for declaration in core::iter::once(dataset).chain(
+    for declaration in std::iter::once(dataset).chain(
         sources
             .iter()
             .enumerate()
@@ -632,7 +632,7 @@ pub(super) fn bind(
         .iter()
         .flat_map(|item| &item.references)
         .filter_map(|name| name.split_once('.').map(|(owner, _)| owner))
-        .collect::<alloc::collections::BTreeSet<_>>();
+        .collect::<std::collections::BTreeSet<_>>();
     let mut required = previous
         .iter()
         .enumerate()
@@ -641,7 +641,7 @@ pub(super) fn bind(
                 .filter(|item| references.contains(item.identifier.as_str()))
                 .map(|_| index)
         })
-        .collect::<alloc::collections::BTreeSet<_>>();
+        .collect::<std::collections::BTreeSet<_>>();
     // A referenced selector may itself read an earlier selector. Retain its
     // transitive current-record dependencies, preserving their original slots.
     for index in (0..previous.len()).rev() {
@@ -794,7 +794,7 @@ pub(super) fn bind(
     .map_err(BindError::InvalidPlan)?;
     *pending_schema = None;
     Ok(Some(IntermediateDerivations {
-        plan: alloc::rc::Rc::new(plan),
+        plan: std::rc::Rc::new(plan),
         current,
         stored_columns: stored.columns().len(),
         driver_kinds,
@@ -881,7 +881,7 @@ fn outer_secondary(
 #[allow(clippy::too_many_arguments)]
 fn rebase(
     previous: &[Option<Intermediate>],
-    required: &alloc::collections::BTreeSet<usize>,
+    required: &std::collections::BTreeSet<usize>,
     unavailable: &mut BTreeMap<usize, String>,
     sources: &[SourceDeclaration],
     schemas: &[&TableSchema],

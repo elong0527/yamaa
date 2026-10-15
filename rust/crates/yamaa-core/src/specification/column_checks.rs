@@ -153,7 +153,7 @@ pub(super) fn prepare(
                 ));
             }
             if min.as_ref().zip(max.as_ref()).is_some_and(|(min, max)| {
-                compare_present(min, max) == Ok(core::cmp::Ordering::Greater)
+                compare_present(min, max) == Ok(std::cmp::Ordering::Greater)
             }) {
                 return Ok(invalid(
                     ConditionCode::VerificationBounds,

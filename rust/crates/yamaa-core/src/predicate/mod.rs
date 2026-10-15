@@ -4,8 +4,8 @@
 //! Evaluation preserves written operand occurrences, including BETWEEN's repeated
 //! subject. A future compiler owns grammar, binding and literal validation.
 
-use alloc::{string::String, vec, vec::Vec};
-use core::cmp::Ordering;
+use std::cmp::Ordering;
+use std::vec;
 
 use crate::regex;
 use crate::table::ValueRef;
@@ -156,22 +156,29 @@ pub enum Resource {
 }
 
 /// Resource refusal is never predicate false, unknown or a language diagnostic.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("predicate: resource={resource:?}, limit={limit:?}")]
 pub struct LimitError {
     pub resource: Resource,
     pub limit: usize,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum PlanError {
+    #[error("predicate invalid root")]
     InvalidRoot,
+    #[error("predicate invalid child")]
     InvalidChild,
+    #[error("predicate empty identifier")]
     EmptyIdentifier,
+    #[error("predicate empty membership")]
     EmptyMembership,
+    #[error("predicate regex: node={node:?}, error={error:?}")]
     Regex {
         node: usize,
         error: regex::CompileError,
     },
+    #[error("predicate limit: {0:?}")]
     Limit(LimitError),
 }
 
@@ -205,6 +212,7 @@ pub trait EvaluationContext {
 }
 
 /// A context keeps resource refusals separate from opaque resolution failures.
+#[derive(Debug)]
 pub enum ContextError<E> {
     Resolution(E),
     Limit(LimitError),
@@ -478,7 +486,10 @@ pub enum ErrorKind<E> {
 }
 
 /// Original source context and structural route, without fabricating a source span.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "predicate: spec_path={spec_path:?}, expression={expression:?}, route={route:?}, kind={kind:?}"
+)]
 pub struct EvaluationError<E> {
     pub spec_path: String,
     pub expression: String,
@@ -1053,9 +1064,16 @@ fn like<R: EvaluationContext>(
                 Pattern::Literal(literal) => *literal == character && previous[index],
             };
         }
-        core::mem::swap(&mut previous, &mut next);
+        std::mem::swap(&mut previous, &mut next);
     }
     Ok(Truth::from_bool(previous[tokens.len()]))
 }
 
 mod type_facts;
+
+impl<E: std::fmt::Debug> std::fmt::Display for ContextError<E> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "predicate: {self:?}")
+    }
+}
+impl<E: std::fmt::Debug> std::error::Error for ContextError<E> {}

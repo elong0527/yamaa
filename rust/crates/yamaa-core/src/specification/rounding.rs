@@ -253,7 +253,7 @@ pub(super) fn bind_operand(
 }
 pub(super) fn wrap(rounding: &Rounding, column: usize, source: Expression) -> Expression {
     Expression::Round {
-        source: alloc::boxed::Box::new(Assignment {
+        source: std::boxed::Box::new(Assignment {
             column,
             expression: source,
             path: format!("{}.source", rounding.path()),

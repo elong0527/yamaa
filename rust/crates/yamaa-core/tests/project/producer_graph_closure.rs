@@ -7,7 +7,7 @@ use yamaa_core::{
 };
 
 #[test]
-fn complete_graph_metadata_never_grants_the_ordinary_build_capability() {
+fn complete_graph_metadata_retains_identity_order_and_activation_selection() {
     let root = document(
         &[("FIRST", Some("/p")), ("SECOND", Some("/p"))],
         Some("alpha"),
@@ -28,19 +28,6 @@ fn complete_graph_metadata_never_grants_the_ordinary_build_capability() {
     assert_eq!(checked.root(), 1);
     assert_eq!(checked.called_functions(), [0, 2]);
     assert_eq!(checked.nodes()[1].activation_slots(), [1]);
-    let PrepareError::Unsupported(features) = checked.execution_refusal() else {
-        panic!("metadata graph must refuse execution")
-    };
-    assert_eq!(
-        features
-            .iter()
-            .map(|f| (f.operation.as_str(), f.path.as_str()))
-            .collect::<Vec<_>>(),
-        [
-            ("producer_workflow", "input.FIRST.schema"),
-            ("producer_workflow", "input.SECOND.schema"),
-        ]
-    );
     let leaf = producer_graph::prepare(
         "/p",
         &[node("/p", &p, &[])],
@@ -48,10 +35,8 @@ fn complete_graph_metadata_never_grants_the_ordinary_build_capability() {
         Limits::default(),
     )
     .unwrap();
-    assert!(
-        matches!(leaf.execution_refusal(), PrepareError::Unsupported(features)
-        if features.len() == 1 && features[0].operation == "producer_workflow" && features[0].path == "input")
-    );
+    assert_eq!(leaf.root(), 0);
+    assert_eq!(leaf.order(), [0]);
     let Err(PrepareError::Invalid(findings)) = yamaa_core::domain::check(&root) else {
         panic!("metadata alone does not admit the called project function");
     };

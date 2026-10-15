@@ -1,7 +1,6 @@
 //! A non-owning admission pass precedes one complete owned decode. Both traverse
 //! the same immutable document; refusal keeps that exact borrowed input.
 use super::*;
-use alloc::{string::String, vec::Vec};
 
 struct Budget(Limits);
 impl Budget {

@@ -2,7 +2,6 @@
 //! Include resolution, descriptors and default authority remain in the shared core.
 use crate::project_preparation::Source;
 use crate::schema::{BundleError, BundleLimits, Document, SchemaModule, SchemaStructure};
-use alloc::{string::String, vec::Vec};
 
 /// Discovery grants read authority only to names accepted by the existing core
 /// include grammar. Unsafe authored names remain for final bundle diagnostics.
@@ -100,10 +99,13 @@ pub enum Resource {
     CapturedBytes,
     IdentityBytes,
 }
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error<E> {
+    #[error("schema capture limit: {0:?}")]
     Limit(Resource),
+    #[error("schema capture decode: identity={identity:?}, error={error:?}")]
     Decode { identity: String, error: E },
+    #[error("schema capture bundle: {0:?}")]
     Bundle(BundleError),
 }
 /// The original supplied source order and allocations survive admission.

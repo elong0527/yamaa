@@ -3,8 +3,6 @@
 //! Parsing, operand evaluation order, callbacks and handler application belong
 //! to later layers. These functions do not skip evaluating an expression tree.
 
-use alloc::string::{String, ToString};
-
 use crate::value::{FiniteFloat, Value, ValueType};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -93,7 +91,8 @@ pub enum ArithmeticErrorKind {
 }
 
 /// Portable condition data; a future evaluator adds source paths/handler traces.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("numeric: expression={expression:?}, kind={kind:?}")]
 pub struct ArithmeticError {
     pub expression: String,
     pub kind: ArithmeticErrorKind,
@@ -213,7 +212,7 @@ pub enum SelectionFunction {
 /// not influence promotion. Empty primitive input is missing; the grammar layer
 /// separately enforces each function's minimum arity.
 pub fn select(function: SelectionFunction, arguments: &[Number]) -> Number {
-    use core::cmp::Ordering;
+    use std::cmp::Ordering;
     let mut selected = Number::Missing;
     let mut has_float = false;
     for &argument in arguments {

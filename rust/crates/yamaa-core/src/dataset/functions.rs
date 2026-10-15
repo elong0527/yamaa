@@ -4,7 +4,7 @@ use crate::{
     bound_expression::Read,
     function_signature::{InvocationPlan, LogicalSignature, Presence, ProjectInvocationPlan},
 };
-use alloc::collections::BTreeSet;
+use std::collections::BTreeSet;
 /// Already admitted literal or statically bound current-candidate value.
 #[derive(Clone, Debug, PartialEq)]
 pub enum FunctionInput {

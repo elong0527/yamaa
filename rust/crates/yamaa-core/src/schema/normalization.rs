@@ -5,7 +5,7 @@ use super::{
     DocumentNode as N, SchemaAliasKind, SchemaDiagnostic, SchemaField, SchemaShape,
     SchemaStructure, TypeExpression, TypeNode, ValidationBudget, ValidationError, ValidationLimits,
 };
-use alloc::{vec, vec::Vec};
+use std::vec;
 
 /// Original decoded bytes remain in the caller's input or admitted schema module.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -56,15 +56,20 @@ pub enum NormalizationResource {
     Depth,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum NormalizationError {
+    #[error("schema normalization validation: {0:?}")]
     Validation(ValidationError),
+    #[error("schema normalization invalid: {0:?}")]
     Invalid(Vec<SchemaDiagnostic>),
+    #[error("schema normalization defaults: {0:?}")]
     Defaults(Vec<DefaultDiagnostics>),
+    #[error("schema normalization limit: resource={resource:?}, limit={limit:?}")]
     Limit {
         resource: NormalizationResource,
         limit: usize,
     },
+    #[error("schema normalization document: {0:?}")]
     Document(DocumentError),
 }
 impl From<ValidationError> for NormalizationError {

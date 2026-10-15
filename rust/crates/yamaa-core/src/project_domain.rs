@@ -11,7 +11,6 @@ use crate::{
     specification::{PrepareError, PreparedSpecification},
     table::TableAccess,
 };
-use alloc::{boxed::Box, vec::Vec};
 
 pub(crate) type BuildEvidence<'a, P, D> = (
     &'a mut CapturedAttempt<

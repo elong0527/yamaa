@@ -11,11 +11,13 @@ publish.workspace = true
 test-support = []
 
 [dependencies]
-# Pure no_std numeric formatting; no host, filesystem, or table dependencies.
+thiserror = "=2.0.21"
+serde_json = { version = "=1.0.145", features = ["arbitrary_precision"] }
+# Canonical numeric formatting and portable mathematics.
 ryu = { version = "=1.0.20", default-features = false }
-# Pure no_std math; disable architecture-specific default implementations.
+# Disable architecture-specific math implementations.
 libm = { version = "=0.2.16", default-features = false }
-# Bounded exact decimal rounding intermediates; no std, random or serde features.
+# Exact decimal rounding intermediates.
 num-bigint = { version = "=0.5.1", default-features = false }
 
 # Integration targets are finite and explicit; support files are never discovered as binaries.

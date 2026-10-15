@@ -2,10 +2,11 @@
 use super::*;
 use crate::{
     dataset::{Flag, FlagBinding, FlagRead},
-    diagnostic::{ConditionCode as C, ContextValue as V, Diagnostic},
+    diagnostic::{ConditionCode as C, Diagnostic},
     predicate::Plan,
     predicate_compiler,
 };
+use serde_json::Value as V;
 
 #[derive(Clone, Debug)]
 pub(super) struct Declaration {
@@ -25,7 +26,7 @@ fn finding(code: C, path: &str, context: crate::diagnostic::Context) -> Diagnost
     }
 }
 fn value_text(value: &str) -> V {
-    V::Scalar(crate::value::Value::Str(value.into()))
+    V::String(value.into())
 }
 impl Declaration {
     pub(super) fn has_findings(&self) -> bool {
@@ -39,7 +40,7 @@ impl Declaration {
             findings.push(BindFinding::Predicate(finding(
                 C::FlagMissingValueRequired,
                 &format!("{}.missing", self.path),
-                [("false_value".into(), V::Scalar(false_value.clone()))].into(),
+                [("false_value".into(), V::from(false_value.clone()))].into(),
             )));
         }
     }
@@ -351,7 +352,7 @@ pub(super) fn bind(
     };
     let start = findings.len();
     let mut bindings = Vec::new();
-    let mut seen = alloc::collections::BTreeSet::new();
+    let mut seen = std::collections::BTreeSet::new();
     for name in condition.identifiers() {
         if !seen.insert(name) {
             continue;
@@ -453,7 +454,7 @@ pub(super) fn bind_row(
     };
     let start = findings.len();
     let mut bindings = Vec::new();
-    let mut seen = alloc::collections::BTreeSet::new();
+    let mut seen = std::collections::BTreeSet::new();
     for name in condition.identifiers() {
         if !seen.insert(name) {
             continue;

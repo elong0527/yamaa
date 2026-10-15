@@ -216,9 +216,8 @@ pub fn failure<E>(
                             .iter()
                             .map(|diagnostic| {
                                 specification_diagnostics::portable_diagnostic(diagnostic.clone())
-                                    .ok_or(Error::InvalidObservation)
                             })
-                            .collect::<Result<Vec<_>, _>>()?
+                            .collect::<Vec<_>>()
                     }
                 }
                 Some("failure") => {
@@ -256,8 +255,7 @@ pub fn failure<E>(
                 .failure
                 .ok_or(Error::InvalidObservation)?
                 .diagnostic(&source.read.source.name, written);
-            vec![specification_diagnostics::portable_diagnostic(diagnostic)
-                .ok_or(Error::InvalidObservation)?]
+            vec![specification_diagnostics::portable_diagnostic(diagnostic)]
         }
         Err(PortError::Inspect(_)) => {
             let failures = inspected_failures(run, attempt)?;
@@ -267,11 +265,8 @@ pub fn failure<E>(
                     failures,
                 )
                 .cloned()
-                .map(|diagnostic| {
-                    specification_diagnostics::portable_diagnostic(diagnostic)
-                        .ok_or(Error::InvalidObservation)
-                })
-                .collect::<Result<Vec<_>, Error>>()?;
+                .map(specification_diagnostics::portable_diagnostic)
+                .collect::<Vec<_>>();
             if !known_filter_types.is_empty() {
                 known_filter_types
             } else {
@@ -282,13 +277,12 @@ pub fn failure<E>(
                             .document()
                             .written_source_path(&failure.source.name)
                             .ok_or(Error::InvalidObservation)?;
-                        specification_diagnostics::portable_diagnostic(
+                        Ok(specification_diagnostics::portable_diagnostic(
                             failure
                                 .failure
                                 .ok_or(Error::InvalidObservation)?
                                 .diagnostic(&failure.source.name, written),
-                        )
-                        .ok_or(Error::InvalidObservation)
+                        ))
                     })
                     .collect::<Result<Vec<_>, Error>>()?
             }
@@ -804,8 +798,7 @@ fn rejected_output(
     let diagnostic = specification_diagnostics::portable_diagnostic(match error {
         Error::ResourceLimit(refusal) => refusal.diagnostic("output", reason),
         _ => yamaa_core::application_issue::rejected("output", reason),
-    })
-    .ok_or(Error::InvalidObservation)?;
+    });
     let Value::Array(mut diagnostics) = std::mem::take(&mut report["diagnostics"]) else {
         return Err(Error::InvalidObservation);
     };
@@ -861,13 +854,10 @@ pub(crate) fn check_observations(
 }
 pub(crate) fn output_diagnostics(
     findings: &[yamaa_core::specification::OutputFinding],
-) -> Result<Vec<Value>, Error> {
+) -> Vec<Value> {
     findings
         .iter()
-        .map(|finding| {
-            crate::specification_diagnostics::portable_diagnostic(finding.diagnostic())
-                .ok_or(Error::InvalidObservation)
-        })
+        .map(|finding| crate::specification_diagnostics::portable_diagnostic(finding.diagnostic()))
         .collect()
 }
 /// Render all portable observations and enforce report/output budgets before
@@ -1005,7 +995,7 @@ impl yamaa_core::specification_output::OutputReport for Report<'_, '_> {
         findings: &[yamaa_core::specification::OutputFinding],
     ) -> Result<StoredReport, Error> {
         let mut report = self.value.take().ok_or(Error::InvalidObservation)?;
-        set_diagnostics(&mut report, output_diagnostics(findings)?);
+        set_diagnostics(&mut report, output_diagnostics(findings));
         bounded(report)
     }
     fn success(

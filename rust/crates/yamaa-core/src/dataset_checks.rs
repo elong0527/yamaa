@@ -1,14 +1,11 @@
 //! Pure column checks over completed values; effect order belongs to the engine.
 use crate::{
     dataset::{Check, PlanError},
-    diagnostic::{ConditionCode, ContextValue, Definition, Diagnostic},
+    diagnostic::{ConditionCode, Definition, Diagnostic},
     value::{compare_present, ColumnType, Value},
 };
-use alloc::{
-    string::{String, ToString},
-    vec,
-    vec::Vec,
-};
+use serde_json::Value as JsonValue;
+use std::vec;
 
 /// Full offending positions retain row order; hosts may bound their displayed keys.
 pub struct NotMissingResult {
@@ -80,15 +77,15 @@ pub(crate) fn validate(check: &Check, kind: ColumnType) -> Result<(), PlanError>
                     .chain(max)
                     .any(|value| !matches!(value, Value::Int(_) | Value::Float(_)))
                 || min.as_ref().zip(max.as_ref()).is_some_and(|(min, max)| {
-                    compare_present(min, max) != Ok(core::cmp::Ordering::Less)
-                        && compare_present(min, max) != Ok(core::cmp::Ordering::Equal)
+                    compare_present(min, max) != Ok(std::cmp::Ordering::Less)
+                        && compare_present(min, max) != Ok(std::cmp::Ordering::Equal)
                 })
             {
                 return Err(PlanError::InvalidBounds);
             }
         }
         Check::ValueMaxLength { max, .. }
-            if kind != ColumnType::Str || max.compare_count(0) != core::cmp::Ordering::Greater =>
+            if kind != ColumnType::Str || max.compare_count(0) != std::cmp::Ordering::Greater =>
         {
             return Err(PlanError::InvalidBounds)
         }
@@ -96,7 +93,7 @@ pub(crate) fn validate(check: &Check, kind: ColumnType) -> Result<(), PlanError>
             return Err(PlanError::InvalidBounds)
         }
         Check::WideMaxLength(max)
-            if kind != ColumnType::Str || max.compare_count(0) != core::cmp::Ordering::Greater =>
+            if kind != ColumnType::Str || max.compare_count(0) != std::cmp::Ordering::Greater =>
         {
             return Err(PlanError::InvalidBounds)
         }
@@ -167,7 +164,7 @@ pub fn invalid_pattern_diagnostic(path: String, pattern: String) -> Diagnostic {
     Diagnostic {
         code: ConditionCode::RegexInvalidPattern,
         spec_paths: vec![path],
-        context: [("pattern".into(), ContextValue::Scalar(Value::Str(pattern)))].into(),
+        context: [("pattern".into(), JsonValue::String(pattern))].into(),
         source_span: None,
         operand_route: None,
     }
@@ -196,7 +193,7 @@ pub fn declaration_diagnostic(
     Some(Diagnostic {
         code,
         spec_paths: vec![path],
-        context: [("reason".into(), ContextValue::Scalar(Value::Str(reason)))].into(),
+        context: [("reason".into(), JsonValue::String(reason))].into(),
         source_span: None,
         operand_route: None,
     })
@@ -220,20 +217,20 @@ pub fn column_offenders<'a>(
                 } => !accepted.contains(value),
                 Check::Codelist { values, .. } => !values
                     .iter()
-                    .any(|code| compare_present(value, code) == Ok(core::cmp::Ordering::Equal)),
+                    .any(|code| compare_present(value, code) == Ok(std::cmp::Ordering::Equal)),
                 Check::Range { min, max } => {
                     min.as_ref().is_some_and(|min| {
-                        compare_present(value, min) == Ok(core::cmp::Ordering::Less)
+                        compare_present(value, min) == Ok(std::cmp::Ordering::Less)
                     }) || max.as_ref().is_some_and(|max| {
-                        compare_present(value, max) == Ok(core::cmp::Ordering::Greater)
+                        compare_present(value, max) == Ok(std::cmp::Ordering::Greater)
                     })
                 }
-                Check::ValueMaxLength { max, .. } => matches!(value, Value::Str(text) if max.compare_count(text.chars().count()) == core::cmp::Ordering::Less),
+                Check::ValueMaxLength { max, .. } => matches!(value, Value::Str(text) if max.compare_count(text.chars().count()) == std::cmp::Ordering::Less),
                 Check::MaxLength(max) => {
                     matches!(value,Value::Str(text) if text.chars().count()>*max)
                 }
                 Check::WideMaxLength(max) => {
-                    matches!(value, Value::Str(text) if max.compare_count(text.chars().count()) == core::cmp::Ordering::Less)
+                    matches!(value, Value::Str(text) if max.compare_count(text.chars().count()) == std::cmp::Ordering::Less)
                 }
                 _ => unreachable!("only admitted column checks reach the value service"),
             };
@@ -247,7 +244,7 @@ pub fn codelist_accepts(values: &[Value], value: &Value) -> bool {
     matches!(value, Value::Missing)
         || values
             .iter()
-            .any(|code| compare_present(value, code) == Ok(core::cmp::Ordering::Equal))
+            .any(|code| compare_present(value, code) == Ok(std::cmp::Ordering::Equal))
 }
 
 pub fn column_diagnostic(
@@ -261,24 +258,21 @@ pub fn column_diagnostic(
     }
     let code = column_code(check)?;
     let mut context: crate::diagnostic::Context = [
-        ("column".into(), ContextValue::Scalar(Value::Str(column))),
-        (
-            "failure_count".into(),
-            ContextValue::Integer(failures.to_string()),
-        ),
+        ("column".into(), JsonValue::String(column)),
+        ("failure_count".into(), JsonValue::from(failures)),
     ]
     .into();
     if let Check::MaxLength(max) = check {
-        context.insert("max".into(), ContextValue::Integer(max.to_string()));
+        context.insert("max".into(), JsonValue::from(*max));
     }
     if let Check::WideMaxLength(max) | Check::ValueMaxLength { max, .. } = check {
-        context.insert("max".into(), ContextValue::Integer(max.decimal().into()));
+        context.insert(
+            "max".into(),
+            JsonValue::Number((max.decimal()).parse().expect("canonical integer")),
+        );
     }
     if let Check::Codelist { id, .. } = check {
-        context.insert(
-            "codelist".into(),
-            ContextValue::Scalar(Value::Str(id.clone())),
-        );
+        context.insert("codelist".into(), JsonValue::String(id.clone()));
     }
     Some(Diagnostic {
         code,

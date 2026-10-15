@@ -6,12 +6,15 @@ use crate::{
     specification::PreparedSpecification,
     value::Value,
 };
-use alloc::{collections::BTreeSet, vec::Vec};
+use std::collections::BTreeSet;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
+    #[error("project codelist diagnostics invalid observation")]
     InvalidObservation,
+    #[error("project codelist diagnostics limit")]
     Limit,
+    #[error("project codelist diagnostics projection")]
     Projection,
 }
 struct Budget(usize);

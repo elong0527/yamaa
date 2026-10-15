@@ -3,17 +3,12 @@ use pyo3::prelude::*;
 mod arrow_input;
 mod define_entry;
 mod domain_entry;
-#[cfg(any(unix, windows))]
 mod file_domain;
-#[cfg(any(unix, windows))]
 mod file_producer;
-#[cfg(any(unix, windows))]
 mod file_project;
-#[cfg(any(unix, windows))]
 mod file_specification;
 mod function_callback;
 mod project_activation;
-#[cfg(any(unix, windows))]
 mod project_result;
 mod schema_metadata;
 mod source_metadata;
@@ -47,7 +42,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     )?;
     module.add_function(wrap_pyfunction!(domain_entry::_domain_file, module)?)?;
     module.add_function(wrap_pyfunction!(domain_entry::_check_file, module)?)?;
-    #[cfg(any(unix, windows))]
     {
         module.add_class::<file_specification::Specification>()?;
         module.add_class::<file_project::Specification>()?;

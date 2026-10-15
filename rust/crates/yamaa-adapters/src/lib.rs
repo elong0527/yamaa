@@ -10,7 +10,6 @@ mod arrow_temporal;
 #[cfg(feature = "arrow-c-data")]
 #[allow(unsafe_code)]
 pub mod c_data_table;
-#[cfg(any(unix, windows))]
 pub mod file_define;
 pub mod public_table;
 mod report_publication;
@@ -51,19 +50,12 @@ mod verification_logs;
 
 pub mod typed_csv;
 
-#[cfg(any(unix, windows))]
 pub mod file_application;
-#[cfg(any(unix, windows))]
 pub mod file_configuration;
-#[cfg(any(unix, windows))]
 pub mod file_graph;
-#[cfg(any(unix, windows))]
 mod file_metadata;
-#[cfg(any(unix, windows))]
 pub mod file_preparation;
-#[cfg(any(unix, windows))]
 pub mod file_producer_build;
-#[cfg(any(unix, windows))]
 pub mod file_project;
 #[cfg(unix)]
 pub mod file_publication;
@@ -74,9 +66,7 @@ pub mod file_publication;
 #[cfg(windows)]
 #[path = "file_publication_windows.rs"]
 pub mod file_publication;
-#[cfg(any(unix, windows))]
 pub mod file_resources;
-#[cfg(any(unix, windows))]
 pub mod file_workflow;
 
 pub mod project_source;
@@ -102,22 +92,14 @@ pub mod project_activation_diagnostics;
 pub mod project_activation_observations;
 
 pub mod producer_admission;
-#[cfg(any(unix, windows))]
 pub mod producer_attempt;
-#[cfg(any(unix, windows))]
 pub mod producer_check;
-#[cfg(any(unix, windows))]
 mod producer_diagnostics;
 pub mod producer_graph;
-#[cfg(any(unix, windows))]
 mod producer_log_publication;
-#[cfg(any(unix, windows))]
 pub mod producer_publication;
-#[cfg(any(unix, windows))]
 pub mod producer_report;
-#[cfg(any(unix, windows))]
 pub mod producer_result;
-#[cfg(any(unix, windows))]
 pub mod project_application;
 pub mod project_check;
 

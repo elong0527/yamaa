@@ -136,8 +136,8 @@ fn actual_constraints_preserve_whole_ordered_report_and_reused_descriptor_facts(
         &mut Budget::new(),
     )
     .unwrap();
-    assert!(core::ptr::eq(report.schema(), &schema));
-    assert!(core::ptr::eq(report.document().unwrap(), &input));
+    assert!(std::ptr::eq(report.schema(), &schema));
+    assert!(std::ptr::eq(report.document().unwrap(), &input));
     assert_eq!(report.findings().as_ptr(), findings.as_ptr());
     assert_eq!(report.source_context().as_ptr(), origins.as_ptr());
     assert_eq!(
@@ -448,7 +448,7 @@ fn normalized_default_occurrences_keep_the_pass_arena_and_original_origin_author
         &mut Budget::new(),
     )
     .unwrap();
-    assert!(core::ptr::eq(
+    assert!(std::ptr::eq(
         report.document().unwrap(),
         &normalized.document
     ));

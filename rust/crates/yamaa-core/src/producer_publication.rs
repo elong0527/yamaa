@@ -2,7 +2,7 @@
 //! Construction is private to the build boundary; public attempts are evidence.
 use crate::{producer_build::Attempt, specification_output::PreparedOutput};
 use crate::{producer_graph::PreparedGraph, table::TableAccess};
-use alloc::{string::String, sync::Arc, vec::Vec};
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
@@ -46,11 +46,15 @@ pub trait PublicationPort {
     fn preflight(&mut self, artifacts: &[Artifact]) -> Result<(), Self::Error>;
     fn publish(&mut self, artifact: &Artifact) -> Result<(), Self::Error>;
 }
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Failure<E> {
+    #[error("producer publication incomplete")]
     Incomplete,
+    #[error("producer publication limit: {0:?}")]
     Limit(&'static str),
+    #[error("producer publication preflight: {0:?}")]
     Preflight(E),
+    #[error("producer publication publish: node={node:?}, error={error:?}")]
     Publish { node: usize, error: E },
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

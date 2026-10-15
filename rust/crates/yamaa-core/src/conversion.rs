@@ -1,17 +1,6 @@
 //! Completed-result conversion under REQ-0009-0021 and REQ-0601.
 
-use alloc::string::{String, ToString};
-
 use crate::value::{ColumnType, FiniteFloat, Value, ValueType};
-
-/// A failed conversion may contain an integer too large for a runtime value.
-#[derive(Clone, Debug, PartialEq)]
-pub enum ConversionValue {
-    /// Ordinary input or a finite number parsed from numeric text.
-    Runtime(Value),
-    /// Canonical decimal integer diagnostic data, never a successful value.
-    Integer(String),
-}
 
 /// The requirement owning a conversion failure, separate from arithmetic.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -22,10 +11,12 @@ pub enum ConversionReason {
 }
 
 /// Portable conversion failure data; callers decide whether to apply a handler.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+#[error("conversion: target={target:?}, value={value:?}, source_type={source_type:?}, reason={reason:?}")]
 pub struct ConversionError {
     pub target: ColumnType,
-    pub value: ConversionValue,
+    pub value: serde_json::Value,
+    pub source_type: Option<ValueType>,
     pub reason: ConversionReason,
 }
 
@@ -55,10 +46,7 @@ impl ConversionError {
 
     /// Preserve the parsed numeric source type used by the Python reference.
     pub fn source_type(&self) -> Option<ValueType> {
-        match &self.value {
-            ConversionValue::Runtime(value) => value.value_type(),
-            ConversionValue::Integer(_) => Some(ValueType::Int),
-        }
+        self.source_type
     }
 }
 
@@ -66,7 +54,8 @@ impl ConversionError {
 fn failed(value: &Value, target: ColumnType, reason: ConversionReason) -> ConversionError {
     ConversionError {
         target,
-        value: ConversionValue::Runtime(value.clone()),
+        value: value.into(),
+        source_type: value.value_type(),
         reason,
     }
 }
@@ -162,7 +151,8 @@ fn numeric_text(text: &str, target: ColumnType) -> Result<Value, ConversionError
     }
     let invalid = || ConversionError {
         target,
-        value: ConversionValue::Runtime(Value::Str(text.into())),
+        value: serde_json::Value::String(text.into()),
+        source_type: Some(ValueType::Str),
         reason: ConversionReason::IncompatibleOrInvalidText,
     };
     let integer = integer_spelling(text).ok_or_else(invalid)?;
@@ -172,7 +162,10 @@ fn numeric_text(text: &str, target: ColumnType) -> Result<Value, ConversionError
             .map(Value::Int)
             .map_err(|_| ConversionError {
                 target,
-                value: ConversionValue::Integer(integer_diagnostic(text)),
+                value: serde_json::Value::Number(
+                    integer_diagnostic(text).parse().expect("canonical integer"),
+                ),
+                source_type: Some(ValueType::Int),
                 reason: ConversionReason::IntegerRangeOrFraction,
             });
     }

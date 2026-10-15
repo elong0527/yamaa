@@ -1,5 +1,4 @@
 //! Static and build diagnostics use declaration indices, never arbitrary row IDs.
-#![cfg(any(unix, windows))]
 use serde_json::{json, Value};
 use std::{
     fs,

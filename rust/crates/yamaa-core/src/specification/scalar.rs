@@ -309,7 +309,7 @@ pub(super) fn bind(
                 } else {
                     cases::bind(
                         spec,
-                        core::slice::from_ref(source),
+                        std::slice::from_ref(source),
                         column,
                         catalog,
                         driver,
@@ -438,7 +438,7 @@ pub(super) fn bind_row(
                                 })
                             }))
                         } else {
-                            bound_types(core::slice::from_ref(name), catalog).map(|types| types[0])
+                            bound_types(std::slice::from_ref(name), catalog).map(|types| types[0])
                         }
                     })
                     .collect::<Result<Vec<_>, BindError>>()?,

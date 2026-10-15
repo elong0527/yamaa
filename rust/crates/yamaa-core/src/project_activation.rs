@@ -12,11 +12,7 @@ use crate::{
     project_function_result::results_match,
     value::Value,
 };
-use alloc::{
-    collections::{BTreeMap, BTreeSet},
-    string::String,
-    vec::Vec,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Installed metadata, callable resolution and scalar host invocation are ports.
 /// Lock checking covers yamaa and only packages of the selected called functions;
@@ -85,50 +81,57 @@ fn retain(held: &mut usize, amount: usize, maximum: usize) -> Result<(), Resourc
         .ok_or(Resource::RetainedText)?;
     Ok(())
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum Failure<E> {
+    #[error("project activation limit: {0:?}")]
     Limit(Resource),
+    #[error("project activation lock kind mismatch: language={language:?}, actual={actual:?}")]
     LockKindMismatch {
         language: Language,
         actual: LockKind,
     },
+    #[error("project activation function language mismatch: function={function:?}, declared={declared:?}, selected={selected:?}")]
     FunctionLanguageMismatch {
         function: usize,
         declared: Language,
         selected: Language,
     },
-    DuplicateSelection {
-        function: usize,
-    },
-    Plan {
-        function: usize,
-        error: PlanError,
-    },
+    #[error("project activation duplicate selection: function={function:?}")]
+    DuplicateSelection { function: usize },
+    #[error("project activation plan: function={function:?}, error={error:?}")]
+    Plan { function: usize, error: PlanError },
+    #[error("project activation lock: {0:?}")]
     Lock(E),
+    #[error("project activation bindings: {0:?}")]
     Bindings(Vec<BindingFailure<E>>),
+    #[error("project activation tests: {0:?}")]
     Tests(Vec<TestFailure<E>>),
-    InterruptedBinding {
-        function: usize,
-        error: E,
-    },
+    #[error("project activation interrupted binding: function={function:?}, error={error:?}")]
+    InterruptedBinding { function: usize, error: E },
+    #[error("project activation interrupted invocation: function={function:?}, case={case:?}, error={error:?}")]
     InterruptedInvocation {
         function: usize,
         case: usize,
         error: InvocationFailure<E, ProjectFunctionIdentity>,
     },
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, thiserror::Error)]
+#[error("project activation: function={function:?}, error={error:?}")]
 pub struct BindingFailure<E> {
     pub function: usize,
     pub error: E,
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum TestFailure<E> {
+    #[error(
+        "project activation invocation: function={function:?}, case={case:?}, error={error:?}"
+    )]
     Invocation {
         function: usize,
         case: usize,
         error: InvocationFailure<E, ProjectFunctionIdentity>,
     },
+    #[error("project activation result: function={function:?}, case={case:?}, actual={actual:?}, expected={expected:?}")]
     Result {
         function: usize,
         case: usize,
@@ -230,7 +233,7 @@ impl<'a, P: ActivationPort> Bindings<'a, P> {
         port: &'a mut P,
     ) -> Result<Self, usize> {
         if projection.len() != plans.len() {
-            return Err(core::cmp::min(projection.len(), plans.len()));
+            return Err(std::cmp::min(projection.len(), plans.len()));
         }
         for (local, (global, expected)) in projection.iter().zip(plans).enumerate() {
             if functions.get(*global).map(|function| &function.plan) != Some(expected) {

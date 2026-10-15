@@ -1,5 +1,4 @@
 //! Exact CSV display rounding under REQ-0745/0747/0748, after execution gates.
-use alloc::string::String;
 use num_bigint::BigUint;
 
 use crate::{decimal_rounding::binary64_fraction, value::FiniteFloat};
@@ -54,10 +53,10 @@ pub fn fixed_point(value: FiniteFloat, digits: usize, maximum: usize) -> Result<
             result.push_str(&decimal[split..]);
         } else {
             result.push_str("0.");
-            result.extend(core::iter::repeat_n('0', exact_digits - decimal.len()));
+            result.extend(std::iter::repeat_n('0', exact_digits - decimal.len()));
             result.push_str(&decimal);
         }
-        result.extend(core::iter::repeat_n('0', digits - exact_digits));
+        result.extend(std::iter::repeat_n('0', digits - exact_digits));
     }
     Ok(result)
 }

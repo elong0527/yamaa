@@ -143,8 +143,7 @@ pub(crate) fn inheritance_dependencies(error: InheritanceDependencyError) -> Res
             let translated = findings
                 .into_iter()
                 .map(crate::specification_diagnostics::portable_diagnostic)
-                .collect::<Option<Vec<_>>>()
-                .ok_or(Error::Internal)?;
+                .collect::<Vec<_>>();
             json!({"status":"invalid","diagnostics":translated})
         }
         E::Reference(R::Numeric(n::ParseError::Limit {

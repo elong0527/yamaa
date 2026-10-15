@@ -3,14 +3,16 @@ use crate::{
     project_limits::{Budget, Limit, Limits},
     schema::{Document, DocumentNode as N},
 };
-use alloc::{collections::BTreeSet, string::String, vec::Vec};
+use std::collections::BTreeSet;
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Inventory {
     names: Vec<String>,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum MetadataError {
+    #[error("submission inventory shape")]
     Shape,
+    #[error("submission inventory limit: {0:?}")]
     Limit(Limit),
 }
 impl From<Limit> for MetadataError {
@@ -114,10 +116,13 @@ pub trait Ports {
     fn document(specification: &Self::Specification) -> &Document;
     fn identity(specification: &Self::Specification) -> &str;
 }
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error<E> {
+    #[error("submission inventory port: written={written:?}, error={error:?}")]
     Port { written: String, error: E },
+    #[error("submission inventory metadata: {0:?}")]
     Metadata(MetadataError),
+    #[error("submission inventory limit")]
     Limit,
 }
 pub struct Captured<S> {

@@ -179,7 +179,7 @@ fn checked_wrap(
         return None;
     }
     Some(Expression::MappingCut {
-        source: alloc::boxed::Box::new(Assignment {
+        source: std::boxed::Box::new(Assignment {
             column,
             // Collection multiplicity belongs to the enclosing mapping/cut operation.
             // Static source/type binding still uses the authored `.source` leaf.

@@ -6,7 +6,7 @@ use super::{
     SchemaDiagnostic, SchemaField, SchemaOrigin, SchemaSource, SchemaStructure, ValidationError,
 };
 use crate::diagnostic::ConditionCode;
-use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
+use std::{collections::BTreeMap, vec};
 
 #[derive(Clone, Copy)]
 struct Collection {

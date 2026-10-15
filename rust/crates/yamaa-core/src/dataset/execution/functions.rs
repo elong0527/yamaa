@@ -164,7 +164,7 @@ pub(super) fn admit_plan<E>(
     functions: &dyn FunctionPort<Error = E>,
 ) -> Result<(), Box<ExecutionError<E>>> {
     let mut pending = vec![plan];
-    let mut seen = alloc::collections::BTreeSet::new();
+    let mut seen = std::collections::BTreeSet::new();
     while let Some(plan) = pending.pop() {
         if !seen.insert(plan as *const DatasetPlan) {
             continue;

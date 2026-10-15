@@ -1,13 +1,11 @@
+use serde_json::Value as V;
 use std::collections::BTreeSet;
-use yamaa_core::{
-    diagnostic::{
-        lock_diagnostics, lock_diagnostics_with_limit, ConditionCode, ContextValue as V,
-        LockDiagnosticError as E, LockFinding, LockOrigins, LockReason as R,
-    },
-    value::Value,
+use yamaa_core::diagnostic::{
+    lock_diagnostics, lock_diagnostics_with_limit, ConditionCode, LockDiagnosticError as E,
+    LockFinding, LockOrigins, LockReason as R,
 };
 fn text(value: &str) -> V {
-    V::Scalar(Value::Str(value.into()))
+    V::String(value.into())
 }
 fn origins() -> LockOrigins<'static> {
     LockOrigins {
@@ -95,12 +93,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 ("reason".into(), text(token)),
                 (
                     "expected".into(),
-                    V::Sequence(expected.into_iter().map(text).collect())
+                    V::Array(expected.into_iter().map(text).collect())
                 ),
-                (
-                    "actual".into(),
-                    actual.map_or(V::Scalar(Value::Missing), text)
-                ),
+                ("actual".into(), actual.map_or(V::Null, text)),
             ]
             .into()
         );
@@ -140,11 +135,11 @@ fn spelling_missing_and_empty_facts_are_preserved_without_version_comparison() {
         ],
     )
     .unwrap();
-    assert_eq!(records[0].context["actual"], V::Scalar(Value::Missing));
-    assert_eq!(records[1].context["expected"], V::Sequence(vec![]));
+    assert_eq!(records[0].context["actual"], V::Null);
+    assert_eq!(records[1].context["expected"], V::Array(vec![]));
     assert_eq!(
         records[2].context["expected"],
-        V::Sequence(vec![text(" 1.0 ")])
+        V::Array(vec![text(" 1.0 ")])
     );
     assert_eq!(records[2].context["actual"], text(" 1.0 "));
     assert_eq!(records[3].context["actual"], text(""));

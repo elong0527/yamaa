@@ -1,12 +1,13 @@
 //! Versionless call preparation and retained diagnostic projection.
 use super::*;
 use crate::{
-    diagnostic::{ConditionCode as C, ContextValue as V, Diagnostic},
+    diagnostic::{ConditionCode as C, Diagnostic},
     project_call_document::{self, Input},
     project_calls::{self, LocatedCall, ProjectCalls},
     project_function::{CallFinding, Function},
-    value::{Value, ValueType},
+    value::ValueType,
 };
+use serde_json::Value as V;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Cause {
@@ -46,7 +47,7 @@ fn type_name(kind: ValueType) -> &'static str {
 impl FunctionFinding {
     pub fn diagnostic(&self) -> Diagnostic {
         let mut context = crate::diagnostic::Context::new();
-        let text = |s: &str| V::Scalar(Value::Str(s.into()));
+        let text = |s: &str| V::String(s.into());
         context.insert("function".into(), text(&self.function));
         if let Some(argument) = &self.argument {
             context.insert("argument".into(), text(argument));
@@ -411,7 +412,7 @@ pub(super) fn prepare(
         .iter()
         .map(|(_, _, _, name)| function_index.get(name.as_str()).copied())
         .collect::<Vec<_>>();
-    let uses = alloc::vec![usize::from(!has_rows); calls.len()];
+    let uses = std::vec![usize::from(!has_rows); calls.len()];
     let contextual = origins
         .iter()
         .map(|(request, _, _, _)| requests[*request].2)

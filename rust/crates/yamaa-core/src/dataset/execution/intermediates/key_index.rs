@@ -1,6 +1,6 @@
 //! Attempt-local ordinary string keys; immutable donor coordinates retain order.
 use super::*;
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use std::collections::BTreeMap;
 
 /// Avoid indexing small relations whose scan is already cheap.
 pub(super) const MINIMUM_ROWS: usize = 128;

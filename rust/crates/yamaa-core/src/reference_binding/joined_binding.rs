@@ -4,7 +4,7 @@ use crate::{
     bound_expression::Read,
     dataset::{AggregateSource, JoinedRead, MatchKey},
 };
-use alloc::{boxed::Box, vec::Vec};
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum JoinedFinding {
     UnknownField,
@@ -53,7 +53,7 @@ impl Catalog {
                 let Some(&(_, actual)) = donor.fields.get(name) else {
                     continue;
                 };
-                let identifier = alloc::format!("{}.{}", scope.driver, name);
+                let identifier = std::format!("{}.{}", scope.driver, name);
                 let findings = reference_scope::validate(
                     self,
                     &identifier,

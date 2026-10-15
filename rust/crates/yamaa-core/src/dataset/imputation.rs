@@ -1,11 +1,11 @@
 //! Declarative partial-date completion and precision preserve collected fields.
 use crate::{
-    diagnostic::{ConditionCode as C, ContextValue as V, Diagnostic},
+    diagnostic::{ConditionCode as C, Diagnostic},
     table::ValueRef,
     temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
     value::Value,
 };
-use alloc::{format, string::String, vec};
+use serde_json::Value as V;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DayRule {
@@ -20,10 +20,13 @@ pub enum DayDeclaration<'a> {
 }
 /// Maximum borrowed policy/context bytes admitted before scans or copying.
 pub const MAX_IMPUTATION_POLICY_BYTES: usize = 16_777_216;
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum DatePolicyError {
+    #[error("dataset imputation diagnostic: {0:?}")]
     Diagnostic(Diagnostic),
+    #[error("dataset imputation limit")]
     Limit,
+    #[error("dataset imputation shape")]
     Shape,
 }
 /// Validate written calendar policy without narrowing arbitrary-width integers.
@@ -49,7 +52,7 @@ pub(crate) fn date_policy_findings(
     day: DayDeclaration<'_>,
     minimum: DatePrecision,
     path: &str,
-) -> Result<Result<ImputationKind, alloc::vec::Vec<Diagnostic>>, DatePolicyError> {
+) -> Result<Result<ImputationKind, std::vec::Vec<Diagnostic>>, DatePolicyError> {
     let day_text = match day {
         DayDeclaration::Number(value) | DayDeclaration::Position(value) => value,
     };
@@ -77,11 +80,12 @@ pub(crate) fn date_policy_findings(
         return Err(DatePolicyError::Shape);
     }
     fn number(value: &str) -> V {
-        value
-            .parse::<i64>()
-            .map_or_else(|_| V::Integer(value.into()), |n| V::Scalar(Value::Int(n)))
+        value.parse::<i64>().map_or_else(
+            |_| V::Number((value).parse().expect("canonical integer")),
+            V::from,
+        )
     }
-    fn error(code: C, path: &str, fields: alloc::vec::Vec<(&str, V)>) -> Diagnostic {
+    fn error(code: C, path: &str, fields: std::vec::Vec<(&str, V)>) -> Diagnostic {
         Diagnostic {
             code,
             spec_paths: vec![path.into()],
@@ -102,10 +106,7 @@ pub(crate) fn date_policy_findings(
         (DatePrecision::Year, None) => Err(error(
             C::ImputationMonthRequired,
             &format!("{path}.month"),
-            vec![(
-                "minimum_source_precision",
-                V::Scalar(Value::Str("year".into())),
-            )],
+            vec![("minimum_source_precision", V::String("year".into()))],
         )),
         (_, Some(value)) => value
             .parse::<u8>()
@@ -128,13 +129,10 @@ pub(crate) fn date_policy_findings(
             C::ImputationDayRule,
             &format!("{path}.day"),
             vec![
-                ("value", V::Scalar(Value::Str(value.into()))),
+                ("value", V::String(value.into())),
                 (
                     "permitted",
-                    V::Sequence(vec![
-                        V::Scalar(Value::Str("first".into())),
-                        V::Scalar(Value::Str("last".into())),
-                    ]),
+                    V::Array(vec![V::String("first".into()), V::String("last".into())]),
                 ),
             ],
         )),
@@ -148,9 +146,9 @@ pub(crate) fn date_policy_findings(
                     C::ImputationDayRange,
                     path,
                     vec![
-                        ("field", V::Scalar(Value::Str("day".into()))),
+                        ("field", V::String("day".into())),
                         ("value", number(value)),
-                        ("permitted", V::Scalar(Value::Str("1 to 31".into()))),
+                        ("permitted", V::String("1 to 31".into())),
                     ],
                 )
             }),
@@ -629,7 +627,7 @@ pub(crate) fn diagnostic(code: C, path: &str, fields: &[(&str, Value)]) -> Diagn
         spec_paths: vec![path.into()],
         context: fields
             .iter()
-            .map(|(key, value)| ((*key).into(), V::Scalar(value.clone())))
+            .map(|(key, value)| ((*key).into(), V::from(value.clone())))
             .collect(),
         source_span: None,
         operand_route: None,

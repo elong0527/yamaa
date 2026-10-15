@@ -44,8 +44,8 @@ use crate::{
     table_grouping::{partition, GroupingError},
     table_reduction::{count_selected, reduce_column, TableReductionError},
 };
-use alloc::{boxed::Box, collections::BTreeMap, format, string::String, vec, vec::Vec};
-use core::convert::Infallible;
+use std::convert::Infallible;
+use std::{collections::BTreeMap, vec};
 
 /// Contiguous stages of one attempt; clocks and measurement storage belong to adapters.
 /// Derivation includes source reads, callbacks and per-value result conversion.
@@ -101,7 +101,7 @@ pub struct ExecutionBudget {
     pub max_batches: usize,
     pub max_output_bytes: usize,
     /// None exports one batch; Some exports at most this many rows per batch.
-    pub batch_rows: Option<core::num::NonZeroUsize>,
+    pub batch_rows: Option<std::num::NonZeroUsize>,
     pub execution: Limits,
 }
 
@@ -139,7 +139,7 @@ impl ExecutionBudget {
         budget.max_decoded_cells = crate::capacity::SOURCE_CELLS;
         budget.max_batches = 65_536;
         budget.max_output_bytes = crate::capacity::SOURCE_BYTES;
-        budget.batch_rows = core::num::NonZeroUsize::new(65_536);
+        budget.batch_rows = std::num::NonZeroUsize::new(65_536);
         budget.execution.source_rows = crate::capacity::SOURCE_ROWS;
         budget.execution.output_rows = crate::capacity::OUTPUT_ROWS;
         budget.execution.output_cells = crate::capacity::OUTPUT_CELLS;
@@ -616,7 +616,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
             }
             state
                 .handlers
-                .record(&alloc::format!("{path}.absent"), HandlerKind::Absent)
+                .record(&std::format!("{path}.absent"), HandlerKind::Absent)
                 .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
             return Ok(absent.clone());
         }
@@ -830,7 +830,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
                 state
                     .handlers
                     .record(
-                        &alloc::format!("{}.invalid", operation.path()),
+                        &std::format!("{}.invalid", operation.path()),
                         HandlerKind::Invalid,
                     )
                     .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
@@ -1061,18 +1061,14 @@ fn finish<E>(
                                 variable.len().saturating_add(path.len()).saturating_add(64),
                             )?;
                             let mut diagnostic = error.clone().into_diagnostic(result_path.clone());
-                            diagnostic.spec_paths.push(alloc::format!("{path}.absent"));
+                            diagnostic.spec_paths.push(std::format!("{path}.absent"));
                             diagnostic.context.insert(
                                 "variable".into(),
-                                crate::diagnostic::ContextValue::Scalar(Value::Str(
-                                    variable.clone(),
-                                )),
+                                serde_json::Value::String(variable.clone()),
                             );
                             diagnostic.context.insert(
                                 "handler".into(),
-                                crate::diagnostic::ContextValue::Scalar(Value::Str(
-                                    "absent".into(),
-                                )),
+                                serde_json::Value::String("absent".into()),
                             );
                             return Err(Box::new(ExecutionError::SemanticDiagnostic {
                                 diagnostic,
@@ -1257,7 +1253,7 @@ impl DatasetPlan {
                 identity_cells: limits.identity_cells.min(pool.identity_cells),
                 identity_text_bytes: limits.identity_text_bytes.min(pool.identity_text_bytes),
             });
-        let active = core::cell::Cell::new(ExecutionPhase::Admission);
+        let active = std::cell::Cell::new(ExecutionPhase::Admission);
         let mut observer = |event| {
             if let ExecutionEvent::Phase(phase) = event {
                 if phase != ExecutionPhase::Finished {
@@ -1928,7 +1924,7 @@ impl DatasetPlan {
                 .collect();
             if !missing.is_empty() {
                 failures.push(CheckRecord {
-                    path: alloc::format!("keys[{position}]"),
+                    path: std::format!("keys[{position}]"),
                     code: crate::diagnostic::ConditionCode::OutputMissingKeyFailed,
                     evaluated_count: dataset.rows.len(),
                     failed_count: missing.len(),
@@ -1986,7 +1982,7 @@ impl DatasetPlan {
                 Check::InvalidDiagnostic(diagnostic) => {
                     return Err(Box::new(ExecutionError::VerificationDiagnostic {
                         diagnostic: diagnostic.clone(),
-                        records: core::mem::take(records),
+                        records: std::mem::take(records),
                     }));
                 }
                 Check::InvalidDeclaration { code, reason } => {
@@ -1994,7 +1990,7 @@ impl DatasetPlan {
                         path: verification.path.clone(),
                         code: *code,
                         reason: reason.clone(),
-                        records: core::mem::take(records),
+                        records: std::mem::take(records),
                     }));
                 }
                 Check::Assert { .. } | Check::PredicateDeclaration(_) => {
@@ -2133,7 +2129,7 @@ impl DatasetPlan {
                     == crate::dataset::VerificationSeverity::Error
         }) {
             return Err(Box::new(ExecutionError::VerificationFailures(
-                core::mem::take(records),
+                std::mem::take(records),
             )));
         }
         drop(dataset);
@@ -2144,7 +2140,7 @@ impl DatasetPlan {
         ordering::apply(self.output_order(), &mut dataset, budget)?;
         Ok(Execution {
             dataset,
-            verifications: core::mem::take(records),
+            verifications: std::mem::take(records),
         })
     }
 
@@ -2181,7 +2177,7 @@ impl DatasetPlan {
                         Check::InvalidDiagnostic(diagnostic) => {
                             return Err(Box::new(ExecutionError::VerificationDiagnostic {
                                 diagnostic: diagnostic.clone(),
-                                records: core::mem::take(records),
+                                records: std::mem::take(records),
                             }));
                         }
                         Check::InvalidDeclaration { code, reason } => {
@@ -2189,7 +2185,7 @@ impl DatasetPlan {
                                 path: verification.path.clone(),
                                 code: *code,
                                 reason: reason.clone(),
-                                records: core::mem::take(records),
+                                records: std::mem::take(records),
                             }));
                         }
                         Check::NotMissing
@@ -2464,7 +2460,7 @@ impl DatasetPlan {
                             == crate::dataset::VerificationSeverity::Error
                 }) {
                     return Err(Box::new(ExecutionError::VerificationFailures(
-                        core::mem::take(records),
+                        std::mem::take(records),
                     )));
                 }
             }
@@ -2570,3 +2566,10 @@ fn failure_identity<E>(
 mod verification;
 
 use verification::CompletedRows;
+
+impl<E: std::fmt::Debug> std::fmt::Display for ExecutionError<E> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "dataset execution: {self:?}")
+    }
+}
+impl<E: std::fmt::Debug> std::error::Error for ExecutionError<E> {}

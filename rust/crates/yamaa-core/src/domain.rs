@@ -102,14 +102,14 @@ impl CheckedSpecification {
     }
     /// Report all known declaration findings without entering study authority.
     /// Build still defers these findings to their ordered execution checkpoints.
-    pub fn check_diagnostics(&self) -> alloc::vec::Vec<crate::diagnostic::Diagnostic> {
+    pub fn check_diagnostics(&self) -> std::vec::Vec<crate::diagnostic::Diagnostic> {
         self.compiled.check_declaration_diagnostics()
     }
 
     /// Inspect verification declarations alone for callers with that narrow scope.
     pub fn verification_declaration_diagnostics(
         &self,
-    ) -> alloc::vec::Vec<crate::diagnostic::Diagnostic> {
+    ) -> std::vec::Vec<crate::diagnostic::Diagnostic> {
         self.compiled.verification_declaration_diagnostics()
     }
 

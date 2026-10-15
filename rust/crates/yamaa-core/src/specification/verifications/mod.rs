@@ -6,10 +6,11 @@ mod lookups;
 use crate::dataset::{Check, CountBoundError, RowCount, RowCountBound, Verification};
 use crate::{
     bound_expression::BoundPredicate,
-    diagnostic::{ConditionCode, ContextValue, Diagnostic},
+    diagnostic::{ConditionCode, Diagnostic},
     predicate_compiler,
     value::Value,
 };
+use serde_json::Value as JsonValue;
 
 #[derive(Clone, Debug)]
 enum DeclarationFinding {
@@ -42,7 +43,7 @@ fn predicate(
             spec_paths: vec![path],
             context: [(
                 "reason".into(),
-                ContextValue::Scalar(Value::Str("a predicate must be text".into())),
+                JsonValue::String("a predicate must be text".into()),
             )]
             .into(),
             source_span: None,
@@ -88,16 +89,12 @@ fn predicate(
         return Ok(Err(Diagnostic {
             code: ConditionCode::VerificationUnknownReference,
             spec_paths: vec![path],
-            context: [(
-                "identifier".into(),
-                ContextValue::Scalar(Value::Str(name.into())),
-            )]
-            .into(),
+            context: [("identifier".into(), JsonValue::String(name.into()))].into(),
             source_span: None,
             operand_route: None,
         }));
     }
-    let names: alloc::collections::BTreeSet<_> = plan.identifiers().into_iter().collect();
+    let names: std::collections::BTreeSet<_> = plan.identifiers().into_iter().collect();
     let bindings = names
         .into_iter()
         .map(|name| Binding {

@@ -5,7 +5,6 @@ use super::{
     NormalizationBudget, NormalizationError, NormalizationResource, SchemaAliasKind, SchemaField,
     SchemaShape, SchemaStructure, TypeExpression, TypeNode, ValidationError,
 };
-use alloc::vec::Vec;
 
 /// An occurrence in one retained input, not a host identity or content digest.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -302,8 +301,9 @@ impl Run<'_, '_> {
                                                 )?,
                                             };
                                             let key = self.copy(old.child(old_key), depth + 1)?;
-                                            return Ok(self
-                                                .push(N::Mapping(alloc::vec![(key, value)]), old));
+                                            return Ok(
+                                                self.push(N::Mapping(std::vec![(key, value)]), old)
+                                            );
                                         }
                                     }
                                 }

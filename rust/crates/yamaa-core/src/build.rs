@@ -1,7 +1,6 @@
 //! Shared build request and original metadata admission. Study and publication
 //! authority enter only after the selected checked capability is complete.
 use crate::schema::{Document, DocumentNode};
-use alloc::string::String;
 
 pub struct Request<'a> {
     pub specification: &'a str,
@@ -20,9 +19,9 @@ pub fn without_environment(
             language: None,
             lock: None,
             functions: None,
-            codelists: alloc::vec::Vec::new(),
+            codelists: std::vec::Vec::new(),
             has_study: false,
-            submissions: alloc::vec::Vec::new(),
+            submissions: std::vec::Vec::new(),
         },
     )
     .expect("empty environment admission")
@@ -67,9 +66,11 @@ impl<T> ResourceReader for T where
 
 /// Root capture and environment preparation keep separate original failure
 /// families. A projection refusal cannot replace either retained native payload.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum EnvironmentFailure<E, D, X> {
+    #[error("build resource: {0:?}")]
     Resource(E),
+    #[error("build preparation: {0:?}")]
     Preparation(crate::project_preparation::Failure<E, D, X>),
 }
 
@@ -106,10 +107,13 @@ pub struct EntryView<'a> {
     pub original: &'a Document,
     pub model_nodes: usize,
 }
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum SelectionFailure<E> {
+    #[error("build resource: {0:?}")]
     Resource(E),
+    #[error("build limit: {0:?}")]
     Limit(&'static str),
+    #[error("build snapshot: identity={identity:?}, error={error:?}")]
     Snapshot { identity: String, error: E },
 }
 

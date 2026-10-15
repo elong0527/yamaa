@@ -5,7 +5,7 @@ use crate::{
     project_function::{CallArgument, CallFinding, Function},
     value::Value,
 };
-use alloc::{collections::BTreeMap, string::String, vec, vec::Vec};
+use std::{collections::BTreeMap, vec};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LocatedCall {
@@ -44,12 +44,17 @@ pub struct Finding {
     pub call: usize,
     pub kind: Kind,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
+    #[error("project calls limit: {0:?}")]
     Limit(&'static str),
+    #[error("project calls duplicate definitions: {0:?}")]
     DuplicateDefinitions(Vec<usize>),
+    #[error("project calls findings: {0:?}")]
     Findings(Vec<Finding>),
+    #[error("project calls invalid admitted signature")]
     InvalidAdmittedSignature,
+    #[error("project calls invalid call uses")]
     InvalidCallUses,
 }
 #[derive(Clone, Debug, PartialEq)]

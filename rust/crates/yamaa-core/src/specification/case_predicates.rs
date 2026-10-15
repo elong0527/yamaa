@@ -72,7 +72,7 @@ pub(super) fn bind(
     let start = findings.len();
     let mut bindings = Vec::new();
     let mut collected = Vec::new();
-    let mut seen = alloc::collections::BTreeSet::new();
+    let mut seen = std::collections::BTreeSet::new();
     for name in plan.identifiers() {
         if !seen.insert(name) {
             continue;
