@@ -46,10 +46,6 @@ fn unavailable_environment_precedes_bad_entry_and_valid_environment_is_retained_
             rows[0].context,
             serde_json::json!({"cause":"missing", "path":environment}).to_string()
         );
-        assert!(matches!(
-            producer_check::rejected_with_limit(&rejection, Language::Python, 1),
-            Err(producer_check::Error::Projection(_))
-        ));
         let Error::Environment(owner) = &rejection else {
             unreachable!()
         };
@@ -145,6 +141,53 @@ fn yaml(input: &str, base: &str, output: &str, invalid: bool) -> String {
 }
 
 #[test]
+fn raw_graph_checks_keep_all_findings_and_public_checks_take_the_first_ten_thousand() {
+    use yamaa_adapters::issue_rows::Issue;
+
+    let study = Study::new();
+    let mut verifications = String::from("    verifications:\n");
+    for _ in 0..10_001 {
+        verifications.push_str("      - matches: {pattern: '('}\n");
+    }
+    let source = yaml("{RAW: never-read.csv}", "RAW", "result.csv", false).replace(
+        "    derivation: RAW.VALUE\n",
+        &format!("    derivation: RAW.VALUE\n{verifications}"),
+    );
+    assert!(source.len() < 8 * 1024 * 1024);
+    study.write("root.yaml", &source);
+
+    let graph = study.prepare().unwrap();
+    assert_eq!(graph.capture_reads(), 2); // environment and specification only
+    let raw = producer_check::prepared(&graph).unwrap();
+    assert_eq!(raw.len(), 10_001);
+    for (index, issue) in raw.iter().enumerate() {
+        assert_eq!(
+            issue,
+            &Issue {
+                phase: "validation".into(),
+                condition: "invalid_regex".into(),
+                requirement: Some("REQ-0827".into()),
+                spec_paths: vec![format!(
+                    "columns.VALUE.verifications[{index}].matches.pattern"
+                )],
+                context: "{\"pattern\":\"(\"}".into(),
+            },
+            "verification {index} keeps its complete finding in authored order"
+        );
+    }
+
+    let public = yamaa_adapters::project_application::check(
+        &study.path("root.yaml"),
+        &study.path("environment.yaml"),
+        Language::Python,
+    );
+    assert_eq!(public.len(), 10_000);
+    assert_eq!(public, raw[..10_000]);
+    assert!(!study.0.join("never-read.csv").exists());
+    assert!(!study.0.join("result.csv").exists());
+}
+
+#[test]
 fn original_decode_diagnostics_remain_bounded_and_owned() {
     use yamaa_adapters::issue_rows::Issue;
     let study = Study::new();
@@ -162,10 +205,6 @@ fn original_decode_diagnostics_remain_bounded_and_owned() {
         producer_check::rejected(&owner, Language::Python).unwrap(),
         expected
     );
-    assert!(matches!(
-        producer_check::rejected_with_limit(&owner, Language::Python, 32),
-        Err(producer_check::Error::Projection(_))
-    ));
     assert_eq!(
         yamaa_adapters::project_application::check(
             &study.path("root.yaml"),
@@ -241,10 +280,6 @@ fn complete_original_diamond_checks_each_canonical_node_once_without_data() {
         context: serde_json::json!({"pattern":"é(", "source":study.path(name), "entry":study.path("root.yaml")}).to_string(),
     });
     assert_eq!(producer_check::prepared(&graph).unwrap(), expected);
-    assert!(matches!(
-        producer_check::prepared_with_limit(&graph, 4096),
-        Err(producer_check::Error::Projection(_))
-    ));
     assert_eq!(producer_check::prepared(&graph).unwrap(), expected);
     fs::remove_dir_all(&study.0).unwrap();
     assert_eq!(producer_check::prepared(&graph).unwrap(), expected);
@@ -321,10 +356,6 @@ fn producer_typed_rejections_keep_complete_authored_rows_and_original_owners() {
             serde_json::from_str::<serde_json::Value>(&rows[0].context).unwrap()["source"],
             study.path("root.yaml")
         );
-        assert!(matches!(
-            producer_check::rejected_with_limit(&error, Language::Python, 1024),
-            Err(producer_check::Error::Projection(_))
-        ));
         fs::remove_dir_all(&study.0).unwrap();
         assert_eq!(
             producer_check::rejected(&error, Language::Python).unwrap(),
@@ -438,10 +469,6 @@ fn supported_environment_and_original_inherited_schema_causes_are_complete() {
         panic!("environment");
     };
     assert_eq!(environment.capture_reads(), 1);
-    assert!(matches!(
-        producer_check::rejected_with_limit(&error, Language::Python, 16),
-        Err(producer_check::Error::Projection(_))
-    ));
     study.write("environment.yaml", "schema_version: '1.0'\n");
     study.write(
         "parent/base.yaml",
@@ -565,10 +592,6 @@ fn invalid_producer_contract_and_environment_child_failures_keep_original_metada
         .iter()
         .any(|row| row.requirement.as_deref() == Some("REQ-0534")
             && row.condition == "invalid_producer_contract"));
-    assert!(matches!(
-        producer_check::rejected_with_limit(&error, Language::Python, 64),
-        Err(producer_check::Error::Projection(_))
-    ));
     study.write(
         "environment.yaml",
         "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions: {id: broken.yaml}\n",
@@ -744,7 +767,6 @@ fn rejected_null_schema_keeps_the_original_shipped_schema_cause_and_raw_entry() 
     assert_eq!(findings[0].condition, "invalid_field_type");
     assert_eq!(findings[0].requirement.as_deref(), Some("REQ-0287"));
     assert_eq!(findings[0].spec_paths, ["input.RAW.schema"]);
-    assert!(producer_check::rejected_with_limit(&rejection, Language::Python, 1).is_err());
     assert_eq!(graph.capture_reads(), 2);
 }
 
