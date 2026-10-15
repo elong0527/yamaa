@@ -1,5 +1,6 @@
 //! End-to-end shared request effects with the production metadata, activation,
-//! execution and held-output services and opt-in native scripted ports.
+//! execution and held-output services and private native scripted ports.
+use crate::support::ports::*;
 use crate::support::project_call_compiler as support;
 use std::{convert::Infallible, rc::Rc, sync::Arc};
 use support::{call, specification, Tree};
@@ -12,7 +13,6 @@ use yamaa_core::{
     project_preparation as metadata,
     specification_output::{self as output, CompleteError, OutputReport, PreparedOutput},
     specification_run::CapturedAttempt,
-    test_support::*,
 };
 use yamaa_core::{
     function_signature::{LogicalSignature, ProjectFunctionIdentity},

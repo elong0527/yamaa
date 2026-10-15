@@ -61,6 +61,8 @@ impl Define {
             environment: None,
             environment_written: String::new(),
             specifications: Vec::new(),
+            #[cfg(test)]
+            after_publish: None,
         };
         let attempt = service::Application::prepare(
             &mut ports,
@@ -106,13 +108,6 @@ impl Define {
         let result = self.application.save(&mut self.ports);
         self.save_result(result)
     }
-    #[cfg(test)]
-    fn save_with_checkpoint(&mut self, checkpoint: impl FnMut(usize)) -> Result<bool, SaveError> {
-        let result = self
-            .application
-            .save_with_checkpoint(&mut self.ports, checkpoint);
-        self.save_result(result)
-    }
     fn save_result(
         &mut self,
         result: Result<bool, service::SaveFailure<Failure, file_publication::Error>>,
@@ -144,6 +139,8 @@ struct NativePorts {
     environment: Option<std::sync::Arc<OwnedEnvironment>>,
     environment_written: String,
     specifications: Vec<(String, String, std::sync::Arc<PreparedDocument>)>,
+    #[cfg(test)]
+    after_publish: Option<Box<dyn FnMut(&str)>>,
 }
 impl NativePorts {
     fn resources(&self) -> &Resources {
@@ -365,7 +362,12 @@ impl Ports for NativePorts {
         written: &str,
         bytes: &[u8],
     ) -> Result<(), Self::PublicationError> {
-        publisher.publish(written, bytes)
+        publisher.publish(written, bytes)?;
+        #[cfg(test)]
+        if let Some(after_publish) = self.after_publish.as_mut() {
+            after_publish(written);
+        }
+        Ok(())
     }
 }
 fn same_location(left: &Path, right: &Path) -> bool {

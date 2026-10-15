@@ -515,22 +515,6 @@ impl<P: Ports> Application<P> {
         &mut self,
         ports: &mut P,
     ) -> Result<bool, SaveFailure<P::Error, P::PublicationError>> {
-        self.save_inner(ports, |_| {})
-    }
-    /// Test-only operational checkpoint; production hosts receive no callback.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn save_with_checkpoint(
-        &mut self,
-        ports: &mut P,
-        checkpoint: impl FnMut(usize),
-    ) -> Result<bool, SaveFailure<P::Error, P::PublicationError>> {
-        self.save_inner(ports, checkpoint)
-    }
-    fn save_inner(
-        &mut self,
-        ports: &mut P,
-        mut checkpoint: impl FnMut(usize),
-    ) -> Result<bool, SaveFailure<P::Error, P::PublicationError>> {
         if self.failed {
             return Err(SaveFailure::Refused);
         }
@@ -553,7 +537,6 @@ impl<P: Ports> Application<P> {
                 return Err(SaveFailure::Failure(failure));
             }
             artifact.state = PublicationState::Published;
-            checkpoint(index);
         }
         self.saved = true;
         Ok(true)

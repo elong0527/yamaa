@@ -1,27 +1,27 @@
 //! Deterministic native fixtures for application boundary tests.
 //!
-//! Available to downstream tests only through the opt-in `test-support` feature.
+//! Private to the core integration tests.
 //! These ports consume scripted outcomes once, log before each effect, and panic
 //! on an unexpected request. They perform no I/O, codec work, activation or retry.
 //! Owned errors are moved intact and need neither Clone nor Send nor Sync.
-use crate::{
-    specification::SourceDeclaration,
-    table::{CellError, TableAccess, TableSchema, ValueRef},
-    value::Value,
-};
 use std::rc::Rc;
 use std::{
     cell::{Ref, RefCell},
     marker::PhantomData,
 };
+use yamaa_core::{
+    specification::SourceDeclaration,
+    table::{CellError, TableAccess, TableSchema, ValueRef},
+    value::Value,
+};
 
-use crate::{
+use yamaa_core::{
     dataset, function_invocation, project_preparation as metadata, specification_output as output,
     specification_run as run,
 };
 
-mod ports;
-pub use ports::*;
+mod scripted;
+pub use scripted::*;
 
 /// Ordered observations shared by independently owned fake ports.
 #[derive(Clone, Debug)]
@@ -208,6 +208,3 @@ impl<E> TableAccess for FixtureTable<E> {
             .ok_or(CellError::OutOfBounds { row, column })
     }
 }
-
-#[cfg(test)]
-mod tests;

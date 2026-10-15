@@ -73,6 +73,7 @@ fn changed_define_metadata_uses_original_root_spec_parent_and_dictionary_occurre
         let environment_written =
             file_resources::caller_path(&directory.join("environment.yaml")).unwrap();
         let mut ports = NativePorts {
+            after_publish: None,
             resources: None,
             host: Language::Python,
             environment: None,
@@ -165,13 +166,13 @@ fn later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_re
     assert!(result.issues().is_empty(), "{:?}", result.issues());
     let held = result.artifacts().next().unwrap().1.to_vec();
     let reads = result.capture_reads();
-    assert!(result
-        .save_with_checkpoint(|index| {
-            if index == 0 {
-                fs::create_dir(directory.join("second.json")).unwrap();
-            }
-        })
-        .is_err());
+    let later_target = directory.join("second.json");
+    result.ports.after_publish = Some(Box::new(move |written| {
+        if written == "dm.json" {
+            fs::create_dir(&later_target).unwrap();
+        }
+    }));
+    assert!(result.save().is_err());
     assert_eq!(fs::read(directory.join("dm.json")).unwrap(), held);
     assert_eq!(
         fs::read(directory.join("define.xml")).unwrap(),
