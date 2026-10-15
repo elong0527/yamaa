@@ -218,6 +218,58 @@ mod service {
         }
 
         #[test]
+        fn held_non_odm_bytes_refuse_oversized_tables_before_any_cell_access() {
+            struct Oversized(TableSchema);
+            impl TableAccess for Oversized {
+                type Error = Payload;
+                fn schema(&self) -> &TableSchema {
+                    &self.0
+                }
+                fn row_count(&self) -> usize {
+                    yamaa_core::limits::Limits::TABLE_ROWS + 1
+                }
+                fn cell(&self, _: usize, _: usize) -> Result<ValueRef<'_>, CellError<Payload>> {
+                    panic!("table geometry must be admitted before reading cells");
+                }
+            }
+            struct OversizedDecoder;
+            impl SourceDecoder for OversizedDecoder {
+                type Error = Payload;
+                type Table = Oversized;
+                fn continue_after(&self, _: &Payload) -> bool {
+                    false
+                }
+                fn decode(
+                    &mut self,
+                    _: &SourceDeclaration,
+                    _: &[u8],
+                    _: yamaa_core::specification::SourceInterpretation,
+                    _: Option<&yamaa_core::producer_contract::Contract>,
+                ) -> Result<Oversized, Payload> {
+                    Ok(Oversized(source()))
+                }
+            }
+            let prepared =
+                PreparedSpecification::prepare(&document("ID + 1", "input.csv")).unwrap();
+            let attempt = run::execute_bytes(&prepared, b"held snapshot", &mut OversizedDecoder);
+            assert!(
+                attempt.table.is_some(),
+                "retain the decoded observation on refusal"
+            );
+            assert!(matches!(
+                attempt.result,
+                Err(RunError::Boundary {
+                    source: 0,
+                    error: yamaa_core::limits::LimitExceeded {
+                        resource: "table_rows",
+                        limit: 10_000_000,
+                        actual: Some(10_000_001),
+                    }
+                })
+            ));
+        }
+
+        #[test]
         fn reuse_repeats_effects_and_reports_actual_cached_captures() {
             let prepared =
                 PreparedSpecification::prepare(&document("ID + 1", "input.csv")).unwrap();

@@ -10,7 +10,7 @@ mod widths;
 /// Pinned ID_Start / ID_Continue data used for capture-group name admission.
 pub const IDENTIFIER_UNICODE_VERSION: &str = "18.0.0";
 
-/// Fixed recursion and per-match interpretation boundaries.
+/// Fixed recursion and regex compilation/matching work boundaries.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Resource {
     Depth,
@@ -169,7 +169,8 @@ impl Pattern {
             .collect();
         for start in 0..=if full { 0 } else { chars.len() } {
             steps.work(1)?;
-
+            steps.work(self.groups)?;
+            steps.work(1)?;
             let state = State {
                 at: start,
                 tasks: vec![Task::Node(self.root)],
@@ -236,7 +237,8 @@ impl Pattern {
                         if max.is_some_and(|max| count >= max) {
                             continue;
                         }
-                        let mut iteration = state.clone();
+                        let mut iteration = state.copy(steps)?;
+                        steps.work(self.nodes[child].captures.len())?;
                         for capture in self.nodes[child].captures.clone() {
                             iteration.captures[capture] = None;
                         }
@@ -257,6 +259,7 @@ impl Pattern {
                     }
                     Task::Node(id) => match &self.nodes[id].kind {
                         Kind::Sequence(children) => {
+                            steps.work(children.len())?;
                             if backwards {
                                 for &child in children {
                                     state.tasks.push(Task::Node(child));
@@ -269,7 +272,7 @@ impl Pattern {
                         }
                         Kind::Alternative(children) => {
                             for &child in children[1..].iter().rev() {
-                                let mut branch = state.clone();
+                                let mut branch = state.copy(steps)?;
                                 branch.tasks.push(Task::Node(child));
 
                                 alternatives.push(branch);
@@ -288,7 +291,7 @@ impl Pattern {
                             behind,
                             positive,
                         } => {
-                            let mut probe = state.clone();
+                            let mut probe = state.copy(steps)?;
                             probe.tasks.clear();
                             probe.tasks.push(Task::Node(*child));
                             let result = self.run(input, probe, *behind, false, steps)?;
@@ -398,13 +401,25 @@ enum Task {
         before: usize,
     },
 }
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct State {
     at: usize,
     tasks: Vec<Task>,
     captures: Vec<Option<(usize, usize)>>,
 }
-/// The only matching counter spans starts, backtracking and nested lookarounds.
+impl State {
+    /// Reserve the copy work before allocating either backtracking vector.
+    fn copy(&self, steps: &mut Steps) -> Result<Self, MatchError> {
+        steps.work(self.tasks.len())?;
+        steps.work(self.captures.len())?;
+        Ok(Self {
+            at: self.at,
+            tasks: self.tasks.clone(),
+            captures: self.captures.clone(),
+        })
+    }
+}
+/// One fixed work scope per compilation or match, including copied state.
 struct Steps(usize);
 impl Steps {
     fn work(&mut self, amount: usize) -> Result<(), MatchError> {
@@ -413,5 +428,59 @@ impl Steps {
             limit: crate::limits::Limits::REGEX_STEPS,
         })?;
         Ok(())
+    }
+
+    fn compile_work(&mut self, amount: usize) -> Result<(), CompileError> {
+        self.work(amount).map_err(|error| CompileError::Limit {
+            resource: error.resource,
+            limit: error.limit,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn initial_capture_storage_is_refused_before_allocating_it() {
+        // Model the requested storage directly; no million-element vector is built.
+        let pattern = Pattern {
+            nodes: Vec::new(),
+            root: 0,
+            groups: crate::limits::Limits::REGEX_STEPS,
+        };
+        assert_eq!(
+            pattern.full_match(""),
+            Err(MatchError {
+                resource: Resource::Work,
+                limit: crate::limits::Limits::REGEX_STEPS,
+            })
+        );
+    }
+
+    #[test]
+    fn repeated_capture_copies_consume_the_match_work_scope() {
+        // All three continuations match the empty string structurally. Their
+        // repeats, alternatives and assertions copy the full capture state.
+        for continuation in [
+            "(){1000}".to_owned(),
+            "(?:|)".repeat(1000),
+            "(?=)".repeat(1000),
+        ] {
+            let pattern = Pattern::compile(&("()".repeat(1000) + &continuation)).unwrap();
+            assert_eq!(
+                pattern.full_match(""),
+                Err(MatchError {
+                    resource: Resource::Work,
+                    limit: crate::limits::Limits::REGEX_STEPS,
+                })
+            );
+        }
+        let small = Pattern::compile("(){1000}").unwrap();
+        assert_eq!(
+            small.full_match("").unwrap().unwrap().groups,
+            [Some(""), Some("")]
+        );
     }
 }

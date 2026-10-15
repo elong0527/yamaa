@@ -305,11 +305,7 @@ mod schema {
         use crate::support::document::Tree as V;
 
         /// Build explicitly authored decoded schema documents without an interpreter oracle.
-        fn module(
-            name: &str,
-            declarations: Vec<(&'static str, V)>,
-            includes: &[&'static str],
-        ) -> SchemaModule {
+        fn module(name: &str, declarations: Vec<(&str, V)>, includes: &[&str]) -> SchemaModule {
             fn push(value: V, nodes: &mut Vec<N>) -> usize {
                 value.append(nodes)
             }
@@ -512,6 +508,36 @@ mod schema {
                     I::UnreferencedRegistry,
                     I::UnknownType("missing".into())
                 ]
+            );
+        }
+
+        #[test]
+        fn doubling_field_reuse_refuses_before_exponential_materialization() {
+            let names: Vec<_> = (0..30).map(|index| format!("class_{index}")).collect();
+            let mut declarations = vec![
+                ("root_class", V::List(vec![reuse("class_29")])),
+                ("class_0", V::List(vec![field("id", "str")])),
+            ];
+            for index in 1..names.len() {
+                declarations.push((
+                    names[index].as_str(),
+                    V::List(vec![
+                        V::map(vec![("fields_from", V::text(&names[index - 1]))]),
+                        V::map(vec![("fields_from", V::text(&names[index - 1]))]),
+                    ]),
+                ));
+            }
+            assert_eq!(
+                SchemaStructure::admit(
+                    vec![module("schema.yaml", declarations, &[])],
+                    0,
+                    "root_class"
+                )
+                .unwrap_err(),
+                BundleError::Limit {
+                    resource: yamaa_core::schema::BundleResource::ExpandedFields,
+                    limit: 65_536,
+                },
             );
         }
 

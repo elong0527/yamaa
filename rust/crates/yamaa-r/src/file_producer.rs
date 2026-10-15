@@ -212,6 +212,12 @@ pub(crate) mod platform {
                     formatted = Some(observations.to_string());
                     refusal = "original_boundary";
                 }
+                Err(ProjectionError::Report(
+                    yamaa_adapters::specification_report::Error::ResourceLimit(details),
+                )) => {
+                    refusal = "output_limit";
+                    refusal_details = Some(details);
+                }
                 Err(_) => refusal = "report_refusal",
             }
         }
