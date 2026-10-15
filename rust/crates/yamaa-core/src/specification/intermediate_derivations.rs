@@ -980,6 +980,12 @@ fn rebase(
             };
             continue;
         }
+        // Retain field names before moving this selector's source into the
+        // donor catalog, whose secondary coordinates differ from the outer plan.
+        let donor_schema = item
+            .source_schema(&original_secondary)
+            .ok_or(BindError::Internal)?
+            .clone();
         let missing = item.current_fields().find_map(|field| match field.read {
             CurrentRead::Output(column) => (!output
                 .columns()
@@ -1057,10 +1063,6 @@ fn rebase(
                 .map(&current_field)
                 .collect::<Result<Vec<_>, _>>()?;
         }
-        let donor_schema = item
-            .source_schema(&original_secondary)
-            .ok_or(BindError::Internal)?
-            .clone();
         for key in &mut item.keys {
             if matches!(
                 key.value,

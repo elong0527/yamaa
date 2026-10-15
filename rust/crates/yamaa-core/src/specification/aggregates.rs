@@ -989,6 +989,7 @@ pub(super) fn bind(
                         )?;
                     }
                 }
+                let before_references = findings.len();
                 for reference in value.references() {
                     if catalog
                         .bind(reference)
@@ -1002,8 +1003,10 @@ pub(super) fn bind(
                             },
                             findings,
                         )?;
-                        continue;
                     }
+                }
+                if findings.len() != before_references {
+                    continue;
                 }
                 let bound = value.bind(
                     &format!("{}.key.{field}", declaration.path),
