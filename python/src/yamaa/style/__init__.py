@@ -77,6 +77,15 @@ def _findings(
     )
 
 
+def _read_text(path: str | Path) -> str:
+    """A specification file's text exactly as written.
+
+    Text-mode reads translate CRLF line endings to LF, which would hide
+    the file's written ending from the checks and lose it on a fix write.
+    """
+    return Path(path).read_bytes().decode("utf-8")
+
+
 def _check_file(
     path: str | Path,
     *,
@@ -84,7 +93,7 @@ def _check_file(
     orders: Mapping[str, Sequence[str]] | None = None,
 ) -> tuple[_StyleFinding, ...]:
     """Every unsuppressed style finding in one specification file."""
-    text = Path(path).read_text(encoding="utf-8")
+    text = _read_text(path)
     selected = _selection(select)
     return _findings(path, text, _orders(orders), selected)
 
@@ -98,21 +107,19 @@ def _fix_file(
 ) -> tuple[bool, tuple[_StyleFinding, ...]]:
     """Apply the proved layout fixes; return (changed, remaining findings)."""
     source = Path(path)
-    text = source.read_text(encoding="utf-8")
+    text = _read_text(source)
     selected = _selection(select)
     resolved = _orders(orders)
     fixed = fix_text(text, resolved, selected)
     if write and fixed != text:
-        source.write_text(fixed, encoding="utf-8")
+        source.write_bytes(fixed.encode("utf-8"))
     return fixed != text, _findings(path, fixed, resolved, selected)
 
 
 def _is_specification(path: str | Path, root_fields: Sequence[str]) -> bool:
     """True when the file's root declares `schema_version` and only root fields."""
     try:
-        node = yaml.compose(
-            Path(path).read_text(encoding="utf-8"), Loader=yaml.BaseLoader
-        )
+        node = yaml.compose(_read_text(path), Loader=yaml.BaseLoader)
     except (OSError, UnicodeDecodeError, yaml.YAMLError):
         return False
     if not isinstance(node, yaml.MappingNode):

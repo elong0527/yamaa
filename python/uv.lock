@@ -2746,7 +2746,7 @@ requires-dist = [
     { name = "jsonschema", marker = "extra == 'test'", specifier = ">=4.25" },
     { name = "lxml", specifier = ">=6.1.0" },
     { name = "packaging", specifier = ">=25" },
-    { name = "polars", specifier = ">=1.35.2" },
+    { name = "polars", specifier = ">=1.43.2" },
     { name = "py-yaml12", specifier = ">=0.2" },
     { name = "pyarrow", specifier = ">=23.0.1" },
     { name = "pydantic", specifier = ">=2.12.4" },

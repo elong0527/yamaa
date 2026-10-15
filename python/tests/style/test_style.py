@@ -297,6 +297,59 @@ def test_missing_line_break_is_reported_at_the_last_line(tmp_path: Path) -> None
     ]
 
 
+def test_fix_preserves_crlf_line_endings(tmp_path: Path) -> None:
+    # REQ-1286: a fix rearranges lines and never rewrites what a value
+    # says; the file's line endings are not a value, but silently
+    # converting every CRLF ending to LF rewrites the whole file for a
+    # one-line spacing fix, so the written ending is preserved.
+    text = CANONICAL.replace("\n\noutput:", "\noutput:").replace("\n", "\r\n")
+    path = tmp_path / "spec.yaml"
+    path.write_bytes(text.encode("utf-8"))
+    assert _names(path) == ["root_spacing"]
+    changed, remaining = fix_file(path, orders=ORDERS)
+    assert changed is True
+    assert remaining == ()
+    data = path.read_bytes()
+    assert data.count(b"\n") == data.count(b"\r\n")
+    assert data.decode("utf-8").replace("\r\n", "\n") == CANONICAL
+
+
+def test_crlf_line_width_counts_the_line_without_its_ending(
+    tmp_path: Path,
+) -> None:
+    # The carriage return belongs to the line ending, not the line: a
+    # 79-character CRLF line is within REQ-1285, and an 80-character one
+    # is reported as 80 characters, not 81.
+    label = "    label: Study Identifier\n"
+    for width, expected in ((79, []), (80, ["line is 80 characters"])):
+        text = CANONICAL.replace(label, "    label: " + "x" * (width - 11) + "\n")
+        path = tmp_path / f"spec{width}.yaml"
+        path.write_bytes(text.replace("\n", "\r\n").encode("utf-8"))
+        findings = [
+            item
+            for item in check_file(path, orders=ORDERS)
+            if item.name == "line_width"
+        ]
+        assert [item.message.split(";")[0] for item in findings] == expected
+
+
+def test_lone_cr_line_endings_are_lines_and_a_final_break(tmp_path: Path) -> None:
+    # YAML also breaks lines on a lone carriage return, and the shared
+    # reader assigns later nodes later line marks: a lone-CR file's lines
+    # are its CR-separated lines, its final CR is a line break, and a fix
+    # writes the CR ending back rather than converting the file to LF.
+    text = CANONICAL.replace("\n\noutput:", "\noutput:").replace("\n", "\r")
+    path = tmp_path / "spec.yaml"
+    path.write_bytes(text.encode("utf-8"))
+    assert _names(path) == ["root_spacing"]
+    changed, remaining = fix_file(path, orders=ORDERS)
+    assert changed is True
+    assert remaining == ()
+    data = path.read_bytes()
+    assert b"\n" not in data
+    assert data.decode("utf-8").replace("\r", "\n") == CANONICAL
+
+
 def test_blank_lines_inside_a_block_scalar_are_value_text(tmp_path: Path) -> None:
     text = CANONICAL.replace(
         "    derivation: DM.STUDYID\n",
@@ -843,6 +896,85 @@ def test_repeated_row_derivation_skips_columns_read_by_a_filter(
     ]
     assert ("repeated_row_derivation", "rows[0].derivations.DOMAIN") not in names
     assert ("repeated_row_derivation", "rows[0].derivations.STUDYID") in names
+
+
+PREDICATE_CHAIN = """\
+schema_version: "1.0"
+domain: ADXX
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+
+output:
+  path: adxx.csv
+  columns: [STUDYID, USUBJID, RESULT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: AGG
+    type: num
+    label: Aggregate Value
+    derivation:
+      aggregate:
+        filter: "DM.X = 1"
+        expr: "ONLY(DM.Y)"
+
+  - name: FLG
+    type: str
+    label: Aggregate Flag
+    derivation: {flag: "AGG > 0"}
+
+  - name: RESULT
+    type: str
+    label: Result
+
+rows:
+  - id: a
+    derivations:
+      RESULT: {flag: "FLG = 'Y'"}
+
+  - id: b
+    derivations:
+      RESULT: {flag: "FLG = 'Y'"}
+"""
+
+
+def test_repeated_row_derivation_skips_predicate_reads_of_blocked_columns(
+    tmp_path: Path,
+) -> None:
+    # FLG reads the dataset-level AGG inside a flag string, so FLG is not
+    # row-local either; the row derivation that reads FLG inside its own
+    # flag string therefore stays in the row templates. Whole-string
+    # comparisons missed both predicate reads and reported RESULT.
+    assert check_file(_spec(tmp_path, PREDICATE_CHAIN), orders=ORDERS) == ()
+
+
+def test_repeated_row_derivation_reports_predicate_reads_of_local_columns(
+    tmp_path: Path,
+) -> None:
+    # The same predicate forms over row-local columns stay reported:
+    # reading bare identifiers out of a string must not suppress a
+    # derivation whose chain is row-local all the way down.
+    local = PREDICATE_CHAIN.replace(
+        "    derivation:\n      aggregate:\n"
+        '        filter: "DM.X = 1"\n'
+        '        expr: "ONLY(DM.Y)"\n',
+        "    derivation: DM.AGG\n",
+    )
+    names = [
+        (item.name, item.spec_path)
+        for item in check_file(_spec(tmp_path, local), orders=ORDERS)
+    ]
+    assert ("repeated_row_derivation", "rows[0].derivations.RESULT") in names
 
 
 REDUNDANT = """\
