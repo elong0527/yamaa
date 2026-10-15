@@ -1,0 +1,48 @@
+name: Publish qualified release
+
+on:
+  push:
+    tags: ['yamaa-v*']
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'elong0527/yamaa'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+      - name: Select and download the exact qualified packages
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          python rust/tools/select_release_artifacts.py \
+            --repository "${GITHUB_REPOSITORY}" --tag "${RELEASE_TAG}" \
+            --destination "${RUNNER_TEMP}/qualified-release"
+      - name: Publish qualified assets without rebuilding
+        run: |
+          git fetch --no-tags origin "refs/tags/${RELEASE_TAG}:refs/release-publication/checked-tag"
+          test "$(git rev-parse 'refs/release-publication/checked-tag^{commit}')" = "$(cat "${RUNNER_TEMP}/qualified-release/source-revision.txt")"
+          mapfile -t assets < "${RUNNER_TEMP}/qualified-release/asset-paths.txt"
+          gh release create "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+            --verify-tag --title "yamaa ${RELEASE_TAG#yamaa-v}" \
+            --notes-file "${RUNNER_TEMP}/qualified-release/release-notes.md" \
+            "${assets[@]}"

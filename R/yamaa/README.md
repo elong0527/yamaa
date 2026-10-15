@@ -72,9 +72,9 @@ share cumulative allowances, and expensive plans can exhaust work before size.
 Validation and normalization share 67,108,864 logical work units; complex or
 inherited specifications can exhaust this separate preparation budget below
 the width ceiling. These are implementation policies, not language constraints
-or process-memory guarantees. Layered work policy and release acceptance remain
-tracked in [#2300](https://github.com/elong0527/yamaa/issues/2300) and
-[#2288](https://github.com/elong0527/yamaa/issues/2288).
+or process-memory guarantees. The
+[release resource policies](../../docs/release.md#resource-limits) describe
+cumulative layered allowances and the separate representation budgets.
 
 ## Source installation
 
@@ -87,6 +87,11 @@ After downloading the tarball from the selected release:
 ```r
 install.packages("yamaa_0.4.0.tar.gz", repos = NULL, type = "source")
 ```
+
+The release asset is the unchanged source archive tested on Linux. Native
+qualification also builds, installs and checks each host's own source archive
+on macOS and Windows. Checkout builds are development candidates; release
+downloads are selected by the complete native qualification workflow.
 
 Supported source-build targets are R 4.6.1 on Linux x86_64, macOS arm64 and Windows
 x64. Install Rust 1.90.0/Cargo and the platform's C compiler and GNU make first.
