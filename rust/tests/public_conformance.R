@@ -27,10 +27,26 @@ write_json <- function(path, value) {
   dir.create(dirname(path), recursive=TRUE, showWarnings=FALSE)
   writeBin(charToRaw(paste0(json(value), "\n")), path)
 }
+copy_tree <- function(source, target) {
+  dir.create(target, recursive=TRUE, showWarnings=FALSE)
+  for (entry in list.files(source, all.files=TRUE, no..=TRUE)) {
+    from <- file.path(source, entry)
+    to <- file.path(target, entry)
+    if (dir.exists(from)) copy_tree(from, to)
+    else if (!file.copy(from, to)) stop("could not copy staged R input: ", from)
+  }
+  invisible(TRUE)
+}
 move_inputs <- function(source, target) {
   if (!dir.exists(source)) stop("missing fresh R inputs; regenerate the conformance plan: ", source)
   dir.create(dirname(target), recursive=TRUE, showWarnings=FALSE)
-  if (!file.rename(source, target)) stop("could not move staged R inputs to execution work: ", source)
+  if (file.rename(source, target)) return(invisible(TRUE))
+  # file.rename() cannot move a directory across filesystems, so fall back
+  # to copying the staged tree into place and deleting the original.
+  copy_tree(source, target)
+  unlink(source, recursive=TRUE, force=TRUE)
+  if (dir.exists(source)) stop("could not move staged R inputs to execution work: ", source)
+  invisible(TRUE)
 }
 public_table <- function(frame) {
   if (is.null(frame)) return(NULL)
