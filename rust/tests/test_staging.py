@@ -1,6 +1,5 @@
 """Ensure the R archive has real shared sources and cannot overwrite prior work."""
 
-import collections
 import contextlib
 import csv
 import importlib.util
@@ -132,24 +131,6 @@ class StagingTests(unittest.TestCase):
                     json.loads(truth.read_text()),
                 )
 
-            # Historical preparation expectations keep facts unchanged; only the
-            # approved citation-only sidecar may fill a missing requirement.
-            def changes(before, after):
-                if isinstance(before, dict):
-                    self.assertEqual(before.keys(), after.keys())
-                    for key in before:
-                        if key == "requirement" and before[key] != after[key]:
-                            self.assertIsNone(before[key])
-                            yield after[key]
-                        else:
-                            yield from changes(before[key], after[key])
-                elif isinstance(before, list):
-                    self.assertEqual(len(before), len(after))
-                    for old, new in zip(before, after, strict=True):
-                        yield from changes(old, new)
-                else:
-                    self.assertEqual(before, after)
-
             source_preparation = (
                 staging.WORKSPACE
                 / "crates/yamaa-adapters/tests/fixtures/inheritance_preparation.tsv"
@@ -169,16 +150,11 @@ class StagingTests(unittest.TestCase):
             normative = preparation_rows(
                 retained_preparation.with_name("normative-inheritance-preparation.tsv")
             )
-            self.assertEqual(len(historical), len(normative))
-            actual_changes = collections.Counter()
-            for old, new in zip(historical, normative, strict=True):
-                before, after = (
-                    json.loads(old.pop("expected")),
-                    json.loads(new.pop("expected")),
-                )
-                self.assertEqual(old, new)
-                actual_changes.update(changes(before, after))
-            self.assertEqual(dict(actual_changes), {"REQ-0285": 1})
+            # Requirement citations are part of the fixture itself, so the
+            # normative copy only re-serializes the historical expectations.
+            for row in (*historical, *normative):
+                row["expected"] = json.loads(row["expected"])
+            self.assertEqual(historical, normative)
 
     def test_missing_lock_refuses_before_staging(self):
         with tempfile.TemporaryDirectory() as directory:
