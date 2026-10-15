@@ -118,9 +118,7 @@ def required_jobs(coverage):
         "portable-math-exact": (
             "Compare every candidate bit across the native matrix",
         ),
-        "public-cohort-complete-runs": (
-            "Require complete public runs through the M1 comparator",
-        ),
+        "public-cohort-complete-runs": ("Compare complete installed host reports",),
     }
     for lane in coverage["build"]["include"]:
         suffix = f"({lane['os']}, {lane['python']})"

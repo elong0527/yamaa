@@ -603,7 +603,7 @@ jobs:
         run: |
           uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/cohort-requirements.txt"
           python -m pip install --no-deps -r "${RUNNER_TEMP}/cohort-requirements.txt" "${RUNNER_TEMP}"/cohort-reference/*.whl
-      - name: Require complete public runs through the M1 comparator
+      - name: Compare complete installed host reports
         working-directory: ${{ runner.temp }}
         run: python -I -m tools.ci.native
       - name: Preserve complete public cohort inventory

@@ -48,9 +48,7 @@ def native_jobs():
     # platform/interpreter/form inventory rather than a second release matrix.
     jobs = {
         "portable-math-exact": ["Compare every candidate bit across the native matrix"],
-        "public-cohort-complete-runs": [
-            "Require complete public runs through the M1 comparator"
-        ],
+        "public-cohort-complete-runs": ["Compare complete installed host reports"],
     }
     for platform in MATRIX.PLATFORMS:
         jobs[f"native-rust ({platform}, {MATRIX.BUILD_PYTHON})"] = [

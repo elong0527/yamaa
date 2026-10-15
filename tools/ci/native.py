@@ -61,32 +61,25 @@ def compare_cohorts(matrix, root, revision):
                 "--r-evidence",
                 str(r_directory / "r-source"),
             ]
-        for tool, fixtures, destination in (
-            ("qualify_public_cohort.py", root / "benchmarks", output),
-            (
-                "qualify_producer_cohort.py",
-                root / "rust/qualification/producer-cohort",
-                output / "producer-cohort",
-            ),
-        ):
-            subprocess.run(
-                [
-                    sys.executable,
-                    "-I",
-                    "-m",
-                    "tools.conformance." + tool.removesuffix(".py"),
-                    "--fixtures",
-                    str(fixtures),
-                    "--python-evidence",
-                    str(python_evidence),
-                    *r_evidence,
-                    "--output",
-                    str(destination),
-                    "--source-revision",
-                    revision,
-                ],
-                check=True,
-            )
+        subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                "-m",
+                "tools.conformance.public_conformance",
+                "complete-reports",
+                "--fixtures",
+                str(root / "benchmarks"),
+                "--python-evidence",
+                str(python_evidence),
+                *r_evidence,
+                "--output",
+                str(output),
+                "--source-revision",
+                revision,
+            ],
+            check=True,
+        )
 
 
 def main():
