@@ -52,6 +52,23 @@ impl Fixture {
         )
         .unwrap_or_else(|issues| panic!("preparation {issues:?}"))
     }
+    fn check(&self) -> Vec<yamaa_adapters::issue_rows::Issue> {
+        let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
+        file_application::check(
+            Request {
+                specification: &specification,
+                environment: None,
+            },
+            Identity {
+                runtime: "test",
+                runtime_version: "test",
+                engine_version: yamaa_core::VERSION,
+                example: "grouped-reducer-check",
+                specification: &specification,
+                base_directory: ".",
+            },
+        )
+    }
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
@@ -132,6 +149,46 @@ fn grouped_row_case_reads_group_keys_and_converted_reductions() {
         b"ID,SECTION,TOTAL,TEXT\na,grouped,7,a\nb,grouped,1,low\n"
     );
 }
+
+#[test]
+fn grouped_numeric_reducers_skip_missing_arguments_and_still_reject_present_text() {
+    for reducer in ["SUM", "MEAN"] {
+        let source = format!(
+            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: input.csv, types: {{V: str}}}}}}\noutput: {{path: output.csv, columns: [ID, VALUE]}}\ncolumns: [{{name: ID, type: str}}, {{name: VALUE, type: float}}]\nrows:\n  - id: groups\n    group_by: [SRC.ID]\n    derivations:\n      ID: SRC.ID\n      VALUE: {{aggregate: {{expr: '{reducer}(SRC.V)'}}}}\n"
+        );
+        for (input, expected) in [
+            (b"ID,V\na,\na,\n".as_slice(), b"ID,VALUE\na,\n".as_slice()),
+            (b"ID,V\n".as_slice(), b"ID,VALUE\n".as_slice()),
+        ] {
+            let fixture = bespoke(&source, input);
+            assert!(fixture.check().is_empty());
+            assert_eq!(saved(&fixture), expected, "{reducer}");
+        }
+        for input in [
+            b"ID,V\na,text\n".as_slice(),
+            b"ID,V\na,\na,text\n".as_slice(),
+        ] {
+            let fixture = bespoke(&source, input);
+            assert!(fixture.check().is_empty());
+            let mut result = fixture.run();
+            assert_eq!(result.issues().len(), 1, "{reducer}: {:?}", result.issues());
+            let issue = &result.issues()[0];
+            assert_eq!(issue.phase, "validation");
+            assert_eq!(issue.condition, "incompatible_input_type");
+            assert_eq!(issue.requirement.as_deref(), Some("REQ-0510"));
+            assert_eq!(issue.spec_paths, ["rows[0].derivations.VALUE.aggregate"]);
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(&issue.context).unwrap(),
+                serde_json::json!({"expr": format!("{reducer}(SRC.V)"),
+                    "reducer": reducer, "source": "SRC.V", "expected": "numeric", "actual": "str"})
+            );
+            assert!(result.output().is_none());
+            assert!(matches!(result.save(), Err(file_application::FailedBuild)));
+            assert!(!fixture.0.join("output.csv").exists());
+        }
+    }
+}
+
 #[test]
 fn invalid_grouped_case_source_and_window_filter_refuse_publication() {
     let columns = "  - {name: VALUE, type: int}\n";
@@ -289,6 +346,7 @@ rows:
 "#,
         b"I,V\n3,8\n2,3\n1,5\n2,4\n",
     );
-    // REQ-1056 gates completed candidate groups, including their windows.
+    // REQ-0058/REQ-0059 run grouped filters after the complete row graph,
+    // including windows. REQ-0068's pre-window restriction is ungrouped.
     assert_eq!(saved(&fixture), b"ID,TOTAL,SEQ\n2,7,2\n");
 }

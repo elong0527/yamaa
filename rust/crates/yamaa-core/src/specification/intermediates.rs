@@ -738,6 +738,19 @@ impl Declarations {
                         sources,
                         schemas,
                         driver,
+                        // Current source-key cardinality is resolved before
+                        // selecting donor records. Its failure must precede
+                        // the filter's operand types.
+                        !(pairs.iter().any(|key| key.value.is_expression())
+                            && pairs.iter().any(|key| {
+                                matches!(
+                                    key.value.read(),
+                                    Some(
+                                        crate::dataset::MatchRead::Record { .. }
+                                            | crate::dataset::MatchRead::SecondaryRecord { .. }
+                                    )
+                                )
+                            })),
                         findings,
                     )?;
                     if filter.is_none() {

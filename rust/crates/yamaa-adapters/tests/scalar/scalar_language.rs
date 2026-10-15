@@ -223,6 +223,33 @@ fn nested_concat_keeps_order_and_handler_counts_and_stops_at_missing() {
         b"ID,RESULT\na,fallback\n"
     );
 }
+
+#[test]
+fn concat_missing_fallback_keeps_an_earlier_nested_absent_handler() {
+    // Preserve the distinct REQ-0361 case from the retired Python expression
+    // control: a later missing value must retain the earlier source's handler.
+    let fixture = bespoke(
+        &spec(
+            "{str_concat: {sources: [{source: {variable: SRC.ABSENT, absent: NA}}, {source: SRC.B}], missing: '?' }}",
+            "str",
+        ),
+        b"ID,I,F,D,B\na,1,1,2025-01-01,\n",
+    );
+    let mut result = fixture.run();
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    let counts = serde_json::json!([
+        {"spec_path": "columns.RESULT.derivation.str_concat.missing", "handler": "missing", "count": 1},
+        {"spec_path": "columns.RESULT.derivation.str_concat.sources[0].source.absent", "handler": "absent", "count": 1},
+    ]);
+    assert_eq!(result.observations()["handler_counts"], counts);
+    assert_eq!(result.observations()["nodes"][0]["handler_counts"], counts);
+    assert!(result.save().unwrap());
+    assert_eq!(
+        fs::read(fixture.0.join("output.csv")).unwrap(),
+        b"ID,RESULT\na,?\n"
+    );
+}
+
 #[test]
 fn concat_input_diagnostic_preserves_operand_path_and_blocks_publication() {
     let fixture = bespoke(

@@ -61,6 +61,7 @@ fn numeric_kinds_with_budget(
 pub(super) fn aggregate_kinds(
     plan: &crate::aggregate_compiler::CompiledAggregate,
     kind: impl Fn(&str) -> Option<ValueType>,
+    source_arguments: bool,
 ) -> Result<Vec<Diagnostic>, BindError> {
     use crate::{
         aggregate_compiler::{AggregateOperand, AggregateResult},
@@ -79,6 +80,11 @@ pub(super) fn aggregate_kinds(
             _ => continue,
         };
         if let AggregateOperand::Value(name) = &reduction.operand {
+            // A grouped source reduction checks the collected present values.
+            // Its storage kind does not make missing cells numeric arguments.
+            if source_arguments && name.contains('.') {
+                continue;
+            }
             if let Some(actual) =
                 kind(name).filter(|actual| !matches!(actual, ValueType::Int | ValueType::Float))
             {
