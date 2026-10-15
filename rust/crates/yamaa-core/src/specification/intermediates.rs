@@ -804,13 +804,11 @@ impl Declarations {
                         // selecting donor records. Its failure must precede
                         // the filter's operand types.
                         !(pairs.iter().any(|key| key.value.is_expression())
-                            && pairs.iter().any(|key| {
+                            && pairs.iter().flat_map(|key| key.value.reads()).any(|read| {
                                 matches!(
-                                    key.value.read(),
-                                    Some(
-                                        crate::dataset::MatchRead::Record { .. }
-                                            | crate::dataset::MatchRead::SecondaryRecord { .. }
-                                    )
+                                    read,
+                                    crate::dataset::MatchRead::Record { .. }
+                                        | crate::dataset::MatchRead::SecondaryRecord { .. }
                                 )
                             })),
                         findings,

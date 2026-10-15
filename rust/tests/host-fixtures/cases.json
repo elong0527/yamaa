@@ -3613,6 +3613,61 @@
               "spec_path": "intermediates[0].key.M.str_case.missing"
             }
           ]
+        },
+        {
+          "name": "generic-key-cardinality-precedes-donor-filter-types",
+          "specification": "schema_version: '1.0'\ndomain: OUT\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      N: int\n  TAB:\n    path: tab.csv\n    types:\n      KINT: int\n      KNUM: float\nbase: SRC\noutput:\n  path: out.csv\n  columns:\n  - ID\n  - V\n  - V2\nintermediates:\n- id: LOOK\n  dataset: TAB\n  key:\n    KINT:\n      compute:\n        expr: SRC.N + 0\n  filter: TAB.KINT > 'bad'\n  no_match: null\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: V\n  type: str\n  derivation: LOOK.VAL\n- name: V2\n  type: str\n  derivation: LOOK.VAL\n",
+          "inputs": {
+            "src.csv": "ID,N\na,7\na,8\n",
+            "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "derivation",
+              "condition": "multiple_values_per_key",
+              "requirement": "REQ-0075",
+              "spec_paths": [
+                "intermediates[0]"
+              ],
+              "context": {
+                "identifier": "SRC.N",
+                "keys": [
+                  {
+                    "ID": "a"
+                  }
+                ],
+                "value_count": 2
+              }
+            }
+          ],
+          "handlers": [],
+          "csv": null
+        },
+        {
+          "name": "generic-key-valid-cardinality-retains-donor-filter-type-refusal",
+          "specification": "schema_version: '1.0'\ndomain: OUT\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      N: int\n  TAB:\n    path: tab.csv\n    types:\n      KINT: int\n      KNUM: float\nbase: SRC\noutput:\n  path: out.csv\n  columns:\n  - ID\n  - V\n  - V2\nintermediates:\n- id: LOOK\n  dataset: TAB\n  key:\n    KINT:\n      compute:\n        expr: SRC.N + 0\n  filter: TAB.KINT > 'bad'\n  no_match: null\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: V\n  type: str\n  derivation: LOOK.VAL\n- name: V2\n  type: str\n  derivation: LOOK.VAL\n",
+          "inputs": {
+            "src.csv": "ID,N\na,7\n",
+            "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "requirement": "REQ-0190",
+              "spec_paths": [
+                "intermediates[0].filter"
+              ],
+              "context": {
+                "left_type": "int",
+                "right_type": "str"
+              }
+            }
+          ],
+          "handlers": [],
+          "csv": null
         }
       ]
     },
