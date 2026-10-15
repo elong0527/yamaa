@@ -277,7 +277,11 @@ pub(super) fn validate(
                     items[index].source_kind(sources, column)
                 }
             };
-            if range.value_kind() != current_kind.map(Into::into) {
+            if range
+                .value_kind()
+                .zip(current_kind)
+                .is_some_and(|(value, current)| value != current.into())
+            {
                 return Err(PlanError::InvalidIntermediate);
             }
             if [range.lower(), range.upper()]

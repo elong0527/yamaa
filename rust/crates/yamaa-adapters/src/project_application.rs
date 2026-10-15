@@ -312,6 +312,26 @@ fn preparation_boundary(
 mod resource_tests {
     use super::*;
     #[test]
+    fn inventory_rejection_retains_the_preparation_stage_and_inventory_cause() {
+        let inventory = || {
+            crate::file_preparation::Error::Inventory(
+                yamaa_core::submission_inventory::MetadataError::Shape,
+            )
+        };
+        let original = file_application::preparation_failure(inventory().into_message());
+        let project = failure(
+            &Error::Project(file_project::Error::Document(inventory())),
+            Language::Python,
+        );
+        assert_eq!(project, original);
+        assert_eq!(project.len(), 1);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&project[0].context).unwrap(),
+            serde_json::json!({"stage":"prepare", "code":"inventory"})
+        );
+    }
+
+    #[test]
     fn layered_validation_depth_refusal_keeps_its_preparation_outcome_on_both_routes() {
         use yamaa_core::schema::ValidationError;
         let error = crate::specification_source::InheritanceError::<crate::file_resources::Error>::Preparation {
