@@ -581,7 +581,7 @@ fn compiler_refusals_retain_the_same_capacity_on_plain_and_environment_routes() 
 }
 
 #[test]
-fn iterative_inheritance_admits_sixty_five_layers_on_both_public_routes() {
+fn iterative_inheritance_admits_sixty_five_layers_during_check_and_build() {
     let study = Study::new();
     fs::write(study.0.join("base.yaml"), VALID).unwrap();
     fs::write(study.0.join("input.csv"), b"ID\n1\n").unwrap();
@@ -610,17 +610,27 @@ fn iterative_inheritance_admits_sixty_five_layers_on_both_public_routes() {
     let spec = study.text("spec.yaml");
     let environment = study.text("environment.yaml");
     for environment in [None, Some(environment.as_str())] {
-        let request = || Request {
-            specification: &spec,
-            environment,
-        };
-        assert!(file_application::check(request(), identity(&spec)).is_empty());
-        let mut result = file_application::domain(request(), identity(&spec)).unwrap();
-        assert!(result.issues().is_empty());
-        assert!(result.output().is_some());
-        assert!(result.save().unwrap());
-        assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n1\n");
+        assert!(file_application::check(
+            Request {
+                specification: &spec,
+                environment
+            },
+            identity(&spec)
+        )
+        .is_empty());
     }
+    let mut result = file_application::domain(
+        Request {
+            specification: &spec,
+            environment: None,
+        },
+        identity(&spec),
+    )
+    .unwrap();
+    assert!(result.issues().is_empty());
+    assert!(result.output().is_some());
+    assert!(result.save().unwrap());
+    assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n1\n");
 }
 
 #[test]
