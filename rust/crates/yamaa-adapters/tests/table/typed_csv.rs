@@ -130,3 +130,113 @@ fn incomplete_temporal_text_is_not_implicitly_imputed() {
         );
     }
 }
+
+#[test]
+fn retired_python_integer_ingestion_keeps_every_i64_through_long_zero_prefixes() {
+    // Original test_source.py operands: CSV admission must not inherit a host
+    // integer-string digit ceiling or round the values through binary64.
+    let expected = [0_i64, 1, 9_007_199_254_740_993, i64::MAX, i64::MIN];
+    let mut input = String::from("VALUE\n");
+    for value in expected {
+        input.push(if value < 0 { '-' } else { '+' });
+        input.push_str(&"0".repeat(5000));
+        input.push_str(&value.unsigned_abs().to_string());
+        input.push('\n');
+    }
+    let table = typed_csv::parse(
+        input.as_bytes(),
+        &[("VALUE".into(), T::Int)],
+        Default::default(),
+        limits(),
+    )
+    .unwrap();
+    assert_eq!(table.row_count(), expected.len());
+    for (row, value) in expected.into_iter().enumerate() {
+        assert_eq!(table.cell(row, 0).unwrap(), ValueRef::Int(value));
+    }
+}
+
+#[test]
+fn retired_python_typed_csv_keeps_original_field_order_missingness_and_civil_time() {
+    let declared = [
+        ("AGE".into(), T::Int),
+        ("SCORE".into(), T::Float),
+        ("DATE".into(), T::Date),
+        ("MOMENT".into(), T::DateTime),
+    ];
+    let table = typed_csv::parse(
+        b"ID,AGE,SCORE,DATE,MOMENT,EMPTY,TEXT\n\
+007,42,1.5,2025-01-02,2025-01-02T03:04,,\"\"\n\
+008,,.Inf,2025-02-03,2025-02-03T04:05:06,NA,unknown\n",
+        &declared,
+        Default::default(),
+        limits(),
+    )
+    .unwrap();
+    assert_eq!(
+        table
+            .schema()
+            .columns()
+            .iter()
+            .map(|column| (column.name.as_str(), column.kind))
+            .collect::<Vec<_>>(),
+        [
+            ("ID", T::Str),
+            ("AGE", T::Int),
+            ("SCORE", T::Float),
+            ("DATE", T::Date),
+            ("MOMENT", T::DateTime),
+            ("EMPTY", T::Str),
+            ("TEXT", T::Str),
+        ]
+    );
+    let expected = [
+        vec![
+            ValueRef::Str("007"),
+            ValueRef::Int(42),
+            ValueRef::Float(yamaa_core::value::FiniteFloat::new(1.5).unwrap()),
+            ValueRef::Date("2025-01-02".parse().unwrap()),
+            ValueRef::DateTime("2025-01-02T03:04".parse().unwrap()),
+            ValueRef::Missing,
+            ValueRef::Missing,
+        ],
+        vec![
+            ValueRef::Str("008"),
+            ValueRef::Missing,
+            ValueRef::Missing,
+            ValueRef::Date("2025-02-03".parse().unwrap()),
+            ValueRef::DateTime("2025-02-03T04:05:06".parse().unwrap()),
+            ValueRef::Str("NA"),
+            ValueRef::Str("unknown"),
+        ],
+    ];
+    assert_eq!(table.row_count(), expected.len());
+    for (row, values) in expected.into_iter().enumerate() {
+        for (column, value) in values.into_iter().enumerate() {
+            assert_eq!(table.cell(row, column).unwrap(), value, "{row}/{column}");
+        }
+    }
+
+    let empty =
+        typed_csv::parse(b"ID,AGE\n", &declared[..1], Default::default(), limits()).unwrap();
+    assert_eq!(empty.row_count(), 0);
+    assert_eq!(empty.schema().columns()[0].kind, T::Str);
+    assert_eq!(empty.schema().columns()[1].kind, T::Int);
+    let quoted =
+        typed_csv::parse(b"AGE\n\"\"\n", &declared[..1], Default::default(), limits()).unwrap();
+    assert_eq!(quoted.cell(0, 0).unwrap(), ValueRef::Missing);
+}
+
+#[test]
+fn retired_python_missing_looking_text_is_never_inferred_as_missing() {
+    let table = typed_csv::parse(
+        b"VALUE\nNA\nNULL\n.\nunknown\n",
+        &[],
+        Default::default(),
+        limits(),
+    )
+    .unwrap();
+    for (row, expected) in ["NA", "NULL", ".", "unknown"].into_iter().enumerate() {
+        assert_eq!(table.cell(row, 0).unwrap(), ValueRef::Str(expected));
+    }
+}

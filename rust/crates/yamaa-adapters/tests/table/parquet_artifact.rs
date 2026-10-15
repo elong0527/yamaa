@@ -418,3 +418,27 @@ fn artifacts_keep_complete_temporal_fields_and_drop_collected_precision() {
         ],
     );
 }
+
+#[test]
+fn retired_python_double_operands_round_trip_without_display_rounding() {
+    let values = [0.1, 1.0 / 3.0, f64::from_bits(1), 1e308, -0.0, 2.675];
+    let table = table(
+        &[("USUBJID", ColumnType::Str), ("VALUE", ColumnType::Float)],
+        values
+            .into_iter()
+            .enumerate()
+            .map(|(index, value)| vec![Value::Str(format!("S-{index}")), Value::float(value)])
+            .collect(),
+    );
+    let source = Source::new(&render(&table, &[0, 1], limits()).unwrap());
+    let reader = source.reader();
+    let rows = reader
+        .get_row_iter(None)
+        .unwrap()
+        .map(Result::unwrap)
+        .collect::<Vec<_>>();
+    assert_eq!(rows.len(), values.len());
+    for (row, expected) in rows.iter().zip(values) {
+        assert_eq!(row.get_double(1).unwrap().to_bits(), expected.to_bits());
+    }
+}
