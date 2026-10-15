@@ -653,7 +653,8 @@ pub(super) fn bind_row(
                                     continue;
                                 }
                             }
-                            if let Some(expression) = self_relations::bind_operand(
+                            let reference_start = findings.len();
+                            let expression = self_relations::bind_operand(
                                 identifier,
                                 plan.spec_path(),
                                 catalog,
@@ -667,7 +668,12 @@ pub(super) fn bind_row(
                                 named,
                                 secondary,
                                 intermediates,
-                            )? {
+                            )?;
+                            case_predicates::retain_reference_owner(
+                                &mut findings[reference_start..],
+                                catalog,
+                            )?;
+                            if let Some(expression) = expression {
                                 let read = match expression {
                                     Expression::Source(column) => Read::Source(column),
                                     Expression::Column(column) => Read::Column(column),
