@@ -50,20 +50,6 @@ fn diamond_and_shared_aliases_retain_authored_order_but_compile_each_identity_on
         ["RIGHT", "LEFT", "AGAIN"]
     );
     assert!(graph.called_functions().is_empty());
-    let PrepareError::Unsupported(features) = graph.execution_refusal() else {
-        panic!("metadata graph must refuse execution")
-    };
-    assert_eq!(
-        features
-            .iter()
-            .map(|f| (f.operation.as_str(), f.path.as_str()))
-            .collect::<Vec<_>>(),
-        [
-            ("producer_workflow", "input.RIGHT.schema"),
-            ("producer_workflow", "input.LEFT.schema"),
-            ("producer_workflow", "input.AGAIN.schema"),
-        ]
-    );
     assert!(matches!(
         yamaa_core::specification::PreparedSpecification::prepare(&root),
         Err(PrepareError::Unsupported(_))
@@ -109,7 +95,8 @@ fn local_slots_project_into_unique_graph_selection_in_environment_order() {
 
 #[test]
 fn recursive_and_self_cycles_retain_closed_identity_route_without_compiling_calls() {
-    use yamaa_core::{diagnostic::ContextValue as V, value::Value};
+    use serde_json::Value as V;
+
     let a = document(&[("B", Some("/b"))], Some("unknown"));
     let b = document(&[("C", Some("/c"))], None);
     let c = document(&[("A", Some("/a"))], None);
@@ -142,10 +129,10 @@ fn recursive_and_self_cycles_retain_closed_identity_route_without_compiling_call
     assert_eq!(diagnostic.spec_paths, ["input.A.schema"]);
     assert_eq!(
         diagnostic.context["cycle"],
-        V::Sequence(
+        V::Array(
             ["/a", "/b", "/c", "/a"]
                 .into_iter()
-                .map(|s| V::Scalar(Value::Str(s.into())))
+                .map(|s| V::String(s.into()))
                 .collect()
         )
     );

@@ -20,7 +20,7 @@ pub(super) fn recover<E>(
     {
         budget.scalar_text(text.len())?;
     }
-    let column_path = alloc::format!(
+    let column_path = std::format!(
         "columns.{}",
         plan.output().columns()[assignment.column].name
     );

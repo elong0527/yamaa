@@ -435,7 +435,8 @@ fn failed_attempts_retain_charges_and_fresh_requests_recover() {
 
 #[test]
 fn real_traversal_failures_project_canonical_causes_and_original_provenance() {
-    use yamaa_core::{diagnostic::ContextValue as C, value::Value as S};
+    use serde_json::Value as C;
+    use yamaa_core::value::Value as S;
     fn check(
         error: &Error<(&str, u32)>,
         condition: &str,
@@ -455,7 +456,7 @@ fn real_traversal_failures_project_canonical_causes_and_original_provenance() {
         );
         assert_eq!(diagnostic.spec_paths, [path]);
         for &(name, value) in fields {
-            assert_eq!(diagnostic.context[name], C::Scalar(S::Str(value.into())));
+            assert_eq!(diagnostic.context[name], C::from(S::Str(value.into())));
         }
     }
     let mut port = Port::default();
@@ -515,10 +516,10 @@ fn real_traversal_failures_project_canonical_causes_and_original_provenance() {
         };
         assert_eq!(
             error.diagnostic().unwrap().context["cycle"],
-            C::Sequence(
+            C::Array(
                 expected
                     .into_iter()
-                    .map(|s| C::Scalar(S::Str(s.into())))
+                    .map(|s| C::from(S::Str(s.into())))
                     .collect()
             )
         );

@@ -7,7 +7,7 @@ pub enum OdmScope {
     Keys,
     Records,
     Groups(Vec<usize>),
-    Templates(alloc::rc::Rc<[OdmTemplateScope]>),
+    Templates(std::rc::Rc<[OdmTemplateScope]>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -60,12 +60,12 @@ fn template_bytes(contexts: &[OdmTemplateScope]) -> Option<usize> {
             return None;
         }
         used.checked_add(context.row.capacity())
-            .and_then(|used| used.checked_add(core::mem::size_of::<OdmTemplateScope>()))
+            .and_then(|used| used.checked_add(std::mem::size_of::<OdmTemplateScope>()))
             .and_then(|used| {
                 used.checked_add(match &context.groups {
                     Some(fields) => fields
                         .capacity()
-                        .checked_mul(core::mem::size_of::<usize>())?,
+                        .checked_mul(std::mem::size_of::<usize>())?,
                     None => 0,
                 })
             })
@@ -89,7 +89,7 @@ impl BoundOdm {
                 .iter()
                 .any(|text| text.is_empty())
             || read.row.as_ref().is_some_and(String::is_empty)
-            || read.item != alloc::format!("{}.{}", read.dataset, read.item_oid)
+            || read.item != std::format!("{}.{}", read.dataset, read.item_oid)
         {
             return Err(PlanError::InvalidSource);
         }
@@ -100,7 +100,7 @@ impl BoundOdm {
     }
     pub(crate) fn defer(
         &mut self,
-        contexts: alloc::rc::Rc<[OdmTemplateScope]>,
+        contexts: std::rc::Rc<[OdmTemplateScope]>,
     ) -> Result<(), PlanError> {
         if self.0.source.is_none()
             || self.0.phase != AggregatePhase::Derivation
@@ -293,11 +293,11 @@ mod tests {
             filter: None,
         })
         .unwrap();
-        let mut expression = Expression::Odm(alloc::boxed::Box::new(bound));
+        let mut expression = Expression::Odm(std::boxed::Box::new(bound));
         for _ in 0..66 {
-            expression = Expression::Case(alloc::vec![CaseBranch {
+            expression = Expression::Case(std::vec![CaseBranch {
                 when: None,
-                assignment: alloc::boxed::Box::new(Assignment {
+                assignment: std::boxed::Box::new(Assignment {
                     column: 0,
                     expression,
                     path: "nested".into(),

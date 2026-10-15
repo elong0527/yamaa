@@ -1,8 +1,8 @@
+use serde_json::Value as JsonValue;
 use std::collections::BTreeSet;
 use yamaa_core::{
-    diagnostic::{ConditionCode, ContextValue},
+    diagnostic::ConditionCode,
     text_pad::{DeclarationError, StringPad},
-    value::Value,
 };
 pub(super) fn reached() -> BTreeSet<ConditionCode> {
     let cause = StringPad::new("SRC.V", "columns.V.derivation.str_pad", "0").unwrap_err();
@@ -21,7 +21,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
         d.context,
         [(
             "expected".into(),
-            ContextValue::Scalar(Value::Str("a positive integer width".into()))
+            JsonValue::String("a positive integer width".into())
         )]
         .into_iter()
         .collect()

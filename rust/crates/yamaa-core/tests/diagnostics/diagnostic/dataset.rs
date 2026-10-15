@@ -1,12 +1,13 @@
+use serde_json::Value as V;
 use std::collections::BTreeSet;
 use yamaa_core::{
-    diagnostic::{ConditionCode, ContextValue as V, DatasetFinding as F, ProjectionError},
+    diagnostic::{ConditionCode, DatasetFinding as F, ProjectionError},
     reduction::NumericReducer,
     temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
     value::{Value, ValueType},
 };
 fn text(value: &str) -> V {
-    V::Scalar(Value::Str(value.into()))
+    V::String(value.into())
 }
 
 /// Independent normative assertions; engine tests reach the same causes from
@@ -23,10 +24,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "derivation",
             "multiple_values_per_key",
             "REQ-0075",
-            vec![
-                ("identifier", text("SRC.A")),
-                ("value_count", V::Scalar(Value::Int(3))),
-            ],
+            vec![("identifier", text("SRC.A")), ("value_count", V::from(3))],
         ),
         (
             F::UnmatchedKey {
@@ -52,7 +50,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             vec![
                 ("dataset", text("DM")),
                 ("intermediate", text("I")),
-                ("match_count", V::Scalar(Value::Int(4))),
+                ("match_count", V::from(4)),
             ],
         ),
         (
@@ -69,7 +67,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 ("column", text("A")),
                 ("operation", text("baseline_flag")),
                 ("date", text("2024-02-29")),
-                ("match_count", V::Scalar(Value::Int(2))),
+                ("match_count", V::from(2)),
             ],
         ),
         (
@@ -229,10 +227,7 @@ fn counts_above_i64_remain_mathematical_diagnostic_integers() {
     }
     .diagnostic()
     .unwrap();
-    assert_eq!(
-        diagnostic.context["value_count"],
-        V::Integer(usize::MAX.to_string())
-    );
+    assert_eq!(diagnostic.context["value_count"], V::from(usize::MAX));
     let diagnostic = F::MultipleMatches {
         path: "p",
         dataset: "DM",
@@ -241,8 +236,5 @@ fn counts_above_i64_remain_mathematical_diagnostic_integers() {
     }
     .diagnostic()
     .unwrap();
-    assert_eq!(
-        diagnostic.context["match_count"],
-        V::Integer(usize::MAX.to_string())
-    );
+    assert_eq!(diagnostic.context["match_count"], V::from(usize::MAX));
 }

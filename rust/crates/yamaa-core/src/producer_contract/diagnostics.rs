@@ -1,13 +1,14 @@
 //! Portable producer causes retain authored geometry without study data.
 use super::{Cause, Contract, Error, Limits};
 use crate::{
-    diagnostic::{ConditionCode as C, ContextValue as V, Diagnostic},
-    value::{ColumnType, Value},
+    diagnostic::{ConditionCode as C, Diagnostic},
+    value::ColumnType,
 };
-use alloc::{format, string::ToString, vec, vec::Vec};
+use serde_json::Value as V;
+use std::vec;
 
 pub(crate) fn text(value: &str) -> V {
-    V::Scalar(Value::Str(value.into()))
+    V::String(value.into())
 }
 pub(crate) fn kind(value: ColumnType) -> &'static str {
     match value {
@@ -38,7 +39,7 @@ impl Cause {
                 count,
             } => {
                 context.push(("field".into(), text(field)));
-                context.push(("declarations".into(), V::Integer(count.to_string())));
+                context.push(("declarations".into(), V::from(*count)));
                 format!("{prefix}.output.columns[{position}]")
             }
             Self::Label { field } => {
@@ -123,16 +124,14 @@ impl Contract {
             .copied()
             .filter(|name| !expected.contains(name))
             .collect::<Vec<_>>();
-        let sequence = |names: &[&str]| V::Sequence(names.iter().map(|name| text(name)).collect());
+        let sequence = |names: &[&str]| V::Array(names.iter().map(|name| text(name)).collect());
         let mut context = vec![
             ("dataset".into(), text(dataset)),
             ("expected".into(), sequence(&expected)),
             ("actual".into(), sequence(actual)),
             (
                 "reordered".into(),
-                V::Scalar(Value::Bool(
-                    missing.is_empty() && extra.is_empty() && actual != expected,
-                )),
+                V::Bool(missing.is_empty() && extra.is_empty() && actual != expected),
             ),
             ("missing".into(), sequence(&missing)),
             ("extra".into(), sequence(&extra)),
@@ -140,11 +139,11 @@ impl Contract {
         if let Some(typed) = typed {
             context.push((
                 "expected_types".into(),
-                V::Sequence(self.fields.iter().map(|f| text(kind(f.kind))).collect()),
+                V::Array(self.fields.iter().map(|f| text(kind(f.kind))).collect()),
             ));
             context.push((
                 "actual_types".into(),
-                V::Sequence(typed.iter().map(|(_, k)| text(kind(*k))).collect()),
+                V::Array(typed.iter().map(|(_, k)| text(kind(*k))).collect()),
             ));
         }
         Ok(Some(Diagnostic {

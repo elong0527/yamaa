@@ -7,7 +7,7 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
         Expression::StrCase { source, operation } => {
             if operation.missing().is_some() {
                 counter.register(
-                    &alloc::format!("{}.missing", operation.path()),
+                    &std::format!("{}.missing", operation.path()),
                     HandlerKind::Missing,
                 );
             }
@@ -62,7 +62,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
             state
                 .handlers
                 .record(
-                    &alloc::format!("{}.missing", operation.path()),
+                    &std::format!("{}.missing", operation.path()),
                     HandlerKind::Missing,
                 )
                 .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;

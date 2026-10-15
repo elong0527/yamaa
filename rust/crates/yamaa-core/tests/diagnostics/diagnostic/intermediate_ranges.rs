@@ -1,11 +1,12 @@
 //! Original declarations reach range and projection causes with complete context.
 use crate::support::table_schema as schema;
+use serde_json::Value as JsonValue;
 use std::collections::BTreeSet;
 use yamaa_core::{
-    diagnostic::{ConditionCode, ContextValue, Diagnostic},
+    diagnostic::{ConditionCode, Diagnostic},
     schema::{Document, DocumentNode as N, SpecificationDocument, ValidationBudget},
     specification::{BindError, PrepareError, PreparedSpecification},
-    value::{ColumnType as T, Value},
+    value::ColumnType as T,
 };
 enum Tree<'a> {
     Text(&'a str),
@@ -86,8 +87,8 @@ fn model(between: Option<Tree<'_>>, columns: Option<Tree<'_>>) -> SpecificationD
     .unwrap()
     .unwrap()
 }
-fn text(value: &str) -> ContextValue {
-    ContextValue::Scalar(Value::Str(value.into()))
+fn text(value: &str) -> JsonValue {
+    JsonValue::String(value.into())
 }
 fn check(
     d: Diagnostic,

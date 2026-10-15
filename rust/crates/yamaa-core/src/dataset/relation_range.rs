@@ -4,7 +4,7 @@ use crate::{
     table::ValueRef,
     value::{compare_present_refs, ValueType},
 };
-use core::cmp::Ordering;
+use std::cmp::Ordering;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RelationRangeBound {
@@ -28,7 +28,8 @@ impl RelationRangeTypes {
         path: &str,
         intermediate: Option<&str>,
     ) -> crate::diagnostic::Diagnostic {
-        use crate::diagnostic::{ConditionCode, ContextValue, Diagnostic};
+        use crate::diagnostic::{ConditionCode, Diagnostic};
+        use serde_json::Value as JsonValue;
         let name = |kind| match kind {
             ValueType::Str => "str",
             ValueType::Int => "int",
@@ -37,7 +38,7 @@ impl RelationRangeTypes {
             ValueType::Date => "date",
             ValueType::DateTime => "datetime",
         };
-        let text = |value: &str| ContextValue::Scalar(Value::Str(value.into()));
+        let text = |value: &str| JsonValue::String(value.into());
         let mut context = BTreeMap::from([("value_type".into(), text(name(self.value)))]);
         if let Some(intermediate) = intermediate {
             context.insert("intermediate".into(), text(intermediate));
@@ -56,16 +57,22 @@ impl RelationRangeTypes {
         }
     }
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum RelationRangeError {
+    #[error("dataset relation range invalid metadata")]
     InvalidMetadata,
+    #[error("dataset relation range limit")]
     Limit,
+    #[error("dataset relation range no bounds")]
     NoBounds,
+    #[error("dataset relation range incomparable: {0:?}")]
     Incomparable(RelationRangeTypes),
 }
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum RelationRangeFailure<E> {
+    #[error("dataset relation range access: {0:?}")]
     Access(E),
+    #[error("dataset relation range incomparable: {0:?}")]
     Incomparable(RelationRangeTypes),
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -110,7 +117,7 @@ impl RelationRange {
         let initial = path
             .capacity()
             .checked_add(current.identifier.capacity())
-            .and_then(|n| n.checked_add(core::mem::size_of::<Self>()))
+            .and_then(|n| n.checked_add(std::mem::size_of::<Self>()))
             .ok_or(RelationRangeError::Limit)?;
         let bytes = [&lower, &upper]
             .iter()

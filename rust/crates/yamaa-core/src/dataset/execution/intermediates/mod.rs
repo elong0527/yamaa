@@ -4,7 +4,7 @@ use super::*;
 mod cache_tests;
 mod key_index;
 pub(super) mod match_values;
-use alloc::{collections::BTreeMap, rc::Rc};
+use std::{collections::BTreeMap, rc::Rc};
 
 /// Keep only immutable row coordinates and the inherited handler outcome.
 #[derive(Clone, Copy)]
@@ -184,13 +184,13 @@ fn source_name<'a>(item: &'a Intermediate, plan: &'a DatasetPlan) -> &'a str {
 }
 pub(super) struct Data<'a, E> {
     dataset: &'a Dataset,
-    error: core::marker::PhantomData<E>,
+    error: std::marker::PhantomData<E>,
 }
 impl<'a, E> Data<'a, E> {
     pub(super) fn new(dataset: &'a Dataset) -> Self {
         Self {
             dataset,
-            error: core::marker::PhantomData,
+            error: std::marker::PhantomData,
         }
     }
 }
@@ -446,7 +446,7 @@ fn donor_failure<E>(
                 source_row,
                 error: original,
                 ..
-            } = core::mem::replace(error.as_mut(), ExecutionError::SchemaMismatch)
+            } = std::mem::replace(error.as_mut(), ExecutionError::SchemaMismatch)
             {
                 *error = ExecutionError::Cell {
                     path,
@@ -461,7 +461,7 @@ fn donor_failure<E>(
                     path,
                     source_row,
                     error: original,
-                } = core::mem::replace(error.as_mut(), ExecutionError::SchemaMismatch)
+                } = std::mem::replace(error.as_mut(), ExecutionError::SchemaMismatch)
                 {
                     *error = ExecutionError::SecondaryCell {
                         source,
@@ -832,7 +832,7 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                     for (column, expected) in &keys {
                         let value = cell(table, item, source_row, *column, state.budget)?;
                         if crate::value::compare_present_refs(value, ValueRef::from(expected))
-                            != Ok(core::cmp::Ordering::Equal)
+                            != Ok(std::cmp::Ordering::Equal)
                         {
                             matches = false;
                             break;
@@ -959,7 +959,7 @@ fn read_with_observations<T: TableAccess + ?Sized>(
         state
             .handlers
             .record(
-                &alloc::format!("{}.{}", assignment.path, handler.name()),
+                &std::format!("{}.{}", assignment.path, handler.name()),
                 handler,
             )
             .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
@@ -1055,7 +1055,7 @@ fn select<E>(
     selection: &SourceSelection,
     budget: &mut Budget,
 ) -> Result<usize, Box<ExecutionError<E>>> {
-    use core::cmp::Ordering;
+    use std::cmp::Ordering;
     let mut best = matching[0];
     for &row in &matching[1..] {
         let mut order = Ordering::Equal;

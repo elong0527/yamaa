@@ -5,7 +5,6 @@ use crate::schema::{
     Document, NormalizationBudget, NormalizationError, NormalizationLimits, NormalizedDocument,
     SchemaDiagnostic, SchemaStructure, ValidationError,
 };
-use alloc::{boxed::Box, string::String, vec::Vec};
 
 /// A physical codec decodes this exact held source once. Its locations must
 /// address the returned arena; equal strings cannot establish replacement authority.
@@ -38,15 +37,22 @@ impl Default for Limits {
         }
     }
 }
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error<E> {
+    #[error("structural preparation class name limit")]
     ClassNameLimit,
+    #[error("structural preparation unknown class: {0:?}")]
     UnknownClass(String),
+    #[error("structural preparation versioned root required")]
     VersionedRootRequired,
+    #[error("structural preparation decode: {0:?}")]
     Decode(E),
     /// Type-query failure is distinct from normalization policy failure.
+    #[error("structural preparation validation: {0:?}")]
     Validation(ValidationError),
+    #[error("structural preparation normalize: {0:?}")]
     Normalize(NormalizationError),
+    #[error("structural preparation findings: {0:?}")]
     Findings(Box<Findings>),
 }
 

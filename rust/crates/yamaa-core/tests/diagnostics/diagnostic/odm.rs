@@ -1,11 +1,12 @@
+use serde_json::Value as V;
 use std::collections::BTreeSet;
 use yamaa_core::{
     dataset::AggregatePhase,
-    diagnostic::{ConditionCode, ContextValue as V, OdmDeclared, OdmFinding as F, ProjectionError},
+    diagnostic::{ConditionCode, OdmDeclared, OdmFinding as F, ProjectionError},
     value::{ColumnType, Value},
 };
 fn text(value: &str) -> V {
-    V::Scalar(Value::Str(value.into()))
+    V::String(value.into())
 }
 fn check(
     finding: F<'_>,
@@ -66,7 +67,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "input.D.path",
         vec![
             ("dataset", text("D")),
-            ("fields", V::Sequence(vec![text("FormOID"), text("Value")])),
+            ("fields", V::Array(vec![text("FormOID"), text("Value")])),
         ],
         &mut reached,
     );
@@ -84,10 +85,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         vec![
             ("dataset", text("D")),
             ("field", text("ItemOID")),
-            (
-                "stored",
-                V::Sequence(vec![text("ITEMoid"), text("ItemOID")]),
-            ),
+            ("stored", V::Array(vec![text("ITEMoid"), text("ItemOID")])),
         ],
         &mut reached,
     );
@@ -126,8 +124,14 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         vec![
             ("dataset", text("D")),
             ("field", text("SubjectKey")),
-            ("record", V::Integer("2".into())),
-            ("records", V::Integer("3".into())),
+            (
+                "record",
+                V::Number(("2").parse().expect("canonical integer")),
+            ),
+            (
+                "records",
+                V::Number(("3").parse().expect("canonical integer")),
+            ),
         ],
         &mut reached,
     );
@@ -166,7 +170,11 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         for (differences, expected_differ, repeated) in [
             (
                 differ.as_slice(),
-                V::Object([("FormOID".into(), V::Sequence(vec![text("F2"), text("F1")]))].into()),
+                V::Object(
+                    [("FormOID".into(), V::Array(vec![text("F2"), text("F1")]))]
+                        .into_iter()
+                        .collect(),
+                ),
                 false,
             ),
             (&[][..], V::Object(Default::default()), true),
@@ -192,15 +200,19 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                         "scope",
                         V::Object(
                             [
-                                ("StudyEventRepeatKey".into(), V::Scalar(Value::Missing)),
+                                ("StudyEventRepeatKey".into(), V::Null),
                                 ("SubjectKey".into(), text("S1")),
                             ]
-                            .into(),
+                            .into_iter()
+                            .collect(),
                         ),
                     ),
-                    ("records", V::Integer("2".into())),
+                    (
+                        "records",
+                        V::Number(("2").parse().expect("canonical integer")),
+                    ),
                     ("differ", expected_differ),
-                    ("repeated", V::Scalar(Value::Bool(repeated))),
+                    ("repeated", V::Bool(repeated)),
                 ],
                 &mut reached,
             );

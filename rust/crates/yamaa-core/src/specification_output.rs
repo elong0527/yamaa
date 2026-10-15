@@ -4,7 +4,7 @@ use crate::{
     specification::{OutputFinding, PreparedSpecification},
     table::TableAccess,
 };
-use alloc::{string::String, sync::Arc, vec::Vec};
+use std::sync::Arc;
 
 /// Explicit host authority for atomic output replacement. Success means every
 /// supplied byte has been published at the authorized path; no retry is implied.
@@ -41,19 +41,26 @@ pub trait OutputReport {
     ) -> Result<Self::Report, Self::Error>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum CompleteError<R, C, P> {
+    #[error("specification output report: {0:?}")]
     Report(R),
+    #[error("specification output encode: {0:?}")]
     Encode(C),
+    #[error("specification output projection")]
     Projection,
+    #[error("specification output output limit")]
     OutputLimit,
+    #[error("specification output publish: {0:?}")]
     Publish(P),
 }
 
 /// A failed build cannot be saved; publisher failures retain their original value.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum SaveError<E> {
+    #[error("specification output failed build")]
     FailedBuild,
+    #[error("specification output publish: {0:?}")]
     Publish(E),
 }
 
@@ -122,7 +129,7 @@ pub type Preparation<R, C> = Result<
     CompleteError<
         <R as OutputReport>::Error,
         <C as ArtifactEncoder>::Error,
-        core::convert::Infallible,
+        std::convert::Infallible,
     >,
 >;
 

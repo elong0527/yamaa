@@ -141,10 +141,13 @@ impl Default for DatasetCompileLimits {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum DatasetCompileError {
+    #[error("dataset compiler limit: {0:?}")]
     Limit(&'static str),
+    #[error("dataset compiler numeric: {0:?}")]
     Numeric(CompileError),
+    #[error("dataset compiler plan: {0:?}")]
     Plan(PlanError),
 }
 impl From<PlanError> for DatasetCompileError {

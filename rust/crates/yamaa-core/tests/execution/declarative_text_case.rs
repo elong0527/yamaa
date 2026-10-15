@@ -1,8 +1,9 @@
 use crate::support::text_schema as schema;
+use serde_json::Value as JsonValue;
 use std::{cell::RefCell, rc::Rc};
 use yamaa_core::{
     dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate},
-    diagnostic::{ConditionCode, ContextValue},
+    diagnostic::ConditionCode,
     table::{CellError, TableAccess, TableSchema, ValueRef},
     text_case::{Case, StringCase},
     value::Value,
@@ -153,12 +154,9 @@ fn semantic_missing_preserves_complete_core_facts_and_admitted_current_keys() {
     assert_eq!(diagnostic.spec_paths, ["columns.TEXT.derivation.str_case"]);
     assert_eq!(
         diagnostic.context,
-        [(
-            "variable".into(),
-            ContextValue::Scalar(Value::Str("SRC.TEXT".into()))
-        )]
-        .into_iter()
-        .collect()
+        [("variable".into(), JsonValue::String("SRC.TEXT".into()))]
+            .into_iter()
+            .collect()
     );
     let identity = identity.unwrap();
     assert_eq!(identity.position, 0);

@@ -32,13 +32,13 @@ pub(super) fn register(assignment: &Assignment, counter: &mut HandlerCounter) {
         Expression::MappingCut { source, operation } => {
             if operation.missing().is_some() {
                 counter.register(
-                    &alloc::format!("{}.missing", operation.path()),
+                    &std::format!("{}.missing", operation.path()),
                     HandlerKind::Missing,
                 );
             }
             if operation.unmapped().is_some() {
                 counter.register(
-                    &alloc::format!("{}.unmapped", operation.path()),
+                    &std::format!("{}.unmapped", operation.path()),
                     HandlerKind::Unmapped,
                 );
             }
@@ -51,7 +51,7 @@ pub(super) fn register(assignment: &Assignment, counter: &mut HandlerCounter) {
             selection: Some(_), ..
         } => {
             counter.register(
-                &alloc::format!("{}.multiple_matches", assignment.path),
+                &std::format!("{}.multiple_matches", assignment.path),
                 HandlerKind::MultipleMatches,
             );
         }
@@ -63,11 +63,11 @@ pub(super) fn register(assignment: &Assignment, counter: &mut HandlerCounter) {
             ..
         } => {
             if absent.is_some() {
-                counter.register(&alloc::format!("{path}.absent"), HandlerKind::Absent);
+                counter.register(&std::format!("{path}.absent"), HandlerKind::Absent);
             }
             if *selection_declared {
                 counter.register(
-                    &alloc::format!("{}.multiple_matches", source.path),
+                    &std::format!("{}.multiple_matches", source.path),
                     HandlerKind::MultipleMatches,
                 );
             }
@@ -83,7 +83,7 @@ pub(super) fn register(assignment: &Assignment, counter: &mut HandlerCounter) {
         Expression::StrContains { source, operation } => {
             if operation.handler("missing").is_some() {
                 counter.register(
-                    &alloc::format!("{}.missing", operation.path()),
+                    &std::format!("{}.missing", operation.path()),
                     HandlerKind::Missing,
                 );
             }
@@ -95,7 +95,7 @@ pub(super) fn register(assignment: &Assignment, counter: &mut HandlerCounter) {
             path,
         } => {
             if missing.is_some() {
-                counter.register(&alloc::format!("{path}.missing"), HandlerKind::Missing);
+                counter.register(&std::format!("{path}.missing"), HandlerKind::Missing);
             }
             for source in operands {
                 register(source, counter);
@@ -131,7 +131,7 @@ fn recover<T: TableAccess + ?Sized>(
     }
     state
         .handlers
-        .record(&alloc::format!("{path}.missing"), HandlerKind::Missing)
+        .record(&std::format!("{path}.missing"), HandlerKind::Missing)
         .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
     Ok(value.clone())
 }

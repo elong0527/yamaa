@@ -4,14 +4,14 @@ use super::*;
 pub(super) struct Donors<'a, E> {
     rows: &'a [Candidate],
     schema: &'a TableSchema,
-    error: core::marker::PhantomData<E>,
+    error: std::marker::PhantomData<E>,
 }
 impl<'a, E> Donors<'a, E> {
     pub(super) fn new(rows: &'a [Candidate], schema: &'a TableSchema) -> Self {
         Self {
             rows,
             schema,
-            error: core::marker::PhantomData,
+            error: std::marker::PhantomData,
         }
     }
 }

@@ -7,7 +7,7 @@ use crate::{
     table::TableSchema,
     value::Value,
 };
-use alloc::{collections::BTreeMap, string::String, vec, vec::Vec};
+use std::{collections::BTreeMap, vec};
 mod compiler;
 pub use compiler::{
     compile_dataset, validate_window_form, AssignmentDeclaration, CompiledDataset,
@@ -85,11 +85,11 @@ pub use windows::{ContextWindow, OrderTerm, Window, WindowKind};
 /// Already bound expressions; no host joins or lookup fallback are implicit.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
-    Joined(alloc::boxed::Box<JoinedRead>),
-    Odm(alloc::boxed::Box<BoundOdm>),
-    Aggregate(alloc::boxed::Box<BoundAggregate>),
+    Joined(std::boxed::Box<JoinedRead>),
+    Odm(std::boxed::Box<BoundOdm>),
+    Aggregate(std::boxed::Box<BoundAggregate>),
     MappingCut {
-        source: alloc::boxed::Box<Assignment>,
+        source: std::boxed::Box<Assignment>,
         operation: crate::mapping_cut::MappingCut,
     },
     Extreme {
@@ -102,7 +102,7 @@ pub enum Expression {
         path: String,
     },
     StrContains {
-        source: alloc::boxed::Box<Assignment>,
+        source: std::boxed::Box<Assignment>,
         operation: StringExtract,
     },
     StrTemplate {
@@ -110,15 +110,15 @@ pub enum Expression {
         operation: StringTemplate,
     },
     StrExtract {
-        source: alloc::boxed::Box<Assignment>,
+        source: std::boxed::Box<Assignment>,
         operation: StringExtract,
     },
     StrCase {
-        source: alloc::boxed::Box<Assignment>,
+        source: std::boxed::Box<Assignment>,
         operation: StringCase,
     },
     StrPad {
-        source: alloc::boxed::Box<Assignment>,
+        source: std::boxed::Box<Assignment>,
         operation: StringPad,
     },
     /// Only the first TRUE branch is evaluated; FALSE and UNKNOWN continue.
@@ -126,7 +126,7 @@ pub enum Expression {
     Literal(Value),
     /// Binding handler ownership is retained even when the variable exists.
     SourceBinding {
-        source: alloc::boxed::Box<Assignment>,
+        source: std::boxed::Box<Assignment>,
         absent: Option<Value>,
         variable_absent: bool,
         /// A source keep declaration still has an auditable zero count when its
@@ -143,7 +143,7 @@ pub enum Expression {
     },
     /// A qualified source keeps its filter and stable choice on its declared port.
     JoinedSource {
-        read: alloc::boxed::Box<JoinedRead>,
+        read: std::boxed::Box<JoinedRead>,
         filter: Option<BoundPredicate>,
         selection: Option<SourceSelection>,
     },
@@ -153,7 +153,7 @@ pub enum Expression {
     Compute(BoundNumeric),
     /// Declarative rounding over one bound operand; no formula text is invented.
     Round {
-        source: alloc::boxed::Box<Assignment>,
+        source: std::boxed::Box<Assignment>,
         rounding: Rounding,
     },
     Imputation {
@@ -172,7 +172,7 @@ pub enum Expression {
     Window(Window),
     ContextWindow(ContextWindow),
     /// First present raw operand in authored order, followed by one output conversion.
-    FirstAvailable(alloc::boxed::Box<FirstAvailable>),
+    FirstAvailable(std::boxed::Box<FirstAvailable>),
     Source(usize),
     /// Read one record from a secondary source on completed output match values.
     Lookup(Lookup),
@@ -210,7 +210,7 @@ pub enum Expression {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CaseBranch {
     pub when: Option<BoundPredicate>,
-    pub assignment: alloc::boxed::Box<Assignment>,
+    pub assignment: std::boxed::Box<Assignment>,
 }
 
 /// Choose the first or last record in declared stable source order.
@@ -288,12 +288,12 @@ pub enum RowMode {
     IntermediateDriver {
         index: usize,
         source: usize,
-        mode: alloc::boxed::Box<RowMode>,
+        mode: std::boxed::Box<RowMode>,
     },
     /// A stored secondary source with one bounded record/group construction mode.
     Driver {
         source: usize,
-        mode: alloc::boxed::Box<RowMode>,
+        mode: std::boxed::Box<RowMode>,
     },
 }
 
@@ -404,7 +404,7 @@ impl Check {
     }
     /// Shared mathematical count comparison for legacy probes and specifications.
     pub fn row_count_accepts(&self, count: usize) -> Option<bool> {
-        use core::cmp::Ordering;
+        use std::cmp::Ordering;
         Some(match self {
             Self::RowCount { min, max } => {
                 let count = count as i128;
@@ -463,29 +463,51 @@ pub struct ColumnVerifications {
     pub checks: Vec<Verification>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum PlanError {
+    #[error("dataset no templates")]
     NoTemplates,
+    #[error("dataset invalid columns")]
     InvalidColumns,
+    #[error("dataset empty path")]
     EmptyPath,
+    #[error("dataset invalid source")]
     InvalidSource,
+    #[error("dataset unavailable column")]
     UnavailableColumn,
+    #[error("dataset duplicate assignment")]
     DuplicateAssignment,
+    #[error("dataset incomplete row")]
     IncompleteRow,
+    #[error("dataset inconsistent row columns")]
     InconsistentRowColumns,
+    #[error("dataset non group source")]
     NonGroupSource,
+    #[error("dataset ungrouped reduction")]
     UngroupedReduction,
+    #[error("dataset invalid bounds")]
     InvalidBounds,
+    #[error("dataset duplicate verification path")]
     DuplicateVerificationPath,
+    #[error("dataset filter: {0:?}")]
     Filter(BindingError),
+    #[error("dataset predicate: {0:?}")]
     Predicate(BindingError),
+    #[error("dataset invalid key mode")]
     InvalidKeyMode,
+    #[error("dataset invalid window")]
     InvalidWindow,
+    #[error("dataset invalid source order")]
     InvalidSourceOrder,
+    #[error("dataset invalid output order")]
     InvalidOutputOrder,
+    #[error("dataset invalid lookup")]
     InvalidLookup,
+    #[error("dataset invalid intermediate")]
     InvalidIntermediate,
+    #[error("dataset invalid conversion handler")]
     InvalidConversionHandler,
+    #[error("dataset invalid function")]
     InvalidFunction,
 }
 
@@ -502,7 +524,7 @@ pub struct DatasetPlan {
     keys: Vec<usize>,
     verifications: Vec<Verification>,
     column_verifications: Vec<ColumnVerifications>,
-    warning_verifications: alloc::collections::BTreeSet<String>,
+    warning_verifications: std::collections::BTreeSet<String>,
     conversion_handlers: Vec<ConversionHandler>,
     conversion_sites: BTreeMap<String, usize>,
     output_order: Vec<OrderTerm>,
@@ -1921,7 +1943,7 @@ impl DatasetPlan {
     }
     /// Severity belongs to admitted check declarations, never host issue rows.
     pub fn with_warning_verifications(mut self, paths: Vec<String>) -> Result<Self, PlanError> {
-        let checks: alloc::collections::BTreeSet<_> = self
+        let checks: std::collections::BTreeSet<_> = self
             .verifications
             .iter()
             .chain(
@@ -1931,7 +1953,7 @@ impl DatasetPlan {
             )
             .map(|check| check.path.as_str())
             .collect();
-        let mut warnings = alloc::collections::BTreeSet::new();
+        let mut warnings = std::collections::BTreeSet::new();
         for path in paths {
             if !checks.contains(path.as_str()) || !warnings.insert(path) {
                 return Err(PlanError::InvalidColumns);
@@ -1952,7 +1974,7 @@ impl DatasetPlan {
         mut self,
         groups: Vec<ColumnVerifications>,
     ) -> Result<Self, PlanError> {
-        let mut paths = alloc::collections::BTreeSet::new();
+        let mut paths = std::collections::BTreeSet::new();
         for (index, group) in groups.iter().enumerate() {
             if group.column >= self.output.columns().len()
                 || groups[..index]

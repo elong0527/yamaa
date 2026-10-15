@@ -1,8 +1,9 @@
 //! Independently authored arenas reach submission detectors and portable boundary policy.
+use serde_json::Value as JsonValue;
 use std::{collections::BTreeSet, convert::Infallible};
 use yamaa_core::{
     define_diagnostics::{self, TargetRelation},
-    diagnostic::{ConditionCode, ContextValue},
+    diagnostic::ConditionCode,
     project_terminology as ct,
     schema::{Document, DocumentLimits, DocumentNode as N},
     submission_composition::{self as composition, Finding, Input, Study},
@@ -671,10 +672,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 ("derivation_kind", "literal"),
                 ("origin_type", "Collected"),
             ] {
-                assert_eq!(
-                    finding.context[key],
-                    ContextValue::Scalar(Value::Str(value.into()))
-                );
+                assert_eq!(finding.context[key], JsonValue::String(value.into()));
             }
         }
     }
@@ -850,20 +848,21 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "datasets.D0.columns.VALUE.submission.inventory_vocabulary"
     );
     assert_eq!(finding.context.len(), 8);
-    assert_eq!(finding.context["row"], ContextValue::Integer("0".into()));
+    assert_eq!(
+        finding.context["row"],
+        JsonValue::Number(("0").parse().expect("canonical integer"))
+    );
     assert_eq!(
         finding.context["value"],
-        ContextValue::Scalar(Value::Str("UNKNOWN_DATASET".into()))
+        JsonValue::String("UNKNOWN_DATASET".into())
     );
     assert_eq!(
         finding.context["key_columns"],
-        ContextValue::Sequence(vec![ContextValue::Scalar(Value::Str("VALUE".into()))])
+        JsonValue::Array(vec![JsonValue::String("VALUE".into())])
     );
     assert_eq!(
         finding.context["key_values"],
-        ContextValue::Sequence(vec![ContextValue::Scalar(Value::Str(
-            "UNKNOWN_DATASET".into()
-        ))])
+        JsonValue::Array(vec![JsonValue::String("UNKNOWN_DATASET".into())])
     );
     for valid in ["sdtm", "adam", "send"] {
         assert!(define_diagnostics::standard_name(valid).is_ok());
@@ -943,7 +942,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             finding.context,
             [(
                 "detail".into(),
-                ContextValue::Scalar(Value::Str("A and B name one retained target".into()))
+                JsonValue::String("A and B name one retained target".into())
             )]
             .into()
         );
@@ -994,11 +993,7 @@ fn actual_binding_quota_keeps_its_path_detail_and_complete_implementation_report
     );
     assert_eq!(
         finding.context,
-        [(
-            "detail".into(),
-            ContextValue::Scalar(Value::Str("LIST".into()))
-        )]
-        .into()
+        [("detail".into(), JsonValue::String("LIST".into()))].into()
     );
     // Ordinary finite unequal sets retain their language conflict classification.
     let mut spec = specification();

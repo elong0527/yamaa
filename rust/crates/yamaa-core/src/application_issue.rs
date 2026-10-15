@@ -1,13 +1,7 @@
 //! Application admission failures are distinct from normative language findings.
-use crate::{
-    diagnostic::{ConditionCode, ContextValue, Diagnostic},
-    value::Value,
-};
-use alloc::{
-    string::{String, ToString},
-    vec,
-    vec::Vec,
-};
+use crate::diagnostic::{ConditionCode, Diagnostic};
+use serde_json::Value as JsonValue;
+use std::vec;
 
 /// Format classified installed-package disagreement. Packaging tools supply the
 /// facts; this owns the stable normative issue identity without comparing versions.
@@ -27,7 +21,7 @@ pub fn unsupported(operation: &str, path: Option<&str>) -> Diagnostic {
         spec_paths: path.map(String::from).into_iter().collect(),
         context: [(
             String::from("operation"),
-            ContextValue::Scalar(Value::Str(operation.into())),
+            JsonValue::String(operation.into()),
         )]
         .into(),
         source_span: None,
@@ -42,14 +36,8 @@ pub fn rejected(stage: &str, code: &str) -> Diagnostic {
         code: ConditionCode::ApplicationRejected,
         spec_paths: Vec::new(),
         context: vec![
-            (
-                String::from("stage"),
-                ContextValue::Scalar(Value::Str(stage.into())),
-            ),
-            (
-                String::from("code"),
-                ContextValue::Scalar(Value::Str(code.into())),
-            ),
+            (String::from("stage"), JsonValue::String(stage.into())),
+            (String::from("code"), JsonValue::String(code.into())),
         ]
         .into_iter()
         .collect(),
@@ -81,20 +69,19 @@ pub fn resource_rejected(
     };
     finding.context.insert(
         "incomplete_checks_from".into(),
-        ContextValue::Scalar(Value::Str(incomplete_from.into())),
+        JsonValue::String(incomplete_from.into()),
     );
     finding.spec_paths = spec_paths;
-    finding.context.insert(
-        "resource".into(),
-        ContextValue::Scalar(Value::Str(resource.into())),
-    );
     finding
         .context
-        .insert("limit".into(), ContextValue::Integer(limit.to_string()));
+        .insert("resource".into(), JsonValue::String(resource.into()));
+    finding
+        .context
+        .insert("limit".into(), JsonValue::from(limit));
     if let Some(actual) = actual {
         finding
             .context
-            .insert("actual".into(), ContextValue::Integer(actual.to_string()));
+            .insert("actual".into(), JsonValue::from(actual));
     }
     finding
 }
@@ -105,11 +92,7 @@ pub fn publication_failed(target: &str) -> Diagnostic {
     Diagnostic {
         code: ConditionCode::OutputPublicationFailed,
         spec_paths: vec!["output.path".into()],
-        context: [(
-            String::from("path"),
-            ContextValue::Scalar(Value::Str(target.into())),
-        )]
-        .into(),
+        context: [(String::from("path"), JsonValue::String(target.into()))].into(),
         source_span: None,
         operand_route: None,
     }

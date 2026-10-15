@@ -5,29 +5,25 @@ use crate::{
     reduction::{count_records, count_values, reduce_numeric, NumericReducer, ReductionError},
     table::{CellError, TableAccess},
 };
-use alloc::vec::Vec;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum TableReductionError<E> {
-    RowLimit {
-        limit: usize,
-        required: usize,
-    },
-    InvalidColumn {
-        column: usize,
-    },
-    InvalidRow {
-        position: usize,
-        row: usize,
-    },
-    UnorderedSelection {
-        position: usize,
-    },
+    #[error("table reduction row limit: limit={limit:?}, required={required:?}")]
+    RowLimit { limit: usize, required: usize },
+    #[error("table reduction invalid column: column={column:?}")]
+    InvalidColumn { column: usize },
+    #[error("table reduction invalid row: position={position:?}, row={row:?}")]
+    InvalidRow { position: usize, row: usize },
+    #[error("table reduction unordered selection: position={position:?}")]
+    UnorderedSelection { position: usize },
+    #[error("table reduction allocation")]
     Allocation,
+    #[error("table reduction cell: position={position:?}, error={error:?}")]
     Cell {
         position: usize,
         error: CellError<E>,
     },
+    #[error("table reduction reduction: {0:?}")]
     Reduction(ReductionError),
 }
 

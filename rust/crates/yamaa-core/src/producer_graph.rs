@@ -2,15 +2,16 @@
 //! Graph compilation owns one admitted environment and preserves every local
 //! call's projection into the graph's unique activation selection.
 use crate::{
-    diagnostic::{ConditionCode, ContextValue, Diagnostic},
+    diagnostic::{ConditionCode, Diagnostic},
     producer_admission::{self, Candidate, Declaration},
     producer_contract::diagnostics::text,
     project_environment::ExecutionEnvironment,
     schema::{DocumentNode, SpecificationDocument},
-    specification::{PrepareError, PreparedSpecification, UnsupportedFeature},
+    specification::{PrepareError, PreparedSpecification},
     table::TableSchema,
 };
-use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
+use serde_json::Value as JsonValue;
+use std::{collections::BTreeMap, vec};
 
 /// The surrounding preparation boundary retains one document per canonical
 /// identity. References must borrow that same admitted document, so a candidate
@@ -49,25 +50,24 @@ impl Default for Limits {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("producer graph limit: {0:?}")]
     Limit(&'static str),
+    #[error("producer graph boundary: node={node:?}, reason={reason:?}")]
     Boundary {
         node: Option<usize>,
         reason: &'static str,
     },
+    #[error("producer graph admission: node={node:?}, error={error:?}")]
     Admission {
         node: usize,
         error: producer_admission::Error,
     },
-    Compilation {
-        node: usize,
-        error: PrepareError,
-    },
-    Cycle {
-        node: usize,
-        diagnostic: Diagnostic,
-    },
+    #[error("producer graph compilation: node={node:?}, error={error:?}")]
+    Compilation { node: usize, error: PrepareError },
+    #[error("producer graph cycle: node={node:?}, diagnostic={diagnostic:?}")]
+    Cycle { node: usize, diagnostic: Diagnostic },
 }
 
 #[derive(Debug)]
@@ -193,35 +193,17 @@ impl PreparedGraph {
     pub(crate) fn plans(&self) -> impl ExactSizeIterator<Item = &PreparedSpecification> {
         self.nodes.iter().map(|node| &node.compiled)
     }
-    /// This static capability grants no data, activation, build or publication
-    /// authority. #1741 must qualify the complete orchestration before release.
-    pub fn execution_refusal(&self) -> PrepareError {
-        let producers = &self.nodes[self.root].producers;
-        if producers.is_empty() {
-            // A single external-input node is a valid metadata graph. Keep its
-            // denial nonempty and anchored at the admitted input declaration.
-            return PrepareError::Unsupported(vec![UnsupportedFeature {
-                operation: "producer_workflow".into(),
-                path: "input".into(),
-            }]);
-        }
-        PrepareError::Unsupported(
-            producers
-                .iter()
-                .map(|p| UnsupportedFeature {
-                    operation: "producer_workflow".into(),
-                    path: format!("input.{}.schema", p.dataset()),
-                })
-                .collect(),
-        )
-    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum MetadataBindingError {
+    #[error("producer graph identity")]
     Identity,
+    #[error("producer graph limit")]
     Limit,
+    #[error("producer graph projection")]
     Projection,
+    #[error("producer graph binding: node={node:?}, error={error:?}")]
     Binding {
         node: usize,
         error: crate::specification::BindError,
@@ -363,7 +345,7 @@ pub fn prepare(
                 .get(candidate.producer_identity)
                 .copied()
                 .ok_or_else(|| boundary(Some(index), "missing_producer_node"))?;
-            if !core::ptr::eq(candidate.document, supplied[producer].document) {
+            if !std::ptr::eq(candidate.document, supplied[producer].document) {
                 return Err(boundary(Some(index), "contradictory_producer_document"));
             }
         }
@@ -448,7 +430,7 @@ pub fn prepare(
                 let cycle = stack[start..]
                     .iter()
                     .map(|&(n, _)| text(supplied[n].identity))
-                    .chain(core::iter::once(text(supplied[producer].identity)))
+                    .chain(std::iter::once(text(supplied[producer].identity)))
                     .collect();
                 return Err(Error::Cycle {
                     node,
@@ -458,7 +440,7 @@ pub fn prepare(
                             "input.{}.schema",
                             declarations[node][next].dataset()
                         )],
-                        context: [("cycle".into(), ContextValue::Sequence(cycle))]
+                        context: [("cycle".into(), JsonValue::Array(cycle))]
                             .into_iter()
                             .collect(),
                         source_span: None,

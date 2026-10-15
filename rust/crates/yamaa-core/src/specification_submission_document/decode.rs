@@ -1,7 +1,7 @@
 //! Complete non-owning admission followed by one owned decode of the same input.
 use super::*;
 use crate::diagnostic::ScalarSubmissionRule;
-use alloc::{boxed::Box, string::String, vec::Vec};
+
 use FieldName as F;
 
 struct Budget(Limits);

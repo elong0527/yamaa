@@ -1,11 +1,12 @@
 use crate::support::project_environment as support;
+use serde_json::Value as CV;
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     cell::Cell,
     collections::BTreeMap,
 };
 use yamaa_core::{
-    diagnostic::{ConditionCode as C, ContextValue as CV, Diagnostic},
+    diagnostic::{ConditionCode as C, Diagnostic},
     project_environment::{self, Draft, Finding, LockKind, LockReference},
     project_environment_diagnostics::{
         self,
@@ -90,7 +91,7 @@ fn root_document(functions: &[(&str, bool)], codelists: &[bool]) -> Document {
     document(nodes)
 }
 fn text(value: &str) -> CV {
-    CV::Scalar(Value::Str(value.into()))
+    CV::String(value.into())
 }
 fn expected(
     code: C,
@@ -221,10 +222,7 @@ fn independent_complete_eighteen_record_environment_report_preserves_every_field
         want.push(expected(
             C::CodelistInvalidValue,
             &format!("{base}.items[0].value"),
-            &[
-                ("codelist", text("SEX")),
-                ("value", CV::Scalar(Value::Bool(true))),
-            ],
+            &[("codelist", text("SEX")), ("value", CV::Bool(true))],
             "held/environment.yaml",
             "codelists[0]",
         ));
@@ -238,20 +236,14 @@ fn independent_complete_eighteen_record_environment_report_preserves_every_field
         want.push(expected(
             C::CodelistInvalidValue,
             &format!("{base}.items[1].value"),
-            &[
-                ("codelist", text("SEX")),
-                ("value", CV::Scalar(Value::Bool(true))),
-            ],
+            &[("codelist", text("SEX")), ("value", CV::Bool(true))],
             "held/environment.yaml",
             "codelists[0]",
         ));
         want.push(expected(
             C::CodelistDuplicateValue,
             &format!("{base}.items[1].value"),
-            &[
-                ("codelist", text("SEX")),
-                ("value", CV::Scalar(Value::Bool(true))),
-            ],
+            &[("codelist", text("SEX")), ("value", CV::Bool(true))],
             "held/environment.yaml",
             "codelists[0]",
         ));
@@ -366,7 +358,7 @@ fn every_function_route_has_complete_independent_inline_and_external_context() {
             vec![
                 ("case", text("ordinary")),
                 ("argument", text("x")),
-                ("value", CV::Scalar(Value::Int(i64::MIN))),
+                ("value", CV::from(i64::MIN)),
             ],
         ),
         (
@@ -379,7 +371,7 @@ fn every_function_route_has_complete_independent_inline_and_external_context() {
             vec![
                 ("case", text("ordinary")),
                 ("argument", text("x")),
-                ("value", CV::Scalar(Value::Int(i64::MIN))),
+                ("value", CV::from(i64::MIN)),
             ],
         ),
         (
@@ -401,17 +393,14 @@ fn every_function_route_has_complete_independent_inline_and_external_context() {
             vec![
                 ("case", text("ordinary")),
                 ("argument", text("x")),
-                ("value", CV::Scalar(Value::Int(i64::MIN))),
+                ("value", CV::from(i64::MIN)),
             ],
         ),
         (
             F::InvalidResult { case: 0 },
             "tests[0].result",
             "invalid_case_result",
-            vec![
-                ("case", text("ordinary")),
-                ("value", CV::Scalar(Value::Int(i64::MAX))),
-            ],
+            vec![("case", text("ordinary")), ("value", CV::from(i64::MAX))],
         ),
         (
             F::MissingObligation("boundary".into()),
@@ -686,7 +675,10 @@ fn root_headers_and_wide_scalars_are_one_admitted_complete_report() {
                 "functions.id.result",
                 &[
                     ("reason", text("integer_out_of_range")),
-                    ("value", CV::Integer(wide.into()))
+                    (
+                        "value",
+                        CV::Number((wide).parse().expect("canonical integer"))
+                    )
                 ],
                 "held/environment.yaml",
                 "$"
@@ -759,7 +751,10 @@ fn scalar_sources_admit_all_captures_before_copying_and_keep_authored_holes() {
                 "items[0].value",
                 &[
                     ("reason", text("integer_out_of_range")),
-                    ("value", CV::Integer("9223372036854775808".into()))
+                    (
+                        "value",
+                        CV::Number(("9223372036854775808").parse().expect("canonical integer"))
+                    )
                 ],
                 "held/first.yaml",
                 "codelists[1]"
@@ -769,7 +764,10 @@ fn scalar_sources_admit_all_captures_before_copying_and_keep_authored_holes() {
                 "items[0].value",
                 &[
                     ("reason", text("integer_out_of_range")),
-                    ("value", CV::Integer("9223372036854775808".into()))
+                    (
+                        "value",
+                        CV::Number(("9223372036854775808").parse().expect("canonical integer"))
+                    )
                 ],
                 "held/second.yaml",
                 "codelists[2]"
@@ -896,7 +894,7 @@ fn two_hundred_inline_functions_keep_all_six_hundred_independent_findings_in_ord
                 ("function", text(name)),
                 ("case", text("ordinary")),
                 ("reason", text("invalid_case_result")),
-                ("value", CV::Scalar(Value::Bool(true))),
+                ("value", CV::Bool(true)),
             ],
             "held/environment.yaml",
             &declaration,

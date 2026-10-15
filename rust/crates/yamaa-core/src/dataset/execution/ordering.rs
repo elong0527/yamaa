@@ -1,6 +1,6 @@
 //! Stable presentation order over completed rows, after all verification.
 use super::*;
-use core::cmp::Ordering;
+use std::cmp::Ordering;
 
 /// Charge every comparison before borrowing normalized cells; never clone payloads.
 pub(super) fn apply<E>(
@@ -41,7 +41,7 @@ pub(super) fn apply<E>(
         .map_err(|_| Box::new(ExecutionError::Allocation))?;
     budget.work(members.len(), 1)?;
     for member in members {
-        rows.push(core::mem::take(&mut dataset.rows[member]));
+        rows.push(std::mem::take(&mut dataset.rows[member]));
     }
     dataset.rows = rows;
     Ok(())

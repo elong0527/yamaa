@@ -1,6 +1,5 @@
 //! Exercise the shared opt-in fake ports from a downstream integration boundary.
 #![cfg(feature = "test-support")]
-extern crate alloc;
 use yamaa_core::{project_preparation as metadata, test_support::*};
 
 #[derive(Debug)]

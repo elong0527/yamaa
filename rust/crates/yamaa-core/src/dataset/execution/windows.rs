@@ -1,6 +1,6 @@
 //! Partitioned window results over completed, typed output columns.
 use super::*;
-use core::cmp::Ordering;
+use std::cmp::Ordering;
 
 struct Rows<'a> {
     candidates: &'a [Candidate],
@@ -331,7 +331,7 @@ impl Run {
                                 .and_then(|(_, value)| value.split('.').next())
                                 .map_or_else(
                                     || context.assignment.path.clone(),
-                                    |field| alloc::format!("key[{field}]"),
+                                    |field| std::format!("key[{field}]"),
                                 )
                         }),
                     date: candidates[donor].values[date].clone(),

@@ -6,7 +6,7 @@ use crate::{
     specification::{BindError, PreparedSpecification, SourceDeclaration, SourceInterpretation},
     table::TableAccess,
 };
-use alloc::{boxed::Box, sync::Arc, vec, vec::Vec};
+use std::{sync::Arc, vec};
 
 /// Capture authority for a declared source. Bound allocation before returning,
 /// hold immutable bytes and compare cached snapshots on bytes, never a digest.
@@ -128,7 +128,7 @@ fn odm_records<T: TableAccess>(
             crate::odm_source::RecordError::Schema => dataset::ExecutionError::SchemaMismatch,
             crate::odm_source::RecordError::Coordinate => dataset::ExecutionError::Capacity,
             crate::odm_source::RecordError::Cell { row, column, error } => {
-                let path = alloc::format!(
+                let path = std::format!(
                     "input.{}.{}",
                     declaration.name,
                     crate::odm_source::FIELDS[column]
@@ -178,13 +178,18 @@ pub struct SourceRead {
     pub snapshots_created: Option<usize>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum PortError<C, D> {
     /// The host boundary interrupted the attempt before a final result was stored.
+    #[error("specification run incomplete")]
     Incomplete,
+    #[error("specification run capture: {0:?}")]
     Capture(C),
+    #[error("specification run inspect: {0:?}")]
     Inspect(Vec<InspectionFailure<C>>),
+    #[error("specification run run: {0:?}")]
     Run(RunError<D>),
+    #[error("specification run capture accounting")]
     CaptureAccounting,
 }
 
@@ -436,7 +441,7 @@ fn execute_scoped_into<P: SourcePort, D: SourceDecoder>(
     work: Option<&crate::execution_work::WorkBudget>,
 ) {
     scope.phase(crate::application_observer::Phase::Input);
-    let input_finished = core::cell::Cell::new(false);
+    let input_finished = std::cell::Cell::new(false);
     execute_inner_with_observer_into(
         prepared,
         port,
@@ -468,7 +473,7 @@ fn execute_inner_with_observer_into<P: SourcePort, D: SourceDecoder>(
     attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
     (scope, input_finished): (
         crate::application_observer::Scope<'_>,
-        &core::cell::Cell<bool>,
+        &std::cell::Cell<bool>,
     ),
     work: Option<&crate::execution_work::WorkBudget>,
 ) {
@@ -659,7 +664,7 @@ fn execute_inner_with_observer_into<P: SourcePort, D: SourceDecoder>(
                 as &dyn TableAccess<Error = <D::Table as TableAccess>::Error>
         })
         .collect::<Vec<_>>();
-    let phase = core::cell::Cell::new(dataset::ExecutionPhase::Admission);
+    let phase = std::cell::Cell::new(dataset::ExecutionPhase::Admission);
     let mut functions = scope.functions(functions, &phase);
     input_finished.set(true);
     scope.exit(
@@ -696,3 +701,17 @@ fn execute_inner_with_observer_into<P: SourcePort, D: SourceDecoder>(
         ),
     });
 }
+
+impl<E: std::fmt::Debug> std::fmt::Display for RunError<E> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "specification run: {self:?}")
+    }
+}
+impl<E: std::fmt::Debug> std::error::Error for RunError<E> {}
+
+impl<E: std::fmt::Debug> std::fmt::Display for InspectionFailure<E> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "specification run: {self:?}")
+    }
+}
+impl<E: std::fmt::Debug> std::error::Error for InspectionFailure<E> {}

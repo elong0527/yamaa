@@ -65,29 +65,28 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
         };
         state
             .handlers
-            .record(&alloc::format!("{}.{}", operation.path(), handler), kind)
+            .record(&std::format!("{}.{}", operation.path(), handler), kind)
             .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
         // A reached literal has no eager conversion. At the completed result site,
         // retain its original handler alongside a fatal conversion context.
         if retained && plan.conversion_handler(&assignment.path).is_none() {
             if let Err(error) = convert(&result, plan.output().columns()[assignment.column].kind) {
                 state.budget.scalar_text(diagnostic_text_bytes)?;
-                let path = alloc::format!(
+                let path = std::format!(
                     "columns.{}",
                     plan.output().columns()[assignment.column].name
                 );
                 let mut diagnostic = error.into_diagnostic(path);
                 diagnostic
                     .spec_paths
-                    .push(alloc::format!("{}.{}", operation.path(), handler));
+                    .push(std::format!("{}.{}", operation.path(), handler));
                 diagnostic.context.insert(
                     "variable".into(),
-                    crate::diagnostic::ContextValue::Scalar(Value::Str(operation.source().into())),
+                    serde_json::Value::String(operation.source().into()),
                 );
-                diagnostic.context.insert(
-                    "handler".into(),
-                    crate::diagnostic::ContextValue::Scalar(Value::Str(handler.into())),
-                );
+                diagnostic
+                    .context
+                    .insert("handler".into(), serde_json::Value::String(handler.into()));
                 return Err(retained_diagnostic(
                     diagnostic,
                     true,

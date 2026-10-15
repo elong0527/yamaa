@@ -12,7 +12,7 @@ use crate::{
 struct Output<'a, E> {
     schema: &'a TableSchema,
     rows: &'a [Candidate],
-    marker: core::marker::PhantomData<E>,
+    marker: std::marker::PhantomData<E>,
 }
 impl<E> TableAccess for Output<'_, E> {
     type Error = E;
@@ -90,7 +90,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
             let donor = Output {
                 schema: plan.output(),
                 rows: state.output_rows,
-                marker: core::marker::PhantomData,
+                marker: std::marker::PhantomData,
             };
             run(
                 bound,
@@ -278,7 +278,7 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
                     if crate::value::compare_present_refs(
                         cell(donor, bound, coordinate, source_row, *column, state.budget)?,
                         ValueRef::from(expected),
-                    ) != Ok(core::cmp::Ordering::Equal)
+                    ) != Ok(std::cmp::Ordering::Equal)
                     {
                         matches = false;
                         break;
@@ -502,7 +502,7 @@ fn reduce_selected<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?
     // Every reducer runs before a lazy surrounding numeric expression resolves.
     match bound.expression().result() {
         AggregateResult::Reduction(index) => {
-            Ok(core::mem::replace(&mut reductions[*index], Value::Missing))
+            Ok(std::mem::replace(&mut reductions[*index], Value::Missing))
         }
         AggregateResult::Numeric(expression) => {
             state.budget.work(1, expression.node_count())?;
@@ -609,7 +609,7 @@ fn fold<T: TableAccess + ?Sized>(
                             state.budget,
                         )?
                     };
-                    state.budget.identity_refs(core::iter::once(value))?;
+                    state.budget.identity_refs(std::iter::once(value))?;
                     group.push((name.clone(), own(value)));
                 }
             }

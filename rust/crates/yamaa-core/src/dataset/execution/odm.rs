@@ -62,7 +62,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
                 let value = &candidate.values[column];
                 state
                     .budget
-                    .identity_refs(core::iter::once(ValueRef::from(value)))?;
+                    .identity_refs(std::iter::once(ValueRef::from(value)))?;
                 scope.push((plan.output().columns()[column].name.clone(), value.clone()));
             }
             &[]

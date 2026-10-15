@@ -1,8 +1,9 @@
+use serde_json::Value as V;
 use std::collections::BTreeSet;
 use yamaa_core::{
-    diagnostic::{ConditionCode, Context, ContextValue as V, MAX_PROJECTION_BYTES},
+    diagnostic::{ConditionCode, Context, MAX_PROJECTION_BYTES},
     parquet_source::{self as p, Converted, Field, Logical, Physical, Representation},
-    value::{ColumnType, Value},
+    value::ColumnType,
 };
 fn field(name: &str) -> Field {
     Field {
@@ -18,7 +19,7 @@ fn field(name: &str) -> Field {
     }
 }
 fn text(value: &str) -> V {
-    V::Scalar(Value::Str(value.into()))
+    V::String(value.into())
 }
 pub(super) fn reached() -> BTreeSet<ConditionCode> {
     let mut nested = field("S");
@@ -35,7 +36,10 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             p::columns(vec![field("")], 1).unwrap_err(),
             "source_field_name_empty",
             "REQ-1039",
-            vec![("field", V::Integer("1".into()))],
+            vec![(
+                "field",
+                V::Number(("1").parse().expect("canonical integer")),
+            )],
         ),
         (
             p::columns(vec![field("I"), field("I")], 2).unwrap_err(),
@@ -58,8 +62,8 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             "REQ-1041",
             vec![
                 ("field", text("DT")),
-                ("row", V::Integer("2".into())),
-                ("value", V::Scalar(Value::Int(i64::MAX))),
+                ("row", V::Number(("2").parse().expect("canonical integer"))),
+                ("value", V::from(i64::MAX)),
             ],
         ),
     ];

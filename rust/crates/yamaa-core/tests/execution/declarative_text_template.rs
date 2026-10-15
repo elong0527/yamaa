@@ -1,7 +1,8 @@
+use serde_json::Value as JsonValue;
 use std::{cell::RefCell, rc::Rc};
 use yamaa_core::{
     dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate},
-    diagnostic::{ConditionCode, ContextValue},
+    diagnostic::ConditionCode,
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     text_template::StringTemplate,
     value::{ColumnType as T, Value},
@@ -159,11 +160,7 @@ fn first_missing_recovery_stops_before_later_failure_and_retains_literal_presenc
             assert_eq!(diagnostic.spec_paths, [PATH]);
             assert_eq!(
                 diagnostic.context,
-                [(
-                    "variable".into(),
-                    ContextValue::Scalar(Value::Str("A".into()))
-                )]
-                .into()
+                [("variable".into(), JsonValue::String("A".into()))].into()
             );
             assert_eq!(identity.unwrap().values, [Value::Str("row1".into())]);
             assert!(result.handler_counts.is_empty());
@@ -213,18 +210,9 @@ fn type_failure_precedes_later_error_without_formatting_or_recovery() {
     assert_eq!(
         diagnostic.context,
         [
-            (
-                "source".into(),
-                ContextValue::Scalar(Value::Str("A".into()))
-            ),
-            (
-                "expected".into(),
-                ContextValue::Scalar(Value::Str("str".into()))
-            ),
-            (
-                "actual".into(),
-                ContextValue::Scalar(Value::Str("int".into()))
-            )
+            ("source".into(), JsonValue::String("A".into())),
+            ("expected".into(), JsonValue::String("str".into())),
+            ("actual".into(), JsonValue::String("int".into()))
         ]
         .into()
     );
