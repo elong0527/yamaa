@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# Build the six named targets with: python evaluations/harbor/images.py build
+# Build the six named targets with: python -m evaluations.harbor.images build
 # Each agent has one benchmark runtime; its verifier adds the Python grader.
 ARG R_VERSION=4.6.1
 ARG UV_VERSION=0.12.21

@@ -559,7 +559,7 @@ class DashboardTests(unittest.TestCase):
             self.assertIn(f'id="prompt-pane-{tier}"', page)
             self.assertIn(
                 '<a class="edit-button" href="https://github.com/elong0527/yamaa/edit/main/'
-                f'evaluations/harbor/prompts/adam-adae-death/{tier}.md">Edit</a>',
+                f'evaluations/harbor/prompts/adam-adae-death/{"full" if tier == "brief" else tier}.md">Edit</a>',
                 page,
             )
         self.assertIn(
@@ -580,13 +580,18 @@ class DashboardTests(unittest.TestCase):
             folder = harbor / "prompts" / BENCHMARK.name
             folder.mkdir(parents=True)
             (folder / "full.md").write_text(
-                "Build <ADAE> & keep *every* row.\n", encoding="utf-8"
+                "Following CDISC ADaM standards, build <ADAE> & keep *every* row.\n\n"
+                "The output dataset should contain the following columns in this order: ID.\n\n"
+                "Use the collected ID.\n\n"
+                "Read the source datasets from /app/input and save /app/output/adae.csv.\n",
+                encoding="utf-8",
             )
             with mock.patch.object(generate, "HARBOR", harbor):
                 page = generate.render_benchmark(BENCHMARK).decode("ascii")
-        self.assertIn("<p>Build &lt;ADAE&gt; &amp; keep <em>every</em> row.</p>", page)
-        # One tier: no picker. No solutions folder: no solution tab.
-        self.assertNotIn('id="prompt-select"', page)
+        self.assertIn("build &lt;ADAE&gt; &amp; keep <em>every</em> row.</p>", page)
+        # The brief is derived without a committed source file.
+        self.assertIn('id="prompt-select"', page)
+        self.assertIn('id="prompt-pane-brief"', page)
         self.assertNotIn('id="tab-solution"', page)
 
     def test_prompt_links_follow_the_readme_rules(self):
@@ -595,8 +600,11 @@ class DashboardTests(unittest.TestCase):
             folder = harbor / "prompts" / BENCHMARK.name
             folder.mkdir(parents=True)
             (folder / "full.md").write_text(
-                "See [the notes](notes.md), ![a chart](https://example.org/c.png),"
-                " and [CDISC](https://www.cdisc.org).\n",
+                "Following CDISC ADaM standards, see [the notes](notes.md), "
+                "![a chart](https://example.org/c.png), and [CDISC](https://www.cdisc.org).\n\n"
+                "The output dataset should contain the following columns in this order: ID.\n\n"
+                "Use the collected ID.\n\n"
+                "Read the source datasets from /app/input and save /app/output/adae.csv.\n",
                 encoding="utf-8",
             )
             with mock.patch.object(generate, "HARBOR", harbor):

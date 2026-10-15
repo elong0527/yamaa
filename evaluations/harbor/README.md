@@ -1,627 +1,174 @@
 # Agent evaluation with Harbor
 
-Runs yamaa benchmarks as agent evaluations: an AI coding agent gets a
-benchmark's prompt and its input datasets, writes the requested dataset,
-and is graded cell by cell against the benchmark's golden file.
-[Harbor](https://github.com/harbor-framework/harbor) runs the agent in
-Docker; this folder only writes Harbor task directories and a job file.
+An agent receives a benchmark's prompt and input datasets, writes an R,
+Python or opensas program, and reproduces the independently authored
+expected datasets. [Harbor](https://github.com/harbor-framework/harbor)
+runs the agent and verifier in separate Docker images. Evaluation results
+live on Harbor Hub or in the chosen output directory.
 
-| File | Role |
+## Sources and generated output
+
+| Source | Purpose |
 |---|---|
-| `Dockerfile`, `images.py` | build and verify a separate agent/verifier image pair per language, including Harbor's OpenCode setup |
-| `system-r.md`, `system-python.md`, `system-opensas.md` | the shared system prompt per language: use only that language and write `result.R`/`result.py`/`result.sas` |
-| `prompts/` | the prompts, `<benchmark>/full.md`, `conventions.md`, and `brief.md`, one file per tier; what each tier means is in [`prompts/README.md`](prompts/README.md) |
-| `brief.py` | writes each `brief.md` from its `full.md` |
-| `build.py` | benchmarks with a prompt -> Harbor tasks per prompt tier and language with their Harbor Hub READMEs, one dataset README per tier and language, and one job file per tier, language, and model variant |
-| `hub.py` | a job's preserved tasks -> private Hub task and dataset revisions, with verified job associations |
-| `grade.py` | the verifier, copied into every task's `tests/` |
-| `solutions/` | reference solutions, `<benchmark>/result.R`, `result.py` and `result.sas`, written from the full prompt alone; the oracle runs them |
-| `leaderboard.py` | Harbor job directories -> Harbor Hub leaderboard and row configs |
-| `leaderboards/` | leaderboard definitions, one file per leaderboard (one per prompt tier and language) |
+| `prompts/<benchmark>/full.md` and `conventions.md` | authored requests; the brief tier is derived from the full prompt when used |
+| `solutions/<benchmark>/result.R`, `result.py`, `result.sas` | independent reference programs written from the prompt and inputs |
+| `system-*.md` | language policy and packages available to the agent |
+| `Dockerfile`, `install-r-packages.R`, `images.py` | language images and their runtime checks |
+| `build.py` | tasks, dataset pages, and model job configurations |
+| `grade.py`, `sandbox.py` | grading and isolated program reruns |
+| `measurements.json` | authored measurement columns used by changed-input checks |
+| `leaderboards/config.yaml` | shared Hub schemas, columns, ranking and minimum attempts |
+| `leaderboards/task-populations.json` | frozen benchmark populations for versioned boards |
+| `leaderboard.py`, `hub.py`, `run.py` | result aggregation and private Hub publication |
+| `tests/` | prompt, reference, grading, isolation and Hub controls |
 
-Results are not kept in this repository: runs are uploaded to Harbor Hub and
-reviewed on its leaderboards.
+Benchmark lifecycle, standard, domain and track exclusions come from each
+case's `benchmarks/<name>/benchmark.yaml`. Adding a benchmark needs its
+metadata, authored prompts and independent reference programs; it needs no
+committed brief prompt or per-language leaderboard definition. Follow the
+[prompt recipe](prompts/recipe.md) and [tier contract](prompts/README.md).
+The [opensas guide](solutions/opensas.md) covers its runtime and supported
+inputs. An explicit request for an excluded track fails with the reason
+from that case's metadata.
 
-Standalone `result.sas` sources are also prepared for the 148 prompted
-derivation benchmarks. Their execution prerequisites, local checks and known
-compatibility gaps are documented in [solutions/opensas.md](solutions/opensas.md).
-The opensas track runs the 145 confident cases with native CSV inputs. Three
-prepared cases remain excluded: investigator comments (spaces-only text),
-randomization (Parquet input), and age quality (warning-log output).
-`build.py` records their reasons and rejects explicit requests to run them.
+Tasks, jobs, image diagnostics and exported Hub configurations are generated
+outside the checkout. The default is `~/.cache/yamaa-harbor/`, or
+`$XDG_CACHE_HOME/yamaa-harbor`; commands accepting `--out` can override it.
+A build replaces the tasks, dataset pages and job configurations in that
+output directory, while preserving completed jobs.
 
-Tasks are built from the full prompt unless `--prompt` names the
-conventions or brief tier (see [Prompt tiers](#prompt-tiers)). The Harbor
-Evaluation workflow
-(`.github/workflows/harbor-evaluation.yml`) reruns every reference
-solution, in R and in Python, against its benchmark's current data, and
-checks that every prompt still asks for the datasets and columns the
-expected data holds, so a change to a benchmark that breaks either fails
-its pull request.
+## Setup and local checks
 
-How to write a prompt is in
-[`automation/benchmark_prompt.md`](../../automation/benchmark_prompt.md).
-
-## What a run enforces
-
-- **One language throughout each task.** Each task's `instruction.md` is the shared
-  system prompt for its language (`system-r.md`, `system-python.md` or `system-opensas.md`)
-  followed by the benchmark's prompt of the task's tier, which itself
-  never names a language. The R track requires `/app/output/result.R`,
-  the Python track `/app/output/result.py`, and the opensas track
-  `/app/output/result.sas`, each rerunnable to reproduce
-  the datasets. A
-  shell call that attempts another runtime zeroes the trial, including
-  inspection, editing, debugging, help/version probes and failed commands: `python`,
-  `pip`, or `uv` on the R track, `R` or `Rscript` on the Python track, as a
-  command (also behind `env`, `sudo`, `timeout`, `bash -c`, or `$(...)`).
-  Naming one is not a call: in a `grep` pattern, a quoted string, a
-  comment, a heredoc body, or the tool call's description. So is a bridge
-  in the script: `library(reticulate)` or `system("python ...")` in R,
-  `import rpy2` or `subprocess.run(["Rscript", ...])` in Python. R/Python
-  tracks also reject calls to opensas. opensas rejects Python, R and Lua calls,
-  PROC PYTHON/LUA and shell bridges such as SYSTEM, X, PIPE and SYSEXEC.
-  All tracks reject other helper runtimes, including Node/Bun, Lua, Perl,
-  Java and compilers. Use OpenCode file tools or shell text tools for
-  inspection and editing, and the required language for data calculations.
-  Generated OpenCode permissions deny common foreign-runtime commands; the
-  independent trajectory audit remains the authority for scoring. A denied
-  attempted tool call still violates the policy.
-- **The agent sees only the prompt and `/app/input/`.** Specifications,
-  READMEs, golden files, and input schemas (`*.schema.yaml`) never enter
-  its container; the golden files live in `tests/`, which Harbor builds
-  into a separate verifier image.
-- **Closed book.** While the agent works, only the model API host is
-  reachable. During setup Harbor may also reach GitHub, `nodejs.org`, and
-  the npm registry to install OpenCode. OpenCode's `webfetch` and
-  `websearch` tools are denied, and the grader zeroes any trial whose
-  trajectory calls them. The verifier has no network.
-- **Grading.** Reward 1 when every requested dataset has the golden's
-  columns, keys, and cell values, and the script, rerun by the verifier
-  from a clean state (its datasets deleted first), writes datasets that
-  match too. Then the held-out rerun: with selected subjects dropped from
-  the inputs, the script must recompute the answer. Every task ships its
-  reference solution (`solutions/`, copied into `tests/reference/`). The
-  reference must first match the original golden. Per-subject derivations
-  use the golden restricted to the subjects kept when the reference agrees;
-  aggregate or cross-subject derivations use its validated recomputed answer.
-  The grade records which expected source was used. A check that cannot
-  discriminate is skipped with a note, and a reference crash or invalid
-  answer is a verifier error. Then,
-  when an output carries `USUBJID`, the changed-input challenge: every
-  subject identifier in the inputs is renamed and supported ages,
-  measurements and complete dates are changed. The reference computes the
-  answer from those inputs, and the script must write it. Zero-padded numeric
-  identifiers keep their width and leading zero through one shared shift per
-  width; if there is no room to shift upward, they rotate within that padded
-  domain. The one-character identifier `0` has no distinct padded replacement
-  and stays unchanged. Supported measurements include numeric laboratory/vital
-  standardized results and baseline height and weight. Numeric standardized
-  text follows the matching numeric value actually stored. Ages stay unchanged
-  when an input stores an age group whose rule is unknown. A benchmark may
-  declare further measurement columns in `measurements.json` - ADaM `AVAL`,
-  dose columns such as `EXDOSE`, and ODM `Value` where a form's numeric items
-  are measurements - and the challenge scales those columns only for that
-  benchmark; columns holding categories, counts or codes are never declared.
-  The grade records the shared seed and changed columns. The shared day shift
-  preserves chronology
-  among complete dates only. Partial dates, dates collected in separate
-  year/month/day items, and interval strings stay unchanged; their alignment
-  with complete dates and the resulting imputations can therefore change.
-  This checks supported counterfactuals;
-  it does not prove generalization to every possible input. Column and row
-  order are reported, not graded. Cells are read by column type: integers
-  compare exactly (`1.0` equals `1`), other numbers within a relative 1e-9,
-  dates also accept a midnight datetime, text is compared exactly (spaces
-  included), and an empty cell, `NA`, or `.` is no value. An output that is a symlink
-  is rejected.
-  `reward.json` also carries `cell_accuracy`, `row_accuracy`, `reproduced`,
-  `language_violations`, `held_out_checked`, `held_out` (when checked),
-  `challenge_checked`, and `challenge_passed`, and
-  `verifier/diff-<file>.csv` lists the differing cells.
-  Partial accuracy is the minimum across the submitted datasets and every
-  checked rerun. Failed execution or a language/web policy violation gets
-  zero partial credit; an executable, partly correct derivation keeps its
-  credit. Extra rows and columns reduce accuracy, and a row missing any
-  required column is not fully correct. Each output in `grade.json` also
-  reports `column_accuracy` for comparisons of individual variables.
-- **Sandboxed reruns.** The verifier runs the agent's script, and the
-  reference, as the image's unprivileged `nobody` user (`sandbox.py`):
-  `/tests`, with the golden and the reference, is readable by root only,
-  every rerun restores the original inputs from `tests/input/` and starts
-  from an empty output folder, and every process the script left is
-  killed. A model's job also requires the agent's trajectory
-  (`YAMAA_REQUIRE_TRAJECTORY`), so the language and web-tool audit always
-  has a record to read. `run.py` copies each task into the job and saves
-  `evaluation.json` before execution, so setup failures retain provenance
-  and later builds cannot change what the job runs. The verifier's saved
-  `task.toml` must agree with that snapshot.
-
-## Setup
-
-A Docker engine whose kernel supports nftables `fib` (Harbor's allowlist
-needs it): Linux, or OrbStack on macOS. Docker Desktop may lack it.
+Use a Docker engine with nftables `fib` support for Harbor's network
+allowlist, such as Linux or OrbStack. Install the locked Python tools and
+Harbor dependencies from the repository root:
 
 ```bash
 uv sync --project python --group harbor
-uv run --project python --no-sync python evaluations/harbor/images.py build
-uv run --project python --no-sync python evaluations/harbor/images.py verify
+uv run --project python --no-sync python -m evaluations.harbor.images build
+uv run --project python --no-sync python -m evaluations.harbor.images verify
+uv run --project python --no-sync pytest evaluations/harbor/tests
 ```
 
-The six image targets are `agent-r`, `agent-python`, `agent-opensas` and
-`verifier-r`, `verifier-python`, `verifier-opensas`. Agent images expose only
-that track's benchmark runtime. OpenCode's Node infrastructure and standard
-shell tools remain available; they are covered by the workflow language rules.
-Verifier images contain the same language runtime plus Python for the trusted
-grader, and have no model agent or network access. The Python verifier reuses
-its existing runtime; the R verifier adds PyArrow for Parquet grading.
-The opensas verifier needs only the Python standard library for CSV grading.
+Images are separate agent/verifier pairs for R, Python and opensas. Each
+agent image exposes its required runtime, OpenCode and shell text tools.
+The verifier adds the trusted Python grader. R packages are installed and
+checked by `install-r-packages.R`, shared by the image and CI. Local
+reference tests skip unavailable optional runtimes; CI requires its R
+packages and runs opensas oracle checks in the built image.
 
-`images.py verify` checks runtime isolation and approved packages before and
-after invoking Harbor's pinned OpenCode installer. This catches setup packages
-that introduce a foreign runtime. Its disposable containers are removed on
-completion; diagnostics and a summary are saved under `image-checks/`.
-A deterministic local provider also tests explicit command denies through the
-actual pinned Harbor runner, confirms the required runtime still executes,
-and checks that denied attempts survive trajectory conversion and grading.
-This requires no remote model or credential. The permission configuration uses
-[OpenCode's granular rules](https://opencode.ai/docs/permissions/); the audit
-still catches attempts that a shell wrapper hides from those rules.
+`images verify` checks approved packages, foreign-runtime isolation and
+OpenCode permissions before and after Harbor's pinned installer. A local
+provider tests both allowed and denied calls without a model credential.
+The `Harbor` workflow runs on main pushes, scheduled runs and manual dispatch.
+Its `solutions` job checks references and prompts; its `oracle` job runs the
+harness controls, image checks and real oracle/nop trials.
 
-## Build and check the tasks
-
-`build.py` writes to `~/.cache/yamaa-harbor/` (`$XDG_CACHE_HOME/yamaa-harbor`
-when set, or `--out`): the tasks under `tasks/`, one dataset README per
-language under `datasets/<language>/`, and the job files under `configs/`.
-Harbor writes its job directories under `jobs/` there. All of it stays
-outside the repository, whose validators read every file in the tree. Each
-build first removes the tasks, datasets, and job files of the previous one.
-
-Each language is its own Harbor Hub dataset, `yamaa/yamaa-sdtm-adam-r` and
-`yamaa/yamaa-sdtm-adam-python` (`--dataset-prefix` changes the part before
-`-<language>`), so R and Python are published, run, and ranked apart. Each
-task gets a `README.md`, its page on Harbor Hub: the benchmark's own
-README, the inputs, the outputs and keys, and the grading and network
-rules. It sits at the task root, which never enters the agent's container.
-`datasets/<language>/README.md` is the dataset's page, listing its tasks.
+Run an offline Docker preflight before spending model tokens:
 
 ```bash
-uv run --project python --no-sync python evaluations/harbor/build.py \
-	--model opencode-go/muse-spark-1.3-contributor
+uv run --project python --no-sync python -m evaluations.harbor.smoke \
+    --out /tmp/yamaa-harbor-preflight
 ```
 
-One build covers R/Python (`--language r python`, the default). Add
-`--language opensas` for that track, or `--language r python opensas` for all
-three. Each model job contains one language and uses its own agent/verifier
-image pair. Each benchmark becomes a task suffixed with its language.
-A benchmark is skipped, with its reason on stderr, when the grader
-cannot check it: its golden is a warning or violation log, a golden cell
-holds a token the grader reads as no value (`NA`, `.`), a column's type is
-not one the grader knows, or no specification writes a golden dataset.
-Naming one with `--benchmarks` fails fast instead. Domains built together
-(`spec_dm.yaml` and `spec_suppdm.yaml`) are one task that grades both
-datasets.
+The default samples buildable tasks and saves the selection and seed.
+Use `--language opensas --all-cases` for its full supported population,
+`--benchmarks <name> ...` for specific tasks, and `--seed` to repeat a
+sample. Oracle must pass and nop must fail through Harbor's actual
+verifier, with no model API calls.
 
-### Prompt tiers
-
-`--prompt` picks the prompt tiers to build: `full` (the default),
-`conventions`, and `brief`; [`prompts/README.md`](prompts/README.md) says
-what each keeps. Every tier is its own Hub dataset per language,
-`yamaa/yamaa-sdtm-adam-<tier>-<language>`, with tasks
-`<benchmark>-<tier>-<language>`, its page in `datasets/<tier>-<language>/`,
-and job files `<job-name>-<tier>-<language>[-<variant>].json`; the full
-prompt keeps the names above. Inputs, expected data, the grader, and the
-reference solution are the same in every tier, so the oracle scores 1 on
-every task and `nop` 0. On a shorter prompt that shows the task builds and
-grades, not that the prompt can be solved, and each tier task's page says
-so.
+## Build and run a model
 
 ```bash
-uv run --project python --no-sync python evaluations/harbor/build.py \
-	--prompt conventions brief \
-	--model opencode-go/muse-spark-1.3-contributor \
-	--variant low \
-	--out ~/.cache/yamaa-harbor-tiers
+uv run --project python --no-sync python -m evaluations.harbor.build \
+    --model openai/<model> --language python --prompt full \
+    --out /tmp/yamaa-harbor-model
+uv run --project python --no-sync python -m evaluations.harbor.run \
+    -c /tmp/yamaa-harbor-model/configs/<generated-job>.json
 ```
 
-To compare tiers, run the same model and variant, with the same attempts,
-on all three, and read its rows on the three boards of one language.
+`build --help` lists model variants, provider overrides, attempts and
+concurrency. Defaults build R and Python full-prompt tasks for every
+prompted benchmark. `--prompt conventions brief` selects the other tiers;
+each language and tier has a separate dataset and job. Credentials come
+from the provider's named environment variable and stay out of task files.
 
-For development, a pilot of three ADaM benchmarks in both languages is a
-quick check before a full run:
+`run` preserves each task and `evaluation.json` before execution. A model
+job requires a trajectory, uploads its completed tasks, datasets, job and
+eligible leaderboard rows privately to the `yamaa` organization, verifies
+the associations, then cleans uploaded local artifacts. Log in with
+`harbor auth login` before a publication run. Use the generated jobs from
+a committed tree so the stored source revision names the prompts answered.
+Restore a cleaned job with `harbor job download <job-id>`.
+
+## Grading contract
+
+The agent sees its system prompt, task prompt and `/app/input/` data.
+Specifications, input schemas, benchmark READMEs, expected data and
+references stay out of the agent image. Only the model API host is
+reachable while the agent works; the verifier has no network.
+
+Each track requires its own program (`result.R`, `result.py` or
+`result.sas`). Calls to another runtime, helper compiler or web tool fail
+the language policy, including denied attempts, shell wrappers and bridges
+inside a program. Merely naming a runtime in text is allowed. OpenCode
+permissions provide an early guard; the independent trajectory audit
+makes the scoring decision.
+
+A passing result must match every requested dataset and reproduce it from
+a clean output directory. The verifier also reruns both the reference and
+agent program after dropping selected subjects and after changing supported
+identifiers, ages, measurements and complete dates. `measurements.json`
+adds benchmark-specific numeric measurements; categorical codes and counts
+are not measurements. Partial dates remain unchanged. These checks exercise
+supported counterfactuals and do not prove generalization to every input.
+
+Reruns execute as an unprivileged user with no access to expected files or
+references. Inputs are restored between runs, outputs are removed, and
+remaining child processes are killed. A reference must first reproduce the
+original expected data. Its recomputed answer supplies expectations for
+cross-subject derivations; subject-local results use restricted expected
+data when the reference agrees. A reference failure is a verifier error.
+
+Integer cells compare exactly, other numbers within relative `1e-9`, and
+text including spaces exactly. Empty cells, `NA` and `.` mean no value;
+dates also accept midnight datetimes. Row and column order are reported
+without affecting the score. Extra rows or columns reduce partial accuracy,
+and symlink outputs are rejected. Execution or policy failures receive zero
+partial credit. Reward is one only when every required comparison passes.
+The verifier saves `grade.json`, `reward.json` and per-file cell differences.
+
+## Versioned leaderboards
+
+`leaderboard.py` derives one board per frozen population, language and
+prompt tier. Task names, dataset packages and runtime references come from
+`build.py`; Hub schemas and ranking come from `leaderboards/config.yaml`.
+Historical populations in `task-populations.json` stay frozen. New tasks can
+be evaluated immediately, then admitted to a new population version without
+changing previous scores.
+
+A row represents one job with one agent, model, variant and source commit.
+Export requires every board task, equal attempts, finished trials, uniform
+agent settings, the expected grading protocol and image references, and
+unchanged task resources, timeouts, network and verifier. Export pins the
+full source commit in the board identity and metadata. Jobs from different
+commits are compared separately.
+
+Boards rank by mean per-task reward, then cell accuracy and cost per
+attempt. An errored trial counts as zero. Additional metrics include mean
+row accuracy, token and cost totals, runtime, a bootstrap interval over
+tasks, and Harbor's unbiased pass-at-k estimator when enough attempts exist.
+Choose attempts before running compared models and keep task populations
+and settings equal. Compare prompt tiers using paired runs; a brief score
+includes guesses about sponsor choices omitted from that prompt.
+
+For manual export of restored jobs:
 
 ```bash
-uv run --project python --no-sync python evaluations/harbor/build.py \
-	--benchmarks adam-adsl-age-group adam-adae-death adam-adtte-dor \
-	--model opencode-go/muse-spark-1.3-contributor \
-	--n-concurrent 3 \
-	--job-name muse-spark-1.3-pilot
+uv run --project python --no-sync python -m evaluations.harbor.leaderboard \
+    export <board-name> <job-directory> --out /tmp/yamaa-harbor-export
 ```
 
-Harbor's `oracle` agent runs each task's `solution/result.R` or
-`result.py` and must score 1 on every task, rerun included; its `nop`
-agent writes nothing and must score 0. That script is the benchmark's
-reference solution from `solutions/`, written from the full prompt and
-the inputs alone, which also shows the prompt can be solved. Every task
-needs one, since the held-out and changed-input reruns compute their
-answers with it, and a benchmark without one is not built. To run the
-oracle:
-
-```bash
-uv run --project python --no-sync harbor run \
-	-p ~/.cache/yamaa-harbor/tasks \
-	-a oracle \
-	-o ~/.cache/yamaa-harbor/jobs \
-	--job-name oracle \
-	-y
-```
-
-The R, Python and opensas references follow the full prompt on edge cases
-as well as on the committed inputs. `test_harbor_reference_edges.py` uses
-temporary inputs with independent assertions; it never rewrites a prompt,
-input fixture or expected output. The reference-solutions job requires all
-three runtimes and grades their original outputs as well as those witnesses.
-
-Where the full prompt is silent, the references share these choices:
-
-- A missing sort date or target distance follows known values; the stated
-  sequence tie-break still applies among otherwise equal records. Missing
-  ages likewise follow known ages in the subject ranking.
-- Only `AESER = N` is non-serious. Missing seriousness leaves the prior and
-  first serious-event fields empty, while the previous-event field still
-  follows collected sequence.
-- A repeated checklist item uses its last row in collected input order,
-  including an unanswered last row; it still produces one checklist record.
-- Reported laboratory results from an unrecognized study event remain in
-  LB with no visit label or number.
-- Lab age bands include their lower bound and exclude their upper bound.
-  When effective-date ranges overlap, the latest applicable start wins,
-  followed by the highest applicable age-band start. An exact remaining tie
-  keeps the first range in collected order. Effective end dates are inclusive.
-
-The alive-date input naming discrepancy from #1889 was corrected separately
-in #1890. Its existing prompts already name `adsl.csv`.
-
-`smoke.py` does both checks offline in one step: it builds the tasks,
-probes the verifier sandbox (`probe.py`: the script cannot read the golden
-files, change the inputs or the grader's logs, or leave a process
-behind), then randomly samples ten buildable tasks without replacement.
-Both `oracle` and `nop` run the same sample: ten trials each, twenty total.
-`oracle` must score 1 with every required challenge checked, and `nop` must
-score 0. If fewer than ten tasks are available, it checks all of them.
-`sample.json` saves the selected tasks and random seed; pass that seed with
-`--seed` to repeat the sample from the same source and prompt tiers.
-The Harbor Oracle workflow (`.github/workflows/harbor-oracle.yml`) limits PR
-Docker verification to benchmarks whose data, prompts, or reference solutions
-changed. It checks every buildable R/Python task for those benchmarks across
-all three prompt tiers. Shared harness, image, or dependency changes affect
-every benchmark; those PRs, Mondays, and manual runs keep the full opensas
-selection and ten-task R/Python preflight. PRs without affected Harbor
-benchmarks skip Docker verification while retaining harness regression tests.
-Before a model run, use the same sampled preflight:
-
-```bash
-uv run --project python --no-sync python evaluations/harbor/smoke.py \
-	--prompt full conventions brief \
-	--n-concurrent 6 \
-	--out ~/.cache/yamaa-harbor-smoke
-```
-
-## Run every confident opensas case
-
-The image uses the existing official opensas v0.6.6 Linux executable for
-amd64 or arm64. It retains the Apache 2.0 and applicable MIT notices under
-`/usr/local/share/licenses/opensas`; see [runtime notices](licenses/opensas/README.md).
-No engine is built. Harbor's separate verifier still uses clean outputs,
-unprivileged execution, held-out subjects and required changed-input checks.
-
-```bash
-uv run --project python --no-sync python evaluations/harbor/images.py build
-uv run --project python --no-sync python evaluations/harbor/images.py verify
-uv run --project python --no-sync python evaluations/harbor/smoke.py \
-    --language opensas --all-cases --prompt full --n-concurrent 6 \
-    --out ~/.cache/yamaa-harbor-opensas
-```
-
-This runs oracle and nop on the same 145 cases, with no model key. The saved
-`sample.json` lists every selected task and exclusion; `summary.json` records
-each case's rewards and exceptions. Jobs retain the usual task snapshots,
-verifier grades and logs. Weekly and manual CI runs retain this complete
-selection. PRs verify only impacted benchmarks, or the complete selection when
-shared changes affect every benchmark. The CI artifact records the selected
-benchmark names alongside the usual task selection and verifier diagnostics.
-
-For a model evaluation, pass `--language opensas` to `build.py`; it creates a
-separate opensas dataset, job and leaderboard per requested prompt tier.
-R/Python remain the default selection when no language is given.
-
-## Prepare a fresh full comparison
-
-After reviewing and merging the harness change, start from that clean commit,
-build and verify the six images, and pass the offline preflight above. Then
-use a fresh output directory to prepare all nine jobs:
-
-```bash
-uv run --project python --no-sync python evaluations/harbor/build.py \
-    --language r python opensas --prompt full conventions brief \
-    --model opencode-go/muse-spark-1.3-contributor \
-    --n-attempts 1 --n-concurrent 1 \
-    --job-name muse-spark-1.3-language-images \
-    --out ~/.cache/yamaa-harbor-language-images
-```
-
-This prepares 1,317 trials: 147 R, 147 Python and 145 opensas cases in each
-prompt tier. Exclusions remain reported. Run at most six job processes in
-parallel, each with one active trial; start the remaining three as slots free
-up. Keep the default model variant, one attempt per task, and all failures.
-Use `run.py` for each generated configuration so completed jobs retain private
-Hub uploads, exact dataset associations and release-specific leaderboard links.
-Do not resume or combine the cancelled protocol-3 jobs with this comparison.
-A small model pilot should pass the workflow policy before launching all jobs.
-
-## Run an agent
-
-The provider is chosen per run: `--model <provider>/<model>` picks the
-model API host and the key variable, and the key is read from your shell
-when the job starts, never written to a file.
-
-| Provider prefix | Host | Key |
-|---|---|---|
-| `opencode-go`, `opencode` | `opencode.ai` | `OPENCODE_API_KEY` |
-| `anthropic` | `api.anthropic.com` | `ANTHROPIC_API_KEY` |
-| `openai` | `api.openai.com` | `OPENAI_API_KEY` |
-| `xai` | `api.x.ai` | `XAI_API_KEY` |
-
-Any other provider, or a gateway, takes `--api-host` and `--key-env`.
-Each job file allows the agent 900 s to install (`override_setup_timeout_sec`),
-since many trials downloading at once slow it; the agent's own time limit
-is the task's, which leaderboard runs must keep.
-
-The build writes one job file per language and model variant,
-`configs/<job-name>-<language>-<variant>.json`, so each job is one row on
-one language's leaderboard. `--variant` takes the model's OpenCode
-variants, which set its reasoning effort; for
-`opencode-go/muse-spark-1.3-contributor` they are `minimal`, `low`,
-`medium`, `high`, and `xhigh` (`opencode models opencode-go --verbose`
-lists them). Without `--variant` there is one job per language at the
-model's default. `--job-name` is the prefix, by default the model's name.
-
-```bash
-export OPENCODE_API_KEY=...
-for job in ~/.cache/yamaa-harbor/configs/*.json; do
-	uv run --project python --no-sync python evaluations/harbor/run.py -c "$job"
-done
-```
-
-Use this wrapper for ranked runs. It refuses an existing job directory;
-choose a new job name for a new complete run. Automatic retries are disabled.
-Do not select successful attempts from an interrupted or failed job.
-Keep the job's `evaluation.json` and `task-snapshots/` with its results until
-the Hub confirms the upload.
-At trial start the wrapper also saves the task metadata and manifest under
-`verifier/`, which Harbor includes in its upload/download archives. It restores
-the manifest after verification resets that directory, retaining the verifier's
-own task snapshot for comparison. Successful and failed setup trials therefore
-keep their evidence after a Hub download.
-
-After each complete model job, the wrapper uploads every trial and its
-artifacts privately to the `yamaa` organization on Harbor Hub, including
-failed attempts. Authenticate once with `harbor auth login` as a member of
-`yamaa`. The wrapper first publishes the job's exact task snapshots and a
-dataset revision for each language and prompt tier. Generated task configs
-carry their dataset source, including a custom `--dataset-prefix`.
-Oracle and nop preflight jobs stay local. After the Hub confirms
-the finalized job archive, every trial archive, every dataset association,
-and the leaderboard row's scores and trial links,
-the wrapper deletes the local trial artifacts, task snapshots, logs, and upload
-caches. It keeps
-only `config.json`, `result.json`, and `hub-upload.json` as completion records
-for batch status and the Hub link. Unrelated files in the job directory are
-left alone. Upload or verification failures retain the local artifacts.
-`hub-upload.json` records upload, verification, and cleanup status, along with
-the dataset and leaderboard names, immutable revisions, IDs, and links.
-It retains the calculated leaderboard submission so a failed publication or
-partial cleanup can be retried without rerunning the model. Before associating a
-job, the wrapper checks that every uploaded attempt matches the published
-dataset's exact task versions. Harbor Hub's job config uses those pinned
-dataset references; `local_task_snapshots` retains the original execution
-paths there without selecting the same tasks twice for replay. Trial source
-labels also name their dataset. After checking the complete grading evidence,
-the wrapper submits one row per job to the board for its task release, language
-and prompt tier. Every board ranks by task pass rate (`reward`), shows that score
-as a percentage and displays successful attempts / total attempts. Cell accuracy
-is a secondary metric. Each row links to its job and every trial, including
-failed attempts. Repeated uploads reuse the existing row.
-Publishing, association or leaderboard verification failures keep the
-local artifacts and can be retried with the same command as an upload failure.
-An upload failure is
-reported without stopping subsequent benchmark jobs; retry the upload,
-without rerunning the model, with:
-
-```bash
-uv run --project python --no-sync python evaluations/harbor/run.py \
-	--upload-only ~/.cache/yamaa-harbor/jobs/<job>
-```
-
-Each trial directory under `~/.cache/yamaa-harbor/jobs/<job>/` holds the
-agent's files (`artifacts/app/`, with its `output/result.R` or
-`output/result.py`) and trajectory (`agent/trajectory.json`),
-the grade (`verifier/grade.json`, `verifier/reward.json`, and a
-`diff-<file>.csv` when cells differ), and Harbor's `result.json` with
-tokens and cost until upload is confirmed. To browse or export results after
-cleanup, restore the job with `harbor job download <job-id>`.
-
-## Leaderboards
-
-Each leaderboard follows the
-[Harbor Hub model](https://docs.harborframework.com/core-concepts/harbor-hub/leaderboards):
-a curated, ranked table whose definition fixes the columns and the ranking
-rules, and whose rows are uploaded runs that point back to their trials.
-`leaderboards/<name>.yaml` holds:
-
-- `package`: the Harbor Hub dataset the board belongs to, the dataset of
-  its language and prompt tier.
-- `grading_protocol`: the verifier's checks a run must have been graded
-  with (`GRADING_PROTOCOL` in `build.py`, recorded in every task).
-- `image_reference` and `verifier_image_reference`: the agent and verifier
-  references every ranked row must use.
-- `tasks` and `attempts`: the benchmarks a run must cover and the fewest
-  attempts on each (every buildable benchmark, one attempt), with the
-  same number of attempts on every task.
-- `harbor`: the Hub definition itself, in the shape
-  `harbor hub leaderboard create --config` takes: the `metadata_schema`
-  and `metrics_schema` of a row, the `columns`, and the ordered `rank_by`
-  rules. Accessors read one flat key, `metadata.<key>` or `metrics.<key>`.
-
-A leaderboard's tasks are its fixed question, as a Hub leaderboard is
-pinned to dataset versions: adding a task leaves earlier runs without it,
-and `export` then refuses them. Start a new leaderboard instead. New
-benchmarks may be built and evaluated before a successor board is assembled;
-their admission leaves historical task lists and scores unchanged. There is
-one leaderboard per dataset, so one per language and prompt tier
-(`yamaa/yamaa-sdtm-adam-r/sdtm-adam-v4-r`,
-`yamaa/yamaa-sdtm-adam-brief-r/sdtm-adam-v4-brief-r`, ...), and R, Python,
-opensas and each tier are ranked independently. All boards rank by complete task pass
-rate before cell accuracy. Shorter prompts can leave sponsor choices unstated,
-so their strict pass rates include the model's ability to infer those choices.
-The v4 boards introduced protocol 4, which separates the language images,
-records both runtime references, and applies the helper-runtime restriction
-to every track. Protocol 3's changed-input checks, regenerated partial credit
-and complete job evidence remain required. Older scores stay on their
-existing boards. Export appends the full source commit to the Hub board name
-and pins that commit and both image references in its metadata schema, so separately
-published runs cannot mix releases. Compared jobs must share the same commit.
-
-The `v5` boards retain protocol 4 and add completed-history intercurrent
-event priority, event-specific time-at-risk incidence and ARS-style adverse
-event results. Their task populations are pinned independently in
-`leaderboards/task-populations.json`, alongside the frozen v4 population.
-The `v6` boards retain protocol 4 and admit the eight public PK/QT cases
-from #2297, covering replicate QTcF averages, time-matched baseline and
-concentration, placebo-corrected change, carry-over exclusions, comparison
-sets, accumulation ratios and dose normalization. Their pinned population
-contains 147 R/Python cases and 145 opensas cases in each prompt tier. The
-v4 and v5 definitions, task populations and historical scores stay frozen.
-
-A row is one job: one agent, model, and variant, so the variants of a model
-sit side by side. Its metadata comes from the job (agent, version, model,
-variant, date, attempts, job and Harbor version, and the yamaa commit,
-grading protocol, and agent/verifier references of its tasks, read from the `task.toml` each
-trial's verifier saved), the effective agent configuration with credentials
-redacted, and its metrics from its trials on the
-leaderboard's tasks:
-
-| Metric | Meaning |
-|---|---|
-| `reward` | the pass rate: each task's mean reward, averaged over tasks; an errored trial counts as 0 |
-| `trial_reward` | the mean reward over trials (Harbor's mean) |
-| `reward_ci_low`, `reward_ci_high` | a 95% bootstrap interval of `reward` over tasks (2,000 resamples); it shows how much the score depends on which tasks are in, not the noise within a task |
-| `cell_accuracy`, `row_accuracy` | mean minimum accuracy across submitted and regenerated datasets, with penalties for extra records/columns and zero for failed execution or policy violations |
-| `pass_at_<k>` | Harbor's unbiased pass@k averaged over tasks, for k = 2, 4, 5, 8, 10, ... up to the fewest attempts on a task |
-| `n_trials`, `n_errors` | trials aggregated, and trials that ended in an exception |
-| `input_tokens`, `output_tokens`, `cost_usd` | totals, when every trial reported them |
-| `cost_per_trial_usd` | `cost_usd` per trial |
-| `agent_seconds` | mean agent time per trial |
-
-Harbor skips pass@k when a verifier writes several rewards, as `grade.py`
-does, so `leaderboard.py` computes it from `reward`. Harbor Hub orders the
-rows by the board's `rank_by` rules. With the `harbor` group installed,
-tests check the pass@k estimator and the exported configs against
-Harbor's own code; without it they skip.
-
-To compare models, ask for several attempts per task: one attempt is a
-pilot, and pass@k needs at least two. Terminal-Bench 2.0, the reference
-Harbor benchmark, takes leaderboard runs with `--n-attempts 5`.
-
-Choose the attempt count before running any compared model and keep it equal.
-Compare prompt tiers in paired runs of the same tasks, model, variant and
-configuration. Inspect `column_accuracy` in the original, replay and challenge
-outputs separately: copied input values, derived values, and withheld sponsor
-labels answer different questions. A brief score includes guesses about
-unstated sponsor choices and is not a standalone measure of CDISC correctness.
-Report differences by task/domain as well as an overall mean; related tasks
-are not independent evidence of generalization.
-
-### Publish to Harbor Hub
-
-Everything is private to the `yamaa` organization on Harbor Hub: the tasks,
-the six datasets, the uploaded jobs, and the leaderboards. Log in once with
-`harbor auth login` (GitHub OAuth) as a member of `yamaa`. Build the tasks
-from a committed tree, so each row's "Tasks from" commit names the prompts
-it answered (a `+dirty` suffix means uncommitted changes), and publish
-exactly the task directories the job ran, so the uploaded trials match the
-published tasks. Publish the tasks before the datasets, whose manifests
-point at them; `dataset init` keeps the README the build wrote. Publish one
-tier from a build of that tier alone, in its own `--out`: `tasks/*-r` also
-matches `*-brief-r` and `*-conventions-r`. For the R dataset of the full
-prompt (repeat with `python`; for a tier, use its dataset name and its
-`datasets/<tier>-r` folder):
-
-```bash
-H="uv run --project python --no-sync harbor"
-D=~/.cache/yamaa-harbor/datasets/r
-$H publish ~/.cache/yamaa-harbor/tasks/*-r \
-	--private
-$H dataset init yamaa/yamaa-sdtm-adam-r \
-	-o $D \
-	--description "yamaa SDTM and ADaM benchmarks, R track"
-$H add ~/.cache/yamaa-harbor/tasks/*-r \
-	--to $D
-$H publish $D \
-	--private
-$H upload ~/.cache/yamaa-harbor/jobs/<job> \
-	--org yamaa \
-	--private
-```
-
-A republish of changed tasks makes a new revision of each task and of the
-dataset. The board links dataset revisions by id, and
-`harbor hub leaderboard update <board> --dv-id <id> ...` replaces that
-list, so pass every revision its rows ran on.
-
-The runner publishes the board and its row automatically before cleanup.
-For manual publication or older jobs, restore cleaned jobs with
-`harbor job download <job-id>`, then write each leaderboard's configs from
-the job directories and create the board and its rows:
-
-```bash
-uv run --project python --no-sync python evaluations/harbor/leaderboard.py \
-	export sdtm-adam-v4-r \
-	~/.cache/yamaa-harbor/jobs/muse-spark-1.3-contributor-r-low
-$H hub leaderboard create \
-	--config ~/.cache/yamaa-harbor/hub/sdtm-adam-v4-r.leaderboard.yaml
-```
-
-`export` takes the board's dataset from its `package`; `--package`
-overrides it.
-Then run the `row create` command printed by `export`. It uses the exported
-name, including its full source commit. Reuse that board only for that release
-and runtime reference;
-do not update it to admit incompatible revisions.
-
-An uploaded job keeps each trial's artifacts, so the agent's script stays
-on the Hub under the trial's `artifacts/app/output/`, and
-`harbor job download <job-id>` brings a whole job back, scripts included.
-
-`export` refuses a job that mixes agents, models, or variants, misses a
-board task or attempts, has unequal attempts across tasks, or changed the
-tasks' timeouts, resources, mounts, network access, skills, or verifier.
-It requires a finished job with all declared attempts and checks uniform
-effective agent settings within each row.
-It also refuses a trial without the grading evidence `grade.json` keeps
-(a checked trajectory, and the challenge where one is required), and a
-job whose tasks do not share one committed (not `+dirty`) yamaa commit,
-the board's grading protocol, and the board's agent/verifier image pair. `--hide` exports its rows
-hidden. Repeat for `sdtm-adam-v4-python` with the Python jobs. The published
-tasks build from `yamaa-harbor-agent-<language>:0.8` and
-`yamaa-harbor-verifier-<language>:0.8`, so both images must be built locally.
-
-Build each image pair once for a comparison and reuse those artifact references.
-The catalog comes from the pinned OpenCode binary, with model fetching off;
-there is no live catalog download during the image build. Package managers
-still resolve system and Node packages during builds, so rebuilding a local
-tag is not a reproducibility guarantee. For shared evaluations, publish the
-agent/verifier images once under immutable versioned references and set both
-references on the board before running (`build.py --language <language>
---image <agent-reference> --verifier-image <verifier-reference>`). Image
-overrides require exactly one language.
+The command prints the Hub create commands. Review the generated definition
+and rows before running them. Preserve a published board's population,
+source commit and runtime contract when adding compatible rows.

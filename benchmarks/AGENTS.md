@@ -84,7 +84,7 @@ select an implicit project root.
 
 The `sdtm-*` and `adam-*` evaluation prompts and independent solutions live
 beside the Harbor harness in `../evaluations/harbor/`. Its prompt recipe is
-`../automation/benchmark_prompt.md`.
+`../evaluations/harbor/prompts/recipe.md`.
 
 ## Input staging
 
@@ -402,7 +402,7 @@ uv run --project python --no-sync pytest evaluations/harbor/tests
 3. Once the README of a positive `sdtm-*` or `adam-*` benchmark is
    `reviewed`, write its full prompt,
    `../evaluations/harbor/prompts/<name>/full.md`, to the
-   [benchmark prompt recipe](../automation/benchmark_prompt.md), and its
+   [benchmark prompt recipe](../evaluations/harbor/prompts/recipe.md), and its
    `conventions.md`. The harness derives the brief prompt.
 4. Record any finding it exposes as a gap on the matching work item in the
    issue tracker, or add the benchmark's name to the gap that already states it.

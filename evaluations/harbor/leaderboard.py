@@ -1,11 +1,11 @@
 """Turn Harbor jobs into Harbor Hub leaderboard rows.
 
-    python evaluations/harbor/leaderboard.py export <leaderboard> \\
+    python -m evaluations.harbor.leaderboard export <leaderboard> \\
         <job-dir> [<job-dir> ...]
 
 The leaderboards follow Harbor Hub's curated-leaderboard model. Each
-`leaderboards/<name>.yaml` names its Hub dataset package, the tasks and
-attempts a run must cover and, under `harbor:`, the Hub definition: the
+`leaderboards/task-populations.json` fixes each version's benchmark set;
+`leaderboards/config.yaml` owns attempts and the shared Hub definition: the
 metadata and metrics every row carries, the columns, and the ordered
 `rank_by` rules. One row is one job: one agent, model, and variant.
 
@@ -32,6 +32,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
+from evaluations.harbor import build
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -375,16 +376,65 @@ def board_problems(board: dict) -> list[str]:
 
 
 def load_leaderboards() -> list[dict]:
+    """Generate versioned populations and track variants from one Hub schema."""
+    configuration = yaml.safe_load(
+        (LEADERBOARDS / "config.yaml").read_text(encoding="utf-8")
+    )
+    populations = json.loads(
+        (LEADERBOARDS / "task-populations.json").read_text(encoding="utf-8")
+    )
+    exclusions = build.opensas_exclusions()
     boards = []
-    for path in sorted(LEADERBOARDS.glob("*.yaml")):
-        board = yaml.safe_load(path.read_text(encoding="utf-8"))
-        found = board_problems(board)
-        if board["harbor"]["name"] != path.stem:
-            found.append(f"harbor.name must be {path.stem!r}")
-        if found:
-            raise SystemExit(f"{path.name}: " + "; ".join(found))
-        boards.append(board)
-    return boards
+    for version, population in sorted(populations.items()):
+        if (
+            not isinstance(population, list)
+            or not population
+            or any(not isinstance(name, str) for name in population)
+            or len(set(population)) != len(population)
+        ):
+            raise ValueError(f"{version}: expected unique benchmark names")
+        for name in population:
+            if (
+                not (build.BENCHMARKS / name / "benchmark.yaml").is_file()
+                or not (build.PROMPTS / name / "full.md").is_file()
+                or Path(name).name != name
+            ):
+                raise ValueError(f"{version}: unknown benchmark {name!r}")
+        for language in build.LANGUAGES:
+            for tier in build.TIERS:
+                names = [
+                    name
+                    for name in population
+                    if language != "opensas" or name not in exclusions
+                ]
+                board = {
+                    "grading_protocol": build.GRADING_PROTOCOL,
+                    "image_reference": build.AGENT_IMAGES[language],
+                    "verifier_image_reference": build.VERIFIER_IMAGES[language],
+                    "package": build.dataset_name(build.DATASET_PREFIX, language, tier),
+                    "tasks": sorted(
+                        build.task_name(name, language, tier) for name in names
+                    ),
+                    "attempts": configuration["attempts"],
+                    "harbor": copy.deepcopy(configuration["harbor"]),
+                }
+                name = build.dataset_name(f"sdtm-adam-{version}", language, tier)
+                label = build.LANGUAGES[language]["label"]
+                board["harbor"].update(
+                    {
+                        "name": name,
+                        "title": f"yamaa derivation {version}, {tier} prompts ({label})",
+                        "description": f"{len(names)} authored derivation tasks using {tier} prompts and {label}. Complete jobs rank by task pass rate, then cell accuracy and cost per attempt.",
+                    }
+                )
+                board["harbor"]["metadata_schema"]["properties"]["grading_protocol"][
+                    "const"
+                ] = build.GRADING_PROTOCOL
+                problems = board_problems(board)
+                if problems:
+                    raise ValueError(f"{name}: " + "; ".join(problems))
+                boards.append(board)
+    return sorted(boards, key=lambda board: board["harbor"]["name"])
 
 
 def run_problems(run: dict, board: dict) -> list[str]:

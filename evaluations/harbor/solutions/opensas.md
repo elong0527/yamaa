@@ -1,13 +1,13 @@
 # opensas reference solutions
 
-The `result.sas` programs prepare all 148 prompted derivation benchmarks for
+The `result.sas` programs prepare the prompted derivation benchmarks for
 execution with the existing [opensas v0.6.6 release](https://github.com/kirha-ai/opensas/releases/tag/v0.6.6).
 Each program reads `/app/input` and writes the CSV files requested by its full
 prompt to `/app/output`. The race/ethnicity solution writes both DM and SUPPDM.
 Identifiers are read as character values to preserve leading zeros; numeric
 measurements and sequence variables use explicit numeric input.
 
-The Harbor opensas track executes the 145 confident native CSV cases with the
+The Harbor opensas track executes supported native CSV cases with the
 existing opensas v0.6.6 release. The image installs an unmodified release
 executable; these programs do not implement or modify an execution engine. Benchmarks
 without derivation prompts, including yamaa specification rejection cases,
@@ -36,56 +36,33 @@ Refresh this I/O conversion whenever the inputs change. Do not substitute the
 ODM input for DM or use a conversion to perform derivations. The Harbor opensas
 selection excludes this case; no converter is included.
 
-## Preparation checks
+## Checks
 
-Local checks on 2026-10-10 used the official macOS arm64 release asset
-`sas-v0.6.6-macos`, reporting `opensas v0.6.6`. The release tag's source ref is
-`1e8bc655b6a56c58ab20e263e7a2638063834768`. Programs ran from fresh output
-directories, and CSV outputs were compared using the existing cell grader's
-column types, keys and tolerances.
+The current track population is discovered from prompts and each case's
+`benchmark.yaml`; excluded cases carry their own reasons. Run original-data
+reference checks with an available opensas executable:
 
-| Check | Result |
-|---|---|
-| Source coverage | 145 of 145 full derivation prompts have `result.sas` |
-| Original fixture data | 144 match; 1 whitespace mismatch |
-| Native CSV input | 143 matching cases |
-| Parquet input staged as CSV | 1 matching case, randomization |
-| Changed inputs against the existing Python references | 143 of 144 match; the same whitespace mismatch remains |
-| Reduced-subject inputs against the Python references | 142 of 142 checked match; 2 single-subject cases skipped |
+```bash
+uv run --project python --no-sync pytest evaluations/harbor/tests/test_harbor_opensas.py
+```
 
-These retained preparation counts cover the original 137-case collection and
-the eight PK/QT additions; they do not claim measurements of the three cases
-admitted on main in between. The current collection contains 148 sources and
-145 executable native CSV cases. The Linux v0.6.6 reference check now matches
-all 145 executable cases against their original goldens.
+The tests compare required outputs using the grader's column types, keys
+and tolerances. Independent reference-edge tests exercise temporary input
+changes. Harbor's oracle preflight additionally runs the actual Linux image,
+sandbox and held-out/changed-input verifier:
 
-The eight PK/QT cases of #2297 were checked the same way on 2026-10-14
-with the same release asset, and the counts above include them: their
-fixture, changed-input and reduced-subject checks all match. For seven of
-them the reduced-subject check compared against the restricted golden; for
-`adam-adeg-placebo-corrected-change` it compared against the Python
-reference.
+```bash
+uv run --project python --no-sync python -m evaluations.harbor.smoke \
+    --language opensas --all-cases --out /tmp/yamaa-opensas-check
+```
 
-The changed-input check uses the existing grader's deterministic subject
-renaming and supported age, measurement and complete-date perturbations.
-The Python references were first checked against their original goldens;
-they then computed expected data for the changed inputs. The opensas programs
-perform all their own derivations. This local comparison does not exercise
-Harbor's sandbox, trajectory audit or Linux image, and it does not establish
-parity with SAS Institute software.
+The grader's deterministic challenge renames subjects and perturbs supported
+ages, measurements and complete dates. Its reduced-subject check recomputes
+answers after dropping subjects. These controls do not establish parity with
+SAS Institute software.
 
-The reduced-subject comparison drops every third subject when possible and
-recomputes the expected data with the Python reference. Tumor measurements and
-event findings each have one subject and were skipped in that comparison.
-The spaces-only comment belongs to a dropped subject in this check. Its
-reference was later rewritten to pass the original and changed-input checks
-too; see the whitespace entry below.
-
-`adam-adsl-age-quality` matches the prompt's requested ADSL data. Its
-specification also declares a warning log that is absent from the full prompt;
-the current Harbor builder excludes that benchmark because log outputs are
-not graded. Its data-only check is included in the 145-case fixture count,
-and it has no existing Python reference for the changed-input check.
+`adam-adsl-age-quality` also declares a warning log absent from its full
+prompt. The Harbor builder excludes it because log outputs are not graded.
 
 ## Compatibility gaps and solution choices
 

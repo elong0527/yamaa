@@ -15,7 +15,12 @@ from pathlib import Path
 
 def prepare_job_leaderboards(job_dir: Path, datasets: list[dict]) -> list[dict]:
     """Calculate ranked rows from complete local evidence before any cleanup."""
-    from leaderboard import collect, definition_for, load_leaderboards, rows_for
+    from evaluations.harbor.leaderboard import (
+        collect,
+        definition_for,
+        load_leaderboards,
+        rows_for,
+    )
 
     try:
         run = collect(job_dir)
