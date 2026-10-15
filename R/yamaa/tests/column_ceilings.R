@@ -37,9 +37,9 @@ write_case <- function(root, columns = 1L, fields = 1L, typed = FALSE,
   path
 }
 
-assert_build <- function(spec, width = 1L) {
-  stopifnot(nrow(yamaa_check(spec)$issues) == 0L)
-  built <- yamaa_domain(spec)
+assert_build <- function(spec, width = 1L, environment = NULL) {
+  stopifnot(nrow(yamaa_check(spec, environment = environment)$issues) == 0L)
+  built <- yamaa_domain(spec, environment = environment)
   stopifnot(nrow(built$issues) == 0L, nrow(built$output) == 1L,
             ncol(built$output) == width, identical(built$output$ID, "S-001"))
   if (width > 1L) stopifnot(all(built$output[1L, -1L] == "x"))
@@ -111,19 +111,11 @@ run_column_ceilings <- function() {
   for (operation in list(yamaa_check, yamaa_domain)) {
     result <- operation(child)
     assert_refusal(result)
-    contexts <- result$issues$context
-    with_resource <- grepl('"resource":', contexts, fixed = TRUE)
-    if (any(with_resource)) {
-      details <- contexts[with_resource]
-      visits <- grepl('"resource":"parent_visits"', details, fixed = TRUE) &
-        grepl('"limit":8192', details, fixed = TRUE)
-      paths <- grepl('"resource":"path_bytes"', details, fixed = TRUE) &
-        grepl('"limit":1048576', details, fixed = TRUE)
-      stopifnot(all(visits | paths))
-    }
+    stopifnot(nrow(result$issues) == 1L, identical(result$issues$context,
+      '{"actual":8193,"code":"resource_limit","limit":8192,"phase":"inheritance","resource":"parent_occurrences","stage":"prepare"}'))
   }
 
-  # A quota refusal does not certify that later semantic checks passed. Once
+  # A fixed refusal does not certify that later semantic checks passed. Once
   # capacity is repaired, both operations and routes expose the remaining error.
   case_root <- path("incomplete-checks")
   spec <- write_case(case_root, columns = 1025L, selected = "ID")
@@ -141,7 +133,7 @@ run_column_ceilings <- function() {
       assert_refusal(refused, TRUE)
       issue <- refused$issues
       stopifnot(nrow(issue) == 1L, is.na(issue$requirement),
-        grepl('"incomplete_checks_from":"specification"', issue$context, fixed = TRUE),
+        !grepl("incomplete_checks_from", issue$context, fixed = TRUE),
         grepl('"actual":1025', issue$context, fixed = TRUE),
         grepl('"limit":1024', issue$context, fixed = TRUE))
     }
@@ -175,7 +167,7 @@ run_column_ceilings <- function() {
     writeLines(c("schema_version: '1.0'", "language: r"), env)
     spec_path <- switch(resource, inputs = "input", source_fields = "input.SRC.types",
                         projected_columns = "output.columns", "columns")
-    expected <- sprintf('{"actual":%s,"code":"compiler_limit","incomplete_checks_from":"specification","limit":%s,"resource":"%s","stage":"prepare"}',
+    expected <- sprintf('{"actual":%s,"code":"compiler_limit","limit":%s,"resource":"%s","stage":"prepare"}',
                         actual, limit, resource)
     for (environment in list(NULL, env)) {
       for (operation in list(yamaa_check, yamaa_domain)) {
@@ -187,32 +179,35 @@ run_column_ceilings <- function() {
     }
   }
 
-  # Layered traversal and strict YAML decoding retain their original phase and bound.
-  for (resource in c("depth", "numeric_digits")) {
-    case_root <- path(paste0("preparation-", resource))
-    spec <- write_case(case_root)
-    if (resource == "depth") {
-      file.copy(spec, file.path(case_root, "base.yaml"))
-      for (index in 0:64) {
-        parent <- if (index < 64L) sprintf("layer-%s.yaml", index + 1L) else "base.yaml"
-        writeLines(c("schema_version: '1.0'", sprintf("parents: [%s]", parent)),
-                   file.path(case_root, sprintf("layer-%s.yaml", index)))
-      }
-      writeLines(c("schema_version: '1.0'", "parents: [layer-0.yaml]"), spec)
-      expected <- '{"code":"resource_limit","incomplete_checks_from":"specification","limit":64,"phase":"inheritance","resource":"depth","stage":"prepare"}'
-    } else {
-      writeLines(paste0("value: ", paste(rep("9", 4097L), collapse = "")), spec)
-      expected <- '{"actual":4097,"code":"resource_limit","incomplete_checks_from":"specification","limit":4096,"phase":"yaml_decode","resource":"numeric_digits","stage":"capture"}'
-    }
-    env <- file.path(case_root, "environment.yaml")
-    writeLines(c("schema_version: '1.0'", "language: r"), env)
-    for (environment in list(NULL, env)) {
-      for (operation in list(yamaa_check, yamaa_domain)) {
-        issue <- operation(spec, environment = environment)$issues
-        stopifnot(nrow(issue) == 1L, identical(issue$phase, "engine"),
-          identical(issue$condition, "engine_rejected"), is.na(issue$requirement),
-          identical(issue$context, expected))
-      }
+  # Iterative inheritance is bounded by parent occurrences, not a separate depth quota.
+  case_root <- path("preparation-depth")
+  spec <- write_case(case_root)
+  file.copy(spec, file.path(case_root, "base.yaml"))
+  for (index in 0:64) {
+    parent <- if (index < 64L) sprintf("layer-%s.yaml", index + 1L) else "base.yaml"
+    writeLines(c("schema_version: '1.0'", sprintf("parents: [%s]", parent)),
+               file.path(case_root, sprintf("layer-%s.yaml", index)))
+  }
+  writeLines(c("schema_version: '1.0'", "parents: [layer-0.yaml]"), spec)
+  env <- file.path(case_root, "environment.yaml")
+  writeLines(c("schema_version: '1.0'", "language: r"), env)
+  for (environment in list(NULL, env)) assert_build(spec, environment = environment)
+
+  # A wide scalar within the file boundary reaches its language finding with exact digits.
+  case_root <- path("preparation-numeric-digits")
+  spec <- write_case(case_root)
+  digits <- paste(rep("9", 4097L), collapse = "")
+  writeLines(paste0("schema_version: ", digits), spec)
+  expected <- sprintf('{"actual":%s,"expected":"1.0"}', digits)
+  env <- file.path(case_root, "environment.yaml")
+  writeLines(c("schema_version: '1.0'", "language: r"), env)
+  for (environment in list(NULL, env)) {
+    for (operation in list(yamaa_check, yamaa_domain)) {
+      issue <- operation(spec, environment = environment)$issues
+      stopifnot(nrow(issue) == 1L, identical(issue$phase, "validation"),
+        identical(issue$condition, "schema_version_mismatch"),
+        identical(issue$requirement, "REQ-0281"),
+        identical(issue$spec_paths, list("schema_version")), identical(issue$context, expected))
     }
   }
 
