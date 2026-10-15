@@ -181,14 +181,19 @@ impl MatchValue {
         secondary: &[SecondarySource],
         output: &TableSchema,
         available: &[bool],
+        read_kind: &impl Fn(&MatchRead, ColumnType) -> Option<ColumnType>,
     ) -> Result<Option<ComparableType>, PlanError> {
         if let Self::Expression(expression) = self {
             expression.validate(primary, secondary, output, available)?;
         }
         let read_kind = self
             .read()
-            .map(|read| read.kind(primary, secondary, output, available))
-            .transpose()?;
+            .map(|read| {
+                read.kind(primary, secondary, output, available)
+                    .map(|physical| read_kind(read, physical))
+            })
+            .transpose()?
+            .flatten();
         if matches!(
             self,
             Self::StrPad {
@@ -218,6 +223,7 @@ pub struct IntermediateKey {
     pub value: MatchValue,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn validate_declaration(
     keys: &[IntermediateKey],
     primary: &TableSchema,
@@ -226,6 +232,7 @@ pub(super) fn validate_declaration(
     donor_kind: &impl Fn(usize) -> Option<ColumnType>,
     output: &TableSchema,
     available: &[bool],
+    read_kind: &impl Fn(&MatchRead, ColumnType) -> Option<ColumnType>,
 ) -> Result<(), PlanError> {
     if keys.is_empty() || keys.len() > crate::limits::Limits::KEYS {
         return Err(PlanError::InvalidIntermediate);
@@ -253,7 +260,7 @@ pub(super) fn validate_declaration(
         }
         if key
             .value
-            .kind(primary, secondary, output, available)?
+            .kind(primary, secondary, output, available, read_kind)?
             .zip(donor_kind(key.source_column))
             .is_some_and(|(kind, donor)| !crate::key_relation::comparable(kind, donor.into()))
         {
@@ -279,6 +286,13 @@ pub(super) fn validate(
         return Err(PlanError::InvalidIntermediate);
     }
     validate_declaration(
-        keys, primary, secondary, donor, donor_kind, output, available,
+        keys,
+        primary,
+        secondary,
+        donor,
+        donor_kind,
+        output,
+        available,
+        &|_, kind| Some(kind),
     )
 }

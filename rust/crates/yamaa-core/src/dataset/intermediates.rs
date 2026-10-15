@@ -71,26 +71,13 @@ pub struct IntermediateDerivations {
     pub plan: std::rc::Rc<DatasetPlan>,
     pub current: Vec<CurrentField>,
     pub stored_columns: usize,
-    /// An untyped result may have no single statically known non-missing kind.
-    pub result_kinds: Vec<Option<ColumnType>>,
     pub driver_kinds: Vec<Option<ColumnType>>,
     /// Explicitly typed results convert before completing their donor slot.
     pub typed_columns: Vec<usize>,
 }
 impl IntermediateDerivations {
     pub fn column_kind(&self, column: usize) -> Option<ColumnType> {
-        if column < self.stored_columns {
-            self.plan
-                .output()
-                .columns()
-                .get(column)
-                .map(|column| column.kind)
-        } else {
-            self.result_kinds
-                .get(column - self.stored_columns)
-                .copied()
-                .flatten()
-        }
+        self.plan.output_kind(column)
     }
 }
 
@@ -205,11 +192,14 @@ pub fn visit_output_dependencies<'a>(
 }
 
 /// Bind declarations globally; completed-value availability is checked at each read.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn validate(
     items: &[Intermediate],
     sources: &[SecondarySource],
     primary: &TableSchema,
+    primary_kind: &impl Fn(usize) -> Option<ColumnType>,
     output: &TableSchema,
+    output_kind: &impl Fn(usize) -> Option<ColumnType>,
     templates: &[RowTemplate],
 ) -> Result<(), PlanError> {
     for (index, item) in items.iter().enumerate() {
@@ -226,18 +216,7 @@ pub(super) fn validate(
             .source_schema(sources)
             .ok_or(PlanError::InvalidIntermediate)?;
         if let Some(derived) = &item.derivations {
-            if derived.stored_columns > donor.columns().len()
-                || derived.result_kinds.len() != donor.columns().len() - derived.stored_columns
-                || derived
-                    .result_kinds
-                    .iter()
-                    .enumerate()
-                    .any(|(index, kind)| {
-                        kind.is_some_and(|kind| {
-                            kind != donor.columns()[derived.stored_columns + index].kind
-                        })
-                    })
-            {
+            if derived.stored_columns > donor.columns().len() {
                 return Err(PlanError::InvalidIntermediate);
             }
         }
@@ -256,6 +235,11 @@ pub(super) fn validate(
                 &|column| item.source_kind(sources, column),
                 output,
                 &vec![true; output.columns().len()],
+                &|read, physical| match read {
+                    MatchRead::Output { column, .. } => output_kind(*column),
+                    MatchRead::Record { column, .. } => primary_kind(*column),
+                    MatchRead::SecondaryRecord { .. } => Some(physical),
+                },
             )?;
         }
         let width = item
@@ -284,11 +268,11 @@ pub(super) fn validate(
                 .current()
                 .validate(primary, sources, output, items, index)?;
             let current_kind = match range.current().read {
-                CurrentRead::Record { source: 0, column } => Some(primary.columns()[column].kind),
+                CurrentRead::Record { source: 0, column } => primary_kind(column),
                 CurrentRead::Record { source, column } => {
                     Some(sources[source - 1].schema.columns()[column].kind)
                 }
-                CurrentRead::Output(column) => Some(output.columns()[column].kind),
+                CurrentRead::Output(column) => output_kind(column),
                 CurrentRead::Intermediate { index, column } => {
                     items[index].source_kind(sources, column)
                 }
@@ -375,7 +359,9 @@ pub(super) fn validate_read(
         primary,
         sources,
         source,
-        &|column| item.source_kind(sources, column),
+        // Key kinds were checked once with the owning plan's inferred metadata.
+        // A read checks scope and availability without promoting layout placeholders.
+        &|_| None,
         output,
         available,
     )

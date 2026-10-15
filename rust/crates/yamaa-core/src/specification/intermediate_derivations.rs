@@ -847,6 +847,12 @@ pub(super) fn bind(
         output,
         rows,
         assignments,
+        stored
+            .columns()
+            .iter()
+            .map(|column| Some(column.kind))
+            .chain(result_kinds)
+            .collect(),
     )
     .and_then(|plan| plan.with_conversion_handlers(handlers))
     .map_err(BindError::InvalidPlan)?;
@@ -855,7 +861,6 @@ pub(super) fn bind(
         plan: std::rc::Rc::new(plan),
         current,
         stored_columns: stored.columns().len(),
-        result_kinds,
         driver_kinds,
         typed_columns: declarations
             .iter()

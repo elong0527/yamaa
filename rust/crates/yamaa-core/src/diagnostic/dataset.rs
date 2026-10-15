@@ -60,6 +60,29 @@ fn type_name(value: ValueType) -> &'static str {
         ValueType::DateTime => "datetime",
     }
 }
+
+/// Static admission and raw runtime key comparisons retain the same authored cause.
+pub(crate) fn lookup_key_type(
+    path: &str,
+    intermediate: &str,
+    source: &str,
+    expected: ValueType,
+    actual: ValueType,
+) -> Diagnostic {
+    Diagnostic {
+        code: C::LookupKeyType,
+        spec_paths: vec![path.into()],
+        context: [
+            ("intermediate".into(), text(intermediate)),
+            ("source".into(), text(source)),
+            ("expected".into(), text(type_name(expected))),
+            ("actual".into(), text(type_name(actual))),
+        ]
+        .into(),
+        source_span: None,
+        operand_route: None,
+    }
+}
 impl DatasetFinding<'_> {
     /// Preserve complete facts and refuse contradictory classified causes.
     pub fn diagnostic(self) -> Result<Diagnostic, ProjectionError> {

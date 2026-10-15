@@ -43,6 +43,7 @@ fn model(expression: Expression) -> Result<DatasetPlan, PlanError> {
             assignment(1, expression),
             assignment(2, Expression::Literal(Value::Int(5))),
         ],
+        vec![Some(ColumnType::Int); 3],
     )
 }
 fn predicate() -> crate::predicate::Plan {

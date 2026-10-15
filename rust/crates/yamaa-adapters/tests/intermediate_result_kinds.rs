@@ -480,3 +480,122 @@ fn unknown_numeric_operands_do_not_invent_an_integer_result_kind() {
     );
     assert!(result.output().is_none());
 }
+
+fn nested_lookup_specification() -> &'static str {
+    "schema_version: '1.0'
+domain: TEST
+keys: [USUBJID]
+input: {EX: {path: ex.csv}}
+base: EX
+output: {path: out.csv, columns: [USUBJID, SELECTED]}
+intermediates:
+  - id: DATES
+    dataset: EX
+    derivations:
+      DATE: {to_date: {source: EXENDTC}}
+    key: {DATE: {source: EX.CHOICE}}
+    no_match: null
+  - id: RESULT
+    dataset: EX
+    derivations:
+      DATE: {to_date: {source: EXSTDTC}}
+      CHOICE: {first_available: {sources: [DATE], missing: 17}}
+      SELECTED: {source: DATES.DATE}
+    no_match: null
+columns:
+  - {name: USUBJID, type: str, derivation: EX.USUBJID}
+  - {name: SELECTED, type: date, derivation: RESULT.SELECTED}
+"
+}
+
+fn assert_nested_lookup_date(specification: &str) {
+    let study = Study::new(specification);
+    let path = study.specification();
+    let request = || Request {
+        specification: &path,
+        environment: None,
+    };
+    let checked = file_application::check(request(), identity(&path));
+    assert!(checked.is_empty(), "{checked:?}");
+    fs::write(
+        study.0.join("ex.csv"),
+        "USUBJID,EXSTDTC,EXENDTC\nS01,2024-01-01,2024-01-01\n",
+    )
+    .unwrap();
+    let mut result = file_application::domain(request(), identity(&path)).unwrap();
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    assert!(result.save().unwrap());
+    assert_eq!(
+        fs::read(study.0.join("out.csv")).unwrap(),
+        b"USUBJID,SELECTED\nS01,2024-01-01\n"
+    );
+}
+
+#[test]
+fn nested_lookup_keys_retain_unknown_current_kinds() {
+    for expression in [
+        "{source: EX.CHOICE}",
+        "EX.CHOICE",
+        "{greatest: {sources: [EX.CHOICE]}}",
+    ] {
+        assert_nested_lookup_date(
+            &nested_lookup_specification().replace("{source: EX.CHOICE}", expression),
+        );
+    }
+}
+
+fn assert_nested_lookup_type_error(
+    specification: &str,
+    expected_source: &str,
+    expected_path: &str,
+) {
+    let study = Study::new(specification);
+    let path = study.specification();
+    let request = || Request {
+        specification: &path,
+        environment: None,
+    };
+    assert!(file_application::check(request(), identity(&path)).is_empty());
+    fs::write(
+        study.0.join("ex.csv"),
+        "USUBJID,EXSTDTC,EXENDTC\nS01,,2024-01-01\n",
+    )
+    .unwrap();
+    let result = file_application::domain(request(), identity(&path)).unwrap();
+    let issues = result.issues();
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert_eq!(issues[0].condition, "incompatible_input_type");
+    assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0323"));
+    assert_eq!(issues[0].spec_paths, [expected_path]);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&issues[0].context).unwrap(),
+        serde_json::json!({
+            "intermediate":"DATES", "source":expected_source, "expected":"int", "actual":"date"
+        })
+    );
+    assert!(result.output().is_none());
+    assert!(!study.0.join("out.csv").exists());
+}
+
+#[test]
+fn nested_lookup_keys_report_actual_incompatible_types_instead_of_no_match() {
+    for (expression, source, path) in [
+        (
+            "{source: EX.CHOICE}",
+            "key[DATE]",
+            "intermediates[0].key.DATE",
+        ),
+        ("EX.CHOICE", "EX.CHOICE", "intermediates[0].key"),
+        (
+            "{greatest: {sources: [EX.CHOICE]}}",
+            "key[DATE]",
+            "intermediates[0].key.DATE",
+        ),
+    ] {
+        assert_nested_lookup_type_error(
+            &nested_lookup_specification().replace("{source: EX.CHOICE}", expression),
+            source,
+            path,
+        );
+    }
+}

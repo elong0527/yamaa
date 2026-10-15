@@ -502,6 +502,7 @@ pub struct DatasetPlan {
     secondary: Vec<SecondarySource>,
     intermediates: Vec<Intermediate>,
     output: TableSchema,
+    output_kinds: Vec<Option<crate::value::ColumnType>>,
     templates: Vec<RowTemplate>,
     row_contexts: Vec<Option<AggregateRowContext>>,
     columns: Vec<Assignment>,
@@ -1549,6 +1550,7 @@ impl DatasetPlan {
             keys,
             verifications,
             true,
+            None,
         )
     }
     /// Donor evaluation has no publication key gate; all expression and metadata
@@ -1559,6 +1561,7 @@ impl DatasetPlan {
         output: TableSchema,
         templates: Vec<RowTemplate>,
         columns: Vec<Assignment>,
+        output_kinds: Vec<Option<crate::value::ColumnType>>,
     ) -> Result<Self, PlanError> {
         Self::new_implementation(
             sources,
@@ -1569,6 +1572,7 @@ impl DatasetPlan {
             Vec::new(),
             Vec::new(),
             false,
+            Some(output_kinds),
         )
     }
     #[allow(clippy::too_many_arguments)]
@@ -1581,12 +1585,47 @@ impl DatasetPlan {
         keys: Vec<usize>,
         verifications: Vec<Verification>,
         publication: bool,
+        output_kinds: Option<Vec<Option<crate::value::ColumnType>>>,
     ) -> Result<Self, PlanError> {
         let SourceSchemas {
             primary: source,
             secondary,
         } = sources;
-        intermediates::validate(&intermediates, &secondary, &source, &output, &templates)?;
+        let output_kinds = output_kinds.unwrap_or_else(|| {
+            output
+                .columns()
+                .iter()
+                .map(|column| Some(column.kind))
+                .collect()
+        });
+        if output_kinds.len() != output.columns().len()
+            || output_kinds
+                .iter()
+                .zip(output.columns())
+                .any(|(kind, column)| kind.is_some_and(|kind| kind != column.kind))
+        {
+            return Err(PlanError::InvalidColumns);
+        }
+        if !publication && !source.columns().starts_with(output.columns()) {
+            return Err(PlanError::InvalidSource);
+        }
+        let primary_kind = |column: usize| {
+            if !publication && column < output_kinds.len() {
+                output_kinds[column]
+            } else {
+                source.columns().get(column).map(|column| column.kind)
+            }
+        };
+        let output_kind = |column: usize| output_kinds.get(column).copied().flatten();
+        intermediates::validate(
+            &intermediates,
+            &secondary,
+            &source,
+            &primary_kind,
+            &output,
+            &output_kind,
+            &templates,
+        )?;
         for (index, relation) in secondary.iter().enumerate() {
             if relation.name.is_empty()
                 || secondary[..index]
@@ -1873,6 +1912,7 @@ impl DatasetPlan {
             secondary,
             intermediates,
             output,
+            output_kinds,
             templates,
             columns,
             keys,
@@ -2079,6 +2119,10 @@ impl DatasetPlan {
     /// Borrow admitted output without exposing mutation.
     pub fn output(&self) -> &TableSchema {
         &self.output
+    }
+    /// Physical layout slots do not promise a type for untyped donor results.
+    pub(crate) fn output_kind(&self, column: usize) -> Option<crate::value::ColumnType> {
+        self.output_kinds.get(column).copied().flatten()
     }
     /// Borrow admitted templates without exposing mutation.
     pub fn templates(&self) -> &[RowTemplate] {

@@ -593,10 +593,6 @@ fn read_with_observations<T: TableAccess + ?Sized>(
         return Err(Box::new(ExecutionError::SchemaMismatch));
     }
     let item = &plan.intermediates()[index];
-    // Materialized and expression contexts retain their existing admission
-    // until aggregate retained-schema/text bounds are separately qualified.
-    let bounded_choice = item.derivations.is_none() && !item.has_expression_keys();
-
     let cache_key = (candidate.selection_identity, index);
     let prepared = materialize(index, assignment, candidate, plan, row, state)?;
     let materialized = prepared.as_ref().map(|data| Data::<T::Error>::new(data));
@@ -718,11 +714,36 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                     let mut matches = true;
                     for (column, expected) in &keys {
                         let value = cell(table, item, source_row, *column)?;
-                        if crate::value::compare_present_refs(value, ValueRef::from(expected))
-                            != Ok(std::cmp::Ordering::Equal)
-                        {
-                            matches = false;
-                            break;
+                        match crate::value::compare_present_refs(value, ValueRef::from(expected)) {
+                            Ok(std::cmp::Ordering::Equal) => (),
+                            Err(crate::value::ComparisonError::IncompatibleTypes) => {
+                                let key = item
+                                    .keys
+                                    .iter()
+                                    .find(|key| key.source_column == *column)
+                                    .expect("resolved key belongs to the admitted selector");
+                                let field = &table.schema().columns()[*column].name;
+                                let source = if key.value.is_expression() {
+                                    format!("key[{field}]")
+                                } else {
+                                    key.value
+                                        .read()
+                                        .map_or(field.clone(), |read| read.identifier().into())
+                                };
+                                return Err(Box::new(ExecutionError::ScalarDiagnostic(
+                                    crate::diagnostic::lookup_key_type(
+                                        &key.path,
+                                        &item.identifier,
+                                        &source,
+                                        expected.value_type().expect("present key"),
+                                        value.value_type().expect("present donor key"),
+                                    ),
+                                )));
+                            }
+                            _ => {
+                                matches = false;
+                                break;
+                            }
                         }
                     }
                     if matches {
@@ -814,10 +835,6 @@ fn read_with_observations<T: TableAccess + ?Sized>(
             }));
         };
 
-        if bounded_choice {
-            // One fixed typed identity, item index and selected choice are retained.
-            // Existing entries and source key/value text are never copied here.
-        }
         state.intermediates.choices.insert(cache_key, choice);
         choice
     };

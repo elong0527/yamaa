@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 use crate::numeric_parser::SourceSpan;
 
 mod dataset;
+pub(crate) use dataset::lookup_key_type;
 pub use dataset::DatasetFinding;
 
 mod aggregate;
