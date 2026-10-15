@@ -125,3 +125,24 @@ fn flat_capture_dependency_chains_retain_their_initial_width_choice() {
         }
     );
 }
+
+#[test]
+fn flat_capture_dependency_chains_keep_each_new_width_choice() {
+    // Each group independently chooses one scalar or the preceding capture
+    // followed by one scalar. Group n therefore ranges from one to n, with
+    // a fresh alternative at every link rather than one shared initial choice.
+    let mut source = "(a)".to_owned();
+    for previous in 1..3000 {
+        write!(source, r"(a|\{previous}b)").unwrap();
+    }
+    let byte = source.len();
+    source.push_str(r"(?<=\3000)");
+
+    assert_eq!(
+        Pattern::compile(&source).unwrap_err(),
+        CompileError::Invalid {
+            byte,
+            reason: "variable-length lookbehind",
+        }
+    );
+}
