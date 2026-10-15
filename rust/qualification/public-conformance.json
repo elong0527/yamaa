@@ -1,9 +1,9 @@
 {
   "protocol": "public-conformance-ratchet/1",
-  "source_revision": "2ba10418607933f92597f7c00ac363a3113a49db",
-  "evidence": "https://github.com/elong0527/yamaa/actions/runs/38416920074",
+  "source_revision": "4cc24be54e6622206c4b47c4ac011b1d7c929d27",
+  "evidence": "https://github.com/elong0527/yamaa/actions/runs/38670293825",
   "run_attempt": 1,
-  "benchmarks": 321,
+  "benchmarks": 329,
   "python": [
     "adam-adae-death",
     "adam-adae-exposure-adjusted-incidence",
@@ -27,6 +27,10 @@
     "adam-adcm-atc-classes",
     "adam-adcm-on-treatment",
     "adam-adeg-derived-intervals",
+    "adam-adeg-placebo-corrected-change",
+    "adam-adeg-replicate-qtc-average",
+    "adam-adeg-time-matched-baseline",
+    "adam-adeg-time-matched-concentration",
     "adam-adex-cumulative-dose",
     "adam-adex-dose-reduction",
     "adam-adex-uncollected",
@@ -44,6 +48,10 @@
     "adam-adlbc-row-window",
     "adam-adlbc-window-chain",
     "adam-adoe-study-eye",
+    "adam-adpp-accumulation-ratio",
+    "adam-adpp-carryover-exclusion",
+    "adam-adpp-comparison-sets",
+    "adam-adpp-dose-normalized",
     "adam-adqs-missed-visit-locf",
     "adam-adqs-multi-scale-scoring",
     "adam-adqs-subscale-score",
@@ -348,6 +356,10 @@
     "adam-adcm-atc-classes",
     "adam-adcm-on-treatment",
     "adam-adeg-derived-intervals",
+    "adam-adeg-placebo-corrected-change",
+    "adam-adeg-replicate-qtc-average",
+    "adam-adeg-time-matched-baseline",
+    "adam-adeg-time-matched-concentration",
     "adam-adex-cumulative-dose",
     "adam-adex-dose-reduction",
     "adam-adex-uncollected",
@@ -365,6 +377,10 @@
     "adam-adlbc-row-window",
     "adam-adlbc-window-chain",
     "adam-adoe-study-eye",
+    "adam-adpp-accumulation-ratio",
+    "adam-adpp-carryover-exclusion",
+    "adam-adpp-comparison-sets",
+    "adam-adpp-dose-normalized",
     "adam-adqs-missed-visit-locf",
     "adam-adqs-multi-scale-scoring",
     "adam-adqs-subscale-score",
@@ -650,7 +666,7 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.12-wheel",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -660,7 +676,7 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.12-source",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -670,7 +686,7 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.13-wheel",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -680,7 +696,7 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.13-source",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -690,7 +706,7 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.14-wheel",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -700,7 +716,7 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.14-source",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -710,7 +726,7 @@
     {
       "artifact": "public-conformance-python-macos-15-3.12-wheel",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -720,7 +736,7 @@
     {
       "artifact": "public-conformance-python-macos-15-3.12-source",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -730,7 +746,7 @@
     {
       "artifact": "public-conformance-python-macos-15-3.13-wheel",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -740,7 +756,7 @@
     {
       "artifact": "public-conformance-python-macos-15-3.13-source",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -750,7 +766,7 @@
     {
       "artifact": "public-conformance-python-macos-15-3.14-wheel",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -760,7 +776,7 @@
     {
       "artifact": "public-conformance-python-macos-15-3.14-source",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -770,7 +786,7 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.12-wheel",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -780,7 +796,7 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.12-source",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -790,7 +806,7 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.13-wheel",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -800,7 +816,7 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.13-source",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -810,7 +826,7 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.14-wheel",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -820,7 +836,7 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.14-source",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -830,7 +846,7 @@
     {
       "artifact": "public-conformance-r-ubuntu-24.04",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -840,7 +856,7 @@
     {
       "artifact": "public-conformance-r-macos-15",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -850,7 +866,7 @@
     {
       "artifact": "public-conformance-r-windows-latest",
       "summary": {
-        "pass": 316,
+        "pass": 327,
         "mismatch": 0,
         "unsupported": 0,
         "error": 0,
@@ -866,150 +882,6 @@
     {
       "example": "negative-path-parent-escape",
       "reason": "reference-only path history (#1905)"
-    }
-  ],
-  "additional_observations": [
-    {
-      "scope": "ADICE public benchmark observations",
-      "source_revision": "9b91d3d113f811f3cc3e84c5e872e20fbd6ed0c9",
-      "evidence": "https://github.com/elong0527/yamaa/actions/runs/38647072070",
-      "run_attempt": 1,
-      "python": [
-        "adam-adice-governing-event"
-      ],
-      "r": [
-        "adam-adice-governing-event"
-      ],
-      "inventories": [
-        {
-          "artifact": "public-conformance-python-ubuntu-24.04-3.12-wheel",
-          "evidence": "https://github.com/elong0527/yamaa/actions/runs/38647072070/artifacts/11933128039",
-          "job": "https://github.com/elong0527/yamaa/actions/runs/38647072070/job/116138272610",
-          "runtime_version": "3.12.15",
-          "package_form": "wheel",
-          "summary": {
-            "pass": 319,
-            "mismatch": 0,
-            "unsupported": 0,
-            "error": 0,
-            "excluded": 2
-          }
-        },
-        {
-          "artifact": "public-conformance-r-ubuntu-24.04",
-          "evidence": "https://github.com/elong0527/yamaa/actions/runs/38647072070/artifacts/11932079381",
-          "job": "https://github.com/elong0527/yamaa/actions/runs/38647072070/job/116136509519",
-          "runtime_version": "4.6.1",
-          "package_form": "source",
-          "summary": {
-            "pass": 319,
-            "mismatch": 0,
-            "unsupported": 0,
-            "error": 0,
-            "excluded": 2
-          }
-        },
-        {
-          "artifact": "public-conformance-r-macos-15",
-          "evidence": "https://github.com/elong0527/yamaa/actions/runs/38647072070/artifacts/11933232423",
-          "job": "https://github.com/elong0527/yamaa/actions/runs/38647072070/job/116136509305",
-          "runtime_version": "4.6.1",
-          "package_form": "source",
-          "summary": {
-            "pass": 319,
-            "mismatch": 0,
-            "unsupported": 0,
-            "error": 0,
-            "excluded": 2
-          }
-        },
-        {
-          "artifact": "public-conformance-r-windows-latest",
-          "evidence": "https://github.com/elong0527/yamaa/actions/runs/38647072070/artifacts/11932988556",
-          "job": "https://github.com/elong0527/yamaa/actions/runs/38647072070/job/116136509330",
-          "runtime_version": "4.6.1",
-          "package_form": "source",
-          "summary": {
-            "pass": 319,
-            "mismatch": 0,
-            "unsupported": 0,
-            "error": 0,
-            "excluded": 2
-          }
-        }
-      ]
-    },
-    {
-      "scope": "incidence and ARS public benchmark observations",
-      "source_revision": "9b91d3d113f811f3cc3e84c5e872e20fbd6ed0c9",
-      "evidence": "https://github.com/elong0527/yamaa/actions/runs/38647072070",
-      "run_attempt": 1,
-      "python": [
-        "adam-adae-exposure-adjusted-incidence",
-        "ars-ae-incidence-results"
-      ],
-      "r": [
-        "adam-adae-exposure-adjusted-incidence",
-        "ars-ae-incidence-results"
-      ],
-      "inventories": [
-        {
-          "artifact": "public-conformance-python-ubuntu-24.04-3.12-wheel",
-          "evidence": "https://github.com/elong0527/yamaa/actions/runs/38647072070/artifacts/11933128039",
-          "job": "https://github.com/elong0527/yamaa/actions/runs/38647072070/job/116138272610",
-          "runtime_version": "3.12.15",
-          "package_form": "wheel",
-          "summary": {
-            "pass": 319,
-            "mismatch": 0,
-            "unsupported": 0,
-            "error": 0,
-            "excluded": 2
-          }
-        },
-        {
-          "artifact": "public-conformance-r-ubuntu-24.04",
-          "evidence": "https://github.com/elong0527/yamaa/actions/runs/38647072070/artifacts/11932079381",
-          "job": "https://github.com/elong0527/yamaa/actions/runs/38647072070/job/116136509519",
-          "runtime_version": "4.6.1",
-          "package_form": "source",
-          "summary": {
-            "pass": 319,
-            "mismatch": 0,
-            "unsupported": 0,
-            "error": 0,
-            "excluded": 2
-          }
-        },
-        {
-          "artifact": "public-conformance-r-macos-15",
-          "evidence": "https://github.com/elong0527/yamaa/actions/runs/38647072070/artifacts/11933232423",
-          "job": "https://github.com/elong0527/yamaa/actions/runs/38647072070/job/116136509305",
-          "runtime_version": "4.6.1",
-          "package_form": "source",
-          "summary": {
-            "pass": 319,
-            "mismatch": 0,
-            "unsupported": 0,
-            "error": 0,
-            "excluded": 2
-          }
-        },
-        {
-          "artifact": "public-conformance-r-windows-latest",
-          "evidence": "https://github.com/elong0527/yamaa/actions/runs/38647072070/artifacts/11932988556",
-          "job": "https://github.com/elong0527/yamaa/actions/runs/38647072070/job/116136509330",
-          "runtime_version": "4.6.1",
-          "package_form": "source",
-          "summary": {
-            "pass": 319,
-            "mismatch": 0,
-            "unsupported": 0,
-            "error": 0,
-            "excluded": 2
-          }
-        }
-      ]
     }
   ]
 }
