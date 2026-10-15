@@ -6,7 +6,7 @@ use yamaa_adapters::{
     file_application::{self, RuntimePort},
     specification_report::Identity,
 };
-use yamaa_engine::application_observer::{Noop, Outcome, Phase, Scope};
+use yamaa_core::application_observer::{Noop, Outcome, Phase, Scope};
 pub struct Runtime<'py, 'request> {
     pub py: Python<'py>,
     pub specification: &'request str,
@@ -16,7 +16,7 @@ impl Runtime<'_, '_> {
         Identity {
             runtime: "python",
             runtime_version: self.py.version(),
-            engine_version: yamaa_engine::host_values::VERSION,
+            engine_version: yamaa_core::VERSION,
             example: "domain",
             specification: self.specification,
             base_directory: ".",
@@ -97,7 +97,7 @@ impl RuntimePort for Runtime<'_, '_> {
             py,
             [
                 py.version(),
-                yamaa_engine::host_values::VERSION,
+                yamaa_core::VERSION,
                 "domain",
                 self.specification,
                 ".",
@@ -136,7 +136,7 @@ impl RuntimePort for Runtime<'_, '_> {
             py,
             [
                 py.version(),
-                yamaa_engine::host_values::VERSION,
+                yamaa_core::VERSION,
                 "domain",
                 self.specification,
                 ".",
@@ -147,13 +147,13 @@ impl RuntimePort for Runtime<'_, '_> {
             py,
             &mut build,
             fields,
-            yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+            yamaa_core::capacity::REPORT_ENCODED_BYTES,
             scope,
         );
         scope.phase(Phase::Output);
         let converted = (|| {
             let producer =
-                attempt.formatted(py, yamaa_engine::capacity::REPORT_ENCODED_BYTES, true)?;
+                attempt.formatted(py, yamaa_core::capacity::REPORT_ENCODED_BYTES, true)?;
             Ok(Domain {
                 producer: Some(producer),
                 measurements: None,

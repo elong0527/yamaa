@@ -8,8 +8,8 @@ use crate::{
     specification_source::CapturedSchema,
 };
 use std::sync::Arc;
+use yamaa_core::project_activation::ActivationPort;
 use yamaa_core::project_function::Language;
-use yamaa_engine::project_activation::ActivationPort;
 
 #[derive(Debug)]
 pub enum Error {
@@ -195,15 +195,13 @@ impl FileProject {
     ) -> Attempt<ResourceError, A::Error> {
         self.build_with_observer(
             factory,
-            yamaa_engine::application_observer::Scope::new(
-                &yamaa_engine::application_observer::Noop,
-            ),
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
         )
     }
     pub fn build_with_observer<'run, A: ActivationPort>(
         &'run mut self,
         factory: impl FnOnce(&'run PreparedRun) -> A,
-        scope: yamaa_engine::application_observer::Scope<'_>,
+        scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Attempt<ResourceError, A::Error> {
         let mut activation = factory(&self.run);
         self.run
@@ -221,7 +219,7 @@ pub(crate) fn capture_environment(
     schema: Arc<CapturedSchema>,
 ) -> Result<project_source::OwnedEnvironment, Error> {
     let mut reader = crate::file_metadata::Reader { resources };
-    let prepared = match yamaa_engine::build::prepare_environment(
+    let prepared = match yamaa_core::build::prepare_environment(
         &mut reader,
         &mut project_source::Decoder(schema),
         written,
@@ -229,10 +227,10 @@ pub(crate) fn capture_environment(
         Default::default(),
     ) {
         Ok(prepared) => Ok(prepared),
-        Err(yamaa_engine::build::EnvironmentFailure::Resource(error)) => {
+        Err(yamaa_core::build::EnvironmentFailure::Resource(error)) => {
             return Err(Error::Resource(error));
         }
-        Err(yamaa_engine::build::EnvironmentFailure::Preparation(error)) => Err(error),
+        Err(yamaa_core::build::EnvironmentFailure::Preparation(error)) => Err(error),
     };
     project_source::adapt_preparation(prepared)
         .map_err(Error::Environment)

@@ -32,7 +32,7 @@ class CommandEntryPoints(unittest.TestCase):
             self.assertEqual(command[0], "cargo")
             self.assertEqual(command[2:4], ["test", "--locked"])
         for arguments in (
-            ["-p", "yamaa-engine", "--features", "test-support"],
+            ["-p", "yamaa-core", "--features", "test-support"],
             [
                 "-p",
                 "yamaa-adapters",

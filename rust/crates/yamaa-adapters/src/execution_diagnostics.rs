@@ -35,7 +35,7 @@ pub(crate) fn conversion(
     project(error.into_diagnostic(path))
 }
 pub(crate) fn failure<E>(
-    error: &yamaa_engine::dataset::ExecutionError<E>,
+    error: &yamaa_core::dataset::ExecutionError<E>,
     maximum: usize,
 ) -> Result<Box<Value>, Error> {
     project(
@@ -63,7 +63,7 @@ pub(crate) fn declaration(
 mod tests {
     use super::*;
     use std::convert::Infallible;
-    use yamaa_engine::dataset::ExecutionError;
+    use yamaa_core::dataset::ExecutionError;
     #[test]
     fn projection_refusal_preserves_original_typed_error() {
         let error = ExecutionError::<Infallible>::MultipleValues {

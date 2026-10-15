@@ -116,7 +116,7 @@ pub(super) mod platform {
             resources,
             paths[2],
             paths[3],
-            yamaa_engine::host_values::Language::R,
+            yamaa_core::project_function::Language::R,
             specification_schema,
             environment_schema,
         );

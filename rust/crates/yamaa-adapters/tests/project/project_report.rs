@@ -8,16 +8,16 @@ use yamaa_adapters::{
     specification_source::Source,
 };
 use yamaa_core::{
+    function_invocation::{Argument, HostError},
+    project_activation::ActivationPort,
+    specification_run::SourcePort,
+};
+use yamaa_core::{
     function_signature::{LogicalSignature, ProjectFunctionIdentity},
     project_environment::LockReference,
     project_function::Language,
     specification::SourceDeclaration,
     value::Value,
-};
-use yamaa_engine::{
-    function_invocation::{Argument, HostError},
-    project_activation::ActivationPort,
-    specification_run::SourcePort,
 };
 fn source(identity: &str, bytes: &[u8]) -> Source {
     Source {
@@ -78,10 +78,10 @@ impl SourcePort for Study {
         &mut self,
         source: &SourceDeclaration,
         byte_limit: usize,
-        origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
     ) -> Result<Arc<[u8]>, Self::Error> {
-        *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-        <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+        <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
     }
     fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
         Ok(())
@@ -115,7 +115,7 @@ impl SourcePort for Study {
 }
 #[derive(Default)]
 struct Publisher(Vec<(String, Vec<u8>)>);
-impl yamaa_engine::specification_output::ArtifactPort for Publisher {
+impl yamaa_core::specification_output::ArtifactPort for Publisher {
     type Error = Infallible;
     fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), Infallible> {
         self.0.push((path.into(), bytes.into()));
@@ -196,7 +196,7 @@ fn whole_project_reports_match_independent_original_document_truth_and_exact_sav
         } else {
             assert!(matches!(
                 result.save(&mut publisher),
-                Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+                Err(yamaa_core::specification_output::SaveError::FailedBuild)
             ));
             assert!(publisher.0.is_empty());
             assert_eq!(result.output(), None);
@@ -244,7 +244,7 @@ fn full_codelist_values_and_keys_survive_failed_output_and_repeated_reporting() 
     let mut publisher = Publisher::default();
     assert!(matches!(
         result.save(&mut publisher),
-        Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+        Err(yamaa_core::specification_output::SaveError::FailedBuild)
     ));
     assert!(publisher.0.is_empty());
     assert_eq!(study.cached.len(), 1);
@@ -269,10 +269,10 @@ fn original_inspection_and_capture_failures_keep_complete_findings_and_counters(
             &mut self,
             source: &SourceDeclaration,
             byte_limit: usize,
-            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
         }
         type Error = Failure;
         fn inspect(&mut self, _: &SourceDeclaration) -> Result<(), Failure> {
@@ -341,7 +341,7 @@ fn original_inspection_and_capture_failures_keep_complete_findings_and_counters(
                 let mut publisher = Publisher::default();
                 assert!(matches!(
                     result.save(&mut publisher),
-                    Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+                    Err(yamaa_core::specification_output::SaveError::FailedBuild)
                 ));
                 assert!(publisher.0.is_empty());
             } else {
@@ -353,8 +353,8 @@ fn original_inspection_and_capture_failures_keep_complete_findings_and_counters(
                     attempt.dataset.result.as_ref().unwrap_err()
                 ));
                 let payload = match held {
-                    yamaa_engine::specification_run::PortError::Capture(error) => error,
-                    yamaa_engine::specification_run::PortError::Inspect(failures) => {
+                    yamaa_core::specification_run::PortError::Capture(error) => error,
+                    yamaa_core::specification_run::PortError::Inspect(failures) => {
                         &failures[0].error
                     }
                     _ => panic!("source failure"),
@@ -403,7 +403,7 @@ fn completed_codelist_check_survives_a_later_verification_declaration_failure() 
     let mut publisher = Publisher::default();
     assert!(matches!(
         result.save(&mut publisher),
-        Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+        Err(yamaa_core::specification_output::SaveError::FailedBuild)
     ));
     assert!(publisher.0.is_empty());
 }

@@ -6,12 +6,16 @@ use yamaa_adapters::{
     project_lock::{self, Finding, Reason},
     scalar_bytes,
 };
-use yamaa_engine::host_values::{
-    Language, LockKind, LockReference, LogicalSignature, ProjectFunctionIdentity, Value, ValueRef,
-};
-use yamaa_engine::{
+use yamaa_core::{
     function_invocation::{Argument, HostError},
     project_activation::ActivationPort,
+};
+use yamaa_core::{
+    function_signature::{LogicalSignature, ProjectFunctionIdentity},
+    project_environment::{LockKind, LockReference},
+    project_function::Language,
+    table::ValueRef,
+    value::Value,
 };
 #[derive(Debug)]
 pub enum Error {

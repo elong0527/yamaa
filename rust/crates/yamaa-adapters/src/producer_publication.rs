@@ -8,7 +8,7 @@ use std::{
     any::Any,
     panic::{catch_unwind, AssertUnwindSafe},
 };
-use yamaa_engine::producer_publication::{
+use yamaa_core::producer_publication::{
     self as engine, Artifact, PreparedPublication, PublicationPort,
 };
 

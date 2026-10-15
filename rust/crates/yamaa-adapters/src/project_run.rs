@@ -10,12 +10,12 @@ use std::{
     any::Any,
     panic::{catch_unwind, AssertUnwindSafe},
 };
-use yamaa_core::{project_environment::ExecutionEnvironment, specification::PreparedSpecification};
-use yamaa_engine::{
+use yamaa_core::{
     project_activation::{ActivationPort, Failure, Observations},
     project_domain::{self, CheckedOwnedProject, RejectedOwnedProject},
     specification_run::{CapturedAttempt, SourcePort},
 };
+use yamaa_core::{project_environment::ExecutionEnvironment, specification::PreparedSpecification};
 
 #[derive(Debug)]
 pub struct PreparedRun {
@@ -78,7 +78,7 @@ impl PreparedRun {
                 checked,
             }),
             Err(mut rejection) => {
-                rejection.error = yamaa_engine::source_profile_inspection::refine(
+                rejection.error = yamaa_core::source_profile_inspection::refine(
                     rejection.error,
                     |dataset, path| inspect(&document, dataset, path),
                 );
@@ -123,16 +123,14 @@ impl PreparedRun {
         self.execute_with_observer(
             activation,
             source,
-            yamaa_engine::application_observer::Scope::new(
-                &yamaa_engine::application_observer::Noop,
-            ),
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
         )
     }
     pub fn execute_with_observer<A: ActivationPort, P: SourcePort>(
         &self,
         activation: &mut A,
         source: &mut P,
-        scope: yamaa_engine::application_observer::Scope<'_>,
+        scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Attempt<P::Error, A::Error> {
         let mut attempt = Attempt {
             boundary: Ok(()),

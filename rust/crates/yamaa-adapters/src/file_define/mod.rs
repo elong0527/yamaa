@@ -12,7 +12,7 @@ use yamaa_core::{
     diagnostic::Diagnostic, project_function::Language, submission_composition::Finding,
 };
 
-use yamaa_engine::define::{self as service, Ports};
+use yamaa_core::define::{self as service, Ports};
 #[derive(Debug)]
 pub enum Failure {
     Project(project_application::Error),

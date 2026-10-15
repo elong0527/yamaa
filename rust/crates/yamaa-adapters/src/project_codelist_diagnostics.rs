@@ -1,8 +1,8 @@
 //! Encode admitted core codelist facts without rerunning checks or table reads.
 use crate::{issue_rows::Issue, project_diagnostic_projection::issue};
+use yamaa_core::dataset::CheckRecord;
 pub use yamaa_core::project_codelist_diagnostics::Error;
 use yamaa_core::specification::PreparedSpecification;
-use yamaa_engine::dataset::CheckRecord;
 
 pub fn codelist_issues(
     compiled: &PreparedSpecification,
@@ -20,7 +20,7 @@ pub fn codelist_issues_with_limit(
     maximum: usize,
 ) -> Result<Vec<Issue>, Error> {
     let diagnostics =
-        yamaa_engine::project_codelist_diagnostics::diagnostics(compiled, records, maximum)?;
+        yamaa_core::project_codelist_diagnostics::diagnostics(compiled, records, maximum)?;
     let issues = diagnostics
         .into_iter()
         .map(issue)

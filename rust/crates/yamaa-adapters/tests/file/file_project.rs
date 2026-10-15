@@ -12,16 +12,16 @@ use yamaa_adapters::{
     project_source::{CaptureFailure, Failure as EnvironmentFailure, Origin},
 };
 use yamaa_core::{
+    function_invocation::{Argument, HostError},
+    project_activation::{ActivationPort, Failure, LockObservation},
+    specification_run::PortError,
+};
+use yamaa_core::{
     function_signature::{LogicalSignature, ProjectFunctionIdentity},
     project_environment::{LockKind, LockReference},
     project_function::Language,
     table::{TableAccess, ValueRef},
     value::Value,
-};
-use yamaa_engine::{
-    function_invocation::{Argument, HostError},
-    project_activation::{ActivationPort, Failure, LockObservation},
-    specification_run::PortError,
 };
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -469,7 +469,7 @@ fn native_project_inheritance_retains_parent_authorship_and_selected_entry_sourc
 
 #[test]
 fn selected_ordinary_environment_owner_preserves_fresh_activation_and_inherited_data_origins() {
-    use yamaa_adapters::{file_workflow, file_workflow::Selected};
+    use yamaa_adapters::file_workflow::{self, Selected};
     let study = Study::new();
     study.write("parent/base.yaml", &DOMAIN.replace("input.csv", "data.csv"));
     study.write(

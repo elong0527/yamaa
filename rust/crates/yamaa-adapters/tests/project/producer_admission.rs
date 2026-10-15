@@ -4,8 +4,8 @@ use yamaa_adapters::{
     shipped_schema,
     specification_source::{InheritancePort, PreparedDocument, Source},
 };
+use yamaa_core::inheritance::{Source as FileIdentity, SourceError};
 use yamaa_core::{producer_admission::Error as CoreError, specification::PrepareError};
-use yamaa_engine::inheritance::{Source as FileIdentity, SourceError};
 const PRODUCER:&str="schema_version: '1.0'\ndomain: PROD\nkeys: [ID]\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: float, label: Reported value, derivation: RAW.VALUE}\noutput: {path: './produced.csv', columns: [ID, VALUE]}\n";
 const CONSUMER:&str="schema_version: '1.0'\ndomain: CONS\nkeys: [ID]\ninput: {SRC: {path: './produced.csv', schema: nested/producer.yaml}}\ncolumns: [{name: ID, type: int, label: ID, derivation: SRC.ID}]\noutput: {path: consumer.csv, columns: [ID]}\n";
 fn standalone(identity: &str, text: &str) -> Arc<PreparedDocument> {
@@ -46,7 +46,7 @@ fn original_documents_and_distinct_metadata_remain_held_without_study_authority(
         admitted.producers()[0].document.source().bytes,
         PRODUCER.as_bytes()
     );
-    let declaration = &admitted.checked().metadata().producers()[0];
+    let declaration = &admitted.metadata().producers()[0];
     assert_eq!(
         declaration.schema_origin().written(),
         "nested/producer.yaml"
@@ -66,7 +66,7 @@ fn original_documents_and_distinct_metadata_remain_held_without_study_authority(
         ["ID", "VALUE"]
     );
     assert!(
-        matches!(admitted.checked().metadata().execution_refusal(),PrepareError::Unsupported(features) if features[0].path=="input.SRC.schema")
+        matches!(admitted.metadata().execution_refusal(),PrepareError::Unsupported(features) if features[0].path=="input.SRC.schema")
     );
 }
 struct Parent {
@@ -152,7 +152,7 @@ fn inherited_schema_artifact_and_output_paths_keep_independent_authored_layers()
         Limits::default(),
     )
     .unwrap();
-    let declaration = &admitted.checked().metadata().producers()[0];
+    let declaration = &admitted.metadata().producers()[0];
     assert_eq!(
         declaration.schema_path(),
         "internal/parent/../producer.yaml"
@@ -256,7 +256,7 @@ fn ordinary_preparation_remains_unsupported_and_inline_types_are_portable() {
     assert_eq!(findings[0].definition().requirement, Some("REQ-0523"));
     assert_eq!(findings[0].spec_paths, ["input.SRC.types.ID"]);
     assert!(matches!(
-        yamaa_engine::domain::check(consumer.model()),
+        yamaa_core::domain::check(consumer.model()),
         Err(PrepareError::Unsupported(_))
     ));
 }

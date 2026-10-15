@@ -6,7 +6,7 @@ use pyo3::{
 };
 use std::sync::{Arc, Mutex, MutexGuard};
 use yamaa_adapters::file_workflow::{self, Selected, SelectionError};
-use yamaa_engine::host_values::Language;
+use yamaa_core::project_function::Language;
 
 type NativeAttempt = yamaa_adapters::project_run::Attempt<
     yamaa_adapters::file_resources::Error,
@@ -115,7 +115,7 @@ impl Specification {
         let project = state
             .as_mut()
             .map_err(|_| pyo3::exceptions::PyValueError::new_err("project preparation failed"))?;
-        let yamaa_engine::build::Prepared::Ordinary(project) = project else {
+        let yamaa_core::build::Prepared::Ordinary(project) = project else {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "this metadata handle is not an ordinary project build capability",
             ));
