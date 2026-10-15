@@ -2319,6 +2319,8 @@ local({
           is.null(get(".domain_observations",asNamespace("yamaa"))(result)),
           inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"))
         else {
+          if (!is.null(truth$output_rows)) stopifnot(identical(result$output$K,"r1"),
+            identical(result$output$XVAL,1))
           stopifnot(identical(result$save(),TRUE),
             identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
           unlink(file.path(directory,"out.csv"))
