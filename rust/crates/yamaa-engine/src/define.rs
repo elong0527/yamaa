@@ -123,6 +123,33 @@ pub enum Failure<E, PE> {
     TargetAdmission { index: usize, error: PE },
     Publication { index: usize, error: PE },
 }
+fn published_source_failure<E, PE>(
+    finding: Option<yamaa_core::diagnostic::SourceFinding<'_>>,
+    fallback: Finding,
+) -> Failure<E, PE> {
+    use yamaa_core::diagnostic::{ProjectionError, MAX_PROJECTION_BYTES};
+    let Some(finding) = finding else {
+        return Failure::Metadata(vec![fallback]);
+    };
+    let diagnostic = match finding.diagnostic_with_limit(MAX_PROJECTION_BYTES) {
+        Ok(diagnostic) => diagnostic,
+        Err(ProjectionError::Limit) => yamaa_core::application_issue::resource_rejected(
+            "output",
+            "diagnostic_context_limit",
+            "diagnostic_context_bytes",
+            MAX_PROJECTION_BYTES,
+            None,
+            vec![fallback.path],
+        ),
+        Err(ProjectionError::InvalidContext) => {
+            let mut diagnostic =
+                yamaa_core::application_issue::rejected("output", "diagnostic_context");
+            diagnostic.spec_paths.push(fallback.path);
+            diagnostic
+        }
+    };
+    Failure::Diagnostic(vec![diagnostic])
+}
 type PreflightResult<P> = Result<
     Vec<<P as Ports>::Publisher>,
     Failure<<P as Ports>::Error, <P as Ports>::PublicationError>,
@@ -402,23 +429,14 @@ impl<P: Ports> Application<P> {
                 let rendered = if location.to_ascii_lowercase().ends_with(".csv") {
                     let source = yamaa_core::csv_source::parse(bytes.as_ref(), Default::default())
                         .map_err(|error| {
-                            error
-                                .finding(dataset.id(), written)
-                                .and_then(|finding| {
-                                    // The deleted Error::diagnostic used the
-                                    // unbounded owned projection; keep that
-                                    // behavior instead of falling back to the
-                                    // generic metadata finding on a limit.
-                                    finding.diagnostic_with_limit(usize::MAX).ok()
-                                })
-                                .map(|diagnostic| Failure::Diagnostic(vec![diagnostic]))
-                                .unwrap_or_else(|| {
-                                    Failure::Metadata(vec![Finding::cause(
-                                        ConditionCode::ApplicationRejected,
-                                        written,
-                                        "published CSV admission",
-                                    )])
-                                })
+                            published_source_failure(
+                                error.finding(dataset.id(), written),
+                                Finding::cause(
+                                    ConditionCode::ApplicationRejected,
+                                    written,
+                                    "published CSV admission",
+                                ),
+                            )
                         })?;
                     yamaa_core::submission_json::admit_fields(
                         dataset,
@@ -428,23 +446,14 @@ impl<P: Ports> Application<P> {
                     let table = yamaa_core::typed_csv::PreparedTypes::new(&kinds, 16_384)
                         .and_then(|types| types.convert(source))
                         .map_err(|error| {
-                            error
-                                .finding(dataset.id())
-                                .and_then(|finding| {
-                                    // The deleted Error::diagnostic used the
-                                    // unbounded owned projection; keep that
-                                    // behavior instead of falling back to the
-                                    // generic metadata finding on a limit.
-                                    finding.diagnostic_with_limit(usize::MAX).ok()
-                                })
-                                .map(|diagnostic| Failure::Diagnostic(vec![diagnostic]))
-                                .unwrap_or_else(|| {
-                                    Failure::Metadata(vec![Finding::cause(
-                                        ConditionCode::ProducerContractMismatch,
-                                        written,
-                                        "published CSV contract",
-                                    )])
-                                })
+                            published_source_failure(
+                                error.finding(dataset.id()),
+                                Finding::cause(
+                                    ConditionCode::ProducerContractMismatch,
+                                    written,
+                                    "published CSV contract",
+                                ),
+                            )
                         })?;
                     yamaa_core::submission_json::render(
                         &composed,
@@ -753,5 +762,44 @@ pub fn publication_diagnostic(
         context,
         source_span: None,
         operand_route: None,
+    }
+}
+
+#[cfg(test)]
+mod projection_tests {
+    use super::*;
+
+    #[test]
+    fn published_csv_context_limit_remains_an_explicit_refusal() {
+        use yamaa_core::diagnostic::{SourceFinding, MAX_PROJECTION_BYTES};
+        let value = "x".repeat(MAX_PROJECTION_BYTES / 6);
+        let failure: Failure<(), ()> = published_source_failure(
+            Some(SourceFinding::FieldParse {
+                dataset: "DM",
+                field: "AGE",
+                target: yamaa_core::value::ColumnType::Int,
+                value: &value,
+            }),
+            Finding::cause(
+                ConditionCode::ProducerContractMismatch,
+                "sdtm.specs[0]",
+                "published CSV contract",
+            ),
+        );
+        let Failure::Diagnostic(findings) = failure else {
+            panic!("projection refusal must not become a metadata finding");
+        };
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].code, ConditionCode::ApplicationRejected);
+        assert_eq!(findings[0].definition().requirement, None);
+        assert_eq!(findings[0].spec_paths, ["sdtm.specs[0]"]);
+        assert_eq!(
+            findings[0].context["resource"],
+            ContextValue::Scalar(Value::Str("diagnostic_context_bytes".into()))
+        );
+        assert_eq!(
+            findings[0].context["limit"],
+            ContextValue::Integer(MAX_PROJECTION_BYTES.to_string())
+        );
     }
 }

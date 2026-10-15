@@ -206,7 +206,7 @@ impl SourceFinding<'_> {
     }
     /// Owned materialization for admitted in-crate reports; external callers
     /// use complete-report admission (`admit_source_diagnostics`).
-    pub(crate) fn owned_compatibility(self) -> Diagnostic {
+    fn materialize(self) -> Diagnostic {
         if let Self::Odm { dataset, finding } = self {
             return finding.finding(dataset).owned();
         }
@@ -312,9 +312,7 @@ impl<'a> SourceDiagnosticReport<'a> {
     }
     /// Owned materialization is available only after every record was admitted.
     pub fn iter(&self) -> impl ExactSizeIterator<Item = Diagnostic> + 'a {
-        self.findings
-            .iter()
-            .map(|finding| finding.owned_compatibility())
+        self.findings.iter().map(|finding| finding.materialize())
     }
 }
 pub fn admit_source_diagnostics<'a>(

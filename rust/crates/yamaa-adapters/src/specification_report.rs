@@ -26,6 +26,20 @@ pub enum Error {
     OutputLimit,
     ResourceLimit(crate::resource_diagnostics::Refusal),
 }
+impl From<crate::source_diagnostics::SourceProjectionError> for Error {
+    fn from(error: crate::source_diagnostics::SourceProjectionError) -> Self {
+        use crate::source_diagnostics::SourceProjectionError;
+        match error {
+            SourceProjectionError::TraversalLimit
+            | SourceProjectionError::Context(yamaa_core::diagnostic::ProjectionError::Limit) => {
+                Self::OutputLimit
+            }
+            SourceProjectionError::Context(
+                yamaa_core::diagnostic::ProjectionError::InvalidContext,
+            ) => Self::InvalidObservation,
+        }
+    }
+}
 fn plain(value: &Value) -> Result<Value, Error> {
     if let Ok(scalar) = serde_json::from_value::<ScalarValue>(value.clone()) {
         return Ok(
@@ -228,6 +242,7 @@ pub fn failure<E>(
         }
         Err(PortError::Run(error)) => {
             crate::resource_diagnostics::source_findings(error, run.source())
+                .map_err(Error::from)?
                 .ok_or(Error::UnsupportedOutcome)?
         }
         Err(PortError::Capture(_)) => {

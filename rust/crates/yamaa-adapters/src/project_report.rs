@@ -652,6 +652,7 @@ pub fn build_result<'a, C, E>(
                                     error,
                                     run.compiled().source(),
                                 )
+                                .map_err(report::Error::from)?
                             }
                             RunError::Bind(error) => crate::specification_diagnostics::binding(
                                 error,
@@ -666,6 +667,7 @@ pub fn build_result<'a, C, E>(
                                         crate::resource_diagnostics::source_findings(
                                             ingestion, source,
                                         )
+                                        .map_err(report::Error::from)?
                                         .ok_or(Error::Source(error))?,
                                     );
                                 }
@@ -677,8 +679,7 @@ pub fn build_result<'a, C, E>(
                                     run.compiled().sources(),
                                     yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
                                 )
-                                .ok()
-                                .flatten()
+                                .map_err(report::Error::from)?
                                 .and_then(|findings| {
                                     findings
                                         .into_iter()

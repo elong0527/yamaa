@@ -1,5 +1,9 @@
 # Adapters test fixtures
-Provenance and reading notes for the fixtures in this folder, folded from theformer per-fixture notes in #2416. Fixtures converted from hex-encoded TSVare now plain JSON with the same rows; staging re-encodes the legacy TSVbytes for the installed hosts, so staged output is unchanged.
+
+Provenance and reading notes for the fixtures in this folder, folded from the
+former per-fixture notes in #2416. Fixtures converted from hex-encoded TSV are
+now plain JSON with the same rows; staging re-encodes the legacy TSV bytes for
+the installed hosts, so staged output is unchanged.
 
 ## binding_diagnostics
 # Original-document binding findings

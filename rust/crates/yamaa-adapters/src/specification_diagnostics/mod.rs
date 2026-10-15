@@ -103,15 +103,20 @@ pub fn findings_with_limit(
         | Error::Source(_)
         | Error::Ordinal(_)
         | Error::OdmFields(_)
-        | Error::OdmValues(_) => Ok(crate::source_diagnostics::findings_with_limit(
-            error, source, maximum,
-        )?
-        .and_then(|findings| {
-            findings
-                .into_iter()
-                .map(portable_diagnostic)
-                .collect::<Option<Vec<_>>>()
-        })),
+        | Error::OdmValues(_) => {
+            crate::source_diagnostics::findings_with_limit(error, source, maximum)?
+                .map(|findings| {
+                    findings
+                        .into_iter()
+                        .map(|finding| {
+                            portable_diagnostic(finding).ok_or_else(|| {
+                                yamaa_core::diagnostic::ProjectionError::InvalidContext.into()
+                            })
+                        })
+                        .collect()
+                })
+                .transpose()
+        }
         Error::Prepare(PrepareError::Invalid(errors)) => Ok(errors.iter().map(preparing).collect()),
         Error::Bind(error) => Ok(source.and_then(|source| binding(error, source))),
         _ => Ok(None),
