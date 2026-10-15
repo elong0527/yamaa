@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    diagnostic::ConditionCode as C,
-    schema::{DocumentLimits, SpecificationDocument, ValidationBudget},
-};
+use crate::{diagnostic::ConditionCode as C, schema::SpecificationDocument};
 
 #[derive(Clone)]
 enum Tree<'a> {
@@ -85,12 +82,9 @@ fn document(value: Tree<'_>, verification: Option<Tree<'_>>) -> SpecificationDoc
     }
     let mut nodes = Vec::new();
     let root = Map(fields).append(&mut nodes);
-    SpecificationDocument::admit(
-        Document::new(nodes, root).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap()
+    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap()
 }
 fn source() -> TableSchema {
     TableSchema::new(vec![Column {
@@ -264,7 +258,7 @@ fn independent_cut_findings_keep_first_error_priority() {
 }
 
 #[test]
-fn repeated_type_findings_refuse_whole_projection_before_output() {
+fn repeated_type_findings_keep_the_complete_ordered_context() {
     let mut terms = (0..1024)
         .map(|index| format!("X{index}"))
         .collect::<Vec<_>>();
@@ -276,10 +270,19 @@ fn repeated_type_findings_refuse_whole_projection_before_output() {
     }
     let expression = terms.pop().unwrap();
     let plan = crate::numeric_compiler::compile_numeric(&expression, "result").unwrap();
-    assert!(matches!(
-        numeric_kinds(&plan, |_| Some(crate::value::ValueType::Str)),
-        Err(BindError::PredicateDiagnosticLimit)
-    ));
+    let findings = numeric_kinds(&plan, |_| Some(crate::value::ValueType::Str));
+    assert_eq!(findings.len(), 1024);
+    for (index, finding) in findings.iter().enumerate() {
+        assert_eq!(finding.code, C::NumericInputType);
+        assert_eq!(finding.spec_paths, ["result"]);
+        assert_eq!(
+            finding.context["source"],
+            serde_json::json!(format!("X{index}"))
+        );
+        assert_eq!(finding.context["expr"], serde_json::json!(expression));
+        assert_eq!(finding.context["expected"], serde_json::json!("numeric"));
+        assert_eq!(finding.context["actual"], serde_json::json!("str"));
+    }
 }
 
 fn phase_document(
@@ -313,12 +316,9 @@ fn phase_document(
     }
     let mut nodes = Vec::new();
     let root = Map(fields).append(&mut nodes);
-    SpecificationDocument::admit(
-        Document::new(nodes, root).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap()
+    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap()
 }
 fn empty_column(name: &str) -> Tree<'_> {
     Tree::Map(vec![

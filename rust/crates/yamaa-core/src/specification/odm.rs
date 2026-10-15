@@ -741,12 +741,7 @@ mod tests {
             let mut nodes = Vec::new();
             let root = tree.append(&mut nodes);
             let document = Document::new(nodes, root).unwrap();
-            let admitted = SpecificationDocument::admit(
-                document,
-                &mut crate::schema::ValidationBudget::new(Default::default()),
-            )
-            .unwrap()
-            .unwrap();
+            let admitted = SpecificationDocument::admit(document).unwrap().unwrap();
             let document = admitted.document();
             let column = sequence(
                 document,
