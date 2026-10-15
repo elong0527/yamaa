@@ -1,11 +1,8 @@
-//! Exact cumulative cache boundaries through the real named-selection service.
+//! Exact named-selection values, original coordinates and attempt-local read order.
 use super::*;
 use crate::{table::Column, value::ColumnType};
+use std::cell::RefCell;
 use std::rc::Rc;
-use std::{
-    cell::RefCell,
-    mem::{align_of, size_of},
-};
 
 type Trace = Rc<RefCell<Vec<&'static str>>>;
 type Original = std::convert::Infallible;
@@ -128,11 +125,7 @@ impl Fixture {
             trace,
         }
     }
-    fn read(
-        &self,
-        run: &mut Run,
-        budget: &mut Budget,
-    ) -> Result<Value, Box<ExecutionError<Original>>> {
+    fn read(&self, run: &mut Run) -> Result<Value, Box<ExecutionError<Original>>> {
         let candidate = Candidate {
             template: Some(0),
             selection_identity: SelectionIdentity::Candidate(0),
@@ -150,7 +143,6 @@ impl Fixture {
             &self.primary,
             &mut EvaluationState {
                 functions: &mut crate::function_invocation::NoFunctions::new(),
-                budget,
                 handlers: &mut HandlerCounter::default(),
                 secondary: &[&self.donor],
                 primary: &self.primary,
@@ -164,83 +156,13 @@ impl Fixture {
         )
     }
 }
-fn budget(work: usize) -> Budget {
-    Budget::new(Limits {
-        source_rows: 100,
-        output_rows: 100,
-        output_cells: 100,
-        key_cells: 100,
-        work_cells: work,
-        scalar_text_bytes: 100,
-        output_text_bytes: 100,
-        identity_cells: 100,
-        identity_text_bytes: 100,
-    })
-}
-fn refusal(error: ExecutionError<Original>, limit: usize, required: usize) {
-    assert!(matches!(error, ExecutionError::Limit {
-        resource: Resource::WorkCells, limit: actual, required: Some(needed),
-    } if (actual, needed) == (limit, required)));
-}
-
 #[test]
-fn insertion_admits_one_fixed_entry_at_equality_and_never_reads_a_value_after_refusal() {
-    // Two 36-unit scalar search bounds, nine ordinary relation visits, three
-    // new typed fields, and one subsequent selected-value visit total 85.
-    for limit in [83, 84, 85] {
-        let fixture = Fixture::new();
-        let mut run = Run::default();
-        let result = fixture.read(&mut run, &mut budget(limit));
-        if limit == 85 {
-            assert_eq!(result.unwrap(), Value::Int(7));
-            assert_eq!(*fixture.trace.borrow(), ["BASE.K", "DONOR.K", "DONOR.V"]);
-        } else {
-            refusal(*result.unwrap_err(), limit, limit + 1);
-            assert_eq!(*fixture.trace.borrow(), ["BASE.K", "DONOR.K"]);
-        }
-        assert_eq!(run.choices.len(), usize::from(limit >= 84));
-    }
-}
-
-#[test]
-fn cache_hit_equality_is_cumulative_and_refusal_enters_no_donor_or_current_read() {
-    for limit in [120, 121, 122] {
-        let fixture = Fixture::new();
-        let mut run = Run::default();
-        let mut budget = budget(limit);
-        assert_eq!(fixture.read(&mut run, &mut budget).unwrap(), Value::Int(7));
-        fixture.trace.borrow_mut().clear();
-        let result = fixture.read(&mut run, &mut budget);
-        if limit == 122 {
-            assert_eq!(result.unwrap(), Value::Int(7));
-            assert_eq!(*fixture.trace.borrow(), ["DONOR.V"]);
-        } else {
-            refusal(*result.unwrap_err(), limit, limit + 1);
-            assert!(fixture.trace.borrow().is_empty());
-        }
-        assert_eq!(run.choices.len(), 1);
-    }
-}
-
-#[test]
-fn one_choice_contains_only_bounded_numeric_identity_and_coordinate_fields() {
-    let word = size_of::<usize>();
-    type Entry = ((SelectionIdentity, usize), Choice);
-    assert_eq!(size_of::<Entry>(), 5 * word);
-    assert_eq!(size_of::<(String, Vec<usize>)>(), 6 * word);
-    assert_eq!(
-        size_of::<BTreeMap<(SelectionIdentity, usize), Choice>>(),
-        3 * word
-    );
-    assert_eq!(size_of::<Run>(), 13 * word);
-    assert_eq!(size_of::<key_index::StringIndex>(), 3 * word);
-    assert!(align_of::<Entry>() <= word);
-    assert!(key_index::search_work(usize::MAX) <= 12 * (1 + usize::BITS as usize));
-    let (fixture, mut run) = (Fixture::new(), Run::default());
-    assert_eq!(
-        fixture.read(&mut run, &mut budget(85)).unwrap(),
-        Value::Int(7)
-    );
+fn named_selection_retains_value_original_coordinate_and_read_order() {
+    let fixture = Fixture::new();
+    let mut run = Run::default();
+    assert_eq!(fixture.read(&mut run).unwrap(), Value::Int(7));
+    assert_eq!(*fixture.trace.borrow(), ["BASE.K", "DONOR.K", "DONOR.V"]);
+    assert_eq!(run.choices.len(), 1);
     assert!(matches!(
         run.choices[&(SelectionIdentity::Candidate(0), 0)],
         Choice::Record {
@@ -251,7 +173,18 @@ fn one_choice_contains_only_bounded_numeric_identity_and_coordinate_fields() {
 }
 
 #[test]
-fn retained_index_strings_and_coordinate_capacity_obey_the_admitted_source_bound() {
+fn repeated_selection_uses_the_original_cached_choice_and_reads_only_the_payload() {
+    let fixture = Fixture::new();
+    let mut run = Run::default();
+    assert_eq!(fixture.read(&mut run).unwrap(), Value::Int(7));
+    fixture.trace.borrow_mut().clear();
+    assert_eq!(fixture.read(&mut run).unwrap(), Value::Int(7));
+    assert_eq!(*fixture.trace.borrow(), ["DONOR.V"]);
+    assert_eq!(run.choices.len(), 1);
+}
+
+#[test]
+fn string_index_keeps_every_original_coordinate_in_source_order() {
     struct Keys {
         schema: TableSchema,
         values: Vec<Value>,
@@ -277,28 +210,15 @@ fn retained_index_strings_and_coordinate_capacity_obey_the_admitted_source_bound
     };
     let fixture = Fixture::new();
     let eligible = (0..256).collect::<Vec<_>>();
-    let mut limits = budget(100_000).limits();
-    limits.scalar_text_bytes = 10_000;
-    let index = key_index::StringIndex::build(
-        &keys,
-        &fixture.plan.intermediates()[0],
-        &eligible,
-        0,
-        &mut Budget::new(limits),
-    )
-    .unwrap();
+    let index =
+        key_index::StringIndex::build(&keys, &fixture.plan.intermediates()[0], &eligible, 0)
+            .unwrap();
     assert_eq!(index.0.len(), 64);
     assert_eq!(index.0["K015"], [15, 79, 143, 207]);
-    let text_bytes = index.0.keys().map(String::capacity).sum::<usize>();
-    let coordinate_cells = index.0.values().map(Vec::capacity).sum::<usize>();
-    assert_eq!(text_bytes, 256);
-    assert_eq!(coordinate_cells, 256);
-    assert!(text_bytes <= 256 * 4);
-    assert!(coordinate_cells <= 2 * eligible.len());
 }
 
 #[test]
-fn scalar_key_snapshots_read_current_once_and_quota_refusal_runs_no_handler_or_donor() {
+fn scalar_key_snapshots_read_current_once_and_apply_only_the_authored_missing_handler() {
     use crate::{
         dataset::MatchExpression,
         text_case::{Case, StringCase},
@@ -340,19 +260,17 @@ fn scalar_key_snapshots_read_current_once_and_quota_refusal_runs_no_handler_or_d
         values: vec![Value::Int(1), Value::Missing],
         completed: vec![true, false],
     };
-    for refuse in [false, true] {
-        fixture.primary.values[0] = if refuse {
+    for missing in [false, true] {
+        fixture.primary.values[0] = if missing {
             Value::Missing
         } else {
             Value::Str("x".into())
         };
         fixture.trace.borrow_mut().clear();
-        let mut budget = budget(1000);
         let mut handlers = HandlerCounter::default();
         handlers.register(&std::format!("{path}.missing"), HandlerKind::Missing);
         let mut state = EvaluationState {
             functions: &mut crate::function_invocation::NoFunctions::new(),
-            budget: &mut budget,
             handlers: &mut handlers,
             secondary: &[&fixture.donor],
             primary: &fixture.primary,
@@ -374,10 +292,6 @@ fn scalar_key_snapshots_read_current_once_and_quota_refusal_runs_no_handler_or_d
         )
         .unwrap();
         assert_eq!(*fixture.trace.borrow(), ["BASE.K"]);
-        if refuse {
-            let used = state.budget.predicate().used().work;
-            *state.budget = Budget::with_work(state.budget.limits(), used, used);
-        }
         let result = match_values::evaluate(
             item,
             &current,
@@ -385,25 +299,14 @@ fn scalar_key_snapshots_read_current_once_and_quota_refusal_runs_no_handler_or_d
             &fixture.plan,
             0,
             &fixture.primary,
-            state.budget.limits(),
             &mut state,
         );
-        if refuse {
-            assert!(matches!(
-                *result.unwrap_err(),
-                ExecutionError::Limit {
-                    resource: Resource::WorkCells,
-                    ..
-                }
-            ));
-        } else {
-            assert_eq!(result.unwrap(), [(0, Value::Str("x".into()))]);
-        }
+        assert_eq!(result.unwrap(), [(0, Value::Str("x".into()))]);
         assert_eq!(
             *fixture.trace.borrow(),
             ["BASE.K"],
             "scalar evaluation uses the resolved snapshot only"
         );
-        assert_eq!(handlers.snapshot()[0].count, 0);
+        assert_eq!(handlers.snapshot()[0].count, u64::from(missing));
     }
 }

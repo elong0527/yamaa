@@ -44,7 +44,7 @@ impl MatchRead {
         output: &TableSchema,
         available: &[bool],
     ) -> Result<ColumnType, PlanError> {
-        if self.identifier().is_empty() || self.identifier().len() > 65_536 {
+        if self.identifier().is_empty() {
             return Err(PlanError::InvalidIntermediate);
         }
         let column = match self {
@@ -181,14 +181,19 @@ impl MatchValue {
         secondary: &[SecondarySource],
         output: &TableSchema,
         available: &[bool],
+        read_kind: &impl Fn(&MatchRead, ColumnType) -> Option<ColumnType>,
     ) -> Result<Option<ComparableType>, PlanError> {
         if let Self::Expression(expression) = self {
             expression.validate(primary, secondary, output, available)?;
         }
         let read_kind = self
             .read()
-            .map(|read| read.kind(primary, secondary, output, available))
-            .transpose()?;
+            .map(|read| {
+                read.kind(primary, secondary, output, available)
+                    .map(|physical| read_kind(read, physical))
+            })
+            .transpose()?
+            .flatten();
         if matches!(
             self,
             Self::StrPad {
@@ -202,7 +207,7 @@ impl MatchValue {
             return Err(PlanError::InvalidIntermediate);
         }
         if let Self::Contextual(declaration) = self {
-            if declaration.identifier().is_empty() || declaration.identifier().len() > 65_536 {
+            if declaration.identifier().is_empty() {
                 return Err(PlanError::InvalidIntermediate);
             }
         }
@@ -218,27 +223,29 @@ pub struct IntermediateKey {
     pub value: MatchValue,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn validate_declaration(
     keys: &[IntermediateKey],
     primary: &TableSchema,
     secondary: &[SecondarySource],
     donor: &TableSchema,
+    donor_kind: &impl Fn(usize) -> Option<ColumnType>,
     output: &TableSchema,
     available: &[bool],
+    read_kind: &impl Fn(&MatchRead, ColumnType) -> Option<ColumnType>,
 ) -> Result<(), PlanError> {
-    if keys.is_empty() || keys.len() > 64 {
+    if keys.is_empty() || keys.len() > crate::limits::Limits::KEYS {
         return Err(PlanError::InvalidIntermediate);
     }
     for (index, key) in keys.iter().enumerate() {
         if key.path.is_empty()
-            || key.path.len() > 65_536
             || keys[..index]
                 .iter()
                 .any(|prior| prior.source_column == key.source_column)
         {
             return Err(PlanError::InvalidIntermediate);
         }
-        let donor = donor
+        donor
             .columns()
             .get(key.source_column)
             .ok_or(PlanError::InvalidIntermediate)?;
@@ -253,8 +260,9 @@ pub(super) fn validate_declaration(
         }
         if key
             .value
-            .kind(primary, secondary, output, available)?
-            .is_some_and(|kind| !crate::key_relation::comparable(kind, donor.kind.into()))
+            .kind(primary, secondary, output, available, read_kind)?
+            .zip(donor_kind(key.source_column))
+            .is_some_and(|(kind, donor)| !crate::key_relation::comparable(kind, donor.into()))
         {
             return Err(PlanError::InvalidLookup);
         }
@@ -267,6 +275,7 @@ pub(super) fn validate(
     primary: &TableSchema,
     secondary: &[SecondarySource],
     donor: &TableSchema,
+    donor_kind: &impl Fn(usize) -> Option<ColumnType>,
     output: &TableSchema,
     available: &[bool],
 ) -> Result<(), PlanError> {
@@ -276,5 +285,14 @@ pub(super) fn validate(
     {
         return Err(PlanError::InvalidIntermediate);
     }
-    validate_declaration(keys, primary, secondary, donor, output, available)
+    validate_declaration(
+        keys,
+        primary,
+        secondary,
+        donor,
+        donor_kind,
+        output,
+        available,
+        &|_, kind| Some(kind),
+    )
 }
