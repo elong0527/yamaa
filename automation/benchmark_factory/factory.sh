@@ -157,7 +157,7 @@ PY
   # 6. repo-wide validators (prose gate + column labels; needs uv)
   if [ "$HAVE_UV" = 0 ]; then
     skip "validate_repository.py needs uv"
-  elif (cd "$BENCH" && $PY python "$ROOT/.github/scripts/yaml-validation/validate_repository.py") \
+  elif (cd "$BENCH" && $PY python "$ROOT/tools/validation/validate_repository.py") \
       >/tmp/factory-validate.log 2>&1; then
     say ok "validate_repository.py clean"
   else
@@ -176,7 +176,7 @@ fi
 if [ "$1" = "retire-check" ]; then
   [ -d "$DIR" ] || die "no such benchmark: $DIR"
   HITS="$(cd "$ROOT" && grep -rln --exclude-dir="$name" "$name" \
-    benchmarks/README.md rust/tools/public_conformance.py \
+    benchmarks/README.md tools/conformance/public_conformance.py \
     benchmarks/validation-manifest.yaml benchmarks/vocabulary-coverage.yaml \
     evaluations docs automation mkdocs.yml .github 2>/dev/null)"
   if [ -z "$HITS" ]; then

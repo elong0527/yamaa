@@ -77,7 +77,7 @@ reviews:
     - path: ".github/workflows/**"
       instructions: "Flag unpinned action versions, secrets in logs, and jobs without timeouts. Note: bot tokens cannot push workflow-file changes, so findings here are for the maintainer."
     - path: "docs/**"
-      instructions: "The project name is written yamaa, never YAMAA, including in headings. docs/stylesheets/extra.css and .github/scripts/benchmark-docs/dashboard.css share one palette \u2014 flag a color or bar-treatment change in one without the other."
+      instructions: "The project name is written yamaa, never YAMAA, including in headings. docs/stylesheets/extra.css and tools/benchmark_docs/dashboard.css share one palette \u2014 flag a color or bar-treatment change in one without the other."
     - path: "**"
       instructions: "The project name is yamaa (lowercase, even at the start of a sentence). Do not flag YAMAA-01 STUDYID data values in benchmark fixtures."
 

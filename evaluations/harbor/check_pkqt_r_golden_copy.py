@@ -13,8 +13,7 @@ import json
 import shutil
 from pathlib import Path
 
-import build
-import grade
+from evaluations.harbor import build, grade
 
 BENCHMARKS = (
     "adam-adeg-placebo-corrected-change",

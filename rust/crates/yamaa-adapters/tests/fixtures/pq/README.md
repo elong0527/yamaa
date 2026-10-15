@@ -1,7 +1,7 @@
 # Independent Parquet inputs
 
 These files were authored by PyArrow 25.0.1 using
-`rust/tools/build_parquet_source_inputs.py`. They are inputs, not regenerated
+`tools/staging/build_parquet_source_inputs.py`. They are inputs, not regenerated
 expected outputs. Rust tests specify the exact scalar values independently.
 
 The 24 ordinary containers vary six codecs, both page versions and dictionary

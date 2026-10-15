@@ -92,7 +92,7 @@ jobs:
       - name: Reject R literal golden writers
         if: always() && (github.ref == 'refs/heads/validation/issue-2297-harbor' || github.ref == 'refs/heads/validation/issue-2297-r-rejection')
         run: >-
-          uv run --project python --no-sync python evaluations/harbor/check_pkqt_r_golden_copy.py
+          uv run --project python --no-sync python -m evaluations.harbor.check_pkqt_r_golden_copy
           --out "${RUNNER_TEMP}/pkqt-r-golden-copy"
 
       - name: Upload R rejection controls

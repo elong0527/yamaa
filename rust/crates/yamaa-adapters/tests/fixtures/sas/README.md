@@ -1,6 +1,6 @@
 # Independent SAS source fixtures
 
-`build_xport.py` writes transport files directly from documented 80-byte
+`python -m tools.staging.build_xport_fixtures` writes transport files directly from documented 80-byte
 records and 140-byte NAMESTR layouts, with rational IBM numbers. It imports no
 candidate parser and no ReadStat code. Literal rows are `ID` 2, 1, 3 in that
 order; text ` caf\xe9`, blank, `.` in Windows-1252; `NUM` 1.5, `.Z`, -2; `DAY`

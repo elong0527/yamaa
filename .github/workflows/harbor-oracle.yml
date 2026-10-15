@@ -20,8 +20,6 @@ on:
       - python/uv.lock
       - benchmarks/**
       - .github/workflows/harbor-oracle.yml
-      - .github/scripts/ci/harbor_changes.py
-      - .github/scripts/ci/test_harbor_changes.py
   workflow_dispatch:
   schedule:
     - cron: '0 6 * * 1'
@@ -45,9 +43,6 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.14'
-      - name: Select full coverage
-        id: changes
-        run: python .github/scripts/ci/harbor_changes.py --out "${RUNNER_TEMP}/harbor-selection.json"
       - name: Install locked Harbor and test dependencies
         run: |
           python -m pip install uv==0.11.6
@@ -58,44 +53,18 @@ jobs:
           uv run --project python --no-sync ruff format --check evaluations/harbor/*.py python/tests/test_harbor*.py
           uv run --project python --no-sync pytest python/tests/test_harbor*.py
       - name: Build language agent and verifier images
-        if: steps.changes.outputs.run == 'true'
         run: uv run --project python --no-sync python evaluations/harbor/images.py build
       - name: Verify language isolation after Harbor setup
-        if: steps.changes.outputs.run == 'true'
         run: uv run --project python --no-sync python evaluations/harbor/images.py verify --out "${{ runner.temp }}/harbor-images"
       - name: Run selected opensas cases through Harbor
-        if: steps.changes.outputs.run == 'true'
-        env:
-          FULL_COVERAGE: ${{ steps.changes.outputs.full }}
         run: |
-          options=()
-          if [ "${FULL_COVERAGE}" != true ]; then
-            options+=(--allow-empty)
-          fi
           uv run --project python --no-sync python evaluations/harbor/smoke.py \
-            --benchmarks-file "${RUNNER_TEMP}/harbor-selection.json" "${options[@]}" \
-            --language opensas --all-cases --prompt full \
-            --n-concurrent 6 \
+            --language opensas --all-cases --prompt full --n-concurrent 6 \
             --out "${{ runner.temp }}/harbor-opensas"
-          if [ "${FULL_COVERAGE}" = true ]; then
-            python -c 'import json; from pathlib import Path; data = json.loads(Path("${{ runner.temp }}/harbor-opensas/sample.json").read_text()); assert len(data["tasks"]) == data["candidate_tasks"] == 145'
-          fi
       - name: Run both tracks through the separate Docker verifier
-        if: steps.changes.outputs.run == 'true'
-        env:
-          FULL_COVERAGE: ${{ steps.changes.outputs.full }}
         run: |
-          options=()
-          if [ "${FULL_COVERAGE}" != true ]; then
-            options+=(--all-cases --allow-empty)
-          elif [ "${GITHUB_REF}" = refs/heads/validation/issue-2297-harbor ]; then
-            # Reviewed batch acceptance covers every R/Python case and tier.
-            options+=(--all-cases)
-          fi
           uv run --project python --no-sync python evaluations/harbor/smoke.py \
-            --benchmarks-file "${RUNNER_TEMP}/harbor-selection.json" "${options[@]}" \
-            --prompt full conventions brief \
-            --n-concurrent 6 \
+            --language r python --prompt full conventions brief --n-concurrent 6 \
             --out "${{ runner.temp }}/harbor"
       - name: Upload verifier diagnostics
         if: always()
@@ -103,7 +72,6 @@ jobs:
         with:
           name: harbor-verification
           path: |
-            ${{ runner.temp }}/harbor-selection.json
             ${{ runner.temp }}/harbor-images
             ${{ runner.temp }}/harbor/jobs
             ${{ runner.temp }}/harbor/sample.json

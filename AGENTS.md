@@ -53,7 +53,7 @@ their prerequisites. Local targets and CI share the owned scripts under
   fields belong to the packaging tools.
 - **Site pages have one source.** Edit `README.md` for the site home
   page and `rules/README.md` for the rules index. MkDocs reads those
-  files through `.github/scripts/docs/canonical_pages.py`; do not create
+  files through `tools/docs/canonical_pages.py`; do not create
   `docs/index.md` or `docs/articles/rules.md`.
 
 ## Change recipes
@@ -64,8 +64,8 @@ for every area a change touches.
 - **Rule or schema change** (`rules/`, `yaml/`): follow the terminology
   and requirement-allocation rules in `rules/README.md` and the
   maintenance rules in `yaml/README.md`, then run
-  `python .github/scripts/commands/repository.py rules` and
-  `python .github/scripts/commands/repository.py rule-references`.
+  `python -m tools.commands.repository rules` and
+  `python -m tools.commands.repository rule-references`.
 - **Rust change** (`rust/`): from `rust/`, run
   `cargo test --locked -p <crate>` for each crate touched, then
   `cargo clippy --locked --all-targets -- -D warnings` and
@@ -79,7 +79,7 @@ for every area a change touches.
   `uv run --project ../../python --no-sync python run.py` -- then run
   the repository validator from the root, which also checks negative
   benchmarks:
-  `python .github/scripts/commands/repository.py validator`.
+  `python -m tools.commands.repository validator`.
 - **Docs change** (`docs/`, `README.md`, `rules/README.md`): run
   `make docs-test docs`.
 - **Anything else, or a cross-area change:** `make check-fast` gives
@@ -95,7 +95,7 @@ for every area a change touches.
 - Architecture, crate boundaries, and local verification: `docs/development.md`
 - Rust workspace entry point: `rust/README.md`
 - Host usage: `python/README.md` and `R/yamaa/README.md`
-- Site build and canonical pages: `.github/scripts/docs/README.md`
+- Site build and canonical pages: `tools/docs/README.md`
 - Benchmark factory: `automation/benchmark_factory/README.md`
 - Harbor evaluation: `evaluations/harbor/README.md`
 - Release, platforms, and migrations (not needed for normal changes): `docs/release.md`

@@ -157,7 +157,7 @@ host's syntax, and share the unchanged specification and expected outputs.
 Function implementations are ordinary installed packages. The benchmark program
 packages live in `rust/tests/project-programs/`; no vendored runtime artifact,
 contract fingerprint or activation cache is used. The original function
-studies are copied outside the checkout by `rust/tools/stage_project_inputs.py`.
+studies are copied outside the checkout by `tools/staging/stage_project_inputs.py`.
 It copies the sole existing `python/uv.lock` beside each Python environment;
 committed R locks contain versions without hashes. Each runner names its
 `python/environment.yaml` or `r/environment.yaml` explicitly. The subdirectories
@@ -174,7 +174,7 @@ Use `expected/resolved.yaml` with `spec.yaml`, or
 must be complete, canonical, minimal, and free of `parents`; the repository
 validator requires it and compares it with the resolved specification. Only
 the retained historical benchmarks named in `HISTORICAL_RESOLVED_FIXTURES`
-(`../.github/scripts/yaml-validation/repository_artifacts.py`) are exempt;
+(`../tools/validation/repository_artifacts.py`) are exempt;
 every new positive inherited benchmark needs one.
 
 A multi-level benchmark keeps each inheritance level beside the entry as
@@ -399,7 +399,7 @@ check merely to make the sample pass.
     # (validate_column_labels in validate_repository.py; the full prose gate
     # is check_documentation.py)
     uv run --project ../python --no-sync \
-        python ../.github/scripts/yaml-validation/validate_repository.py
+        python ../tools/validation/validate_repository.py
 
     # every specification follows the style contract
     # (../rules/specification/style.md); --fix applies the proved layout fixes

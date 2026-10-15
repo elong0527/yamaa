@@ -34,15 +34,11 @@ jobs:
       - name: Select and download the exact qualified packages
         run: |
           git fetch --no-tags origin main:refs/remotes/origin/main
-          python rust/tools/select_release_artifacts.py \
+          python -m tools.ci.select_release_artifacts \
             --repository "${GITHUB_REPOSITORY}" --tag "${RELEASE_TAG}" \
             --destination "${RUNNER_TEMP}/qualified-release"
       - name: Publish qualified assets without rebuilding
         run: |
-          git fetch --no-tags origin "refs/tags/${RELEASE_TAG}:refs/release-publication/checked-tag"
-          test "$(git rev-parse 'refs/release-publication/checked-tag^{commit}')" = "$(cat "${RUNNER_TEMP}/qualified-release/source-revision.txt")"
-          mapfile -t assets < "${RUNNER_TEMP}/qualified-release/asset-paths.txt"
-          gh release create "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
-            --verify-tag --title "yamaa ${RELEASE_TAG#yamaa-v}" \
-            --notes-file "${RUNNER_TEMP}/qualified-release/release-notes.md" \
-            "${assets[@]}"
+          python -m tools.ci.publish_release \
+            --repository "${GITHUB_REPOSITORY}" --tag "${RELEASE_TAG}" \
+            --destination "${RUNNER_TEMP}/qualified-release"

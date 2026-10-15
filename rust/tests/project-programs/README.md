@@ -9,7 +9,7 @@ From the repository root, install the Python package and its project programs:
 
 ```sh
 uv sync --project python --locked --group benchmark --extra test --no-editable
-python/.venv/bin/python rust/tools/stage_project_inputs.py /tmp/yamaa-project-studies
+python/.venv/bin/python -m tools.staging.stage_project_inputs /tmp/yamaa-project-studies
 cd /tmp/yamaa-project-studies/schema-functions
 /path/to/yamaa/python/.venv/bin/python run.py
 ```

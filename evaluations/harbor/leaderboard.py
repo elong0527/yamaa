@@ -26,11 +26,10 @@ import os
 import random
 import re
 import sys
+import tomllib
 from collections import Counter, defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
-
-import tomllib
 
 import yaml
 

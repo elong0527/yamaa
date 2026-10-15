@@ -1,7 +1,7 @@
 # Installed package checks
 
 The Python and R suites exercise installed `domain`, `check` and `define` APIs.
-Benchmark directories and `tools/public_conformance.py` define the current active
+Benchmark directories and `tools.conformance.public_conformance` define the current active
 set and explicit exclusions for both hosts. No passing observations are retained:
 each native lane gates directly on every active benchmark passing.
 `supplemental.json` records only underivable catalog data (contract fixtures and
@@ -10,8 +10,8 @@ plain fixtures are discovered by glob.
 
 ## Public reports
 
-`tools/qualify_public_cohort.py` compares complete domain reports with authored
-truth. `tools/qualify_producer_cohort.py` compares retained producer results before
+`tools.conformance.qualify_public_cohort` compares complete domain reports with authored
+truth. `tools.conformance.qualify_producer_cohort` compares retained producer results before
 and after repeated Save calls with `producer-cohort/` fixtures. Comparisons cover
 values, types, exact float bits, ordering, diagnostics, verification, callbacks,
 resource observations and saved artifacts. CSV bytes compare exactly; Parquet
@@ -19,7 +19,7 @@ compares logical fields, types, nulls, rows and values.
 
 ## Benchmark conformance
 
-`tools/public_conformance.py` discovers benchmark specifications and explicit
+`tools.conformance.public_conformance` discovers benchmark specifications and explicit
 runner arguments. Its shared plan accounts for every authored case, with two
 reviewed exclusions. Runnable entries describe host metadata;
 qualification requires each installed host's actual passing inventory.
@@ -29,20 +29,21 @@ independent expected files and rejects changed values, types, order, diagnostics
 or saved bytes. Per-case exclusions and artifact comparison scope appear in
 the resulting inventory.
 
-Run from the repository root against an installed package:
+After `make setup`, run from the repository root against the installed package:
 
 ```sh
-python -I rust/tools/public_conformance.py plan --fixtures benchmarks --output /tmp/public-plan
-python -I rust/tests/public_conformance.py --plan /tmp/public-plan --fixtures benchmarks \
+python -I -m tools.conformance.public_conformance plan --fixtures benchmarks --output /tmp/public-plan
+python -I python/tests/installed/public_conformance.py --plan /tmp/public-plan --fixtures benchmarks \
   --python-lock python/uv.lock --output /tmp/public-python --source-revision REVISION
 Rscript --vanilla rust/tests/public_conformance.R /tmp/public-plan benchmarks /tmp/public-r REVISION
-python -I rust/tools/public_conformance.py compare --fixtures benchmarks \
+python -I -m tools.conformance.public_conformance compare --fixtures benchmarks \
   --observed /tmp/public-python --output /tmp/public-python/inventory.json
-python -I rust/tools/public_conformance.py compare --fixtures benchmarks \
+python -I -m tools.conformance.public_conformance compare --fixtures benchmarks \
   --observed /tmp/public-r --output /tmp/public-r/inventory.json
 ```
 
-Use absolute script, fixture and lock paths when running outside the checkout.
+Use absolute runner, fixture and lock paths when running outside the checkout.
+The importable comparison tools are installed by `make setup`.
 The comparator needs the pinned YAML and Arrow dependencies in `python/uv.lock`;
 the R runner needs base R and the installed package.
 

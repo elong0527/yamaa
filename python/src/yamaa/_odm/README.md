@@ -41,6 +41,6 @@ the shared engine's responsibility.
 
 The retained assertion suites are `test_readers.py`, `test_parquet.py` and
 `test_schema.py` under `python/tests/odm`. The installed supplemental suite
-`rust/tests/installed_odm_helpers.py` exercises both public helpers with ODM
+`python/tests/installed/installed_odm_helpers.py` exercises both public helpers with ODM
 1.3/2.0, exact values, null/empty distinctions, row order, schema metadata
 and refusal to overwrite, while blocking reference imports.

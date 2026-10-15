@@ -19,7 +19,7 @@ combination nightly on main and on manual dispatch. A release is cut from a
 commit whose nightly native run passed.
 
 Python, R and Cargo versions move together;
-`rust/tools/check_shared_release_versions.py` checks that they agree. The
+`tools/packaging/check_shared_release_versions.py` checks that they agree. The
 previous Python release is the `yamaa-py-0.3.0` tag.
 
 ## Publication

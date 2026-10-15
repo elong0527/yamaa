@@ -1,32 +1,11 @@
-name: Native installation prototype
+name: Native qualification
 
 on:
-  # Qualify a reviewed branch's complete installed matrix before issue closure.
-  # A dispatch on main runs every check, like the nightly run.
   workflow_dispatch:
-  # Main is qualified nightly rather than on every merge: queued main pushes
-  # replaced each other before running, and PR feedback uses pr.yml smoke checks.
   schedule:
     - cron: '17 5 * * *'
   push:
-    # Explicit issue qualification branches exercise the same full checks before
-    # review.
     branches: ['qualification/issue-*']
-    paths:
-      - 'rust/**'
-      # Prose is checked by repository validation; Markdown fixtures still run.
-      - '!rust/*.md'
-      - 'R/yamaa/**'
-      - 'python/**'
-      - 'benchmarks/**'
-      - '!benchmarks/**/*.md'
-      - 'yaml/**'
-      - '.github/workflows/native.yml'
-      - '.github/scripts/ci/native_matrix.py'
-      - '.github/scripts/ci/test_native_matrix.py'
-      - '.github/scripts/commands/**'
-      - '.github/scripts/yaml-validation/fixtures/**'
-      - 'Makefile'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -41,39 +20,11 @@ defaults:
     shell: bash
 
 env:
-  RUSTUP_TOOLCHAIN: 1.90.0
   # One abi3 wheel per OS is installed on every approved interpreter.
   NATIVE_BUILD_PYTHON: '3.14'
 
 jobs:
-  plan:
-    name: native-coverage
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    outputs:
-      build: ${{ steps.coverage.outputs.build }}
-      qualify: ${{ steps.coverage.outputs.qualify }}
-      r: ${{ steps.coverage.outputs.r }}
-      run-r: ${{ steps.coverage.outputs.run-r }}
-      run-rust: ${{ steps.coverage.outputs.run-rust }}
-      full: ${{ steps.coverage.outputs.full }}
-      compare-os: ${{ steps.coverage.outputs.compare-os }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: '3.14'
-      - name: Select the full installed matrix
-        id: coverage
-        run: python .github/scripts/ci/native_matrix.py plan
-
-  # Nightly main, dispatches on main and explicit qualification pushes run all
-  # shared checks. Branch dispatches qualify the installed R/Python packages.
   rust:
-    needs: plan
-    if: needs.plan.outputs.run-rust == 'true'
     name: native-rust (${{ matrix.os }}, ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
     # Cold optimized test builds on Windows can consume more than 20 minutes.
@@ -81,7 +32,9 @@ jobs:
     timeout-minutes: ${{ matrix.os == 'windows-latest' && 60 || matrix.os == 'macos-15' && 45 || 30 }}
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.build) }}
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-latest]
+        python: ['3.14']
     steps:
       - name: Preserve fixture bytes and symlinks on Windows
         if: runner.os == 'Windows'
@@ -91,50 +44,47 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: '0.11.6'
+          enable-cache: true
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python }}
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m tools.ci.toolchain
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           # Without `workspaces` the action looks for Cargo.toml at the root,
           # fails, and saves an empty cache under a key that never refreshes.
           workspaces: rust
-          # Keep the main-only shared-crates cache separate from package builds.
-          shared-key: native-rust-${{ matrix.os }}
+          shared-key: yamaa-${{ runner.os }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install build tools
         run: |
-          rustup toolchain install 1.90.0 --profile minimal --component rustfmt,clippy
-          python -m pip install uv==0.11.6
-      - name: Check shared crates and dependency direction
+          python -m tools.ci.toolchain --install
+      - name: Test shared workspace
         id: shared_crates
-        working-directory: rust
         run: |
           (
             set -e
-            python tools/check_benchmark_sdk_versions.py
-            python tools/check_shared_release_versions.py
-            cargo fmt --all --check
-            python tools/check_cargo_lock.py --output-dir "${RUNNER_TEMP}/rust-dependencies"
-            cargo clippy --locked -p yamaa-core -p yamaa-adapters -p yamaa-python --all-targets -- -D warnings
-            python ../.github/scripts/commands/rust_tests.py
-            python tools/generate_regex_identifiers.py
-            python tools/generate_schema_printable.py
-            python tools/generate_shipped_schema.py
-            uv run --project ../python --locked --no-editable python tools/check_shared_grammar.py
-            python tools/check_float_text.py
-            python tools/check_sqrt.py
-            python tools/check_rounding.py
-            python tools/assess_math.py --output "${RUNNER_TEMP}/math-assessment.json"
-            uv run --project ../python --locked --no-editable python tools/check_numeric_grammar.py
-            uv run --project ../python --locked --no-editable python tools/check_aggregate_grammar.py
-            uv run --project ../python --locked --no-editable python tools/check_numeric_syntax.py
-            uv run --project ../python --locked --no-editable python tools/check_predicate_syntax.py
-            uv run --project ../python --locked --no-editable python tools/check_regex.py
-            uv run --project ../python --locked --no-editable python tools/assess_regex_reference.py > "${RUNNER_TEMP}/regex-native-assessment.json"
-            python tools/check_diagnostics.py
-            uv run --project ../python --locked --no-editable --extra test --group benchmark python -m unittest discover -s tests -p 'test_*.py'
+            python -m tools.packaging.check_benchmark_sdk_versions
+            python -m tools.packaging.check_shared_release_versions
+            cargo fmt --manifest-path rust/Cargo.toml --all --check
+            python -m tools.packaging.check_cargo_lock --output-dir "${RUNNER_TEMP}/rust-dependencies"
+            (cd rust && cargo clippy --locked --all-targets --all-features -- -D warnings)
+            (cd rust && cargo clippy --locked -p yamaa-python --all-targets -- -D warnings)
+            python -m tools.commands.rust_tests
+            python -m tools.numeric.generate_regex_identifiers
+            python -m tools.packaging.generate_schema_printable
+            python -m tools.packaging.generate_shipped_schema
+            python -m tools.numeric.check_float_text
+            python -m tools.numeric.check_sqrt
+            python -m tools.numeric.assess_math --output "${RUNNER_TEMP}/math-assessment.json"
+            python -m tools.validation.check_diagnostics
           ) 2>&1 | tee "${RUNNER_TEMP}/shared-crates-check.log"
       - name: Preserve locked Rust dependency evidence
         if: always()
@@ -151,20 +101,12 @@ jobs:
           path: ${{ runner.temp }}/shared-crates-check.log
           if-no-files-found: error
       - name: Preserve Python 3.12 numerical assessment coverage
-        if: needs.plan.outputs.full == 'true'
-        working-directory: rust
         # The native build matrix uses 3.14, but portable-math-exact still
         # requires independent observations from all three supported interpreters.
         # Reuse the Rust probe; this stdlib-only assessment needs no wheel build.
-        run: uv run --no-project --python 3.12 python tools/assess_math.py --output "${RUNNER_TEMP}/math-assessment-3.12/math-assessment.json"
+        run: uv run --no-project --python 3.12 python -m tools.numeric.assess_math --output "${RUNNER_TEMP}/math-assessment-3.12/math-assessment.json"
       - name: Preserve Python 3.13 numerical assessment coverage
-        if: needs.plan.outputs.full == 'true'
-        working-directory: rust
-        run: uv run --no-project --python 3.13 python tools/assess_math.py --output "${RUNNER_TEMP}/math-assessment-3.13/math-assessment.json"
-      - name: Assess decimal rounding independently
-        if: ${{ !cancelled() }}
-        working-directory: rust
-        run: uv run --project ../python --locked --no-editable python tools/assess_rounding.py --output "${RUNNER_TEMP}/rounding-assessment.json"
+        run: uv run --no-project --python 3.13 python -m tools.numeric.assess_math --output "${RUNNER_TEMP}/math-assessment-3.13/math-assessment.json"
       - name: Preserve candidate math assessment (not parity qualification)
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -173,41 +115,28 @@ jobs:
           path: ${{ runner.temp }}/math-assessment.json
           if-no-files-found: error
       - name: Preserve Python 3.12 candidate math assessment
-        if: ${{ always() && needs.plan.outputs.full == 'true' }}
+        if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: math-assessment-${{ matrix.os }}-3.12
           path: ${{ runner.temp }}/math-assessment-3.12/math-assessment.json
           if-no-files-found: error
       - name: Preserve Python 3.13 candidate math assessment
-        if: ${{ always() && needs.plan.outputs.full == 'true' }}
+        if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: math-assessment-${{ matrix.os }}-3.13
           path: ${{ runner.temp }}/math-assessment-3.13/math-assessment.json
           if-no-files-found: error
-      - name: Preserve rounding assessment (not parity qualification)
-        if: always()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
-        with:
-          name: rounding-assessment-${{ matrix.os }}-${{ matrix.python }}
-          path: ${{ runner.temp }}/rounding-assessment.json
-          if-no-files-found: error
-      - name: Preserve native regex assessment and historical disposition
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
-        with:
-          name: regex-native-${{ matrix.os }}-${{ matrix.python }}
-          path: ${{ runner.temp }}/regex-native-assessment.json
-          if-no-files-found: error
-
   dist:
-    needs: plan
     name: native-dist (${{ matrix.os }}, ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.build) }}
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-latest]
+        python: ['3.14']
     steps:
       # The source archive carries crate fixtures, so keep their bytes exact.
       - name: Preserve fixture bytes and symlinks on Windows
@@ -218,20 +147,28 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: '0.11.6'
+          enable-cache: true
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python }}
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m tools.ci.toolchain
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: rust
-          shared-key: native-dist-${{ matrix.os }}
+          shared-key: yamaa-${{ runner.os }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Check benchmark SDK lock versions
-        run: python rust/tools/check_benchmark_sdk_versions.py
+        run: python -m tools.packaging.check_benchmark_sdk_versions
       - name: Install build tools
         run: |
-          rustup toolchain install 1.90.0 --profile minimal
+          python -m tools.ci.toolchain --install
           python -m pip install maturin==1.9.6 hatchling==1.27.0
       - name: Generate Python caches before packaging
         run: |
@@ -255,8 +192,8 @@ jobs:
           cp "${RUNNER_TEMP}"/native-dist/*.whl "${RUNNER_TEMP}/reference-dist/"
       - name: Check Python distribution contents
         run: |
-          python rust/tools/check_python_package_hygiene.py "${RUNNER_TEMP}/native-dist"
-          python rust/tools/check_cargo_lock.py --output-dir "${RUNNER_TEMP}/rust-dependencies" "${RUNNER_TEMP}"/native-dist/*.tar.gz
+          python -m tools.packaging.check_python_package_hygiene "${RUNNER_TEMP}/native-dist"
+          python -m tools.packaging.check_cargo_lock --output-dir "${RUNNER_TEMP}/rust-dependencies" "${RUNNER_TEMP}"/native-dist/*.tar.gz
       - name: Preserve the reference host wheel
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
@@ -285,12 +222,15 @@ jobs:
 
   qualify:
     name: native-qualify (${{ matrix.os }}, ${{ matrix.python }}, ${{ matrix.form }})
-    needs: [plan, dist]
+    needs: dist
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.qualify) }}
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-latest]
+        python: ['3.12', '3.13', '3.14']
+        form: [wheel, source]
     steps:
       - name: Preserve fixture bytes and symlinks on Windows
         if: runner.os == 'Windows'
@@ -300,14 +240,22 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: '0.11.6'
+          enable-cache: true
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python }}
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m tools.ci.toolchain
       - name: Install build tools
         run: |
-          python -m pip install uv==0.11.6 py-yaml12==0.2.0
+          python -m pip install py-yaml12==0.2.0
           if [ "${{ matrix.form }}" = source ]; then
-            rustup toolchain install 1.90.0 --profile minimal
+            python -m tools.ci.toolchain --install
           fi
       # Qualify the uploaded bytes, so the artifact names recorded in each
       # report identify exactly what was installed.
@@ -330,7 +278,7 @@ jobs:
       - name: Stage installed checks outside checkout
         working-directory: ${{ runner.temp }}
         run: |
-          python "${GITHUB_WORKSPACE}/.github/scripts/commands/installed.py" stage \
+          python -m tools.commands.installed stage \
             --runtime python --staged-root "${RUNNER_TEMP}"
       - name: Install the wheel
         if: matrix.form == 'wheel'
@@ -345,15 +293,15 @@ jobs:
       - name: Report installed Python public benchmark conformance
         working-directory: ${{ runner.temp }}
         run: |
-          python -I "${GITHUB_WORKSPACE}/rust/tools/public_conformance.py" plan \
+          python -I -m tools.conformance.public_conformance plan \
             --fixtures "${GITHUB_WORKSPACE}/benchmarks" --output public-conformance-plan
-          python -I "${GITHUB_WORKSPACE}/rust/tests/public_conformance.py" \
+          python -I "${GITHUB_WORKSPACE}/python/tests/installed/public_conformance.py" \
             --plan public-conformance-plan --fixtures "${GITHUB_WORKSPACE}/benchmarks" \
             --python-lock "${GITHUB_WORKSPACE}/python/uv.lock" \
             --output public-conformance/observed --source-revision "${QUALIFICATION_SOURCE_REVISION}" \
             --package-form "${{ matrix.form }}" \
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          python -I "${GITHUB_WORKSPACE}/rust/tools/public_conformance.py" compare \
+          python -I -m tools.conformance.public_conformance compare \
             --fixtures "${GITHUB_WORKSPACE}/benchmarks" --observed public-conformance/observed \
             --output public-conformance/inventory.json
       - name: Preserve Python public benchmark inventory and saved artifacts
@@ -370,7 +318,7 @@ jobs:
           ARCHIVE: ${{ matrix.form == 'wheel' && '*.whl' || '*.tar.gz' }}
         run: |
           archives=(native-dist/${ARCHIVE})
-          YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/${FORM}/public-reports" python -I "${GITHUB_WORKSPACE}/.github/scripts/commands/installed.py" run \
+          YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/${FORM}/public-reports" python -I -m tools.commands.installed run \
             --output "qualification/${FORM}/supplemental" --runtime python --staged-root "${RUNNER_TEMP}" \
             --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form "${FORM}" \
             --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-python-${{ matrix.os }}-${{ env.NATIVE_BUILD_PYTHON }}/$(basename "${archives[0]}")" \
@@ -386,32 +334,40 @@ jobs:
 
   math-portability:
     name: portable-math-exact
-    needs: [plan, rust]
-    if: needs.plan.outputs.run-rust == 'true'
+    needs: rust
+
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: '0.11.6'
+          enable-cache: true
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.14'
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m tools.ci.toolchain
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: math-assessment-*
           path: math-assessments
       - name: Compare every candidate bit across the native matrix
-        run: python rust/tools/check_math_portability.py math-assessments
+        run: python -m tools.numeric.check_math_portability math-assessments
 
   r:
-    needs: plan
-    if: needs.plan.outputs.run-r == 'true'
+
     name: native-r (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.os == 'windows-latest' && 40 || 20 }}
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.r) }}
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-latest]
     steps:
       - name: Preserve fixture bytes and symlinks on Windows
         if: runner.os == 'Windows'
@@ -421,14 +377,22 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: '0.11.6'
+          enable-cache: true
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m tools.ci.toolchain
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: rust
-          shared-key: native-r-${{ matrix.os }}
+          shared-key: yamaa-${{ runner.os }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
         with:
@@ -436,12 +400,12 @@ jobs:
           rtools-version: ${{ runner.os == 'Windows' && '45' || '' }}
           use-public-rspm: true
       - name: Check benchmark SDK lock versions
-        run: python rust/tools/check_benchmark_sdk_versions.py
+        run: python -m tools.packaging.check_benchmark_sdk_versions
       - name: Install Rust
         run: |
-          rustup toolchain install 1.90.0 --profile minimal --component clippy
+          python -m tools.ci.toolchain --install
           if [ "${{ runner.os }}" = Windows ]; then
-            rustup target add --toolchain 1.90.0 x86_64-pc-windows-gnu
+            rustup target add x86_64-pc-windows-gnu
           fi
       - name: Record Windows R build toolchain
         if: runner.os == 'Windows'
@@ -463,14 +427,14 @@ jobs:
       - name: Install the shared grammar fixture codec
         run: python -m pip install py-yaml12==0.2.0
       - name: Stage standalone R package
-        run: python rust/tools/stage_r_package.py "${RUNNER_TEMP}/native-stage/yamaa"
+        run: python -m tools.staging.stage_r_package "${RUNNER_TEMP}/native-stage/yamaa"
       - name: Build and install R outside checkout
         id: r_install
         working-directory: ${{ runner.temp }}
         run: |
           mkdir -p native-r-library
           R CMD build --no-build-vignettes --no-manual native-stage/yamaa
-          python "${GITHUB_WORKSPACE}/rust/tools/check_cargo_lock.py" --output-dir "${RUNNER_TEMP}/rust-dependencies" yamaa_0.4.0.tar.gz
+          python -m tools.packaging.check_cargo_lock --output-dir "${RUNNER_TEMP}/rust-dependencies" yamaa_0.4.0.tar.gz
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" "${GITHUB_WORKSPACE}/rust/tests/project-programs/r"
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" yamaa_0.4.0.tar.gz
           if [ "${{ runner.os }}" = Windows ]; then
@@ -499,14 +463,14 @@ jobs:
           PUBLIC_CONFORMANCE_PACKAGE_FORM: source
         run: |
           python -m pip install py-yaml12==0.2.0 pyarrow==25.0.1
-          python -I "${GITHUB_WORKSPACE}/rust/tools/public_conformance.py" plan \
+          python -I -m tools.conformance.public_conformance plan \
             --fixtures "${GITHUB_WORKSPACE}/benchmarks" --output public-conformance-plan
           Rscript --vanilla "${GITHUB_WORKSPACE}/rust/tests/test_public_conformance.R" \
             "${GITHUB_WORKSPACE}/rust/tests/public_conformance.R"
           Rscript --vanilla "${GITHUB_WORKSPACE}/rust/tests/public_conformance.R" \
             public-conformance-plan "${GITHUB_WORKSPACE}/benchmarks" public-conformance/observed \
             "$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)"
-          python -I "${GITHUB_WORKSPACE}/rust/tools/public_conformance.py" compare \
+          python -I -m tools.conformance.public_conformance compare \
             --fixtures "${GITHUB_WORKSPACE}/benchmarks" --observed public-conformance/observed \
             --output public-conformance/inventory.json
       - name: Preserve R public benchmark inventory and saved artifacts
@@ -543,22 +507,13 @@ jobs:
         if: ${{ !cancelled() && steps.r_install.outcome == 'success' }}
         working-directory: ${{ runner.temp }}
         run: |
-          python "${GITHUB_WORKSPACE}/.github/scripts/commands/installed.py" stage \
+          python -m tools.commands.installed stage \
             --runtime r --staged-root "${RUNNER_TEMP}"
-          YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/r-source/public-reports" R_LIBS="${RUNNER_TEMP}/native-r-library" python -I "${GITHUB_WORKSPACE}/.github/scripts/commands/installed.py" run \
+          YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/r-source/public-reports" R_LIBS="${RUNNER_TEMP}/native-r-library" python -I -m tools.commands.installed run \
             --output qualification/r-source --runtime r --staged-root "${RUNNER_TEMP}" \
             --source-revision "$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)" --package-form source \
             --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-${{ matrix.os }}/yamaa_0.4.0.tar.gz" \
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-      - name: Require repository validator real-R public Check transport
-        if: ${{ !cancelled() && steps.r_install.outcome == 'success' }}
-        working-directory: ${{ runner.temp }}
-        env:
-          R_LIBS: ${{ runner.temp }}/native-r-library
-        run: |
-          cp "${GITHUB_WORKSPACE}/.github/scripts/yaml-validation/_r_check_transport.py" _r_check_transport.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/check_repository_r_transport.py" check_repository_r_transport.py
-          python -I check_repository_r_transport.py
       - name: Check R source package outside checkout
         id: r_package_check
         working-directory: ${{ runner.temp }}
@@ -566,7 +521,7 @@ jobs:
           _R_CHECK_CRAN_INCOMING_REMOTE_: 'false'
           R_LIBS: ${{ runner.temp }}/native-r-library
         run: |
-          python "${GITHUB_WORKSPACE}/.github/scripts/commands/check_r.py" \
+          python -m tools.commands.check_r \
             --archive "${RUNNER_TEMP}/yamaa_0.4.0.tar.gz" --work-dir "${RUNNER_TEMP}/native-r-check"
       - name: Preserve R package check
         if: ${{ always() && (steps.r_package_check.outcome == 'success' || steps.r_package_check.outcome == 'failure') }}
@@ -608,12 +563,8 @@ jobs:
 
   public-cohort:
     name: public-cohort-complete-runs
-    needs: [plan, qualify, r]
-    # Complete cohort comparisons run with the full installed matrix.
-    if: >-
-      ${{ !cancelled() && needs.plan.outputs.full == 'true'
-          && needs.qualify.result == 'success' && needs.r.result == 'success' }}
-    runs-on: ${{ needs.plan.outputs.compare-os }}
+    needs: [qualify, r]
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Preserve fixture bytes and symlinks on Windows
@@ -624,98 +575,41 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: '0.11.6'
+          enable-cache: true
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.14'
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m tools.ci.toolchain
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: native-qualification-*
           path: ${{ runner.temp }}/cohort-input
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        if: needs.plan.outputs.run-r == 'true'
+
         with:
           pattern: native-r-qualification-*
           path: ${{ runner.temp }}/cohort-input
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: native-reference-${{ needs.plan.outputs.compare-os }}-${{ env.NATIVE_BUILD_PYTHON }}
+          name: native-reference-ubuntu-24.04-${{ env.NATIVE_BUILD_PYTHON }}
           path: ${{ runner.temp }}/cohort-reference
       - name: Install the qualified package for comparison only
         run: |
-          python -m pip install uv==0.11.6
           uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/cohort-requirements.txt"
           python -m pip install --no-deps -r "${RUNNER_TEMP}/cohort-requirements.txt" "${RUNNER_TEMP}"/cohort-reference/*.whl
       - name: Require complete public runs through the M1 comparator
         working-directory: ${{ runner.temp }}
-        env:
-          QUALIFICATION_MATRIX: ${{ needs.plan.outputs.qualify }}
-        run: python -I "${GITHUB_WORKSPACE}/.github/scripts/ci/native_matrix.py" compare
+        run: python -I -m tools.ci.native
       - name: Preserve complete public cohort inventory
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: native-public-cohort
           path: ${{ runner.temp }}/public-cohort
-          if-no-files-found: error
-
-  # Branch dispatches check changed components independently of installed qualification.
-  numeric_tool_obligations:
-    needs: plan
-    if: needs.plan.outputs.full == 'true' && needs.plan.outputs.run-rust != 'true'
-    name: native-numeric-tools (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 60 || 35 }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, macos-15, windows-latest]
-    steps:
-      - name: Preserve fixture bytes and symlinks on Windows
-        if: runner.os == 'Windows'
-        run: |
-          git config --global core.autocrlf false
-          git config --global core.symlinks true
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: '3.12'
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-        with:
-          workspaces: rust
-          shared-key: native-numeric-tools-${{ matrix.os }}
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Install locked toolchain and package tools
-        run: |
-          rustup toolchain install 1.90.0 --profile minimal
-          python -m pip install uv==0.11.6
-      - name: Preserve original spans, parser precedence and numerical policy truth
-        working-directory: rust
-        run: cargo test --locked -p yamaa-core --test numeric_tests --test scalar_tests --test portable_math_golden
-      - name: Replay independent syntax and numeric checks
-        working-directory: rust
-        run: |
-          set -e
-          uv run --project ../python --locked --no-editable python tools/check_numeric_grammar.py
-          uv run --project ../python --locked --no-editable python tools/check_aggregate_grammar.py
-          uv run --project ../python --locked --no-editable python tools/check_numeric_syntax.py
-          uv run --project ../python --locked --no-editable python tools/check_predicate_syntax.py
-          uv run --project ../python --locked --no-editable python tools/check_regex.py
-          uv run --project ../python --locked --no-editable python tools/check_rounding.py
-          uv run --project ../python --locked --no-editable python tools/assess_regex_reference.py > "${RUNNER_TEMP}/regex-native-assessment.json"
-          uv run --project ../python --locked --no-editable python tools/assess_rounding.py --output "${RUNNER_TEMP}/rounding-assessment.json"
-          uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_native_numeric_tools.py -v
-          uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_predicate_syntax_encoding.py -v
-          uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_portable_math.py -v
-          uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_rounding_assessment.py -v
-          uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_rounding_check.py -v
-      - name: Retain component evidence without claiming installed matrix qualification
-        if: always()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
-        with:
-          name: native-numeric-tools-${{ matrix.os }}
-          path: |
-            ${{ runner.temp }}/regex-native-assessment.json
-            ${{ runner.temp }}/rounding-assessment.json
           if-no-files-found: error

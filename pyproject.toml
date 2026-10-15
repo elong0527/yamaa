@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yamaa-tools"
+version = "0.0.0"
+description = "Repository development tools; not a released yamaa runtime package"
+requires-python = ">=3.12"
+
+[tool.setuptools.packages.find]
+include = ["tools*", "python", "evaluations*"]
+exclude = ["evaluations.harbor.solutions*", "evaluations.harbor.prompts*"]
+
+[tool.ruff]
+target-version = "py312"
+extend-exclude = ["evaluations/harbor/solutions"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

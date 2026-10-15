@@ -21,7 +21,7 @@ def test_arrow_input_tests_skip_when_native_extension_is_absent() -> None:
     """
     script = textwrap.dedent(
         """
-        import importlib.util
+        import importlib
         import sys
 
 
@@ -37,12 +37,8 @@ def test_arrow_input_tests_skip_when_native_extension_is_absent() -> None:
         sys.meta_path.insert(0, _NativeBlocker())
         sys.modules.pop("yamaa._native", None)
 
-        spec = importlib.util.spec_from_file_location(
-            "test_arrow_input_under_test", {path!r}
-        )
-        module = importlib.util.module_from_spec(spec)
         try:
-            spec.loader.exec_module(module)
+            importlib.import_module("python.tests.native.test_arrow_input")
         except BaseException as exc:  # pytest's Skipped is a BaseException
             if type(exc).__name__ == "Skipped":
                 print(f"SKIPPED: {{exc}}")
