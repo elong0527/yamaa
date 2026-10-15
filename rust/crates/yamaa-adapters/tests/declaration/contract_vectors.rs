@@ -510,8 +510,37 @@ fn regex_observation(pattern: &str, subject: &str) -> Json {
 #[test]
 fn unchanged_regex_documents_and_authored_capture_controls_run_directly() {
     let document = yaml("yaml/conformance/regex.yaml");
+    assert_eq!(document["contract"], "regex");
     assert_eq!(document["contract_version"], "2.0.0");
+    assert!(document.get("engine").is_none());
+    let mut ids = BTreeSet::new();
+    let mut covered = BTreeSet::new();
     for case in document["cases"].as_array().unwrap() {
+        let id = case["id"].as_str().unwrap();
+        assert!(
+            !id.is_empty() && ids.insert(id),
+            "duplicate/empty regex case {id}"
+        );
+        let covers = case["covers"].as_array().unwrap();
+        assert!(!covers.is_empty(), "{id}");
+        for tag in covers {
+            let tag = tag.as_str().unwrap();
+            assert!(
+                matches!(
+                    tag,
+                    "anchors"
+                        | "capture-groups"
+                        | "dialect"
+                        | "empty-match"
+                        | "escaping"
+                        | "search"
+                        | "unicode"
+                        | "unsupported"
+                ),
+                "{id}: unknown coverage tag {tag}"
+            );
+            covered.insert(tag);
+        }
         let actual = regex_observation(
             case["pattern"].as_str().unwrap(),
             case["subject"].as_str().unwrap_or(""),
@@ -543,6 +572,21 @@ fn unchanged_regex_documents_and_authored_capture_controls_run_directly() {
                 case["id"]
             );
         }
+    }
+    // Retain the original fixture-integrity coverage requirement alongside
+    // actual parser/matcher assertions, without a Python replay executable.
+    for required in [
+        "anchors",
+        "capture-groups",
+        "empty-match",
+        "escaping",
+        "unicode",
+        "unsupported",
+    ] {
+        assert!(
+            covered.contains(required),
+            "no regex case covers {required}"
+        );
     }
     for line in include_str!("../fixtures/regex_contract.tsv")
         .lines()
