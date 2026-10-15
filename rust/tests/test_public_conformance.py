@@ -229,26 +229,18 @@ class PublicConformance(unittest.TestCase):
             {"define.xml", "dm.json", "spec_resolved.yaml"},
         )
 
-    def test_missing_record_errors_and_deliberately_broken_output_fails_ratchet(self):
-        ratchet = self.root / "ratchet.json"
-        judge.write_json(ratchet, {"python": ["simple"], "r": []})
+    def test_missing_record_errors_and_deliberately_broken_output_fails_gate(self):
         inventory = self.root / "inventory.json"
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(judge.compare(self.fixtures, self.observed, inventory), 0)
+            self.assertEqual(judge.compare(self.fixtures, self.observed, inventory), 1)
             self.assertEqual(judge.read_json(inventory)["summary"]["error"], 1)
             judge.write_json(
                 self.observed / "records/simple.json", {"builds": [self.build]}
             )
-            self.assertEqual(
-                judge.compare(self.fixtures, self.observed, inventory, ratchet), 0
-            )
+            self.assertEqual(judge.compare(self.fixtures, self.observed, inventory), 0)
             (self.observed / "work/simple/result.csv").write_text("broken\n")
-            self.assertEqual(
-                judge.compare(self.fixtures, self.observed, inventory, ratchet), 1
-            )
-        self.assertEqual(
-            judge.read_json(inventory)["ratchet"]["regressions"], ["simple"]
-        )
+            self.assertEqual(judge.compare(self.fixtures, self.observed, inventory), 1)
+        self.assertEqual(judge.read_json(inventory)["gate"]["failing"], ["simple"])
 
     def test_incomplete_multi_entry_run_errors(self):
         self.example["entries"]["python"].append(
@@ -257,38 +249,21 @@ class PublicConformance(unittest.TestCase):
         self.assertEqual(self.verdict()["verdict"], "error")
 
     def test_new_directory_is_required_on_both_hosts_without_a_registry_edit(self):
-        ratchet = self.root / "ratchet.json"
-        judge.write_json(ratchet, {"python": [], "r": []})
         inventory = self.root / "inventory.json"
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(
-                judge.compare(self.fixtures, self.observed, inventory, ratchet), 1
-            )
-        self.assertEqual(
-            judge.read_json(inventory)["ratchet"]["regressions"], ["simple"]
-        )
+            self.assertEqual(judge.compare(self.fixtures, self.observed, inventory), 1)
+        self.assertEqual(judge.read_json(inventory)["gate"]["failing"], ["simple"])
         metadata = judge.read_json(self.observed / "run.json")
         metadata["runtime"] = "r"
         judge.write_json(self.observed / "run.json", metadata)
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(
-                judge.compare(self.fixtures, self.observed, inventory, ratchet), 1
-            )
-        self.assertEqual(
-            judge.read_json(inventory)["ratchet"]["regressions"], ["simple"]
-        )
+            self.assertEqual(judge.compare(self.fixtures, self.observed, inventory), 1)
+        self.assertEqual(judge.read_json(inventory)["gate"]["failing"], ["simple"])
 
-    def test_unexpected_runner_record_and_duplicate_observations_are_rejected(self):
+    def test_unexpected_runner_record_is_rejected(self):
         judge.write_json(self.observed / "records/unexpected.json", {})
         with self.assertRaisesRegex(ValueError, "unexpected installed runner"):
             judge.compare(self.fixtures, self.observed, self.root / "inventory.json")
-        (self.observed / "records/unexpected.json").unlink()
-        ratchet = self.root / "ratchet.json"
-        judge.write_json(ratchet, {"python": ["simple", "simple"]})
-        with self.assertRaisesRegex(ValueError, "duplicate observed"):
-            judge.compare(
-                self.fixtures, self.observed, self.root / "inventory.json", ratchet
-            )
 
     def test_log_types_are_independent_and_saved_logs_are_compared(self):
         with (self.case / "spec.yaml").open("a") as stream:
@@ -709,9 +684,18 @@ class PublicConformance(unittest.TestCase):
         self.assertEqual(verdict["metamorphic"]["differences"][0]["check"], "key_order")
 
     def test_corpus_inventory_has_all_entries_and_approved_exclusions(self):
-        corpus = judge.plan(ROOT.parent / "benchmarks")
+        fixtures = ROOT.parent / "benchmarks"
+        corpus = judge.plan(fixtures)
         names = {e["name"]: e for e in corpus["examples"]}
-        self.assertEqual(len(names), 329)
+        # Every authored directory is planned; no count to edit per addition.
+        self.assertEqual(
+            set(names),
+            {
+                p.name
+                for p in fixtures.iterdir()
+                if p.is_dir() and not p.name.startswith(".")
+            },
+        )
         self.assertEqual(len(names["sdtm-dm-race-ethnicity"]["entries"]["python"]), 2)
         self.assertEqual(
             names["schema-inheritance"]["entries"]["r"][0]["specification"],
@@ -725,19 +709,31 @@ class PublicConformance(unittest.TestCase):
             {n for n, e in names.items() if e["excluded"]}, set(judge.EXCLUDED)
         )
 
-    def test_corpus_metamorphic_plan_and_expectations_match_the_reviewed_counts(self):
+    def test_corpus_metamorphic_plan_and_expectations_follow_each_entry(self):
         corpus = judge.plan(ROOT.parent / "benchmarks")
-        kinds = {"empty_child": 0, "key_order_control": 0, "key_order_permuted": 0}
+        pairs = 0
         for example in corpus["examples"]:
-            self.assertEqual(example["variants"]["python"], example["variants"]["r"])
-            for variant in example["variants"]["python"]:
-                kinds[variant["kind"]] += 1
-        # One empty child per entry; the eight PK/QT cases add five
-        # key-order-eligible positive entries to the current main population.
-        self.assertEqual(
-            kinds,
-            {"empty_child": 329, "key_order_control": 105, "key_order_permuted": 105},
-        )
+            variants = example["variants"]["python"]
+            self.assertEqual(variants, example["variants"]["r"])
+            entries = 0 if example["excluded"] else len(example["entries"]["python"])
+            kinds = {}
+            for variant in variants:
+                kinds.setdefault(variant["entry"], []).append(variant["kind"])
+            self.assertEqual(set(kinds), set(range(entries)), example["name"])
+            # One empty child per entry; a key-order-eligible entry adds one
+            # control/permuted pair. Derived per entry, so adding a benchmark
+            # needs no count edit here.
+            for entry_kinds in kinds.values():
+                self.assertIn(
+                    sorted(entry_kinds),
+                    (
+                        ["empty_child"],
+                        ["empty_child", "key_order_control", "key_order_permuted"],
+                    ),
+                    example["name"],
+                )
+                pairs += "key_order_control" in entry_kinds
+        self.assertTrue(pairs, "no benchmark entry exercises the key-order check")
         expectations = judge.load_metamorphic_expectations(ROOT.parent / "benchmarks")
         names = {e["name"] for e in corpus["examples"]}
         # #2190 fixes the 40 missing-handler empty children. The reviewed

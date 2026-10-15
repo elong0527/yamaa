@@ -393,6 +393,20 @@ def validate_examples_index(root: Path):
         return errors
 
     index_content = index_file.read_text(encoding="utf-8")
+    if not re.search(r"^\| \[`", index_content, re.MULTILINE):
+        # The committed README carries no index table: the index is derived
+        # at docs build time, so validate the rendered index instead.
+        import sys
+
+        docs = Path(__file__).resolve().parents[1] / "benchmark-docs"
+        if str(docs) not in sys.path:
+            sys.path.insert(0, str(docs))
+        try:
+            from build_index import render_index
+
+            index_content = render_index(examples_dir, index_content)
+        except (OSError, ValueError) as exc:
+            return [f"ERROR: cannot derive benchmark index: {exc}"]
     # Find all table rows matching: | [`dir`](dir/) | desc | ... |
     # Trailing columns (lifecycle, conformance, ...) are allowed and ignored.
     # Column classes exclude newlines so a match can never span rows.

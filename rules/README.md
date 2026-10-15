@@ -4,7 +4,7 @@ Every contract indexed below is normative. Files have one semantic owner;
 requirements use permanent global IDs independent of that owner's filename.
 The schema owns shape, defaults, and structural constraints. Contracts state
 shared and operation-local behavior and failure conditions. The
-[generated benchmark index](../benchmarks/README.md#benchmarks) accounts for
+[directory-derived benchmark index](../benchmarks/README.md#benchmarks) accounts for
 authored examples, public host entries, and explicit conformance exclusions.
 
 Read the relevant block, then follow its requirement links. The blocks are
@@ -132,17 +132,18 @@ meanings.
 Every contract has Requirements; contracts with distinct failure rules also
 have Error conditions. Topic subsections group related rules.
 
-The generated [requirement index](reference/requirements.md) links each active ID
-to the current owning contract, derived from its definition.
+The [requirement index](https://elong0527.github.io/yamaa/reference/requirements/) links each active ID
+to the current owning contract, derived from its definition. The docs build
+renders it from the contracts; it is not committed.
 
 The validation-condition registry (`yaml/conditions.yaml`) maps every condition an
 implementation may raise to the phases that may raise it. It no longer carries
 the old diagnostic family tags (`R001`, etc.). Author-facing citations use
 current REQ IDs; historical citations remain in Git history.
 
-[Schema fields](reference/schema-fields.md) is generated from the current
-schema: it lists shapes and defaults and links to semantic owners. Edit the
-schema or owning contract and regenerate the table; do not edit the table.
+[Schema fields](https://elong0527.github.io/yamaa/reference/schema-fields/) is rendered the same way
+from the current schema: it lists shapes and defaults and links to semantic
+owners. Edit the schema or owning contract, never the table.
 The [glossary](reference/glossary.md) pins one meaning per shared clinical
 term used across the contracts. It is informative, not normative: it states
 what the terms mean and adds no requirements.

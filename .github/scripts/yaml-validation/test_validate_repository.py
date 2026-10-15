@@ -2167,17 +2167,9 @@ class TestDerivedBenchmarkInventory(unittest.TestCase):
             ],
         }, names
 
-    def observations(self):
-        return {
-            'protocol': 'public-conformance-ratchet/1', 'benchmarks': 3,
-            'python': ['active'], 'r': ['active'],
-            'exclusions': [{'example': n, 'reason': r}
-                           for n, r in EXECUTION_CHECK.EXCLUDED.items()],
-        }
-
     def test_derived_cases_include_both_hosts_and_explicit_exclusions(self):
         payload, names = self.payload()
-        self.assertEqual(EXECUTION_CHECK.check_inventory(payload, names, self.observations()), [])
+        self.assertEqual(EXECUTION_CHECK.check_inventory(payload, names), [])
 
     def test_missing_duplicate_and_unexpected_cases_are_rejected(self):
         payload, names = self.payload()
@@ -2196,23 +2188,8 @@ class TestDerivedBenchmarkInventory(unittest.TestCase):
         self.assertIn('missing public host entry: active', errors)
         self.assertIn('exclusion reason differs: ' + names[1], errors)
 
-    def test_runnable_labels_cannot_replace_observed_passing_cases(self):
+    def test_stale_exclusions_are_rejected(self):
         payload, names = self.payload()
-        observed = self.observations()
-        observed['r'] = ['unexpected', 'unexpected']
-        errors = EXECUTION_CHECK.check_inventory(payload, names, observed)
-        self.assertIn('duplicate observed r case', errors)
-        self.assertIn('missing observed r case: active', errors)
-        self.assertIn('unexpected observed r case: unexpected', errors)
-
-    def test_stale_exclusions_and_observed_denominator_are_rejected(self):
-        payload, names = self.payload()
-        observed = self.observations()
-        observed['benchmarks'] = 2
-        observed['exclusions'] = []
-        errors = EXECUTION_CHECK.check_inventory(payload, names, observed)
-        self.assertIn('observed authored denominator differs', errors)
-        self.assertIn('observed exclusions differ', errors)
         self.assertIn('exclusion has no authored case: ' + names[1],
                       EXECUTION_CHECK.check_inventory(payload, names[:1]))
 
@@ -6504,21 +6481,26 @@ class TestValidatorCLI(unittest.TestCase):
         index.write_text(row.replace('description', 'wrong description'))
         self.assertTrue(OWNER_EDITORIAL.validate_examples_index(self.root_dir))
 
-    def test_example_index_missing(self):
+    def test_example_index_is_derived_not_committed(self):
+        # The committed README carries no index table; the index is derived
+        # from the case directories, so a case absent from the committed
+        # README is still indexed.
         ex_dir = self.root_dir / 'benchmarks'
         ex_dir.mkdir(parents=True, exist_ok=True)
-        (ex_dir / 'README.md').write_text('# Index\n')
+        (ex_dir / 'README.md').write_text('# Index\n\n## Benchmarks\n')
         good_ex = ex_dir / 'good'
         good_ex.mkdir()
-        (good_ex / 'README.md').write_text('# Good: description')
+        readme = good_ex / 'README.md'
+        readme.write_text(
+            '# Good description\n'
+            '[![Lifecycle: draft](https://example.com/badge)](https://example.com/lifecycle)\n')
         (good_ex / 'spec.yaml').write_text('{}')
-        (good_ex / 'input').mkdir()
-        (good_ex / 'expected').mkdir()
-        (good_ex / 'expected' / 'out.csv').write_text('h1')
-
-        result = subprocess.run([sys.executable, str(self.doc_tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('not in index', result.stdout)
+        self.assertEqual(OWNER_EDITORIAL.validate_examples_index(self.root_dir), [])
+        # A case the derived index cannot render is reported, not dropped.
+        readme.write_text('# Good description\n')
+        self.assertEqual(
+            OWNER_EDITORIAL.validate_examples_index(self.root_dir),
+            ['ERROR: cannot derive benchmark index: missing title/lifecycle: good'])
 
     def test_csv_header_uses_output_columns(self):
         ex_dir = self.root_dir / 'benchmarks' / 'csv-output'

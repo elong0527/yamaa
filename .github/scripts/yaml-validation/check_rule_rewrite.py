@@ -39,6 +39,71 @@ DEFINING_NAME = re.compile(
 )
 
 
+FENCE_RUN = re.compile(r"```+|~~~+")
+INLINE_CODE = re.compile(r"`[^`\n]*`")
+FRONTMATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
+
+
+def strip_code(text):
+    """Yield lintable prose lines: no frontmatter, fenced blocks, or code.
+
+    A fence marker may open mid-line (e.g. ``**REQ-0160.** ```text``);
+    text before the marker still counts as prose.
+    """
+    body = FRONTMATTER.sub("", text)
+    in_fence = False
+    for line in body.splitlines():
+        markers = FENCE_RUN.findall(line)
+        if markers:
+            if not in_fence:
+                head = line[: FENCE_RUN.search(line).start()]
+                if head.strip():
+                    yield INLINE_CODE.sub("", head)
+            if len(markers) % 2 == 1:
+                in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        yield INLINE_CODE.sub("", line)
+
+
+def requirement_registry_errors(root):
+    """Duplicate/dangling-ID scan over every rule page, code stripped.
+
+    Every requirement ID is defined exactly once as a bold dotted marker,
+    and every prose citation in ``rules/`` resolves to a definition. The
+    contract scan in :func:`check` covers the normative contracts; this scan
+    additionally covers the index, generated references and any other rule
+    page, with examples and quoted syntax stripped before scanning.
+    """
+    errors = []
+    rules = root / "rules"
+    if not rules.is_dir():
+        return errors
+    defined = {}
+    cited = {}
+    for path in sorted(rules.rglob("*.md")):
+        label = path.relative_to(rules).as_posix()
+        body = "\n".join(strip_code(path.read_text(encoding="utf-8")))
+        for identifier in DEFINITION.findall(body):
+            defined.setdefault(identifier, []).append(label)
+        for identifier in REFERENCE.findall(body):
+            cited.setdefault(identifier, set()).add(label)
+    for identifier in sorted(defined):
+        locations = defined[identifier]
+        if len(locations) > 1:
+            errors.append(
+                f"duplicate requirement definition: {identifier} "
+                f"({len(locations)}x in {', '.join(sorted(set(locations)))})"
+            )
+    for identifier in sorted(set(cited) - set(defined)):
+        files = sorted(cited[identifier])
+        errors.append(
+            f"unresolved requirement citation: {identifier} ({', '.join(files)})"
+        )
+    return errors
+
+
 class SchemaSourceError(ValueError):
     """Invalid authored schema source or navigation metadata."""
 
@@ -231,6 +296,7 @@ def check(root):
             if identifier not in found:
                 errors.append(f"schema description has no canonical owner: {source}")
     errors.extend(verification_registry_errors(root))
+    errors.extend(requirement_registry_errors(root))
     return errors, found
 
 

@@ -177,23 +177,63 @@ def require_native_consumer(source, name):
                 )
 
 
+SUITE_LEVELS = ("component", "compile", "shared_run")
+DOCUMENTATION_SUFFIXES = (".md", ".txt")
+
+
+def _derived_suite_id(runtime, path):
+    """Derive a suite identity from its file name; overrides stay exceptional."""
+    name = Path(path).name
+    if runtime == "python":
+        stem = name.removesuffix(".py").removeprefix("installed_")
+    else:
+        stem = name.removesuffix(".R")
+    return runtime + "/" + stem.replace("_", "-")
+
+
 def load_catalog(root, catalog_path):
-    """Reject missing/new contracts and suites instead of freezing the denominator."""
+    """Materialize the catalog by glob discovery, keeping only underivable data.
+
+    The committed catalog (version 2) records only what discovery cannot
+    derive: contract fixtures with their family, level and consumers; suite
+    levels above the ``component`` default; suite identities that differ
+    from the file-name derivation; and support-file roles that differ from
+    the suffix default. Suites and plain fixtures are discovered by glob,
+    so adding one needs no catalog edit.
+    """
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
-    _keys(catalog, ("version", "contracts", "suites", "support_files"))
-    if catalog["version"] != "1":
+    _keys(
+        catalog,
+        ("version", "contracts", "suite_levels", "suite_ids", "support_roles"),
+    )
+    if catalog["version"] != "2":
         raise ValueError("unsupported supplemental catalog version")
-    if not all(
-        isinstance(catalog[key], list)
-        for key in ("contracts", "suites", "support_files")
-    ):
-        raise ValueError("contracts, suites and support_files must be lists")
-    contracts, suites, ids, staged, supporting = set(), set(), set(), set(), set()
+    if not isinstance(catalog["contracts"], list):
+        raise ValueError("contracts must be a list")
+    for key in ("suite_levels", "suite_ids", "support_roles"):
+        if not isinstance(catalog[key], dict):
+            raise ValueError(f"{key} must be a mapping")
+    discovered_fixtures = {
+        p.relative_to(root).as_posix()
+        for pattern in (
+            "rust/crates/*/tests/fixtures/**/*",
+            "rust/tests/host-fixtures/**/*",
+        )
+        for p in root.glob(pattern)
+        if p.is_file() and "__pycache__" not in p.parts
+    }
+    # Discovery replaces the hand-kept listing, not its containment check: a
+    # link that resolves outside the checkout is refused before staging.
+    for name in discovered_fixtures:
+        _path(root, name)
+    contracts = set()
     for contract in catalog["contracts"]:
         _keys(contract, ("path", "family", "level", "consumers"))
         name = contract["path"]
         if name in contracts or not _path(root, name).is_file():
             raise ValueError(f"duplicate or missing contract: {name}")
+        if name not in discovered_fixtures:
+            raise ValueError(f"contract is not a discovered fixture: {name}")
         contracts.add(name)
         if contract["level"] not in ("component", "compile"):
             raise ValueError(f"invalid supplemental level: {name}")
@@ -209,66 +249,74 @@ def load_catalog(root, catalog_path):
         for consumer in consumers:
             if not _path(root, consumer).is_file():
                 raise ValueError(f"missing contract consumer: {consumer}")
-    for suite in catalog["suites"]:
-        _keys(suite, ("id", "runtime", "path", "staged_path", "level"))
-        if suite["runtime"] not in ("python", "r") or suite["level"] not in (
-            "component",
-            "compile",
-            "shared_run",
-        ):
-            raise ValueError(f"invalid suite route or level: {suite['id']}")
+    support_files = []
+    for name in sorted(discovered_fixtures - contracts):
+        role = catalog["support_roles"].get(
+            name,
+            "documentation" if Path(name).suffix in DOCUMENTATION_SUFFIXES else "input",
+        )
+        if role not in ("input", "documentation"):
+            raise ValueError(f"invalid support file role: {name}")
+        support_files.append({"path": name, "role": role})
+    for name in catalog["support_roles"]:
+        if name in contracts or name not in discovered_fixtures:
+            raise ValueError(f"stale support file role override: {name}")
+    discovered_suites = []
+    for pattern, runtime in (
+        ("rust/tests/installed_*.py", "python"),
+        ("R/yamaa/tests/*.R", "r"),
+    ):
+        for path in sorted(root.glob(pattern)):
+            name = path.relative_to(root).as_posix()
+            _path(root, name)
+            discovered_suites.append((runtime, name))
+    for path in catalog["suite_ids"]:
+        if path not in {name for _, name in discovered_suites}:
+            raise ValueError(f"stale suite identity override: {path}")
+    suites, ids, staged = [], set(), set()
+    for runtime, name in discovered_suites:
+        if name in catalog["suite_ids"]:
+            suite_id = catalog["suite_ids"][name]
+        else:
+            suite_id = _derived_suite_id(runtime, name)
         if (
-            not isinstance(suite["id"], str)
-            or re.fullmatch(r"(?:python|r)/[a-z][a-z0-9_-]*", suite["id"]) is None
-            or not suite["id"].startswith(suite["runtime"] + "/")
+            not isinstance(suite_id, str)
+            or re.fullmatch(r"(?:python|r)/[a-z][a-z0-9_-]*", suite_id) is None
+            or not suite_id.startswith(runtime + "/")
         ):
             raise ValueError("suite identity must be host/simple-name")
-        if suite["id"] in ids or suite["path"] in suites:
-            raise ValueError(f"duplicate suite: {suite['id']}")
-        if not _path(root, suite["path"]).is_file():
-            raise ValueError(f"missing suite: {suite['path']}")
-        if suite["runtime"] == "python":
-            require_native_consumer(
-                _path(root, suite["path"]).read_text(encoding="utf-8"), suite["path"]
-            )
-        _path(root, suite["staged_path"])
-        stage = suite["runtime"], suite["staged_path"]
+        level = catalog["suite_levels"].get(suite_id, "component")
+        if level not in SUITE_LEVELS:
+            raise ValueError(f"invalid suite route or level: {suite_id}")
+        if suite_id in ids:
+            raise ValueError(f"duplicate suite: {suite_id}")
+        staged_path = Path(name).name
+        _path(root, staged_path)
+        stage = runtime, staged_path
         if stage in staged:
             raise ValueError(f"duplicate staged suite path: {stage}")
         staged.add(stage)
-        ids.add(suite["id"])
-        suites.add(suite["path"])
-    for support in catalog["support_files"]:
-        _keys(support, ("path", "role"))
-        name = support["path"]
-        if name in supporting or name in contracts or not _path(root, name).is_file():
-            raise ValueError(f"duplicate or missing support file: {name}")
-        if support["role"] not in ("input", "documentation"):
-            raise ValueError(f"invalid support file role: {name}")
-        supporting.add(name)
-    discovered_fixtures = {
-        p.relative_to(root).as_posix()
-        for pattern in (
-            "rust/crates/*/tests/fixtures/**/*",
-            "rust/tests/host-fixtures/**/*",
+        ids.add(suite_id)
+        if runtime == "python":
+            require_native_consumer(_path(root, name).read_text(encoding="utf-8"), name)
+        suites.append(
+            {
+                "id": suite_id,
+                "runtime": runtime,
+                "path": name,
+                "staged_path": staged_path,
+                "level": level,
+            }
         )
-        for p in root.glob(pattern)
-        if p.is_file() and "__pycache__" not in p.parts
+    for suite_id in catalog["suite_levels"]:
+        if suite_id not in ids:
+            raise ValueError(f"stale suite level: {suite_id}")
+    return {
+        "version": "1",
+        "contracts": catalog["contracts"],
+        "suites": suites,
+        "support_files": support_files,
     }
-    discovered_suites = {
-        p.relative_to(root).as_posix()
-        for pattern in ("rust/tests/installed_*.py", "R/yamaa/tests/*.R")
-        for p in root.glob(pattern)
-    }
-    for label, expected, actual in (
-        ("fixture files", contracts | supporting, discovered_fixtures),
-        ("suites", suites, discovered_suites),
-    ):
-        if expected != actual:
-            raise ValueError(
-                f"{label} differ: uncataloged={sorted(actual - expected)}, stale={sorted(expected - actual)}"
-            )
-    return catalog
 
 
 def host_fixture_files(catalog):

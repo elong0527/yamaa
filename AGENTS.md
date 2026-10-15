@@ -69,8 +69,8 @@ for every area a change touches.
 - **Rust change** (`rust/`): from `rust/`, run
   `cargo test --locked -p <crate>` for each crate touched, then
   `cargo clippy --locked --all-targets -- -D warnings` and
-  `cargo fmt --all --check`. The release-API inventory check and the
-  portable-math golden command live in `docs/development.md`.
+  `cargo fmt --all --check`. The portable-math golden command lives in
+  `docs/development.md`.
 - **Python host change** (`python/`): run
   `uv run --project python --no-sync pytest python/tests`.
 - **New or changed benchmark** (`benchmarks/`): follow

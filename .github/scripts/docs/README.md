@@ -6,6 +6,11 @@ sources as virtual pages, resolves their relative Markdown links to repository
 files, and points their Edit and View buttons to the canonical source. There
 are no Markdown copies to synchronize or commit.
 
+The requirement index (`/reference/requirements/`) and schema fields
+(`/reference/schema-fields/`) pages are rendered by the same hook from `rules/`
+and `yaml/` with `generate_rule_reference.py` on every build. They are not
+committed and have no Edit button; edit the owning contract or schema instead.
+
 From the repository root, install and test with the existing pinned documentation
 dependencies. Set `DOCS_PYTHON=/path/to/docs-env/bin/python` to select another
 interpreter for both installation and the Make targets:

@@ -8,7 +8,8 @@ README describing what the benchmark derives.
 
 Read `../rules/README.md` and `../yaml/README.md` first; they govern the
 schema and rules this directory exercises. Then read `README.md` here for
-the benchmark index. The open design
+the lifecycle states; the case directories themselves are the benchmark
+index. The open design
 gaps and the schema work they justify are tracked in this repository's issue
 tracker, one work item per root cause.
 
@@ -448,15 +449,13 @@ check reports is a variable the README does not explain.
    For a positive inherited benchmark, also write its expected resolved YAML.
 2. Write the README to the contract above. A negative benchmark must include its
    `## How to fix` section.
-3. Add a row to the index table in `README.md`. Its `Derives` column copies
-   the README title, which now carries no standard/domain prefix.
-4. Once the README of a positive `sdtm-*` or `adam-*` benchmark is
+3. Once the README of a positive `sdtm-*` or `adam-*` benchmark is
    `reviewed`, write its full prompt,
    `../evaluations/harbor/prompts/<name>/full.md`, to the
    [benchmark prompt recipe](../automation/benchmark_prompt.md), its
    `conventions.md` from it, and its `brief.md` with
    `evaluations/harbor/brief.py`.
-5. Record any finding it exposes as a gap on the matching work item in the
+4. Record any finding it exposes as a gap on the matching work item in the
    issue tracker, or add the benchmark's name to the gap that already states it.
 
 ## Before deleting a benchmark

@@ -12,7 +12,7 @@ without masking (or being masked by) a spec verdict:
   line or on the line immediately below;
 - validate_example_readmes: line width, schema-vocabulary-free data
   contracts, heading structure, described expected columns;
-- validate_examples_index: the examples index table matches directories;
+- validate_examples_index: the derived examples index matches directories;
 - validate_rule_metadata: rule front matter matches the rules index.
 """
 

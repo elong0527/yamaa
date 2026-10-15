@@ -33,7 +33,6 @@ CHECKS = {
         "test_rationale_phrases.py",
         "check_rationale_phrases.py",
         "test_requirement_registry.py",
-        "check_requirement_registry.py",
     ],
     "blockers": ["check_validation_blockers.py"],
 }

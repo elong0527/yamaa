@@ -22,12 +22,12 @@ separate qualification workflow.
 | Schemas | Included files stay within `yaml/`, types/registries/constraints resolve and entry points validate. |
 | Specifications | Native admission, inherited declarations, static bindings, original declaring-file paths, closed source metadata and producer contracts. Metadata capture does not grant project activation, derivation execution or Save authority. |
 | Fixture diagnostics | `benchmarks/validation-manifest.yaml` declares negative cases, conditions, paths and blockers. Every implemented expected validation condition must appear at its declared paths; unrelated findings fail. |
-| Benchmark inventory | Benchmark directories and the public-conformance configuration derive case membership, both host entries and explicit exclusions. `check_execution_manifest.py` checks that inventory, prior observations and the generated index; no execution manifest is maintained. |
+| Benchmark inventory | Benchmark directories and the public-conformance configuration derive case membership, both host entries and explicit exclusions. `check_execution_manifest.py` checks that inventory; passing is gated by the native run, and no execution manifest or observation registry is maintained. |
 | Sources and artifacts | Native source-profile checks, CSV quoting/missingness/header/field contracts, expected output names/types/representation and key order. Expected golden values are authored truth, not regenerated results. |
 | Layout and prose | Required example files, negative remediation sections, variant layout, benchmark index, badges, line width, described columns and rule metadata. |
 | Grammar and regex | Shared grammar/vocabulary vectors and pinned R022 regex conformance through native bindings. Missing bindings fail rather than falling back. |
 | Environments and Define | `environment_class` and `define_class` schema validation for authored documents. Complete generation and saved-byte comparison belong to installed public suites. |
-| Rules and references | Current normative contracts and schema navigation determine requirement ownership, citations and generated references. `test_rule_rewrite.py` checks the independent owners in [schema-navigation.tsv](scripts/yaml-validation/fixtures/schema-navigation.tsv); historical mappings remain in Git. |
+| Rules and references | Current normative contracts and schema navigation determine requirement ownership, citations and generated references. `check_rule_rewrite.py` validates every schema owner directly against the requirement definitions; historical mappings remain in Git. |
 
 The historical `negative-path-absolute` and `negative-path-parent-escape` cases
 remain explicit public-conformance exclusions. Four old resolved-spec expected
@@ -49,7 +49,6 @@ uv run --project python --no-sync python .github/scripts/yaml-validation/check_d
 uv run --project python --no-sync python .github/scripts/yaml-validation/test_rule_rewrite.py
 uv run --project python --no-sync python .github/scripts/yaml-validation/check_rule_rewrite.py
 uv run --project python --no-sync python .github/scripts/yaml-validation/generate_rule_reference.py --check
-uv run --project python --no-sync python .github/scripts/yaml-validation/check_requirement_registry.py
 ```
 
 The script infers the repository root from its location when `--root` is omitted.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate the benchmark README index from case READMEs and public entries."""
+"""Render the benchmark README index from case READMEs and public entries."""
 
 import argparse
 import re
@@ -27,7 +27,7 @@ def render_index(fixtures, current):
         "",
         f"{len(payload['examples'])} authored cases; {active} active cases use the same public",
         "Python and R plan. Host entries describe runnable metadata. Actual passing",
-        "coverage is recorded separately in the [conformance observations](../rust/qualification/public-conformance.json).",
+        "coverage is gated by the native run: every active benchmark must pass on every lane.",
         "",
         "| Benchmark | Derives | Lifecycle | Public conformance |",
         "|---|---|---|---|",
@@ -51,22 +51,26 @@ def render_index(fixtures, current):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true")
     parser.add_argument("--root", type=Path, default=ROOT)
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="write the rendered README here instead of to standard output",
+    )
     args = parser.parse_args()
     path = args.root / "benchmarks/README.md"
     try:
-        current = path.read_text(encoding="utf-8")
-        result = render_index(path.parent, current)
+        result = render_index(path.parent, path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
         print(f"Cannot generate benchmark index: {error}", file=sys.stderr)
         return 1
-    if args.check:
-        if result != current:
-            print(f"Stale benchmark index: {path}", file=sys.stderr)
-            return 1
+    # The committed README keeps only its heading and prose, so the rendered
+    # index is never written back in place.
+    if args.output is None:
+        sys.stdout.write(result)
     else:
-        path.write_text(result, encoding="utf-8")
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(result, encoding="utf-8")
     return 0
 
 
