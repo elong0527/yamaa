@@ -254,30 +254,22 @@ fn calendar_policy_preserves_wide_integers_and_unreachable_month_precedence() {
 
 #[test]
 fn public_policy_admits_whole_context_before_semantic_copies_or_integer_scans() {
-    use yamaa_core::dataset::{DatePolicyError as E, MAX_IMPUTATION_POLICY_BYTES};
-    let oversized = "9".repeat(MAX_IMPUTATION_POLICY_BYTES);
-    assert_eq!(
-        date_policy(Some(&oversized), D::Number("0"), P::Month, "date"),
-        Err(E::Limit)
-    );
-    assert_eq!(
-        date_policy(Some("6"), D::Position(&oversized), P::Year, "date"),
-        Err(E::Limit)
-    );
-    assert_eq!(
-        date_policy(Some("6"), D::Number("1"), P::Year, &oversized),
-        Err(E::Limit)
-    );
-    // A formatted member path and its retained diagnostic path can coexist.
-    assert_eq!(
-        date_policy(
-            Some("6"),
-            D::Number("1"),
-            P::Year,
-            &oversized[..MAX_IMPUTATION_POLICY_BYTES / 2]
-        ),
-        Err(E::Limit)
-    );
+    use yamaa_core::{dataset::DatePolicyError as E, diagnostic::ConditionCode as C};
+    let oversized = "9".repeat(200_000);
+    let E::Diagnostic(finding) =
+        date_policy(Some(&oversized), D::Number("0"), P::Month, "date").unwrap_err()
+    else {
+        panic!("month policy");
+    };
+    assert_eq!(finding.code, C::ImputationMonthNotPermitted);
+    let E::Diagnostic(finding) =
+        date_policy(Some("6"), D::Position(&oversized), P::Year, "date").unwrap_err()
+    else {
+        panic!("day policy");
+    };
+    assert_eq!(finding.code, C::ImputationDayRule);
+    assert!(date_policy(Some("6"), D::Number("1"), P::Year, &oversized).is_ok());
+    assert!(date_policy(Some("6"), D::Number("1"), P::Year, &oversized[..100_000]).is_ok());
     for number in ["", "01", "+1", "-0", "1.0", "bad"] {
         assert_eq!(
             date_policy(Some(number), D::Number("1"), P::Year, "date"),
@@ -299,9 +291,8 @@ fn public_policy_admits_whole_context_before_semantic_copies_or_integer_scans() 
 }
 
 #[test]
-fn constructor_refuses_whole_owned_metadata_and_invalid_shapes_before_later_copies() {
-    use yamaa_core::dataset::MAX_IMPUTATION_POLICY_BYTES;
-    let oversized = "x".repeat(MAX_IMPUTATION_POLICY_BYTES / 2);
+fn constructor_retains_complete_metadata_and_rejects_invalid_shapes() {
+    let oversized = "x".repeat(100_000);
     for field in ["source", "bound", "path", "missing", "invalid"] {
         assert!(
             Imputation::new(
@@ -324,8 +315,8 @@ fn constructor_refuses_whole_owned_metadata_and_invalid_shapes_before_later_copi
                 (field == "missing").then(|| Value::Str(oversized.clone())),
                 (field == "invalid").then(|| Value::Str(oversized.clone())),
             )
-            .is_none(),
-            "{field} metadata must be refused"
+            .is_some(),
+            "{field} metadata must be retained"
         );
     }
     assert!(Imputation::new(
@@ -336,7 +327,7 @@ fn constructor_refuses_whole_owned_metadata_and_invalid_shapes_before_later_copi
         None,
         None,
     )
-    .is_none());
+    .is_some());
     assert!(Imputation::new(
         K::DatePrecision,
         String::new(),

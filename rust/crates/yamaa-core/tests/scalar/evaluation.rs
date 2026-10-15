@@ -5,7 +5,7 @@ use yamaa_core::evaluation::{
     EvaluationErrorKind, NumericCondition, NumericNode, NumericPlan, NumericResolver, Operand,
 };
 use yamaa_core::numeric::{ArithmeticErrorKind, BinaryOperator as B, Number, UnaryOperator as U};
-use yamaa_core::numeric_compiler::{compile_numeric, CompileLimits};
+use yamaa_core::numeric_compiler::compile_numeric;
 use yamaa_core::value::{Selection, Value, ValueType};
 
 const SPEC_PATH: &str = "columns.A.derivation.compute";
@@ -170,7 +170,7 @@ fn fixture_evaluate(
     resolver: &mut RecordingResolver,
 ) -> Result<Number, Box<yamaa_core::evaluation::EvaluationError<Infallible>>> {
     if compiled {
-        compile_numeric(expression, SPEC_PATH, CompileLimits::default())
+        compile_numeric(expression, SPEC_PATH)
             .unwrap()
             .evaluate(resolver)
             .map_err(|failure| {
@@ -373,12 +373,7 @@ fn shared_function_vectors() {
         let fields: Vec<_> = row.split('\t').collect();
         assert_eq!(fields.len(), 6);
         let mut resolver = RecordingResolver::new(fields[2]);
-        let plan = yamaa_core::numeric_compiler::compile_numeric(
-            fields[1],
-            SPEC_PATH,
-            CompileLimits::default(),
-        )
-        .unwrap();
+        let plan = yamaa_core::numeric_compiler::compile_numeric(fields[1], SPEC_PATH).unwrap();
         let mut route = Vec::new();
         let actual = match plan.evaluate(&mut resolver) {
             Ok(number) => encoded(number),

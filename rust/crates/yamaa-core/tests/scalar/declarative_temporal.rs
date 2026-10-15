@@ -116,13 +116,9 @@ fn immutable_declarations_reject_invalid_arity_and_bounds_and_retain_typed_opera
 }
 
 #[test]
-fn oversized_temporal_metadata_is_refused_before_diagnostic_projection() {
-    use yamaa_core::{dataset::InvalidTemporal, diagnostic::MAX_PROJECTION_BYTES};
-    let huge = "x".repeat(MAX_PROJECTION_BYTES / 6);
-    assert_eq!(
-        Temporal::new(K::EpochDay, vec![huge], "epoch".into()),
-        Err(InvalidTemporal::Limit)
-    );
-    let valid = Temporal::new(K::EpochDay, vec!["DATE".into()], "epoch".into()).unwrap();
-    assert_eq!(valid.operand(1, ValueRef::Missing), None);
+fn temporal_metadata_is_complete_and_operand_indexes_stay_validated() {
+    let huge = "x".repeat(200_000);
+    let operation = Temporal::new(K::EpochDay, vec![huge.clone()], "epoch".into()).unwrap();
+    assert_eq!(operation.sources(), [huge]);
+    assert_eq!(operation.operand(1, ValueRef::Missing), None);
 }

@@ -1,6 +1,6 @@
 use yamaa_core::evaluation::{EvaluationErrorKind, NumericCondition, NumericResolver, Operand};
 use yamaa_core::numeric::{round_half_away_from_zero as rounded, ArithmeticErrorKind, Number};
-use yamaa_core::numeric_compiler::{compile_numeric, CompileError, CompileLimits};
+use yamaa_core::numeric_compiler::compile_numeric;
 use yamaa_core::value::{Selection, Value};
 
 /// Missing suppresses digits validation only after both operand values are available.
@@ -69,18 +69,7 @@ impl NumericResolver for Resolver {
 
 /// Compilation retains call/operand source spans and eager resolver failures.
 #[test]
-fn rounding_compilation_preserves_provenance_and_limits() {
-    assert!(matches!(
-        compile_numeric(
-            "ROUND_HALF_AWAY_FROM_ZERO(A, D)",
-            "spec",
-            CompileLimits {
-                resolutions: 1,
-                ..CompileLimits::default()
-            },
-        ),
-        Err(CompileError::ResolutionLimit { required: 2, .. })
-    ));
+fn rounding_compilation_preserves_provenance_and_occurrences() {
     for (text, span, path, expected_trace) in [
         (
             "1 + ROUND_HALF_AWAY_FROM_ZERO(A, D)",
@@ -95,7 +84,7 @@ fn rounding_compilation_preserves_provenance_and_limits() {
             vec!["BROKEN"],
         ),
     ] {
-        let plan = compile_numeric(text, "spec", CompileLimits::default()).unwrap();
+        let plan = compile_numeric(text, "spec").unwrap();
         let mut resolver = Resolver(Vec::new());
         let error = plan.evaluate(&mut resolver).unwrap_err();
         assert_eq!(&text[error.source_span.start..error.source_span.end], span);

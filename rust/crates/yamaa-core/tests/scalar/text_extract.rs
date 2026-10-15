@@ -1,7 +1,7 @@
 use yamaa_core::{
-    predicate, regex,
+    regex,
     table::ValueRef,
-    text_extract::{AdmissionError, Error, Step, StringExtract, MAX_DECLARATION_BYTES},
+    text_extract::{AdmissionError, Error, Step, StringExtract},
     value::Value,
 };
 fn operation(
@@ -20,9 +20,6 @@ fn operation(
     )
     .unwrap()
 }
-fn budget() -> predicate::Budget {
-    predicate::Budget::new(predicate::Limits::default().into())
-}
 #[test]
 fn shared_search_capture_truth_preserves_absence_empty_unicode_and_nul() {
     for (pattern, group, subject, expected) in [
@@ -37,11 +34,7 @@ fn shared_search_capture_truth_preserves_absence_empty_unicode_and_nul() {
         ("(a)", "1", "xyz", Step::NoMatch("xyz")),
     ] {
         assert_eq!(
-            operation(pattern, group, None, None).apply(
-                ValueRef::Str(subject),
-                Default::default(),
-                &mut budget()
-            ),
+            operation(pattern, group, None, None).apply(ValueRef::Str(subject)),
             Ok(expected)
         );
     }
@@ -51,55 +44,42 @@ fn omitted_handlers_null_literals_and_nonconversion_are_distinct() {
     for handler in [Value::Missing, Value::Str("12".into()), Value::Int(12)] {
         let declared = operation("(a)", "1", Some(handler.clone()), Some(handler.clone()));
         assert_eq!(
-            declared.apply(ValueRef::Missing, Default::default(), &mut budget()),
+            declared.apply(ValueRef::Missing),
             Ok(Step::Recovered("missing"))
         );
         assert_eq!(
-            declared.apply(ValueRef::Str("x"), Default::default(), &mut budget()),
+            declared.apply(ValueRef::Str("x")),
             Ok(Step::Recovered("no_match"))
         );
         assert_eq!(declared.handler("missing"), Some(&handler));
         assert_eq!(
-            declared.apply(ValueRef::Str("a"), Default::default(), &mut budget()),
+            declared.apply(ValueRef::Str("a")),
             Ok(Step::Capture(Some("a")))
         );
     }
     assert_eq!(
-        operation("()", "0", None, None).apply(
-            ValueRef::Missing,
-            Default::default(),
-            &mut budget()
-        ),
+        operation("()", "0", None, None).apply(ValueRef::Missing),
         Ok(Step::Missing)
     );
 }
 #[test]
-fn matcher_limits_and_shared_consumer_usage_never_become_no_match() {
-    let op = operation("(a)", "1", None, Some(Value::Missing));
-    let mut usage = predicate::Usage::from(predicate::Limits::default());
-    usage.regex.subject_bytes = 3;
-    let mut shared = predicate::Budget::new(usage);
-    assert_eq!(
-        op.apply(ValueRef::Str("aa"), Default::default(), &mut shared),
-        Ok(Step::Capture(Some("a")))
-    );
-    let other = regex::Pattern::compile("a", Default::default()).unwrap();
-    assert!(shared
-        .search_pattern(&other, "aa", Default::default())
-        .is_err());
-    assert_eq!(shared.used().regex.subject_bytes, 2);
-    let mut shared = budget();
-    let limits = regex::MatchLimits {
-        work: 0,
-        ..Default::default()
-    };
+fn per_match_step_refusal_never_becomes_no_match_or_a_recovered_value() {
+    let op = operation("z", "0", None, Some(Value::Missing));
     assert!(matches!(
-        op.apply(ValueRef::Str("x"), limits, &mut shared),
-        Err(Error::Limit(_))
+        op.apply(ValueRef::Str(&"a".repeat(500_000))),
+        Err(Error::Regex(regex::MatchError {
+            resource: regex::Resource::Work,
+            limit: 1_000_000
+        }))
     ));
+    assert_eq!(op.apply(ValueRef::Str("z")), Ok(Step::Capture(Some("z"))));
+    assert_eq!(
+        op.apply(ValueRef::Str("x")),
+        Ok(Step::Recovered("no_match"))
+    );
 }
 #[test]
-fn constructor_and_failure_context_are_admitted_before_copying_or_parsing() {
+fn constructor_rejects_shapes_and_keeps_complete_semantic_context() {
     assert_eq!(
         StringExtract::new("".into(), "p".into(), "[".into(), "0".into(), None, None),
         Err(AdmissionError::Shape)
@@ -108,35 +88,30 @@ fn constructor_and_failure_context_are_admitted_before_copying_or_parsing() {
         StringExtract::new("s".into(), "p".into(), "[".into(), "+1".into(), None, None),
         Err(AdmissionError::Shape)
     );
-    assert_eq!(
-        StringExtract::new(
-            "s".into(),
-            "p".into(),
-            "[".repeat(MAX_DECLARATION_BYTES / 512),
-            "0".into(),
-            None,
-            None
-        ),
-        Err(AdmissionError::Limit)
-    );
-    assert_eq!(
-        StringExtract::new(
-            "s".into(),
-            "p".into(),
-            "a".into(),
-            "0".into(),
-            Some(Value::Str("x".repeat(MAX_DECLARATION_BYTES / 4))),
-            None
-        ),
-        Err(AdmissionError::Limit)
-    );
-    let op = operation("(a)", "1", None, None);
-    assert!(op.failure_diagnostic(Step::NoMatch("x"), 0).is_none());
-    let size = op.failure_text_bytes(Step::NoMatch("x")).unwrap();
-    assert!(op
-        .failure_diagnostic(Step::NoMatch("x"), size - 1)
-        .is_none());
-    assert!(op.failure_diagnostic(Step::NoMatch("x"), size).is_some());
+    let invalid = StringExtract::new(
+        "s".into(),
+        "p".into(),
+        "[".repeat(100_000),
+        "0".into(),
+        None,
+        None,
+    )
+    .unwrap();
+    assert!(invalid.declaration_diagnostic().is_some());
+    let handler = Value::Str("x".repeat(100_000));
+    let op = StringExtract::new(
+        "s".into(),
+        "p".into(),
+        "a".into(),
+        "0".into(),
+        Some(handler.clone()),
+        None,
+    )
+    .unwrap();
+    assert_eq!(op.handler("missing"), Some(&handler));
+    let subject = "x".repeat(100_000);
+    let finding = op.failure_diagnostic(Step::NoMatch(&subject)).unwrap();
+    assert_eq!(finding.context["value"], serde_json::json!(subject));
 }
 #[path = "../diagnostics/diagnostic/text_extract.rs"]
 mod diagnostic;

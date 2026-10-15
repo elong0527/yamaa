@@ -1,4 +1,4 @@
-use yamaa_core::text_case::{transform, Case, OutputLimit};
+use yamaa_core::text_case::{transform, Case};
 
 #[test]
 fn normative_ascii_modes_preserve_foreign_scalars_and_first_scalar_boundaries() {
@@ -23,7 +23,7 @@ fn normative_ascii_modes_preserve_foreign_scalars_and_first_scalar_boundaries() 
         ("a\0BC", Case::Title, "A\0Bc"),
         ("", Case::Upper, ""),
     ] {
-        let actual = transform(source, mode, source.len()).unwrap();
+        let actual = transform(source, mode);
         assert_eq!(actual, expected);
         assert_eq!(actual.chars().count(), source.chars().count());
         assert_eq!(actual.len(), source.len());
@@ -80,7 +80,7 @@ fn original_ascii_casing_truth_preserves_range_endpoints_and_unicode_word_bounda
         ("ABC", Case::Title, "Abc"),
         ("aZ", Case::Title, "Az"),
     ] {
-        let actual = transform(source, mode, source.len()).unwrap();
+        let actual = transform(source, mode);
         assert_eq!(actual, expected, "{source:?}, {mode:?}");
         assert_eq!(actual.chars().count(), source.chars().count());
     }
@@ -88,23 +88,14 @@ fn original_ascii_casing_truth_preserves_range_endpoints_and_unicode_word_bounda
         "\u{00df}", "\u{0130}", "\u{0131}", "\u{212a}", "\u{00e9}", "\u{00c9}",
     ] {
         for mode in [Case::Upper, Case::Lower, Case::Sentence, Case::Title] {
-            assert_eq!(transform(source, mode, source.len()).unwrap(), source);
+            assert_eq!(transform(source, mode), source);
         }
     }
     for mode in [Case::Sentence, Case::Title] {
-        assert_eq!(transform("", mode, 0).unwrap(), "");
+        assert_eq!(transform("", mode), "");
     }
 }
 
-#[test]
-fn output_quota_is_checked_on_utf8_bytes_before_substitution() {
-    assert_eq!(
-        transform("\u{00e9}A", Case::Upper, 2),
-        Err(OutputLimit { required: 3 })
-    );
-    assert_eq!(transform("\u{00e9}A", Case::Upper, 3).unwrap(), "\u{00e9}A");
-    assert_eq!(transform("", Case::Title, 0).unwrap(), "");
-}
 #[path = "../diagnostics/diagnostic/text_case.rs"]
 mod diagnostic;
 #[test]
@@ -123,37 +114,34 @@ fn owned_declarations_preserve_missing_literal_presence_and_semantic_truth() {
             Some(handler.clone()),
         )
         .unwrap();
-        assert_eq!(operation.apply(ValueRef::Missing, 0), Ok(Step::Recovered));
+        assert_eq!(operation.apply(ValueRef::Missing), Ok(Step::Recovered));
         assert_eq!(operation.missing(), Some(&handler));
         assert_eq!(
-            operation.apply(ValueRef::Str("ABC"), 3),
+            operation.apply(ValueRef::Str("ABC")),
             Ok(Step::Value(Value::Str("abc".into())))
         );
     }
 }
 #[test]
-fn owned_metadata_shape_and_whole_copy_size_refuse_before_future_evaluation() {
-    use yamaa_core::{
-        text_case::{StringCase, MAX_DECLARATION_BYTES},
-        value::Value,
-    };
+fn owned_metadata_retains_complete_values_and_rejects_only_invalid_shapes() {
+    use yamaa_core::{text_case::StringCase, value::Value};
     assert!(StringCase::new(String::new(), "path".into(), Case::Upper, None).is_none());
     assert!(StringCase::new("SRC.V".into(), String::new(), Case::Upper, None).is_none());
-    let oversized = "x".repeat(MAX_DECLARATION_BYTES / 2);
-    assert!(StringCase::new(oversized.clone(), "path".into(), Case::Upper, None).is_none());
-    assert!(StringCase::new("SRC.V".into(), oversized.clone(), Case::Upper, None).is_none());
+    let oversized = "x".repeat(100_000);
+    assert!(StringCase::new(oversized.clone(), "path".into(), Case::Upper, None).is_some());
+    assert!(StringCase::new("SRC.V".into(), oversized.clone(), Case::Upper, None).is_some());
     assert!(StringCase::new(
         "SRC.V".into(),
         "path".into(),
         Case::Upper,
         Some(Value::Str(oversized.clone()))
     )
-    .is_none());
+    .is_some());
     assert!(StringCase::new(
         oversized[..oversized.len() / 2].into(),
         oversized[..oversized.len() / 2].into(),
         Case::Upper,
         None
     )
-    .is_none());
+    .is_some());
 }

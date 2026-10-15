@@ -348,13 +348,17 @@ fn arithmetic_overflow_is_fatal_and_missingness_does_not_hide_wrong_types() {
 }
 
 #[test]
-fn duration_handler_metadata_and_operand_indices_remain_bounded() {
-    use yamaa_core::{dataset::InvalidTemporal, diagnostic::MAX_PROJECTION_BYTES};
+fn duration_handlers_remain_complete_and_operand_indexes_are_validated() {
+    use yamaa_core::dataset::InvalidTemporal;
     let duration = operation(K::DurationValue { unit: U::Hour });
     assert_eq!(duration.validate_operand(1, &Value::Missing), None);
+    let handler = Value::Str("x".repeat(200_000));
     assert_eq!(
-        duration.with_invalid(Value::Str("x".repeat(MAX_PROJECTION_BYTES / 6))),
-        Err(InvalidTemporal::Limit)
+        duration
+            .with_invalid(handler.clone())
+            .unwrap()
+            .invalid_handler(),
+        Some(&handler)
     );
     assert_eq!(
         operation(K::DateShift).with_invalid(Value::Missing),

@@ -2,7 +2,6 @@ use serde_json::Value as V;
 use std::collections::BTreeSet;
 use yamaa_core::{
     diagnostic::ConditionCode,
-    predicate,
     table::ValueRef,
     text_extract::{Error, Step, StringExtract},
 };
@@ -21,11 +20,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
         .unwrap()
     };
     let op = make("(a)", "1");
-    let mut budget = predicate::Budget::new(predicate::Limits::default().into());
-    let Error::Diagnostic(input) = op
-        .apply(ValueRef::Int(7), Default::default(), &mut budget)
-        .unwrap_err()
-    else {
+    let Error::Diagnostic(input) = op.apply(ValueRef::Int(7)).unwrap_err() else {
         panic!("typed input")
     };
     let cases = [
@@ -42,7 +37,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             ],
         ),
         (
-            op.failure_diagnostic(Step::Missing, 4096).unwrap(),
+            op.failure_diagnostic(Step::Missing).unwrap(),
             "mapping",
             "missing_input",
             "REQ-0334",
@@ -50,7 +45,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             vec![("variable", V::String("SRC.TEXT".into()))],
         ),
         (
-            op.failure_diagnostic(Step::NoMatch("abc"), 4096).unwrap(),
+            op.failure_diagnostic(Step::NoMatch("abc")).unwrap(),
             "mapping",
             "unmatched_pattern",
             "REQ-0334",
