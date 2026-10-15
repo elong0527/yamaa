@@ -228,7 +228,12 @@ fn default_reads(
     let mut self_default = false;
     for name in names {
         self_default |= self_relations::is_self_reference(d, &name)?;
-        reads.extend(row_intermediates::default_dependencies(d, &name, output)?);
+        reads.extend(row_intermediates::default_dependencies(
+            d,
+            &name,
+            output,
+            string_templates,
+        )?);
     }
     let mut reference = |name: &str| {
         if !name.contains('.') {
@@ -721,13 +726,22 @@ impl Rows {
             .collect::<Result<Vec<_>, PrepareError>>()?;
         let mut filter_defaults =
             self_relations::donor_defaults(d, output, project, intermediates, string_templates)?;
-        for filter in &filters {
+        for (&row, filter) in raw_rows.iter().zip(&filters) {
             if let Some((_, Ok(plan))) = filter {
-                for name in plan
-                    .identifiers()
-                    .into_iter()
-                    .filter(|name| !name.contains('.'))
-                {
+                for name in plan.identifiers() {
+                    if !present(d, row, "group_by") {
+                        // A named lookup in an ungrouped filter also reads its
+                        // match defaults from this candidate's derived values.
+                        filter_defaults.extend(row_intermediates::default_dependencies(
+                            d,
+                            name,
+                            output,
+                            string_templates,
+                        )?);
+                    }
+                    if name.contains('.') {
+                        continue;
+                    }
                     let Some(column) = output.columns().iter().position(|c| c.name == name) else {
                         continue;
                     };
@@ -1613,8 +1627,7 @@ impl Rows {
                         _ => None,
                     };
                     if lookup_match.is_some()
-                        || matches!(binding.read, Read::Column(column) if deferred.get(column).copied().unwrap_or(false))
-                        || matches!(&binding.read, Read::Joined(read) if read.record_keys.is_none() && read.keys.iter().any(|key| deferred.get(key.output_column).copied().unwrap_or(true)))
+                        || crate::dataset::read_requires_window(&binding.read, &deferred, &bound)
                     {
                         let mut context: crate::diagnostic::Context = [
                             (

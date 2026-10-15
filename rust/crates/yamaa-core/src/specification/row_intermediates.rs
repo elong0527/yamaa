@@ -169,6 +169,7 @@ pub(super) fn default_dependencies(
     d: &Document,
     reference: &str,
     output: &TableSchema,
+    templates: &str_template::Prepared,
 ) -> Result<Vec<usize>, PrepareError> {
     let Some((name, _)) = reference.split_once('.') else {
         return Ok(Vec::new());
@@ -214,16 +215,11 @@ pub(super) fn default_dependencies(
                     register(name);
                     continue;
                 }
-                let &[(op, payload)] = mapping(d, value)? else {
-                    return Err(PrepareError::Internal);
-                };
-                match text(d, op)? {
-                    "source" => register(match &d.nodes()[payload] {
-                        N::Text(name) => name,
-                        _ => text(d, field(d, payload, "variable")?)?,
-                    }),
-                    "str_pad" => register(text(d, field(d, payload, "source")?)?),
-                    _ => (),
+                let mut names = Vec::new();
+                derivations::current_references(d, value, None, &mut names, 0)?;
+                self_relations::template_references(d, value, templates, &mut names, 0)?;
+                for name in &names {
+                    register(name);
                 }
             }
         }
@@ -274,7 +270,7 @@ pub(super) fn bind(
     let Some((index, field)) = declarations.reference(reference) else {
         return Ok(None);
     };
-    let Some(item) = &items[index] else {
+    let Some(item) = items.get(index).and_then(Option::as_ref) else {
         findings.push(BindFinding::UnknownReference {
             path: path.into(),
             name: reference.into(),
@@ -329,31 +325,66 @@ pub(super) fn bind(
             findings.push(missing_dependency(declaration.identifier(), &key.path));
             continue;
         }
-        if let Some(crate::dataset::MatchRead::Output { column, identifier }) = key.value.read() {
-            if available.is_some_and(|available| !available.contains(column)) {
+        for read in key.value.reads() {
+            if let crate::dataset::MatchRead::Output { column, identifier } = read {
+                if available.is_some_and(|available| !available.contains(column)) {
+                    findings.push(missing_dependency(identifier, &key.path));
+                    continue;
+                }
+            }
+            if let crate::dataset::MatchRead::SecondaryRecord { identifier, .. } = read {
+                if catalog
+                    .bind(identifier)
+                    .map_err(BindError::Catalog)?
+                    .is_some_and(|read| {
+                        matches!(read, reference_binding::Binding::Dataset { dataset: 0, .. })
+                    })
+                {
+                    continue;
+                }
                 findings.push(missing_dependency(identifier, &key.path));
-                continue;
             }
-        }
-        if let Some(crate::dataset::MatchRead::SecondaryRecord { identifier, .. }) =
-            key.value.read()
-        {
-            if catalog
-                .bind(identifier)
-                .map_err(BindError::Catalog)?
-                .is_some_and(|read| {
-                    matches!(read, reference_binding::Binding::Dataset { dataset: 0, .. })
-                })
-            {
-                continue;
-            }
-            findings.push(missing_dependency(identifier, &key.path));
         }
     }
     if findings.len() != before {
         return Ok(None);
     }
     let donor = item.source_schema(secondary).ok_or(BindError::Internal)?;
+    if item.keys.is_empty() {
+        if let Some(root_keys) = declarations.driver_keys(index) {
+            let keys = (0..root_keys.columns().len()).collect::<Vec<_>>();
+            let fields = root_keys
+                .columns()
+                .iter()
+                .map(|column| reference_binding::Field {
+                    name: &column.name,
+                    column_type: column.kind,
+                })
+                .collect::<Vec<_>>();
+            let root_catalog =
+                Catalog::compile(&fields, &[], Default::default()).map_err(BindError::Catalog)?;
+            // A scalar read still needs lookup keys even when this relation also drives rows.
+            let dataset = match &item.source {
+                crate::dataset::IntermediateSource::Input(index) => secondary
+                    .get(*index)
+                    .map(|source| source.name.as_str())
+                    .ok_or(BindError::Internal)?,
+                crate::dataset::IntermediateSource::Primary { name, .. } => name.as_str(),
+                crate::dataset::IntermediateSource::SelfRows { .. } => "SELF",
+            };
+            intermediate_admission::inferred_keys(
+                &root_catalog,
+                root_keys,
+                &keys,
+                donor,
+                &|column| item.admits_donor_column(column),
+                &item.path,
+                dataset,
+                findings,
+            )?;
+            return Ok(None);
+        }
+    }
     for key in &item.keys {
         let read_kind = key
             .value

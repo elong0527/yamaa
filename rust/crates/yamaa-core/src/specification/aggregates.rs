@@ -30,6 +30,7 @@ pub(super) struct Declaration {
     )>,
     derive: Option<Vec<DeriveDeclaration>>,
     derive_relations: Vec<String>,
+    derive_references: Vec<String>,
     between: Option<RangeDeclaration>,
 }
 #[derive(Clone, Debug)]
@@ -171,6 +172,7 @@ pub(super) fn prepare(
     }
     let mut extra = Vec::new();
     let mut derive_relations = Vec::<String>::new();
+    let mut derive_references = Vec::<String>::new();
     let derive = if scalar {
         None
     } else {
@@ -230,6 +232,7 @@ pub(super) fn prepare(
                         if let Some((relation, _)) = reference.split_once('.') {
                             if !named.contains(relation) {
                                 derive_relations.push(relation.into());
+                                derive_references.push(reference);
                             } else {
                                 intermediate_names.push(relation.into());
                             }
@@ -360,6 +363,9 @@ pub(super) fn prepare(
                                 &format!("{path}.key.{name}"),
                                 &[],
                                 0,
+                                project,
+                                extraction,
+                                templates,
                                 &mut extra,
                             )?,
                         ))
@@ -402,6 +408,16 @@ pub(super) fn prepare(
     };
     if derive.is_some() {
         if let Some((_, Ok(filter))) = &filter {
+            derive_references.extend(
+                filter
+                    .identifiers()
+                    .into_iter()
+                    .filter(|name| {
+                        name.split_once('.')
+                            .is_some_and(|(relation, _)| !named.contains(relation))
+                    })
+                    .map(String::from),
+            );
             derive_relations.extend(
                 filter
                     .identifiers()
@@ -450,6 +466,7 @@ pub(super) fn prepare(
         filter,
         derive,
         derive_relations,
+        derive_references,
         between,
     })
 }
@@ -654,9 +671,18 @@ pub(super) fn bind(
         } else if let Some(index) = secondary.iter().position(|source| source.name == relation) {
             AggregateSource::Secondary(index)
         } else {
+            let reference = declaration
+                .derive_references
+                .iter()
+                .map(String::as_str)
+                .chain(compiled.identifiers())
+                .find(|name| {
+                    name.split_once('.')
+                        .is_some_and(|(owner, _)| owner == relation)
+                });
             findings.push(BindFinding::UnknownReference {
                 path: declaration.expression_path.clone(),
-                name: format!("{relation}.*"),
+                name: reference.map_or_else(|| format!("{relation}.*"), String::from),
             });
             return Ok(None);
         }
@@ -963,7 +989,8 @@ pub(super) fn bind(
                         )?;
                     }
                 }
-                if let Some(reference) = value.reference() {
+                let before_references = findings.len();
+                for reference in value.references() {
                     if catalog
                         .bind(reference)
                         .map_err(BindError::Catalog)?
@@ -976,19 +1003,31 @@ pub(super) fn bind(
                             },
                             findings,
                         )?;
-                        continue;
                     }
+                }
+                if findings.len() != before_references {
+                    continue;
                 }
                 let bound = value.bind(
                     &format!("{}.key.{field}", declaration.path),
                     relation,
                     catalog,
                     findings,
+                    match_values::Context {
+                        output,
+                        driver,
+                        row,
+                        phase,
+                        project,
+                        named,
+                        secondary,
+                        intermediates,
+                    },
                 )?;
                 if let Some(value) = bound {
-                    if let Some(column) = value
-                        .read()
-                        .and_then(crate::dataset::MatchRead::output_column)
+                    for column in value
+                        .reads()
+                        .filter_map(crate::dataset::MatchRead::output_column)
                     {
                         edges.push(column);
                     }

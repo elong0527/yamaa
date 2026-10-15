@@ -81,9 +81,13 @@ pub(super) fn bind(
                 read,
             });
         } else {
-            let suggestion = (!name.contains('.')
-                && donor.columns().iter().any(|column| column.name == name))
-            .then(|| format!("{donor_name}.{name}"));
+            let bare = name.split_once('.').map_or(name, |(_, field)| field);
+            let suggestion = donor
+                .columns()
+                .iter()
+                .enumerate()
+                .any(|(column, metadata)| metadata.name == bare && admits(column))
+                .then(|| format!("{donor_name}.{bare}"));
             findings.push(BindFinding::Lookup(LookupFinding::reference(
                 plan.spec_path(),
                 name,
@@ -168,20 +172,22 @@ pub(super) fn admit_reads<'a>(
                         None,
                     )));
                 }
-                if let Some(crate::dataset::MatchRead::SecondaryRecord {
-                    source: owner,
-                    identifier,
-                    ..
-                }) = key.value.read()
-                {
-                    if owner + 1 != source {
-                        findings.push(BindFinding::Lookup(LookupFinding::reference(
-                            &key.path,
-                            identifier,
-                            Some(&item.identifier),
-                            ReferenceCause::OutputKey,
-                            None,
-                        )));
+                for read in key.value.reads() {
+                    if let crate::dataset::MatchRead::SecondaryRecord {
+                        source: owner,
+                        identifier,
+                        ..
+                    } = read
+                    {
+                        if owner + 1 != source {
+                            findings.push(BindFinding::Lookup(LookupFinding::reference(
+                                &key.path,
+                                identifier,
+                                Some(&item.identifier),
+                                ReferenceCause::OutputKey,
+                                None,
+                            )));
+                        }
                     }
                 }
             }

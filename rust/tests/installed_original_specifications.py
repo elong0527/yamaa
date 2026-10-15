@@ -2860,6 +2860,212 @@ class NamespaceAdmission(unittest.TestCase):
                     self.assertEqual(entry.read_bytes(), original)
 
 
+class PredicateSuggestions(unittest.TestCase):
+    def test_original_qualified_suggestions_keep_unknown_and_ambiguous_names(self):
+        import yamaa
+
+        for case in TRUTH["predicate_suggestions"]:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                for name, content in case["inputs"].items():
+                    source = root / name
+                    source.parent.mkdir(parents=True, exist_ok=True)
+                    source.write_text(content, encoding="ascii")
+                entry = root / "spec.yaml"
+                entry.write_text(case["specification"], encoding="ascii")
+                for _ in range(2):
+                    checked = yamaa.check(entry)
+                    result = yamaa.domain(entry)
+                    for frame, expected in ((checked.issues, case["check_issues"]),
+                                            (result.issues, case["issues"])):
+                        rows = frame.to_dicts()
+                        for row in rows:
+                            row["context"] = json.loads(row["context"])
+                        self.assertEqual(rows, expected)
+                    if case["csv"] is not None:
+                        self.assertTrue(result.save())
+                        self.assertEqual((root / "out.csv").read_bytes(), case["csv"].encode("ascii"))
+                    else:
+                        self.assertIsNone(result.output)
+                        with self.assertRaises(yamaa.DomainError):
+                            result.save()
+                        self.assertFalse((root / "out.csv").exists())
+
+
+class IntermediateDependencies(unittest.TestCase):
+    def test_original_cycles_and_forward_donor_reads_through_both_public_routes(self):
+        import yamaa
+
+        for case in TRUTH["intermediate_dependencies"]:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                entry = root / "spec.yaml"
+                entry.write_text(case["specification"], encoding="ascii")
+                def rows(frame):
+                    records = frame.to_dicts()
+                    for record in records:
+                        record["context"] = json.loads(record["context"])
+                    return records
+                for inputs_present in (False, True):
+                    if inputs_present:
+                        for name, content in case["inputs"].items():
+                            path = root / name
+                            path.parent.mkdir(parents=True, exist_ok=True)
+                            path.write_text(content, encoding="ascii")
+                    elif not case["issues"]:
+                        continue
+                    for attempt in range(2):
+                        with self.subTest(inputs_present=inputs_present, attempt=attempt):
+                            self.assertEqual(rows(yamaa.check(entry).issues), case["issues"])
+                            result = yamaa.domain(entry)
+                            self.assertEqual(rows(result.issues), case["issues"])
+                            self.assertFalse((root / "out.csv").exists())
+                            if case["issues"]:
+                                self.assertIsNone(result.output)
+                                self.assertIsNone(result._native.observations())
+                                with self.assertRaises(yamaa.DomainError):
+                                    result.save()
+                            else:
+                                if "output_rows" in case:
+                                    self.assertEqual([list(row) for row in result.output.rows()], case["output_rows"])
+                                self.assertTrue(result.save())
+                                self.assertEqual((root / "out.csv").read_bytes(), case["csv"].encode("ascii"))
+                                (root / "out.csv").unlink()
+                self.assertEqual(entry.read_text(encoding="ascii"), case["specification"])
+
+
+class IntermediateRowDrivers(unittest.TestCase):
+    def test_source_only_driver_records_preserve_lookup_key_admission(self):
+        import yamaa
+
+        for case in TRUTH["intermediate_row_drivers"]:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                for name, content in case["inputs"].items():
+                    source = root / name
+                    source.parent.mkdir(parents=True, exist_ok=True)
+                    source.write_text(content, encoding="ascii")
+                entry = root / "spec.yaml"
+                entry.write_text(case["specification"], encoding="ascii")
+                for _ in range(2):
+                    checked = yamaa.check(entry)
+                    result = yamaa.domain(entry)
+                    for frame, expected in ((checked.issues, case["check_issues"]),
+                                            (result.issues, case["issues"])):
+                        rows = frame.to_dicts()
+                        for row in rows:
+                            row["context"] = json.loads(row["context"])
+                        self.assertEqual(rows, expected)
+                    if case["csv"] is not None:
+                        self.assertTrue(result.save())
+                        self.assertEqual((root / "out.csv").read_bytes(), case["csv"].encode("ascii"))
+                    else:
+                        self.assertIsNone(result.output)
+                        with self.assertRaises(yamaa.DomainError):
+                            result.save()
+                        self.assertFalse((root / "out.csv").exists())
+
+
+class DiagnosticSites(unittest.TestCase):
+    def test_original_unknown_references_keep_authored_identifier_and_dataset(self):
+        import yamaa
+
+        def issues(frame):
+            rows = frame.to_dicts()
+            self.assertEqual(frame.columns, TRUTH["issue_columns"])
+            for row in rows:
+                self.assertIsInstance(row["context"], str)
+                row["context"] = json.loads(row["context"])
+            return rows
+
+        for case in TRUTH["diagnostic_sites"]:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                entry = root / "spec.yaml"
+                entry.write_text(case["specification"], encoding="utf-8")
+                self.assertEqual(issues(yamaa.check(entry).issues), case["check_issues"])
+                for name, content in case["inputs"].items():
+                    path = root / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(content, encoding="utf-8")
+                for _ in range(2):
+                    self.assertEqual(issues(yamaa.check(entry).issues), case["check_issues"])
+                    result = yamaa.domain(entry)
+                    self.assertEqual(issues(result.issues), case["issues"])
+                    self.assertIsNone(result.output)
+                    with self.assertRaises(yamaa.DomainError):
+                        result.save()
+                    self.assertFalse((root / case["output"]).exists())
+
+
+class RowCountLookups(unittest.TestCase):
+    def test_original_row_count_predicates_resolve_typed_lookup_fields(self):
+        import yamaa
+
+        for case in TRUTH["row_count_lookups"]:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                for name, content in case["inputs"].items():
+                    source = root / name
+                    source.parent.mkdir(parents=True, exist_ok=True)
+                    source.write_text(content, encoding="ascii")
+                entry = root / "spec.yaml"
+                entry.write_text(case["specification"], encoding="ascii")
+                for _ in range(2):
+                    checked = yamaa.check(entry)
+                    result = yamaa.domain(entry)
+                    for frame, expected in ((checked.issues, case["check_issues"]),
+                                            (result.issues, case["issues"])):
+                        rows = frame.to_dicts()
+                        for row in rows:
+                            row["context"] = json.loads(row["context"])
+                        self.assertEqual(rows, expected)
+                    report = json.loads(result._native.observations())
+                    expected = [{**record, "specification": str(entry)} for record in case["verifications"]]
+                    self.assertEqual(report["verifications"], expected)
+                    self.assertEqual(report["handler_counts"], case["handler_counts"])
+                    if case["csv"] is not None:
+                        self.assertTrue(result.save())
+                        self.assertEqual((root / "out.csv").read_bytes(), case["csv"].encode("ascii"))
+                    else:
+                        self.assertIsNone(result.output)
+                        with self.assertRaises(yamaa.DomainError):
+                            result.save()
+                        self.assertFalse((root / "out.csv").exists())
+
+
+class BaselineWindowTypes(unittest.TestCase):
+    def test_baseline_temporal_types_keep_owned_conditions_and_valid_carriers(self):
+        import yamaa
+
+        for case in TRUTH["baseline_window_types"]:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                for name, content in case["inputs"].items():
+                    source = root / name
+                    source.parent.mkdir(parents=True, exist_ok=True)
+                    source.write_text(content, encoding="ascii")
+                entry = root / "spec.yaml"
+                entry.write_text(case["specification"], encoding="ascii")
+                for _ in range(2):
+                    checked = yamaa.check(entry)
+                    result = yamaa.domain(entry)
+                    for frame, expected in ((checked.issues, case["check_issues"]),
+                                            (result.issues, case["issues"])):
+                        rows = frame.to_dicts()
+                        for row in rows:
+                            row["context"] = json.loads(row["context"])
+                        self.assertEqual(rows, expected)
+                    if case["csv"] is not None:
+                        self.assertTrue(result.save())
+                        self.assertEqual((root / "out.csv").read_bytes(), case["csv"].encode("ascii"))
+                    else:
+                        self.assertIsNone(result.output)
+                        with self.assertRaises(yamaa.DomainError):
+                            result.save()
+                        self.assertFalse((root / "out.csv").exists())
+
+
 class RowJoinKeys(unittest.TestCase):
     def test_original_row_join_keys_are_raw_driver_fields(self):
         import yamaa
@@ -2899,6 +3105,47 @@ class RowJoinKeys(unittest.TestCase):
                         self.assertFalse((root / "out.csv").exists())
 
 
+class KeyExpressions(unittest.TestCase):
+    def test_public_scalar_and_window_keys_keep_scope_comparison_handlers_and_saved_truth(self):
+        import yamaa
+        def issues(frame):
+            records = frame.to_dicts()
+            for record in records:
+                self.assertIsInstance(record["context"], str)
+                record["context"] = json.loads(record["context"])
+            return records
+        for case in TRUTH["key_expressions"]:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                entry = root / "spec.yaml"
+                entry.write_text(case["specification"], encoding="ascii")
+                if case["check_issues"]:
+                    self.assertEqual(issues(yamaa.check(entry).issues), case["check_issues"])
+                    self.assertEqual(issues(yamaa.domain(entry).issues), case["check_issues"])
+                for name, content in case["inputs"].items():
+                    (root / name).write_text(content, encoding="ascii")
+                for attempt in range(2):
+                    with self.subTest(attempt=attempt):
+                        self.assertEqual(issues(yamaa.check(entry).issues), case["check_issues"])
+                        result = yamaa.domain(entry)
+                        self.assertEqual(issues(result.issues), case["issues"])
+                        self.assertFalse((root / "out.csv").exists())
+                        if case["issues"]:
+                            self.assertIsNone(result.output)
+                            with self.assertRaises(yamaa.DomainError):
+                                result.save()
+                            self.assertFalse((root / "out.csv").exists())
+                        else:
+                            observations = json.loads(result._native.observations())
+                            self.assertEqual(observations["handler_counts"], case["handlers"])
+                            self.assertTrue(result.save())
+                            self.assertEqual((root / "out.csv").read_bytes(), case["csv"].encode("ascii"))
+                            (root / "source.csv").write_bytes(b"changed after build")
+                            self.assertTrue(result.save())
+                            self.assertEqual((root / "out.csv").read_bytes(), case["csv"].encode("ascii"))
+                            (root / "out.csv").unlink()
+                            (root / "source.csv").write_text(case["inputs"]["source.csv"], encoding="ascii")
+                self.assertEqual(entry.read_text(encoding="ascii"), case["specification"])
 
 
 if __name__ == "__main__":

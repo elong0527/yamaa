@@ -93,6 +93,36 @@ pub(super) fn bind(
                     }
                 }
             }
+            Check::ScopedRowCount(check) => {
+                let mut check = check.clone();
+                let mut filter_bound = false;
+                for (position, predicate) in
+                    [&mut check.filter, &mut check.when].into_iter().enumerate()
+                {
+                    if let Some(original) = predicate {
+                        match bind_predicate(original, spec, secondary, intermediates)? {
+                            Ok(bound) => {
+                                *original = bound;
+                                filter_bound |= position == 0;
+                            }
+                            Err(d) => {
+                                failure = Some(d);
+                                break;
+                            }
+                        }
+                    }
+                }
+                if failure.is_some() {
+                    if let Some(filter) = check.filter.filter(|_| filter_bound) {
+                        result.push(Verification {
+                            path: filter.plan().spec_path().into(),
+                            check: Check::PredicateDeclaration(filter),
+                        });
+                    }
+                } else {
+                    bound.check = Check::ScopedRowCount(check);
+                }
+            }
             Check::PredicateDeclaration(p) => {
                 match bind_predicate(p, spec, secondary, intermediates)? {
                     Ok(p) => bound.check = Check::PredicateDeclaration(p),

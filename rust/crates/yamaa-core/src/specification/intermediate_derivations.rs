@@ -673,6 +673,11 @@ pub(super) fn bind(
         &source,
         outer_output,
         &output,
+        named,
+        project,
+        &catalog,
+        &secondary,
+        findings,
     )?;
     let mut selected = Vec::new();
     for (index, item) in earlier.iter().enumerate() {
@@ -886,6 +891,11 @@ fn rebase(
     source: &TableSchema,
     outer: &TableSchema,
     output: &TableSchema,
+    named: &intermediates::Declarations,
+    project: Option<&crate::project_calls::ProjectCalls>,
+    catalog: &Catalog,
+    secondary: &[SecondarySource],
+    findings: &mut Vec<BindFinding>,
 ) -> Result<Vec<Option<Intermediate>>, BindError> {
     let mut result = previous.to_vec();
     let original_secondary = outer_secondary(sources, schemas, driver);
@@ -970,6 +980,12 @@ fn rebase(
             };
             continue;
         }
+        // Retain field names before moving this selector's source into the
+        // donor catalog, whose secondary coordinates differ from the outer plan.
+        let donor_schema = item
+            .source_schema(&original_secondary)
+            .ok_or(BindError::Internal)?
+            .clone();
         let missing = item.current_fields().find_map(|field| match field.read {
             CurrentRead::Output(column) => (!output
                 .columns()
@@ -1048,6 +1064,39 @@ fn rebase(
                 .collect::<Result<Vec<_>, _>>()?;
         }
         for key in &mut item.keys {
+            if matches!(
+                key.value,
+                crate::dataset::MatchValue::Expression(_)
+                    | crate::dataset::MatchValue::Contextual(
+                        crate::dataset::ContextualMatch::Expression { .. }
+                    )
+            ) {
+                let field = &donor_schema.columns()[key.source_column].name;
+                let declaration = named
+                    .match_declaration(&item.identifier, field)
+                    .ok_or(BindError::Internal)?;
+                let bound = declaration.bind_deferred(
+                    &key.path,
+                    &item.identifier,
+                    catalog,
+                    findings,
+                    match_values::Context {
+                        output,
+                        driver: donor_name,
+                        row: None,
+                        phase: crate::reference_scope::Phase::Row { group_by: None },
+                        project,
+                        named,
+                        secondary,
+                        intermediates: previous,
+                    },
+                )?;
+                // A declaration finding already owns this refusal. Do not
+                // invent an additional missing-dependency finding for a known
+                // operand whose scalar operation rejected its type.
+                key.value = bound.unwrap_or(crate::dataset::MatchValue::Literal(Value::Missing));
+                continue;
+            }
             if let crate::dataset::MatchValue::Contextual(declaration) = &key.value {
                 let name = declaration.identifier();
                 let local = name
@@ -1063,7 +1112,10 @@ fn rebase(
                 }
                 continue;
             }
-            if let Some(read) = key.value.read().cloned() {
+            let fallback = key.value.contextual();
+            let mut missing = None;
+            for bound in key.value.reads_mut() {
+                let read = bound.clone();
                 let read = match read {
                     crate::dataset::MatchRead::Output { column, identifier } => {
                         let name = &outer.columns()[column].name;
@@ -1072,10 +1124,8 @@ fn rebase(
                             .iter()
                             .position(|field| field.name == *name)
                         else {
-                            key.value = crate::dataset::MatchValue::Contextual(
-                                key.value.contextual().ok_or(BindError::Internal)?,
-                            );
-                            continue;
+                            missing = Some(identifier);
+                            break;
                         };
                         crate::dataset::MatchRead::Output { column, identifier }
                     }
@@ -1128,12 +1178,12 @@ fn rebase(
                         }
                     }
                 };
-                match &mut key.value {
-                    crate::dataset::MatchValue::Variable(bound)
-                    | crate::dataset::MatchValue::Source(bound)
-                    | crate::dataset::MatchValue::StrPad { read: bound, .. } => *bound = read,
-                    _ => (),
-                }
+                *bound = read;
+            }
+            if let Some(identifier) = missing {
+                key.value = crate::dataset::MatchValue::Contextual(
+                    fallback.unwrap_or(crate::dataset::ContextualMatch::Source(identifier)),
+                );
             }
         }
     }

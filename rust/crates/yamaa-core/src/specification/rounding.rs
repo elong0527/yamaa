@@ -107,6 +107,9 @@ pub(super) fn declaration_findings(
             &mut diagnostic_bytes,
         )?;
     }
+    match_values::visit_keys(d, &mut |value, path| {
+        visit(d, value, path, output, findings, 0, &mut diagnostic_bytes)
+    })?;
     Ok(())
 }
 

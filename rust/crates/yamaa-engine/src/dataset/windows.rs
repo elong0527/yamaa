@@ -317,9 +317,23 @@ impl Run {
                 )?;
                 return Err(Box::new(ExecutionError::BaselineAmbiguity {
                     path: context.assignment.path.clone(),
-                    column: context.plan.output().columns()[context.assignment.column]
-                        .name
-                        .clone(),
+                    column: context
+                        .plan
+                        .output()
+                        .columns()
+                        .get(context.assignment.column)
+                        .map(|column| column.name.clone())
+                        .unwrap_or_else(|| {
+                            context
+                                .assignment
+                                .path
+                                .rsplit_once(".key.")
+                                .and_then(|(_, value)| value.split('.').next())
+                                .map_or_else(
+                                    || context.assignment.path.clone(),
+                                    |field| alloc::format!("key[{field}]"),
+                                )
+                        }),
                     date: candidates[donor].values[date].clone(),
                     match_count: count,
                     partition: window

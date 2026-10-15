@@ -2348,6 +2348,238 @@ local({
 })
 
 local({
+  for (truth in host_truth[["predicate_suggestions"]]) {
+    directory <- tempfile("predicate-suggestions-"); dir.create(directory)
+    for (name in names(truth$inputs)) {
+      source <- file.path(directory,name)
+      dir.create(dirname(source),recursive=TRUE,showWarnings=FALSE)
+      writeBin(charToRaw(truth$inputs[[name]]),source)
+    }
+    entry <- file.path(directory,"spec.yaml")
+    writeBin(charToRaw(truth$specification),entry)
+    for (attempt in 1:2) {
+      checked <- yamaa_check(entry); result <- yamaa_domain(entry)
+      for (check in list(list(frame=checked$issues,expected=truth$check_issues),
+                         list(frame=result$issues,expected=truth$issues))) {
+        frame <- check$frame
+        stopifnot(nrow(frame)==length(check$expected))
+        for (index in seq_along(check$expected)) {
+          expected <- check$expected[[index]]
+          stopifnot(identical(frame$phase[[index]],expected$phase),
+            identical(frame$condition[[index]],expected$condition),
+            identical(frame$requirement[[index]],expected$requirement),
+            identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
+            identical(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
+        }
+      }
+      if (!is.null(truth$csv)) stopifnot(identical(result$save(),TRUE),
+        identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
+      else stopifnot(is.null(result$output),
+        inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        !file.exists(file.path(directory,"out.csv")))
+    }
+    unlink(directory,recursive=TRUE)
+  }
+  cat("original predicate qualified suggestions preserve unknown names and paired output\n")
+})
+
+local({
+  for (truth in host_truth[["intermediate_dependencies"]]) {
+    directory <- tempfile("intermediate-dependencies-"); dir.create(directory)
+    entry <- file.path(directory,"spec.yaml")
+    writeBin(charToRaw(truth$specification),entry)
+    for (inputs_present in c(FALSE,TRUE)) {
+      if (inputs_present) for (name in names(truth$inputs)) {
+        path <- file.path(directory,name)
+        dir.create(dirname(path),recursive=TRUE,showWarnings=FALSE)
+        writeBin(charToRaw(truth$inputs[[name]]),path)
+      } else if (!length(truth$issues)) next
+      for (attempt in 1:2) {
+        checked <- yamaa_check(entry)
+        result <- yamaa_domain(entry)
+        for (frame in list(checked$issues,result$issues)) {
+          stopifnot(nrow(frame)==length(truth$issues))
+          for (index in seq_along(truth$issues)) {
+            expected <- truth$issues[[index]]
+            stopifnot(identical(frame$phase[[index]],expected$phase),
+              identical(frame$condition[[index]],expected$condition),
+              identical(frame$requirement[[index]],expected$requirement),
+              identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
+              identical(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
+          }
+        }
+        stopifnot(!file.exists(file.path(directory,"out.csv")))
+        if (length(truth$issues)) stopifnot(is.null(result$output),
+          is.null(get(".domain_observations",asNamespace("yamaa"))(result)),
+          inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"))
+        else {
+          if (!is.null(truth$output_rows)) stopifnot(identical(result$output$K,"r1"),
+            identical(result$output$XVAL,1))
+          stopifnot(identical(result$save(),TRUE),
+            identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
+          unlink(file.path(directory,"out.csv"))
+        }
+      }
+    }
+    stopifnot(identical(rawfile(entry),charToRaw(truth$specification)))
+    unlink(directory,recursive=TRUE)
+  }
+  cat("original intermediate cycles and forward donor dependencies preserve complete paired findings and saved bytes\n")
+})
+
+local({
+  for (truth in host_truth[["intermediate_row_drivers"]]) {
+    directory <- tempfile("intermediate-row-drivers-"); dir.create(directory)
+    for (name in names(truth$inputs)) {
+      source <- file.path(directory,name)
+      dir.create(dirname(source),recursive=TRUE,showWarnings=FALSE)
+      writeBin(charToRaw(truth$inputs[[name]]),source)
+    }
+    entry <- file.path(directory,"spec.yaml")
+    writeBin(charToRaw(truth$specification),entry)
+    for (attempt in 1:2) {
+      checked <- yamaa_check(entry); result <- yamaa_domain(entry)
+      for (check in list(list(frame=checked$issues,expected=truth$check_issues),
+                         list(frame=result$issues,expected=truth$issues))) {
+        frame <- check$frame
+        stopifnot(nrow(frame)==length(check$expected))
+        for (index in seq_along(check$expected)) {
+          expected <- check$expected[[index]]
+          stopifnot(identical(frame$phase[[index]],expected$phase),
+            identical(frame$condition[[index]],expected$condition),
+            identical(frame$requirement[[index]],expected$requirement),
+            identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
+            identical(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
+        }
+      }
+      if (!is.null(truth$csv)) stopifnot(identical(result$save(),TRUE),
+        identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
+      else stopifnot(is.null(result$output),
+        inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        !file.exists(file.path(directory,"out.csv")))
+    }
+    unlink(directory,recursive=TRUE)
+  }
+  cat("source-only named row drivers preserve record order and governed lookup keys\n")
+})
+
+local({
+  assert_diagnostic_sites <- function(actual,expected) {
+    stopifnot(identical(names(actual),fixture_strings(host_truth[["issue_columns"]])),
+      nrow(actual)==length(expected))
+    for (i in seq_along(expected)) {
+      finding <- expected[[i]]
+      context <- jsonlite::fromJSON(actual$context[[i]],simplifyVector=FALSE)
+      stopifnot(identical(actual$phase[[i]],finding$phase),
+        identical(actual$condition[[i]],finding$condition),
+        identical(actual$requirement[[i]],finding$requirement),
+        identical(actual$spec_paths[[i]],fixture_strings(finding$spec_paths)),
+        identical(context[sort(names(context))],finding$context[sort(names(finding$context))]))
+    }
+  }
+  for (truth in host_truth[["diagnostic_sites"]]) {
+    directory <- tempfile("yamaa-diagnostic-sites-"); dir.create(directory)
+    entry <- file.path(directory,"spec.yaml")
+    writeBin(charToRaw(truth$specification),entry)
+    assert_diagnostic_sites(yamaa_check(entry)$issues,truth$check_issues)
+    for (name in names(truth$inputs)) {
+      path <- file.path(directory,name); dir.create(dirname(path),recursive=TRUE,showWarnings=FALSE)
+      writeBin(charToRaw(truth$inputs[[name]]),path)
+    }
+    for (attempt in 1:2) {
+      assert_diagnostic_sites(yamaa_check(entry)$issues,truth$check_issues)
+      result <- yamaa_domain(entry)
+      assert_diagnostic_sites(result$issues,truth$issues)
+      stopifnot(is.null(result$output),
+        inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        !file.exists(file.path(directory,truth$output)))
+    }
+    unlink(directory,recursive=TRUE)
+  }
+  cat("original unknown references retain authored identifiers, dataset context and complete findings without Python\n")
+})
+
+local({
+  for (truth in host_truth[["row_count_lookups"]]) {
+    directory <- tempfile("row-count-lookups-"); dir.create(directory)
+    directory <- normalizePath(directory,winslash="/",mustWork=TRUE)
+    for (name in names(truth$inputs)) {
+      source <- file.path(directory,name)
+      dir.create(dirname(source),recursive=TRUE,showWarnings=FALSE)
+      writeBin(charToRaw(truth$inputs[[name]]),source)
+    }
+    entry <- file.path(directory,"spec.yaml")
+    writeBin(charToRaw(truth$specification),entry)
+    for (attempt in 1:2) {
+      checked <- yamaa_check(entry); result <- yamaa_domain(entry)
+      for (check in list(list(frame=checked$issues,expected=truth$check_issues),
+                         list(frame=result$issues,expected=truth$issues))) {
+        frame <- check$frame
+        stopifnot(nrow(frame)==length(check$expected))
+        for (index in seq_along(check$expected)) {
+          expected <- check$expected[[index]]
+          stopifnot(identical(frame$phase[[index]],expected$phase),
+            identical(frame$condition[[index]],expected$condition),
+            identical(frame$requirement[[index]],expected$requirement),
+            identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
+            identical(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
+        }
+      }
+      report <- jsonlite::fromJSON(rawToChar(get(".domain_observations",asNamespace("yamaa"))(result)),simplifyVector=FALSE)
+      expected <- lapply(truth$verifications,function(record) {
+        record$specification <- entry
+        record
+      })
+      stopifnot(identical(report$verifications,expected),
+        identical(report$handler_counts,truth$handler_counts))
+      if (!is.null(truth$csv)) stopifnot(identical(result$save(),TRUE),
+        identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
+      else stopifnot(is.null(result$output),
+        inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        !file.exists(file.path(directory,"out.csv")))
+    }
+    unlink(directory,recursive=TRUE)
+  }
+  cat("original row-count lookup predicates preserve typed scopes and paired output\n")
+})
+
+local({
+  for (truth in host_truth[["baseline_window_types"]]) {
+    directory <- tempfile("baseline-window-types-"); dir.create(directory)
+    for (name in names(truth$inputs)) {
+      source <- file.path(directory,name)
+      dir.create(dirname(source),recursive=TRUE,showWarnings=FALSE)
+      writeBin(charToRaw(truth$inputs[[name]]),source)
+    }
+    entry <- file.path(directory,"spec.yaml")
+    writeBin(charToRaw(truth$specification),entry)
+    for (attempt in 1:2) {
+      checked <- yamaa_check(entry); result <- yamaa_domain(entry)
+      for (check in list(list(frame=checked$issues,expected=truth$check_issues),
+                         list(frame=result$issues,expected=truth$issues))) {
+        frame <- check$frame
+        stopifnot(nrow(frame)==length(check$expected))
+        for (index in seq_along(check$expected)) {
+          expected <- check$expected[[index]]
+          stopifnot(identical(frame$phase[[index]],expected$phase),
+            identical(frame$condition[[index]],expected$condition),
+            identical(frame$requirement[[index]],expected$requirement),
+            identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
+            identical(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
+        }
+      }
+      if (!is.null(truth$csv)) stopifnot(identical(result$save(),TRUE),
+        identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
+      else stopifnot(is.null(result$output),
+        inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        !file.exists(file.path(directory,"out.csv")))
+    }
+    unlink(directory,recursive=TRUE)
+  }
+  cat("baseline temporal operands preserve typed refusals and valid carriers\n")
+})
+
+local({
   assert_row_join_issues <- function(actual,expected) {
     stopifnot(identical(names(actual),fixture_strings(host_truth[["issue_columns"]])),
       nrow(actual)==length(expected))
@@ -2386,6 +2618,53 @@ local({
     unlink(directory,recursive=TRUE)
   }
   cat("implicit row joins preserve raw driver keys while column and named lookups preserve constructed keys without Python\n")
+})
+
+local({
+  assert_key_issues <- function(frame, expected) {
+    stopifnot(nrow(frame)==length(expected))
+    for (index in seq_along(expected)) {
+      row <- expected[[index]]
+      stopifnot(identical(frame$phase[[index]],row$phase),
+        identical(frame$condition[[index]],row$condition),
+        identical(frame$requirement[[index]],row$requirement),
+        identical(frame$spec_paths[[index]],fixture_strings(row$spec_paths)),
+        identical(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),row$context))
+    }
+  }
+  for (truth in host_truth[["key_expressions"]]) {
+    directory <- tempfile("key-expressions-"); dir.create(directory)
+    entry <- file.path(directory,"spec.yaml")
+    writeBin(charToRaw(truth$specification),entry)
+    if (length(truth$check_issues)) {
+      assert_key_issues(yamaa_check(entry)$issues,truth$check_issues)
+      assert_key_issues(yamaa_domain(entry)$issues,truth$check_issues)
+    }
+    for (name in names(truth$inputs)) writeBin(charToRaw(truth$inputs[[name]]),file.path(directory,name))
+    for (attempt in 1:2) {
+      assert_key_issues(yamaa_check(entry)$issues,truth$check_issues)
+      result <- yamaa_domain(entry)
+      assert_key_issues(result$issues,truth$issues)
+      stopifnot(!file.exists(file.path(directory,"out.csv")))
+      if (length(truth$issues)) stopifnot(is.null(result$output),
+        inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        !file.exists(file.path(directory,"out.csv")))
+      else {
+        observations <- get(".domain_observations",asNamespace("yamaa"))(result)
+        counts <- jsonlite::fromJSON(rawToChar(observations),simplifyVector=FALSE)$handler_counts
+        stopifnot(identical(counts,truth$handlers),identical(result$save(),TRUE),
+          identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
+        writeBin(charToRaw("changed after build"),file.path(directory,"source.csv"))
+        stopifnot(identical(result$save(),TRUE),
+          identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
+        unlink(file.path(directory,"out.csv"))
+        writeBin(charToRaw(truth$inputs[["source.csv"]]),file.path(directory,"source.csv"))
+      }
+    }
+    stopifnot(identical(rawfile(entry),charToRaw(truth$specification)))
+    unlink(directory,recursive=TRUE)
+  }
+  cat("scalar and window key expressions preserve current scope, raw comparisons, handler counts and saved truth without Python\n")
 })
 
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))

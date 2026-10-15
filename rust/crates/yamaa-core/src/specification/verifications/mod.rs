@@ -291,7 +291,7 @@ impl Verifications {
                     if name == "require" || d.field(payload, name).is_some() {
                         predicates.insert(
                             (index, name),
-                            predicate(d, payload, name, &path, output, op == "assert")?,
+                            predicate(d, payload, name, &path, output, true)?,
                         );
                     }
                 }

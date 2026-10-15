@@ -25,6 +25,7 @@ struct Declaration {
     unique: UniqueDeclarations,
     derivations: Vec<intermediate_derivations::Derivation>,
     driver_prohibited: Vec<String>,
+    driver_keys: Option<alloc::sync::Arc<TableSchema>>,
 }
 #[derive(Debug, Default)]
 pub(super) struct Declarations(alloc::sync::Arc<Vec<Declaration>>, Option<String>);
@@ -123,6 +124,9 @@ impl Declarations {
             .iter()
             .any(|item| item.name == name && item.keep.is_some())
     }
+    pub(super) fn driver_keys(&self, index: usize) -> Option<&TableSchema> {
+        self.0.get(index)?.driver_keys.as_deref()
+    }
     pub(super) fn driver_findings(
         &self,
         name: &str,
@@ -200,13 +204,27 @@ impl Declarations {
             .position(|item| item.name == relation)
             .map(|index| (index, field))
     }
+    pub(super) fn match_declaration(
+        &self,
+        name: &str,
+        field: &str,
+    ) -> Option<&match_values::Declaration> {
+        self.0
+            .iter()
+            .find(|item| item.name == name)?
+            .keys
+            .as_ref()?
+            .iter()
+            .find(|(name, _)| name == field)
+            .map(|(_, declaration)| declaration)
+    }
     pub(super) fn match_references(&self, index: usize) -> impl Iterator<Item = &str> {
         self.0.get(index).into_iter().flat_map(|item| {
             item.keys
                 .as_ref()
                 .into_iter()
                 .flatten()
-                .filter_map(|(_, value)| value.reference())
+                .flat_map(|(_, value)| value.references())
                 .chain(item.range.iter().map(|range| range.value.as_str()))
         })
     }
@@ -215,6 +233,8 @@ impl Declarations {
         d: &Document,
         sources: &[SourceDeclaration],
         driver: usize,
+        output: &TableSchema,
+        keys: &[usize],
         limits: CompilationLimits,
         project: Option<&functions::Prepared>,
         extraction: &str_extract::Prepared,
@@ -245,9 +265,31 @@ impl Declarations {
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
-        for (index, &id) in items.iter().enumerate() {
+        let driver_key_schema = alloc::sync::Arc::new(
+            TableSchema::new(
+                keys.iter()
+                    .map(|&key| output.columns()[key].clone())
+                    .collect(),
+            )
+            .map_err(|_| PrepareError::Internal)?,
+        );
+        let order = derivation_order(d, items, project, templates, limits)?;
+        for index in order {
+            let id = items[index];
             let path = format!("intermediates[{index}]");
             let name = text(d, field(d, id, "id")?)?;
+            let row_driver = d
+                .field(d.root(), "rows")
+                .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                .map(|rows| sequence(d, rows))
+                .transpose()?
+                .is_some_and(|rows| {
+                    rows.iter().any(|&row| {
+                        d.field(row, "dataset")
+                            .is_some_and(|node| text(d, node).is_ok_and(|driver| driver == name))
+                    })
+                });
+            let driver_keys = row_driver.then(|| alloc::sync::Arc::clone(&driver_key_schema));
             let range = intermediate_range::prepare(d, id, &path, name)?;
             let columns = intermediate_range::prepare_columns(d, id, limits)?;
             let dataset = text(d, field(d, id, "dataset")?)?;
@@ -329,6 +371,9 @@ impl Declarations {
                                         &format!("{path}.key.{name}"),
                                         sources,
                                         driver,
+                                        project,
+                                        extraction,
+                                        templates,
                                         extra,
                                     )?,
                                 ))
@@ -503,6 +548,7 @@ impl Declarations {
                     unique,
                     derivations,
                     driver_prohibited,
+                    driver_keys,
                 });
         }
         Ok(result)
@@ -633,6 +679,7 @@ impl Declarations {
             let catalog = Catalog::compile(&output_fields, &datasets, Default::default())
                 .map_err(BindError::Catalog)?;
             let default_keys = if item.keys.is_none() {
+                let before_keys = findings.len();
                 match intermediate_admission::inferred_keys(
                     &catalog,
                     output,
@@ -644,6 +691,11 @@ impl Declarations {
                     findings,
                 )? {
                     Some(keys) => keys,
+                    None if item.driver_keys.is_some() => {
+                        // A driver traverses donor records, without selecting by output keys.
+                        findings.truncate(before_keys);
+                        Vec::new()
+                    }
                     None => {
                         result.push(None);
                         continue;
@@ -704,10 +756,20 @@ impl Declarations {
                 } else {
                     format!("{}.key.{field}", item.path)
                 };
+                let context = match_values::Context {
+                    output,
+                    driver: &sources[driver].name,
+                    row: None,
+                    phase: crate::reference_scope::Phase::Row { group_by: None },
+                    project,
+                    named: self,
+                    secondary: &secondary,
+                    intermediates: &result,
+                };
                 let value = if contextual_reader {
-                    declaration.bind_deferred(&path, &item.name, &catalog, findings)?
+                    declaration.bind_deferred(&path, &item.name, &catalog, findings, context)?
                 } else {
-                    declaration.bind(&path, &item.name, &catalog, findings)?
+                    declaration.bind(&path, &item.name, &catalog, findings, context)?
                 };
                 match value {
                     Some(value) => {
@@ -742,13 +804,11 @@ impl Declarations {
                         // selecting donor records. Its failure must precede
                         // the filter's operand types.
                         !(pairs.iter().any(|key| key.value.is_expression())
-                            && pairs.iter().any(|key| {
+                            && pairs.iter().flat_map(|key| key.value.reads()).any(|read| {
                                 matches!(
-                                    key.value.read(),
-                                    Some(
-                                        crate::dataset::MatchRead::Record { .. }
-                                            | crate::dataset::MatchRead::SecondaryRecord { .. }
-                                    )
+                                    read,
+                                    crate::dataset::MatchRead::Record { .. }
+                                        | crate::dataset::MatchRead::SecondaryRecord { .. }
                                 )
                             })),
                         findings,
@@ -913,6 +973,124 @@ impl Declarations {
         }
         Ok((secondary, result))
     }
+}
+
+/// Donor derivations may read another declared selector in either source order.
+/// Analyze their shared extracted references before any selector is bound.
+fn derivation_order(
+    d: &Document,
+    items: &[usize],
+    project: Option<&functions::Prepared>,
+    templates: &str_template::Prepared,
+    limits: CompilationLimits,
+) -> Result<Vec<usize>, PrepareError> {
+    use crate::dependency_analysis::{self, Error};
+    const EDGE_LIMIT: usize = 65_536;
+    let names = items
+        .iter()
+        .map(|&item| text(d, field(d, item, "id")?))
+        .collect::<Result<Vec<_>, _>>()?;
+    let indices = names
+        .iter()
+        .enumerate()
+        .map(|(index, &name)| (name, index))
+        .collect::<BTreeMap<_, _>>();
+    let mut graph = vec![Vec::new(); items.len()];
+    let mut sites = vec![Vec::new(); items.len()];
+    let mut edges = 0usize;
+    let mut projection =
+        crate::diagnostic::ProjectionBudget::new(crate::diagnostic::MAX_PROJECTION_BYTES)
+            .map_err(|_| PrepareError::Internal)?;
+    for (index, &item) in items.iter().enumerate() {
+        let Some(derivations) = d
+            .field(item, "derivations")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        else {
+            continue;
+        };
+        for &(name, handled) in mapping(d, derivations)? {
+            let path = format!("intermediates[{index}].derivations.{}", text(d, name)?);
+            let (value, expression_path) = intermediate_derivations::value(d, handled, &path)?;
+            let &[(operation, _)] = mapping(d, value)? else {
+                return Err(PrepareError::Internal);
+            };
+            let path = format!("{expression_path}.{}", text(d, operation)?);
+            let mut references = Vec::new();
+            derivations::donor_references(d, value, project, &mut references, 0)?;
+            self_relations::template_references(d, value, templates, &mut references, 0)?;
+            for reference in references {
+                let Some(dependency) = reference
+                    .split_once('.')
+                    .and_then(|(name, _)| indices.get(name))
+                    .copied()
+                else {
+                    continue;
+                };
+                edges = edges
+                    .checked_add(1)
+                    .filter(|&edges| edges <= EDGE_LIMIT)
+                    .ok_or_else(|| {
+                        PrepareError::limit("intermediate_dependency_edges", EDGE_LIMIT, None, None)
+                    })?;
+                projection
+                    .text(&path)
+                    .and_then(|()| projection.text(names[index]))
+                    .and_then(|()| projection.text(names[dependency]))
+                    .and_then(|()| projection.charge(64))
+                    .map_err(|_| {
+                        PrepareError::limit(
+                            "intermediate_dependency_metadata",
+                            crate::diagnostic::MAX_PROJECTION_BYTES,
+                            None,
+                            None,
+                        )
+                    })?;
+                graph[index].push(dependency);
+                sites[index].push((dependency, path.clone()));
+            }
+        }
+    }
+    let analysis = dependency_analysis::analyze(
+        &graph,
+        dependency_analysis::Limits {
+            nodes: limits.columns,
+            edges: EDGE_LIMIT,
+        },
+    )
+    .map_err(|error| match error {
+        Error::NodeLimit { limit, required } => {
+            PrepareError::limit("intermediate_dependency_nodes", limit, Some(required), None)
+        }
+        Error::EdgeLimit { limit, required } => {
+            PrepareError::limit("intermediate_dependency_edges", limit, Some(required), None)
+        }
+        Error::SizeOverflow => {
+            PrepareError::limit("intermediate_dependency_edges", EDGE_LIMIT, None, None)
+        }
+        Error::InvalidDependency { .. } => PrepareError::Internal,
+    })?;
+    if let Some(cycle) = analysis.cycle {
+        let mut paths = Vec::new();
+        for pair in cycle.windows(2) {
+            for (dependency, path) in &sites[pair[0]] {
+                if *dependency == pair[1] && !paths.contains(path) {
+                    paths.push(path.clone());
+                }
+            }
+        }
+        let mut finding = LookupFinding::new(
+            "",
+            crate::diagnostic::ConditionCode::IntermediateDerivationCycle,
+        );
+        let names = cycle.iter().map(|&index| names[index]).collect::<Vec<_>>();
+        finding.texts("cycle", &names);
+        let mut diagnostic = finding.diagnostic();
+        diagnostic.spec_paths = paths;
+        return Err(PrepareError::Invalid(vec![PreflightFinding::Scalar(
+            diagnostic,
+        )]));
+    }
+    Ok(analysis.order)
 }
 
 impl Declarations {

@@ -528,6 +528,31 @@ pub(super) fn window_reached() -> BTreeSet<ConditionCode> {
             values,
         ));
     }
+    let prepared = compile(
+        Map(vec![(
+            "value",
+            Map(vec![(
+                "baseline_flag",
+                Map(vec![("date", Text("ID")), ("reference_date", Text("ID"))]),
+            )]),
+        )]),
+        None,
+    );
+    let found = failures(&prepared);
+    assert_eq!(found.len(), 1);
+    let mut projected = found[0].diagnostics(&source).unwrap();
+    reached.insert(check(
+        projected.remove(0),
+        "incompatible_input_type",
+        Some("REQ-0323"),
+        &["columns.VALUE.derivation.baseline_flag.date"],
+        vec![
+            ("operation", text("baseline_flag")),
+            ("source", text("ID")),
+            ("expected", text("date or datetime")),
+            ("actual", text("int")),
+        ],
+    ));
     reached
 }
 

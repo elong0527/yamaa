@@ -2,6 +2,29 @@
 use super::*;
 use crate::bound_expression::Read;
 fn intermediate_deferred(index: usize, deferred: &[bool], intermediates: &[Intermediate]) -> bool {
+    let mut pending = vec![index];
+    let mut seen = alloc::collections::BTreeSet::new();
+    while let Some(index) = pending.pop() {
+        if !seen.insert(index) {
+            continue;
+        }
+        let Some(item) = intermediates.get(index) else {
+            return true;
+        };
+        if item.keys.iter().any(
+            |key| matches!(&key.value, MatchValue::Expression(expression) if expression.windowed),
+        ) {
+            return true;
+        }
+        for field in item.current_fields() {
+            if let CurrentRead::Intermediate { index: child, .. } = field.read {
+                if child >= index {
+                    return true;
+                }
+                pending.push(child);
+            }
+        }
+    }
     let mut found = false;
     visit_output_dependencies(
         index,
@@ -13,17 +36,30 @@ fn intermediate_deferred(index: usize, deferred: &[bool], intermediates: &[Inter
     .is_err()
         || found
 }
-fn read_deferred(read: Read, deferred: &[bool], intermediates: &[Intermediate]) -> bool {
+/// A key expression can itself require the completed window relation even
+/// when none of its input columns were produced by another window.
+pub fn read_requires_window(
+    read: &Read,
+    deferred: &[bool],
+    intermediates: &[Intermediate],
+) -> bool {
     match read {
-        Read::Column(column) => deferred[column],
-        Read::Intermediate { index, .. } => intermediate_deferred(index, deferred, intermediates),
+        Read::Column(column) => deferred.get(*column).copied().unwrap_or(true),
+        Read::Intermediate { index, .. } => intermediate_deferred(*index, deferred, intermediates),
         Read::Source(_) => false,
         Read::Joined(read) => {
-            read.record_keys.is_none() && read.keys.iter().any(|key| deferred[key.output_column])
+            read.record_keys.is_none()
+                && read
+                    .keys
+                    .iter()
+                    .any(|key| deferred.get(key.output_column).copied().unwrap_or(true))
         }
     }
 }
-fn expression_deferred(
+fn read_deferred(read: Read, deferred: &[bool], intermediates: &[Intermediate]) -> bool {
+    read_requires_window(&read, deferred, intermediates)
+}
+pub(super) fn expression_deferred(
     expression: &Expression,
     deferred: &[bool],
     intermediates: &[Intermediate],
@@ -34,7 +70,7 @@ fn expression_deferred(
         Expression::Aggregate(aggregate) => match aggregate.relation() {
             AggregateRelation::Output { group_by } => group_by.iter().any(|&column| deferred[column])
                 || aggregate.bindings().iter().any(|binding| deferred[binding.column]),
-            AggregateRelation::Matched { keys, .. } => keys.iter().any(|key| key.value.read().and_then(MatchRead::output_column).is_some_and(|column| deferred[column])),
+            AggregateRelation::Matched { keys, .. } => keys.iter().any(|key| matches!(&key.value, MatchValue::Expression(expression) if expression.windowed) || key.value.reads().filter_map(MatchRead::output_column).any(|column| deferred[column])),
             AggregateRelation::CurrentGroup => false,
         },
         Expression::Column(column) => deferred[*column],
