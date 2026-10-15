@@ -319,6 +319,8 @@ mod tests {
     use super::*;
     #[test]
     fn traversal_preserves_the_complete_long_failure_and_original_owner() {
+        let expected =
+            yamaa_core::diagnostic::ConditionCode::InheritanceParentUnavailable.definition();
         let path = "x".repeat(3_000_000);
         let error = graph::Error::<()>::Unavailable {
             declaring: "entry".into(),
@@ -329,7 +331,7 @@ mod tests {
             assert_eq!(
                 projected,
                 json!({"status":"invalid", "diagnostics":[{
-                    "phase":"validation", "condition":"parent_not_found", "requirement":"REQ-0654",
+                    "phase":expected.phase, "condition":expected.condition, "requirement":expected.requirement,
                     "spec_paths":["parents"], "context":{"source":"entry", "path":"x".repeat(3_000_000)}
                 }]})
             );
