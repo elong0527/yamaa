@@ -71,7 +71,7 @@ pub fn observe_input(input: SchemaInput, document: &str, root: Option<&str>) -> 
             let context = finding
                 .context
                 .map(|(name, field)| (name.into(), value(field)))
-                .collect::<Map<_, _>>();
+                .collect::<Map<String, _>>();
             json!({"phase": finding.phase, "condition": finding.condition,
                 "requirement": finding.requirement, "spec_paths": [finding.path],
                 "context": context})

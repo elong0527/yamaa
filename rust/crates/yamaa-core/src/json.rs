@@ -334,6 +334,26 @@ impl From<Vec<Value>> for Value {
         Self::Array(value)
     }
 }
+impl<const N: usize> From<[Value; N]> for Value {
+    fn from(value: [Value; N]) -> Self {
+        Self::Array(Vec::from(value))
+    }
+}
+impl FromIterator<Value> for Value {
+    fn from_iter<T: IntoIterator<Item = Value>>(values: T) -> Self {
+        Self::Array(values.into_iter().collect())
+    }
+}
+impl<K: Into<String>> FromIterator<(K, Value)> for Value {
+    fn from_iter<T: IntoIterator<Item = (K, Value)>>(values: T) -> Self {
+        Self::Object(
+            values
+                .into_iter()
+                .map(|(key, value)| (key.into(), value))
+                .collect(),
+        )
+    }
+}
 impl From<Map<String, Value>> for Value {
     fn from(value: Map<String, Value>) -> Self {
         Self::Object(value)
@@ -351,6 +371,9 @@ macro_rules! integer {
         impl From<$ty> for Value { fn from(value: $ty) -> Self { Self::Number(value.into()) } }
         impl PartialEq<$ty> for Value {
             fn eq(&self, value: &$ty) -> bool { self == &Self::from(*value) }
+        }
+        impl PartialEq<Value> for $ty {
+            fn eq(&self, value: &Value) -> bool { value == self }
         }
     )* };
 }
@@ -373,6 +396,26 @@ impl PartialEq<String> for Value {
 impl PartialEq<bool> for Value {
     fn eq(&self, value: &bool) -> bool {
         self.as_bool() == Some(*value)
+    }
+}
+impl PartialEq<Value> for str {
+    fn eq(&self, value: &Value) -> bool {
+        value == self
+    }
+}
+impl PartialEq<Value> for &str {
+    fn eq(&self, value: &Value) -> bool {
+        value == self
+    }
+}
+impl PartialEq<Value> for String {
+    fn eq(&self, value: &Value) -> bool {
+        value == self
+    }
+}
+impl PartialEq<Value> for bool {
+    fn eq(&self, value: &Value) -> bool {
+        value == self
     }
 }
 
