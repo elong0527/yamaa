@@ -100,6 +100,28 @@ The ordinary CI workflow runs the same check targets listed above for each PR.
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 
+Before every merge, run a fresh read-only review check with an authenticated
+GitHub CLI, supplying the exact final commit:
+
+```sh
+python -m tools.ci.review_gate --repository elong0527/yamaa --pr <number> --head <full-commit>
+```
+
+This requires CodeRabbit's authentic `Review completed` status on that commit
+and resolved review threads. A skipped successful status or a review of an
+earlier commit does not pass. Triage findings outside inline threads as well.
+The trusted-main `review.yml` workflow publishes the `review-completion` status
+for current open PRs targeting main. It refreshes after PR/status/discussion
+events and on a five-minute schedule for review and thread changes. It never
+checks out PR code; a formal review submission is optional for clean reviews.
+
+The workflow does not configure repository rules. Server enforcement requires a
+maintainer to make `review-completion` from GitHub Actions a required status on
+main, require CodeRabbit's own status, and require conversation resolution.
+The fresh manual check remains mandatory, including during bootstrap and when
+scheduled runs are delayed. An administrator must configure these rules
+separately; the workflow's token cannot administer repository rules.
+
 Native qualification is separate: `.github/workflows/native.yml` builds and
 installs the supported Python wheel/source and R source combinations nightly
 and on dispatch, or on a `qualification/issue-*` push. It checks public

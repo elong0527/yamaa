@@ -29,6 +29,10 @@ their prerequisites. Local targets and CI share the owned scripts under
 
 - **0.4.0 is a fresh release.** Breaking changes are allowed. Remove obsolete
   interfaces and callers together instead of adding compatibility aliases.
+- **Complete review before merging.** On the exact final PR head, require
+  CodeRabbit's explicit completed review and resolve every actionable finding.
+  Pending, missing, skipped or older-head reviews do not count. Run the fresh
+  read-only review gate in `CONTRIBUTING.md` before every merge, alongside CI.
 - **Expected data is truth.** Files under `benchmarks/**/expected/` are
   independently authored and define what an implementation must
   reproduce. Never regenerate them from the implementation, and never
