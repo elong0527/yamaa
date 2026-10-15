@@ -226,7 +226,6 @@ fn normalize(
         };
         logical.push(schema);
     }
-    diagnostics.truncate(crate::limits::Limits::FINDINGS);
     if !diagnostics.is_empty() {
         return Ok(Err(diagnostics));
     }
@@ -348,7 +347,6 @@ pub(crate) fn graph_normalized_schemas(
         }
         schemas.push(complete);
     }
-    diagnostics.truncate(crate::limits::Limits::FINDINGS);
     if !diagnostics.is_empty() {
         return Ok(Err(diagnostics));
     }

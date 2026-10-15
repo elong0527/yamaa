@@ -23,7 +23,6 @@ impl PreparedSpecification {
                 let output = self.output_findings();
                 Ok(output
                     .into_iter()
-                    .take(crate::limits::Limits::FINDINGS)
                     .map(|finding| finding.diagnostic())
                     .collect())
             }
@@ -60,7 +59,6 @@ impl PreparedSpecification {
                         .split_once('.')
                         .is_some_and(|(namespace, _)| failed.contains(namespace))
                 });
-                diagnostics.truncate(crate::limits::Limits::FINDINGS);
                 Ok(diagnostics)
             }
             Err(error) => Err(error),
