@@ -1,0 +1,12 @@
+# Codecov settings for the reports uploaded by .github/workflows/coverage.yml.
+fixes:
+  # The Python package is installed non-editable in CI, so its coverage
+  # report names venv site-packages paths; map them back to the source
+  # tree. The interpreter segment tracks the Python version the setup
+  # action installs (3.14).
+  - "python/.venv/lib/python3.14/site-packages/yamaa/::python/src/yamaa/"
+
+ignore:
+  - "python/tests"
+  - "tools/tests"
+  - "rust/tests"
