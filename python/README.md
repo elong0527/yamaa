@@ -23,6 +23,15 @@ study uses project functions or terminology. Paths resolve relative to their
 original declaring YAML layer under the [local path policy](../rules/storage/resources.md).
 There is no upward project-root discovery or public backend selector in this API.
 
+Inputs can use CSV, Parquet, SAS datasets (`.sas7bdat`), or SAS Transport v5/v8
+(`.xpt`). SAS inputs explicitly declare `encoding`, for example
+`{path: input/dm.xpt, encoding: windows-1252, types: {SEQ: int, VISITDT: date}}`.
+Character fields default to `str`, numeric fields to `float`; numeric `types`
+narrowing requires exact integral values. See the
+[SAS source contract](../rules/storage/sas.md) for missing values, character
+padding, supported encodings and 1960 date/datetime epochs. Outputs remain CSV
+or Parquet.
+
 Build reads inputs and invokes the declared project functions through the shared
 engine. Check performs preparation/static validation without reading study data
 or invoking project code. Each result owns its native state; copied Polars output,
@@ -30,7 +39,16 @@ issue and log views remain independent. Issues contain `phase`, `condition`,
 `requirement`, `spec_paths` and JSON-text `context`. The public issue table has no
 `severity` field. Signed integers retain their full 64-bit range; strings
 retain Unicode and embedded NUL, and date/datetime columns retain ordinary Polars
-types. Numeric operations use PortableLibmV1 with pinned libm 0.2.16;
+types. A compiler capacity refusal keeps `engine_rejected` and a null
+requirement. Its context names `code: compiler_limit`, `stage: prepare`,
+`resource`, integer `limit` and `actual` when counted; `spec_paths` identifies
+the refused declaration. The same facts are returned by check and build,
+with or without an environment. Numeric policy refusals retain their applicable
+resource bound under `code: numeric_policy`. Layered preparation and YAML
+resource refusals use `code: resource_limit` and retain the preparation or
+decoder `phase` alongside the resource bound in context.
+
+Numeric operations use PortableLibmV1 with pinned libm 0.2.16;
 the [numeric implementation](../rust/crates/yamaa-core/src/numeric.rs) defines
 the exact operations and domain checks.
 
@@ -45,18 +63,22 @@ writes remain if a later target fails. There is no whole-run file rollback.
 ## Implementation limits
 
 The shared engine admits up to 1,024 declared columns, output columns and fields
-in each input's `types`. CSV, Parquet, Arrow imports and producer contracts use
+in each input's `types`. CSV, Parquet, SAS, Arrow imports and producer contracts use
 the same width ceiling. An `ordinal` adds one field and counts toward this bound.
 Specifications still admit at most 64 keys and 16 inputs.
 
-Width does not override aggregate budgets: the default source allowance is
-2,097,152 cells and output allowance is 1,048,576 cells. At 1,024 fields these
-allow at most 2,048 source rows and 1,024 output rows, before other limits apply.
+The public hosts use the longitudinal profile: 10,000,000 source or output
+rows, 640,000,000 source or output cells, 1 GiB scalar text, 512 MiB output
+text and 1 GiB encoded input/output. CSV admission includes its header in the
+field and record quotas. Finite report and producer budgets account for the
+same profile. Execution permits 2,000,000,000 logical work units; producer nodes
+share cumulative allowances, and expensive plans can exhaust work before size.
+
 Validation and normalization share 67,108,864 logical work units; complex or
-inherited specifications can exhaust this budget below the width ceiling.
-These are implementation policies, not language constraints or process-memory
-guarantees. Broader capacity and inheritance work remains tracked in
-[#2185](https://github.com/elong0527/yamaa/issues/2185) and
+inherited specifications can exhaust this separate preparation budget below
+the width ceiling. These are implementation policies, not language constraints
+or process-memory guarantees. Layered work policy and release acceptance remain
+tracked in [#2300](https://github.com/elong0527/yamaa/issues/2300) and
 [#2288](https://github.com/elong0527/yamaa/issues/2288).
 
 ## Define documents

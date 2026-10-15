@@ -57,7 +57,7 @@ fn positions_and_stored_contract_are_exact_at_the_admission_boundary() {
     ] {
         assert!(matches!(
             Ordinal::admit(&original, 3, "REC", limits),
-            Err(Error::Limit)
+            Err(Error::ResourceLimit { .. })
         ));
     }
     assert!(matches!(
@@ -70,7 +70,7 @@ fn positions_and_stored_contract_are_exact_at_the_admission_boundary() {
                 cells: usize::MAX
             }
         ),
-        Err(Error::Limit)
+        Err(Error::ResourceLimit { .. })
     ));
     assert!(matches!(
         Ordinal::admit(

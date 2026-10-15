@@ -90,10 +90,17 @@ pub(super) fn declared_source_type(
         return Ok(None);
     };
     let path = text(d, field(d, input, "path")?)?;
-    if SourceProfile::from_path(path) != Some(SourceProfile::Csv) {
+    let profile = SourceProfile::from_path(path);
+    if !matches!(
+        profile,
+        Some(SourceProfile::Csv | SourceProfile::Xport | SourceProfile::Sas7bdat)
+    ) {
         return Ok(None);
     }
     let declared = d.field(input, "types").and_then(|id| d.field(id, name));
+    if declared.is_none() && profile != Some(SourceProfile::Csv) {
+        return Ok(None);
+    }
     Ok(Some(
         match declared.map(|id| text(d, id)).transpose()?.unwrap_or("str") {
             "str" => ColumnType::Str,
@@ -123,8 +130,21 @@ pub(super) fn declaration_findings(
         bytes: &mut usize,
         rows: bool,
     ) -> Result<(), PrepareError> {
-        if depth > 64 || prefix.len() > 65_536 {
-            return Err(PrepareError::Limit("case_depth"));
+        if depth > 64 {
+            return Err(PrepareError::limit(
+                "case_depth",
+                64,
+                Some(depth),
+                Some(prefix),
+            ));
+        }
+        if prefix.len() > 65_536 {
+            return Err(PrepareError::limit(
+                "path_bytes",
+                65_536,
+                Some(prefix.len()),
+                Some(prefix),
+            ));
         }
         for &op in OPERATIONS {
             if let Some(payload) = d.field(value, op) {
@@ -137,7 +157,9 @@ pub(super) fn declaration_findings(
                             .checked_add(path.len())
                             .and_then(|n| n.checked_add(value.len()))
                             .filter(|&n| n <= 16_777_216)
-                            .ok_or(PrepareError::Limit("temporal_diagnostics"))?;
+                            .ok_or_else(|| {
+                                PrepareError::limit("temporal_diagnostics", 16_777_216, None, None)
+                            })?;
                         findings.push(PreflightFinding::TemporalBounds {
                             path: path.clone(),
                             value: value.into(),
@@ -167,7 +189,7 @@ pub(super) fn declaration_findings(
                         .collect::<Result<Vec<_>, PrepareError>>()?,
                     path.clone(),
                 )
-                .map_err(|_| PrepareError::Limit("temporal_diagnostics"))?;
+                .map_err(|_| PrepareError::limit("temporal_diagnostics", 16_777_216, None, None))?;
                 for (index, field_name) in operation.fields().iter().enumerate() {
                     let id = field(d, payload, field_name)?;
                     let N::Text(source) = &d.nodes()[id] else {
@@ -203,7 +225,9 @@ pub(super) fn declaration_findings(
                             .checked_add(path.len())
                             .and_then(|n| n.checked_add(source.len()))
                             .filter(|&n| n <= 16_777_216)
-                            .ok_or(PrepareError::Limit("temporal_diagnostics"))?;
+                            .ok_or_else(|| {
+                                PrepareError::limit("temporal_diagnostics", 16_777_216, None, None)
+                            })?;
                         findings.push(PreflightFinding::Scalar(
                             witness.operand_diagnostic(index, actual),
                         ));
@@ -304,13 +328,18 @@ pub(super) fn prepare(
             if let Some(id) = d.field(payload, "invalid") {
                 operation = operation
                     .with_invalid(literal(d, id, &format!("{path}.invalid"))?)
-                    .map_err(|_| PrepareError::Limit("temporal_diagnostics"))?;
+                    .map_err(|_| {
+                        PrepareError::limit("temporal_diagnostics", 16_777_216, None, None)
+                    })?;
             }
             Ok(operation)
         }
-        Err(crate::dataset::InvalidTemporal::Limit) => {
-            Err(PrepareError::Limit("temporal_diagnostics"))
-        }
+        Err(crate::dataset::InvalidTemporal::Limit) => Err(PrepareError::limit(
+            "temporal_diagnostics",
+            16_777_216,
+            None,
+            None,
+        )),
         Err(crate::dataset::InvalidTemporal::Shape) => Err(PrepareError::Internal),
         Err(crate::dataset::InvalidTemporal::Bounds) => Err(PrepareError::Invalid(vec![
             PreflightFinding::TemporalBounds {

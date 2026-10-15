@@ -66,18 +66,26 @@ impl ActivationView for crate::file_producer_build::Provenance {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     InvalidObservation,
-    Limit,
+    Limit {
+        resource: &'static str,
+        limit: usize,
+        actual: Option<usize>,
+    },
     Projection,
 }
-struct Budget(usize);
+struct Budget {
+    limit: usize,
+    remaining: usize,
+}
 impl Budget {
     fn text(&mut self, text: &str) -> Result<(), Error> {
-        let charge = text
-            .len()
-            .checked_mul(12)
-            .and_then(|n| n.checked_add(128))
-            .ok_or(Error::Limit)?;
-        self.0 = self.0.checked_sub(charge).ok_or(Error::Limit)?;
+        let charge = text.len().checked_mul(12).and_then(|n| n.checked_add(128));
+        let next = charge.and_then(|charge| self.remaining.checked_sub(charge));
+        self.remaining = next.ok_or(Error::Limit {
+            resource: "report_activation_bytes",
+            limit: self.limit,
+            actual: charge.and_then(|charge| (self.limit - self.remaining).checked_add(charge)),
+        })?;
         Ok(())
     }
     fn value(&mut self, value: &Value) -> Result<(), Error> {
@@ -127,8 +135,19 @@ pub fn activation_with_limit(
     observed: &Observations,
     maximum: usize,
 ) -> Result<Json, Error> {
-    if observed.bindings.len() > 1024 || observed.tests.len() > 65_536 {
-        return Err(Error::Limit);
+    if observed.bindings.len() > 1024 {
+        return Err(Error::Limit {
+            resource: "report_activation_bindings",
+            limit: 1024,
+            actual: Some(observed.bindings.len()),
+        });
+    }
+    if observed.tests.len() > 65_536 {
+        return Err(Error::Limit {
+            resource: "report_activation_tests",
+            limit: 65_536,
+            actual: Some(observed.tests.len()),
+        });
     }
     let selected = run.called_functions().len();
     if selected == 0
@@ -141,7 +160,10 @@ pub fn activation_with_limit(
     if !observed.bindings.is_empty() && observed.lock != LockObservation::Verified {
         return Err(Error::InvalidObservation);
     }
-    let mut budget = Budget(maximum);
+    let mut budget = Budget {
+        limit: maximum,
+        remaining: maximum,
+    };
     for (index, binding) in observed.bindings.iter().enumerate() {
         if binding.function != index
             || (index + 1 < observed.bindings.len()
@@ -225,8 +247,36 @@ pub fn activation_with_limit(
     let result = json!({"lock":match observed.lock {
         LockObservation::NotRequested => "not_requested", LockObservation::Attempted => "attempted", LockObservation::Verified => "verified", LockObservation::Rejected => "rejected", LockObservation::Interrupted => "interrupted",
     }, "bindings":bindings, "tests":tests});
-    if result.to_string().len() > maximum {
-        return Err(Error::Limit);
+    let bytes = result.to_string().len();
+    if bytes > maximum {
+        return Err(Error::Limit {
+            resource: "report_activation_bytes",
+            limit: maximum,
+            actual: Some(bytes),
+        });
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn report_text_refusal_keeps_the_complete_charge_and_original_quota() {
+        let mut budget = Budget {
+            limit: 256,
+            remaining: 256,
+        };
+        budget.text("a").unwrap();
+        assert_eq!(
+            budget.text("abcdefghijk"),
+            Err(Error::Limit {
+                resource: "report_activation_bytes",
+                limit: 256,
+                actual: Some(400),
+            })
+        );
+        assert_eq!(budget.remaining, 116);
+    }
 }

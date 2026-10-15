@@ -52,6 +52,19 @@ def _extension_attribute(element: etree._Element, name: str) -> str | None:
     return matches[0] if matches else None
 
 
+def _has_item_data_ancestor(element: etree._Element, namespace: str | None) -> bool:
+    ancestor = element.getparent()
+    while ancestor is not None:
+        if (
+            isinstance(ancestor.tag, str)
+            and etree.QName(ancestor.tag).namespace == namespace
+            and _local_name(ancestor.tag) == "ItemData"
+        ):
+            return True
+        ancestor = ancestor.getparent()
+    return False
+
+
 def _required_attribute(element: etree._Element, name: str) -> str:
     value = element.get(name)
     if value is None or value == "":
@@ -325,12 +338,18 @@ def iter_odm_records(
                         continue
                     if name == "ODM":
                         raise ODMError("document contains a nested ODM element")
-                    if clinical is None and name == "Study":
-                        metadata_study = _required_attribute(element, "OID")
-                    elif clinical is None and name == "MetaDataVersion":
-                        if metadata_study is None:
-                            raise ODMError("MetaDataVersion appears outside Study")
-                        metadata_version = _required_attribute(element, "OID")
+                    if name == "Study":
+                        if metadata_study is not None:
+                            raise ODMError("nested Study is not supported")
+                        if clinical is None:
+                            metadata_study = _required_attribute(element, "OID")
+                    elif name == "MetaDataVersion":
+                        if metadata_version is not None:
+                            raise ODMError("nested MetaDataVersion is not supported")
+                        if clinical is None:
+                            if metadata_study is None:
+                                raise ODMError("MetaDataVersion appears outside Study")
+                            metadata_version = _required_attribute(element, "OID")
                     elif clinical is None and name in {
                         "StudyEventDef",
                         "FormDef",
@@ -436,6 +455,12 @@ def iter_odm_records(
                     continue
 
                 if name == "ItemData":
+                    # ItemData holds a value, never another ItemData: without
+                    # this guard the inner item is emitted as if it were a
+                    # sibling row, silently inventing a clinical value the
+                    # document's structure does not support.
+                    if _has_item_data_ancestor(element, odm_namespace):
+                        raise ODMError("nested ItemData is not supported")
                     if subject is None or event is None:
                         raise ODMError("ItemData requires subject and event context")
                     item_oid = _required_attribute(element, "ItemOID")
@@ -612,6 +637,34 @@ def iter_odm_records(
                         ) from error
                     yield row
                     _release(element)
+                elif name in {
+                    "ClinicalData",
+                    "SubjectData",
+                    "StudyEventData",
+                    "FormData",
+                    "ItemGroupData",
+                } and _has_item_data_ancestor(element, odm_namespace):
+                    # A clinical container inside ItemData mutates the
+                    # reader context at its start event, but below its end
+                    # event would be skipped like other ItemData children,
+                    # so the context would never be cleared: a group or
+                    # form written inside one item silently supplied the
+                    # projected context of every following row. Roll the
+                    # context back and reject the container here, at its
+                    # own end — an ItemData nested inside it ends first,
+                    # so that nesting is still reported as nested ItemData.
+                    if name == "ItemGroupData":
+                        if groups:
+                            groups.pop()
+                    elif name == "FormData":
+                        form = None
+                    elif name == "SubjectData":
+                        subject = None
+                    elif name == "StudyEventData":
+                        event = None
+                    elif name == "ClinicalData":
+                        clinical = None
+                    raise ODMError(f"{name} inside ItemData is not supported")
                 elif (
                     element.getparent() is not None
                     and _local_name(element.getparent().tag) == "ItemData"

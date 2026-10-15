@@ -1889,12 +1889,6 @@ local({
   on.exit(unlink(directory,recursive=TRUE))
   for(name in names(key_truth)) {
     truth <- key_truth[[name]]
-    # REQ-0190 now admits predicate types before cell-dependent key reads.
-    # Preserve the historical fixture and author the current finding here.
-    if(identical(name,"dependency_before_bad_filter")) truth$issues <- list(
-      phase="validation",condition="incompatible_input_type",requirement="REQ-0190",
-      spec_paths=list("intermediates[0].filter"),context='{"left_type":"int","right_type":"str"}')
-
     stopifnot(file.copy(file.path(root,"keys",name),directory,recursive=TRUE))
     case <- file.path(directory,name);entry <- file.path(case,"spec.yaml")
     written <- rawfile(entry);output <- file.path(case,"out.csv")
@@ -1920,7 +1914,7 @@ local({
       stopifnot(!file.exists(output),identical(rawfile(entry),written))
     }
   }
-  cat("all 19 scalar-key controls match current complete ordered findings, CSV and handler ledgers twice without Python passed\n")
+  cat("all 19 unchanged scalar-key captures match complete ordered findings, CSV and handler ledgers twice without Python passed\n")
 })
 
 # Compare complete independently authored ledgers while ignoring only JSON object
@@ -2205,6 +2199,32 @@ local({
 })
 
 local({
+  for (truth in host_truth[["inheritance_nulls"]]) {
+    directory <- tempfile("yamaa-inheritance-null-"); dir.create(directory)
+    entry <- file.path(directory,"spec.yaml")
+    writeBin(charToRaw(truth$spec),entry)
+    for (name in names(truth$parents)) writeBin(charToRaw(truth$parents[[name]]),file.path(directory,name))
+    checked <- yamaa_check(entry)$issues
+    if (is.null(truth$check_condition)) stopifnot(nrow(checked)==0L)
+    else stopifnot(identical(checked$condition[[1]],truth$check_condition))
+    for (name in names(truth$inputs)) writeBin(charToRaw(truth$inputs[[name]]),file.path(directory,name))
+    result <- yamaa_domain(entry)
+    if (is.null(truth$run_condition)) {
+      stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),
+        identical(rawfile(file.path(directory,"result.csv")),charToRaw(truth$csv)))
+    } else stopifnot(identical(result$issues$condition[[1]],truth$run_condition),is.null(result$output))
+    observations <- get(".domain_observations",asNamespace("yamaa"))(result)
+    if (!is.null(observations)) {
+      counts <- jsonlite::fromJSON(rawToChar(observations),simplifyVector=FALSE)$handler_counts
+      reached <- sum(vapply(counts,function(item) if(item$handler=="no_match") item$count else 0,numeric(1)))
+      stopifnot(reached==truth$no_match_count)
+    }
+    unlink(directory,recursive=TRUE)
+  }
+  cat("introducing missing handlers and inherited clears agree across public host boundaries\n")
+})
+
+local({
   for (truth in host_truth[["typed_intermediates"]]) {
     directory <- tempfile("yamaa-typed-intermediate-"); dir.create(directory)
     entry <- file.path(directory,"spec.yaml")
@@ -2261,6 +2281,36 @@ local({
     unlink(directory,recursive=TRUE)
   }
   cat("shared temporal arithmetic conformance preserves civil values and duration handlers without Python\n")
+})
+
+local({
+  for (truth in host_truth[["namespace_admission"]]) {
+    directory <- tempfile("namespace-admission-"); dir.create(directory)
+    entry <- file.path(directory,"spec.yaml")
+    writeBin(charToRaw(truth$specification),entry)
+    original <- rawfile(entry)
+    # No input file exists: declaration admission must precede source access.
+    for (attempt in 1:2) {
+      checked <- yamaa_check(entry)
+      result <- yamaa_domain(entry)
+      for (frame in list(checked$issues,result$issues)) {
+        stopifnot(nrow(frame)==length(truth$issues))
+        for (index in seq_along(truth$issues)) {
+          expected <- truth$issues[[index]]
+          stopifnot(identical(frame$phase[[index]],expected$phase),
+            identical(frame$condition[[index]],expected$condition),
+            identical(frame$requirement[[index]],expected$requirement),
+            identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
+            identical(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
+        }
+      }
+      stopifnot(is.null(result$output),
+        inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        !file.exists(file.path(directory,"out.csv")),identical(rawfile(entry),original))
+    }
+    unlink(directory,recursive=TRUE)
+  }
+  cat("original namespace declarations preserve complete paired public refusals before source reads\n")
 })
 
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))

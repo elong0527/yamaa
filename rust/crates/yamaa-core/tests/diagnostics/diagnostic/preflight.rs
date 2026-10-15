@@ -544,6 +544,31 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             vec![(condition, Some(requirement), vec![spec_path], fields)],
         ));
     }
+    for (path, encoding) in [
+        ("source.xpt", None),
+        ("source.sas7bdat", None),
+        ("source.csv", Some("windows-1252")),
+        ("source.parquet", Some("utf-8")),
+    ] {
+        let mut input = vec![("path", Text(path))];
+        if let Some(encoding) = encoding {
+            input.push(("encoding", Text(encoding)));
+        }
+        log_codes.extend(check(
+            base(
+                "TEST",
+                Map(vec![("SRC", Map(input))]),
+                vec![column("ID", Some(source()))],
+                vec![Text("ID")],
+            ),
+            vec![(
+                "source_encoding_required",
+                Some("REQ-1311"),
+                vec!["input.SRC.encoding"],
+                vec![("dataset", text("SRC"))],
+            )],
+        ));
+    }
     for (warning, verification, condition, requirement, paths) in [
         (
             Some("result.csv"),
@@ -1019,6 +1044,60 @@ pub(super) fn intermediate_reached() -> BTreeSet<ConditionCode> {
                     ("intermediate", text("P")),
                     ("declared", texts(&[declared])),
                     ("missing", texts(&[missing])),
+                ],
+            )]
+        };
+        reached.extend(check(fields, expected));
+    }
+    reached
+}
+
+pub(super) fn namespace_reached() -> BTreeSet<ConditionCode> {
+    let mut reached = BTreeSet::new();
+    for duplicate_row in [false, true] {
+        let mut fields = base(
+            "TEST",
+            inputs(),
+            vec![column("ID", Some(source()))],
+            vec![Text("ID")],
+        );
+        fields.push(("base", Text("SRC")));
+        let expected = if duplicate_row {
+            fields.push((
+                "rows",
+                List(
+                    (0..2)
+                        .map(|_| {
+                            Map(vec![
+                                ("id", Text("repeated")),
+                                ("dataset", Text("SRC")),
+                                ("derivations", Map(vec![])),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ));
+            vec![(
+                "duplicate_identifier",
+                Some("REQ-1056"),
+                vec!["rows[1].id", "rows[0].id"],
+                vec![("identifier", text("repeated"))],
+            )]
+        } else {
+            fields.push((
+                "intermediates",
+                List(vec![Map(vec![
+                    ("id", Text("LOOK")),
+                    ("dataset", Text("ABSENT")),
+                ])]),
+            ));
+            vec![(
+                "unknown_field",
+                Some("REQ-0079"),
+                vec!["intermediates[0].dataset"],
+                vec![
+                    ("identifier", text("ABSENT")),
+                    ("intermediate", text("LOOK")),
                 ],
             )]
         };

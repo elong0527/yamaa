@@ -9,8 +9,8 @@ use yamaa_adapters::{
     arrow_table::physical_schema,
     execute_dataset_with_budget,
     ipc_table::{
-        dataset_batches, decode_snapshot, decode_snapshot_with_budget, encode_dataset_with_budget,
-        snapshot_batches, write_dataset_with_budget, TableError,
+        dataset_batches, decode_snapshot_with_budget, encode_dataset_with_budget, snapshot_batches,
+        write_dataset_with_budget, TableError,
     },
     ExecutionBudget,
 };
@@ -91,7 +91,7 @@ fn combined_quotas_are_configurable_and_reset_per_attempt() {
     let donor = integers(&[&[3]]);
     let secondary = vec![donor.as_slice(); 8];
     let plan = plan(schema(ColumnType::Int), 8, RowMode::Records);
-    let mut budget = ExecutionBudget::default();
+    let mut budget = ExecutionBudget::bounded();
     assert!(matches!(
         execute_dataset_with_budget(&plan, &input, &secondary, budget),
         Err(TableError::ShapeLimit)
@@ -246,10 +246,10 @@ fn accepted_output_streams_in_order_and_byte_limits_include_all_frames() {
         ..budget
     };
     let mut partial = Vec::new();
-    assert_eq!(
+    assert!(matches!(
         write_dataset_with_budget(&result.dataset, &mut partial, insufficient),
-        Err(TableError::OutputLimit)
-    );
+        Err(TableError::Limit {resource: "output_ipc_bytes", limit, .. }) if limit == insufficient.max_output_bytes
+    ));
     assert!(partial.len() <= insufficient.max_output_bytes);
     assert!(matches!(
         dataset_batches(
@@ -390,9 +390,9 @@ fn ten_million_records_execute_with_chunked_ipc() {
             ])) as ArrayRef
         }),
     );
-    assert!(input.len() > yamaa_adapters::ipc_table::MAX_INPUT_BYTES);
+    assert!(input.len() > 64 * 1024 * 1024);
     assert!(matches!(
-        decode_snapshot(&input),
+        decode_snapshot_with_budget(&input, ExecutionBudget::bounded()),
         Err(TableError::InputLimit)
     ));
     let rows = snapshot_batches(&input, budget)
@@ -439,11 +439,11 @@ fn large_accepted_output_exceeds_legacy_row_and_byte_caps() {
     .unwrap();
     assert_eq!(execution.dataset.row_count(), count);
     assert!(matches!(
-        encode_dataset_with_budget(&execution.dataset, ExecutionBudget::default()),
+        encode_dataset_with_budget(&execution.dataset, ExecutionBudget::bounded()),
         Err(TableError::ShapeLimit)
     ));
     let bytes = encode_dataset_with_budget(&execution.dataset, budget).unwrap();
-    assert!(bytes.len() > ExecutionBudget::default().max_output_bytes);
+    assert!(bytes.len() > ExecutionBudget::bounded().max_output_bytes);
     let table = decode_snapshot_with_budget(&bytes, budget).unwrap();
     assert_eq!(table.row_count(), count);
     assert_eq!(

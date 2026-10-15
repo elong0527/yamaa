@@ -76,6 +76,24 @@ RULE_CHECK = importlib.util.module_from_spec(RULE_SPEC)
 RULE_SPEC.loader.exec_module(RULE_CHECK)
 
 
+class TestSemanticFinding(unittest.TestCase):
+    def test_native_findings_keep_structured_message_and_own_their_context(self):
+        row = {'phase': 'validation', 'condition': 'unknown_field',
+            'requirement': 'REQ-0103', 'spec_paths': ['columns.X'],
+            'context': {'identifier': 'SRC.UNKNOWN'}, 'span': [1, 12]}
+        finding = CONTROLS.Finding(row, 'spec')
+        self.assertIsInstance(finding, OWNER_VALIDATION_DIAGNOSTICS.ValidationDiagnostic)
+        self.assertEqual(str(finding),
+            'ERROR: spec.columns.X: unknown_field: {"identifier": "SRC.UNKNOWN"}')
+        self.assertEqual(finding.message, 'unknown_field: {"identifier": "SRC.UNKNOWN"}')
+        self.assertEqual(finding.path, 'spec.columns.X')
+        self.assertEqual(finding.span, (1, 12))
+        self.assertEqual(finding.requirement, 'REQ-0103')
+        self.assertEqual(finding.phase, 'validation')
+        row['context']['identifier'] = 'changed'
+        self.assertEqual(finding.context, {'identifier': 'SRC.UNKNOWN'})
+
+
 class TestYamlLoader(unittest.TestCase):
     def test_yaml_12_boolean_resolution(self):
         loaded = yaml.load(
@@ -1831,7 +1849,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
     def test_self_intermediate_excludes_column_phase_columns(self):
         # REQ-0120/REQ-1260: a column-level derivation that is not row-local
         # keeps its column phase, so it is not on the completed rows a SELF
-        # intermediate reads, whether it uses a window, reads a named
+        # intermediate reads, whether it uses a window, reads a SELF-backed
         # intermediate, or reads a column that is not row-local.
         window = {
             'row_number': {
@@ -1842,7 +1860,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
             'window': [
                 {'name': 'LATE', 'type': 'int', 'derivation': window},
             ],
-            'intermediate': [
+            'self_intermediate': [
                 {'name': 'LATE', 'type': 'int', 'derivation': 'FIRST_AE.AESEQ'},
             ],
             'transitive': [
@@ -1859,11 +1877,12 @@ class TestStaticSemanticContracts(unittest.TestCase):
                 spec = self.self_intermediate_spec(
                     'SELF.AESEQ < AE.AESEQ AND SELF.LATE > 0'
                 )
+                dataset = 'SELF' if label == 'self_intermediate' else 'AE'
                 spec['intermediates'].append({
                     'id': 'FIRST_AE',
-                    'dataset': 'AE',
+                    'dataset': dataset,
                     'key': ['USUBJID'],
-                    'order_by': ['AE.AESEQ'],
+                    'order_by': [f'{dataset}.AESEQ'],
                     'keep': 'first',
                 })
                 spec['columns'].extend(columns)
@@ -1881,6 +1900,34 @@ class TestStaticSemanticContracts(unittest.TestCase):
                             {'identifier': 'PRIOR_SAE.AESEQ'}),
                     ],
                 )
+
+    def test_self_intermediate_reads_input_backed_named_column_defaults(self):
+        # REQ-1260 admits input-backed named reads as row defaults. Their
+        # transitive readers are available in completed SELF donors too.
+        for transitive in (False, True):
+            with self.subTest(transitive=transitive):
+                spec = self.self_intermediate_spec(
+                    'SELF.AESEQ < AE.AESEQ AND SELF.LATE > 0'
+                )
+                spec['intermediates'].append({
+                    'id': 'FIRST_AE',
+                    'dataset': 'AE',
+                    'key': ['USUBJID'],
+                    'order_by': ['AE.AESEQ'],
+                    'keep': 'first',
+                })
+                spec['columns'].append({
+                    'name': 'BASE' if transitive else 'LATE',
+                    'type': 'int',
+                    'derivation': 'FIRST_AE.AESEQ',
+                })
+                if transitive:
+                    spec['columns'].append({
+                        'name': 'LATE',
+                        'type': 'int',
+                        'derivation': {'compute': {'expr': 'BASE + 1'}},
+                    })
+                self.assertEqual(self.self_intermediate_errors(spec), [])
 
     def test_self_intermediate_requires_row_templates(self):
         # REQ-0120: SELF names completed rows only when the spec declares
@@ -3867,21 +3914,40 @@ class TestSpecNames(unittest.TestCase):
             "columns": [],
             "rows": [{"id": "row"}, {"id": "row", "dataset": "MISSING"}],
         }
-
         errors = CONTROLS.names(spec, "example/spec.yaml")
+        facts = [(error.condition, error.path, error.context) for error in errors]
+        for path in ('input.ADSL', 'domain', 'rows[1].id', 'rows[0].id'):
+            self.assertIn(('duplicate_identifier', 'example/spec.yaml.' + path,
+                {'identifier': 'row' if path.startswith('rows') else 'ADSL'}), facts)
+        self.assertIn(('driver_unavailable', 'example/spec.yaml.base',
+            {'dataset': 'MISSING'}), facts)
+        self.assertIn(('driver_unavailable', 'example/spec.yaml.rows[1].dataset',
+            {'dataset': 'MISSING', 'row': 'row'}), facts)
 
-        self.assertIn('duplicate_identifier', [error.condition for error in errors])
-        self.assertIn('driver_unavailable', [error.condition for error in errors])
-        spec['domain'] = 'OUT'
-        spec['base'] = 'ADSL'
-        spec['keys'] = ['ID']
-        spec['columns'] = [{'name': 'ID'}]
+        # Earlier root failures cannot stand in for later lookup obligations.
+        # Isolate each original assertion with complete, otherwise valid names.
+        spec.update(domain='OUT', base='ADSL', keys=['ID'], columns=[{'name': 'ID'}])
         spec['output']['columns'] = ['ID']
         spec.pop('rows')
-        spec['intermediates'][0]['dataset'] = 'ADSL'
-        additional = CONTROLS.names(spec, 'example/spec.yaml')
-        self.assertTrue(additional)
-        self.assertIn('ADSL', '\n'.join(additional))
+        for declarations, expected in (
+            ([{'id': 'LOOK', 'dataset': 'MISSING'}], [
+                ('unknown_field', 'intermediates[0].dataset',
+                 {'identifier': 'MISSING', 'intermediate': 'LOOK'})]),
+            ([{'id': 'LOOK', 'dataset': 'ADSL'}, {'id': 'LOOK', 'dataset': 'ADSL'}], [
+                ('duplicate_identifier', 'intermediates[1].id', {'identifier': 'LOOK'}),
+                ('duplicate_identifier', 'intermediates[0].id', {'identifier': 'LOOK'})]),
+            ([{'id': 'ADSL', 'dataset': 'ADSL'}], [
+                ('duplicate_identifier', 'intermediates[0].id', {'identifier': 'ADSL'}),
+                ('duplicate_identifier', 'input.ADSL', {'identifier': 'ADSL'})]),
+            ([{'id': 'OUT', 'dataset': 'ADSL'}], [
+                ('duplicate_identifier', 'intermediates[0].id', {'identifier': 'OUT'}),
+                ('duplicate_identifier', 'domain', {'identifier': 'OUT'})]),
+        ):
+            with self.subTest(declarations=declarations):
+                spec['intermediates'] = declarations
+                findings = CONTROLS.names(spec, 'example/spec.yaml')
+                self.assertEqual([(error.condition, error.path.removeprefix('example/spec.yaml.'),
+                    error.context) for error in findings], expected)
 
     def test_accepts_intermediate_row_driver(self):
         # REQ-1262: a row template may name a named intermediate as
@@ -4019,10 +4085,47 @@ class TestSpecContracts(unittest.TestCase):
         message = "\n".join(errors)
         self.assertEqual([error.condition for error in errors], ['unpaired_fields'])
         self.assertEqual(errors[0].context, {'intermediate': 'FIRST', 'declared': ['order_by'], 'missing': ['keep']})
-        spec.pop('intermediates')
-        remaining = CONTROLS.contracts(spec, 'example/spec.yaml')
-        self.assertTrue(remaining)
-        self.assertIn('verifications', '\n'.join(remaining))
+        # Observe every original independent defect with valid surrounding
+        # declarations. A prior pairing/schema refusal cannot stand in for the
+        # row-count, cardinality, duplicate-id and column-type assertions.
+        base = {
+            'domain': 'ADSL', 'input': {'DM': 'dm.csv'}, 'base': 'DM',
+            'keys': ['USUBJID'], 'output': {'columns': ['USUBJID']},
+            'columns': [{'name': 'USUBJID', 'type': 'str',
+                'derivation': {'source': 'DM.USUBJID'}}],
+        }
+        cases = [
+            ({'verifications': [{'row_count': {}}]},
+             'verifications[0].row_count', 'invalid_declaration',
+             {'reason': 'row_count requires one bound'}),
+            ({'verifications': [{'all_or_none': {
+                'id': 'complete', 'columns': ['USUBJID']}}]},
+             'verifications[0].all_or_none', 'invalid_declaration',
+             {'reason': 'all_or_none names two distinct columns'}),
+            ({'columns': [base['columns'][0],
+                {'name': 'AGE', 'type': 'int', 'derivation': {'literal': 1}}],
+              'verifications': [
+                {'all_or_none': {'id': 'complete', 'columns': ['USUBJID', 'AGE']}},
+                {'assert': {'id': 'complete', 'require': 'TRUE'}}]},
+             'verifications[1].assert', 'duplicate_identifier',
+             {'reason': "verification id 'complete' repeats verifications[0].all_or_none"}),
+            ({'columns': [{**base['columns'][0],
+                'verifications': [{'range': {'min': 1}}]}]},
+             'columns.USUBJID.verifications[0].range', 'invalid_declaration',
+             {'reason': 'a str column does not admit this verification'}),
+            ({'columns': [{**base['columns'][0], 'type': 'int',
+                'derivation': {'literal': 1}, 'verifications': [{'range': {}}]}]},
+             'columns.USUBJID.verifications[0].range', 'invalid_declaration',
+             {'reason': 'range requires one bound'}),
+        ]
+        for changes, path, condition, context in cases:
+            with self.subTest(path=path, context=context):
+                [finding] = CONTROLS.contracts(
+                    {**copy.deepcopy(base), **changes}, 'example/spec.yaml'
+                )
+                self.assertEqual(finding.path, 'example/spec.yaml.' + path)
+                self.assertEqual(finding.condition, condition)
+                self.assertEqual(finding.context, context)
 
     def test_a_row_may_override_an_odm_column_derivation(self):
         # REQ-1260: the item read is a default in the row that uses its own
@@ -6972,12 +7075,21 @@ class TestCsvProfile(unittest.TestCase):
         self.assertIsNone(OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('0.0000001'))
 
     def test_extreme_precision_and_magnitude_do_not_raise(self):
-        # The default decimal context is too small for either, and an
+        # REQ-0744 admits at most 18 fractional digits. The exact stored
+        # binary64 0.1 rounds to this independently authored fixed text.
+        self.assertIsNone(
+            OWNER_REPOSITORY_ARTIFACTS.canonical_float_text(
+                '0.100000000000000006', 18
+            )
+        )
+        self.assertIsNotNone(
+            OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('0.10000000000000000', 18)
+        )
+        # The magnitude still exceeds the default decimal context. An
         # uncaught InvalidOperation would abort the whole run.
         self.assertIsNotNone(
-            OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('0.1' + '0' * 27, 29)
+            OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('1e300', 18)
         )
-        self.assertIsNotNone(OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('1e300', 4))
         self.assertIsNone(OWNER_REPOSITORY_ARTIFACTS.canonical_float_text('0.0313', 4))
 
     def test_temporal_text_follows_the_r016_grammar(self):
@@ -7105,7 +7217,7 @@ class TestCsvProfile(unittest.TestCase):
                    'columns': ['USUBJID']}),
         )
         self.assertIn(
-            'non-negative integer',
+            'an integer from 0 through 18',
             check({'path': 'adsl.csv', 'decimals': -1,
                    'columns': ['USUBJID']}),
         )

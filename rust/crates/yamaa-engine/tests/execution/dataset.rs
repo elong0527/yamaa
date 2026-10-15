@@ -213,11 +213,12 @@ fn repeated_column_patterns_share_subject_budget_and_retain_completed_checks() {
         let attempt = plan.execute_observed(&source, low);
         assert!(matches!(
             *attempt.result.unwrap_err(),
-            ExecutionError::Limit {
+            ExecutionError::ScopedLimit {
                 resource: Resource::PredicateRegexSubjectBytes,
                 limit: 64,
-                ..
-            }
+                required: None,
+                spec_paths,
+            } if spec_paths == ["columns.V.verifications[4].matches.pattern"]
         ));
         assert_eq!(*source.reads.borrow(), [(0, 0), (0, 1), (1, 0), (1, 1)]);
         assert_eq!(attempt.retained_verifications.len(), 5);
@@ -824,7 +825,11 @@ fn failures_keep_provenance_and_stop_later_columns() {
                 }
             )
             .unwrap_err(),
-        ExecutionError::Capacity
+        ExecutionError::Limit {
+            resource: yamaa_engine::dataset::Resource::OutputCells,
+            limit: 3,
+            required: Some(4)
+        }
     ));
     assert!(source.reads.borrow().is_empty());
     let wrong = table(&[("wrong", ColumnType::Str)], vec![]);
@@ -5062,7 +5067,11 @@ fn secondary_lookup_validates_catalog_and_failure_order() {
             )
             .result
             .unwrap_err(),
-        ExecutionError::Capacity
+        ExecutionError::Limit {
+            resource: yamaa_engine::dataset::Resource::SourceRows,
+            limit: 1,
+            required: Some(2)
+        }
     ));
     assert!(plan
         .execute_observed_sources(&source, &[&secondary], limits())

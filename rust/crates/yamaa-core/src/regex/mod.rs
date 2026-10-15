@@ -565,6 +565,13 @@ pub struct MatchBudget {
     used: MatchUsage,
 }
 impl MatchBudget {
+    /// Resume an explicitly owned scope from its already admitted prefix.
+    pub fn with_usage(limits: MatchLimits, used: MatchUsage) -> Self {
+        assert!(used.subject_bytes <= limits.subject_bytes);
+        assert!(used.work <= limits.work);
+        assert!(used.state_cells <= limits.state_cells);
+        Self { limits, used }
+    }
     /// Create an explicitly fresh scope with independently selected resource ceilings.
     pub fn new(limits: MatchLimits) -> Self {
         Self {
@@ -575,6 +582,11 @@ impl MatchBudget {
     /// Observe successful charge prefixes even after a failed attempt.
     pub fn used(&self) -> MatchUsage {
         self.used
+    }
+    /// Admit an application's aggregate scope while retaining every prior charge.
+    /// Per-match limits are checked independently by the local matching scope.
+    pub(crate) fn application_limits(&mut self, limits: MatchLimits) {
+        self.limits = limits;
     }
     /// Refuse overflow and quota exhaustion before changing the selected counter.
     fn consume(&mut self, resource: Resource, amount: usize) -> Result<(), MatchError> {

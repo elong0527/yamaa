@@ -31,6 +31,11 @@ pub enum Error {
     OdmFields(Vec<yamaa_core::odm_source::SchemaError>),
     Malformed,
     Limit,
+    ResourceLimit {
+        resource: &'static str,
+        limit: usize,
+        actual: Option<usize>,
+    },
     Unavailable {
         codec: i64,
     },
@@ -70,9 +75,11 @@ impl Error {
                 row: *row,
                 value: *value,
             },
-            Self::OdmFields(_) | Self::Limit | Self::Unavailable { .. } | Self::Table(_) => {
-                return None
-            }
+            Self::OdmFields(_)
+            | Self::Limit
+            | Self::ResourceLimit { .. }
+            | Self::Unavailable { .. }
+            | Self::Table(_) => return None,
         };
         Some(SourceFinding::Parquet {
             finding,
@@ -100,6 +107,15 @@ impl From<reader::Error> for Error {
                 Self::Malformed
             }
             reader::Error::Limit => Self::Limit,
+            reader::Error::ResourceLimit {
+                resource,
+                limit,
+                actual,
+            } => Self::ResourceLimit {
+                resource,
+                limit,
+                actual,
+            },
             reader::Error::Unavailable(codec) => Self::Unavailable { codec },
             reader::Error::Profile(profile::Error::EmptyName { field }) => {
                 Self::EmptyName { field }
@@ -128,7 +144,6 @@ pub fn parse(
 ) -> Result<ArrowTable, Error> {
     let decoded = reader::read(content, limits)?;
     table::convert(decoded, limits.retained_bytes, table_limits).map_err(|error| match error {
-        table::Error::Limit => Error::Limit,
         table::Error::Invalid => Error::Malformed,
         table::Error::Table(error) => Error::Table(error),
     })
@@ -143,8 +158,34 @@ pub fn parse_odm(
 ) -> Result<ArrowTable, Error> {
     let decoded = reader::read_odm(content, limits)?;
     table::convert(decoded, limits.retained_bytes, table_limits).map_err(|error| match error {
-        table::Error::Limit => Error::Limit,
         table::Error::Invalid => Error::Malformed,
         table::Error::Table(error) => Error::Table(error),
     })
+}
+
+/// Internal sequential decoder receipt; public codec entry points keep their
+/// existing admission behavior and signatures.
+pub(crate) fn parse_with_usage(
+    content: &[u8],
+    limits: Limits,
+    table_limits: TableLimits,
+    odm: bool,
+    usage: &mut crate::source_decode_usage::Usage,
+) -> Result<ArrowTable, Error> {
+    let mut copied = 0;
+    crate::source_decode_usage::charge(
+        &mut copied,
+        content.len(),
+        limits.retained_bytes,
+        "retained_bytes",
+    )
+    .map_err(Error::Table)?;
+    usage.storage(copied);
+    let decoded = reader::read_with_usage(content, limits, odm, Some(usage))?;
+    table::convert_with_usage(decoded, limits.retained_bytes, table_limits, Some(usage)).map_err(
+        |error| match error {
+            table::Error::Invalid => Error::Malformed,
+            table::Error::Table(error) => Error::Table(error),
+        },
+    )
 }

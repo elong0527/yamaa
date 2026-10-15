@@ -1,4 +1,5 @@
 [workspace]
+exclude = ["vendor/saphyr-parser"]
 members = ["crates/yamaa-core", "crates/yamaa-engine", "crates/yamaa-adapters", "crates/yamaa-python", "crates/yamaa-r"]
 default-members = ["crates/yamaa-core", "crates/yamaa-engine", "crates/yamaa-adapters"]
 resolver = "2"
@@ -21,3 +22,6 @@ lto = "thin"
 [profile.release-test]
 inherits = "release"
 lto = false
+
+[patch.crates-io]
+saphyr-parser = { path = "vendor/saphyr-parser" }

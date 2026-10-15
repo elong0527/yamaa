@@ -1,5 +1,10 @@
 # Shared Rust release handoff
 
+Current owner: [#2288](https://github.com/elong0527/yamaa/issues/2288), the
+2026-10-14 remaining release checklist. It supersedes the migration roll-ups
+referenced by historical receipts below. The remaining cleanup and assertion
+migration belong to [#2289](https://github.com/elong0527/yamaa/issues/2289).
+
 Prepared on 2026-10-13 (America/New_York) for
 [#2147](https://github.com/elong0527/yamaa/issues/2147), using main
 `1b795ca4c1cbc742233ba459c1b987ee4b88fd73` and the original evidence identified below. The current
@@ -11,8 +16,9 @@ Reconciled on 2026-10-14 (UTC) against main
 evidence below retain their original identities; this reconciliation is not a
 new qualification result.
 
-**Transition acceptance is pending.** No final qualified source, passing complete
-performance/budget audit or publishable 0.4.0 package selection is asserted here.
+**Final release evidence is pending.** No final qualified source, completed
+scoped Linux performance measurements or publishable 0.4.0 package selection is
+asserted here. The maintainer sets no performance pass/fail budgets for 0.4.0.
 Removal and coordinated 0.4.0 version changes already merged before final
 item-10/item-11 acceptance. The delegated decision authority in
 [#1973](https://github.com/elong0527/yamaa/issues/1973) permits evidence-backed
@@ -21,11 +27,11 @@ release tagging, package publication or asset replacement.
 
 ## Final acceptance reconciliation
 
-| #1969 gate / transition entry | Required final evidence | Current disposition |
+| Historical gate / transition entry | Required final evidence | Current disposition |
 | --- | --- | --- |
-| Fixtures, language, workflow and APIs; B01-B12/B16 | All 316 active cases in every installed tuple, two declared historical exclusions, retained host APIs/helpers and error/value/ownership/Save contracts. Independently committed truth remains unchanged. Unique retired assertions require qualified public or typed-native replacements. | Implementation merged; exact final-source installed renewal and retirement reconciliation pending under #2145/#2147. |
-| Installed matrix, numerical behavior and reproducible packages; B12-B15 | 18 CPython 3.12/3.13/3.14 wheel/source tuples plus three R 4.6.1 source tuples, strict R `Status: OK`, three shared Rust checks with engine test-support, nine math assessments and their exact comparison. Six package builds must preserve canonical workspace/lock/toolchain bytes. | Final combined-main native audit and original-input independent replay pending under #2145. A successful workflow alone is insufficient. |
-| Performance and capacity; B17-B18 | Adopted installed Python/R bounds, original 27-case x 21-tuple campaign, independent distribution/coverage replay and versioned item-10 budget evaluation. Each counted tuple has ten cold samples, thirty warm samples and three retained warmups. | #2141/#2142 admission and bounds, #2143 auditor and #2144 final campaign/budgets remain pending. Local samples and earlier merged fixes do not qualify the campaign. |
+| Fixtures, language, workflow and APIs; B01-B12/B16 | All current directory-derived active cases in every installed tuple, two declared historical exclusions, retained host APIs/helpers and error/value/ownership/Save contracts. Independently committed truth remains unchanged. Unique retired assertions require qualified public or typed-native replacements. | Implementation merged; exact final-source installed renewal and retirement reconciliation pending under #2288/#2289. |
+| Installed matrix, numerical behavior and reproducible packages; B12-B15 | 18 CPython 3.12/3.13/3.14 wheel/source tuples plus three R 4.6.1 source tuples, strict R `Status: OK`, three shared Rust checks with engine test-support, nine math assessments and their exact comparison. Six package builds must preserve canonical workspace/lock/toolchain bytes. | Final combined-main native audit and original-input independent replay pending under #2288. A successful workflow alone is insufficient. |
+| Performance and capacity; B17-B18 | Approved longitudinal bounds and paired 100-column, 50,000-record Build/Save controls; 27 authored cases on Linux Python 3.12 wheel and R 4.6.1 source, independently audited for that scope. Each case has ten cold samples, three retained warmups and thirty warm samples. | Harness and auditor completed under #2141/#2143. Capacity implementation in PRs #2365/#2367 and paired local Python and hosted Linux R installed controls at `983e9c96` are recorded below. Final combined-main renewal and measured latency/RSS remain under #2288; no numeric budgets are set for 0.4.0. |
 | Transition and rollback; B19 | Exact prior artifacts and complete fresh reinstall matrix; version checks before study effects; explicit item-11 decision linked to all passing entry gates. | Historical 18-tuple Python and three-host R raw receipt replay passed as described below. Final item-11 acceptance remains pending. |
 | Removal; B03/B05/B13 | Retained API, assertion replacements, package/archive membership and dependency/validator locks reconcile with final installed contracts. | Removal is implemented. Its chronology does not establish entry-gate approval; final reconciliation remains pending. |
 | Exact source/run/attempt/artifact handoff; B15/B19 | Final native source and parents, original Actions run/attempt/artifact identities, actual package names/bytes and independent replay; measured performance revision and policy bindings remain explicit. | Final source and selected release bytes are pending. Publication is separate. |
@@ -56,14 +62,87 @@ control retired with that input. Six derived benchmark-inventory controls and th
 validation-only blocker-loader control exercise its current successors; nine
 further controls cover native static admission, aggregate bindings and example
 index validation. These 16 additions do not establish equivalence for every
-retired assertion. Final #2145/#2147 admission still reconciles the required
+retired assertion. Final #2288/#2289 admission still reconciles the required
 behavior and renewed native routing against installed evidence.
+
+### Candidate implementation and scoped installed controls
+
+PRs [#2365](https://github.com/elong0527/yamaa/pull/2365) and
+[#2367](https://github.com/elong0527/yamaa/pull/2367) implement the longitudinal
+default and actual native usage pools. Scoped installed-host checks at source
+[`983e9c96`](https://github.com/elong0527/yamaa/commit/983e9c9687a1a49a7d283fe70e681196eef7bd8f)
+passed all 18 Python supplemental suites locally and all 17 R supplemental
+suites and 319 R conformance cases in the hosted Linux R 4.6.1 native job.
+Both hosts passed the paired 100-column, 50,000-record Build/Save controls.
+These suite counts are scoped checks at that
+source, not the required 18-tuple Python and three-tuple R release matrix.
+
+The strict R package check at that earlier source reported one NOTE. The packaging
+repair at
+[`7c04a026`](https://github.com/elong0527/yamaa/commit/7c04a026996e062ec3949bb6e71fcec14c85bbe8)
+was queued for renewed checking at that stage; it does not change the source
+identity of those installed results. The later `7c04a026` native run stalled in
+the cohort job and is not a passing qualification run.
+
+The 2026-10-15 candidate qualification uses source
+[`46ee4dcb0f7ffe5cd8a95b477d242cfadcf0c689`](https://github.com/elong0527/yamaa/commit/46ee4dcb0f7ffe5cd8a95b477d242cfadcf0c689),
+[native run 38657181937](https://github.com/elong0527/yamaa/actions/runs/38657181937),
+attempt 1. All 31 required jobs passed; one optional job was skipped. This is
+`reviewed-branch` qualification, with the following installed and independent
+evidence:
+
+| Candidate gate | Passing evidence at `46ee4dcb` |
+| --- | --- |
+| Python installed matrix | All 18 CPython 3.12/3.13/3.14 wheel/source tuples across Linux x86_64, macOS arm64 and Windows x64; each passed 319 active conformance cases and all 18 supplemental suites, retaining two explicit historical exclusions. |
+| R installed matrix | All three R 4.6.1 source tuples on the same hosts; each passed 319 active conformance cases and all 17 supplemental suites, retaining the same two exclusions. All three strict package checks report `Status: OK`. The earlier `983e9c96` NOTE remains a prior observation. |
+| Shared Rust and numerical behavior | All three shared Rust checks, all nine numerical assessments and their exact comparison passed. The numerical evidence establishes the assessed sample's portability, not universal correct rounding or historical bit parity. |
+| Complete public and producer cohorts | All 18 tuple directories passed, retaining 468 case/host comparison records against committed truth and original held Save bytes. |
+| Independent native audit | All 97 lanes passed with `complete: true`. The original hosted network-isolated replay reproduced the verdict byte for byte. |
+
+The original audit is owned by
+[job 116178061111](https://github.com/elong0527/yamaa/actions/runs/38657181937/job/116178061111).
+Its small original record
+[artifact 11938143736](https://github.com/elong0527/yamaa/actions/runs/38657181937/artifacts/11938143736)
+retains both the verdict and its byte-identical hosted replay. Independent local
+`--input`/`--check` replay of authenticated reconstituted original inputs also
+passed all 97 lanes and reproduced those verdict bytes. That reconstruction
+retained all 86 original advertised artifacts and 19 exact Git source files;
+it did not download the full audit ZIP. The original small metadata and source,
+run, attempt and producing-job identities remain unchanged.
+
+Linux performance
+[run 38657181920](https://github.com/elong0527/yamaa/actions/runs/38657181920)
+uses attempt 1 at frozen source `46ee4dcb0f7ffe5cd8a95b477d242cfadcf0c689`.
+The installed Python 3.12 wheel collector passed; its original collection is
+[artifact 11943075352](https://github.com/elong0527/yamaa/actions/runs/38657181920/artifacts/11943075352),
+produced by
+[job 116178873002](https://github.com/elong0527/yamaa/actions/runs/38657181920/job/116178873002).
+It uses the exact Linux candidate wheel from native artifact `11936644695`
+listed below. The R collector and independent 54-cell coverage audit remain
+pending. No complete measured result is asserted here. Record reviewed
+latency/RSS in the [release guide](release.md#qualification-and-retained-records)
+after that gate passes, preserving the measured revision and each original
+producing job, artifact, package and attempt identity.
+
+The later PK/QT candidate
+[#2376](https://github.com/elong0527/yamaa/pull/2376), source
+`3baef533a182b2bd707060a3b23854f39e17e3ae`, expands the authored inventory to
+329 cases, 327 active and two excluded. Its final installed observations are
+pending. Keep the 319-active-case candidate results above at their original
+source; coverage of newly authored cases requires fresh evidence.
+
+Final postmerge main/native qualification and its independent audit/replay,
+remaining assertion migration under #2289, Linux measurements, exact release
+package/tag selection and publication remain pending. Candidate qualification
+does not establish final release qualification or item-11 acceptance and does
+not close #2288.
 
 ### Source differences and evidence renewal
 
 Record the campaign's measured source, collection run/attempt, original artifact
-IDs, collector/workload interfaces and effective capacity policy. Bind item-10
-budgets to that measured source. Later documentation or decision-record commits
+IDs, collector/workload interfaces and effective capacity policy. Record the
+declared Linux scope and observed latency/RSS without numeric budgets. Later
+documentation or decision-record commits
 must keep the measured revision; do not replace it with the later main SHA.
 
 For any source difference, inspect the complete Git diff and compare actual
@@ -161,6 +240,24 @@ filenames, lengths and original artifact IDs from that run; preserve and compare
 the tested bytes when preparing publication. Rebuilding creates new artifacts
 and requires renewed admission.
 
+The qualified candidate's six original Actions artifacts belong to source
+`46ee4dcb0f7ffe5cd8a95b477d242cfadcf0c689`, native run `38657181937`, attempt 1.
+The table records the actual package filenames and lengths inside those
+artifacts. Each platform's source archive keeps its own tested bytes; these
+candidate references are not a final release selection or published assets.
+
+| Candidate package | Exact original package reference | Package bytes | Original Actions artifact |
+| --- | --- | ---: | --- |
+| Linux x86_64 Python wheel | `github-actions:38657181937/attempt-1/native-python-ubuntu-24.04-3.14/yamaa-0.4.0-cp312-abi3-manylinux_2_34_x86_64.whl` | 8,372,695 | [11936644695](https://github.com/elong0527/yamaa/actions/runs/38657181937/artifacts/11936644695) |
+| Linux Python source | `github-actions:38657181937/attempt-1/native-python-ubuntu-24.04-3.14/yamaa-0.4.0.tar.gz` | 2,319,729 | [11936644695](https://github.com/elong0527/yamaa/actions/runs/38657181937/artifacts/11936644695) |
+| macOS arm64 Python wheel | `github-actions:38657181937/attempt-1/native-python-macos-15-3.14/yamaa-0.4.0-cp312-abi3-macosx_11_0_arm64.whl` | 7,369,996 | [11937203956](https://github.com/elong0527/yamaa/actions/runs/38657181937/artifacts/11937203956) |
+| macOS Python source | `github-actions:38657181937/attempt-1/native-python-macos-15-3.14/yamaa-0.4.0.tar.gz` | 2,320,515 | [11937203956](https://github.com/elong0527/yamaa/actions/runs/38657181937/artifacts/11937203956) |
+| Windows x64 Python wheel | `github-actions:38657181937/attempt-1/native-python-windows-latest-3.14/yamaa-0.4.0-cp312-abi3-win_amd64.whl` | 7,534,978 | [11937900083](https://github.com/elong0527/yamaa/actions/runs/38657181937/artifacts/11937900083) |
+| Windows Python source | `github-actions:38657181937/attempt-1/native-python-windows-latest-3.14/yamaa-0.4.0.tar.gz` | 2,320,174 | [11937900083](https://github.com/elong0527/yamaa/actions/runs/38657181937/artifacts/11937900083) |
+| Linux x86_64 R source | `github-actions:38657181937/attempt-1/native-r-ubuntu-24.04/yamaa_0.4.0.tar.gz` | 3,591,231 | [11937604220](https://github.com/elong0527/yamaa/actions/runs/38657181937/artifacts/11937604220) |
+| macOS arm64 R source | `github-actions:38657181937/attempt-1/native-r-macos-15/yamaa_0.4.0.tar.gz` | 3,590,120 | [11937463740](https://github.com/elong0527/yamaa/actions/runs/38657181937/artifacts/11937463740) |
+| Windows x64 R source | `github-actions:38657181937/attempt-1/native-r-windows-latest/yamaa_0.4.0.tar.gz` | 3,590,728 | [11937549706](https://github.com/elong0527/yamaa/actions/runs/38657181937/artifacts/11937549706) |
+
 | Selection | Required final record |
 | --- | --- |
 | Linux x86_64 Python wheel and source distribution | `native-python-ubuntu-24.04-3.14` original artifact; actual wheel/source names and bytes; qualified CPython 3.12/3.13/3.14 wheel/source reinstall evidence. |
@@ -178,18 +275,18 @@ the release guide's PortableLibmV1 compatibility note before opting in: EXP/LN/
 POWER bits and dependent predicates, conversions and saved bytes may differ from
 historical Python platform behavior. Restore an entire prior release for rollback.
 
-Remaining closure evidence belongs to #2141/#2143 for retained harness/auditor
-replay, #2142 for adopted capacity, #2144 for all 567 campaign combinations and
-accepted item-10 budgets, and #2145 for final combined-main native audit and
-independent original-input replay. #2147 then reconciles retired assertions and
-actual tested package selection before recording item-11 transition acceptance.
-Earlier branch passes, merged repairs and historical rollback re-admission do
-not supply those remaining results. #2154 separately retains all 17 raw
-measurement files until durable original-byte retrieval and replay pass.
+Remaining release evidence belongs to #2288: complete postmerge native audit
+and independent original-input replay, final-source numerical qualification and
+renewed installed capacity controls, scoped Linux performance observations,
+release notes and actual tested package selection. The remaining original
+assertion migration and restoration qualification belong to #2289. Earlier branch passes and
+historical rollback re-admission do not supply the final combined-main results.
+The 17 raw measurement files were deleted by #2345 under the maintainer's finite
+disposition; Git retains their bytes and the old capacity-input obligation is
+abandoned.
 
-After every entry gate passes, update #1994/#1999/#1973 and completed child criteria
-with durable links, close #2147 after its implementing PR merges, and close #1969
-last. Record package/tag publication independently. If 0.4.0 has been published
-before final selection, choose the next version deliberately and requalify the
-affected packages.
+Record the final source commit, native run/attempt, audit/replay artifacts and
+selected package names/bytes here only after their gates pass. Close the current
+checklists when their criteria are met; superseded trackers stay closed.
+Package/tag publication remains a separate maintainer action.
 

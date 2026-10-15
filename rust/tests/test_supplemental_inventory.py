@@ -42,6 +42,45 @@ class RepositoryCatalog(unittest.TestCase):
             "installed_control.py",
         )
 
+    def test_sas_canonical_inputs_and_truth_stage_without_ownership_documents(self):
+        prefix = "rust/crates/yamaa-adapters/tests/fixtures/sas/"
+        catalog = {
+            "contracts": [{"path": prefix + "compressed-truth.csv"}],
+            "support_files": [
+                {"path": prefix + "v5.xpt", "role": "input"},
+                {"path": prefix + "LICENSE-haven.txt", "role": "documentation"},
+                {"path": "rust/tests/host-fixtures/sas-cases.json", "role": "input"},
+            ],
+        }
+        self.assertEqual(
+            module.host_fixture_files(catalog),
+            [
+                (
+                    prefix + "compressed-truth.csv",
+                    "host-fixtures/sas/compressed-truth.csv",
+                ),
+                (prefix + "v5.xpt", "host-fixtures/sas/v5.xpt"),
+                (
+                    "rust/tests/host-fixtures/sas-cases.json",
+                    "host-fixtures/sas-cases.json",
+                ),
+            ],
+        )
+
+    def test_sas_fixture_cannot_overwrite_an_existing_shared_host_input(self):
+        catalog = {
+            "contracts": [],
+            "support_files": [
+                {"path": "rust/tests/host-fixtures/sas/v5.xpt", "role": "input"},
+                {
+                    "path": "rust/crates/yamaa-adapters/tests/fixtures/sas/v5.xpt",
+                    "role": "input",
+                },
+            ],
+        }
+        with self.assertRaisesRegex(ValueError, "duplicate staged host fixture path"):
+            module.host_fixture_files(catalog)
+
 
 class SupplementalEvidence(unittest.TestCase):
     def setUp(self):

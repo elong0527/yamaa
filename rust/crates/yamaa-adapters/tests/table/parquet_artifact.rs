@@ -194,7 +194,7 @@ fn closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero
     budget.output_bytes = bytes.len() - 1;
     assert!(matches!(
         render(&table, &[0, 1, 2, 3, 4], budget),
-        Err(Error::Limit)
+        Err(Error::Limit { .. })
     ));
 }
 
@@ -260,7 +260,7 @@ fn logical_records_preserve_json_spelling_without_rounding_or_partial_dates() {
     assert!(yamaa_adapters::parquet_artifact::records(&table, &[0, 1, 2], size).is_ok());
     assert!(matches!(
         yamaa_adapters::parquet_artifact::records(&table, &[0, 1, 2], size - 1),
-        Err(Error::Limit)
+        Err(Error::Limit { .. })
     ));
 }
 
@@ -345,7 +345,10 @@ fn invalid_projection_shape_staging_and_cell_types_produce_no_artifact() {
             ..limits()
         },
     ] {
-        assert!(matches!(render(&table, &[0], budget), Err(Error::Limit)));
+        assert!(matches!(
+            render(&table, &[0], budget),
+            Err(Error::Limit { .. })
+        ));
     }
     let wrong = Table {
         schema: table.schema,

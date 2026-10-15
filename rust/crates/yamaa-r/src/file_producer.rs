@@ -33,6 +33,7 @@ pub(crate) mod platform {
             attempt: Rc<Attempt>,
             observations: Option<String>,
             refusal: &'static str,
+            refusal_details: Option<yamaa_adapters::resource_diagnostics::Refusal>,
             domain: Option<Box<yamaa_adapters::producer_result::RootResult>>,
             output_error: Option<yamaa_adapters::ipc_table::TableError>,
         },
@@ -311,9 +312,14 @@ pub(crate) mod platform {
                     domain: Some(result),
                     ..
                 } => result.issues().to_vec(),
-                State::Report { refusal, .. } => {
-                    yamaa_adapters::file_application::rejected("build", refusal)
-                }
+                State::Report {
+                    refusal,
+                    refusal_details,
+                    ..
+                } => refusal_details.as_ref().map_or_else(
+                    || yamaa_adapters::file_application::rejected("build", refusal),
+                    |details| details.issues("build", refusal),
+                ),
                 _ => yamaa_adapters::file_application::rejected("build", "producer_report"),
             }
         }
@@ -364,7 +370,8 @@ pub(crate) mod platform {
         formatter: &Function,
         rejected: bool,
         remaining: &mut usize,
-        limited: &mut bool,
+        limited: &mut Option<yamaa_adapters::resource_diagnostics::Refusal>,
+        projection_maximum: usize,
     ) -> Option<CallbackError> {
         let reply = formatter
             .call(pairlist!(condition = condition.clone()))
@@ -372,11 +379,16 @@ pub(crate) mod platform {
         let reply = reply.as_list().filter(|reply| reply.len() == 2)?;
         let class = reply.elt(0).ok()?.as_raw()?;
         let message = reply.elt(1).ok()?.as_raw()?;
-        if [class.len(), message.len()]
-            .iter()
-            .any(|&length| length > yamaa_adapters::callback::MAX_ERROR_BYTES)
+        if let Some(length) = [class.len(), message.len()]
+            .into_iter()
+            .find(|&length| length > yamaa_adapters::callback::MAX_ERROR_BYTES)
         {
-            *limited = true;
+            *limited = Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+                "host_error_bytes",
+                yamaa_adapters::callback::MAX_ERROR_BYTES,
+                Some(length),
+                Vec::new(),
+            ));
             return None;
         }
         let class = std::str::from_utf8(class.as_slice()).ok()?;
@@ -388,7 +400,15 @@ pub(crate) mod platform {
                 .and_then(|size| size.checked_add(128))
                 .and_then(|size| remaining.checked_sub(size));
             let Some(next) = next else {
-                *limited = true;
+                *limited = Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+                    "report_bytes",
+                    projection_maximum,
+                    text.len()
+                        .checked_mul(12)
+                        .and_then(|size| size.checked_add(128))
+                        .and_then(|charge| (projection_maximum - *remaining).checked_add(charge)),
+                    Vec::new(),
+                ));
                 return None;
             };
             *remaining = next;
@@ -429,13 +449,31 @@ pub(crate) mod platform {
         yamaa_adapters::producer_attempt::visit_host_failures(&observations, |_, _| {
             count = count.saturating_add(1)
         });
-        let mut remaining = maximum.min(yamaa_adapters::host_limits::REPLY_BYTES);
+        let projection_maximum = maximum.min(yamaa_adapters::host_limits::REPLY_BYTES);
+        let mut remaining = projection_maximum;
         let admitted = count <= yamaa_adapters::host_limits::RECORDS
             && count
                 .checked_mul(128)
                 .and_then(|size| remaining.checked_sub(size))
                 .is_some();
         let mut refusal = if admitted { "" } else { "report_limit" };
+        let mut refusal_details = if admitted {
+            None
+        } else if count > yamaa_adapters::host_limits::RECORDS {
+            Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+                "report_entries",
+                yamaa_adapters::host_limits::RECORDS,
+                Some(count),
+                Vec::new(),
+            ))
+        } else {
+            Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+                "report_bytes",
+                projection_maximum,
+                count.checked_mul(128),
+                Vec::new(),
+            ))
+        };
         let mut failures = Vec::new();
         let mut projections = Vec::new();
         if admitted {
@@ -446,21 +484,32 @@ pub(crate) mod platform {
                 failures.push(failure)
             });
             for failure in &failures {
-                let mut limited = false;
+                let mut limited = None;
                 let projection = match failure {
-                    HostError::Host(condition) => {
-                        ordinary(condition, formatter, false, &mut remaining, &mut limited)
-                    }
-                    HostError::Representation(condition) => {
-                        ordinary(condition, formatter, true, &mut remaining, &mut limited)
-                    }
+                    HostError::Host(condition) => ordinary(
+                        condition,
+                        formatter,
+                        false,
+                        &mut remaining,
+                        &mut limited,
+                        projection_maximum,
+                    ),
+                    HostError::Representation(condition) => ordinary(
+                        condition,
+                        formatter,
+                        true,
+                        &mut remaining,
+                        &mut limited,
+                        projection_maximum,
+                    ),
                     HostError::Scalar(reason) => Some(CallbackError::Rejected {
                         reason: (*reason).into(),
                         returned: None,
                     }),
                     _ => None,
                 };
-                if limited {
+                if let Some(details) = limited {
+                    refusal_details = Some(details);
                     refusal = "report_limit";
                     break;
                 }
@@ -472,15 +521,23 @@ pub(crate) mod platform {
                         HostDetails::Rejected { reason, returned } => [Some(reason), returned],
                     };
                     for text in texts.into_iter().flatten() {
-                        if let Some(left) = text
+                        let charge = text
                             .len()
                             .checked_mul(12)
-                            .and_then(|size| size.checked_add(128))
-                            .and_then(|size| remaining.checked_sub(size))
-                        {
+                            .and_then(|size| size.checked_add(128));
+                        if let Some(left) = charge.and_then(|size| remaining.checked_sub(size)) {
                             remaining = left;
                         } else {
                             refusal = "report_limit";
+                            refusal_details =
+                                Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+                                    "report_bytes",
+                                    projection_maximum,
+                                    charge.and_then(|charge| {
+                                        (projection_maximum - remaining).checked_add(charge)
+                                    }),
+                                    Vec::new(),
+                                ));
                         }
                     }
                 }
@@ -523,6 +580,20 @@ pub(crate) mod platform {
                         ..
                     }) => {
                         formatted = Some(value.to_string());
+                        if let yamaa_adapters::ipc_table::TableError::Limit {
+                            resource,
+                            limit,
+                            required,
+                        } = error
+                        {
+                            refusal_details =
+                                Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+                                    resource,
+                                    limit,
+                                    required,
+                                    vec!["output.path".into()],
+                                ));
+                        }
                         output_error = Some(error);
                         refusal = "output_projection";
                         Ok(None)
@@ -547,6 +618,12 @@ pub(crate) mod platform {
                 Err(ProjectionError::Report(
                     yamaa_adapters::specification_report::Error::OutputLimit,
                 )) => refusal = "report_limit",
+                Err(ProjectionError::Report(
+                    yamaa_adapters::specification_report::Error::ResourceLimit(details),
+                )) => {
+                    refusal = "report_limit";
+                    refusal_details = Some(details);
+                }
                 Err(_) => refusal = "report_refusal",
             }
         }
@@ -555,6 +632,7 @@ pub(crate) mod platform {
             attempt,
             observations: formatted,
             refusal,
+            refusal_details,
             domain,
             output_error,
         })

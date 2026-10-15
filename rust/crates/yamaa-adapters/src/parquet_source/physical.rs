@@ -21,6 +21,7 @@ fn collect<T: DataType>(
     descriptor: &ColumnDescriptor,
     (rows, levels, keep): (usize, usize, bool),
     budget: &mut usize,
+    initial_budget: usize,
     shapes: &[shape::List],
     size: impl Fn(&T::T) -> usize,
 ) -> Result<Vec<Option<T::T>>, Error> {
@@ -76,10 +77,15 @@ fn collect<T: DataType>(
             } else {
                 None
             };
-            let charge = 32usize
-                .checked_add(value.as_ref().map_or(0, &size))
-                .ok_or(Error::Limit)?;
-            *budget = budget.checked_sub(charge).ok_or(Error::Limit)?;
+            let charge = 32usize.checked_add(value.as_ref().map_or(0, &size));
+            let actual = charge.and_then(|charge| (initial_budget - *budget).checked_add(charge));
+            *budget = charge.and_then(|charge| budget.checked_sub(charge)).ok_or(
+                Error::ResourceLimit {
+                    resource: "retained_bytes",
+                    limit: initial_budget,
+                    actual,
+                },
+            )?;
             result.push(value);
         }
         if values.next().is_some() {
@@ -98,9 +104,10 @@ fn collect<T: DataType>(
 pub(super) fn read(
     bytes: &[u8],
     keep: &[bool],
-    retained_bytes: usize,
+    budget: &mut usize,
     schema: &arrow_schema::Schema,
 ) -> Result<Vec<Column>, Error> {
+    let retained_bytes = *budget;
     let reader = SerializedFileReader::new(bytes::Bytes::copy_from_slice(bytes))
         .map_err(|_| Error::Malformed)?;
     let descriptors = reader.metadata().file_metadata().schema_descr().columns();
@@ -109,7 +116,6 @@ pub(super) fn read(
         return Err(Error::Malformed);
     }
     let mut result: Vec<_> = descriptors.iter().map(|_| Column::Discard).collect();
-    let mut budget = retained_bytes;
     for group in 0..reader.num_row_groups() {
         let group = reader.get_row_group(group).map_err(|_| Error::Malformed)?;
         let rows = usize::try_from(group.metadata().num_rows()).map_err(|_| Error::Malformed)?;
@@ -128,7 +134,8 @@ pub(super) fn read(
                         $reader,
                         descriptor,
                         (rows, levels, keep[index]),
-                        &mut budget,
+                        budget,
+                        retained_bytes,
                         &shapes[index],
                         $size,
                     )?;
@@ -153,7 +160,8 @@ pub(super) fn read(
                         reader,
                         descriptor,
                         (rows, levels, false),
-                        &mut budget,
+                        budget,
+                        retained_bytes,
                         &shapes[index],
                         |_| 0,
                     )?;
@@ -163,7 +171,8 @@ pub(super) fn read(
                         reader,
                         descriptor,
                         (rows, levels, false),
-                        &mut budget,
+                        budget,
+                        retained_bytes,
                         &shapes[index],
                         |_| 0,
                     )?;
@@ -173,7 +182,8 @@ pub(super) fn read(
                         reader,
                         descriptor,
                         (rows, levels, false),
-                        &mut budget,
+                        budget,
+                        retained_bytes,
                         &shapes[index],
                         |_| 0,
                     )?;
@@ -183,7 +193,8 @@ pub(super) fn read(
                         reader,
                         descriptor,
                         (rows, levels, false),
-                        &mut budget,
+                        budget,
+                        retained_bytes,
                         &shapes[index],
                         |_| 0,
                     )?;
@@ -204,4 +215,41 @@ pub(super) fn read(
         }
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arrow_array::{Int64Array, RecordBatch};
+    use arrow_schema::{DataType as ArrowType, Field, Schema};
+    use parquet::arrow::ArrowWriter;
+    use std::sync::Arc;
+
+    #[test]
+    fn retained_quota_reports_complete_prefix_and_refuses_before_next_value() {
+        let schema = Arc::new(Schema::new(vec![Field::new("N", ArrowType::Int64, false)]));
+        let batch =
+            RecordBatch::try_new(schema.clone(), vec![Arc::new(Int64Array::from(vec![1, 2]))])
+                .unwrap();
+        let mut bytes = Vec::new();
+        let mut writer = ArrowWriter::try_new(&mut bytes, schema.clone(), None).unwrap();
+        writer.write(&batch).unwrap();
+        writer.close().unwrap();
+        for (limit, actual) in [(31, 32), (32, 64), (63, 64)] {
+            let mut remaining = limit;
+            assert_eq!(
+                read(&bytes, &[true], &mut remaining, &schema).unwrap_err(),
+                Error::ResourceLimit {
+                    resource: "retained_bytes",
+                    limit,
+                    actual: Some(actual),
+                }
+            );
+            assert_eq!(remaining, limit - if limit >= 32 { 32 } else { 0 });
+        }
+        let mut remaining = 64;
+        let result = read(&bytes, &[true], &mut remaining, &schema).unwrap();
+        assert_eq!(remaining, 0);
+        assert!(matches!(&result[0], Column::Int64(values) if values == &[Some(1), Some(2)]));
+    }
 }

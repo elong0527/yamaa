@@ -10,7 +10,11 @@ use yamaa_core::{
 #[derive(Debug)]
 pub enum Error<E> {
     Projection,
-    Limit,
+    Limit {
+        limit: usize,
+        actual: Option<usize>,
+        decimal_formatting: bool,
+    },
     Cell(CellError<E>),
     UnsupportedValue,
 }
@@ -24,7 +28,11 @@ impl Writer {
             .len()
             .checked_add(text.len())
             .filter(|&n| n <= self.maximum)
-            .ok_or(Error::Limit)?;
+            .ok_or(Error::Limit {
+                limit: self.maximum,
+                actual: self.bytes.len().checked_add(text.len()),
+                decimal_formatting: false,
+            })?;
         self.bytes.extend_from_slice(text.as_bytes());
         Ok(())
     }
@@ -104,7 +112,11 @@ pub fn render_with_decimals<T: TableAccess>(
                                 .is_some_and(|width| width <= maximum - writer.bytes.len())
                         }
                     })
-                    .ok_or(Error::Limit)
+                    .ok_or(Error::Limit {
+                        limit: maximum,
+                        actual: None,
+                        decimal_formatting: true,
+                    })
             })
             .transpose()?
     } else {
@@ -120,7 +132,11 @@ pub fn render_with_decimals<T: TableAccess>(
                 if table.schema().columns()[column].kind == ColumnType::Float
                     && minimum > maximum - writer.bytes.len()
                 {
-                    return Err(Error::Limit);
+                    return Err(Error::Limit {
+                        limit: maximum,
+                        actual: None,
+                        decimal_formatting: true,
+                    });
                 }
             }
             match table.cell(row, column).map_err(Error::Cell)? {
@@ -130,7 +146,11 @@ pub fn render_with_decimals<T: TableAccess>(
                 ValueRef::Float(value) => {
                     let text = match decimals {
                         Some(digits) => fixed_point(value, digits, maximum - writer.bytes.len())
-                            .map_err(|_| Error::Limit)?,
+                            .map_err(|_| Error::Limit {
+                                limit: maximum,
+                                actual: None,
+                                decimal_formatting: true,
+                            })?,
                         None => float_text(value),
                     };
                     writer.field(&text)?;

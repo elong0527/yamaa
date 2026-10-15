@@ -13,6 +13,11 @@ pub(super) struct Limits {
 pub(super) enum Error {
     Malformed,
     Limit,
+    ResourceLimit {
+        resource: &'static str,
+        limit: usize,
+        actual: Option<usize>,
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -53,7 +58,11 @@ impl<'a> Reader<'a> {
         let end = self.position.checked_add(count).ok_or(Error::Malformed)?;
         let value = self.bytes.get(self.position..end).ok_or(Error::Malformed)?;
         if end > self.limits.bytes {
-            return Err(Error::Limit);
+            return Err(Error::ResourceLimit {
+                resource: "compact_bytes",
+                limit: self.limits.bytes,
+                actual: Some(end),
+            });
         }
         self.position = end;
         Ok(value)
@@ -92,8 +101,19 @@ impl<'a> Reader<'a> {
     }
 
     fn node(&mut self, depth: usize) -> Result<(), Error> {
-        if depth > self.limits.depth || self.nodes >= self.limits.nodes {
-            return Err(Error::Limit);
+        if depth > self.limits.depth {
+            return Err(Error::ResourceLimit {
+                resource: "compact_depth",
+                limit: self.limits.depth,
+                actual: Some(depth),
+            });
+        }
+        if self.nodes >= self.limits.nodes {
+            return Err(Error::ResourceLimit {
+                resource: "compact_nodes",
+                limit: self.limits.nodes,
+                actual: self.nodes.checked_add(1),
+            });
         }
         self.nodes += 1;
         Ok(())
@@ -106,7 +126,11 @@ impl<'a> Reader<'a> {
             return Err(Error::Malformed);
         }
         if count > self.limits.nodes - self.nodes {
-            return Err(Error::Limit);
+            return Err(Error::ResourceLimit {
+                resource: "compact_nodes",
+                limit: self.limits.nodes,
+                actual: self.nodes.checked_add(count),
+            });
         }
         Ok(())
     }
@@ -325,7 +349,11 @@ mod tests {
                     ..limits()
                 }
             ),
-            Err(Error::Limit)
+            Err(Error::ResourceLimit {
+                resource: "compact_nodes",
+                limit: 4,
+                actual: Some(5),
+            })
         );
         assert!(parse(
             &data,
@@ -343,7 +371,11 @@ mod tests {
                     ..limits()
                 }
             ),
-            Err(Error::Limit)
+            Err(Error::ResourceLimit {
+                resource: "compact_bytes",
+                limit: 5,
+                actual: Some(6),
+            })
         );
         assert!(parse(
             &data,
@@ -361,7 +393,11 @@ mod tests {
                     ..limits()
                 }
             ),
-            Err(Error::Limit)
+            Err(Error::ResourceLimit {
+                resource: "compact_depth",
+                limit: 1,
+                actual: Some(2),
+            })
         );
         assert_eq!(
             parse(
@@ -371,7 +407,11 @@ mod tests {
                     ..limits()
                 }
             ),
-            Err(Error::Limit)
+            Err(Error::ResourceLimit {
+                resource: "compact_nodes",
+                limit: 0,
+                actual: Some(1),
+            })
         );
         let mut nested = vec![0x1c; 65];
         nested.extend(vec![0; 66]);
@@ -383,7 +423,11 @@ mod tests {
                     ..limits()
                 }
             ),
-            Err(Error::Limit)
+            Err(Error::ResourceLimit {
+                resource: "compact_depth",
+                limit: 64,
+                actual: Some(65),
+            })
         );
         assert!(parse(&[0x19, 0, 0], limits()).is_ok());
     }

@@ -85,6 +85,14 @@ impl Default for ScanLimits {
     }
 }
 
+/// Decoder/scanner admission preserves the caller's actual policy bound.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ResourceLimit {
+    pub resource: &'static str,
+    pub limit: usize,
+    pub actual: Option<usize>,
+}
+
 /// Resource refusal is distinct from language errors and invalid Unicode.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ScanFailure {
@@ -93,7 +101,7 @@ pub enum ScanFailure {
         position: SourcePosition,
         reason: String,
     },
-    Limit(&'static str),
+    Limit(ResourceLimit),
     /// Fail closed if a parser upgrade violates diagnostic reconstruction.
     Reconstruction,
 }
@@ -104,9 +112,19 @@ fn charge(
     limit: usize,
     name: &'static str,
 ) -> Result<(), ScanFailure> {
-    *used = used.checked_add(amount).ok_or(ScanFailure::Limit(name))?;
+    *used = used
+        .checked_add(amount)
+        .ok_or(ScanFailure::Limit(ResourceLimit {
+            resource: name,
+            limit,
+            actual: None,
+        }))?;
     if *used > limit {
-        return Err(ScanFailure::Limit(name));
+        return Err(ScanFailure::Limit(ResourceLimit {
+            resource: name,
+            limit,
+            actual: Some(*used),
+        }));
     }
     Ok(())
 }
@@ -201,7 +219,11 @@ fn parse_pass(
             _ => {}
         }
         if events.len() >= limits.events {
-            return Err(PassFailure::Resource(ScanFailure::Limit("events")));
+            return Err(PassFailure::Resource(ScanFailure::Limit(ResourceLimit {
+                resource: "events",
+                limit: limits.events,
+                actual: Some(events.len() + 1),
+            })));
         }
         match &event {
             Event::SequenceStart(..) | Event::MappingStart(..) => {
@@ -406,7 +428,11 @@ fn scan_impl(
     strict: bool,
 ) -> Result<Vec<LocatedEvent>, ScanFailure> {
     if source.len() > limits.source_bytes {
-        return Err(ScanFailure::Limit("source_bytes"));
+        return Err(ScanFailure::Limit(ResourceLimit {
+            resource: "source_bytes",
+            limit: limits.source_bytes,
+            actual: Some(source.len()),
+        }));
     }
     if let Some(offset) = source.iter().position(|byte| !byte.is_ascii()) {
         let prefix = &source[..offset];

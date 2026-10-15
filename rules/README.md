@@ -61,6 +61,7 @@ owns the sequence of a run.
 | [Source ingestion](storage/ingestion.md) | normative | Select input profiles and assign source field types without inferring values. |
 | [CSV profile](storage/csv.md) | normative | Read admitted CSV spellings and write canonical CSV bytes and display precision. |
 | [Parquet profile](storage/parquet.md) | normative | Read and write the closed Parquet field and value mapping. |
+| [SAS source profiles](storage/sas.md) | normative | Read SAS datasets and Transport v5/v8 through declared encoding and explicit numeric narrowing. |
 | [Artifact publication](storage/publication.md) | normative | Select artifact columns and profiles and publish complete files atomically. |
 
 ## Submission

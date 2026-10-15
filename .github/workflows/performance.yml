@@ -1,9 +1,9 @@
 name: Public performance evidence
 
 on:
-  # Only this explicitly pushed qualification branch starts the expensive matrix.
+  # Explicit qualification branches start their approved collection scope.
   push:
-    branches: [qualification/issue-1998]
+    branches: [qualification/issue-1998, qualification/issue-2288-linux-performance]
     paths:
       - 'rust/**'
       - '!rust/measurements/**'
@@ -19,6 +19,7 @@ on:
       - '.github/workflows/native.yml'
       - '.github/scripts/ci/native_matrix.py'
       - '.github/scripts/commands/installed.py'
+      - '.github/scripts/yaml-validation/fixtures/**'
       - '.github/scripts/commands/rust_tests.py'
       - '.github/scripts/commands/check_r.py'
       - '.github/scripts/ci/test_performance_selection.py'
@@ -26,6 +27,9 @@ on:
     inputs:
       native_run_id:
         required: true
+        type: string
+      collection_scope:
+        default: full-matrix
         type: string
       purpose:
         default: capacity-frontier
@@ -42,6 +46,11 @@ on:
         description: Completed successful full native run supplying candidate distributions
         required: true
         type: string
+      collection_scope:
+        description: Full original matrix or approved Linux installed scope for issue 2288
+        default: full-matrix
+        type: choice
+        options: [full-matrix, linux-installed]
       purpose:
         description: Frontier retains refusals; characterization admits only exact truth
         default: capacity-frontier
@@ -59,7 +68,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/qualification/issue-1998' }}
+  cancel-in-progress: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/qualification/issue-1998' || github.ref == 'refs/heads/qualification/issue-2288-linux-performance') }}
 
 permissions:
   contents: read
@@ -73,9 +82,10 @@ env:
   RUSTUP_TOOLCHAIN: 1.90.0
   CARGO_BUILD_JOBS: '2'
   CARGO_INCREMENTAL: '0'
-  COLLECTION_PURPOSE: ${{ inputs.purpose || 'characterization' }}
+  COLLECTION_SCOPE: ${{ github.ref == 'refs/heads/qualification/issue-2288-linux-performance' && 'linux-installed' || inputs.collection_scope || 'full-matrix' }}
+  COLLECTION_PURPOSE: ${{ (github.ref == 'refs/heads/qualification/issue-2288-linux-performance' || inputs.collection_scope == 'linux-installed') && 'characterization' || inputs.purpose || 'characterization' }}
   BASELINE_REF: ${{ inputs.baseline_ref || 'yamaa-py-0.3.0' }}
-  PHASE_MEASUREMENTS: ${{ github.event_name == 'push' || inputs.phase_measurements }}
+  PHASE_MEASUREMENTS: ${{ github.ref != 'refs/heads/qualification/issue-2288-linux-performance' && (github.event_name == 'push' || inputs.phase_measurements) }}
 
 jobs:
   native:
@@ -122,9 +132,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15, windows-latest]
-        python: ['3.12', '3.13', '3.14']
-        form: [wheel, source]
+        os: ${{ fromJSON((github.ref == 'refs/heads/qualification/issue-2288-linux-performance' || inputs.collection_scope == 'linux-installed') && '["ubuntu-24.04"]' || '["ubuntu-24.04", "macos-15", "windows-latest"]') }}
+        python: ${{ fromJSON((github.ref == 'refs/heads/qualification/issue-2288-linux-performance' || inputs.collection_scope == 'linux-installed') && '["3.12"]' || '["3.12", "3.13", "3.14"]') }}
+        form: ${{ fromJSON((github.ref == 'refs/heads/qualification/issue-2288-linux-performance' || inputs.collection_scope == 'linux-installed') && '["wheel"]' || '["wheel", "source"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -154,7 +164,9 @@ jobs:
           assert run['head_sha']==os.environ['GITHUB_SHA'], 'candidate differs from exact collector source'
           with open(os.environ['GITHUB_ENV'],'a') as env:
               env.write('CANDIDATE_REVISION='+run['head_sha']+'\n')
+              env.write('NATIVE_RUN_ATTEMPT='+str(run['run_attempt'])+'\n')
           PY
+          if [[ "${COLLECTION_SCOPE}" == full-matrix ]]; then
           git archive --format=tar.gz --prefix=previous-release/ -o "${RUNNER_TEMP}/previous-release.tar.gz" "${BASELINE_REF}"
           git rev-parse "${BASELINE_REF}^{commit}" > "${RUNNER_TEMP}/baseline-revision.txt"
           python - <<'PY'
@@ -164,13 +176,16 @@ jobs:
           with tarfile.open(root/'previous-release.tar.gz') as archive:
               archive.extractall(root, filter='data')
           PY
+          fi
       - name: Build and install both owners before measurement
         run: |
           rustup toolchain install 1.90.0 --profile minimal
           python -m pip install uv==0.11.6
           uv export --project python --locked --extra test --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/requirements.txt"
           uv venv --python "$(command -v python)" "${RUNNER_TEMP}/candidate-env"
-          uv venv --python "$(command -v python)" "${RUNNER_TEMP}/baseline-env"
+          if [[ "${COLLECTION_SCOPE}" == full-matrix ]]; then
+            uv venv --python "$(command -v python)" "${RUNNER_TEMP}/baseline-env"
+          fi
           if [ "${{ runner.os }}" = Windows ]; then
             candidate_python="${RUNNER_TEMP}/candidate-env/Scripts/python.exe"
             baseline_python="${RUNNER_TEMP}/baseline-env/Scripts/python.exe"
@@ -185,14 +200,18 @@ jobs:
             uv pip install --python "${candidate_python}" --no-deps -r "${RUNNER_TEMP}/requirements.txt" "${RUNNER_TEMP}"/candidate-distribution/*.tar.gz
           fi
           uv pip install --python "${candidate_python}" --no-deps rust/tests/project-programs/python
+          if [[ "${COLLECTION_SCOPE}" == full-matrix ]]; then
           CARGO_TARGET_DIR="${RUNNER_TEMP}/baseline-target" uv build --wheel "${RUNNER_TEMP}/previous-release/python" --out-dir "${RUNNER_TEMP}/baseline-distribution" 2>&1 | tee "${RUNNER_TEMP}/baseline-build.log"
           uv pip install --python "${baseline_python}" --no-deps -r "${RUNNER_TEMP}/requirements.txt" "${RUNNER_TEMP}"/baseline-distribution/*.whl
+          fi
       - name: Record actual installed origins and archive associations
         run: |
           candidate_artifact=$(python -c 'from pathlib import Path; import os; print(next((Path(os.environ["RUNNER_TEMP"])/"candidate-distribution").glob("*.whl" if "${{ matrix.form }}"=="wheel" else "*.tar.gz")))')
+          python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "${CANDIDATE_REVISION}" --host python --executable "${CANDIDATE_PYTHON}" --artifact "${candidate_artifact}" --artifact-reference "github-actions:${NATIVE_RUN_ID}/attempt-${NATIVE_RUN_ATTEMPT}/native-python-${{ matrix.os }}-3.14/$(basename "${candidate_artifact}")" --form "${{ matrix.form }}" --build-association "completed native workflow source/package association; current job installs wheel or rebuilds source before measurement" --output "${RUNNER_TEMP}/candidate-installation"
+          if [[ "${COLLECTION_SCOPE}" == full-matrix ]]; then
           baseline_artifact=$(python -c 'from pathlib import Path; import os; print(next((Path(os.environ["RUNNER_TEMP"])/"baseline-distribution").glob("*.whl")))')
-          python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "${CANDIDATE_REVISION}" --host python --executable "${CANDIDATE_PYTHON}" --artifact "${candidate_artifact}" --artifact-reference "github-actions:${NATIVE_RUN_ID}/native-python-${{ matrix.os }}-3.14/$(basename "${candidate_artifact}")" --form "${{ matrix.form }}" --build-association "completed native workflow source/package association; current job installs wheel or rebuilds source before measurement" --output "${RUNNER_TEMP}/candidate-installation"
           python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "$(cat "${RUNNER_TEMP}/baseline-revision.txt")" --host python --executable "${BASELINE_PYTHON}" --artifact "${baseline_artifact}" --artifact-reference "source-built:${BASELINE_REF}/$(basename "${baseline_artifact}")" --form wheel --build-association "clean source-built previous release archive; baseline-build.log retained; not a downloaded previous-release binary" --output "${RUNNER_TEMP}/baseline-installation"
+          fi
       - name: Create same-runner campaign before original measurements
         run: python rust/tools/performance_campaign.py create --campaign "${RUNNER_TEMP}/machine-campaign.json"
       - name: Collect candidate with independent truth before timing
@@ -201,12 +220,14 @@ jobs:
         run: |
           phase_args=()
           if [[ "${PHASE_MEASUREMENTS}" == "true" ]]; then phase_args+=(--phase-measurements); fi
-          python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${CANDIDATE_PYTHON}" --provenance "${RUNNER_TEMP}/candidate-installation/provenance.json" --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/candidate-evidence" "${phase_args[@]}"
+          python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${CANDIDATE_PYTHON}" --provenance "${RUNNER_TEMP}/candidate-installation/provenance.json" --purpose "${COLLECTION_PURPOSE}" --collection-scope "${COLLECTION_SCOPE}" --output "${RUNNER_TEMP}/candidate-evidence" "${phase_args[@]}"
       - name: Collect compatible previous-release Python reference on the same runner
+        if: env.COLLECTION_SCOPE == 'full-matrix'
         id: baseline
         continue-on-error: true
         run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --families lookup aggregate window --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/baseline-evidence"
       - name: Collect supported producer root-Build reference without graph Saves
+        if: env.COLLECTION_SCOPE == 'full-matrix'
         id: producer_baseline
         continue-on-error: true
         run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --scope producer-root-build --families producer --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/producer-root-build-baseline"
@@ -245,7 +266,12 @@ jobs:
           if-no-files-found: error
       - name: Require complete evidence after preserving failures
         if: always()
-        run: test "${{ steps.candidate.outcome }}" = success && test "${{ steps.baseline.outcome }}" = success && test "${{ steps.producer_baseline.outcome }}" = success
+        run: |
+          test "${{ steps.candidate.outcome }}" = success
+          if [[ "${COLLECTION_SCOPE}" == full-matrix ]]; then
+            test "${{ steps.baseline.outcome }}" = success
+            test "${{ steps.producer_baseline.outcome }}" = success
+          fi
 
   r:
     needs: native
@@ -257,7 +283,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15, windows-latest]
+        os: ${{ fromJSON((github.ref == 'refs/heads/qualification/issue-2288-linux-performance' || inputs.collection_scope == 'linux-installed') && '["ubuntu-24.04"]' || '["ubuntu-24.04", "macos-15", "windows-latest"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -299,6 +325,7 @@ jobs:
               source.extractall(root/'timer-source', filter='data')
           with open(os.environ['GITHUB_ENV'],'a') as env:
               env.write('CANDIDATE_REVISION='+run['head_sha']+'\n')
+              env.write('NATIVE_RUN_ATTEMPT='+str(run['run_attempt'])+'\n')
               env.write('R_LIBS='+str(root/'performance-r-library')+'\n')
           PY
           rustup toolchain install 1.90.0 --profile minimal
@@ -329,8 +356,9 @@ jobs:
       - name: Record actual installed R origins and source association
         run: |
           artifact=$(python -c 'from pathlib import Path; import os; print(next((Path(os.environ["RUNNER_TEMP"])/"candidate-distribution").glob("*.tar.gz")))')
-          python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "${CANDIDATE_REVISION}" --host r --executable "$(command -v Rscript)" --artifact "${artifact}" --artifact-reference "github-actions:${NATIVE_RUN_ID}/native-r-${{ matrix.os }}/$(basename "${artifact}")" --form source --build-association "completed native workflow source archive; rebuilt before collection; candidate-build.log retained" --clock-config "${TIMER_CONFIG}" --clock-library "${TIMER_LIBRARY}" --output "${RUNNER_TEMP}/candidate-installation"
+          python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "${CANDIDATE_REVISION}" --host r --executable "$(command -v Rscript)" --artifact "${artifact}" --artifact-reference "github-actions:${NATIVE_RUN_ID}/attempt-${NATIVE_RUN_ATTEMPT}/native-r-${{ matrix.os }}/$(basename "${artifact}")" --form source --build-association "completed native workflow source archive; rebuilt before collection; candidate-build.log retained" --clock-config "${TIMER_CONFIG}" --clock-library "${TIMER_LIBRARY}" --output "${RUNNER_TEMP}/candidate-installation"
       - name: Secure and install previous-release Python reference on the R runner
+        if: env.COLLECTION_SCOPE == 'full-matrix'
         env:
           BASELINE_REF: ${{ inputs.baseline_ref || 'yamaa-py-0.3.0' }}
         run: |
@@ -346,7 +374,9 @@ jobs:
               archive.extractall(root, filter='data')
           PY
           CARGO_TARGET_DIR="${RUNNER_TEMP}/baseline-target" uv build --wheel "${RUNNER_TEMP}/previous-release/python" --out-dir "${RUNNER_TEMP}/baseline-distribution" 2>&1 | tee "${RUNNER_TEMP}/baseline-build.log"
-          uv venv --python "$(command -v python)" "${RUNNER_TEMP}/baseline-env"
+          if [[ "${COLLECTION_SCOPE}" == full-matrix ]]; then
+            uv venv --python "$(command -v python)" "${RUNNER_TEMP}/baseline-env"
+          fi
           if [ "${{ runner.os }}" = Windows ]; then
             baseline_python="${RUNNER_TEMP}/baseline-env/Scripts/python.exe"
           else
@@ -364,12 +394,14 @@ jobs:
         run: |
           phase_args=()
           if [[ "${PHASE_MEASUREMENTS}" == "true" ]]; then phase_args+=(--phase-measurements); fi
-          python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host r --executable "$(command -v Rscript)" --provenance "${RUNNER_TEMP}/candidate-installation/provenance.json" --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/candidate-evidence" "${phase_args[@]}"
+          python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host r --executable "$(command -v Rscript)" --provenance "${RUNNER_TEMP}/candidate-installation/provenance.json" --purpose "${COLLECTION_PURPOSE}" --collection-scope "${COLLECTION_SCOPE}" --output "${RUNNER_TEMP}/candidate-evidence" "${phase_args[@]}"
       - name: Collect compatible previous-release reference on the same R runner
+        if: env.COLLECTION_SCOPE == 'full-matrix'
         id: baseline
         continue-on-error: true
         run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --families lookup aggregate window --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/baseline-evidence"
       - name: Collect supported producer root-Build reference on the R runner
+        if: env.COLLECTION_SCOPE == 'full-matrix'
         id: producer_baseline
         continue-on-error: true
         run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --scope producer-root-build --families producer --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/producer-root-build-baseline"
@@ -413,4 +445,93 @@ jobs:
           if-no-files-found: error
       - name: Require complete evidence after preserving failures
         if: always()
-        run: test "${{ steps.candidate.outcome }}" = success && test "${{ steps.baseline.outcome }}" = success && test "${{ steps.producer_baseline.outcome }}" = success
+        run: |
+          test "${{ steps.candidate.outcome }}" = success
+          if [[ "${COLLECTION_SCOPE}" == full-matrix ]]; then
+            test "${{ steps.baseline.outcome }}" = success
+            test "${{ steps.producer_baseline.outcome }}" = success
+          fi
+
+
+  linux-scope-audit:
+    name: Audit issue 2288 Linux installed coverage
+    if: ${{ always() && (github.ref == 'refs/heads/qualification/issue-2288-linux-performance' || inputs.collection_scope == 'linux-installed') }}
+    needs: [native, python, r]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NATIVE_RUN_ID: ${{ needs.native.outputs.run-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Retain original API snapshots and exact source for offline coverage replay
+        id: manifest
+        run: |
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'linux-evidence'
+          root.mkdir(exist_ok=True)
+          repo=os.environ['GITHUB_REPOSITORY']
+          runs=[('',os.environ['GITHUB_RUN_ID']),('native-',os.environ['NATIVE_RUN_ID'])]
+          for prefix, identity in runs:
+              with (root/(prefix+'run.json')).open('wb') as stream:
+                  subprocess.run(['gh','api',f'repos/{repo}/actions/runs/{identity}'],stdout=stream,check=True)
+              run=json.loads((root/(prefix+'run.json')).read_text())
+              for kind,route in [('jobs',f'repos/{repo}/actions/runs/{identity}/attempts/{run["run_attempt"]}/jobs'),('artifacts',f'repos/{repo}/actions/runs/{identity}/artifacts')]:
+                  with (root/(prefix+kind+'-pages.json')).open('wb') as stream:
+                      subprocess.run(['gh','api',route,'--paginate','--slurp'],stdout=stream,check=True)
+                  pages=json.loads((root/(prefix+kind+'-pages.json')).read_text())
+                  (root/(prefix+kind+'.json')).write_text(json.dumps({kind:[item for page in pages for item in page[kind]]},indent=2)+'\n')
+          PY
+          git bundle create "${RUNNER_TEMP}/linux-evidence/source.bundle" HEAD
+          python rust/tools/prepare_scoped_performance_audit.py --root "${RUNNER_TEMP}/linux-evidence" --repository "${GITHUB_REPOSITORY}" --revision "${GITHUB_SHA}" --source-bundle source.bundle --output "${RUNNER_TEMP}/linux-evidence/input.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          payload=json.loads((Path(os.environ['RUNNER_TEMP'])/'linux-evidence/input.json').read_text())
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              for entry in payload['entries']:
+                  output.write(entry['tuple']['host']+'_artifact='+str(entry['artifact_id'])+'\n')
+          PY
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ steps.manifest.outputs.python_artifact }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/linux-evidence/performance-python-ubuntu-24.04-3.12-wheel
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ steps.manifest.outputs.r_artifact }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/linux-evidence/performance-r-ubuntu-24.04-source
+      - name: Independently replay all 54 candidate cells without numeric budgets
+        run: python rust/tools/audit_public_performance.py --input "${RUNNER_TEMP}/linux-evidence/input.json" --collection-scope linux-installed --check-collection --output "${RUNNER_TEMP}/linux-coverage-audit"
+      - name: Preserve independently readable scoped performance record
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: performance-linux-installed-audit-record
+          retention-days: 90
+          path: |
+            ${{ runner.temp }}/linux-coverage-audit/performance-audit.json
+            ${{ runner.temp }}/linux-coverage-audit/performance-audit.md
+            ${{ runner.temp }}/linux-evidence/input.json
+            ${{ runner.temp }}/linux-evidence/run.json
+            ${{ runner.temp }}/linux-evidence/native-run.json
+          if-no-files-found: error
+      - name: Preserve raw source, metadata and independent scoped coverage report
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: performance-linux-installed-audit
+          retention-days: 90
+          path: |
+            ${{ runner.temp }}/linux-evidence
+            ${{ runner.temp }}/linux-coverage-audit
+          if-no-files-found: error

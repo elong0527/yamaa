@@ -146,6 +146,8 @@ fn dictionary_failure_ref<'a, T>(
                     }
                 }
                 json!({"status":"invalid","diagnostics":rows})
+            } else if let crate::yaml_decode::DecodeFailure::Limit(limit) = error {
+                super::decoder_limit(limit, "dictionary")
             } else {
                 json!({"status":"rejected","stage":"dictionary","code":"yaml_decode"})
             }

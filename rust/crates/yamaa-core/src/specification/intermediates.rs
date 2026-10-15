@@ -59,7 +59,7 @@ impl Declarations {
             let count = uses.get_mut(call).ok_or(PrepareError::Internal)?;
             *count = count
                 .checked_add(1)
-                .ok_or(PrepareError::Limit("function_calls"))?;
+                .ok_or_else(|| PrepareError::limit("function_calls", 1024, None, None))?;
         }
         Ok(())
     }
@@ -230,7 +230,12 @@ impl Declarations {
         };
         let items = sequence(d, id)?;
         if items.len() > limits.columns {
-            return Err(PrepareError::Limit("intermediates"));
+            return Err(PrepareError::limit(
+                "intermediates",
+                limits.columns,
+                Some(items.len()),
+                None,
+            ));
         }
         let findings = self_relations::declaration_findings(d, sources, items)?;
         if !findings.is_empty() {
@@ -264,7 +269,12 @@ impl Declarations {
                 }
                 if let N::Text(name) = &d.nodes()[key] {
                     if limits.keys == 0 {
-                        return Err(PrepareError::Limit("intermediate_keys"));
+                        return Err(PrepareError::limit(
+                            "intermediate_keys",
+                            limits.keys,
+                            None,
+                            None,
+                        ));
                     }
                     Some(vec![(
                         name.clone(),
@@ -273,7 +283,12 @@ impl Declarations {
                 } else if matches!(d.nodes()[key], N::Sequence(_)) {
                     let fields = sequence(d, key)?;
                     if fields.len() > limits.keys {
-                        return Err(PrepareError::Limit("intermediate_keys"));
+                        return Err(PrepareError::limit(
+                            "intermediate_keys",
+                            limits.keys,
+                            Some(fields.len()),
+                            None,
+                        ));
                     }
                     Some(
                         fields
@@ -291,7 +306,12 @@ impl Declarations {
                 } else {
                     let fields = mapping(d, key)?;
                     if fields.len() > limits.keys {
-                        return Err(PrepareError::Limit("intermediate_keys"));
+                        return Err(PrepareError::limit(
+                            "intermediate_keys",
+                            limits.keys,
+                            Some(fields.len()),
+                            None,
+                        ));
                     }
                     if fields.is_empty() {
                         reject(extra, "intermediate_key", format!("{path}.key"));
@@ -342,7 +362,12 @@ impl Declarations {
                         reject(extra, "predicate_regex", format!("{path}.filter"));
                     }
                     Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
-                    Err(_) => return Err(PrepareError::Limit("predicate_compilation")),
+                    Err(error) => {
+                        return Err(PrepareError::predicate(
+                            error.clone(),
+                            Some(&format!("{path}.filter")),
+                        ))
+                    }
                 }
                 Some(compiled)
             } else {
@@ -366,7 +391,12 @@ impl Declarations {
             {
                 let terms = sequence(d, order_id)?;
                 if terms.len() > limits.source_fields {
-                    return Err(PrepareError::Limit("intermediate_order"));
+                    return Err(PrepareError::limit(
+                        "intermediate_order",
+                        limits.source_fields,
+                        Some(terms.len()),
+                        None,
+                    ));
                 }
                 for &term in terms {
                     let (name, descending, nulls_first) = if let N::Text(name) = &d.nodes()[term] {
@@ -708,6 +738,19 @@ impl Declarations {
                         sources,
                         schemas,
                         driver,
+                        // Current source-key cardinality is resolved before
+                        // selecting donor records. Its failure must precede
+                        // the filter's operand types.
+                        !(pairs.iter().any(|key| key.value.is_expression())
+                            && pairs.iter().any(|key| {
+                                matches!(
+                                    key.value.read(),
+                                    Some(
+                                        crate::dataset::MatchRead::Record { .. }
+                                            | crate::dataset::MatchRead::SecondaryRecord { .. }
+                                    )
+                                )
+                            })),
                         findings,
                     )?;
                     if filter.is_none() {

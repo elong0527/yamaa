@@ -18,11 +18,21 @@ use yamaa_core::{
 
 #[derive(Debug)]
 pub(super) enum Error {
-    Limit,
     Invalid,
     Table(TableError),
 }
 
+fn retain(remaining: &mut usize, initial: usize, amount: Option<usize>) -> Result<(), Error> {
+    let required = amount.and_then(|amount| (initial - *remaining).checked_add(amount));
+    *remaining = amount
+        .and_then(|amount| remaining.checked_sub(amount))
+        .ok_or(Error::Table(TableError::Limit {
+            resource: "retained_bytes",
+            limit: initial,
+            required,
+        }))?;
+    Ok(())
+}
 /// The staging charge bounds admitted cells and copied string payloads. It is
 /// not an allocator/RSS limit; the caller also bounds source and decoded arrays.
 pub(super) fn convert(
@@ -30,33 +40,76 @@ pub(super) fn convert(
     staged_bytes: usize,
     limits: TableLimits,
 ) -> Result<ArrowTable, Error> {
+    convert_with_usage(decoded, staged_bytes, limits, None)
+}
+
+pub(super) fn convert_with_usage(
+    decoded: Decoded,
+    staged_bytes: usize,
+    limits: TableLimits,
+    mut usage: Option<&mut crate::source_decode_usage::Usage>,
+) -> Result<ArrowTable, Error> {
     let mut rows = 0usize;
     let columns = decoded.schema.columns().len();
-    if columns > limits.max_columns || decoded.batches.len() > limits.max_batches {
-        return Err(Error::Limit);
+    for (resource, required, limit) in [
+        ("columns", Some(columns), limits.max_columns),
+        ("batches", Some(decoded.batches.len()), limits.max_batches),
+    ] {
+        if required.is_none_or(|n| n > limit) {
+            return Err(Error::Table(TableError::Limit {
+                resource,
+                limit,
+                required,
+            }));
+        }
     }
     let mut remaining = staged_bytes;
     // Admit the complete shape before constructing any converted column.
     for batch in &decoded.batches {
-        rows = rows
-            .checked_add(batch.num_rows())
+        let required = rows.checked_add(batch.num_rows());
+        rows = required
             .filter(|n| *n <= limits.max_rows)
-            .ok_or(Error::Limit)?;
-        let cells = batch.num_rows().checked_mul(columns).ok_or(Error::Limit)?;
-        remaining = remaining
-            .checked_sub(cells.checked_mul(32).ok_or(Error::Limit)?)
-            .ok_or(Error::Limit)?;
+            .ok_or(Error::Table(TableError::Limit {
+                resource: "rows",
+                limit: limits.max_rows,
+                required,
+            }))?;
+        retain(
+            &mut remaining,
+            staged_bytes,
+            batch
+                .num_rows()
+                .checked_mul(columns)
+                .and_then(|cells| cells.checked_mul(32)),
+        )?;
+        if let Some(usage) = usage.as_deref_mut() {
+            usage.storage(staged_bytes - remaining);
+        }
         for array in batch.columns() {
             if let Some(strings) = array.as_any().downcast_ref::<LargeStringArray>() {
                 let mut bytes = 0usize;
                 for value in strings.iter().flatten() {
-                    bytes = bytes.checked_add(value.len()).ok_or(Error::Limit)?;
+                    bytes =
+                        bytes
+                            .checked_add(value.len())
+                            .ok_or(Error::Table(TableError::Limit {
+                                resource: "offset_bytes",
+                                limit: i32::MAX as usize,
+                                required: None,
+                            }))?;
                 }
                 // The canonical representation uses signed 32-bit offsets.
                 if bytes > i32::MAX as usize {
-                    return Err(Error::Limit);
+                    return Err(Error::Table(TableError::Limit {
+                        resource: "offset_bytes",
+                        limit: i32::MAX as usize,
+                        required: Some(bytes),
+                    }));
                 }
-                remaining = remaining.checked_sub(bytes).ok_or(Error::Limit)?;
+                retain(&mut remaining, staged_bytes, Some(bytes))?;
+                if let Some(usage) = usage.as_deref_mut() {
+                    usage.storage(staged_bytes - remaining);
+                }
             }
         }
     }
@@ -64,7 +117,11 @@ pub(super) fn convert(
         .checked_mul(columns)
         .is_none_or(|n| n > limits.max_cells)
     {
-        return Err(Error::Limit);
+        return Err(Error::Table(TableError::Limit {
+            resource: "cells",
+            limit: limits.max_cells,
+            required: rows.checked_mul(columns),
+        }));
     }
     let physical = physical_schema(&decoded.schema);
     let mut batches = Vec::with_capacity(decoded.batches.len());
@@ -237,7 +294,7 @@ mod tests {
     fn shape_and_string_copy_charges_are_enforced_before_conversion() {
         assert!(matches!(
             convert(source(), 481, limits()),
-            Err(Error::Limit)
+            Err(Error::Table(TableError::Limit { .. }))
         ));
         for limits in [
             TableLimits {
@@ -257,7 +314,10 @@ mod tests {
                 ..limits()
             },
         ] {
-            assert!(matches!(convert(source(), 482, limits), Err(Error::Limit)));
+            assert!(matches!(
+                convert(source(), 482, limits),
+                Err(Error::Table(TableError::Limit { .. }))
+            ));
         }
     }
 }

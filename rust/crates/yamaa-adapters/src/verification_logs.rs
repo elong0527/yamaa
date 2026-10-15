@@ -151,8 +151,13 @@ fn held(path: &str, table: core::LogTable, limits: PreparationLimits) -> Result<
     let projection = (0..table.schema().columns().len()).collect::<Vec<_>>();
     let bytes = if profile == "csv" {
         crate::csv_artifact::render(&table, &projection, limits.output_bytes).map_err(|e| {
-            if matches!(e, crate::csv_artifact::Error::Limit) {
-                Error::OutputLimit
+            if let crate::csv_artifact::Error::Limit { limit, actual, .. } = e {
+                Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                    "output_bytes",
+                    limit,
+                    actual,
+                    Vec::new(),
+                ))
             } else {
                 Error::InvalidObservation
             }
@@ -169,8 +174,18 @@ fn held(path: &str, table: core::LogTable, limits: PreparationLimits) -> Result<
             },
         )
         .map_err(|e| {
-            if matches!(e, crate::parquet_artifact::Error::Limit) {
-                Error::OutputLimit
+            if let crate::parquet_artifact::Error::Limit {
+                resource,
+                limit,
+                actual,
+            } = e
+            {
+                Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                    resource,
+                    limit,
+                    actual,
+                    Vec::new(),
+                ))
             } else {
                 Error::InvalidObservation
             }
@@ -207,8 +222,18 @@ fn held(path: &str, table: core::LogTable, limits: PreparationLimits) -> Result<
             "",
             crate::parquet_artifact::records(&table, &projection, limits.report_bytes).map_err(
                 |e| {
-                    if matches!(e, crate::parquet_artifact::Error::Limit) {
-                        Error::OutputLimit
+                    if let crate::parquet_artifact::Error::Limit {
+                        resource,
+                        limit,
+                        actual,
+                    } = e
+                    {
+                        Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                            resource,
+                            limit,
+                            actual,
+                            Vec::new(),
+                        ))
                     } else {
                         Error::InvalidObservation
                     }
@@ -237,7 +262,7 @@ pub(crate) struct PreparedLogs {
     pub(crate) failure: Option<Error>,
 }
 /// Conservative graph shares admit record/context/table ownership before any
-/// codec or report copy grows. Ordinary single-domain defaults are unchanged.
+/// codec or report copy grows. Public defaults follow the longitudinal profile.
 #[derive(Clone, Copy)]
 pub(crate) struct PreparationLimits {
     pub(crate) core: core::Limits,
@@ -249,11 +274,16 @@ pub(crate) struct PreparationLimits {
 impl Default for PreparationLimits {
     fn default() -> Self {
         Self {
-            core: Default::default(),
-            output_bytes: 8_388_608,
-            total_output_bytes: 16_777_216,
-            report_bytes: 16_777_216,
-            observation_bytes: 8_388_608,
+            core: core::Limits {
+                records: yamaa_engine::capacity::OUTPUT_ROWS,
+                cells: yamaa_engine::capacity::REPORT_CELLS,
+                text: yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+                json_nodes: yamaa_engine::capacity::REPORT_CELLS,
+            },
+            output_bytes: yamaa_engine::capacity::SOURCE_BYTES,
+            total_output_bytes: yamaa_engine::capacity::SOURCE_BYTES,
+            report_bytes: yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+            observation_bytes: yamaa_engine::capacity::REPORT_ENCODED_BYTES,
         }
     }
 }

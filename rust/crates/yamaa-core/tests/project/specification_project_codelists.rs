@@ -139,6 +139,12 @@ fn compiler_terminology_quota_refuses_the_entire_environment_plan() {
                 ..Default::default()
             }
         ),
-        Err(PrepareError::Limit("terminology_bindings"))
+        Err(PrepareError::Limit(
+            yamaa_core::specification::CompilerLimit {
+                resource: "text_bytes",
+                limit: 1,
+                ..
+            }
+        ))
     ));
 }
