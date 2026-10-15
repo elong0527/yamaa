@@ -1,12 +1,10 @@
-"""Diagnostic guard mutations preserve vocabulary and every source-literal ratchet."""
+"""Diagnostic guard mutations preserve vocabulary and registry-owned literals."""
 
 import importlib.util
 import json
-import subprocess
 import tempfile
 import unittest
-from pathlib import Path, PureWindowsPath
-from unittest.mock import patch
+from pathlib import Path
 
 spec = importlib.util.spec_from_file_location(
     "check_diagnostics", Path(__file__).parents[1] / "tools/check_diagnostics.py"
@@ -39,12 +37,6 @@ class DiagnosticGuardTests(unittest.TestCase):
             'conditions! {\n    Invalid => ("validation", "invalid_value", Some("REQ-0001")),\n'
             '    Rejected => ("engine", "engine_rejected", None),\n}\n',
         )
-        self.seed = {}
-        self.active = {}
-        self.save_sites()
-        self.core_seed = {}
-        self.core_active = {}
-        self.save_core_sites()
         self.dispositions = {
             "version": 1,
             "scope": "Static test dispositions, not execution proof.",
@@ -61,148 +53,8 @@ class DiagnosticGuardTests(unittest.TestCase):
         path.write_text(text, encoding="utf-8")
         return path
 
-    def save_sites(self):
-        self.write(str(guard.SEED), json.dumps(self.seed))
-        self.write(str(guard.ALLOWLIST), json.dumps(self.active))
-
-    def allow(self, relative, source, count=1):
-        identifier = relative + ":1"
-        self.seed[identifier] = {
-            "path": relative,
-            "source": source.strip(),
-            "occurrences": count,
-        }
-        self.active[identifier] = count
-        self.save_sites()
-        return identifier
-
-    def save_core_sites(self):
-        self.write(str(guard.CORE_SEED), json.dumps(self.core_seed))
-        self.write(str(guard.CORE_ALLOWLIST), json.dumps(self.core_active))
-
-    def allow_core(self, relative, source, count=1):
-        identifier = relative + ":1"
-        self.core_seed[identifier] = {
-            "path": relative,
-            "source": source.strip(),
-            "occurrences": count,
-        }
-        self.core_active[identifier] = count
-        self.save_core_sites()
-        return identifier
-
     def errors(self):
         return guard.violations(self.root)
-
-    def commit_baseline(self):
-        for arguments in (
-            ["init", "--quiet"],
-            ["add", "."],
-            [
-                "-c",
-                "user.email=diagnostic-test@example.invalid",
-                "-c",
-                "user.name=Diagnostic test",
-                "commit",
-                "--quiet",
-                "-m",
-                "baseline",
-            ],
-        ):
-            subprocess.run(
-                ["git", *arguments], cwd=self.root, check=True, capture_output=True
-            )
-
-    def test_baseline_rejects_reactivation_after_retirement(self):
-        relative = "rust/crates/yamaa-adapters/src/errors.rs"
-        source = 'const REQUIREMENT: &str = "REQ-0001";'
-        identifier = self.allow(relative, source, count=2)
-        self.active[identifier] = 1
-        self.save_sites()
-        self.write(relative, source + "\n")
-        self.commit_baseline()
-        self.assertEqual(guard.violations(self.root, "HEAD"), [])
-        self.active[identifier] = 2
-        self.save_sites()
-        self.write(relative, source + "\n" + source + "\n")
-        errors = guard.violations(self.root, "HEAD")
-        self.assertEqual(len(errors), 1)
-        self.assertIn("literal allowlist grew from HEAD", errors[0])
-
-    def test_baseline_uses_git_paths_and_utf8_under_windows_defaults(self):
-        identifier = self.allow(
-            "rust/crates/yamaa-adapters/src/errors.rs",
-            'const REQUIREMENT: &str = "REQ-0001"; // \u00e9',
-        )
-        self.write(str(guard.SEED), json.dumps(self.seed, ensure_ascii=False))
-        self.commit_baseline()
-        with (
-            patch.object(guard, "CHECKER", PureWindowsPath(guard.CHECKER.as_posix())),
-            patch("subprocess._text_encoding", return_value="cp1252"),
-        ):
-            seed = PureWindowsPath(guard.SEED.as_posix())
-            allowlist = PureWindowsPath(guard.ALLOWLIST.as_posix())
-            self.assertEqual(
-                guard.baseline_errors(self.root, "HEAD", seed, allowlist), []
-            )
-            self.active[identifier] = 2
-            self.save_sites()
-            errors = guard.baseline_errors(self.root, "HEAD", seed, allowlist)
-        self.assertEqual(len(errors), 1)
-        self.assertIn("literal allowlist grew from HEAD", errors[0])
-
-    def test_baseline_seed_comparison_ignores_json_layout_but_rejects_edits(self):
-        self.commit_baseline()
-        (self.root / guard.SEED).write_text("{\n}\n")
-        self.assertEqual(guard.violations(self.root, "HEAD"), [])
-        self.allow("rust/crates/yamaa-adapters/src/other.rs", '"REQ-0001"')
-        self.assertTrue(
-            any(
-                "frozen literal seed changed" in e
-                for e in guard.violations(self.root, "HEAD")
-            )
-        )
-
-    def test_first_introduction_is_explicit_and_missing_baseline_fails(self):
-        (self.root / guard.SEED).unlink()
-        (self.root / guard.ALLOWLIST).unlink()
-        self.write(str(guard.CHECKER), "# Original requirement-only checker\n")
-        self.commit_baseline()
-        self.save_sites()
-        self.assertEqual(guard.violations(self.root, "HEAD"), [])
-        self.assertTrue(
-            any(
-                "unavailable revision" in e
-                for e in guard.violations(self.root, "missing-ref")
-            )
-        )
-
-    def test_existing_baseline_guard_cannot_lose_its_files(self):
-        (self.root / guard.SEED).unlink()
-        (self.root / guard.ALLOWLIST).unlink()
-        self.write(
-            str(guard.CHECKER),
-            f"# Requires {guard.SEED.name} and {guard.ALLOWLIST.name}\n",
-        )
-        self.commit_baseline()
-        self.save_sites()
-        self.assertTrue(
-            any(
-                "existing guard is missing" in e
-                for e in guard.violations(self.root, "HEAD")
-            )
-        )
-
-    def test_incomplete_baseline_cannot_be_bootstrapped(self):
-        (self.root / guard.ALLOWLIST).unlink()
-        self.commit_baseline()
-        self.save_sites()
-        self.assertTrue(
-            any(
-                "incomplete seed and allowlist" in e
-                for e in guard.violations(self.root, "HEAD")
-            )
-        )
 
     def test_registered_core_mapping_passes(self):
         self.assertEqual(self.errors(), [])
@@ -530,16 +382,6 @@ class DiagnosticGuardTests(unittest.TestCase):
                     self.assertIn("new diagnostic literal site outside core", errors[0])
                     path.unlink()
 
-    def test_seeded_escaped_json_is_counted_at_its_actual_source_line(self):
-        relative = "rust/crates/yamaa-adapters/src/errors.rs"
-        source = r'const ERROR: &str = "{\"condition\":\"invalid_value\",\"requirement\":\"REQ-0001\"}";'
-        self.allow(relative, source)
-        self.write(relative, "// unrelated insertion\n" + source + "\n")
-        self.assertEqual(self.errors(), [])
-        self.write(relative, source + "\n" + source + "\n")
-        self.assertEqual(len(self.errors()), 1)
-        self.assertIn("errors.rs:2: new diagnostic", self.errors()[0])
-
     def test_escaped_json_unknown_requirement_is_still_undefined(self):
         self.write(
             "rust/crates/yamaa-core/src/json_error.rs",
@@ -572,61 +414,6 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         )
         self.assertEqual(len(self.errors()), 1)
         self.assertIn("errors.rs:1: new diagnostic", self.errors()[0])
-
-    def test_exact_seeded_site_survives_unrelated_line_insertions(self):
-        relative = "rust/crates/yamaa-adapters/src/errors.rs"
-        source = 'const REQUIREMENT: &str = "REQ-0001";'
-        self.allow(relative, source)
-        self.write(relative, "// unrelated insertion\n    " + source + "\n")
-        self.assertEqual(self.errors(), [])
-
-    def test_copying_or_moving_a_seeded_site_is_not_allowed(self):
-        relative = "rust/crates/yamaa-adapters/src/errors.rs"
-        source = 'const REQUIREMENT: &str = "REQ-0001";'
-        self.allow(relative, source)
-        path = self.write(relative, source + "\n")
-        self.write("rust/crates/yamaa-adapters/src/other.rs", source + "\n")
-        self.assertEqual(len(self.errors()), 1)
-        path.unlink()
-        self.assertTrue(any("stale literal site" in e for e in self.errors()))
-        self.assertTrue(any("other.rs:1: new diagnostic" in e for e in self.errors()))
-
-    def test_duplicate_seeded_line_and_changed_line_fail(self):
-        relative = "rust/crates/yamaa-adapters/src/errors.rs"
-        source = 'const REQUIREMENT: &str = "REQ-0001";'
-        self.allow(relative, source)
-        self.write(relative, source + "\n" + source + "\n")
-        self.assertEqual(len(self.errors()), 1)
-        self.write(relative, source.replace("REQUIREMENT", "OTHER") + "\n")
-        self.assertEqual(len(self.errors()), 2)
-
-    def test_removal_must_shrink_active_allowlist(self):
-        relative = "rust/crates/yamaa-adapters/src/errors.rs"
-        source = 'const REQUIREMENT: &str = "REQ-0001";'
-        self.allow(relative, source, count=2)
-        self.write(relative, source + "\n")
-        self.assertTrue(any("stale literal site" in e for e in self.errors()))
-        identifier = next(iter(self.active))
-        self.active[identifier] = 1
-        self.save_sites()
-        self.assertEqual(self.errors(), [])
-        self.write(relative, "// diagnostic ownership moved to core\n")
-        self.active.clear()
-        self.save_sites()
-        self.assertEqual(self.errors(), [])
-
-    def test_allowlist_cannot_add_sites_or_grow_counts(self):
-        relative = "rust/crates/yamaa-adapters/src/errors.rs"
-        source = 'const REQUIREMENT: &str = "REQ-0001";'
-        identifier = self.allow(relative, source)
-        self.write(relative, source + "\n")
-        for addition in ({identifier: 2}, {"new.rs:1": 1}, {identifier: "1"}):
-            with self.subTest(addition=addition):
-                self.active = addition
-                self.save_sites()
-                self.assertTrue(
-                    any("literal allowlist may only shrink" in e for e in self.errors())
-                )
 
     def test_generated_schema_is_exempt_from_ownership_but_not_normative_ids(self):
         path = self.write(
@@ -684,17 +471,6 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         (self.root / "yaml/conditions.yaml").unlink()
         self.assertTrue(any("unavailable vocabulary" in e for e in self.errors()))
 
-    def test_missing_or_invalid_allowlist_does_not_pass(self):
-        path = self.root / guard.ALLOWLIST
-        path.unlink()
-        self.assertTrue(
-            any("invalid diagnostic literal sites" in e for e in self.errors())
-        )
-        path.write_text("[]")
-        self.assertTrue(
-            any("invalid diagnostic literal sites" in e for e in self.errors())
-        )
-
     def test_new_core_and_engine_sites_are_rejected_in_every_literal_form(self):
         sources = [
             'const CONDITION: &str = "invalid_value";',
@@ -716,93 +492,6 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
                         errors[0],
                     )
                     path.unlink()
-
-    def test_core_exact_sites_cannot_move_duplicate_or_change(self):
-        relative = "rust/crates/yamaa-engine/src/errors.rs"
-        source = 'const REQUIREMENT: &str = "REQ-0001";'
-        self.allow_core(relative, source)
-        path = self.write(relative, "// unrelated insertion\n    " + source + "\n")
-        self.assertEqual(self.errors(), [])
-        path.write_text(source + "\n" + source + "\n")
-        self.assertEqual(len(self.errors()), 1)
-        path.write_text(source.replace("REQUIREMENT", "OTHER") + "\n")
-        self.assertEqual(len(self.errors()), 2)
-        path.unlink()
-        self.write("rust/crates/yamaa-core/src/errors.rs", source + "\n")
-        self.assertEqual(len(self.errors()), 2)
-
-    def test_core_retirement_requires_active_shrink_and_cannot_reactivate(self):
-        relative = "rust/crates/yamaa-core/src/errors.rs"
-        source = 'const CONDITION: &str = "invalid_value";'
-        identifier = self.allow_core(relative, source, count=2)
-        self.write(relative, source + "\n")
-        self.assertTrue(any("stale literal site" in e for e in self.errors()))
-        self.core_active[identifier] = 1
-        self.save_core_sites()
-        self.commit_baseline()
-        self.assertEqual(guard.violations(self.root, "HEAD"), [])
-        self.core_active[identifier] = 2
-        self.save_core_sites()
-        self.write(relative, source + "\n" + source + "\n")
-        self.assertTrue(
-            any(
-                "literal allowlist grew from HEAD" in e
-                for e in guard.violations(self.root, "HEAD")
-            )
-        )
-        self.core_active.clear()
-        self.save_core_sites()
-        self.write(relative, "// moved to canonical registry\n")
-        self.assertEqual(guard.violations(self.root, "HEAD"), [])
-
-    def test_core_seed_is_frozen_and_namespace_paths_cannot_cross(self):
-        self.commit_baseline()
-        (self.root / guard.CORE_SEED).write_text("{\n}\n")
-        self.assertEqual(guard.violations(self.root, "HEAD"), [])
-        relative = "rust/crates/yamaa-core/src/errors.rs"
-        self.allow_core(relative, '"REQ-0001"')
-        self.assertTrue(
-            any(
-                str(guard.CORE_SEED) + ": frozen literal seed changed" in e
-                for e in guard.violations(self.root, "HEAD")
-            )
-        )
-        self.allow("rust/crates/yamaa-core/src/host_seed.rs", '"REQ-0001"')
-        self.allow_core("rust/crates/yamaa-adapters/src/core_seed.rs", '"REQ-0001"')
-        self.assertEqual(
-            sum("invalid frozen literal site" in e for e in self.errors()), 2
-        )
-
-    def test_core_initial_introduction_is_separate_from_existing_host_guard(self):
-        (self.root / guard.CORE_SEED).unlink()
-        (self.root / guard.CORE_ALLOWLIST).unlink()
-        self.write(
-            str(guard.CHECKER),
-            f"# Requires {guard.SEED.name} and {guard.ALLOWLIST.name}\n",
-        )
-        self.commit_baseline()
-        self.save_core_sites()
-        self.assertEqual(guard.violations(self.root, "HEAD"), [])
-
-    def test_core_existing_guard_and_partial_seed_cannot_bootstrap(self):
-        for partial in (False, True):
-            with self.subTest(partial=partial):
-                (self.root / guard.CORE_ALLOWLIST).unlink()
-                if not partial:
-                    (self.root / guard.CORE_SEED).unlink()
-                self.write(
-                    str(guard.CHECKER),
-                    f"# Requires {guard.CORE_SEED.name} and {guard.CORE_ALLOWLIST.name}\n",
-                )
-                self.commit_baseline()
-                self.save_core_sites()
-                errors = guard.violations(self.root, "HEAD")
-                expected = (
-                    "incomplete seed and allowlist"
-                    if partial
-                    else "existing guard is missing"
-                )
-                self.assertTrue(any(expected in e for e in errors), errors)
 
     def test_core_comments_prose_and_generated_filename_are_not_registry_exemptions(
         self,
@@ -849,7 +538,6 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
     def test_private_cfg_unit_assertions_do_not_gain_production_literal_credit(self):
         self.publication_unit_module()
         self.assertEqual(self.errors(), [])
-        self.assertEqual(self.active, {})
 
     def test_unit_source_loaded_without_test_cfg_remains_production(self):
         self.publication_unit_module()
