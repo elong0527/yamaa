@@ -274,8 +274,7 @@
       "family": "regex",
       "level": "component",
       "consumers": [
-        "tools/numeric/assess_regex_reference.py",
-        "tools/numeric/check_regex.py"
+        "rust/crates/yamaa-adapters/tests/declaration/contract_vectors.rs"
       ]
     },
     {
