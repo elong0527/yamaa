@@ -1,9 +1,8 @@
-"""Tool-private complete-report truth and M1 comparison; executes no evaluator.
+"""Independent complete report observations and authored artifact comparisons.
 
-The observation models and comparison rules are preserved from the reviewed M1
-protocol. Public owners supply actual reports; committed fixtures supply truth.
-Only expected-artifact decoding uses independent Polars/PyArrow/YAML libraries.
-This module is not installed as a yamaa API or runtime implementation.
+Actual installed file runs supply reports; committed fixtures supply truth.
+Only expected-artifact decoding uses Polars/PyArrow/YAML libraries. This module
+executes no candidate engine or reference evaluator and is not a host API.
 """
 
 from __future__ import annotations

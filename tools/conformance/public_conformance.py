@@ -20,6 +20,7 @@ from pathlib import Path
 from tools.benchmark import directories as benchmark_directories
 from tools.benchmark import entries as benchmark_entries
 from tools.benchmark import load_metadata
+from tools.paths import ROOT
 
 PROTOCOL = "public-conformance/1"
 FIELD_REFERENCE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$")
@@ -948,7 +949,40 @@ def main(argv=None):
     judge.add_argument("--fixtures", type=Path, required=True)
     judge.add_argument("--observed", type=Path, required=True)
     judge.add_argument("--output", type=Path, required=True)
+    complete = sub.add_parser("complete-reports")
+    complete.add_argument("--fixtures", type=Path, required=True)
+    complete.add_argument("--python-evidence", type=Path, required=True)
+    complete.add_argument("--r-evidence", type=Path, required=True)
+    complete.add_argument("--output", type=Path, required=True)
+    complete.add_argument("--source-revision", required=True)
     args = parser.parse_args(argv)
+    if args.command == "complete-reports":
+        import subprocess
+
+        from tools.conformance.complete_reports import compare_owners
+
+        if args.fixtures.resolve() != (ROOT / "benchmarks").resolve():
+            parser.error(
+                "complete report truth requires the reviewed benchmark checkout"
+            )
+        if args.output.exists() or any(
+            args.output.resolve().is_relative_to(directory.resolve())
+            for directory in (
+                args.fixtures,
+                ROOT / "rust/qualification/producer-cohort",
+            )
+        ):
+            parser.error("output must be fresh and outside the authored fixture trees")
+        actual = subprocess.check_output(
+            ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
+        ).strip()
+        if args.source_revision != actual:
+            parser.error("candidate source revision differs from the reviewed checkout")
+        result = compare_owners(
+            args.fixtures, args.python_evidence, args.r_evidence, args.output, actual
+        )
+        print(json.dumps(result["summary"], indent=2))
+        return 0
     if args.command == "plan":
         emit_plan(args.fixtures, args.output)
         return 0
