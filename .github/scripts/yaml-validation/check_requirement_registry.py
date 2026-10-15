@@ -31,9 +31,7 @@ def main():
     if errors:
         print(f"FAIL: {len(errors)} requirement-registry violation(s).")
         return 1
-    print(
-        "PASS: current requirements resolve; historical IDs stay out of active sources."
-    )
+    print("PASS: requirement IDs are defined once and every rule citation resolves.")
     return 0
 
 

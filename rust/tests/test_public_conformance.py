@@ -483,9 +483,18 @@ class PublicConformance(unittest.TestCase):
         self.assertEqual(verdict["metamorphic"]["differences"][0]["check"], "key_order")
 
     def test_corpus_inventory_has_all_entries_and_approved_exclusions(self):
-        corpus = judge.plan(ROOT.parent / "benchmarks")
+        fixtures = ROOT.parent / "benchmarks"
+        corpus = judge.plan(fixtures)
         names = {e["name"]: e for e in corpus["examples"]}
-        self.assertEqual(len(names), 329)
+        # Every authored directory is planned; no count to edit per addition.
+        self.assertEqual(
+            set(names),
+            {
+                p.name
+                for p in fixtures.iterdir()
+                if p.is_dir() and not p.name.startswith(".")
+            },
+        )
         self.assertEqual(len(names["sdtm-dm-race-ethnicity"]["entries"]["python"]), 2)
         self.assertEqual(
             names["schema-inheritance"]["entries"]["r"][0]["specification"],
@@ -499,19 +508,31 @@ class PublicConformance(unittest.TestCase):
             {n for n, e in names.items() if e["excluded"]}, set(judge.EXCLUDED)
         )
 
-    def test_corpus_metamorphic_plan_and_expectations_match_the_reviewed_counts(self):
+    def test_corpus_metamorphic_plan_and_expectations_follow_each_entry(self):
         corpus = judge.plan(ROOT.parent / "benchmarks")
-        kinds = {"empty_child": 0, "key_order_control": 0, "key_order_permuted": 0}
+        pairs = 0
         for example in corpus["examples"]:
-            self.assertEqual(example["variants"]["python"], example["variants"]["r"])
-            for variant in example["variants"]["python"]:
-                kinds[variant["kind"]] += 1
-        # One empty child per entry; the eight PK/QT cases add five
-        # key-order-eligible positive entries to the current main population.
-        self.assertEqual(
-            kinds,
-            {"empty_child": 329, "key_order_control": 105, "key_order_permuted": 105},
-        )
+            variants = example["variants"]["python"]
+            self.assertEqual(variants, example["variants"]["r"])
+            entries = 0 if example["excluded"] else len(example["entries"]["python"])
+            kinds = {}
+            for variant in variants:
+                kinds.setdefault(variant["entry"], []).append(variant["kind"])
+            self.assertEqual(set(kinds), set(range(entries)), example["name"])
+            # One empty child per entry; a key-order-eligible entry adds one
+            # control/permuted pair. Derived per entry, so adding a benchmark
+            # needs no count edit here.
+            for entry_kinds in kinds.values():
+                self.assertIn(
+                    sorted(entry_kinds),
+                    (
+                        ["empty_child"],
+                        ["empty_child", "key_order_control", "key_order_permuted"],
+                    ),
+                    example["name"],
+                )
+                pairs += "key_order_control" in entry_kinds
+        self.assertTrue(pairs, "no benchmark entry exercises the key-order check")
         expectations = judge.load_metamorphic_expectations(ROOT.parent / "benchmarks")
         names = {e["name"] for e in corpus["examples"]}
         # #2190 fixes the 40 missing-handler empty children. The reviewed

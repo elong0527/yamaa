@@ -222,6 +222,10 @@ def load_catalog(root, catalog_path):
         for p in root.glob(pattern)
         if p.is_file() and "__pycache__" not in p.parts
     }
+    # Discovery replaces the hand-kept listing, not its containment check: a
+    # link that resolves outside the checkout is refused before staging.
+    for name in discovered_fixtures:
+        _path(root, name)
     contracts = set()
     for contract in catalog["contracts"]:
         _keys(contract, ("path", "family", "level", "consumers"))
@@ -263,22 +267,27 @@ def load_catalog(root, catalog_path):
         ("R/yamaa/tests/*.R", "r"),
     ):
         for path in sorted(root.glob(pattern)):
-            discovered_suites.append((runtime, path.relative_to(root).as_posix()))
+            name = path.relative_to(root).as_posix()
+            _path(root, name)
+            discovered_suites.append((runtime, name))
     for path in catalog["suite_ids"]:
         if path not in {name for _, name in discovered_suites}:
             raise ValueError(f"stale suite identity override: {path}")
     suites, ids, staged = [], set(), set()
     for runtime, name in discovered_suites:
-        suite_id = catalog["suite_ids"].get(name) or _derived_suite_id(runtime, name)
-        level = catalog["suite_levels"].get(suite_id, "component")
-        if level not in SUITE_LEVELS:
-            raise ValueError(f"invalid suite route or level: {suite_id}")
+        if name in catalog["suite_ids"]:
+            suite_id = catalog["suite_ids"][name]
+        else:
+            suite_id = _derived_suite_id(runtime, name)
         if (
             not isinstance(suite_id, str)
             or re.fullmatch(r"(?:python|r)/[a-z][a-z0-9_-]*", suite_id) is None
             or not suite_id.startswith(runtime + "/")
         ):
             raise ValueError("suite identity must be host/simple-name")
+        level = catalog["suite_levels"].get(suite_id, "component")
+        if level not in SUITE_LEVELS:
+            raise ValueError(f"invalid suite route or level: {suite_id}")
         if suite_id in ids:
             raise ValueError(f"duplicate suite: {suite_id}")
         staged_path = Path(name).name

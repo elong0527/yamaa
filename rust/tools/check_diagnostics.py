@@ -1,10 +1,10 @@
 """Guard normative mappings and keep diagnostic literals in their registry.
 
 Core registry conditions and phases must be in the shared vocabulary. Rule error
-tables/refusal clauses must name registered conditions. Registered conditions
-without a core cause are derived by comparing the vocabulary with the core
-registry; no separate disposition file is maintained. These are static ownership
-checks, not a claim that every registered condition has executable release coverage.
+tables/refusal clauses must name registered conditions. A registered condition
+needs no core cause or separate disposition record; the vocabulary and the core
+registry are the only sources. These are static ownership checks, not a claim
+that every registered condition has executable release coverage.
 Condition and requirement literals outside the canonical registry, the generated
 shipped schema and private unit tests are refused.
 """

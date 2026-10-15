@@ -292,6 +292,16 @@ class SupplementalEvidence(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "host/simple-name"):
             module.load_catalog(self.root, self.catalog_path)
 
+    def test_malformed_suite_identity_override_is_not_replaced(self):
+        for value in ("", ["python/first"]):
+            with self.subTest(value=value):
+                self.catalog_file["suite_ids"] = {
+                    "rust/tests/installed_first.py": value
+                }
+                self.save_catalog_file()
+                with self.assertRaisesRegex(ValueError, "host/simple-name"):
+                    module.load_catalog(self.root, self.catalog_path)
+
     def test_stale_suite_level_override_is_rejected(self):
         self.catalog_file["suite_levels"] = {"python/ghost": "compile"}
         self.save_catalog_file()
@@ -301,6 +311,15 @@ class SupplementalEvidence(unittest.TestCase):
     def test_inventory_paths_cannot_escape_the_checkout(self):
         self.catalog_file["contracts"][0]["consumers"] = ["../catalog.json"]
         self.save_catalog_file()
+        with self.assertRaisesRegex(ValueError, "path leaves root"):
+            module.load_catalog(self.root, self.catalog_path)
+
+    def test_discovered_fixture_cannot_link_outside_the_checkout(self):
+        outside = self.directory / "outside.tsv"
+        outside.write_text("id\na\n")
+        link = self.root / "rust/tests/host-fixtures/linked.tsv"
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link.symlink_to(outside)
         with self.assertRaisesRegex(ValueError, "path leaves root"):
             module.load_catalog(self.root, self.catalog_path)
 
