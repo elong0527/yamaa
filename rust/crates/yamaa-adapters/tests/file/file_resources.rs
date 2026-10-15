@@ -145,14 +145,20 @@ fn metadata_inspection_and_capture_reuse_only_exact_retained_bytes() {
         resources.resource_failure(&Error::Changed),
         Some(ResourceFailure::ContentChanged)
     );
-    for opaque in [
-        Error::Limit(
+    assert_eq!(
+        resources.resource_failure(&Error::Limit(
             yamaa_core::limits::Limits::source_bytes(yamaa_core::limits::Limits::SOURCE_BYTES + 1)
                 .unwrap_err(),
-        ),
-        Error::Unreadable,
-        Error::InvalidPath,
-    ] {
+        )),
+        Some(ResourceFailure::Boundary(
+            yamaa_core::limits::LimitExceeded {
+                resource: "source_bytes",
+                limit: 10 * 1024 * 1024 * 1024,
+                actual: Some(10 * 1024 * 1024 * 1024 + 1),
+            }
+        ))
+    );
+    for opaque in [Error::Unreadable, Error::InvalidPath] {
         assert_eq!(resources.resource_failure(&opaque), None);
     }
 }
