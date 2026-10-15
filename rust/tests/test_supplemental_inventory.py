@@ -158,9 +158,10 @@ class RepositoryCatalog(unittest.TestCase):
                 self.assertRaisesRegex(ValueError, "unresolved|reference semantics"),
             ):
                 module.require_native_consumer(source, "installed_control.py")
-        # The suites' own runtime-guard delegation stays allowed: the
-        # saved builtins.__import__ called with the guard function's own
-        # parameter, whose value the guard checks at runtime.
+        # The suites' runtime-guard delegation stays allowed: the saved
+        # builtins.__import__ called with the guard function's own
+        # parameter. The exemption is syntactic; this test does not
+        # exercise runtime validation of that parameter.
         module.require_native_consumer(
             "import builtins\n"
             "original = builtins.__import__\n"
