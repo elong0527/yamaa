@@ -127,14 +127,22 @@ pub(super) fn declaration_findings(
         output: &TableSchema,
         findings: &mut Vec<PreflightFinding>,
         depth: usize,
-
+        bytes: &mut usize,
         rows: bool,
     ) -> Result<(), PrepareError> {
-        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+        if depth > 64 {
             return Err(PrepareError::limit(
-                "semantic_depth",
-                crate::limits::Limits::SEMANTIC_DEPTH,
+                "case_depth",
+                64,
                 Some(depth),
+                Some(prefix),
+            ));
+        }
+        if prefix.len() > 65_536 {
+            return Err(PrepareError::limit(
+                "path_bytes",
+                65_536,
+                Some(prefix.len()),
                 Some(prefix),
             ));
         }
@@ -145,6 +153,13 @@ pub(super) fn declaration_findings(
                 if let TemporalKind::Difference { unit, bounds } = operation {
                     if unit != CalendarUnit::Day && bounds != DateBounds::Exclusive {
                         let value = text(d, field(d, payload, "bounds")?)?;
+                        *bytes = bytes
+                            .checked_add(path.len())
+                            .and_then(|n| n.checked_add(value.len()))
+                            .filter(|&n| n <= 16_777_216)
+                            .ok_or_else(|| {
+                                PrepareError::limit("temporal_diagnostics", 16_777_216, None, None)
+                            })?;
                         findings.push(PreflightFinding::TemporalBounds {
                             path: path.clone(),
                             value: value.into(),
@@ -174,7 +189,7 @@ pub(super) fn declaration_findings(
                         .collect::<Result<Vec<_>, PrepareError>>()?,
                     path.clone(),
                 )
-                .map_err(|_| PrepareError::Internal)?;
+                .map_err(|_| PrepareError::limit("temporal_diagnostics", 16_777_216, None, None))?;
                 for (index, field_name) in operation.fields().iter().enumerate() {
                     let id = field(d, payload, field_name)?;
                     let N::Text(source) = &d.nodes()[id] else {
@@ -205,6 +220,14 @@ pub(super) fn declaration_findings(
                             ColumnType::DateTime => "datetime",
                             ColumnType::Date => "date",
                         };
+                        let path = format!("{path}.{field_name}");
+                        *bytes = bytes
+                            .checked_add(path.len())
+                            .and_then(|n| n.checked_add(source.len()))
+                            .filter(|&n| n <= 16_777_216)
+                            .ok_or_else(|| {
+                                PrepareError::limit("temporal_diagnostics", 16_777_216, None, None)
+                            })?;
                         findings.push(PreflightFinding::Scalar(
                             witness.operand_diagnostic(index, actual),
                         ));
@@ -229,13 +252,14 @@ pub(super) fn declaration_findings(
                     output,
                     findings,
                     depth + 1,
+                    bytes,
                     rows,
                 )?;
             }
         }
         Ok(())
     }
-
+    let mut bytes = 0;
     let rows = present(d, d.root(), "rows");
     for (column, &id) in columns.iter().enumerate() {
         if let Some(value) = d
@@ -249,6 +273,7 @@ pub(super) fn declaration_findings(
                 output,
                 findings,
                 0,
+                &mut bytes,
                 rows,
             )?;
         }
@@ -261,6 +286,7 @@ pub(super) fn declaration_findings(
             output,
             findings,
             0,
+            &mut bytes,
             present(d, d.root(), "rows"),
         )
     })?;
@@ -314,10 +340,18 @@ pub(super) fn prepare(
             if let Some(id) = d.field(payload, "invalid") {
                 operation = operation
                     .with_invalid(literal(d, id, &format!("{path}.invalid"))?)
-                    .map_err(|_| PrepareError::Internal)?;
+                    .map_err(|_| {
+                        PrepareError::limit("temporal_diagnostics", 16_777_216, None, None)
+                    })?;
             }
             Ok(operation)
         }
+        Err(crate::dataset::InvalidTemporal::Limit) => Err(PrepareError::limit(
+            "temporal_diagnostics",
+            16_777_216,
+            None,
+            None,
+        )),
         Err(crate::dataset::InvalidTemporal::Shape) => Err(PrepareError::Internal),
         Err(crate::dataset::InvalidTemporal::Bounds) => Err(PrepareError::Invalid(vec![
             PreflightFinding::TemporalBounds {
@@ -440,11 +474,17 @@ pub(super) fn bind_row(
             let column_type = if let Expression::Intermediate { index, column } = &expression {
                 intermediates[*index]
                     .as_ref()
-                    .and_then(|item| item.source_kind(secondary, *column))
+                    .and_then(|item| item.source_schema(secondary))
+                    .and_then(|schema| schema.columns().get(*column))
+                    .map(|column| column.kind)
+                    .ok_or(BindError::Internal)?
             } else {
-                catalog.type_of(source)
+                catalog
+                    .type_of(source)
+                    .map_err(BindError::Catalog)?
+                    .ok_or(BindError::Internal)?
             };
-            if let Some(column_type) = column_type.filter(|&kind| !operation.accepts(index, kind)) {
+            if !operation.accepts(index, column_type) {
                 let actual = match column_type {
                     ColumnType::Str => "str",
                     ColumnType::Int => "int",

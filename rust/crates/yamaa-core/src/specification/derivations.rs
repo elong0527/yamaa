@@ -34,6 +34,7 @@ pub(super) fn prepare_value(
         extraction,
         templates,
         None,
+        Default::default(),
     )
 }
 #[allow(clippy::too_many_arguments)]
@@ -48,12 +49,21 @@ pub(super) fn prepare_value_with_driver(
     extraction: &str_extract::Prepared,
     templates: &str_template::Prepared,
     driver: Option<&str>,
+    window_limits: CompilationLimits,
 ) -> Result<cases::Branch, PrepareError> {
-    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+    if depth > 64 {
         return Err(PrepareError::limit(
-            "semantic_depth",
-            crate::limits::Limits::SEMANTIC_DEPTH,
+            "expression_depth",
+            64,
             Some(depth),
+            Some(result_path),
+        ));
+    }
+    if result_path.len() > 65_536 {
+        return Err(PrepareError::limit(
+            "path_bytes",
+            65_536,
+            Some(result_path.len()),
             Some(result_path),
         ));
     }
@@ -216,8 +226,14 @@ pub(super) fn prepare_value_with_driver(
         }
         "row_number" | "rank" | "row_value" | "previous_non_missing" | "locf" | "baseline_flag" => {
             let mut features = Vec::new();
-            let operation =
-                windows::Declaration::prepare(d, payload, op, &result_path, &mut features)?;
+            let operation = windows::Declaration::prepare(
+                d,
+                payload,
+                op,
+                &result_path,
+                window_limits,
+                &mut features,
+            )?;
             if !features.is_empty() {
                 return Err(PrepareError::Unsupported(features));
             }
@@ -231,12 +247,14 @@ pub(super) fn prepare_value_with_driver(
                 }
             }
             let expression = text(d, field(d, payload, "expr")?)?;
-            match compile_numeric(expression, &result_path) {
+            match compile_numeric(expression, &result_path, Default::default()) {
                 Ok(compiled) => Operation::Compute(compiled),
-                Err(error @ ParseError::Grammar { .. }) => Operation::InvalidNumeric {
-                    expression: expression.into(),
-                    error,
-                },
+                Err(error @ CompileError::Parse(ParseError::Grammar { .. })) => {
+                    Operation::InvalidNumeric {
+                        expression: expression.into(),
+                        error,
+                    }
+                }
                 Err(error) => {
                     return Err(PrepareError::Numeric {
                         path: format!("{result_path}.expr"),
@@ -907,10 +925,10 @@ fn references_mode(
     aggregate_relation: bool,
     window_references: bool,
 ) -> Result<(), PrepareError> {
-    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+    if depth > 64 {
         return Err(PrepareError::limit(
-            "semantic_depth",
-            crate::limits::Limits::SEMANTIC_DEPTH,
+            "expression_depth",
+            64,
             Some(depth),
             None,
         ));
@@ -931,7 +949,10 @@ fn references_mode(
         }
     }
     if let Some(payload) = d.field(value, "compute") {
-        match crate::numeric_parser::parse_numeric(text(d, field(d, payload, "expr")?)?) {
+        match crate::numeric_parser::parse_numeric(
+            text(d, field(d, payload, "expr")?)?,
+            Default::default(),
+        ) {
             Ok(parsed) => names.extend(parsed.identifiers().map(String::from)),
             Err(crate::numeric_parser::ParseError::Grammar { .. }) => (),
             Err(error) => return Err(PrepareError::numeric_parse(error, None)),
@@ -943,7 +964,7 @@ fn references_mode(
         } else {
             field(d, payload, "expr")?
         };
-        match crate::aggregate_parser::parse_aggregate(text(d, id)?) {
+        match crate::aggregate_parser::parse_aggregate(text(d, id)?, Default::default()) {
             Ok(parsed) => {
                 names.extend(
                     parsed
@@ -1135,7 +1156,7 @@ fn predicate_references(
     id: usize,
     names: &mut Vec<String>,
 ) -> Result<(), PrepareError> {
-    match crate::predicate_parser::parse_predicate(text(d, id)?) {
+    match crate::predicate_parser::parse_predicate(text(d, id)?, Default::default()) {
         Ok(parsed) => names.extend(parsed.identifiers().map(String::from)),
         Err(crate::predicate_parser::ParseError::Grammar { .. }) => (),
         Err(error) => return Err(PrepareError::predicate_parse(error, None)),

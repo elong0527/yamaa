@@ -111,7 +111,7 @@ pub(in crate::specification) fn bind(
                 .as_deref()
                 .is_some_and(|schema| !schema.columns().iter().any(|column| column.name == field))
         } else {
-            catalog.bind(name).is_none()
+            catalog.bind(name).map_err(BindError::Catalog)?.is_none()
         };
         if missing_field && declaration.absent.is_some() {
             variable_absent = true;

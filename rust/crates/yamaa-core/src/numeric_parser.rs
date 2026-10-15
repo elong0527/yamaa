@@ -22,9 +22,35 @@ pub struct SourcePosition {
     pub character: usize,
 }
 
-/// The fixed recursion boundary is distinct from grammar validation.
+/// Caller-lowerable budgets. Depth is always capped at 64 to bound recursion.
+/// Nodes include groups; tokens exclude EOF; a leaf has depth one. Byte/token
+/// budgets apply during lexing, then node/tree-depth budgets during parsing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ParseLimits {
+    pub bytes: usize,
+    pub tokens: usize,
+    pub nodes: usize,
+    pub depth: usize,
+}
+
+impl Default for ParseLimits {
+    /// Conservative prototype defaults, not a new limit in the language contract.
+    fn default() -> Self {
+        Self {
+            bytes: 65_536,
+            tokens: 8192,
+            nodes: 4096,
+            depth: 64,
+        }
+    }
+}
+
+/// The budget that prevented parsing; this is not a grammar validation condition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ParseResource {
+    Bytes,
+    Tokens,
+    Nodes,
     Depth,
 }
 
@@ -304,15 +330,22 @@ impl ParsedNumeric {
     }
 }
 
-/// Lex the whole expression before grammar validation and retain exact spelling.
-/// The fixed semantic depth guard applies before entering recursive productions.
-pub fn parse_numeric(text: &str) -> Result<ParsedNumeric, ParseError> {
-    let tokens = tokenize(text, false)?;
+/// Parse under explicit budgets; never call a resolver or evaluate a literal.
+/// Lexing completes before syntactic validation, matching the reference's error
+/// priority. Resource exhaustion may preempt either phase. Depth above 64 is
+/// clamped, including recursive grouping/calls before an arena node exists.
+pub fn parse_numeric(text: &str, mut limits: ParseLimits) -> Result<ParsedNumeric, ParseError> {
+    limits.depth = limits.depth.min(64);
+    if text.len() > limits.bytes {
+        return Err(limit_error(text, 0, ParseResource::Bytes, limits.bytes));
+    }
+    let tokens = tokenize(text, limits.tokens, false)?;
     let mut parser = Parser {
         text,
         tokens,
         cursor: 0,
         nodes: Vec::new(),
+        limits,
     };
     let root = parser.expression(1)?;
     if parser.token().kind != TokenKind::End {
@@ -440,8 +473,12 @@ fn number_end(bytes: &[u8], start: usize) -> usize {
     end
 }
 
-/// Tokenize all input before applying the closed grammar.
-pub(crate) fn tokenize(text: &str, aggregate: bool) -> Result<Vec<Token>, ParseError> {
+/// Tokenize all input before parsing, while bounding allocation by token count.
+pub(crate) fn tokenize(
+    text: &str,
+    budget: usize,
+    aggregate: bool,
+) -> Result<Vec<Token>, ParseError> {
     let bytes = text.as_bytes();
     let mut tokens = Vec::new();
     let mut index = 0;
@@ -455,7 +492,9 @@ pub(crate) fn tokenize(text: &str, aggregate: bool) -> Result<Vec<Token>, ParseE
             index += character.len_utf8();
             continue;
         }
-
+        if tokens.len() == budget {
+            return Err(limit_error(text, index, ParseResource::Tokens, budget));
+        }
         let start = index;
         let kind = if bytes[index].is_ascii_digit() {
             index = number_end(bytes, index);
@@ -523,6 +562,7 @@ struct Parser<'a> {
     tokens: Vec<Token>,
     cursor: usize,
     nodes: Vec<ParsedNode>,
+    limits: ParseLimits,
 }
 
 impl Parser<'_> {
@@ -548,34 +588,41 @@ impl Parser<'_> {
             ))
         }
     }
-    /// Admit expression depth before retaining the node.
+    /// Append a node only after its depth and arena budget have been checked.
     fn push(
         &mut self,
         span: SourceSpan,
         kind: ParsedKind,
         depth: usize,
     ) -> Result<usize, ParseError> {
-        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+        if depth > self.limits.depth {
             return Err(limit_error(
                 self.text,
                 span.start,
                 ParseResource::Depth,
-                crate::limits::Limits::SEMANTIC_DEPTH,
+                self.limits.depth,
             ));
         }
-
+        if self.nodes.len() == self.limits.nodes {
+            return Err(limit_error(
+                self.text,
+                span.start,
+                ParseResource::Nodes,
+                self.limits.nodes,
+            ));
+        }
         let id = self.nodes.len();
         self.nodes.push(ParsedNode { span, kind, depth });
         Ok(id)
     }
     /// Parse the additive level and guard recursive descent through groups/calls.
     fn expression(&mut self, nesting: usize) -> Result<usize, ParseError> {
-        if nesting > crate::limits::Limits::SEMANTIC_DEPTH {
+        if nesting > self.limits.depth {
             return Err(limit_error(
                 self.text,
                 self.token().span.start,
                 ParseResource::Depth,
-                crate::limits::Limits::SEMANTIC_DEPTH,
+                self.limits.depth,
             ));
         }
         self.binary(nesting, false)

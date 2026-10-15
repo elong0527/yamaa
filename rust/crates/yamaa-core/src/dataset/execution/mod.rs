@@ -31,7 +31,6 @@ mod str_pad;
 mod str_template;
 mod windows;
 
-use crate::limits::Limits;
 use crate::{
     bound_expression::BoundPredicate,
     conversion::{convert, ConversionError},
@@ -40,6 +39,7 @@ use crate::{
     value::{Value, ValueType},
 };
 use crate::{
+    dataset_budget::Budget,
     numeric_lifecycle::{HandlerCount, HandlerCountOverflow, HandlerCounter, HandlerKind},
     table_grouping::{partition, GroupingError},
     table_reduction::{count_selected, reduce_column, TableReductionError},
@@ -73,7 +73,93 @@ pub enum ExecutionEvent {
     },
 }
 
-/// Fixed boundary failures remain distinct from normative language conditions.
+/// Caller-selected capacity limits, not normative language limits.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Limits {
+    pub source_rows: usize,
+    pub output_rows: usize,
+    pub output_cells: usize,
+    pub key_cells: usize,
+    pub work_cells: usize,
+    pub scalar_text_bytes: usize,
+    pub output_text_bytes: usize,
+    pub identity_cells: usize,
+    pub identity_text_bytes: usize,
+}
+
+/// Caller-selected transport and evaluation policy for one dataset attempt.
+/// Adapters enforce byte/batch limits. The engine admits combined source shapes
+/// before cell reads. These are logical quotas, not process-memory guarantees.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ExecutionBudget {
+    pub max_sources: usize,
+    /// Aggregate encoded input bytes and aggregate decoded logical string bytes.
+    pub max_ipc_bytes: usize,
+    pub max_decoded_cells: usize,
+    pub max_columns: usize,
+    /// Aggregate input batches; also bounds the number of exported batches.
+    pub max_batches: usize,
+    pub max_output_bytes: usize,
+    /// None exports one batch; Some exports at most this many rows per batch.
+    pub batch_rows: Option<std::num::NonZeroUsize>,
+    pub execution: Limits,
+}
+
+impl ExecutionBudget {
+    /// Original smaller profile for callers that explicitly select this policy.
+    pub const fn bounded() -> Self {
+        Self {
+            max_sources: 8,
+            max_ipc_bytes: 8 * 1024 * 1024,
+            max_decoded_cells: 2_097_152,
+            max_columns: crate::specification::DEFAULT_MAX_COLUMNS,
+            max_batches: 256,
+            max_output_bytes: 8 * 1024 * 1024,
+            batch_rows: None,
+            execution: Limits {
+                source_rows: 524_288,
+                output_rows: 131_072,
+                output_cells: 1_048_576,
+                key_cells: 524_288,
+                work_cells: 128 * 1024 * 1024,
+                scalar_text_bytes: 16 * 1024 * 1024,
+                output_text_bytes: 2 * 1024 * 1024,
+                identity_cells: 65_536,
+                identity_text_bytes: 1024 * 1024,
+            },
+        }
+    }
+
+    /// Public default profile for ten million combined source and output records.
+    /// Wider/text-heavy domains or more expensive plans can adjust each field.
+    pub const fn longitudinal() -> Self {
+        let mut budget = Self::bounded();
+        budget.max_sources = 64;
+        budget.max_ipc_bytes = crate::capacity::SOURCE_BYTES;
+        budget.max_decoded_cells = crate::capacity::SOURCE_CELLS;
+        budget.max_batches = 65_536;
+        budget.max_output_bytes = crate::capacity::SOURCE_BYTES;
+        budget.batch_rows = std::num::NonZeroUsize::new(65_536);
+        budget.execution.source_rows = crate::capacity::SOURCE_ROWS;
+        budget.execution.output_rows = crate::capacity::OUTPUT_ROWS;
+        budget.execution.output_cells = crate::capacity::OUTPUT_CELLS;
+        budget.execution.key_cells = crate::capacity::KEY_CELLS;
+        budget.execution.work_cells = crate::capacity::EXECUTION_WORK;
+        budget.execution.scalar_text_bytes = crate::capacity::SOURCE_BYTES;
+        budget.execution.output_text_bytes = crate::capacity::OUTPUT_TEXT_BYTES;
+        budget.execution.identity_cells = crate::capacity::IDENTITY_CELLS;
+        budget.execution.identity_text_bytes = crate::capacity::IDENTITY_TEXT_BYTES;
+        budget
+    }
+}
+
+impl Default for ExecutionBudget {
+    fn default() -> Self {
+        Self::longitudinal()
+    }
+}
+
+/// Cumulative resource failures are distinct from normative language conditions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Resource {
     SourceRows,
@@ -83,7 +169,18 @@ pub enum Resource {
     OutputRows,
     OutputCells,
     OutputColumns,
-    RegexWork,
+    WorkCells,
+    ScalarTextBytes,
+    OutputTextBytes,
+    IdentityCells,
+    IdentityTextBytes,
+    PredicateWork,
+    PredicateResolutions,
+    PredicateTextBytes,
+    PredicateLikeWork,
+    PredicateRegexSubjectBytes,
+    PredicateRegexWork,
+    PredicateRegexStateCells,
 }
 
 /// Complete owned rows are exposed only after output identity and checks succeed.
@@ -142,7 +239,7 @@ pub struct CheckRecord {
     pub failed_count: usize,
     pub output_rows: usize,
     pub offending_rows: Vec<RowIdentity>,
-    /// Full offending values survive discarded output.
+    /// Full offending values survive discarded output, under identity quotas.
     pub codelist: Option<CodelistObservation>,
     pub inventory: Option<Vec<Value>>,
     pub row_count: Option<RowCountObservation>,
@@ -349,10 +446,22 @@ fn own(value: ValueRef<'_>) -> Value {
     }
 }
 
-fn regex_limit<E>(error: crate::regex::MatchError) -> ExecutionError<E> {
+/// Keep predicate resource policies separate from portable language conditions.
+pub(crate) fn predicate_limit<E>(limit: crate::predicate::LimitError) -> ExecutionError<E> {
+    use crate::predicate::Resource as P;
+    let resource = match limit.resource {
+        P::Work => Resource::PredicateWork,
+        P::Resolutions => Resource::PredicateResolutions,
+        P::TextBytes => Resource::PredicateTextBytes,
+        P::LikeWork => Resource::PredicateLikeWork,
+        P::RegexSubjectBytes => Resource::PredicateRegexSubjectBytes,
+        P::RegexWork => Resource::PredicateRegexWork,
+        P::RegexStateCells => Resource::PredicateRegexStateCells,
+        P::Nodes | P::Depth => unreachable!("predicate structure was admitted before execution"),
+    };
     ExecutionError::Limit {
-        resource: Resource::RegexWork,
-        limit: error.limit,
+        resource,
+        limit: limit.limit,
         required: None,
     }
 }
@@ -363,6 +472,7 @@ struct EvaluationState<'a, E> {
     functions: &'a mut dyn FunctionPort<Error = E>,
     secondary: &'a [&'a dyn TableAccess<Error = E>],
     self_rows: &'a [Candidate],
+    budget: &'a mut Budget,
     handlers: &'a mut HandlerCounter,
     intermediates: &'a mut intermediates::Run,
     output_rows: &'a [Candidate],
@@ -378,10 +488,20 @@ fn evaluate<T: TableAccess + ?Sized>(
     candidate: &Candidate,
     plan: &DatasetPlan,
     row: usize,
+    limits: Limits,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
-    let value = evaluate_raw_retained(table, assignment, candidate, plan, row, state, true)?;
-    finish(value, assignment, candidate, plan, row, state.handlers)
+    let value =
+        evaluate_raw_retained(table, assignment, candidate, plan, row, limits, state, true)?;
+    finish(
+        value,
+        assignment,
+        candidate,
+        plan,
+        row,
+        state.budget,
+        state.handlers,
+    )
 }
 
 fn evaluate_raw<T: TableAccess + ?Sized>(
@@ -390,9 +510,12 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
     candidate: &Candidate,
     plan: &DatasetPlan,
     row: usize,
+    limits: Limits,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
-    evaluate_raw_retained(table, assignment, candidate, plan, row, state, false)
+    evaluate_raw_retained(
+        table, assignment, candidate, plan, row, limits, state, false,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -402,10 +525,12 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
     candidate: &Candidate,
     plan: &DatasetPlan,
     row: usize,
+    limits: Limits,
     state: &mut EvaluationState<'_, T::Error>,
     retained: bool,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
     if let Expression::Function(function) = &assignment.expression {
+        state.budget.work(1, 1)?;
         return functions::evaluate(
             function,
             table,
@@ -419,6 +544,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         );
     }
     if let Expression::ProjectFunction(function) = &assignment.expression {
+        state.budget.work(1, 1)?;
         return functions::evaluate_project(
             function,
             table,
@@ -441,6 +567,8 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
             plan,
             table,
             row - state.output_offset,
+            limits,
+            state.budget,
             state.handlers,
         );
     }
@@ -466,6 +594,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         );
     }
     if let Expression::Intermediate { index, column } = assignment.expression {
+        state.budget.work(1, 1)?;
         let value = intermediates::read(
             index, column, assignment, candidate, plan, row, table, state,
         )?;
@@ -481,29 +610,33 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
     {
         if *variable_absent {
             let absent = absent.as_ref().expect("admitted absence handler");
-
+            state.budget.work(1, 1)?;
+            if let Value::Str(text) = absent {
+                state.budget.scalar_text(text.len())?;
+            }
             state
                 .handlers
                 .record(&std::format!("{path}.absent"), HandlerKind::Absent)
                 .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
             return Ok(absent.clone());
         }
-        return evaluate_raw_retained(table, source, candidate, plan, row, state, retained);
+        return evaluate_raw_retained(table, source, candidate, plan, row, limits, state, retained);
     }
     if let Expression::FirstAvailable(selection) = &assignment.expression {
         for operand in selection.sources() {
+            state.budget.work(1, 1)?;
             let value = match &operand.read {
-                crate::dataset::SelectionRead::Expression(source) => {
-                    evaluate_raw_retained(table, source, candidate, plan, row, state, retained)
-                        .map_err(|mut error| {
-                            // Collection cardinality belongs to the enclosing selection.
-                            // Keep operand metadata for handlers and every other failure.
-                            if let ExecutionError::MultipleValues { path, .. } = error.as_mut() {
-                                path.clone_from(&assignment.path);
-                            }
-                            error
-                        })?
-                }
+                crate::dataset::SelectionRead::Expression(source) => evaluate_raw_retained(
+                    table, source, candidate, plan, row, limits, state, retained,
+                )
+                .map_err(|mut error| {
+                    // Collection cardinality belongs to the enclosing selection.
+                    // Keep operand metadata for handlers and every other failure.
+                    if let ExecutionError::MultipleValues { path, .. } = error.as_mut() {
+                        path.clone_from(&assignment.path);
+                    }
+                    error
+                })?,
                 crate::dataset::SelectionRead::Source(column) => {
                     let source_row = candidate.members[0];
                     let value = table.cell(source_row, *column).map_err(|error| {
@@ -513,42 +646,55 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
                             error,
                         })
                     })?;
+                    if let ValueRef::Str(text) = value {
+                        state.budget.scalar_text(text.len())?;
+                    }
                     own(value)
                 }
                 crate::dataset::SelectionRead::Column(column) => {
                     let value = &candidate.values[*column];
+                    if let Value::Str(text) = value {
+                        state.budget.scalar_text(text.len())?;
+                    }
                     value.clone()
                 }
                 crate::dataset::SelectionRead::Collect {
                     column,
                     identifier,
                     filter,
-                } => key_grain::collect_bound(
-                    table,
-                    key_grain::Collection {
-                        column: *column,
-                        identifier,
-                        filter: filter.as_deref(),
-                        selection: None,
-                    },
-                    key_grain::CollectionContext {
-                        path: &operand.path,
-                        candidate,
-                        plan,
-                        row,
-                    },
-                    state.handlers,
-                )
-                .map_err(|mut error| {
-                    if let ExecutionError::MultipleValues { path, .. } = error.as_mut() {
-                        *path = assignment.path.clone();
-                    }
-                    error
-                })?,
+                } => {
+                    state.budget.work(candidate.members.len(), 1)?;
+                    key_grain::collect_bound(
+                        table,
+                        key_grain::Collection {
+                            column: *column,
+                            identifier,
+                            filter: filter.as_deref(),
+                            selection: None,
+                        },
+                        key_grain::CollectionContext {
+                            path: &operand.path,
+                            candidate,
+                            plan,
+                            row,
+                        },
+                        state.budget,
+                        state.handlers,
+                    )
+                    .map_err(|mut error| {
+                        if let ExecutionError::MultipleValues { path, .. } = error.as_mut() {
+                            *path = assignment.path.clone();
+                        }
+                        error
+                    })?
+                }
             };
             if value != Value::Missing {
                 return Ok(value);
             }
+        }
+        if let Value::Str(text) = selection.missing() {
+            state.budget.scalar_text(text.len())?;
         }
         return Ok(selection.missing().clone());
     }
@@ -557,6 +703,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
     }
     if let Expression::Case(branches) = &assignment.expression {
         for branch in branches {
+            state.budget.work(1, 1)?;
             let selected = match &branch.when {
                 None => true,
                 Some(when) => {
@@ -573,6 +720,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
                     candidate,
                     plan,
                     row,
+                    limits,
                     state,
                     retained,
                 );
@@ -582,11 +730,12 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
     }
     if let Expression::MappingCut { source, operation } = &assignment.expression {
         return mapping_cut::evaluate(
-            assignment, source, operation, table, candidate, plan, row, state, retained,
+            assignment, source, operation, table, candidate, plan, row, limits, state, retained,
         );
     }
     if let Expression::Round { source, rounding } = &assignment.expression {
-        let value = evaluate_raw(table, source, candidate, plan, row, state)?;
+        state.budget.work(1, 1)?;
+        let value = evaluate_raw(table, source, candidate, plan, row, limits, state)?;
         return rounding
             .apply(ValueRef::from(&value))
             .map_err(|diagnostic| Box::new(ExecutionError::ScalarDiagnostic(diagnostic)));
@@ -596,42 +745,73 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         operation,
     } = &assignment.expression
     {
-        return str_template::evaluate(operands, operation, table, candidate, plan, row, state);
+        return str_template::evaluate(
+            operands,
+            operation,
+            table,
+            candidate,
+            plan,
+            row,
+            limits,
+            state,
+            retained
+                && plan.output().columns()[assignment.column].kind == crate::value::ColumnType::Str,
+        );
     }
     if matches!(
         &assignment.expression,
         Expression::Extreme { .. } | Expression::StrConcat { .. } | Expression::StrContains { .. }
     ) {
-        return scalar::evaluate(assignment, table, candidate, plan, row, state);
+        return scalar::evaluate(assignment, table, candidate, plan, row, limits, state);
     }
     if let Expression::StrExtract { source, operation } = &assignment.expression {
-        return str_extract::evaluate(source, operation, table, candidate, plan, row, state);
+        return str_extract::evaluate(
+            source, operation, table, candidate, plan, row, limits, state,
+        );
     }
     if let Expression::StrCase { source, operation } = &assignment.expression {
-        return str_case::evaluate(source, operation, table, candidate, plan, row, state);
+        return str_case::evaluate(
+            source, operation, table, candidate, plan, row, limits, state,
+        );
     }
     if let Expression::StrPad { source, operation } = &assignment.expression {
-        return str_pad::evaluate(source, operation, table, candidate, plan, row, state);
+        return str_pad::evaluate(
+            source, operation, table, candidate, plan, row, limits, state,
+        );
     }
     if let Expression::Imputation {
         operands,
         operation,
     } = &assignment.expression
     {
-        return imputation::evaluate(operands, operation, table, candidate, plan, row, state);
+        return imputation::evaluate(
+            operands, operation, table, candidate, plan, row, limits, state,
+        );
     }
     if let Expression::Temporal {
         operands,
         operation,
     } = &assignment.expression
     {
+        state.budget.work(1, 1)?;
         let mut values = Vec::with_capacity(operands.len());
         for (index, operand) in operands.iter().enumerate() {
-            let value = evaluate_raw(table, operand, candidate, plan, row, state)?;
+            let value = evaluate_raw(table, operand, candidate, plan, row, limits, state)?;
             operation
                 .validate_operand(index, &value)
                 .expect("admitted operand index")
                 .map_err(|diagnostic| Box::new(ExecutionError::ScalarDiagnostic(diagnostic)))?;
+            if let Value::Str(text) = &value {
+                state.budget.work(1, text.len())?;
+                if matches!(operation.kind(), TemporalKind::DurationValue { .. }) {
+                    // Decimal components use exact integers. Charge a conservative
+                    // quadratic bound before constructing arbitrary-width values.
+                    state
+                        .budget
+                        .work(1, text.len().saturating_mul(text.len()))?;
+                }
+                state.budget.scalar_text(text.len())?;
+            }
             values.push(value);
         }
         let result = operation
@@ -641,7 +821,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
                 if diagnostic.definition().phase == "validation" {
                     Box::new(ExecutionError::ScalarDiagnostic(diagnostic))
                 } else {
-                    retained_diagnostic(diagnostic, true, candidate, plan, row)
+                    retained_diagnostic(diagnostic, true, candidate, plan, row, state.budget)
                 }
             })?;
         let value = match result {
@@ -660,6 +840,9 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
                     .clone()
             }
         };
+        if let Value::Str(text) = &value {
+            state.budget.scalar_text(text.len())?;
+        }
         return Ok(value);
     }
     if let Expression::Compute(expression) = &assignment.expression {
@@ -672,11 +855,20 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         return odm::evaluate(expression, table, candidate, plan, row, state);
     }
     let EvaluationState {
+        budget,
         handlers,
         secondary,
         ..
     } = state;
-
+    budget.work(1, 1)?;
+    let reads = match &assignment.expression {
+        Expression::Source(_) => 1,
+        Expression::Reduce { .. } | Expression::Count { .. } | Expression::Collect { .. } => {
+            candidate.members.len()
+        }
+        _ => 0,
+    };
+    budget.work(reads, 1)?;
     let value = match &assignment.expression {
         Expression::Function(_) | Expression::ProjectFunction(_) => {
             unreachable!("callback arguments resolve through complete run state")
@@ -688,7 +880,12 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         Expression::Joined(_) | Expression::JoinedSource { .. } => {
             unreachable!("joined reads execute through run state")
         }
-        Expression::Literal(value) => value.clone(),
+        Expression::Literal(value) => {
+            if let Value::Str(text) = value {
+                budget.scalar_text(text.len())?;
+            }
+            value.clone()
+        }
         Expression::Extreme { .. }
         | Expression::StrConcat { .. }
         | Expression::StrContains { .. }
@@ -709,6 +906,9 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         }
         Expression::Column(column) => {
             let value = &candidate.values[*column];
+            if let Value::Str(text) = value {
+                budget.scalar_text(text.len())?;
+            }
             value.clone()
         }
         Expression::Source(column) => {
@@ -720,6 +920,9 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
                     error,
                 })
             })?;
+            if let ValueRef::Str(text) = value {
+                budget.scalar_text(text.len())?;
+            }
             own(value)
         }
         Expression::RowLookup(lookup) => lookup::read_row(
@@ -732,6 +935,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
                 plan,
                 row,
             },
+            budget,
         )?,
         Expression::Lookup(lookup) => lookup::read(
             secondary[lookup.source],
@@ -740,6 +944,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
             candidate,
             plan,
             row,
+            budget,
         )?,
         Expression::FirstAvailable(_) | Expression::SourceBinding { .. } => {
             unreachable!("source recursion is handled above")
@@ -759,26 +964,36 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
                 plan,
                 row,
             },
+            budget,
             handlers,
         )?,
         Expression::Collect { .. } => {
-            key_grain::collect(table, assignment, candidate, plan, row, handlers)?
+            key_grain::collect(table, assignment, candidate, plan, row, budget, handlers)?
         }
         Expression::Count { column, .. } => Value::from(
-            count_selected(table, *column, &candidate.members).map_err(|error| {
-                Box::new(ExecutionError::Reduction {
-                    path: assignment.path.clone(),
-                    error,
-                    identity: None,
-                })
-            })?,
+            count_selected(table, *column, &candidate.members, limits.source_rows).map_err(
+                |error| {
+                    Box::new(ExecutionError::Reduction {
+                        path: assignment.path.clone(),
+                        error,
+                        identity: None,
+                    })
+                },
+            )?,
         ),
         Expression::Reduce {
             identifier,
             column,
             reducer,
             text,
-        } => match reduce_column(table, *column, &candidate.members, *reducer, text) {
+        } => match reduce_column(
+            table,
+            *column,
+            &candidate.members,
+            limits.source_rows,
+            *reducer,
+            text,
+        ) {
             Ok(value) => Value::from(value),
             Err(TableReductionError::Reduction(
                 crate::reduction::ReductionError::IncompatibleInputType { actual, .. },
@@ -796,7 +1011,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
             Err(error) => {
                 let identity = if matches!(&error, TableReductionError::Reduction(crate::reduction::ReductionError::Arithmetic { error, .. }) if error.phase() == "derivation")
                 {
-                    failure_identity(candidate, plan.keys(), row)?
+                    failure_identity(candidate, plan.keys(), row, budget)?
                 } else {
                     None
                 };
@@ -818,12 +1033,13 @@ fn finish<E>(
     candidate: &Candidate,
     plan: &DatasetPlan,
     row: usize,
+    budget: &mut Budget,
     handlers: &mut HandlerCounter,
 ) -> Result<Value, Box<ExecutionError<E>>> {
     let converted = match convert(&value, plan.output().columns()[assignment.column].kind) {
         Ok(value) => value,
         Err(error) => {
-            match conversion::recover(error, assignment, candidate, plan, row, handlers) {
+            match conversion::recover(error, assignment, candidate, plan, row, budget, handlers) {
                 Ok(value) => value,
                 Err(failure) => {
                     if let Expression::SourceBinding {
@@ -841,7 +1057,9 @@ fn finish<E>(
                         } = &*failure
                         {
                             // REQ-0364 retains the reached binding handler and completed-result context.
-
+                            budget.scalar_text(
+                                variable.len().saturating_add(path.len()).saturating_add(64),
+                            )?;
                             let mut diagnostic = error.clone().into_diagnostic(result_path.clone());
                             diagnostic.spec_paths.push(std::format!("{path}.absent"));
                             diagnostic.context.insert(
@@ -863,22 +1081,178 @@ fn finish<E>(
             }
         }
     };
-
+    budget.value(&converted)?;
     Ok(converted)
 }
 
 impl DatasetPlan {
-    /// Execute the admitted sources and explicit function port once, retaining
-    /// handler and verification evidence on both success and failure.
-    pub fn execute<T: TableAccess + ?Sized>(
+    pub fn execute_with_budget<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        budget: ExecutionBudget,
+    ) -> ExecutionAttempt<T::Error> {
+        self.execute_functions_with_budget(
+            table,
+            secondary,
+            &mut crate::function_invocation::NoFunctions::new(),
+            budget,
+        )
+    }
+    pub fn execute_functions_with_budget<T: TableAccess + ?Sized>(
         &self,
         table: &T,
         secondary: &[&dyn TableAccess<Error = T::Error>],
         functions: &mut dyn FunctionPort<Error = T::Error>,
-        observer: Option<&mut dyn FnMut(ExecutionEvent)>,
+        budget: ExecutionBudget,
     ) -> ExecutionAttempt<T::Error> {
-        let mut ignore = |_| {};
-        let observer = observer.unwrap_or(&mut ignore);
+        self.execute_scoped(
+            table,
+            secondary,
+            functions,
+            budget.execution,
+            &mut |_| {},
+            None,
+            Some(budget),
+        )
+    }
+    pub fn execute_with_work_budget<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
+        work: &crate::execution_work::WorkBudget,
+    ) -> ExecutionAttempt<T::Error> {
+        self.execute_scoped(
+            table,
+            secondary,
+            functions,
+            limits,
+            &mut |_| {},
+            Some(work),
+            None,
+        )
+    }
+    pub fn execute_with_execution_observer_and_work<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
+        observer: &mut dyn FnMut(ExecutionEvent),
+        work: &crate::execution_work::WorkBudget,
+    ) -> ExecutionAttempt<T::Error> {
+        self.execute_scoped(
+            table,
+            secondary,
+            functions,
+            limits,
+            observer,
+            Some(work),
+            None,
+        )
+    }
+    /// Execute only the admitted scope, returning no accepted table on any failure.
+    /// Source access errors remain errors. No undeclared handlers, callbacks, joins,
+    /// file publication or fallback are implicit.
+    pub fn execute<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        limits: Limits,
+    ) -> Result<Execution, Box<ExecutionError<T::Error>>> {
+        self.execute_observed(table, limits).result
+    }
+
+    /// Retain ordered handler counts across successful values and every later failure.
+    pub fn execute_observed<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        limits: Limits,
+    ) -> ExecutionAttempt<T::Error> {
+        self.execute_observed_sources(table, &[], limits)
+    }
+
+    /// Execute immutable source snapshots in the same order as the admitted secondary schemas.
+    pub fn execute_observed_sources<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        limits: Limits,
+    ) -> ExecutionAttempt<T::Error> {
+        self.execute_observed_functions(
+            table,
+            secondary,
+            &mut crate::function_invocation::NoFunctions::new(),
+            limits,
+        )
+    }
+
+    /// Execute with explicitly activated, signature-matched callbacks on the caller's thread.
+    /// All referenced signatures must be present before any table method is called,
+    /// even for empty input or filtered-out rows. No callback is retried or rolled back.
+    pub fn execute_observed_functions<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
+    ) -> ExecutionAttempt<T::Error> {
+        self.execute_with_phase_observer(table, secondary, functions, limits, &mut |_| {})
+    }
+
+    /// Observe stage transitions without repeating evaluation or exposing intermediate output.
+    /// The trusted observer owns its clock and must not mutate sources or callback state.
+    /// Finished follows every returned success/failure, but is not guaranteed after a panic.
+    pub fn execute_with_phase_observer<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
+        observer: &mut dyn FnMut(ExecutionPhase),
+    ) -> ExecutionAttempt<T::Error> {
+        self.execute_with_execution_observer(table, secondary, functions, limits, &mut |event| {
+            if let ExecutionEvent::Phase(phase) = event {
+                observer(phase);
+            }
+        })
+    }
+
+    pub fn execute_with_execution_observer<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
+        observer: &mut dyn FnMut(ExecutionEvent),
+    ) -> ExecutionAttempt<T::Error> {
+        self.execute_scoped(table, secondary, functions, limits, observer, None, None)
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn execute_scoped<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
+        observer: &mut dyn FnMut(ExecutionEvent),
+        work: Option<&crate::execution_work::WorkBudget>,
+        execution_budget: Option<ExecutionBudget>,
+    ) -> ExecutionAttempt<T::Error> {
+        let limits = work
+            .and_then(crate::execution_work::WorkBudget::node_limits)
+            .map_or(limits, |pool| Limits {
+                source_rows: limits.source_rows.min(pool.source_rows),
+                output_rows: limits.output_rows.min(pool.output_rows),
+                output_cells: limits.output_cells.min(pool.output_cells),
+                key_cells: limits.key_cells.min(pool.key_cells),
+                work_cells: limits.work_cells.min(pool.work_cells),
+                scalar_text_bytes: limits.scalar_text_bytes.min(pool.scalar_text_bytes),
+                output_text_bytes: limits.output_text_bytes.min(pool.output_text_bytes),
+                identity_cells: limits.identity_cells.min(pool.identity_cells),
+                identity_text_bytes: limits.identity_text_bytes.min(pool.identity_text_bytes),
+            });
         let active = std::cell::Cell::new(ExecutionPhase::Admission);
         let mut observer = |event| {
             if let ExecutionEvent::Phase(phase) = event {
@@ -932,8 +1306,11 @@ impl DatasetPlan {
             table,
             secondary,
             functions,
+            limits,
             &mut observations,
             &mut observer,
+            work,
+            execution_budget,
         );
         if let Err(error) = &result {
             if let ExecutionError::Limit {
@@ -977,16 +1354,22 @@ impl DatasetPlan {
         attempt
     }
 
-    /// Share the retained semantic observations for this immutable plan attempt.
+    /// Share one handler ledger and resource budget for this immutable plan attempt.
     #[allow(clippy::too_many_arguments)]
     fn execute_inner<T: TableAccess + ?Sized>(
         &self,
         table: &T,
         secondary: &[&dyn TableAccess<Error = T::Error>],
         functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
         observations: &mut AttemptObservations,
         observer: &mut dyn FnMut(ExecutionEvent),
+        work: Option<&crate::execution_work::WorkBudget>,
+        execution_budget: Option<ExecutionBudget>,
     ) -> Result<Execution, Box<ExecutionError<T::Error>>> {
+        if work.is_some_and(crate::execution_work::WorkBudget::unknown_prefix) {
+            return Err(Box::new(ExecutionError::Capacity));
+        }
         functions::admit_plan(self, functions)?;
         if table.schema() != self.source()
             || secondary.len() != self.secondary().len()
@@ -997,44 +1380,115 @@ impl DatasetPlan {
         {
             return Err(Box::new(ExecutionError::SchemaMismatch));
         }
-        let sources = secondary.len().checked_add(1);
-        if sources.is_none_or(|count| count > Limits::SOURCE_OPERANDS) {
-            return Err(Box::new(ExecutionError::Limit {
-                resource: Resource::SourceCount,
-                limit: Limits::SOURCE_OPERANDS,
-                required: sources,
-            }));
-        }
-        for (source_index, (rows, columns)) in
-            std::iter::once((table.row_count(), table.schema().columns().len()))
-                .chain(
-                    secondary
-                        .iter()
-                        .map(|source| (source.row_count(), source.schema().columns().len())),
-                )
-                .enumerate()
-        {
-            if let Err(error) = Limits::table(rows, columns) {
+        if let Some(budget) = execution_budget {
+            let cells = table
+                .row_count()
+                .checked_mul(table.schema().columns().len())
+                .and_then(|initial| {
+                    secondary.iter().try_fold(initial, |total, source| {
+                        total.checked_add(
+                            source
+                                .row_count()
+                                .checked_mul(source.schema().columns().len())?,
+                        )
+                    })
+                });
+            let sources = secondary.len().checked_add(1);
+            if sources.is_none_or(|count| count > budget.max_sources) {
+                return Err(Box::new(ExecutionError::Limit {
+                    resource: Resource::SourceCount,
+                    limit: budget.max_sources,
+                    required: sources,
+                }));
+            }
+            let primary_columns = table.schema().columns().len();
+            if primary_columns > budget.max_columns {
                 return Err(Box::new(ExecutionError::SourceLimit {
-                    resource: match error.resource {
-                        "columns" => Resource::SourceColumns,
-                        "table_rows" => Resource::SourceRows,
-                        "table_cells" => Resource::SourceCells,
-                        _ => unreachable!("table boundary resource"),
-                    },
-                    limit: error.limit,
-                    required: error.actual,
-                    source_index,
+                    resource: Resource::SourceColumns,
+                    limit: budget.max_columns,
+                    required: Some(primary_columns),
+                    source_index: 0,
+                }));
+            }
+            let output_columns = self.output().columns().len();
+            if output_columns > budget.max_columns {
+                return Err(Box::new(ExecutionError::ScopedLimit {
+                    resource: Resource::OutputColumns,
+                    limit: budget.max_columns,
+                    required: Some(output_columns),
+                    spec_paths: vec!["output.columns".into()],
+                }));
+            }
+            if let Some((index, source)) = secondary
+                .iter()
+                .enumerate()
+                .find(|(_, source)| source.schema().columns().len() > budget.max_columns)
+            {
+                return Err(Box::new(ExecutionError::SourceLimit {
+                    resource: Resource::SourceColumns,
+                    limit: budget.max_columns,
+                    required: Some(source.schema().columns().len()),
+                    source_index: index + 1,
+                }));
+            }
+            if cells.is_none_or(|cells| cells > budget.max_decoded_cells) {
+                return Err(Box::new(ExecutionError::Limit {
+                    resource: Resource::SourceCells,
+                    limit: budget.max_decoded_cells,
+                    required: cells,
                 }));
             }
         }
-        self.check_capacity(0, 0)?;
+        let rows = secondary
+            .iter()
+            .try_fold(table.row_count(), |total, source| {
+                total.checked_add(source.row_count())
+            });
+        if rows.is_none_or(|rows| rows > limits.source_rows) {
+            return Err(Box::new(ExecutionError::Limit {
+                resource: Resource::SourceRows,
+                limit: limits.source_rows,
+                required: rows,
+            }));
+        }
+        if let Some(prior) = work.and_then(crate::execution_work::WorkBudget::usage) {
+            Budget::admit_prefix(limits, prior)?;
+        }
         observer(ExecutionEvent::Exit {
             phase: ExecutionPhase::Admission,
             outcome: crate::application_observer::Outcome::Succeeded,
         });
+        let reservation = work.map(crate::execution_work::WorkBudget::enter);
+        let mut budget = match &reservation {
+            Some(reservation) if reservation.usage().is_some() => {
+                Budget::pooled(limits, reservation.usage().expect("pooled prefix"))
+            }
+            Some(reservation) => {
+                Budget::with_work(limits, reservation.limit(), reservation.prior())
+            }
+            None => Budget::new(limits),
+        };
         observer(ExecutionEvent::Phase(ExecutionPhase::Derivation));
-        self.execute_admitted(table, secondary, functions, observations, observer)
+        let result = self.execute_admitted(
+            table,
+            secondary,
+            functions,
+            limits,
+            observations,
+            observer,
+            &mut budget,
+        );
+        if let Some(reservation) = reservation {
+            let shape = result.as_ref().ok().map(|execution| {
+                let rows = execution.dataset.row_count();
+                let cells = rows
+                    .checked_mul(execution.dataset.schema().columns().len())
+                    .expect("admitted output cells");
+                (rows, cells)
+            });
+            reservation.complete(budget.used_work(), budget.usage(), shape);
+        }
+        result
     }
     #[allow(clippy::too_many_arguments)]
     fn execute_admitted<T: TableAccess + ?Sized>(
@@ -1042,8 +1496,10 @@ impl DatasetPlan {
         table: &T,
         secondary: &[&dyn TableAccess<Error = T::Error>],
         functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
         observations: &mut AttemptObservations,
         observer: &mut dyn FnMut(ExecutionEvent),
+        budget: &mut Budget,
     ) -> Result<Execution, Box<ExecutionError<T::Error>>> {
         let AttemptObservations {
             handlers,
@@ -1055,11 +1511,13 @@ impl DatasetPlan {
         intermediates::verify(
             self,
             false,
+            limits,
             &mut EvaluationState {
                 primary: &primary,
                 functions,
                 secondary,
                 self_rows: &[],
+                budget,
                 handlers,
                 intermediates: &mut intermediate_run,
                 output_rows: &[],
@@ -1073,11 +1531,13 @@ impl DatasetPlan {
             candidates = key_grain::construct(
                 self,
                 table,
+                limits,
                 &mut EvaluationState {
                     primary: &primary,
                     functions,
                     secondary,
                     self_rows: &[],
+                    budget,
                     handlers,
                     intermediates: &mut intermediate_run,
                     output_rows: &[],
@@ -1092,11 +1552,13 @@ impl DatasetPlan {
                     Some(intermediates::driver(
                         *index,
                         self,
+                        limits,
                         &mut EvaluationState {
                             primary: &primary,
                             functions,
                             secondary,
                             self_rows: &candidates,
+                            budget,
                             handlers,
                             intermediates: &mut intermediate_run,
                             output_rows: &[],
@@ -1148,7 +1610,7 @@ impl DatasetPlan {
                         let rows = named
                             .as_ref()
                             .map_or(table.row_count(), |relation| relation.eligible.len());
-                        self.check_capacity(candidates.len(), rows)?;
+                        self.check_capacity(candidates.len(), rows, limits)?;
                         if let Some(relation) = &named {
                             relation.eligible.iter().map(|&row| vec![row]).collect()
                         } else {
@@ -1156,19 +1618,29 @@ impl DatasetPlan {
                         }
                     }
                     RowMode::Groups(keys) => {
+                        budget.work(
+                            named
+                                .as_ref()
+                                .map_or(table.row_count(), |relation| relation.eligible.len()),
+                            keys.len(),
+                        )?;
                         if let Some(relation) = &named {
-                            intermediates::driver_groups(table, &relation.eligible, keys)?
+                            intermediates::driver_groups(table, &relation.eligible, keys, limits)?
                         } else {
-                            partition(table, keys)
+                            partition(table, keys, limits.source_rows, limits.key_cells)
                                 .map_err(|error| Box::new(ExecutionError::Grouping(error)))?
                         }
                     }
                 };
-                self.check_capacity(candidates.len(), groups.len())?;
+                self.check_capacity(candidates.len(), groups.len(), limits)?;
                 candidates
                     .try_reserve(groups.len())
                     .map_err(|_| Box::new(ExecutionError::Allocation))?;
                 for members in groups {
+                    // Discarding a row never refunds its token or evaluated work.
+                    if !self.intermediates().is_empty() {
+                        budget.work(1, 1)?;
+                    }
                     let selection_identity = SelectionIdentity::Candidate(next_selection_identity);
                     next_selection_identity = next_selection_identity
                         .checked_add(1)
@@ -1191,11 +1663,13 @@ impl DatasetPlan {
                             &candidate,
                             self,
                             candidates.len(),
+                            limits,
                             &mut EvaluationState {
                                 primary: &primary,
                                 functions,
                                 secondary,
                                 self_rows: &candidates[..first],
+                                budget,
                                 handlers,
                                 intermediates: &mut intermediate_run,
                                 output_rows: &[],
@@ -1232,6 +1706,7 @@ impl DatasetPlan {
                                     functions,
                                     secondary,
                                     self_rows: &candidates[..first],
+                                    budget,
                                     handlers,
                                     intermediates: &mut intermediate_run,
                                     output_rows: &[],
@@ -1246,15 +1721,17 @@ impl DatasetPlan {
                                 table,
                                 source_row,
                                 &candidate.values,
+                                budget.predicate(),
                             )
                             .map_err(|error| match error.kind {
-                                crate::predicate::ErrorKind::Regex(limit) => {
-                                    Box::new(regex_limit(limit))
+                                crate::predicate::ErrorKind::Limit(limit) => {
+                                    Box::new(predicate_limit(limit))
                                 }
                                 _ => Box::new(ExecutionError::Predicate { source_row, error }),
                             })?
                         };
                         if truth != crate::predicate::Truth::True {
+                            budget.discard_candidate(&candidate.values);
                             continue;
                         }
                     }
@@ -1268,11 +1745,13 @@ impl DatasetPlan {
                     current,
                     self,
                     first,
+                    limits,
                     &mut EvaluationState {
                         primary: &primary,
                         functions,
                         secondary,
                         self_rows: prior,
+                        budget,
                         handlers,
                         intermediates: &mut intermediate_run,
                         output_rows: &[],
@@ -1311,6 +1790,7 @@ impl DatasetPlan {
                                     functions,
                                     secondary,
                                     self_rows: &candidates[..first],
+                                    budget,
                                     handlers,
                                     intermediates: &mut intermediate_run,
                                     output_rows: &candidates[first..],
@@ -1325,10 +1805,11 @@ impl DatasetPlan {
                                 table,
                                 source_row,
                                 &candidate.values,
+                                budget.predicate(),
                             )
                             .map_err(|error| match error.kind {
-                                crate::predicate::ErrorKind::Regex(limit) => {
-                                    Box::new(regex_limit(limit))
+                                crate::predicate::ErrorKind::Limit(limit) => {
+                                    Box::new(predicate_limit(limit))
                                 }
                                 _ => Box::new(ExecutionError::Predicate { source_row, error }),
                             })?
@@ -1336,19 +1817,23 @@ impl DatasetPlan {
                         if truth == crate::predicate::Truth::True {
                             candidates.swap(retained, row);
                             retained += 1;
+                        } else {
+                            budget.discard_candidate(&candidate.values);
                         }
                     }
                     candidates.truncate(retained);
                 }
-                intermediate_run.publish_self(self)?;
+                intermediate_run.publish_self(self, budget)?;
                 intermediates::verify(
                     self,
                     true,
+                    limits,
                     &mut EvaluationState {
                         primary: &primary,
                         functions,
                         secondary,
                         self_rows: &candidates,
+                        budget,
                         handlers,
                         intermediates: &mut intermediate_run,
                         output_rows: &[],
@@ -1359,26 +1844,33 @@ impl DatasetPlan {
                 )?;
             }
         }
-        intermediate_run.begin_columns(self)?;
+        intermediate_run.begin_columns(self, budget)?;
         let mut completed = vec![false; self.output().columns().len()];
         for assignment in &self.templates()[0].assignments {
             completed[assignment.column] = true;
         }
         let mut next_column = 0;
-        self.check_columns(&candidates, &completed, &mut next_column, records)?;
+        self.check_columns(&candidates, &completed, &mut next_column, records, budget)?;
         for assignment in self.columns() {
             let mut nested_windows = windows::Cache::default();
-            let mut numbers =
-                windows::Evaluation::new(assignment, &candidates, self, table, handlers)?;
+            let mut numbers = windows::Evaluation::new(
+                assignment,
+                &candidates,
+                self,
+                table,
+                limits,
+                budget,
+                handlers,
+            )?;
             for row in 0..candidates.len() {
                 let number = if let Some(run) = &mut numbers {
-                    Some(run.value(row, &candidates, table, assignment, self)?)
+                    Some(run.value(row, &candidates, table, budget, assignment, self)?)
                 } else {
                     None
                 };
                 let candidate = &candidates[row];
                 let value = if let Some(value) = number {
-                    finish(value, assignment, candidate, self, row, handlers)?
+                    finish(value, assignment, candidate, self, row, budget, handlers)?
                 } else {
                     evaluate(
                         table,
@@ -1386,11 +1878,13 @@ impl DatasetPlan {
                         candidate,
                         self,
                         row,
+                        limits,
                         &mut EvaluationState {
                             primary: &primary,
                             functions,
                             secondary,
                             self_rows: &candidates,
+                            budget,
                             handlers,
                             intermediates: &mut intermediate_run,
                             output_rows: &candidates,
@@ -1405,11 +1899,11 @@ impl DatasetPlan {
                 candidate.completed[assignment.column] = true;
             }
             completed[assignment.column] = true;
-            self.check_columns(&candidates, &completed, &mut next_column, records)?;
+            self.check_columns(&candidates, &completed, &mut next_column, records, budget)?;
         }
         // A selector hidden by an empty input or a lazy branch must still report
         // its known filter-type refusal before a successful result can publish.
-        intermediates::check_unobserved_filter_types(self)?;
+        intermediates::check_unobserved_filter_types(self, budget)?;
         observer(ExecutionEvent::Exit {
             phase: ExecutionPhase::Derivation,
             outcome: crate::application_observer::Outcome::Succeeded,
@@ -1420,7 +1914,7 @@ impl DatasetPlan {
             rows: candidates.iter().map(|row| &row.values).collect(),
         };
         let mut failures = Vec::new();
-
+        budget.work(dataset.rows.len(), self.keys().len())?;
         for (position, &column) in self.keys().iter().enumerate() {
             let missing: Vec<_> = dataset
                 .rows
@@ -1439,12 +1933,12 @@ impl DatasetPlan {
                     inventory: None,
 
                     row_count: None,
-                    offending_rows: identities(&dataset, self.keys(), missing)?,
+                    offending_rows: identities(&dataset, self.keys(), missing, budget)?,
                 });
             }
         }
-
-        let groups = partition(&dataset, self.keys())
+        budget.work(dataset.rows.len(), self.keys().len())?;
+        let groups = partition(&dataset, self.keys(), limits.output_rows, limits.key_cells)
             .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
         let duplicates: Vec<_> = groups
             .iter()
@@ -1462,7 +1956,7 @@ impl DatasetPlan {
                 inventory: None,
 
                 row_count: None,
-                offending_rows: identities(&dataset, self.keys(), duplicates)?,
+                offending_rows: identities(&dataset, self.keys(), duplicates, budget)?,
             });
         }
         if !failures.is_empty() {
@@ -1511,6 +2005,7 @@ impl DatasetPlan {
                             functions,
                             secondary,
                             self_rows: &candidates,
+                            budget,
                             handlers,
                             intermediates: &mut intermediate_run,
                             output_rows: &candidates,
@@ -1534,9 +2029,10 @@ impl DatasetPlan {
                             distinct.push(column);
                         }
                     }
-
-                    let groups = partition(&dataset, &distinct)
-                        .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
+                    budget.work(dataset.rows.len(), distinct.len())?;
+                    let groups =
+                        partition(&dataset, &distinct, limits.output_rows, limits.key_cells)
+                            .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
                     let repeated: Vec<_> =
                         groups.iter().filter(|members| members.len() > 1).collect();
                     CheckRecord {
@@ -1555,10 +2051,12 @@ impl DatasetPlan {
                             repeated
                                 .into_iter()
                                 .flat_map(|members| members.iter().copied()),
+                            budget,
                         )?,
                     }
                 }
                 Check::AllOrNone(columns) => {
+                    budget.work(dataset.rows.len(), columns.len())?;
                     let offending = dataset.rows.iter().enumerate().filter_map(|(index, row)| {
                         let missing = matches!(row[columns[0]], Value::Missing);
                         columns
@@ -1566,7 +2064,7 @@ impl DatasetPlan {
                             .any(|&column| matches!(row[column], Value::Missing) != missing)
                             .then_some(index)
                     });
-                    let offending_rows = identities(&dataset, self.keys(), offending)?;
+                    let offending_rows = identities(&dataset, self.keys(), offending, budget)?;
                     CheckRecord {
                         path: verification.path.clone(),
                         code: crate::diagnostic::ConditionCode::VerificationAllOrNoneFailed,
@@ -1587,11 +2085,13 @@ impl DatasetPlan {
                     self,
                     table,
                     &candidates,
+                    limits,
                     &mut EvaluationState {
                         primary: &primary,
                         functions,
                         secondary,
                         self_rows: &candidates,
+                        budget,
                         handlers,
                         intermediates: &mut intermediate_run,
                         output_rows: &candidates,
@@ -1602,6 +2102,7 @@ impl DatasetPlan {
                     records,
                 )?,
                 Check::RowCount { .. } | Check::WideRowCount { .. } => {
+                    budget.work(1, verification.check.row_count_work())?;
                     let failed = !verification
                         .check
                         .row_count_accepts(dataset.rows.len())
@@ -1636,7 +2137,7 @@ impl DatasetPlan {
             schema: self.output().clone(),
             rows: candidates.into_iter().map(|row| row.values).collect(),
         };
-        ordering::apply(self.output_order(), &mut dataset)?;
+        ordering::apply(self.output_order(), &mut dataset, budget)?;
         Ok(Execution {
             dataset,
             verifications: std::mem::take(records),
@@ -1650,6 +2151,7 @@ impl DatasetPlan {
         completed: &[bool],
         next: &mut usize,
         records: &mut Vec<CheckRecord>,
+        budget: &mut Budget,
     ) -> Result<(), Box<ExecutionError<E>>> {
         if self.keys().iter().any(|&column| !completed[column]) {
             return Ok(());
@@ -1703,6 +2205,58 @@ impl DatasetPlan {
                                 _ => vec![None],
                             };
                             for binding in bindings {
+                                if let (Check::ValueCodelists { overrides, .. }, Some(binding)) =
+                                    (&verification.check, binding)
+                                {
+                                    let width = overrides
+                                        .iter()
+                                        .chain(&binding.codes)
+                                        .try_fold(1usize, |width, code| {
+                                            width.checked_add(code.len().max(1))
+                                        })
+                                        .ok_or_else(|| {
+                                            Box::new(ExecutionError::Limit {
+                                                resource: Resource::WorkCells,
+                                                limit: budget.work_cell_limit(),
+                                                required: None,
+                                            })
+                                        })?;
+                                    budget.work(candidates.len(), width)?;
+                                }
+                                if let Check::Inventory {
+                                    scope: Some(scope), ..
+                                } = &verification.check
+                                {
+                                    let width = scope
+                                        .overrides
+                                        .iter()
+                                        .try_fold(1usize, |width, (code, _)| {
+                                            width.checked_add(code.len().max(1))
+                                        })
+                                        .ok_or_else(|| {
+                                            Box::new(ExecutionError::Limit {
+                                                resource: Resource::WorkCells,
+                                                limit: budget.work_cell_limit(),
+                                                required: None,
+                                            })
+                                        })?;
+                                    budget.work(candidates.len(), width)?;
+                                }
+                                if let Check::ValueMaxLength { codes, .. } = &verification.check {
+                                    let width = codes
+                                        .iter()
+                                        .try_fold(1usize, |width, code| {
+                                            width.checked_add(code.len().max(1))
+                                        })
+                                        .ok_or_else(|| {
+                                            Box::new(ExecutionError::Limit {
+                                                resource: Resource::WorkCells,
+                                                limit: budget.work_cell_limit(),
+                                                required: None,
+                                            })
+                                        })?;
+                                    budget.work(candidates.len(), width)?;
+                                }
                                 let positions = candidates
                                     .iter()
                                     .enumerate()
@@ -1749,6 +2303,36 @@ impl DatasetPlan {
                                         selected.then_some(index)
                                     })
                                     .collect::<Vec<_>>();
+                                let width = if let Some(binding) = binding {
+                                    binding.values.len().max(1)
+                                } else {
+                                    match &verification.check {
+                                        Check::AllowedValues(accepted)
+                                        | Check::Inventory {
+                                            values: accepted, ..
+                                        } => accepted.len().max(1),
+                                        Check::Codelist { values, .. } => values.len().max(1),
+                                        Check::Range { .. } => 2,
+                                        Check::WideMaxLength(bound)
+                                        | Check::ValueMaxLength { max: bound, .. } => {
+                                            bound.decimal().len().min(usize::BITS as usize).max(1)
+                                        }
+                                        _ => 1,
+                                    }
+                                };
+                                budget.work(candidates.len(), width)?;
+                                if matches!(
+                                    verification.check,
+                                    Check::MaxLength(_)
+                                        | Check::WideMaxLength(_)
+                                        | Check::ValueMaxLength { .. }
+                                ) {
+                                    for row in candidates {
+                                        if let Value::Str(text) = &row.values[group.column] {
+                                            budget.scalar_text(text.len())?;
+                                        }
+                                    }
+                                }
                                 let values = positions
                                     .iter()
                                     .map(|&position| &candidates[position].values[group.column]);
@@ -1764,26 +2348,31 @@ impl DatasetPlan {
                                         })
                                         .collect()
                                 } else if let Check::Matches(pattern) = &verification.check {
-                                    crate::dataset_checks::matches_offenders(pattern, values)
-                                        .map_err(|error| {
-                                            let ExecutionError::Limit {
-                                                resource,
-                                                limit,
-                                                required,
-                                            } = regex_limit::<E>(error)
-                                            else {
-                                                unreachable!("predicate resource limit")
-                                            };
-                                            Box::new(ExecutionError::ScopedLimit {
-                                                resource,
-                                                limit,
-                                                required,
-                                                spec_paths: vec![format!(
-                                                    "{}.pattern",
-                                                    verification.path
-                                                )],
-                                            })
-                                        })?
+                                    crate::dataset_checks::matches_offenders(
+                                        pattern,
+                                        values,
+                                        Default::default(),
+                                        budget.predicate(),
+                                    )
+                                    .map_err(|error| {
+                                        let ExecutionError::Limit {
+                                            resource,
+                                            limit,
+                                            required,
+                                        } = predicate_limit::<E>(error)
+                                        else {
+                                            unreachable!("predicate resource limit")
+                                        };
+                                        Box::new(ExecutionError::ScopedLimit {
+                                            resource,
+                                            limit,
+                                            required,
+                                            spec_paths: vec![format!(
+                                                "{}.pattern",
+                                                verification.path
+                                            )],
+                                        })
+                                    })?
                                 } else {
                                     crate::dataset_checks::column_offenders(
                                         &verification.check,
@@ -1803,17 +2392,28 @@ impl DatasetPlan {
                                         None
                                     }
                                 });
-                                let codelist = identifier.map(|id| CodelistObservation {
-                                    id: id.into(),
-                                    values: offending
-                                        .iter()
-                                        .map(|&position| {
-                                            candidates[position].values[group.column].clone()
-                                        })
-                                        .collect(),
-                                });
+                                let codelist = if let Some(id) = identifier {
+                                    budget.scalar_text(id.len())?;
+                                    budget.identity(offending.iter().map(|&position| {
+                                        &candidates[position].values[group.column]
+                                    }))?;
+                                    Some(CodelistObservation {
+                                        id: id.into(),
+                                        values: offending
+                                            .iter()
+                                            .map(|&position| {
+                                                candidates[position].values[group.column].clone()
+                                            })
+                                            .collect(),
+                                    })
+                                } else {
+                                    None
+                                };
                                 let inventory =
                                     if matches!(verification.check, Check::Inventory { .. }) {
+                                        budget.identity(offending.iter().map(|&position| {
+                                            &candidates[position].values[group.column]
+                                        }))?;
                                         Some(
                                             offending
                                                 .iter()
@@ -1833,6 +2433,7 @@ impl DatasetPlan {
                                             &candidates[position],
                                             self.keys(),
                                             position,
+                                            budget,
                                         )?
                                         .expect("all keys are complete before column checks"),
                                     );
@@ -1873,52 +2474,27 @@ impl DatasetPlan {
         &self,
         current: usize,
         additional: usize,
+        limits: Limits,
     ) -> Result<(), Box<ExecutionError<E>>> {
-        let rows = current.checked_add(additional).ok_or_else(|| {
-            Box::new(ExecutionError::Limit {
-                resource: Resource::OutputRows,
-                limit: Limits::TABLE_ROWS,
-                required: None,
-            })
-        })?;
-        Limits::table(rows, self.output().columns().len()).map_err(|error| {
-            if error.resource == "columns" {
-                return Box::new(ExecutionError::ScopedLimit {
-                    resource: Resource::OutputColumns,
-                    limit: error.limit,
-                    required: error.actual,
-                    spec_paths: vec!["output.columns".into()],
-                });
+        let rows = current.checked_add(additional);
+        for (resource, required, limit) in [
+            (Resource::OutputRows, rows, limits.output_rows),
+            (
+                Resource::OutputCells,
+                rows.and_then(|rows| rows.checked_mul(self.output().columns().len())),
+                limits.output_cells,
+            ),
+        ] {
+            if required.is_none_or(|required| required > limit) {
+                return Err(Box::new(ExecutionError::Limit {
+                    resource,
+                    limit,
+                    required,
+                }));
             }
-            Box::new(ExecutionError::Limit {
-                resource: match error.resource {
-                    "table_rows" => Resource::OutputRows,
-                    "table_cells" => Resource::OutputCells,
-                    _ => unreachable!("table boundary resource"),
-                },
-                limit: error.limit,
-                required: error.actual,
-            })
-        })?;
+        }
         Ok(())
     }
-}
-
-fn scoped_table_boundary<E>(
-    error: crate::limits::LimitExceeded,
-    path: &str,
-) -> Box<ExecutionError<E>> {
-    Box::new(ExecutionError::ScopedLimit {
-        resource: match error.resource {
-            "columns" => Resource::SourceColumns,
-            "table_rows" => Resource::SourceRows,
-            "table_cells" => Resource::SourceCells,
-            _ => unreachable!("table boundary resource"),
-        },
-        limit: error.limit,
-        required: error.actual,
-        spec_paths: vec![path.into()],
-    })
 }
 
 /// Retain original output keys without substituting projected or row-number identity.
@@ -1926,9 +2502,12 @@ pub(crate) fn identities<E>(
     dataset: &CompletedRows<'_>,
     keys: &[usize],
     rows: impl IntoIterator<Item = usize>,
+    budget: &mut Budget,
 ) -> Result<Vec<RowIdentity>, Box<ExecutionError<E>>> {
     let mut identities = Vec::new();
     for position in rows {
+        budget.work(1, keys.len())?;
+        budget.identity(keys.iter().map(|&column| &dataset.rows[position][column]))?;
         identities.push(RowIdentity {
             position,
             values: keys
@@ -1947,9 +2526,10 @@ fn retained_diagnostic<E>(
     candidate: &Candidate,
     plan: &DatasetPlan,
     row: usize,
+    budget: &mut Budget,
 ) -> Box<ExecutionError<E>> {
     let identity = if retain_keys {
-        match failure_identity(candidate, plan.keys(), row) {
+        match failure_identity(candidate, plan.keys(), row, budget) {
             Ok(identity) => identity,
             Err(error) => return error,
         }
@@ -1967,11 +2547,13 @@ fn failure_identity<E>(
     candidate: &Candidate,
     keys: &[usize],
     position: usize,
+    budget: &mut Budget,
 ) -> Result<Option<RowIdentity>, Box<ExecutionError<E>>> {
     if keys.iter().any(|&key| !candidate.completed[key]) {
         return Ok(None);
     }
-
+    budget.work(1, keys.len())?;
+    budget.identity(keys.iter().map(|&column| &candidate.values[column]))?;
     Ok(Some(RowIdentity {
         position,
         values: keys

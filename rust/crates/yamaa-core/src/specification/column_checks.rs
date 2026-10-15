@@ -13,6 +13,7 @@ pub(super) fn prepare(
     payload: usize,
     path: &str,
     kind: ColumnType,
+    regex_budget: &mut crate::regex::CompileBudget,
 ) -> Result<Check, PrepareError> {
     let invalid = |code, reason: String| Check::InvalidDeclaration { code, reason };
     let kind_name = match kind {
@@ -35,7 +36,11 @@ pub(super) fn prepare(
             if kind != ColumnType::Str {
                 return Ok(wrong_type());
             }
-            match crate::regex::Pattern::compile(pattern) {
+            match crate::regex::Pattern::compile_with_budget(
+                pattern,
+                Default::default(),
+                regex_budget,
+            ) {
                 Ok(pattern) => Ok(Check::Matches(pattern)),
                 Err(crate::regex::CompileError::Invalid { .. }) => Ok(Check::InvalidDiagnostic(
                     crate::dataset_checks::invalid_pattern_diagnostic(
@@ -61,7 +66,14 @@ pub(super) fn prepare(
         }
         "allowed_values" => {
             let entries = sequence(d, field(d, payload, "values")?)?;
-
+            if entries.len() > 64 {
+                return Err(PrepareError::limit(
+                    "verification_values",
+                    64,
+                    Some(entries.len()),
+                    Some(&format!("{path}.values")),
+                ));
+            }
             if entries.is_empty() {
                 return Ok(invalid(
                     ConditionCode::VerificationDeclarationRequired,
@@ -70,6 +82,7 @@ pub(super) fn prepare(
             }
             let mut accepted = Vec::new();
             let mut finding = None;
+            let mut quote_budget = crate::schema::ValidationBudget::new(Default::default());
             for (index, &id) in entries.iter().enumerate() {
                 let item_path = format!("{path}.values[{index}]");
                 let value = literal(d, id, &item_path)?;
@@ -77,7 +90,17 @@ pub(super) fn prepare(
                     Ok(value) if !matches!(value, Value::Missing) => accepted.push(value),
                     _ => {
                         let label = match &d.nodes()[id] {
-                            N::Text(text) => crate::schema::quoted_diagnostic_text(text),
+                            N::Text(text) => {
+                                crate::schema::quoted_diagnostic_text(text, &mut quote_budget)
+                                    .map_err(|_| {
+                                        PrepareError::limit(
+                                            "verification_diagnostic",
+                                            16_777_216,
+                                            None,
+                                            None,
+                                        )
+                                    })?
+                            }
                             node => {
                                 // Admitted documents contain finite scalar leaves.
                                 // Invalid carriers belong to schema admission, not

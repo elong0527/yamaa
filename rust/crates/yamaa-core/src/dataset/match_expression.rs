@@ -39,6 +39,7 @@ impl MatchExpression {
     ) -> Result<(), PlanError> {
         if contains_window(&self.assignment.expression, 0)? != self.windowed
             || self.reads.len() != self.schema.columns().len()
+            || self.reads.len() > 65_536
         {
             return Err(PlanError::InvalidIntermediate);
         }
@@ -57,6 +58,7 @@ impl MatchExpression {
         } else {
             vec![false; available.len()]
         };
+        let mut remaining = EXPRESSION_NODE_LIMIT;
         validate_assignment_at(
             &self.assignment,
             &mut slots,
@@ -67,6 +69,7 @@ impl MatchExpression {
             output,
             &RowMode::Records,
             0,
+            &mut remaining,
             false,
             true,
         )
@@ -160,7 +163,7 @@ fn normalize(expression: &mut Expression, reads: &[MatchRead]) -> Result<(), Pla
     Ok(())
 }
 fn contains_window(expression: &Expression, depth: usize) -> Result<bool, PlanError> {
-    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+    if depth > 64 {
         return Err(PlanError::InvalidIntermediate);
     }
     match expression {

@@ -24,7 +24,7 @@ impl RootFilter {
             return Ok(None);
         };
         let expression = text(d, id)?;
-        let compiled = predicate_compiler::compile(expression, "filter");
+        let compiled = predicate_compiler::compile(expression, "filter", Default::default());
         match &compiled {
             Ok(_)
             | Err(predicate_compiler::Error::Parse(
@@ -59,7 +59,7 @@ impl RootFilter {
                     &self.expression,
                     position.character,
                     failure,
-                )));
+                )?));
                 return Ok(None);
             }
             Err(error) => return Err(BindError::PredicatePolicy(error.clone())),

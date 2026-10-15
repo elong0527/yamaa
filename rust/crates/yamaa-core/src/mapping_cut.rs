@@ -8,14 +8,15 @@ use serde_json::Value as V;
 use std::cmp::Ordering;
 use std::{collections::BTreeMap, vec};
 
+pub const MAX_DECLARATION_BYTES: usize = 16_777_216;
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum AdmissionError {
-    #[error("mapping cut shape")]
-    Shape,
+    #[error("mapping cut limit")]
+    Limit,
     #[error("mapping cut diagnostic: {0:?}")]
     Diagnostic(Diagnostic),
 }
-/// A selected result borrows its declared literal or label.
+/// A selected result remains borrowed until the engine admits its copy.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SelectedValue<'a> {
     Literal(&'a Value),
@@ -49,9 +50,29 @@ pub enum MappingCut {
     Mapping(Mapping),
     Cut(Cut),
 }
-fn shape(source: &str, path: &str) -> Result<(), AdmissionError> {
+fn text_bytes(value: &Value) -> usize {
+    match value {
+        Value::Str(text) => text.len(),
+        _ => 0,
+    }
+}
+fn metadata(
+    source: &str,
+    path: &str,
+    mut extra: impl Iterator<Item = usize>,
+) -> Result<(), AdmissionError> {
     if source.is_empty() || path.is_empty() {
-        return Err(AdmissionError::Shape);
+        return Err(AdmissionError::Limit);
+    }
+    let total = extra.try_fold(source.len().saturating_add(path.len()), |total, n| {
+        total.checked_add(n)
+    });
+    if total
+        .and_then(|n| n.checked_mul(2))
+        .and_then(|n| n.checked_add(1024))
+        .is_none_or(|n| n > MAX_DECLARATION_BYTES)
+    {
+        return Err(AdmissionError::Limit);
     }
     Ok(())
 }
@@ -95,7 +116,18 @@ impl Mapping {
         missing: Option<Value>,
         unmapped: Option<Value>,
     ) -> Result<Self, AdmissionError> {
-        shape(&source, &path)?;
+        metadata(
+            &source,
+            &path,
+            entries
+                .iter()
+                .map(|(key, value)| {
+                    key.len()
+                        .saturating_add(text_bytes(value))
+                        .saturating_add(64)
+                })
+                .chain(missing.iter().chain(unmapped.iter()).map(text_bytes)),
+        )?;
         if !case_sensitive {
             let mut groups: BTreeMap<String, Vec<&str>> = BTreeMap::new();
             for (key, _) in &entries {
@@ -194,8 +226,16 @@ impl Cut {
         right: bool,
         missing: Option<Value>,
     ) -> Result<Self, AdmissionError> {
-        shape(&source, &path)?;
-        if let Some(finding) = Self::declaration_findings(&path, &breaks, &labels)
+        metadata(
+            &source,
+            &path,
+            labels
+                .iter()
+                .map(|label| label.len().saturating_add(32))
+                .chain(missing.iter().map(text_bytes))
+                .chain(std::iter::once(breaks.len().saturating_mul(8))),
+        )?;
+        if let Some(finding) = Self::declaration_findings(&source, &path, &breaks, &labels)?
             .into_iter()
             .next()
         {
@@ -212,10 +252,19 @@ impl Cut {
     }
     /// Independent declaration defects share the same admitted context and order.
     pub(crate) fn declaration_findings(
+        source: &str,
         path: &str,
         breaks: &[f64],
         labels: &[String],
-    ) -> Vec<Diagnostic> {
+    ) -> Result<Vec<Diagnostic>, AdmissionError> {
+        metadata(
+            source,
+            path,
+            labels
+                .iter()
+                .map(|label| label.len().saturating_add(32))
+                .chain(std::iter::once(breaks.len().saturating_mul(8))),
+        )?;
         let expected = [
             (
                 labels.len() != breaks.len().saturating_add(1),
@@ -230,7 +279,7 @@ impl Cut {
                 "ascending breaks",
             ),
         ];
-        expected
+        Ok(expected
             .into_iter()
             .filter(|(invalid, _)| *invalid)
             .map(|(_, expected)| {
@@ -240,7 +289,7 @@ impl Cut {
                     [("operation", text("cut")), ("expected", text(expected))],
                 )
             })
-            .collect()
+            .collect())
     }
     pub fn select(&self, value: ValueRef<'_>) -> Result<Selected<'_>, Diagnostic> {
         if matches!(value, ValueRef::Missing) {
@@ -332,6 +381,22 @@ impl MappingCut {
                 kind,
                 crate::value::ColumnType::Int | crate::value::ColumnType::Float
             ),
+        }
+    }
+    /// Bound complete comparison work before entering the selector's bounded scan.
+    pub fn comparison_work(&self, input: ValueRef<'_>) -> usize {
+        match self {
+            Self::Mapping(item) => item.entries.iter().fold(1usize, |n, (key, _)| {
+                n.saturating_add(
+                    key.len()
+                        .saturating_add(match input {
+                            ValueRef::Str(input) => input.len(),
+                            _ => 0,
+                        })
+                        .saturating_add(1),
+                )
+            }),
+            Self::Cut(item) => item.breaks.len().saturating_add(1),
         }
     }
 }

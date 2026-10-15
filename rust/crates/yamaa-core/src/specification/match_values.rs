@@ -177,7 +177,10 @@ impl Declaration {
             _ => format!("key[{field}]"),
         }
     }
-    pub(super) fn result_type(&self, catalog: &Catalog) -> Option<ComparableType> {
+    pub(super) fn result_type(
+        &self,
+        catalog: &Catalog,
+    ) -> Result<Option<ComparableType>, BindError> {
         let expression = match self {
             Self::Variable(name) | Self::Source(name) => match_value::Expression::Source(name),
             Self::StrPad(_) => match_value::Expression::Operation("str_pad"),
@@ -191,7 +194,7 @@ impl Declaration {
                 _ => LiteralKind::Other,
             }),
         };
-        match_value::result_type(catalog, expression)
+        match_value::result_type(catalog, expression).map_err(BindError::Catalog)
     }
     pub(super) fn bind(
         &self,
@@ -229,7 +232,7 @@ impl Declaration {
         {
             if defer_unknown {
                 for name in references {
-                    if catalog.bind(name).is_none() {
+                    if catalog.bind(name).map_err(BindError::Catalog)?.is_none() {
                         return Ok(Some(MatchValue::Contextual(
                             crate::dataset::ContextualMatch::Expression {
                                 identifier: name.clone(),
@@ -242,7 +245,7 @@ impl Declaration {
             let mut reads = Vec::new();
             let mut fields = Vec::new();
             for name in references {
-                let Some(bound) = catalog.bind(name) else {
+                let Some(bound) = catalog.bind(name).map_err(BindError::Catalog)? else {
                     findings.push(BindFinding::Lookup(LookupFinding::reference(
                         path,
                         name,
@@ -330,7 +333,7 @@ impl Declaration {
                         },
                         reads,
                         TableSchema::new(fields).map_err(|_| BindError::Internal)?,
-                        self.result_type(catalog),
+                        self.result_type(catalog)?,
                     )
                     .map(|expression| MatchValue::Expression(Box::new(expression)))
                     .map_err(BindError::InvalidPlan)
@@ -346,7 +349,7 @@ impl Declaration {
             };
             return Ok(Some(MatchValue::Literal(value.clone())));
         };
-        let read = match catalog.bind(name) {
+        let read = match catalog.bind(name).map_err(BindError::Catalog)? {
             Some(reference_binding::Binding::Output { column, .. }) => MatchRead::Output {
                 column,
                 identifier: name.into(),
@@ -384,8 +387,8 @@ impl Declaration {
                 let suggestion = name
                     .strip_prefix("SELF.")
                     .filter(|bare| {
-                        catalog.bind(bare).is_some_and(|item| {
-                            matches!(item, reference_binding::Binding::Output { .. })
+                        catalog.bind(bare).is_ok_and(|item| {
+                            matches!(item, Some(reference_binding::Binding::Output { .. }))
                         })
                     })
                     .map(String::from);
@@ -444,8 +447,11 @@ fn reject_deferred_owners(branch: &cases::Branch, extra: &mut Vec<UnsupportedFea
     }
 }
 
-/// Reject aggregate key counts before compiling their authored expressions.
-pub(super) fn declaration_admission(d: &Document) -> Result<(), PrepareError> {
+/// Reject aggregate key counts before the compiler owns paths or expressions.
+pub(super) fn declaration_admission(
+    d: &Document,
+    limits: CompilationLimits,
+) -> Result<(), PrepareError> {
     let Some(items) = d
         .field(d.root(), "intermediates")
         .filter(|&id| !matches!(d.nodes()[id], N::Null))
@@ -453,23 +459,23 @@ pub(super) fn declaration_admission(d: &Document) -> Result<(), PrepareError> {
         return Ok(());
     };
     let items = sequence(d, items)?;
-    if items.len() > crate::limits::Limits::COLUMNS {
+    if items.len() > limits.columns {
         return Err(PrepareError::limit(
             "intermediates",
-            crate::limits::Limits::COLUMNS,
+            limits.columns,
             Some(items.len()),
             None,
         ));
     }
-    for (index, &item) in items.iter().enumerate() {
+    for &item in items {
         if let Some(key) = d.field(item, "key") {
             if let N::Mapping(fields) = &d.nodes()[key] {
-                if fields.len() > crate::limits::Limits::KEYS {
+                if fields.len() > limits.keys {
                     return Err(PrepareError::limit(
                         "intermediate_keys",
-                        crate::limits::Limits::KEYS,
+                        limits.keys,
                         Some(fields.len()),
-                        Some(&format!("intermediates[{index}].key")),
+                        None,
                     ));
                 }
             }
@@ -508,15 +514,22 @@ pub(super) fn visit_keys(
         depth: usize,
         visit: &mut impl FnMut(usize, &str) -> Result<(), PrepareError>,
     ) -> Result<(), PrepareError> {
-        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+        if depth > 64 {
             return Err(PrepareError::limit(
-                "semantic_depth",
-                crate::limits::Limits::SEMANTIC_DEPTH,
+                "expression_depth",
+                64,
                 Some(depth),
                 Some(path),
             ));
         }
-
+        if path.len() > 65_536 {
+            return Err(PrepareError::limit(
+                "path_bytes",
+                65_536,
+                Some(path.len()),
+                Some(path),
+            ));
+        }
         if let Some(payload) = d.field(value, "aggregate") {
             key(d, payload, &format!("{path}.aggregate"), visit)?;
         }
