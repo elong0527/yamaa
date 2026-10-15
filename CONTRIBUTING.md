@@ -58,8 +58,10 @@ and supported targets. Its inventory is the command reference. Set
 For a focused Rust change, run `cargo test --locked -p <crate>` from `rust/`.
 The workspace test command needs Python and R 4.6.1 installed because it builds
 and links both binding test targets. `make test-rust` selects its development
-Python interpreter for PyO3. The Python extension feature belongs to maturin
-packaging; enabling every feature would select extension linking instead of
+Python interpreter for PyO3. On Windows, run
+`python -m tools.ci.r_import_library` after installing R and the MSVC build tools
+to create the required import library. The Python extension feature belongs to
+maturin packaging; enabling every feature would select extension linking instead of
 normal Python linking for these Cargo tests. Native qualification also runs
 the workspace tests with the optimized `release-test` profile.
 Register new integration modules in their crate's test harness. Test helpers
