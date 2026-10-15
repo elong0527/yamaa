@@ -81,17 +81,15 @@ impl<'a> Parser<'a> {
         kind: Kind,
         scalar_rule: Option<ScalarSubmissionRule>,
     ) -> Result<(), Cause> {
-        if self.findings.len() < crate::limits::Limits::FINDINGS {
-            self.findings.push(Finding {
-                node,
-                container: field.map(|v| v.0),
-                key: field.and_then(|v| v.1),
-                origin,
-                path,
-                kind,
-                scalar_rule,
-            });
-        }
+        self.findings.push(Finding {
+            node,
+            container: field.map(|v| v.0),
+            key: field.and_then(|v| v.1),
+            origin,
+            path,
+            kind,
+            scalar_rule,
+        });
 
         Ok(())
     }
@@ -794,4 +792,44 @@ fn identifier(value: &str) -> bool {
     let mut bytes = value.bytes();
     matches!(bytes.next(), Some(b) if b.is_ascii_alphabetic() || b == b'_')
         && bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retains_all_10001_non_text_root_key_occurrences() {
+        let mut nodes = Vec::new();
+        let mut fields = Vec::new();
+        for index in 0..10_001 {
+            let key = nodes.len();
+            nodes.push(N::Integer(index.to_string()));
+            let value = nodes.len();
+            nodes.push(N::Null);
+            fields.push((key, value));
+        }
+        let root = nodes.len();
+        nodes.push(N::Mapping(fields));
+        let document = Document::new(nodes, root).unwrap();
+        let error = crate::specification_submission_document::decode(&document, root).unwrap_err();
+        assert!(std::ptr::eq(error.input, &document));
+        let Cause::Findings(findings) = error.cause else {
+            panic!("every malformed key must retain its original occurrence");
+        };
+        assert_eq!(findings.len(), 10_001);
+        for (index, finding) in findings.iter().enumerate() {
+            assert_eq!(finding.kind, Kind::NonTextKey);
+            assert_eq!(finding.node, 2 * index);
+            assert_eq!(finding.container, Some(root));
+            assert_eq!(finding.key, Some(2 * index));
+            assert_eq!(finding.origin, None);
+            assert_eq!(finding.scalar_rule, None);
+            assert_eq!(finding.path.steps().next(), None);
+            assert_eq!(
+                document.nodes()[finding.node],
+                N::Integer(index.to_string())
+            );
+        }
+    }
 }
