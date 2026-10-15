@@ -1,11 +1,12 @@
 //! Bind admitted catalogue metadata without code, source access or dictionary resolution.
-use crate::json::Value as V;
 use crate::{
     dataset::{Check, Verification},
     diagnostic::{ConditionCode as C, Diagnostic},
+    project_limits::{Budget, Limit, Limits, Resource},
     project_terminology::{BindingFinding, Catalogue},
     value::{ColumnType, Value},
 };
+use serde_json::Value as V;
 use std::vec;
 
 #[derive(Clone, Copy, Debug)]
@@ -61,6 +62,27 @@ pub struct Finding {
 // All Value floats are finite by construction; structural equality is reflexive.
 impl Eq for Finding {}
 impl Finding {
+    /// Borrow variable-size diagnostic inputs before a formatter allocates them.
+    pub fn visit_diagnostic_text(&self, mut visit: impl FnMut(&str)) {
+        for text in [&self.path, &self.column, &self.codelist] {
+            visit(text);
+        }
+        if let Cause::ValuesConflict {
+            verification,
+            codelist_values,
+            allowed_values,
+        } = &self.cause
+        {
+            visit(verification);
+            for value in codelist_values.iter().chain(allowed_values) {
+                visit(match value {
+                    Value::Str(text) => text,
+                    // Every other admitted scalar has bounded canonical text.
+                    _ => "0123456789012345678901234567890123456789012345678901234567890123",
+                });
+            }
+        }
+    }
     pub fn cause(&self) -> &Cause {
         &self.cause
     }
@@ -119,19 +141,96 @@ impl Finding {
         }
     }
 }
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("project codelist binding limit: {0:?}")]
+    Limit(Limit),
+    #[error("project codelist binding findings: {0:?}")]
+    Findings(Vec<Finding>),
+}
+impl From<Limit> for Error {
+    fn from(limit: Limit) -> Self {
+        Self::Limit(limit)
+    }
+}
 #[derive(Debug)]
 pub struct BoundCodelist {
     pub column: usize,
     pub verification: Verification,
 }
-/// Bind every admitted codelist and retain all independent semantic findings.
+fn product(left: usize, right: usize) -> Result<usize, Error> {
+    left.checked_mul(right).ok_or(Error::Limit(Limit {
+        resource: Resource::Work,
+    }))
+}
+/// Admit the complete aggregate before the first owned finding or code copy.
 /// Extensible/external bindings retain their ordinary explicit verification only.
 pub fn bind(
     catalogue: &Catalogue,
     bindings: &[Binding<'_>],
-) -> Result<Vec<BoundCodelist>, Vec<Finding>> {
+    limits: Limits,
+) -> Result<Vec<BoundCodelist>, Error> {
     if bindings.is_empty() {
         return Ok(Vec::new());
+    }
+    let mut budget = Budget::new(limits);
+    let lists = catalogue
+        .sources()
+        .iter()
+        .flat_map(|source| &source.codelists);
+    let mut count = 0usize;
+    let mut maximum_id = 1usize;
+    for list in lists {
+        budget.work(1)?;
+        count = count.checked_add(1).ok_or(Error::Limit(Limit {
+            resource: Resource::Work,
+        }))?;
+        maximum_id = maximum_id.max(list.id.len());
+    }
+    for binding in bindings {
+        let searches = binding
+            .allowed_values
+            .len()
+            .checked_mul(3)
+            .and_then(|n| n.checked_add(4))
+            .ok_or(Error::Limit(Limit {
+                resource: Resource::Work,
+            }))?;
+        budget.work(product(
+            product(count, searches)?,
+            maximum_id.max(binding.codelist.len()).max(1),
+        )?)?;
+        let finding_count = binding
+            .allowed_values
+            .len()
+            .checked_add(2)
+            .ok_or(Error::Limit(Limit {
+                resource: Resource::Findings,
+            }))?;
+        budget.findings(finding_count)?;
+        // Findings, diagnostic context and future plan ownership each copy these.
+        for _ in 0..finding_count.checked_mul(3).ok_or(Error::Limit(Limit {
+            resource: Resource::TextBytes,
+        }))? {
+            for text in [binding.name, binding.codelist]
+                .into_iter()
+                .chain(binding.path.parts())
+            {
+                budget.text(text)?;
+            }
+        }
+        if let Some(items) = catalogue.enforced_items(binding.codelist) {
+            // One compiler check and its future bound plan; semantic comparison
+            // and all potential conflict payloads are charged independently.
+            budget.binding(items, &[])?;
+            budget.binding(items, &[])?;
+            for allowed in binding.allowed_values {
+                for _ in 0..3 {
+                    budget.binding(items, allowed.values)?;
+                    budget.text(allowed.path)?;
+                }
+            }
+        }
     }
     let mut findings = Vec::new();
     let mut checks = Vec::new();
@@ -149,14 +248,14 @@ pub fn bind(
                 BindingFinding::TypeMismatch { expected, actual } => {
                     Cause::TypeMismatch { expected, actual }
                 }
+                BindingFinding::Limit(limit) => return Err(Error::Limit(limit)),
                 BindingFinding::ValuesConflict => unreachable!("no explicit value set supplied"),
             }));
         }
         for allowed in binding.allowed_values {
             for fault in catalogue.bind(binding.codelist, binding.kind, Some(allowed.values)) {
-                // Unknown/type findings were emitted once per binding above.
-                if let BindingFinding::ValuesConflict = fault {
-                    findings.push(make(Cause::ValuesConflict {
+                match fault {
+                    BindingFinding::ValuesConflict => findings.push(make(Cause::ValuesConflict {
                         verification: allowed.path.into(),
                         codelist_values: catalogue
                             .enforced_items(binding.codelist)
@@ -165,7 +264,9 @@ pub fn bind(
                             .map(|item| item.value.clone())
                             .collect(),
                         allowed_values: allowed.values.to_vec(),
-                    }));
+                    })),
+                    BindingFinding::Limit(limit) => return Err(Error::Limit(limit)),
+                    _ => {} // Unknown/type findings already emitted once per binding.
                 }
             }
         }
@@ -185,6 +286,6 @@ pub fn bind(
     if findings.is_empty() {
         Ok(checks)
     } else {
-        Err(findings)
+        Err(Error::Findings(findings))
     }
 }

@@ -10,6 +10,7 @@ pub(super) fn read<E>(
     candidate: &Candidate,
     plan: &DatasetPlan,
     row: usize,
+    budget: &mut Budget,
 ) -> Result<Value, Box<ExecutionError<E>>> {
     let keys = lookup
         .keys
@@ -32,6 +33,7 @@ pub(super) fn read<E>(
             plan,
             row,
         },
+        budget,
         None,
         None,
         None,
@@ -53,10 +55,12 @@ pub(super) fn read_row<T: TableAccess + ?Sized>(
     table: &dyn TableAccess<Error = T::Error>,
     lookup: &RowLookup,
     context: &Context<'_>,
+    budget: &mut Budget,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
     let source_row = context.candidate.members[0];
     let mut keys = Vec::with_capacity(lookup.keys.len());
     for key in &lookup.keys {
+        budget.work(1, 1)?;
         let value = driver
             .cell(source_row, key.driver_column)
             .map_err(|error| {
@@ -66,6 +70,9 @@ pub(super) fn read_row<T: TableAccess + ?Sized>(
                     error,
                 })
             })?;
+        if let ValueRef::Str(text) = value {
+            budget.scalar_text(text.len())?;
+        }
         keys.push((key.source_column, value));
     }
     read_matching(
@@ -74,6 +81,7 @@ pub(super) fn read_row<T: TableAccess + ?Sized>(
         lookup.column,
         &keys,
         context,
+        budget,
         None,
         None,
         None,
@@ -89,6 +97,7 @@ fn read_matching<E>(
     column: usize,
     keys: &[(usize, ValueRef<'_>)],
     context: &Context<'_>,
+    budget: &mut Budget,
     filter: Option<&crate::bound_expression::BoundPredicate>,
     selection: Option<&SourceSelection>,
     mut handlers: Option<&mut HandlerCounter>,
@@ -97,16 +106,22 @@ fn read_matching<E>(
     // Complete the authored eligibility expression before inspecting match keys.
     let mut eligible = Vec::new();
     if let Some(filter) = filter {
+        budget.work(table.row_count(), 1)?;
         eligible
             .try_reserve_exact(table.row_count())
             .map_err(|_| Box::new(ExecutionError::Allocation))?;
         for source_row in 0..table.row_count() {
-            let truth =
-                crate::dataset::execution::predicates::evaluate(filter, table, source_row, &[])
-                    .map_err(|error| match error.kind {
-                        crate::predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
-                        _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                    })?;
+            let truth = crate::dataset::execution::predicates::evaluate(
+                filter,
+                table,
+                source_row,
+                &[],
+                budget.predicate(),
+            )
+            .map_err(|error| match error.kind {
+                crate::predicate::ErrorKind::Limit(limit) => Box::new(predicate_limit(limit)),
+                _ => Box::new(ExecutionError::Predicate { source_row, error }),
+            })?;
             if truth == crate::predicate::Truth::True {
                 eligible.push(source_row);
             }
@@ -130,7 +145,11 @@ fn read_matching<E>(
     for source_row in rows {
         let mut matches = true;
         for (column, current) in keys {
+            budget.work(1, 1)?;
             let value = cell(table, source, context.assignment, source_row, *column)?;
+            if let ValueRef::Str(text) = value {
+                budget.scalar_text(text.len())?;
+            }
             if crate::value::compare_present_refs(value, *current) != Ok(Ordering::Equal) {
                 matches = false;
                 break;
@@ -140,6 +159,7 @@ fn read_matching<E>(
             count += 1;
             chosen = source_row;
             if selection.is_some() {
+                budget.work(1, 1)?;
                 matching
                     .try_reserve(1)
                     .map_err(|_| Box::new(ExecutionError::Allocation))?;
@@ -157,6 +177,7 @@ fn read_matching<E>(
             context.assignment,
             &matching,
             selection.expect("declared source choice"),
+            budget,
         )?;
         if let Some(counter) = handlers.as_mut() {
             counter
@@ -167,8 +188,9 @@ fn read_matching<E>(
                 .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
         }
     } else if count > 1 {
+        budget.work(1, keys.len())?;
         // Admit diagnostic copies before owning any raw driver text.
-
+        budget.identity_refs(keys.iter().map(|(_, value)| *value))?;
         return Err(Box::new(ExecutionError::MultipleMatches {
             path: context.assignment.path.clone(),
             dataset: donor_name
@@ -185,11 +207,19 @@ fn read_matching<E>(
                     (table.schema().columns()[*column].name.clone(), own(*value))
                 })
                 .collect(),
-            identity: failure_identity(context.candidate, context.plan.keys(), context.row)?,
+            identity: failure_identity(
+                context.candidate,
+                context.plan.keys(),
+                context.row,
+                budget,
+            )?,
         }));
     }
-
+    budget.work(1, 1)?;
     let value = cell(table, source, context.assignment, chosen, column)?;
+    if let ValueRef::Str(text) = value {
+        budget.scalar_text(text.len())?;
+    }
     Ok(own(value))
 }
 
@@ -227,6 +257,7 @@ pub(super) fn read_source<E>(
     filter: Option<&crate::bound_expression::BoundPredicate>,
     selection: Option<&SourceSelection>,
     context: &Context<'_>,
+    budget: &mut Budget,
     handlers: &mut HandlerCounter,
 ) -> Result<Value, Box<ExecutionError<E>>> {
     let keys = lookup
@@ -245,6 +276,7 @@ pub(super) fn read_source<E>(
         lookup.column,
         &keys,
         context,
+        budget,
         filter,
         selection,
         Some(handlers),
@@ -259,13 +291,18 @@ fn select<E>(
     assignment: &Assignment,
     matching: &[usize],
     selection: &SourceSelection,
+    budget: &mut Budget,
 ) -> Result<usize, Box<ExecutionError<E>>> {
     let mut best = matching[0];
     for &row in &matching[1..] {
         let mut order = Ordering::Equal;
         for term in &selection.order_by {
-            let read = |row| -> Result<ValueRef<'_>, Box<ExecutionError<E>>> {
+            budget.work(1, 2)?;
+            let mut read = |row| -> Result<ValueRef<'_>, Box<ExecutionError<E>>> {
                 let value = cell(table, source, assignment, row, term.column)?;
+                if let ValueRef::Str(text) = value {
+                    budget.scalar_text(text.len())?;
+                }
                 Ok(value)
             };
             order = windows::compare(read(row)?, read(best)?, term);
@@ -293,6 +330,7 @@ pub(super) fn read_joined<T: TableAccess + ?Sized>(
     candidate: &Candidate,
     plan: &DatasetPlan,
     row: usize,
+    budget: &mut Budget,
     filter: Option<&crate::bound_expression::BoundPredicate>,
     selection: Option<&SourceSelection>,
     handlers: &mut HandlerCounter,
@@ -300,6 +338,7 @@ pub(super) fn read_joined<T: TableAccess + ?Sized>(
     let mut keys = Vec::new();
     for (index, key) in joined.keys.iter().enumerate() {
         let value = if let Some(records) = &joined.record_keys {
+            budget.work(1, 1)?;
             let source_row = candidate.members[0];
             let value = current.cell(source_row, records[index]).map_err(|error| {
                 Box::new(ExecutionError::Cell {
@@ -308,6 +347,9 @@ pub(super) fn read_joined<T: TableAccess + ?Sized>(
                     error,
                 })
             })?;
+            if let ValueRef::Str(text) = value {
+                budget.scalar_text(text.len())?;
+            }
             value
         } else {
             ValueRef::from(&candidate.values[key.output_column])
@@ -325,6 +367,7 @@ pub(super) fn read_joined<T: TableAccess + ?Sized>(
             plan,
             row,
         },
+        budget,
         filter,
         selection,
         Some(handlers),

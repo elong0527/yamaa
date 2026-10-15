@@ -1,10 +1,10 @@
 //! The four locale-independent ASCII substitutions admitted by text declarations.
-use crate::json::Value as V;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     table::ValueRef,
     value::Value,
 };
+use serde_json::Value as V;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Case {
@@ -13,7 +13,13 @@ pub enum Case {
     Sentence,
     Title,
 }
-/// A closed case declaration owns metadata and preserves an omitted handler.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OutputLimit {
+    pub required: usize,
+}
+
+pub const MAX_DECLARATION_BYTES: usize = 16_777_216;
+/// A closed case declaration owns bounded metadata and preserves an omitted handler.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StringCase {
     source: String,
@@ -30,11 +36,29 @@ pub enum Step {
 pub enum Error {
     #[error("text case diagnostic: {0:?}")]
     Diagnostic(Diagnostic),
+    #[error("text case limit: {0:?}")]
+    Limit(OutputLimit),
 }
 impl StringCase {
-    /// Validate required declaration ownership without executing it.
+    pub(crate) fn metadata_fits(source: &str, path: &str, missing: Option<&str>) -> bool {
+        [Some(source), Some(path), missing]
+            .into_iter()
+            .flatten()
+            .try_fold(0usize, |n, text| n.checked_add(text.len()))
+            .and_then(|n| n.checked_mul(2))
+            .and_then(|n| n.checked_add(512))
+            .is_some_and(|n| n <= MAX_DECLARATION_BYTES)
+    }
+    /// Refuse malformed or oversized owned metadata before future context copies.
     pub fn new(source: String, path: String, mode: Case, missing: Option<Value>) -> Option<Self> {
-        if source.is_empty() || path.is_empty() {
+        let missing_text = match &missing {
+            Some(Value::Str(text)) => Some(text.as_str()),
+            _ => None,
+        };
+        if source.is_empty()
+            || path.is_empty()
+            || !Self::metadata_fits(&source, &path, missing_text)
+        {
             return None;
         }
         Some(Self {
@@ -64,7 +88,10 @@ impl StringCase {
             ],
         )
     }
-    pub fn apply(&self, value: ValueRef<'_>) -> Result<Step, Error> {
+    /// Admit text work/storage before calling; maximum bounds the new output copy.
+    /// The engine owns cumulative work and scalar-text quotas. Recovered literals
+    /// remain borrowed in the declaration until their caller admits and copies them.
+    pub fn apply(&self, value: ValueRef<'_>, maximum: usize) -> Result<Step, Error> {
         match value {
             ValueRef::Missing if self.missing.is_some() => Ok(Step::Recovered),
             ValueRef::Missing => Err(Error::Diagnostic(diagnostic(
@@ -72,7 +99,9 @@ impl StringCase {
                 &self.path,
                 &[("variable", Value::Str(self.source.clone()))],
             ))),
-            ValueRef::Str(text) => Ok(Step::Value(Value::Str(transform(text, self.mode)))),
+            ValueRef::Str(text) => transform(text, self.mode, maximum)
+                .map(|text| Step::Value(Value::Str(text)))
+                .map_err(Error::Limit),
             other => Err(Error::Diagnostic(self.input_diagnostic(match other {
                 ValueRef::Int(_) => "int",
                 ValueRef::Float(_) => "float",
@@ -98,7 +127,13 @@ fn diagnostic(code: C, path: &str, fields: &[(&str, Value)]) -> Diagnostic {
 }
 
 /// ASCII substitution preserves every other scalar and its UTF-8 byte width.
-pub fn transform(input: &str, mode: Case) -> String {
+/// Admission precedes the output allocation, including empty and NUL text.
+pub fn transform(input: &str, mode: Case, maximum: usize) -> Result<String, OutputLimit> {
+    if input.len() > maximum {
+        return Err(OutputLimit {
+            required: input.len(),
+        });
+    }
     let mut output = String::with_capacity(input.len());
     let mut in_word = false;
     for (index, character) in input.chars().enumerate() {
@@ -123,5 +158,5 @@ pub fn transform(input: &str, mode: Case) -> String {
         };
         output.push(substituted);
     }
-    output
+    Ok(output)
 }

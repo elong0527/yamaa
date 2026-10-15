@@ -1,7 +1,6 @@
 //! Complete, bounded producer metadata and sealed whole-graph build transfer.
 //! Graph compilation owns one admitted environment and preserves every local
 //! call's projection into the graph's unique activation selection.
-use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode, Diagnostic},
     producer_admission::{self, Candidate, Declaration},
@@ -11,6 +10,7 @@ use crate::{
     specification::{PrepareError, PreparedSpecification},
     table::TableSchema,
 };
+use serde_json::Value as JsonValue;
 use std::{collections::BTreeMap, vec};
 
 /// The surrounding preparation boundary retains one document per canonical
@@ -22,8 +22,38 @@ pub struct SuppliedNode<'a> {
     pub producers: &'a [Candidate<'a>],
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct Limits {
+    pub nodes: usize,
+    pub edges: usize,
+    pub document_nodes: usize,
+    pub text_bytes: usize,
+    pub slots: usize,
+    pub parameters: usize,
+    pub functions: usize,
+    pub work: usize,
+    pub metadata: producer_admission::Limits,
+}
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            nodes: 64,
+            edges: 1_024,
+            document_nodes: 1_048_576,
+            text_bytes: 16_777_216,
+            slots: 65_536,
+            parameters: 65_536,
+            functions: 1_024,
+            work: 67_108_864,
+            metadata: Default::default(),
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("producer graph limit: {0:?}")]
+    Limit(&'static str),
     #[error("producer graph boundary: node={node:?}, reason={reason:?}")]
     Boundary {
         node: Option<usize>,
@@ -69,7 +99,12 @@ impl Node {
     pub fn sources(&self) -> &[crate::specification::SourceDeclaration] {
         self.compiled.sources()
     }
-
+    pub fn source_interpretation(
+        &self,
+        index: usize,
+    ) -> Option<crate::specification::SourceInterpretation> {
+        self.compiled.source_interpretation(index)
+    }
     pub fn called_functions(&self) -> &[usize] {
         self.compiled.called_functions()
     }
@@ -105,7 +140,35 @@ impl PreparedGraph {
     pub fn environment(&self) -> &ExecutionEnvironment {
         &self.environment
     }
-
+    /// Header/type-only binding over the complete retained graph. This never
+    /// releases a node compilation owner or accepts data or execution ports.
+    pub fn check_source_schemas(
+        &self,
+        schemas: &[Vec<TableSchema>],
+        maximum: usize,
+    ) -> Result<Vec<(usize, crate::diagnostic::Diagnostic)>, MetadataBindingError> {
+        if schemas.len() != self.nodes.len()
+            || schemas
+                .iter()
+                .zip(&self.nodes)
+                .any(|(schemas, node)| schemas.len() != node.compiled.sources().len())
+        {
+            return Err(MetadataBindingError::Identity);
+        }
+        let mut diagnostics = Vec::new();
+        for (index, (schemas, node)) in schemas.iter().zip(&self.nodes).enumerate() {
+            let schemas = schemas.iter().collect::<Vec<_>>();
+            let findings = node
+                .compiled
+                .metadata_source_findings(&schemas, maximum.saturating_sub(diagnostics.len()))
+                .map_err(|error| MetadataBindingError::Binding { node: index, error })?;
+            if findings.len() > maximum.saturating_sub(diagnostics.len()) {
+                return Err(MetadataBindingError::Limit);
+            }
+            diagnostics.extend(findings.into_iter().map(|finding| (index, finding)));
+        }
+        Ok(diagnostics)
+    }
     /// Static findings borrow the complete sealed closure in canonical node
     /// order. No standalone compiled node or execution plan is exposed.
     pub fn check_findings(
@@ -132,19 +195,140 @@ impl PreparedGraph {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum MetadataBindingError {
+    #[error("producer graph identity")]
+    Identity,
+    #[error("producer graph limit")]
+    Limit,
+    #[error("producer graph projection")]
+    Projection,
+    #[error("producer graph binding: node={node:?}, error={error:?}")]
+    Binding {
+        node: usize,
+        error: crate::specification::BindError,
+    },
+}
+
 fn boundary(node: Option<usize>, reason: &'static str) -> Error {
     Error::Boundary { node, reason }
 }
+fn charge(
+    used: &mut usize,
+    amount: usize,
+    maximum: usize,
+    name: &'static str,
+) -> Result<(), Error> {
+    *used = used
+        .checked_add(amount)
+        .filter(|&n| n <= maximum)
+        .ok_or(Error::Limit(name))?;
+    Ok(())
+}
+
 /// Validate the supplied closure before compiling it. The signature has no IO,
 /// runtime, activation or codec port; every returned graph remains metadata only.
 pub fn prepare(
     root_identity: &str,
     supplied: &[SuppliedNode<'_>],
     environment: ExecutionEnvironment,
+    limits: Limits,
 ) -> Result<PreparedGraph, Error> {
-    if supplied.is_empty() {
-        return Err(boundary(None, "empty_graph"));
+    if supplied.is_empty() || supplied.len() > limits.nodes {
+        return Err(Error::Limit("producer_graph_nodes"));
     }
+    let (mut edges, mut document_nodes, mut bytes) = (0usize, 0usize, 0usize);
+    charge(
+        &mut bytes,
+        root_identity.len(),
+        limits.text_bytes,
+        "producer_graph_text_bytes",
+    )?;
+    for node in supplied {
+        charge(
+            &mut bytes,
+            node.identity.len(),
+            limits.text_bytes,
+            "producer_graph_text_bytes",
+        )?;
+        charge(
+            &mut edges,
+            node.producers.len(),
+            limits.edges,
+            "producer_graph_edges",
+        )?;
+        charge(
+            &mut document_nodes,
+            node.document.document().nodes().len(),
+            limits.document_nodes,
+            "producer_graph_document_nodes",
+        )?;
+        for value in node.document.document().nodes() {
+            if let DocumentNode::Text(s) | DocumentNode::Integer(s) = value {
+                charge(
+                    &mut bytes,
+                    s.len(),
+                    limits.text_bytes,
+                    "producer_graph_text_bytes",
+                )?;
+            }
+        }
+        for candidate in node.producers {
+            // Each link retains its own ordered contract. Charge repeated
+            // contract scans/copies even when aliases share the same node.
+            charge(
+                &mut document_nodes,
+                candidate.document.document().nodes().len(),
+                limits.document_nodes,
+                "producer_graph_document_nodes",
+            )?;
+            for value in candidate.document.document().nodes() {
+                if let DocumentNode::Text(s) | DocumentNode::Integer(s) = value {
+                    charge(
+                        &mut bytes,
+                        s.len(),
+                        limits.text_bytes,
+                        "producer_graph_text_bytes",
+                    )?;
+                }
+            }
+            for value in [
+                candidate.dataset,
+                candidate.schema_path,
+                candidate.schema_identity,
+                candidate.producer_identity,
+                candidate.source_identity,
+                candidate.output_identity,
+                candidate.schema_origin.declaring_source,
+                candidate.schema_origin.written,
+                candidate.input_origin.declaring_source,
+                candidate.input_origin.written,
+                candidate.output_origin.declaring_source,
+                candidate.output_origin.written,
+            ] {
+                charge(
+                    &mut bytes,
+                    value.len(),
+                    limits.text_bytes,
+                    "producer_graph_text_bytes",
+                )?;
+            }
+        }
+    }
+    // Bound borrowed identity indexes and traversal before their ownership.
+    // Contract validation and compilation keep their own existing quotas.
+    let keys = supplied
+        .len()
+        .checked_add(edges)
+        .ok_or(Error::Limit("producer_graph_work"))?;
+    let factor = 16 * (usize::BITS as usize - keys.max(1).leading_zeros() as usize + 1);
+    let work = document_nodes
+        .checked_add(bytes)
+        .and_then(|n| n.checked_add(edges))
+        .and_then(|n| n.checked_mul(factor))
+        .filter(|&n| n <= limits.work)
+        .ok_or(Error::Limit("producer_graph_work"))?;
+    let mut used_work = work;
     let mut identities = BTreeMap::new();
     for (index, node) in supplied.iter().enumerate() {
         if node.identity.is_empty() || identities.insert(node.identity, index).is_some() {
@@ -190,6 +374,7 @@ pub fn prepare(
                 node.identity,
                 node.document,
                 node.producers,
+                limits.metadata,
                 true,
             )
             .map_err(|error| Error::Admission { node: index, error })?
@@ -271,6 +456,10 @@ pub fn prepare(
     }
     let mut nodes = Vec::with_capacity(supplied.len());
     let mut selected = Vec::new();
+    let mut slots = 0usize;
+    let mut parameters = 0usize;
+    let slot_comparisons =
+        16 * (usize::BITS as usize - limits.slots.max(1).leading_zeros() as usize + 1);
     for (index, ((node, producers), dependencies)) in supplied
         .iter()
         .zip(declarations)
@@ -278,15 +467,85 @@ pub fn prepare(
         .enumerate()
     {
         let compiled = if producers.is_empty() {
-            PreparedSpecification::prepare_with_environment(node.document, &environment)
+            PreparedSpecification::prepare_with_environment_limits(
+                node.document,
+                &environment,
+                limits.metadata.compilation,
+                Default::default(),
+            )
         } else {
             PreparedSpecification::prepare_producer_metadata(
                 node.document,
+                limits.metadata.compilation,
                 Some(&environment),
                 &producers,
             )
         }
         .map_err(|error| Error::Compilation { node: index, error })?;
+        charge(
+            &mut slots,
+            compiled.called_functions().len(),
+            limits.slots,
+            "producer_graph_slots",
+        )?;
+        charge(
+            &mut used_work,
+            compiled
+                .called_functions()
+                .len()
+                .checked_mul(slot_comparisons)
+                .ok_or(Error::Limit("producer_graph_work"))?,
+            limits.work,
+            "producer_graph_work",
+        )?;
+        // Compilation has its existing bounded temporary frame. Charge every
+        // retained signature before adding that node to graph ownership;
+        // callable/default text is not present in the specification's tree.
+        if let Some(calls) = compiled.project_calls() {
+            for plan in calls.plans() {
+                for value in [&plan.identity().name, &plan.identity().call] {
+                    charge(
+                        &mut bytes,
+                        value.len(),
+                        limits.text_bytes,
+                        "producer_graph_text_bytes",
+                    )?;
+                }
+                charge(
+                    &mut parameters,
+                    plan.signature().parameters().len(),
+                    limits.parameters,
+                    "producer_graph_parameters",
+                )?;
+                charge(
+                    &mut used_work,
+                    plan.signature().parameters().len(),
+                    limits.work,
+                    "producer_graph_work",
+                )?;
+                for parameter in plan.signature().parameters() {
+                    for value in [&parameter.name, &parameter.host_name] {
+                        charge(
+                            &mut bytes,
+                            value.len(),
+                            limits.text_bytes,
+                            "producer_graph_text_bytes",
+                        )?;
+                    }
+                    if let crate::function_signature::Presence::Optional(
+                        crate::value::Value::Str(value),
+                    ) = &parameter.presence
+                    {
+                        charge(
+                            &mut bytes,
+                            value.len(),
+                            limits.text_bytes,
+                            "producer_graph_text_bytes",
+                        )?;
+                    }
+                }
+            }
+        }
         selected.extend_from_slice(compiled.called_functions());
         nodes.push(Node {
             identity: node.identity.into(),
@@ -298,6 +557,9 @@ pub fn prepare(
     }
     selected.sort_unstable();
     selected.dedup();
+    if selected.len() > limits.functions {
+        return Err(Error::Limit("producer_graph_functions"));
+    }
     for node in &mut nodes {
         node.activation_slots = node
             .compiled

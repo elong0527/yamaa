@@ -1,10 +1,10 @@
 //! Pure column checks over completed values; effect order belongs to the engine.
-use crate::json::Value as JsonValue;
 use crate::{
     dataset::{Check, PlanError},
     diagnostic::{ConditionCode, Definition, Diagnostic},
     value::{compare_present, ColumnType, Value},
 };
+use serde_json::Value as JsonValue;
 use std::vec;
 
 /// Full offending positions retain row order; hosts may bound their displayed keys.
@@ -141,15 +141,17 @@ pub fn column_definition(check: &Check) -> Option<Definition> {
     column_code(check).map(ConditionCode::definition)
 }
 
-/// Missing values pass; each pattern invocation retains its fixed step guard.
+/// Missing values pass; matching shares the caller's cumulative regex budget.
 pub fn matches_offenders<'a>(
     pattern: &crate::regex::Pattern,
     values: impl IntoIterator<Item = &'a Value>,
-) -> Result<Vec<usize>, crate::regex::MatchError> {
+    limits: crate::regex::MatchLimits,
+    budget: &mut crate::predicate::Budget,
+) -> Result<Vec<usize>, crate::predicate::LimitError> {
     let mut offenders = Vec::new();
     for (index, value) in values.into_iter().enumerate() {
         if let Value::Str(text) = value {
-            if pattern.search(text)?.is_none() {
+            if budget.search_pattern(pattern, text, limits)?.is_none() {
                 offenders.push(index);
             }
         }

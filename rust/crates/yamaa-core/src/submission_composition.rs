@@ -23,7 +23,7 @@ impl Finding {
         Self {
             code,
             path: path.into(),
-            context: [("detail".into(), crate::json::Value::String(detail.into()))].into(),
+            context: [("detail".into(), serde_json::Value::String(detail.into()))].into(),
         }
     }
 }
@@ -618,6 +618,7 @@ impl ColumnAdmission<'_> {
                     ct::BindingFinding::ValuesConflict => {
                         ConditionCode::CodelistBindingValuesConflict
                     }
+                    ct::BindingFinding::Limit(_) => ConditionCode::ApplicationRejected,
                 };
                 findings.push(Finding::cause(
                     code,
@@ -816,7 +817,7 @@ fn compose_values(
                 ] {
                     finding
                         .context
-                        .insert(key.into(), crate::json::Value::String(value.into()));
+                        .insert(key.into(), serde_json::Value::String(value.into()));
                 }
                 if finding.code == ConditionCode::SubmissionValueOriginRefuted {
                     let origin = effective
@@ -839,7 +840,7 @@ fn compose_values(
                     ] {
                         finding
                             .context
-                            .insert(key.into(), crate::json::Value::String(value.into()));
+                            .insert(key.into(), serde_json::Value::String(value.into()));
                     }
                 }
             }
@@ -865,6 +866,106 @@ pub fn compose(
     installed: &str,
     created: &str,
 ) -> Result<Study, Vec<Finding>> {
+    // Admit cumulative ownership and work before cloning any selected metadata.
+    let mut nodes = 0usize;
+    let mut text_bytes = 0usize;
+    let mut work = 0usize;
+    let mut allowed = inputs.len() <= 1024;
+    for input in inputs {
+        nodes = match nodes.checked_add(input.document.nodes().len()) {
+            Some(n) => n,
+            None => {
+                allowed = false;
+                break;
+            }
+        };
+        let Some(mut input_text) = input
+            .source
+            .len()
+            .checked_add(input.artifact.len())
+            .and_then(|n| n.checked_add(input.href.len()))
+        else {
+            allowed = false;
+            break;
+        };
+        for node in input.document.nodes() {
+            if let N::Text(value) | N::Integer(value) = node {
+                input_text = match input_text.checked_add(value.len()) {
+                    Some(n) => n,
+                    None => {
+                        allowed = false;
+                        break;
+                    }
+                };
+            }
+        }
+        text_bytes = match text_bytes.checked_add(input_text) {
+            Some(n) => n,
+            None => {
+                allowed = false;
+                break;
+            }
+        };
+        // Each selected column can scan the column/key lists and every row's
+        // derivation mapping. Charge those complete scans, including textual
+        // comparisons, rather than unrelated pairs of arena nodes. Constant
+        // passes cover declaration/verification/reference and metadata scans.
+        let output_columns = input
+            .document
+            .field(input.document.root(), "output")
+            .and_then(|output| input.document.field(output, "columns"))
+            .and_then(|columns| match &input.document.nodes()[columns] {
+                N::Sequence(values) => Some(values.len()),
+                _ => None,
+            })
+            .unwrap_or(0);
+        let overrides = input
+            .document
+            .field(input.document.root(), "rows")
+            .and_then(|n| match &input.document.nodes()[n] {
+                N::Sequence(rows) => Some(rows),
+                _ => None,
+            })
+            .into_iter()
+            .flatten()
+            .filter_map(|&r| input.document.field(r, "submission"))
+            .filter_map(|n| match &input.document.nodes()[n] {
+                N::Mapping(fields) => Some(fields.len()),
+                _ => None,
+            })
+            .try_fold(0usize, |sum, count| sum.checked_add(count));
+        work = match input
+            .document
+            .nodes()
+            .len()
+            .checked_mul(32)
+            .and_then(|n| {
+                input_text
+                    .checked_mul(8)
+                    .and_then(|text| n.checked_add(text))
+            })
+            .and_then(|n| {
+                overrides
+                    .and_then(|count| output_columns.checked_add(count))
+                    .and_then(|count| count.checked_add(1))
+                    .and_then(|count| n.checked_mul(count))
+            })
+            .and_then(|n| work.checked_add(n))
+        {
+            Some(n) => n,
+            None => {
+                allowed = false;
+                break;
+            }
+        };
+    }
+    if !allowed || nodes > 524_288 || text_bytes > 16_777_216 || work > 268_435_456 {
+        return Err(std::vec![Finding::cause(
+            crate::diagnostic::ConditionCode::ApplicationRejected,
+            "specs",
+            "composition_admission_limit"
+        )]);
+    }
     let mut findings = Vec::new();
     let family = family_name(section.family);
     let prefix = family.to_string();
@@ -972,7 +1073,7 @@ pub fn compose(
                 &id,
             ));
         }
-        let declarations = match spec::decode(doc, doc.root()) {
+        let declarations = match spec::decode(doc, doc.root(), Default::default()) {
             Ok(value) => value,
             Err(_) => {
                 findings.push(Finding::cause(

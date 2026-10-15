@@ -1,11 +1,14 @@
 //! Ordered decoded-value validation and post-resolution default validation.
 
 use super::{
-    ConstraintError, ConstraintViolation, Document, DocumentKind, DocumentNode as N,
-    SchemaAliasKind, SchemaField, SchemaShape, SchemaStructure, TypeError, TypeExpression,
-    TypeNode,
+    ConstraintBudget, ConstraintError, ConstraintViolation, Document, DocumentKind,
+    DocumentNode as N, SchemaAliasKind, SchemaField, SchemaShape, SchemaStructure, TypeError,
+    TypeExpression, TypeLimits, TypeNode,
 };
-use crate::diagnostic::{ConditionCode, Definition};
+use crate::{
+    diagnostic::{ConditionCode, Definition},
+    regex::MatchLimits,
+};
 use std::vec;
 
 /// Large context values remain references until core admits the complete projection.
@@ -47,6 +50,31 @@ pub struct DefaultDiagnostics {
     pub diagnostics: Vec<SchemaDiagnostic>,
 }
 
+/// Logical policies are independent of authored schema constraints.
+#[derive(Clone, Copy, Debug)]
+pub struct ValidationLimits {
+    pub work: usize,
+    pub diagnostics: usize,
+    pub diagnostic_text_bytes: usize,
+    pub depth: usize,
+    pub regex: MatchLimits,
+}
+impl Default for ValidationLimits {
+    /// Cap recursive alias/type traversal even when the decoded value itself is shallow.
+    fn default() -> Self {
+        Self {
+            // Normalization revalidates shorthand and expanded columns in the
+            // same request scope. Scale with the 16-fold width increase so a
+            // 1,024-column specification can reach compiler admission.
+            work: 64 * 1024 * 1024,
+            diagnostics: 65_536,
+            diagnostic_text_bytes: 8_388_608,
+            depth: 128,
+            regex: MatchLimits::default(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ValidationError {
     #[error("schema validation type: {0:?}")]
@@ -55,32 +83,124 @@ pub enum ValidationError {
     Constraint(ConstraintError),
     #[error("schema validation depth: limit={limit:?}")]
     Depth { limit: usize },
+    #[error("schema validation diagnostics: limit={limit:?}")]
+    Diagnostics { limit: usize },
+    #[error("schema validation diagnostic text: limit={limit:?}")]
+    DiagnosticText { limit: usize },
     #[error("schema validation invalid descriptor")]
     InvalidDescriptor,
 }
 
-pub(super) fn diagnostic(
-    path: &str,
-    code: ConditionCode,
-    context: Vec<(&'static str, SchemaContext)>,
-) -> SchemaDiagnostic {
-    SchemaDiagnostic {
-        path: if path.is_empty() {
-            "$".into()
-        } else {
-            path.into()
-        },
-        code,
-        context,
-    }
+/// Reuse a request scope across defaults, documents and normalization selection checks.
+pub struct ValidationBudget {
+    limits: ValidationLimits,
+    constraints: ConstraintBudget,
+    diagnostics: usize,
+    text: usize,
 }
-
-pub(super) fn depth(depth: usize) -> Result<(), ValidationError> {
-    let limit = crate::limits::Limits::SEMANTIC_DEPTH;
-    if depth > limit {
-        Err(ValidationError::Depth { limit })
-    } else {
+impl ValidationBudget {
+    /// A new attempt owns fresh accounting; individual branches cannot reset it.
+    pub fn new(limits: ValidationLimits) -> Self {
+        Self {
+            limits,
+            constraints: ConstraintBudget::new(limits.work, limits.regex),
+            diagnostics: 0,
+            text: 0,
+        }
+    }
+    /// Expose charged work without allowing callers to refund failed union attempts.
+    pub fn work_used(&self) -> usize {
+        self.constraints.used().work
+    }
+    pub(super) fn application_limits(
+        &mut self,
+        work: usize,
+        diagnostics: usize,
+        text: usize,
+        regex: MatchLimits,
+    ) {
+        self.limits.work = work;
+        self.limits.diagnostics = diagnostics;
+        self.limits.diagnostic_text_bytes = text;
+        self.constraints.application_limits(work, regex);
+    }
+    /// Every attempted diagnostic consumes its allocation quota, even if a later union wins.
+    pub fn diagnostics_used(&self) -> usize {
+        self.diagnostics
+    }
+    pub(super) fn work(&mut self, amount: usize) -> Result<(), ValidationError> {
+        self.constraints
+            .charge(amount)
+            .map_err(ValidationError::Constraint)
+    }
+    pub(super) fn text(&mut self, amount: usize) -> Result<(), ValidationError> {
+        self.text = self
+            .text
+            .checked_add(amount)
+            .filter(|n| *n <= self.limits.diagnostic_text_bytes)
+            .ok_or(ValidationError::DiagnosticText {
+                limit: self.limits.diagnostic_text_bytes,
+            })?;
         Ok(())
+    }
+    /// Reserve an owned pass-specific finding under the same request quota.
+    pub(super) fn reserve_diagnostic(&mut self, bytes: usize) -> Result<(), ValidationError> {
+        self.diagnostics = self
+            .diagnostics
+            .checked_add(1)
+            .filter(|n| *n <= self.limits.diagnostics)
+            .ok_or(ValidationError::Diagnostics {
+                limit: self.limits.diagnostics,
+            })?;
+        self.text(bytes)
+    }
+    /// Charge and construct one portable finding for shared schema passes.
+    pub(super) fn diagnostic(
+        &mut self,
+        path: &str,
+        code: ConditionCode,
+        context: Vec<(&'static str, SchemaContext)>,
+    ) -> Result<SchemaDiagnostic, ValidationError> {
+        self.reserve_diagnostic(0)?;
+        let size = context
+            .iter()
+            .try_fold(path.len(), |total, (key, value)| {
+                total.checked_add(key.len()).and_then(|n| {
+                    n.checked_add(match value {
+                        SchemaContext::Text(s) => s.len(),
+                        // Reserve the largest portable kind name for typed contexts.
+                        SchemaContext::ValueKind(_) | SchemaContext::LayerKind(_) => 8,
+                        _ => 0,
+                    })
+                })
+            })
+            .ok_or(ValidationError::DiagnosticText {
+                limit: self.limits.diagnostic_text_bytes,
+            })?;
+        self.text = self
+            .text
+            .checked_add(size)
+            .filter(|n| *n <= self.limits.diagnostic_text_bytes)
+            .ok_or(ValidationError::DiagnosticText {
+                limit: self.limits.diagnostic_text_bytes,
+            })?;
+        Ok(SchemaDiagnostic {
+            path: if path.is_empty() {
+                "$".into()
+            } else {
+                path.into()
+            },
+            code,
+            context,
+        })
+    }
+    pub(super) fn depth(&self, depth: usize) -> Result<(), ValidationError> {
+        let limit = self.limits.depth.min(128);
+        if depth > limit {
+            Err(ValidationError::Depth { limit })
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -92,10 +212,13 @@ pub(super) fn matches_member(
     value: usize,
     fragment: bool,
     active: &[(usize, usize)],
+    budget: &mut ValidationBudget,
 ) -> Result<bool, ValidationError> {
+    budget.work(active.len())?;
     Ok(Run {
         schema,
         input,
+        budget,
         active: active.to_vec(),
         resolved_output: false,
     }
@@ -198,16 +321,18 @@ impl ConstraintOwner {
     }
 }
 
-struct Run<'a> {
+struct Run<'a, 'b> {
     schema: &'a SchemaStructure,
     input: &'a Document,
+    budget: &'b mut ValidationBudget,
     active: Vec<(usize, usize)>,
     resolved_output: bool,
 }
 
-impl Run<'_> {
+impl Run<'_, '_> {
     fn step(&mut self, site: Site<'_>) -> Result<(), ValidationError> {
-        depth(site.depth)
+        self.budget.depth(site.depth)?;
+        self.budget.work(1)
     }
     fn text(value: impl Into<String>) -> SchemaContext {
         SchemaContext::Text(value.into())
@@ -217,8 +342,8 @@ impl Run<'_> {
         site: Site<'_>,
         code: ConditionCode,
         context: Vec<(&'static str, SchemaContext)>,
-    ) -> SchemaDiagnostic {
-        diagnostic(site.path, code, context)
+    ) -> Result<SchemaDiagnostic, ValidationError> {
+        self.budget.diagnostic(site.path, code, context)
     }
 
     fn invalid(
@@ -236,18 +361,24 @@ impl Run<'_> {
                     SchemaContext::ValueKind(self.input.nodes()[site.value].kind()),
                 ),
             ],
-        )])
+        )?])
     }
     fn field(&mut self, value: usize, name: &str) -> Result<Option<usize>, ValidationError> {
+        self.budget.work(match &self.input.nodes()[value] {
+            N::Mapping(items) => items.len().saturating_mul(name.len().saturating_add(1)),
+            _ => 1,
+        })?;
         Ok(self.input.field(value, name))
     }
     fn key(&mut self, node: usize) -> Result<(String, bool), ValidationError> {
         Ok((
-            super::path_render::label(self.input, node)?,
+            super::path_render::label(self.input, node, self.budget)?,
             matches!(self.input.nodes()[node], N::Integer(_) | N::Boolean(_)),
         ))
     }
     fn joined(&mut self, path: &str, member: &str, index: bool) -> Result<String, ValidationError> {
+        self.budget
+            .work(path.len().saturating_add(member.len()).saturating_add(2))?;
         Ok(if index {
             format!("{path}[{member}]")
         } else if path.is_empty() {
@@ -264,7 +395,11 @@ impl Run<'_> {
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         let descriptor_ref = &self.schema.descriptors()[descriptor].descriptor;
         let violations = descriptor_ref
-            .check_constraints(&self.input.nodes()[site.value])
+            .check_constraints(
+                &self.input.nodes()[site.value],
+                self.budget.limits.regex,
+                &mut self.budget.constraints,
+            )
             .map_err(ValidationError::Constraint)?;
         let mut result = Vec::new();
         for violation in violations {
@@ -284,7 +419,7 @@ impl Run<'_> {
                     vec![("size", SchemaContext::DescriptorSize(descriptor))]
                 }
             };
-            result.push(self.diagnostic(site, owner.code(violation), context));
+            result.push(self.diagnostic(site, owner.code(violation), context)?);
         }
         Ok(result)
     }
@@ -313,6 +448,7 @@ impl Run<'_> {
         };
         let mut diagnostics = Vec::new();
         for field in fields {
+            self.budget.work(1)?;
             let path = self.joined(site.path, &field.name, false)?;
             match self.field(site.value, &field.name)? {
                 Some(value) => {
@@ -334,12 +470,18 @@ impl Run<'_> {
                             ("field", Self::text(&field.name)),
                             ("class", Self::text(name)),
                         ],
-                    ))
+                    )?)
                 }
                 None => {}
             }
         }
         for &(key, _) in items {
+            let name_bytes = match &self.input.nodes()[key] {
+                N::Text(name) => name.len(),
+                _ => 0,
+            };
+            self.budget
+                .work(fields.len().saturating_mul(name_bytes.saturating_add(1)))?;
             let known = matches!(&self.input.nodes()[key],N::Text(name) if fields.iter().any(|f|f.name==*name));
             if !known {
                 let (key, index) = self.key(key)?;
@@ -348,7 +490,7 @@ impl Run<'_> {
                     site.child(site.value, &path),
                     ConditionCode::SchemaUnknownField,
                     vec![("field", Self::text(&key)), ("class", Self::text(name))],
-                ));
+                )?);
             }
         }
         Ok(diagnostics)
@@ -474,11 +616,17 @@ impl Run<'_> {
                                 ("registry", Self::text(&registry.name)),
                                 ("count", SchemaContext::Count(items.len())),
                             ],
-                        )]);
+                        )?]);
                     }
                     let (key, payload) = items[0];
                     let (operation, index) = self.key(key)?;
                     let path = self.joined(site.path, &operation, index)?;
+                    self.budget.work(
+                        registry
+                            .entries
+                            .len()
+                            .saturating_mul(operation.len().saturating_add(1)),
+                    )?;
                     let entry = if matches!(self.input.nodes()[key], N::Text(_)) {
                         registry.entries.iter().find(|e| e.name == operation)
                     } else {
@@ -492,7 +640,7 @@ impl Run<'_> {
                                 ("registry", Self::text(&registry.name)),
                                 ("operation", Self::text(&operation)),
                             ],
-                        )]);
+                        )?]);
                     };
                     match &entry.shape {
                         SchemaShape::Class(fields) => {
@@ -510,7 +658,7 @@ impl Run<'_> {
                         && !diagnostics.is_empty()
                         && !matches!(self.input.nodes()[site.value], N::Text(_) | N::Mapping(_))
                     {
-                        return Ok(vec![self.diagnostic(site,ConditionCode::SchemaBareDerivationScalar,vec![("actual",SchemaContext::ValueKind(self.input.nodes()[site.value].kind())),("hint",Self::text("a bare derivation must be a string column reference such as ADSL.AGE; write a fixed value as {literal: ...}"))])]);
+                        return Ok(vec![self.diagnostic(site,ConditionCode::SchemaBareDerivationScalar,vec![("actual",SchemaContext::ValueKind(self.input.nodes()[site.value].kind())),("hint",Self::text("a bare derivation must be a string column reference such as ADSL.AGE; write a fixed value as {literal: ...}"))])?]);
                     }
                     if !diagnostics.is_empty() {
                         let mut matching = false;
@@ -541,6 +689,7 @@ impl Run<'_> {
                     }
                     if name == "project_path" {
                         if let N::Text(written) = &self.input.nodes()[site.value] {
+                            self.budget.work(written.len().saturating_mul(3))?;
                             if let Some(failure) = crate::resource::written_path_failure(written) {
                                 let mut path = site.path.to_string();
                                 let mut context =
@@ -556,7 +705,7 @@ impl Run<'_> {
                                     site.child(site.value, &path),
                                     failure.code(),
                                     context,
-                                )]);
+                                )?]);
                             }
                         }
                     }
@@ -651,11 +800,17 @@ impl SchemaStructure {
     pub fn parse_query_types(
         &self,
         types: &[String],
+        budget: &mut ValidationBudget,
     ) -> Result<Vec<TypeExpression>, ValidationError> {
+        budget.work(types.len())?;
         let mut result = Vec::new();
         for text in types {
-            let parsed = TypeExpression::parse(text).map_err(ValidationError::Type)?;
+            budget.work(text.len().saturating_add(1))?;
+            let parsed = TypeExpression::parse(text, TypeLimits::default())
+                .map_err(ValidationError::Type)?;
+            budget.work(parsed.nodes().len())?;
             for name in parsed.names() {
+                budget.work(name.len())?;
                 if !matches!(
                     name,
                     "str" | "int" | "float" | "bool" | "null" | "list" | "dict"
@@ -677,6 +832,7 @@ impl SchemaStructure {
         value: usize,
         path: &str,
         fragment: bool,
+        budget: &mut ValidationBudget,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         if value >= input.nodes().len() {
             return Err(ValidationError::InvalidDescriptor);
@@ -684,6 +840,7 @@ impl SchemaStructure {
         Run {
             schema: self,
             input,
+            budget,
             active: Vec::new(),
             resolved_output: false,
         }
@@ -701,25 +858,29 @@ impl SchemaStructure {
     pub fn validate_document(
         &self,
         input: &Document,
+        budget: &mut ValidationBudget,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
-        self.validate_document_mode(input, false)
+        self.validate_document_mode(input, budget, false)
     }
     /// Final inheritance validation assigns the resolved-output rule to an output
     /// to which no contribution survived. Other required fields retain schema ownership.
     pub fn validate_resolved_document(
         &self,
         input: &Document,
+        budget: &mut ValidationBudget,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
-        self.validate_document_mode(input, true)
+        self.validate_document_mode(input, budget, true)
     }
     fn validate_document_mode(
         &self,
         input: &Document,
+        budget: &mut ValidationBudget,
         resolved_output: bool,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         let mut run = Run {
             schema: self,
             input,
+            budget,
             active: Vec::new(),
             resolved_output,
         };
@@ -754,7 +915,7 @@ impl SchemaStructure {
                 },
                 ConditionCode::SchemaVersionMismatch,
                 context,
-            )]);
+            )?]);
         }
         run.class(
             &self.root_class().fields,
@@ -770,6 +931,7 @@ impl SchemaStructure {
         value: usize,
         path: &str,
         fragment: bool,
+        budget: &mut ValidationBudget,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         if descriptor >= self.descriptors().len() || value >= input.nodes().len() {
             return Err(ValidationError::InvalidDescriptor);
@@ -777,6 +939,7 @@ impl SchemaStructure {
         Run {
             schema: self,
             input,
+            budget,
             active: Vec::new(),
             resolved_output: false,
         }
@@ -791,12 +954,15 @@ impl SchemaStructure {
         )
     }
     /// Retain successful default admission for reuse by this immutable schema snapshot.
-    /// Failed findings never establish the prepared state.
-    pub fn prepare_defaults(&mut self) -> Result<Vec<DefaultDiagnostics>, ValidationError> {
+    /// Failed findings or exhausted budgets never establish the prepared state.
+    pub fn prepare_defaults(
+        &mut self,
+        budget: &mut ValidationBudget,
+    ) -> Result<Vec<DefaultDiagnostics>, ValidationError> {
         if self.defaults_validated {
             return Ok(Vec::new());
         }
-        let findings = self.validate_defaults()?;
+        let findings = self.validate_defaults(budget)?;
         if findings.is_empty() {
             self.defaults_validated = true;
         }
@@ -804,14 +970,18 @@ impl SchemaStructure {
     }
     /// Validate defaults only after structural and named-reference admission succeeded.
     /// InputValue diagnostic contexts refer to the descriptor's origin module document.
-    pub fn validate_defaults(&self) -> Result<Vec<DefaultDiagnostics>, ValidationError> {
+    pub fn validate_defaults(
+        &self,
+        budget: &mut ValidationBudget,
+    ) -> Result<Vec<DefaultDiagnostics>, ValidationError> {
         let mut result = Vec::new();
         for (descriptor, located) in self.descriptors().iter().enumerate() {
+            budget.work(1)?;
             if let Some(value) = located.descriptor.default_node() {
                 let input = &self.modules()[located.module].document;
                 let path = format!("{}.default", located.path);
                 let diagnostics =
-                    self.validate_descriptor(descriptor, input, value, &path, false)?;
+                    self.validate_descriptor(descriptor, input, value, &path, false, budget)?;
                 if !diagnostics.is_empty() {
                     result.push(DefaultDiagnostics {
                         descriptor,

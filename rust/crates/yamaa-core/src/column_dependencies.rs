@@ -1,9 +1,9 @@
 //! Column-phase dependency rules over already-bound declaration indices.
 use std::vec;
 
-use crate::dependency_analysis;
+use crate::dependency_analysis::{self, Limits};
 
-/// Invalid compiler metadata, separate from language diagnostics.
+/// Invalid compiler metadata or resource policy, separate from language diagnostics.
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum Error {
     #[error("column dependencies graph: {0:?}")]
@@ -77,12 +77,14 @@ pub fn analyze(
     dependencies: &[Option<Vec<usize>>],
     keys: &[usize],
     has_rows: bool,
+    limits: Limits,
 ) -> Result<Analysis, Error> {
-    dependency_analysis::validate_indices(
+    dependency_analysis::admit(
         dependencies.len(),
         dependencies
             .iter()
             .map(|edges| edges.as_deref().unwrap_or(&[])),
+        limits,
     )
     .map_err(Error::Graph)?;
     let mut is_key = vec![false; dependencies.len()];

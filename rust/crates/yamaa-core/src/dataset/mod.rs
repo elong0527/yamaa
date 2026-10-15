@@ -11,15 +11,17 @@ use std::{collections::BTreeMap, vec};
 mod compiler;
 pub use compiler::{
     compile_dataset, validate_window_form, AssignmentDeclaration, CompiledDataset,
-    DatasetCompileError, DatasetCompiler, DatasetDeclaration, DatasetMetadata,
-    ExpressionDeclaration, TemplateDeclaration, WindowDeclarationKind,
+    DatasetCompileError, DatasetCompileLimits, DatasetCompiler, DatasetDeclaration,
+    DatasetMetadata, ExpressionDeclaration, TemplateDeclaration, WindowDeclarationKind,
 };
 mod conversion;
 pub use conversion::ConversionHandler;
 mod count;
-pub use count::{CountBoundError, RowCount, RowCountBound};
+pub use count::{CountBoundError, RowCount, RowCountBound, MAX_COUNT_BOUND_BYTES};
 mod flags;
-pub use flags::{flag_condition_diagnostic, Flag, FlagBinding, FlagError, FlagRead};
+pub use flags::{
+    flag_condition_diagnostic, Flag, FlagBinding, FlagError, FlagRead, MAX_FLAG_METADATA_BYTES,
+};
 mod functions;
 pub use functions::{BoundFunction, BoundProjectFunction, FunctionArgument, FunctionInput};
 mod aggregate;
@@ -37,7 +39,9 @@ pub use intermediates::{
 pub(crate) mod relation_predicates;
 pub use relation_predicates::{CurrentField, CurrentRead, RelationPredicate};
 mod relation_shape;
-pub use relation_shape::{RelationField, RelationFieldOrigin, RelationShape, RelationShapeError};
+pub use relation_shape::{
+    RelationField, RelationFieldOrigin, RelationShape, RelationShapeError, RelationShapeLimits,
+};
 mod relation_range;
 pub use relation_range::{
     RelationRange, RelationRangeBound, RelationRangeError, RelationRangeFailure, RelationRangeTypes,
@@ -57,7 +61,7 @@ mod imputation;
 pub(crate) use imputation::date_policy_findings;
 pub use imputation::{
     date_policy, DatePolicyError, DayDeclaration, DayRule, Imputation, ImputationKind,
-    ImputationStep, PartialDate, TimeRule,
+    ImputationStep, PartialDate, TimeRule, MAX_IMPUTATION_POLICY_BYTES,
 };
 mod duration;
 mod temporal;
@@ -417,6 +421,18 @@ impl Check {
             _ => return None,
         })
     }
+
+    pub fn row_count_work(&self) -> usize {
+        match self {
+            Self::WideRowCount { min, max } => min
+                .iter()
+                .chain(max)
+                .map(|bound| bound.decimal().len())
+                .sum::<usize>()
+                .max(1),
+            _ => 1,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -502,7 +518,6 @@ pub struct DatasetPlan {
     secondary: Vec<SecondarySource>,
     intermediates: Vec<Intermediate>,
     output: TableSchema,
-    output_kinds: Vec<Option<crate::value::ColumnType>>,
     templates: Vec<RowTemplate>,
     row_contexts: Vec<Option<AggregateRowContext>>,
     columns: Vec<Assignment>,
@@ -527,6 +542,11 @@ fn validate_columns(columns: &[usize], width: usize) -> Result<(), PlanError> {
     }
     Ok(())
 }
+
+/// Enforce grouped source scope and already-completed output dependencies.
+#[allow(clippy::too_many_arguments)]
+const EXPRESSION_DEPTH_LIMIT: usize = 64;
+const EXPRESSION_NODE_LIMIT: usize = 65_536;
 
 #[allow(clippy::too_many_arguments)]
 fn validate_function_intermediates(
@@ -563,6 +583,7 @@ fn validate_assignment(
     mode: &RowMode,
     record_derivation: bool,
 ) -> Result<(), PlanError> {
+    let mut remaining = EXPRESSION_NODE_LIMIT;
     validate_assignment_at(
         assignment,
         available,
@@ -573,6 +594,7 @@ fn validate_assignment(
         output,
         mode,
         0,
+        &mut remaining,
         record_derivation,
         false,
     )
@@ -588,6 +610,7 @@ fn validate_record_assignment(
     intermediates: &[Intermediate],
     output: &TableSchema,
 ) -> Result<(), PlanError> {
+    let mut remaining = EXPRESSION_NODE_LIMIT;
     validate_assignment_at(
         assignment,
         available,
@@ -598,6 +621,7 @@ fn validate_record_assignment(
         output,
         &RowMode::Records,
         0,
+        &mut remaining,
         false,
         false,
     )
@@ -734,12 +758,14 @@ fn validate_assignment_at(
     output: &TableSchema,
     mode: &RowMode,
     depth: usize,
+    remaining: &mut usize,
     record_derivation: bool,
     destination_free: bool,
 ) -> Result<(), PlanError> {
-    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+    if depth > EXPRESSION_DEPTH_LIMIT || *remaining == 0 {
         return Err(PlanError::InvalidColumns);
     }
+    *remaining -= 1;
     if assignment.path.is_empty() {
         return Err(PlanError::EmptyPath);
     }
@@ -775,7 +801,7 @@ fn validate_assignment_at(
             }
         }
         Expression::Case(branches) => {
-            if branches.is_empty() || branches[0].when.is_none() {
+            if branches.is_empty() || branches.len() > 1024 || branches[0].when.is_none() {
                 return Err(PlanError::InvalidColumns);
             }
             for (index, branch) in branches.iter().enumerate() {
@@ -818,6 +844,7 @@ fn validate_assignment_at(
                     output,
                     mode,
                     depth + 1,
+                    remaining,
                     record_derivation,
                     destination_free,
                 )?;
@@ -880,6 +907,7 @@ fn validate_assignment_at(
                 output,
                 mode,
                 depth + 1,
+                remaining,
                 record_derivation,
                 destination_free,
             )?;
@@ -908,6 +936,7 @@ fn validate_assignment_at(
                     output,
                     mode,
                     depth + 1,
+                    remaining,
                     record_derivation,
                     destination_free,
                 )?;
@@ -944,6 +973,7 @@ fn validate_assignment_at(
                 output,
                 mode,
                 depth + 1,
+                remaining,
                 record_derivation,
                 destination_free,
             )?;
@@ -966,6 +996,7 @@ fn validate_assignment_at(
                     output,
                     mode,
                     depth + 1,
+                    remaining,
                     record_derivation,
                     destination_free,
                 )?;
@@ -995,6 +1026,7 @@ fn validate_assignment_at(
                     output,
                     mode,
                     depth + 1,
+                    remaining,
                     record_derivation,
                     destination_free,
                 )?;
@@ -1024,6 +1056,7 @@ fn validate_assignment_at(
                     output,
                     mode,
                     depth + 1,
+                    remaining,
                     record_derivation,
                     destination_free,
                 )?;
@@ -1073,6 +1106,7 @@ fn validate_assignment_at(
                         output,
                         mode,
                         depth + 1,
+                        remaining,
                         record_derivation,
                         destination_free,
                     )?;
@@ -1107,6 +1141,7 @@ fn validate_assignment_at(
                 output,
                 mode,
                 depth + 1,
+                remaining,
                 record_derivation,
                 destination_free,
             )?;
@@ -1550,7 +1585,6 @@ impl DatasetPlan {
             keys,
             verifications,
             true,
-            None,
         )
     }
     /// Donor evaluation has no publication key gate; all expression and metadata
@@ -1561,7 +1595,6 @@ impl DatasetPlan {
         output: TableSchema,
         templates: Vec<RowTemplate>,
         columns: Vec<Assignment>,
-        output_kinds: Vec<Option<crate::value::ColumnType>>,
     ) -> Result<Self, PlanError> {
         Self::new_implementation(
             sources,
@@ -1572,7 +1605,6 @@ impl DatasetPlan {
             Vec::new(),
             Vec::new(),
             false,
-            Some(output_kinds),
         )
     }
     #[allow(clippy::too_many_arguments)]
@@ -1585,47 +1617,12 @@ impl DatasetPlan {
         keys: Vec<usize>,
         verifications: Vec<Verification>,
         publication: bool,
-        output_kinds: Option<Vec<Option<crate::value::ColumnType>>>,
     ) -> Result<Self, PlanError> {
         let SourceSchemas {
             primary: source,
             secondary,
         } = sources;
-        let output_kinds = output_kinds.unwrap_or_else(|| {
-            output
-                .columns()
-                .iter()
-                .map(|column| Some(column.kind))
-                .collect()
-        });
-        if output_kinds.len() != output.columns().len()
-            || output_kinds
-                .iter()
-                .zip(output.columns())
-                .any(|(kind, column)| kind.is_some_and(|kind| kind != column.kind))
-        {
-            return Err(PlanError::InvalidColumns);
-        }
-        if !publication && !source.columns().starts_with(output.columns()) {
-            return Err(PlanError::InvalidSource);
-        }
-        let primary_kind = |column: usize| {
-            if !publication && column < output_kinds.len() {
-                output_kinds[column]
-            } else {
-                source.columns().get(column).map(|column| column.kind)
-            }
-        };
-        let output_kind = |column: usize| output_kinds.get(column).copied().flatten();
-        intermediates::validate(
-            &intermediates,
-            &secondary,
-            &source,
-            &primary_kind,
-            &output,
-            &output_kind,
-            &templates,
-        )?;
+        intermediates::validate(&intermediates, &secondary, &source, &output, &templates)?;
         for (index, relation) in secondary.iter().enumerate() {
             if relation.name.is_empty()
                 || secondary[..index]
@@ -1912,7 +1909,6 @@ impl DatasetPlan {
             secondary,
             intermediates,
             output,
-            output_kinds,
             templates,
             columns,
             keys,
@@ -2120,10 +2116,6 @@ impl DatasetPlan {
     pub fn output(&self) -> &TableSchema {
         &self.output
     }
-    /// Physical layout slots do not promise a type for untyped donor results.
-    pub(crate) fn output_kind(&self, column: usize) -> Option<crate::value::ColumnType> {
-        self.output_kinds.get(column).copied().flatten()
-    }
     /// Borrow admitted templates without exposing mutation.
     pub fn templates(&self) -> &[RowTemplate] {
         &self.templates
@@ -2153,14 +2145,14 @@ impl DatasetPlan {
 }
 
 #[cfg(test)]
-mod admission_boundaries;
-#[cfg(test)]
 mod donor_admission_tests;
 
+mod metadata_types;
 mod verification_predicates;
 
 mod execution;
 pub use execution::{
-    CheckRecord, CodelistObservation, Dataset, Execution, ExecutionAttempt, ExecutionError,
-    ExecutionEvent, ExecutionPhase, Resource, RowCountObservation, RowIdentity,
+    CheckRecord, CodelistObservation, Dataset, Execution, ExecutionAttempt, ExecutionBudget,
+    ExecutionError, ExecutionEvent, ExecutionPhase, Limits, Resource, RowCountObservation,
+    RowIdentity,
 };

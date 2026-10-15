@@ -6,6 +6,21 @@ use crate::{
 
 pub(crate) mod diagnostics;
 
+#[derive(Clone, Copy, Debug)]
+pub struct Limits {
+    pub declarations: usize,
+    pub fields: usize,
+    pub text_bytes: usize,
+}
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            declarations: crate::specification::DEFAULT_MAX_COLUMNS,
+            fields: crate::specification::DEFAULT_MAX_COLUMNS,
+            text_bytes: 262_144,
+        }
+    }
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Cause {
     Empty,
@@ -25,7 +40,7 @@ pub enum Cause {
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     #[error("producer contract limit: {0:?}")]
-    Limit(crate::limits::LimitExceeded),
+    Limit(&'static str),
     #[error("producer contract invalid: {0:?}")]
     Invalid(Vec<Cause>),
     #[error("producer contract boundary")]
@@ -90,14 +105,27 @@ fn kind(d: &Document, node: usize) -> Result<ColumnType, Error> {
     }
 }
 /// Validate producer output fields and labels before any activation or study port.
-/// Each output schema has the fixed column boundary.
-pub fn prepare(spec: &SpecificationDocument) -> Result<Contract, Error> {
+/// All owned strings and findings follow aggregate quota admission.
+pub fn prepare(spec: &SpecificationDocument, limits: Limits) -> Result<Contract, Error> {
     let d = spec.document();
     let declarations = sequence(d, field(d, d.root(), "columns")?)?;
     let output = field(d, d.root(), "output")?;
     let selected = sequence(d, field(d, output, "columns")?)?;
-    crate::limits::Limits::columns(declarations.len()).map_err(Error::Limit)?;
-    crate::limits::Limits::columns(selected.len()).map_err(Error::Limit)?;
+    if declarations.len() > limits.declarations {
+        return Err(Error::Limit("producer_declarations"));
+    }
+    if selected.len() > limits.fields {
+        return Err(Error::Limit("producer_fields"));
+    }
+    let mut bytes = 0usize;
+    for node in d.nodes() {
+        if let N::Text(s) | N::Integer(s) = node {
+            bytes = bytes
+                .checked_add(s.len())
+                .filter(|&n| n <= limits.text_bytes)
+                .ok_or(Error::Limit("producer_text_bytes"))?;
+        }
+    }
     let path = text(d, field(d, output, "path")?)?;
     let mut fields = Vec::new();
     let mut findings = Vec::new();

@@ -170,15 +170,15 @@ pub fn compare_present_refs(
 }
 
 /// Encode a runtime scalar once at the owned JSON boundary. Arbitrary diagnostic
-/// integers use crate::json::Number directly rather than passing through f64.
-impl From<&Value> for crate::json::Value {
+/// integers use serde_json::Number directly rather than passing through f64.
+impl From<&Value> for serde_json::Value {
     fn from(value: &Value) -> Self {
         match value {
             Value::Missing => Self::Null,
             Value::Str(value) => Self::String(value.clone()),
             Value::Int(value) => Self::from(*value),
             Value::Float(value) => Self::Number(
-                crate::json::Number::from_f64(value.get()).expect("finite runtime float"),
+                serde_json::Number::from_f64(value.get()).expect("finite runtime float"),
             ),
             Value::Bool(value) => Self::Bool(*value),
             Value::Date(value) => Self::String(value.to_string()),
@@ -186,7 +186,7 @@ impl From<&Value> for crate::json::Value {
         }
     }
 }
-impl From<Value> for crate::json::Value {
+impl From<Value> for serde_json::Value {
     fn from(value: Value) -> Self {
         match value {
             Value::Str(value) => Self::String(value),

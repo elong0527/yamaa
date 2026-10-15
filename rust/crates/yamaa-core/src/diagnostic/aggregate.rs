@@ -1,11 +1,13 @@
 //! Aggregate causes retain the authored expression and enclosing row grain.
-use super::{ConditionCode as C, Diagnostic, ProjectionError};
-use crate::json::Value as V;
+use super::{
+    ConditionCode as C, Diagnostic, ProjectionBudget, ProjectionError, MAX_PROJECTION_BYTES,
+};
 use crate::{
     dataset::AggregatePhase,
     key_relation::ComparableType,
     value::{ColumnType, Value, ValueType},
 };
+use serde_json::Value as V;
 
 #[derive(Clone, Copy, Debug)]
 pub enum AggregateFinding<'a> {
@@ -132,54 +134,80 @@ fn comparable_name(kind: ComparableType) -> &'static str {
 }
 impl AggregateFinding<'_> {
     pub fn diagnostic(self) -> Result<Diagnostic, ProjectionError> {
+        self.diagnostic_with_limit(MAX_PROJECTION_BYTES)
+    }
+    pub fn diagnostic_with_limit(self, maximum: usize) -> Result<Diagnostic, ProjectionError> {
+        let mut budget = ProjectionBudget::new(maximum)?;
         let key = match self {
-            Self::MissingKeys { path, dataset, key } => Some((
-                path,
-                C::AggregateMissingKeys,
-                [
-                    ("dataset".into(), text(dataset)),
-                    (
-                        "key".into(),
-                        match key {
-                            AggregateEmptyKey::Mapping => V::Object(Default::default()),
-                            AggregateEmptyKey::List => V::Array(vec![]),
-                        },
-                    ),
-                ]
-                .into(),
-            )),
-            Self::KeyReference { path, identifier } => Some((
-                path,
-                C::AggregateKeyReference,
-                [("identifier".into(), text(identifier))].into(),
-            )),
+            Self::MissingKeys { path, dataset, key } => {
+                budget.text(path)?;
+                budget.field("dataset", dataset)?;
+                budget.text("key")?;
+                budget.charge(2)?;
+                Some((
+                    path,
+                    C::AggregateMissingKeys,
+                    [
+                        ("dataset".into(), text(dataset)),
+                        (
+                            "key".into(),
+                            match key {
+                                AggregateEmptyKey::Mapping => V::Object(Default::default()),
+                                AggregateEmptyKey::List => V::Array(vec![]),
+                            },
+                        ),
+                    ]
+                    .into(),
+                ))
+            }
+            Self::KeyReference { path, identifier } => {
+                budget.text(path)?;
+                budget.field("identifier", identifier)?;
+                Some((
+                    path,
+                    C::AggregateKeyReference,
+                    [("identifier".into(), text(identifier))].into(),
+                ))
+            }
             Self::KeyType {
                 path,
                 source,
                 expected,
                 actual,
                 inferred,
-            } => Some((
-                path,
-                if inferred {
-                    C::ImplicitSourceKeyType
-                } else {
-                    C::AggregateKeyType
-                },
-                [
-                    ("source".into(), text(source)),
-                    ("expected".into(), text(comparable_name(expected))),
-                    ("actual".into(), text(comparable_name(actual.into()))),
-                ]
-                .into(),
-            )),
+            } => {
+                budget.text(path)?;
+                budget.field("source", source)?;
+                budget.field("expected", comparable_name(expected))?;
+                budget.field("actual", comparable_name(actual.into()))?;
+                Some((
+                    path,
+                    if inferred {
+                        C::ImplicitSourceKeyType
+                    } else {
+                        C::AggregateKeyType
+                    },
+                    [
+                        ("source".into(), text(source)),
+                        ("expected".into(), text(comparable_name(expected))),
+                        ("actual".into(), text(comparable_name(actual.into()))),
+                    ]
+                    .into(),
+                ))
+            }
             Self::NoApplicableKeys {
                 path,
                 dataset,
                 keys,
             } => {
                 let hint = "declare an explicit `intermediate:` with `source`/`key` pairs";
-
+                budget.text(path)?;
+                budget.field("dataset", dataset)?;
+                budget.field("hint", hint)?;
+                budget.text("keys")?;
+                for key in keys {
+                    budget.text(key)?;
+                }
                 Some((
                     path,
                     C::ImplicitSourceNoApplicableKeys,
@@ -212,28 +240,57 @@ impl AggregateFinding<'_> {
                 count,
                 row,
                 group,
-                phase,
+                ..
             } => {
                 if count < 2
                     || (row.is_none() && !group.is_empty())
-                    || (matches!(phase, AggregatePhase::RowConstruction) && row.is_none())
+                    || (matches!(
+                        self,
+                        Self::MultipleRecords {
+                            phase: AggregatePhase::RowConstruction,
+                            ..
+                        }
+                    ) && row.is_none())
                 {
                     return Err(ProjectionError::InvalidContext);
                 }
-                if row.is_some() {
-                    for (index, (name, _)) in group.iter().enumerate() {
+                budget.field("reducer", "ONLY")?;
+                budget.text("record_count")?;
+                budget.charge(32)?;
+                if let Some(row) = row {
+                    budget.field("row", row)?;
+                    budget.text("group")?;
+                    for (index, (name, value)) in group.iter().enumerate() {
                         if group[..index].iter().any(|(prior, _)| prior == name) {
                             return Err(ProjectionError::InvalidContext);
+                        }
+                        budget.text(name)?;
+                        match value {
+                            Value::Str(value) => budget.text(value)?,
+                            _ => budget.charge(128)?,
                         }
                     }
                 }
                 (path, expression)
             }
+            Self::IdentifierNotGrouped {
+                path,
+                expression,
+                dataset,
+                identifier,
+            } => {
+                budget.text("dataset")?;
+                if let Some(dataset) = dataset {
+                    budget.text(dataset)?;
+                }
+                budget.field("identifier", identifier)?;
+                (path, expression)
+            }
             Self::IncomparableSources {
                 path,
                 expression,
+                source,
                 types,
-                ..
             } => {
                 if !types.iter().enumerate().any(|(index, left)| {
                     types[index + 1..].iter().any(|right| {
@@ -244,17 +301,32 @@ impl AggregateFinding<'_> {
                 }) {
                     return Err(ProjectionError::InvalidContext);
                 }
+                budget.field("sources", source)?;
+                budget.text("types")?;
+                for kind in types {
+                    budget.text(type_name(*kind))?;
+                }
                 (path, expression)
             }
-            Self::IdentifierNotGrouped {
-                path, expression, ..
+            Self::InvalidContext {
+                path,
+                expression,
+                cause,
+            } => {
+                budget.field("reason", cause.reason())?;
+                (path, expression)
             }
-            | Self::InvalidContext {
-                path, expression, ..
+            Self::MixedRelations {
+                path,
+                expression,
+                relations,
+            } => {
+                budget.text("relations")?;
+                for relation in relations {
+                    budget.text(relation)?;
+                }
+                (path, expression)
             }
-            | Self::MixedRelations {
-                path, expression, ..
-            } => (path, expression),
             Self::MissingKeys { .. }
             | Self::KeyReference { .. }
             | Self::KeyType { .. }
@@ -262,6 +334,8 @@ impl AggregateFinding<'_> {
                 unreachable!("key causes projected above")
             }
         };
+        budget.text(path)?;
+        budget.field("expr", expression)?;
         let mut context: super::Context = [("expr".into(), text(expression))].into();
         let code = match self {
             Self::MultipleRecords {

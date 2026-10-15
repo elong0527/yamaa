@@ -29,7 +29,7 @@ impl RelationRangeTypes {
         intermediate: Option<&str>,
     ) -> crate::diagnostic::Diagnostic {
         use crate::diagnostic::{ConditionCode, Diagnostic};
-        use crate::json::Value as JsonValue;
+        use serde_json::Value as JsonValue;
         let name = |kind| match kind {
             ValueType::Str => "str",
             ValueType::Int => "int",
@@ -61,6 +61,8 @@ impl RelationRangeTypes {
 pub enum RelationRangeError {
     #[error("dataset relation range invalid metadata")]
     InvalidMetadata,
+    #[error("dataset relation range limit")]
+    Limit,
     #[error("dataset relation range no bounds")]
     NoBounds,
     #[error("dataset relation range incomparable: {0:?}")]
@@ -97,6 +99,7 @@ impl RelationRange {
         value_kind: Option<ValueType>,
         lower: Option<RelationRangeBound>,
         upper: Option<RelationRangeBound>,
+        metadata_bytes: usize,
     ) -> Result<Self, RelationRangeError> {
         if lower.is_none() && upper.is_none() {
             return Err(RelationRangeError::NoBounds);
@@ -111,6 +114,20 @@ impl RelationRange {
         {
             return Err(RelationRangeError::InvalidMetadata);
         }
+        let initial = path
+            .capacity()
+            .checked_add(current.identifier.capacity())
+            .and_then(|n| n.checked_add(std::mem::size_of::<Self>()))
+            .ok_or(RelationRangeError::Limit)?;
+        let bytes = [&lower, &upper]
+            .iter()
+            .filter_map(|bound| bound.as_ref())
+            .try_fold(initial, |n, bound| {
+                n.checked_add(bound.identifier.capacity())
+            })
+            .filter(|&n| n <= metadata_bytes)
+            .ok_or(RelationRangeError::Limit)?;
+        let _ = bytes;
         if let Some(value) = value_kind {
             if [&lower, &upper]
                 .iter()
@@ -161,17 +178,13 @@ impl RelationRange {
         Ok(())
     }
     /// Stored-only plans retain their original schema rather than copying donor metadata.
-    pub(super) fn validate_source(
-        &self,
-        schema: &TableSchema,
-        kind: &impl Fn(usize) -> Option<ValueType>,
-    ) -> Result<(), RelationRangeError> {
+    pub(super) fn validate_source(&self, schema: &TableSchema) -> Result<(), RelationRangeError> {
         for bound in [&self.lower, &self.upper]
             .iter()
             .filter_map(|bound| bound.as_ref())
         {
             if schema.columns().get(bound.column).is_none_or(|field| {
-                field.name != bound.identifier || kind(bound.column) != bound.kind
+                field.name != bound.identifier || Some(field.kind.into()) != bound.kind
             }) {
                 return Err(RelationRangeError::InvalidMetadata);
             }

@@ -1,6 +1,6 @@
-//! Python-style diagnostic labels with an explicit Unicode table.
+//! Bounded Python-style diagnostic labels with an explicit Unicode table.
 
-use super::{Document, DocumentNode as N, ValidationError};
+use super::{Document, DocumentNode as N, ValidationBudget, ValidationError};
 
 /// Pins label representation independently of a host's Unicode release.
 pub const DIAGNOSTIC_UNICODE_VERSION: &str = "18.0.0";
@@ -17,13 +17,17 @@ pub fn scalar_diagnostic_label(node: &N) -> Option<String> {
     })
 }
 
-/// Quote text in the shared diagnostic vocabulary with the shared Unicode contract.
-pub fn quoted_diagnostic_text(text: &str) -> String {
+/// Quote text in the shared diagnostic vocabulary under caller-owned limits.
+pub fn quoted_diagnostic_text(
+    text: &str,
+    budget: &mut ValidationBudget,
+) -> Result<String, ValidationError> {
     let mut renderer = Renderer {
         output: String::new(),
+        budget,
     };
-    renderer.quoted(text);
-    renderer.output
+    renderer.quoted(text)?;
+    Ok(renderer.output)
 }
 
 fn printable(c: char) -> bool {
@@ -41,28 +45,33 @@ fn printable(c: char) -> bool {
         .is_ok()
 }
 
-struct Renderer {
+struct Renderer<'a> {
     output: String,
+    budget: &'a mut ValidationBudget,
 }
-impl Renderer {
-    fn append(&mut self, text: &str) {
+impl Renderer<'_> {
+    fn append(&mut self, text: &str) -> Result<(), ValidationError> {
+        self.budget.work(text.len().saturating_add(1))?;
+        self.budget.text(text.len())?;
         self.output.push_str(text);
+        Ok(())
     }
-    fn quoted(&mut self, text: &str) {
+    fn quoted(&mut self, text: &str) -> Result<(), ValidationError> {
+        self.budget.work(text.len().saturating_mul(2))?;
         let quote = if text.contains('\'') && !text.contains('"') {
             '"'
         } else {
             '\''
         };
-        self.append(if quote == '\'' { "'" } else { "\"" });
+        self.append(if quote == '\'' { "'" } else { "\"" })?;
         for c in text.chars() {
             match c {
-                '\\' => self.append("\\\\"),
-                '\n' => self.append("\\n"),
-                '\r' => self.append("\\r"),
-                '\t' => self.append("\\t"),
-                c if c == quote => self.append(if quote == '\'' { "\\'" } else { "\\\"" }),
-                c if printable(c) => self.append(c.encode_utf8(&mut [0; 4])),
+                '\\' => self.append("\\\\")?,
+                '\n' => self.append("\\n")?,
+                '\r' => self.append("\\r")?,
+                '\t' => self.append("\\t")?,
+                c if c == quote => self.append(if quote == '\'' { "\\'" } else { "\\\"" })?,
+                c if printable(c) => self.append(c.encode_utf8(&mut [0; 4]))?,
                 c => {
                     let value = c as u32;
                     let escaped = if value <= 0xff {
@@ -72,7 +81,7 @@ impl Renderer {
                     } else {
                         format!("\\U{value:08x}")
                     };
-                    self.append(&escaped);
+                    self.append(&escaped)?;
                 }
             }
         }
@@ -85,7 +94,8 @@ impl Renderer {
         nested: bool,
         depth: usize,
     ) -> Result<(), ValidationError> {
-        super::validation::depth(depth)?;
+        self.budget.depth(depth)?;
+        self.budget.work(1)?;
         match &input.nodes()[node] {
             N::Text(text) if nested => self.quoted(text),
             N::Text(text) | N::Integer(text) => self.append(text),
@@ -93,35 +103,39 @@ impl Renderer {
             N::Null => self.append("None"),
             N::Float(value) => self.append(&float_key(*value)),
             N::Sequence(items) => {
-                self.append("[");
+                self.append("[")?;
                 for (index, &value) in items.iter().enumerate() {
                     if index != 0 {
-                        self.append(", ");
+                        self.append(", ")?;
                     }
                     self.value(input, value, true, depth + 1)?;
                 }
                 self.append("]")
             }
             N::Mapping(items) => {
-                self.append("{");
+                self.append("{")?;
                 for (index, &(key, value)) in items.iter().enumerate() {
                     if index != 0 {
-                        self.append(", ");
+                        self.append(", ")?;
                     }
                     self.value(input, key, true, depth + 1)?;
-                    self.append(": ");
+                    self.append(": ")?;
                     self.value(input, value, true, depth + 1)?;
                 }
                 self.append("}")
             }
         }
-        Ok(())
     }
 }
 
-pub(super) fn label(input: &Document, node: usize) -> Result<String, ValidationError> {
+pub(super) fn label(
+    input: &Document,
+    node: usize,
+    budget: &mut ValidationBudget,
+) -> Result<String, ValidationError> {
     let mut renderer = Renderer {
         output: String::new(),
+        budget,
     };
     renderer.value(input, node, false, 0)?;
     Ok(renderer.output)

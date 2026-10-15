@@ -25,6 +25,7 @@ pub(super) fn read_options<T: TableAccess + ?Sized>(
     row: usize,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    state.budget.work(1, joined.keys.len())?;
     let (source, table) = match joined.source {
         AggregateSource::Primary => (usize::MAX, state.primary),
         AggregateSource::Secondary(index) => (index, state.secondary[index]),
@@ -38,6 +39,7 @@ pub(super) fn read_options<T: TableAccess + ?Sized>(
         candidate,
         plan,
         row,
+        state.budget,
         filter,
         selection,
         state.handlers,

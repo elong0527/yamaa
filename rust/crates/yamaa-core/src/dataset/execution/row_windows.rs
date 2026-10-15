@@ -8,6 +8,7 @@ pub(super) fn complete<T: TableAccess + ?Sized>(
     candidates: &mut [Candidate],
     plan: &DatasetPlan,
     offset: usize,
+    limits: Limits,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<(), Box<ExecutionError<T::Error>>> {
     for assignment in template
@@ -16,17 +17,25 @@ pub(super) fn complete<T: TableAccess + ?Sized>(
         .filter(|assignment| deferred[assignment.column])
     {
         let mut nested_windows = windows::Cache::default();
-        let mut run =
-            windows::Evaluation::new(assignment, candidates, plan, table, state.handlers)?;
+        let mut run = windows::Evaluation::new(
+            assignment,
+            candidates,
+            plan,
+            table,
+            limits,
+            state.budget,
+            state.handlers,
+        )?;
         for row in 0..candidates.len() {
             let value = if let Some(run) = &mut run {
-                let value = run.value(row, candidates, table, assignment, plan)?;
+                let value = run.value(row, candidates, table, state.budget, assignment, plan)?;
                 finish(
                     value,
                     assignment,
                     &candidates[row],
                     plan,
                     offset + row,
+                    state.budget,
                     state.handlers,
                 )?
             } else {
@@ -36,11 +45,13 @@ pub(super) fn complete<T: TableAccess + ?Sized>(
                     &candidates[row],
                     plan,
                     offset + row,
+                    limits,
                     &mut EvaluationState {
                         primary: state.primary,
                         functions: state.functions,
                         secondary: state.secondary,
                         self_rows: state.self_rows,
+                        budget: state.budget,
                         handlers: state.handlers,
                         intermediates: state.intermediates,
                         output_rows: candidates,

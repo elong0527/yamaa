@@ -62,9 +62,15 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     candidate: &Candidate,
     plan: &DatasetPlan,
     row: usize,
+    limits: Limits,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
-    let source = evaluate_raw(table, &operands[0], candidate, plan, row, state)?;
+    state.budget.work(1, 1)?;
+    let source = evaluate_raw(table, &operands[0], candidate, plan, row, limits, state)?;
+    if let Value::Str(text) = &source {
+        state.budget.work(1, text.len())?;
+        state.budget.scalar_text(text.len())?;
+    }
     let result = operation.source_value(ValueRef::from(&source));
     let result = match result {
         Ok(step) => match step {
@@ -72,6 +78,9 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
             ImputationStep::Recovered { handler } => {
                 let path = std::format!("{}.{}", operation.path(), handler);
                 let value = operation.handler(handler).expect("declared recovery");
+                if let Value::Str(text) = value {
+                    state.budget.scalar_text(text.len())?;
+                }
                 state
                     .handlers
                     .record(
@@ -86,7 +95,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
                 Ok(value.clone())
             }
             ImputationStep::Bound(completed) => {
-                let bound = evaluate_raw(table, &operands[1], candidate, plan, row, state)?;
+                let bound = evaluate_raw(table, &operands[1], candidate, plan, row, limits, state)?;
                 operation.apply_bound(completed, ValueRef::from(&bound))
             }
         },
@@ -94,6 +103,6 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     };
     result.map_err(|diagnostic| {
         let retain_keys = diagnostic.definition().phase == "impute";
-        retained_diagnostic(diagnostic, retain_keys, candidate, plan, row)
+        retained_diagnostic(diagnostic, retain_keys, candidate, plan, row, state.budget)
     })
 }

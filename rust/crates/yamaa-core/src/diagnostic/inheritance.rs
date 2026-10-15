@@ -1,6 +1,8 @@
 //! Pure inheritance traversal causes with original declaring-file provenance.
-use super::{ConditionCode as C, Diagnostic, ProjectionError};
-use crate::json::Value as JsonValue;
+use super::{
+    ConditionCode as C, Diagnostic, ProjectionBudget, ProjectionError, MAX_PROJECTION_BYTES,
+};
+use serde_json::Value as JsonValue;
 
 /// Borrow facts retained by the traversal. This grants no source authority and
 /// leaves opaque host errors, schema-arena findings and policy failures separate.
@@ -33,7 +35,69 @@ fn text(value: &str) -> JsonValue {
 impl InheritanceFinding<'_> {
     /// Preserve the existing phase, authored path and source/entry/parent
     /// context. A contradictory closed-loop carrier has no semantic projection.
-    pub fn diagnostic(self) -> Result<Diagnostic, ProjectionError> {
+    pub fn diagnostic(self) -> Option<Diagnostic> {
+        self.diagnostic_with_limit(MAX_PROJECTION_BYTES).ok()
+    }
+
+    /// Admit the complete retained facts under a JSON expansion ceiling before
+    /// any path/context copy. Failure returns no fitting diagnostic prefix.
+    pub fn diagnostic_with_limit(self, maximum: usize) -> Result<Diagnostic, ProjectionError> {
+        let mut budget = ProjectionBudget::new(maximum)?;
+        match &self {
+            Self::InvalidParent { declaring, path } => {
+                budget.text("parents")?;
+                budget.field("reason", "remote_reference")?;
+                budget.field("source", declaring)?;
+                budget.field("parent", path)?;
+            }
+            Self::ParentUnavailable { declaring, path } => {
+                budget.text("parents")?;
+                budget.field("path", path)?;
+                budget.field("source", declaring)?;
+            }
+            Self::Cycle {
+                path,
+                returns_to_entry,
+            } => {
+                if path.len() < 2 || path.first() != path.last() {
+                    return Err(ProjectionError::InvalidContext);
+                }
+                budget.text("parents")?;
+                budget.field(
+                    "reason",
+                    if *returns_to_entry {
+                        "parent_chain_returns_to_entry"
+                    } else {
+                        "parent_chain_returns_to_active_layer"
+                    },
+                )?;
+                budget.field("source", &path[path.len() - 2])?;
+                budget.text("cycle")?;
+                budget.charge(path.len().checked_add(2).ok_or(ProjectionError::Limit)?)?;
+                for name in *path {
+                    budget.text(name)?;
+                }
+            }
+            Self::Version {
+                source,
+                entry,
+                expected,
+                actual,
+                is_entry,
+            } => {
+                budget.field("source", source)?;
+                budget.field("entry", entry)?;
+                if *is_entry {
+                    budget.text("schema_version")?;
+                    budget.field("expected", expected)?;
+                    budget.field("actual", actual)?;
+                } else {
+                    budget.text("parents")?;
+                    budget.field("entry_version", expected)?;
+                    budget.field("parent_version", actual)?;
+                }
+            }
+        }
         let mut context = super::Context::new();
         let (code, path) = match self {
             Self::InvalidParent { declaring, path } => {

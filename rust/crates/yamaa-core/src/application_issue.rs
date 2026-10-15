@@ -1,6 +1,6 @@
 //! Application admission failures are distinct from normative language findings.
 use crate::diagnostic::{ConditionCode, Diagnostic};
-use crate::json::Value as JsonValue;
+use serde_json::Value as JsonValue;
 use std::vec;
 
 /// Format classified installed-package disagreement. Packaging tools supply the
@@ -57,6 +57,20 @@ pub fn resource_rejected(
     spec_paths: Vec<String>,
 ) -> Diagnostic {
     let mut finding = rejected(stage, code);
+    // This is a completion boundary, not an inventory of findings or a claim
+    // that no earlier check ran. `build` may include report projection after
+    // successful execution, so only narrower classified causes narrow it.
+    let incomplete_from = match (stage, code) {
+        ("capture" | "prepare" | "check" | "inheritance", _) => "specification",
+        ("ingest" | "bind", _) | ("build", "source_boundary") => "source_binding",
+        ("execute", _) | ("build", "execution_boundary") => "data",
+        ("output" | "report", _) => "output",
+        _ => stage,
+    };
+    finding.context.insert(
+        "incomplete_checks_from".into(),
+        JsonValue::String(incomplete_from.into()),
+    );
     finding.spec_paths = spec_paths;
     finding
         .context
