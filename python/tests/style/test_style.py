@@ -450,6 +450,21 @@ def test_literal_block_form_reports_any_value_shape(tmp_path: Path) -> None:
         ] == [("literal_form", "columns[1].derivation")]
 
 
+def test_literal_flow_form_on_following_line_is_not_reported(
+    tmp_path: Path,
+) -> None:
+    # A flow-form mapping remains the canonical spelling even when it is
+    # written on the line below `derivation:`; only block form is reported.
+    path = _spec(
+        tmp_path,
+        CANONICAL.replace(
+            "    derivation: DM.USUBJID\n",
+            "    derivation:\n      {literal: [1, 2]}\n",
+        ),
+    )
+    assert _names(path) == []
+
+
 def test_sources_outside_the_shorthand_positions_keep_the_mapping(
     tmp_path: Path,
 ) -> None:

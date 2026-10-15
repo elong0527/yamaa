@@ -286,6 +286,9 @@ def _literal_form(document: Document) -> Iterator[Departure]:
                 isinstance(key, yaml.ScalarNode)
                 and isinstance(value, yaml.MappingNode)
                 and len(value.value) == 1
+                # A flow-form mapping stays flow form even when it is
+                # written on the line below its parent key.
+                and not value.flow_style
             ):
                 continue
             literal_key, _literal_value = value.value[0]
