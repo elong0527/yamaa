@@ -529,6 +529,29 @@ impl Arena {
             bounds.greatest_min < CAP && bounds.finite_max.is_none_or(|max| max < CAP)
         });
         if !safe {
+            let unassigned = vec![None; self.choices.len()];
+            let free = dependencies(&self.entries, &unassigned, id);
+            if !free.is_empty() {
+                // A complete root cofactor can witness reachable overflow
+                // without finding every dense alternative's exact extrema.
+                // Assign only free choices: quantified body choices must still
+                // undergo their full interval union, including unbounded arms.
+                for last in [false, true] {
+                    let mut evaluator = Evaluator::new(self, true);
+                    for &choice in &free {
+                        let arm = if last {
+                            evaluator.arena.choices[choice] - 1
+                        } else {
+                            0
+                        };
+                        evaluator.set(choice, Some(arm));
+                    }
+                    if let Some(value) = evaluator.run(id) {
+                        value.checked(byte)?;
+                    }
+                }
+            }
+            // Safe or absent witnesses prove nothing about other assignments.
             if let Some(value) = self.query(id, true) {
                 value.checked(byte)?;
             }
@@ -1344,6 +1367,38 @@ mod tests {
                 feature: "pattern width exceeds addressable range",
             })
         );
+    }
+
+    #[test]
+    fn safe_first_and_last_cofactors_still_check_the_middle_arm() {
+        let mut arena = Arena::new();
+        let maximum = literal(&mut arena, usize::MAX);
+        let one = literal(&mut arena, 1);
+        let choice = arena.new_choice(3);
+        let selected = arena.choice(choice, vec![0, maximum, 0]);
+        let sum = arena.add(selected, one);
+        assert_eq!(
+            arena.check(sum, 17),
+            Err(CompileError::Unsupported {
+                byte: 17,
+                feature: "pattern width exceeds addressable range",
+            })
+        );
+    }
+
+    #[test]
+    fn absent_root_cofactors_do_not_report_child_overflow() {
+        let mut arena = Arena::new();
+        let maximum = literal(&mut arena, usize::MAX);
+        let one = literal(&mut arena, 1);
+        let bottom = arena.positive(0);
+        let choice = arena.new_choice(2);
+        let selected = arena.choice(choice, vec![maximum, 0]);
+        let guard = arena.choice(choice, vec![bottom, 0]);
+        let sum = arena.add(selected, one);
+        let root = arena.add(sum, guard);
+        arena.check(root, 17).unwrap();
+        assert_eq!(arena.query(root, true).unwrap().span.min, 1);
     }
 
     #[test]
