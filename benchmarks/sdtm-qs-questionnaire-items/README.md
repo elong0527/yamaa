@@ -1,5 +1,8 @@
 # Questionnaire Items
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-qs-questionnaire-items.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build `QSSEQ`, `QSTESTCD`, `QSTEST`, `QSCAT`,
 `QSORRES`, `QSSTRESC`, `QSSTRESN`, `QSSTAT`, `QSREASND`,
 `QSBLFL`, `QSDRVFL`, `VISITNUM`, and `QSDTC` for the nine
@@ -62,3 +65,5 @@ FDA convention for items the instrument instructions skip; the
 refused questionnaire keeps one record instead of nine, with
 `QSTESTCD = 'QSALL'`, `QSSTAT = 'NOT DONE'`, and
 `QSREASND = 'SUBJECT REFUSED'`, per issue #374's design.
+
+**Standard:** SDTM | **Domain:** QS

@@ -1,5 +1,8 @@
 # Standardize Vital-Signs Units
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-vs-units.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** turn every collected vital-signs measurement into one
 record that keeps the collected test, result, and unit, and adds
 the result in the test's standard unit (as a number and as text)
@@ -43,3 +46,5 @@ collection order: all heights first, then all weights, then all
 temperatures, each in collection order. A record whose result was
 never collected carries `VSSTAT` `NOT DONE`, no original unit,
 and no standardized value.
+
+**Standard:** SDTM | **Domain:** VS

@@ -1,5 +1,8 @@
 # Related Records
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-relrec-links.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** emit one related-records row per relationship
 participation, carrying `IDVARVAL`, `RELTYPE`, and `RELID`.
 
@@ -36,3 +39,5 @@ record carrying link 3) emits one RELREC row, and the
 group (STUDYID=CATH, USUBJID=CATH-UCSD-0001, RELID=3) holds 1 row,
 below the minimum of 2. That is why the passing input above
 carries no such row.
+
+**Standard:** SDTM | **Domain:** RELREC

@@ -1,5 +1,8 @@
 # Timepoint Response
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-rs-timepoint-response.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build one RS record per subject and scheduled tumor
 assessment holding the visit order (`AVISITN`), the assessment date
 (`ADT`), a per-subject record number (`RSSEQ`), the response test
@@ -40,3 +43,5 @@ lesions chosen at study entry are listed in `IG.TUTARGET` and
 its response is `NE` whenever it was done. An assessment with some but
 not all chosen target lesions measured is still done, and its response
 is `NE` rather than a guess from partial data.
+
+**Standard:** SDTM | **Domain:** RS

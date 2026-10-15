@@ -1,5 +1,8 @@
 # Last Observation Before Exposure
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-lb-last-observation-before-exposure.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** flag the last laboratory record collected on or before
 first exposure for each subject, test, and specimen: `LBLOBXFL`.
 
@@ -32,3 +35,5 @@ falls after exposure. Dates compare at day precision, so a record
 collected on the day of first exposure still qualifies; of two results
 collected on the same date, the one with the higher sequence number
 (`LBSEQ`) is flagged.
+
+**Standard:** SDTM | **Domain:** LB

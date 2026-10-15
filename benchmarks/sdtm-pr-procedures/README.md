@@ -1,5 +1,8 @@
 # Prior Procedures from Surgery and Radiotherapy Forms
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-pr-procedures.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build one Procedures (PR) record from each of two
 prior-procedure forms carried in a single ODM item extract:
 a prior cancer surgery form and a prior radiotherapy form.
@@ -46,3 +49,5 @@ Provenance: `PRPRESP`/`PROCCUR` follow the SDTMIG
 pre-specified pattern (an asked question with an occurrence
 flag). All subjects, procedures and dates are invented
 fixtures.
+
+**Standard:** SDTM | **Domain:** PR

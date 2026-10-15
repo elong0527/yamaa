@@ -1,5 +1,7 @@
 # Subject elements from DM and an ODM extract
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-se-subject-elements.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build one Subject Elements (SE) record per subject per element
 the subject entered, carrying `SESEQ`, `ETCD`, `ELEMENT`, `TAETORD`,
 `EPOCH`, `SESTDTC`, `SEENDTC`, `SESTDY`, `SEENDY`, and `SEUPDES`.
@@ -47,3 +49,5 @@ earlier follow-up start than the plan described.
 
 Provenance: the trial design, subjects, dates, and dosing dates are invented
 fixtures.
+
+**Standard:** SDTM | **Domain:** SE

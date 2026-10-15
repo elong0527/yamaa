@@ -1,5 +1,7 @@
 # Replicate Readings
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-vs-replicates.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** keep every blood pressure reading taken at a visit and add
 the protocol's visit value beside them: one record per reading with
 its replicate number, plus one record per test and visit holding the
@@ -36,3 +38,5 @@ visit rides in the study event.
 **Note:** a reading that was not taken, whether its record is absent
 or its value is blank, gives no reading record, and the visit mean is
 taken over the readings present.
+
+**Standard:** SDTM | **Domain:** VS

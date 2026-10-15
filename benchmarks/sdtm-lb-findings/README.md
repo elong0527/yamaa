@@ -1,5 +1,8 @@
 # Build One Record per Collected Lab Result
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-lb-findings.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build one record per collected calcium and creatinine
 result with `LBTESTCD`, `LBTEST`, `LBORRES`, `LBORRESU`,
 `LBSTRESN`, `LBSTRESU`, `LBSTAT` and `LBDTC`.
@@ -34,3 +37,5 @@ and one creatinine item, whichever were collected.
 the records are only results actually reported. A `NOT DONE`
 entry does produce a record: the result and units stay
 empty and `LBSTAT` carries `NOT DONE`.
+
+**Standard:** SDTM | **Domain:** LB
