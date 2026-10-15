@@ -1,9 +1,5 @@
 //! REQ-1259's closed static comparison types, without evaluating expressions.
-use crate::{
-    key_relation::ComparableType,
-    reference_binding::{Binding, Catalog},
-    value::ColumnType,
-};
+use crate::{key_relation::ComparableType, reference_binding::Catalog, value::ColumnType};
 
 /// Host-projected scalar representation; no literal bytes or values cross this port.
 #[derive(Clone, Copy, Debug)]
@@ -29,11 +25,7 @@ pub enum Expression<'a> {
 pub fn result_type(catalog: &Catalog, expression: Expression<'_>) -> Option<ComparableType> {
     use ColumnType::{Date, DateTime, Float, Int, Str};
     match expression {
-        Expression::Source(name) => catalog.bind(name).map(|binding| match binding {
-            Binding::Output { column_type, .. } | Binding::Dataset { column_type, .. } => {
-                column_type.into()
-            }
-        }),
+        Expression::Source(name) => catalog.type_of(name).map(Into::into),
         Expression::Literal(kind) => match kind {
             LiteralKind::Str => Some(Str.into()),
             LiteralKind::Int => Some(Int.into()),

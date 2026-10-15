@@ -66,11 +66,7 @@ pub fn validate(
         findings.push(Finding::DriverMismatch);
         return Ok(findings);
     }
-    let Some(Binding::Dataset {
-        column_type: actual,
-        ..
-    }) = bound
-    else {
+    let Some(Binding::Dataset { .. }) = bound else {
         findings.push(Finding::UnknownField);
         return Ok(findings);
     };
@@ -104,7 +100,10 @@ pub fn validate(
             }
         }
     }
-    if let Some(expected) = expected.filter(|expected| *expected != actual) {
+    if let Some((expected, actual)) = expected
+        .zip(catalog.type_of(name))
+        .filter(|(expected, actual)| expected != actual)
+    {
         findings.push(Finding::IncompatibleInputType { expected, actual });
     }
     Ok(findings)

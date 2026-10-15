@@ -222,7 +222,8 @@ fn prepare_driver_kind(
 }
 fn unify(items: impl Iterator<Item = Option<ColumnType>>) -> Option<ColumnType> {
     let mut kind = None;
-    for item in items.flatten() {
+    for item in items {
+        let item = item?;
         kind = match kind {
             None => Some(item),
             Some(previous) if previous == item => Some(item),
@@ -235,6 +236,15 @@ fn unify(items: impl Iterator<Item = Option<ColumnType>>) -> Option<ColumnType> 
         };
     }
     kind
+}
+fn unify_exact(mut items: impl Iterator<Item = Option<ColumnType>>) -> Option<ColumnType> {
+    let kind = items.next()??;
+    for item in items {
+        if item? != kind {
+            return None;
+        }
+    }
+    Some(kind)
 }
 impl Kind {
     fn missing_only(&self) -> bool {
@@ -263,14 +273,12 @@ impl Kind {
             }
             Self::Literal(kind) => *kind,
             Self::Reference(name) => lookup(name),
-            Self::Choice(items) => {
-                let kinds = items
+            Self::Choice(items) => unify_exact(
+                items
                     .iter()
                     .filter(|item| !item.missing_only())
-                    .map(|item| item.infer(lookup))
-                    .collect::<Option<Vec<_>>>()?;
-                unify(kinds.into_iter().map(Some))
-            }
+                    .map(|item| item.infer(lookup)),
+            ),
             Self::Numeric(parsed) => {
                 use crate::numeric_parser::{NumericFunction as F, ParsedKind as K};
                 let mut kinds = Vec::new();
@@ -294,9 +302,32 @@ impl Kind {
                             unify([kinds[*left], kinds[*right]].into_iter())
                         }
                         K::Call {
-                            function: F::Sqrt | F::Exp | F::Ln | F::Power | F::RoundHalfAwayFromZero,
+                            function:
+                                F::Sqrt
+                                | F::Exp
+                                | F::Ln
+                                | F::Power
+                                | F::RoundHalfAwayFromZero
+                                | F::Ceil
+                                | F::Floor
+                                | F::Trunc,
                             ..
                         } => Some(ColumnType::Float),
+                        K::Call {
+                            function: F::NullIf,
+                            arguments,
+                            ..
+                        } => unify_exact(arguments.iter().map(|&index| kinds[index])),
+                        K::Call {
+                            function: F::Greatest | F::Least | F::Coalesce,
+                            arguments,
+                            ..
+                        } => unify_exact(
+                            arguments
+                                .iter()
+                                .filter(|&&index| !matches!(parsed.nodes()[index].kind, K::Null))
+                                .map(|&index| kinds[index]),
+                        ),
                         K::Call { arguments, .. } => {
                             unify(arguments.iter().map(|&index| kinds[index]))
                         }

@@ -54,24 +54,37 @@ pub fn comparable(left: ComparableType, right: ComparableType) -> bool {
 /// Validate every submitted name before semantic early exits; invalid output identity
 /// is explicit so hosts can retain their earlier REQ-0220 declaration diagnostic.
 pub fn infer(catalog: &Catalog, keys: &[&str], fields: &[Field<'_>]) -> Result<Inference, Error> {
+    let fields = fields
+        .iter()
+        .map(|field| (field.name, Some(field.column_type)))
+        .collect::<Vec<_>>();
+    infer_partial(catalog, keys, &fields)
+}
+
+/// Raw donor fields preserve applicability even when no one kind is known.
+pub(crate) fn infer_partial(
+    catalog: &Catalog,
+    keys: &[&str],
+    fields: &[(&str, Option<ColumnType>)],
+) -> Result<Inference, Error> {
     let names = keys
         .iter()
         .copied()
-        .chain(fields.iter().map(|field| field.name));
+        .chain(fields.iter().map(|field| field.0));
     if names.clone().any(str::is_empty) {
         return Err(Error::EmptyName);
     }
     let mut right = BTreeMap::new();
-    for field in fields {
-        if right.insert(field.name, field.column_type).is_some() {
+    for &(name, kind) in fields {
+        if right.insert(name, kind).is_some() {
             return Err(Error::DuplicateField);
         }
     }
     // Identity validity precedes join selection, including when no key is shared.
     let mut output_types = Vec::with_capacity(keys.len());
     for (key, name) in keys.iter().enumerate() {
-        if let Some(kind) = catalog.output_type(name) {
-            output_types.push(kind);
+        if catalog.output_type(name).is_some() {
+            output_types.push(catalog.type_of(name));
         } else {
             return Ok(Inference::UndeclaredOutput { key });
         }
@@ -79,12 +92,14 @@ pub fn infer(catalog: &Catalog, keys: &[&str], fields: &[Field<'_>]) -> Result<I
     let mut selected = Vec::new();
     for (key, (name, expected)) in keys.iter().zip(output_types).enumerate() {
         if let Some(&actual) = right.get(name) {
-            if !comparable(expected.into(), actual.into()) {
-                return Ok(Inference::Incompatible {
-                    key,
-                    expected,
-                    actual,
-                });
+            if let (Some(expected), Some(actual)) = (expected, actual) {
+                if !comparable(expected.into(), actual.into()) {
+                    return Ok(Inference::Incompatible {
+                        key,
+                        expected,
+                        actual,
+                    });
+                }
             }
             selected.push(key);
         }

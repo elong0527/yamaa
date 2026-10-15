@@ -277,6 +277,7 @@ pub(super) fn bind(
                 root_keys,
                 &keys,
                 donor,
+                &|column| item.source_kind(secondary, column),
                 &|column| item.admits_donor_column(column),
                 &item.path,
                 dataset,
@@ -289,17 +290,16 @@ pub(super) fn bind(
         let read_kind = key
             .value
             .read()
-            .and_then(|read| catalog.bind(read.identifier()))
-            .map(|read| match read {
-                reference_binding::Binding::Output { column_type, .. }
-                | reference_binding::Binding::Dataset { column_type, .. } => column_type,
-            });
+            .and_then(|read| catalog.type_of(read.identifier()));
         let field = donor
             .columns()
             .get(key.source_column)
             .ok_or(BindError::Internal)?;
-        if let Some(kind) = key.value.result_type(read_kind) {
-            if !crate::key_relation::comparable(kind, field.kind.into()) {
+        if let (Some(kind), Some(donor_kind)) = (
+            key.value.result_type(read_kind),
+            item.source_kind(secondary, key.source_column),
+        ) {
+            if !crate::key_relation::comparable(kind, donor_kind.into()) {
                 let name = if key.value.is_expression() {
                     format!("key[{}]", field.name)
                 } else {
@@ -312,7 +312,7 @@ pub(super) fn bind(
                     &item.identifier,
                     &name,
                     kind,
-                    field.kind,
+                    donor_kind,
                 )));
             }
         }

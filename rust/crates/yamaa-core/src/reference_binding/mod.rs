@@ -467,7 +467,7 @@ impl Catalog {
         if candidates.iter().any(|&index| index >= self.datasets.len()) {
             return Err(Error::InvalidCandidateDataset);
         }
-        let Some(&(column, actual)) = self.outputs.get(name) else {
+        let Some(&(column, _)) = self.outputs.get(name) else {
             if candidates.is_empty() {
                 return Ok(Some(Diagnostic::UnknownField));
             }
@@ -494,7 +494,8 @@ impl Catalog {
             return Ok(Some(Diagnostic::PhaseBoundary { column }));
         }
         Ok(expected
-            .filter(|&expected| expected != actual)
-            .map(|expected| Diagnostic::IncompatibleInputType { expected, actual }))
+            .zip(self.type_of(name))
+            .filter(|(expected, actual)| expected != actual)
+            .map(|(expected, actual)| Diagnostic::IncompatibleInputType { expected, actual }))
     }
 }

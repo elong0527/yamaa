@@ -225,6 +225,22 @@ pub(super) fn validate(
         let donor = item
             .source_schema(sources)
             .ok_or(PlanError::InvalidIntermediate)?;
+        if let Some(derived) = &item.derivations {
+            if derived.stored_columns > donor.columns().len()
+                || derived.result_kinds.len() != donor.columns().len() - derived.stored_columns
+                || derived
+                    .result_kinds
+                    .iter()
+                    .enumerate()
+                    .any(|(index, kind)| {
+                        kind.is_some_and(|kind| {
+                            kind != donor.columns()[derived.stored_columns + index].kind
+                        })
+                    })
+            {
+                return Err(PlanError::InvalidIntermediate);
+            }
+        }
         if matches!(&item.source,IntermediateSource::SelfRows {columns,..} if columns.is_empty()) {
             return Err(PlanError::InvalidIntermediate);
         }
@@ -237,6 +253,7 @@ pub(super) fn validate(
                 primary,
                 sources,
                 donor,
+                &|column| item.source_kind(sources, column),
                 output,
                 &vec![true; output.columns().len()],
             )?;
@@ -260,26 +277,23 @@ pub(super) fn validate(
                 .validate_source(
                     item.source_schema(sources)
                         .ok_or(PlanError::InvalidIntermediate)?,
+                    &|column| item.source_kind(sources, column).map(Into::into),
                 )
                 .map_err(|_| PlanError::InvalidIntermediate)?;
             range
                 .current()
                 .validate(primary, sources, output, items, index)?;
             let current_kind = match range.current().read {
-                CurrentRead::Record { source: 0, column } => primary.columns()[column].kind,
+                CurrentRead::Record { source: 0, column } => Some(primary.columns()[column].kind),
                 CurrentRead::Record { source, column } => {
-                    sources[source - 1].schema.columns()[column].kind
+                    Some(sources[source - 1].schema.columns()[column].kind)
                 }
-                CurrentRead::Output(column) => output.columns()[column].kind,
+                CurrentRead::Output(column) => Some(output.columns()[column].kind),
                 CurrentRead::Intermediate { index, column } => {
-                    items[index]
-                        .source_schema(sources)
-                        .ok_or(PlanError::InvalidIntermediate)?
-                        .columns()[column]
-                        .kind
+                    items[index].source_kind(sources, column)
                 }
             };
-            if range.value_kind() != Some(current_kind.into()) {
+            if range.value_kind() != current_kind.map(Into::into) {
                 return Err(PlanError::InvalidIntermediate);
             }
             if [range.lower(), range.upper()]
@@ -356,7 +370,15 @@ pub(super) fn validate_read(
     if column >= source.columns().len() || !item.admits_column(column) {
         return Err(PlanError::InvalidIntermediate);
     }
-    match_values::validate(&item.keys, primary, sources, source, output, available)
+    match_values::validate(
+        &item.keys,
+        primary,
+        sources,
+        source,
+        &|column| item.source_kind(sources, column),
+        output,
+        available,
+    )
 }
 
 /// Direct scalar selections use only admitted complete records or completed keys.

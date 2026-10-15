@@ -223,6 +223,7 @@ pub(super) fn validate_declaration(
     primary: &TableSchema,
     secondary: &[SecondarySource],
     donor: &TableSchema,
+    donor_kind: &impl Fn(usize) -> Option<ColumnType>,
     output: &TableSchema,
     available: &[bool],
 ) -> Result<(), PlanError> {
@@ -237,7 +238,7 @@ pub(super) fn validate_declaration(
         {
             return Err(PlanError::InvalidIntermediate);
         }
-        let donor = donor
+        donor
             .columns()
             .get(key.source_column)
             .ok_or(PlanError::InvalidIntermediate)?;
@@ -253,7 +254,8 @@ pub(super) fn validate_declaration(
         if key
             .value
             .kind(primary, secondary, output, available)?
-            .is_some_and(|kind| !crate::key_relation::comparable(kind, donor.kind.into()))
+            .zip(donor_kind(key.source_column))
+            .is_some_and(|(kind, donor)| !crate::key_relation::comparable(kind, donor.into()))
         {
             return Err(PlanError::InvalidLookup);
         }
@@ -266,6 +268,7 @@ pub(super) fn validate(
     primary: &TableSchema,
     secondary: &[SecondarySource],
     donor: &TableSchema,
+    donor_kind: &impl Fn(usize) -> Option<ColumnType>,
     output: &TableSchema,
     available: &[bool],
 ) -> Result<(), PlanError> {
@@ -275,5 +278,7 @@ pub(super) fn validate(
     {
         return Err(PlanError::InvalidIntermediate);
     }
-    validate_declaration(keys, primary, secondary, donor, output, available)
+    validate_declaration(
+        keys, primary, secondary, donor, donor_kind, output, available,
+    )
 }

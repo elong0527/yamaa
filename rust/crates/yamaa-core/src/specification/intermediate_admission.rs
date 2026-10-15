@@ -97,6 +97,7 @@ pub(super) fn inferred_keys(
     output: &TableSchema,
     keys: &[usize],
     donor: &TableSchema,
+    donor_kind: &impl Fn(usize) -> Option<ColumnType>,
     admits: &impl Fn(usize) -> bool,
     path: &str,
     dataset: &str,
@@ -111,13 +112,10 @@ pub(super) fn inferred_keys(
         .iter()
         .enumerate()
         .filter(|(index, _)| admits(*index))
-        .map(|(_, column)| reference_binding::Field {
-            name: &column.name,
-            column_type: column.kind,
-        })
+        .map(|(index, column)| (column.name.as_str(), donor_kind(index)))
         .collect::<Vec<_>>();
     let inferred =
-        crate::key_relation::infer(catalog, &names, &fields).map_err(BindError::Catalog)?;
+        crate::key_relation::infer_partial(catalog, &names, &fields).map_err(BindError::Catalog)?;
     match inferred {
         Inference::Keys { keys } => Ok(Some(
             keys.into_iter()

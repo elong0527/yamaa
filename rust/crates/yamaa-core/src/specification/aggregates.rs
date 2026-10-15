@@ -1193,21 +1193,16 @@ fn bind_range(
         return Ok(None);
     }
     let current = match catalog.bind(&range.value) {
-        Some(reference_binding::Binding::Output {
-            column,
-            column_type,
-        }) => {
+        Some(reference_binding::Binding::Output { column, .. }) => {
             edges.push(column);
-            Some((CurrentRead::Output(column), column_type))
+            Some((CurrentRead::Output(column), catalog.type_of(&range.value)))
         }
-        Some(reference_binding::Binding::Dataset {
-            field, column_type, ..
-        }) => Some((
+        Some(reference_binding::Binding::Dataset { field, .. }) => Some((
             CurrentRead::Record {
                 source: 0,
                 column: field,
             },
-            column_type,
+            catalog.type_of(&range.value),
         )),
         None => range.value.split_once('.').and_then(|(name, field)| {
             secondary
@@ -1226,7 +1221,7 @@ fn bind_range(
                                     source: source + 1,
                                     column,
                                 },
-                                field.kind,
+                                Some(field.kind),
                             )
                         })
                 })
@@ -1240,7 +1235,7 @@ fn bind_range(
                         edges.extend(row_intermediates::dependencies(index, intermediates).ok()?);
                         Some((
                             CurrentRead::Intermediate { index, column },
-                            item.source_schema(secondary)?.columns()[column].kind,
+                            item.source_kind(secondary, column),
                         ))
                     })
                 })
@@ -1261,7 +1256,7 @@ fn bind_range(
             read,
             identifier: range.value.clone(),
         },
-        Some(kind.into()),
+        kind.map(Into::into),
         lower,
         upper,
     ) {

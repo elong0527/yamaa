@@ -592,6 +592,21 @@ impl Declarations {
                     .as_ref()
                     .map_or(schema, |derived| derived.plan.output())
             });
+            let donor_kind = |column| {
+                if let Some(derived) = &derivations {
+                    derived.column_kind(column)
+                } else {
+                    match item.source {
+                        self_relations::Relation::Input(index) => schemas[index]
+                            .columns()
+                            .get(column)
+                            .map(|column| column.kind),
+                        self_relations::Relation::SelfRows => {
+                            output.columns().get(column).map(|column| column.kind)
+                        }
+                    }
+                }
+            };
             let admits = |column: usize| {
                 !matches!(item.source, self_relations::Relation::SelfRows)
                     || column >= output.columns().len()
@@ -663,6 +678,7 @@ impl Declarations {
                     output,
                     keys,
                     schema,
+                    &donor_kind,
                     &admits,
                     &item.path,
                     source_name,
@@ -686,16 +702,20 @@ impl Declarations {
             // Result types and donor fields precede expression declarations and reads.
             for (field, declaration) in pairs_declared {
                 if let (Some(donor), Some(expected)) = (
-                    schema.columns().iter().find(|column| column.name == *field),
+                    schema
+                        .columns()
+                        .iter()
+                        .position(|column| column.name == *field)
+                        .and_then(&donor_kind),
                     declaration.result_type(&catalog),
                 ) {
-                    if !crate::key_relation::comparable(expected, donor.kind.into()) {
+                    if !crate::key_relation::comparable(expected, donor.into()) {
                         findings.push(BindFinding::Lookup(LookupFinding::key_type(
                             &format!("{}.key", item.path),
                             &item.name,
                             &declaration.display_name(field),
                             expected,
-                            donor.kind,
+                            donor,
                         )));
                         failed = true;
                     }
@@ -772,21 +792,7 @@ impl Declarations {
                         plan,
                         source_name,
                         schema,
-                        &|column| {
-                            if let Some(derived) = &derivations {
-                                derived.column_kind(column)
-                            } else {
-                                match item.source {
-                                    self_relations::Relation::Input(index) => schemas[index]
-                                        .columns()
-                                        .get(column)
-                                        .map(|column| column.kind),
-                                    self_relations::Relation::SelfRows => {
-                                        output.columns().get(column).map(|column| column.kind)
-                                    }
-                                }
-                            }
-                        },
+                        &donor_kind,
                         matches!(item.source, self_relations::Relation::SelfRows),
                         &admits,
                         &item.name,
@@ -863,6 +869,7 @@ impl Declarations {
                         declaration,
                         &item.name,
                         schema,
+                        &donor_kind,
                         &admits,
                         &catalog,
                         sources,

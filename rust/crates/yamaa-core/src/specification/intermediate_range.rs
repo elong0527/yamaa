@@ -70,6 +70,7 @@ pub(super) fn bind(
     declaration: &Declaration,
     intermediate: &str,
     donor: &TableSchema,
+    donor_kind: &impl Fn(usize) -> Option<ColumnType>,
     admits: &impl Fn(usize) -> bool,
     catalog: &Catalog,
     sources: &[SourceDeclaration],
@@ -91,7 +92,7 @@ pub(super) fn bind(
                 Some(RelationRangeBound {
                     column,
                     identifier: field.name.clone(),
-                    kind: Some(field.kind.into()),
+                    kind: donor_kind(column).map(Into::into),
                 })
             } else {
                 reference(
@@ -157,8 +158,8 @@ pub(super) fn bind(
                             return None;
                         }
                         let column = item.source_column(secondary, field)?;
-                        let kind = item.source_schema(secondary)?.columns()[column].kind.into();
-                        Some((CurrentRead::Intermediate { index, column }, Some(kind)))
+                        let kind = item.source_kind(secondary, column).map(Into::into);
+                        Some((CurrentRead::Intermediate { index, column }, kind))
                     })
                 }
             } else {

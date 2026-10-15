@@ -161,13 +161,17 @@ impl RelationRange {
         Ok(())
     }
     /// Stored-only plans retain their original schema rather than copying donor metadata.
-    pub(super) fn validate_source(&self, schema: &TableSchema) -> Result<(), RelationRangeError> {
+    pub(super) fn validate_source(
+        &self,
+        schema: &TableSchema,
+        kind: &impl Fn(usize) -> Option<ValueType>,
+    ) -> Result<(), RelationRangeError> {
         for bound in [&self.lower, &self.upper]
             .iter()
             .filter_map(|bound| bound.as_ref())
         {
             if schema.columns().get(bound.column).is_none_or(|field| {
-                field.name != bound.identifier || Some(field.kind.into()) != bound.kind
+                field.name != bound.identifier || kind(bound.column) != bound.kind
             }) {
                 return Err(RelationRangeError::InvalidMetadata);
             }

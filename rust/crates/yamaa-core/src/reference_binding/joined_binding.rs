@@ -73,13 +73,13 @@ impl Catalog {
                         finding,
                     })));
                 }
-                let Some(Binding::Dataset {
-                    field, column_type, ..
-                }) = self.bind(&identifier)
-                else {
+                let Some(Binding::Dataset { field, .. }) = self.bind(&identifier) else {
                     return Err(Error::InvalidAvailableOutput);
                 };
-                if !crate::key_relation::comparable(column_type.into(), actual.into()) {
+                if let Some(column_type) = self
+                    .type_of(&identifier)
+                    .filter(|kind| !crate::key_relation::comparable((*kind).into(), actual.into()))
+                {
                     return Ok(Some(Err(JoinedFinding::KeyType {
                         source: name.clone(),
                         expected: column_type,
