@@ -40,6 +40,7 @@ fn all_referenced_correlated_capture_blocks_have_fixed_total_width() {
     assert_eq!(pattern.group_count(), 120);
     let subject = "abc".repeat(30) + "d";
     let found = pattern.full_match(&subject).unwrap().unwrap();
+    assert_eq!(found.groups.len(), 121);
     assert_eq!(found.groups[0], Some(subject.as_str()));
     for captures in found.groups[1..].chunks_exact(4) {
         assert_eq!(captures, [Some("a"), Some("bc"), None, None]);
