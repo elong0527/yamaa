@@ -149,7 +149,7 @@ impl Flag {
         for binding in &self.bindings {
             match &binding.read {
                 FlagRead::Read(Read::Joined(read)) => {
-                    read.validate(source, secondary, output, available)?
+                    read.validate(source, secondary, output, available, mode)?
                 }
                 FlagRead::Read(Read::Source(column)) => {
                     if *column >= source.columns().len() {

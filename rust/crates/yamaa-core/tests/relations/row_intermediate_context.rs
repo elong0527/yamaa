@@ -214,7 +214,7 @@ fn unknown_and_omitted_drivers_keep_model_preflight_and_exact_typed_context() {
     }
 }
 #[test]
-fn foreign_driver_defaults_require_completed_keys_and_grouped_named_reads_bind() {
+fn foreign_driver_defaults_require_raw_keys_and_grouped_named_reads_bind() {
     let prepared =
         PreparedSpecification::prepare(&doc(false, [Some("SRC"), Some("DONOR")], false, "P.V"))
             .unwrap();
@@ -227,20 +227,29 @@ fn foreign_driver_defaults_require_completed_keys_and_grouped_named_reads_bind()
         .iter()
         .flat_map(|finding| finding.diagnostics(prepared.source()).unwrap())
         .collect::<Vec<_>>();
-    assert!(
-        diagnostics
-            .iter()
-            .any(|d| d.definition().condition == "dependency_cycle"
-                && d.definition().requirement == Some("REQ-0072")
-                && d.spec_paths == ["columns.ID.derivation.source"]),
-        "{diagnostics:?}"
-    );
-    assert_eq!(
-        diagnostics[0].context["cycle"],
-        yamaa_core::diagnostic::ContextValue::Sequence(
-            vec![yamaa_core::diagnostic::ContextValue::Scalar(Value::Str("ID".into())); 2]
-        )
-    );
+    // REQ-0156/0157: this template's raw DONOR record must carry ID.
+    assert_eq!(diagnostics.len(), 2);
+    for (diagnostic, path) in diagnostics.iter().zip([
+        "columns.ID.derivation.source",
+        "columns.KEY.derivation.source",
+    ]) {
+        assert_eq!(
+            (
+                diagnostic.definition().phase,
+                diagnostic.definition().condition,
+                diagnostic.definition().requirement
+            ),
+            ("validation", "unknown_field", Some("REQ-0103"))
+        );
+        assert_eq!(diagnostic.spec_paths, [path]);
+        assert_eq!(
+            diagnostic.context,
+            std::collections::BTreeMap::from([(
+                "identifier".into(),
+                yamaa_core::diagnostic::ContextValue::Scalar(Value::Str("DONOR.ID".into()))
+            )])
+        );
+    }
     let prepared =
         PreparedSpecification::prepare(&doc(false, [Some("SRC"), Some("SRC")], true, "P.V"))
             .unwrap();

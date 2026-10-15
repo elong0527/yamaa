@@ -941,107 +941,83 @@ pub(super) fn bind_catalog_join(
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Expression>, BindError> {
-    let (dataset, field) = name.split_once('.').ok_or(BindError::Internal)?;
-    let donor = catalog.joined(dataset).ok_or(BindError::Internal)?;
-    let Some(&(column, _)) = donor.fields.get(field) else {
-        findings.push(BindFinding::UnknownReference {
-            path: path.into(),
-            name: name.into(),
-        });
-        return Ok(None);
-    };
-    let pairs = match &donor.inference {
-        crate::key_relation::Inference::Keys { keys } => keys,
-        crate::key_relation::Inference::Incompatible {
-            key,
-            expected,
-            actual,
-        } => {
-            findings.push(BindFinding::Source(SourceFinding::new(
-                C::ImplicitSourceKeyType,
-                path,
-                &[
-                    ("source", &donor.keys[*key].0),
-                    ("expected", type_name(*expected)),
-                    ("actual", type_name(*actual)),
-                ],
-            )));
-            return Ok(None);
+    use reference_binding::JoinedFinding;
+    let read = catalog
+        .joined_read(name, available)
+        .map_err(BindError::Catalog)?
+        .ok_or(BindError::Internal)?;
+    match read {
+        Ok((Read::Joined(read), _, dependencies)) => {
+            edges.extend(dependencies);
+            Ok(Some(Expression::Joined(read)))
         }
-        crate::key_relation::Inference::NoApplicableKeys => {
-            let mut finding = SourceFinding::new(
-                C::ImplicitSourceNoApplicableKeys,
-                path,
-                &[
-                    ("dataset", dataset),
-                    (
-                        "hint",
-                        "declare an explicit `intermediate:` with `source`/`key` pairs",
-                    ),
-                ],
-            );
-            finding.0.context.insert(
-                "keys".into(),
-                ContextValue::Sequence(
-                    donor
-                        .keys
-                        .iter()
-                        .map(|(name, _)| ContextValue::Scalar(Value::Str(name.clone())))
-                        .collect(),
-                ),
-            );
-            findings.push(BindFinding::Source(finding));
-            return Ok(None);
-        }
-        _ => return Err(BindError::Internal),
-    };
-    let mut keys = Vec::new();
-    for &index in pairs {
-        let (name, output_column) = &donor.keys[index];
-        if let Some(finding) = catalog
-            .validate_output(name, None, available, &[0])
-            .map_err(BindError::Catalog)?
-        {
-            if matches!(finding, reference_binding::Diagnostic::PhaseBoundary { .. }) {
-                findings.push(BindFinding::Source(SourceFinding::new(
-                    C::RowDependencyPhaseBoundary,
+        Ok(_) => Err(BindError::Internal),
+        Err(cause) => {
+            let finding = match cause {
+                JoinedFinding::UnknownField => BindFinding::UnknownReference {
+                    path: path.into(),
+                    name: name.into(),
+                },
+                JoinedFinding::CurrentKey {
+                    identifier,
+                    finding,
+                } => BindFinding::QualifiedReference {
+                    path: path.into(),
+                    name: identifier,
+                    row: row.map(String::from),
+                    finding,
+                },
+                JoinedFinding::UnavailableKey { column } => {
+                    let identifier = String::from(
+                        *catalog
+                            .output_names()
+                            .get(column)
+                            .ok_or(BindError::Internal)?,
+                    );
+                    BindFinding::Source(SourceFinding::new(
+                        C::RowDependencyPhaseBoundary,
+                        path,
+                        &[
+                            ("identifier", &identifier),
+                            ("row", row.ok_or(BindError::Internal)?),
+                            ("available_phase", "column_derivation"),
+                            ("required_phase", "row_construction"),
+                        ],
+                    ))
+                }
+                JoinedFinding::KeyType {
+                    source,
+                    expected,
+                    actual,
+                } => BindFinding::Source(SourceFinding::new(
+                    C::ImplicitSourceKeyType,
                     path,
                     &[
-                        ("identifier", name),
-                        ("row", row.ok_or(BindError::Internal)?),
-                        ("available_phase", "column_derivation"),
-                        ("required_phase", "row_construction"),
+                        ("source", &source),
+                        ("expected", type_name(expected)),
+                        ("actual", type_name(actual)),
                     ],
-                )));
-                return Ok(None);
-            }
-            findings.push(BindFinding::OutputReference {
-                path: path.into(),
-                name: name.clone(),
-                finding,
-            });
-            return Ok(None);
+                )),
+                JoinedFinding::NoApplicableKeys { dataset, keys } => {
+                    let mut finding = SourceFinding::new(
+                        C::ImplicitSourceNoApplicableKeys,
+                        path,
+                        &[
+                            ("dataset", &dataset),
+                            (
+                                "hint",
+                                "declare an explicit `intermediate:` with `source`/`key` pairs",
+                            ),
+                        ],
+                    );
+                    finding.texts("keys", keys);
+                    BindFinding::Source(finding)
+                }
+            };
+            findings.push(finding);
+            Ok(None)
         }
-        let source_column = donor.fields.get(name).ok_or(BindError::Internal)?.0;
-        edges.push(*output_column);
-        keys.push(crate::dataset::MatchKey {
-            source_column,
-            output_column: *output_column,
-        });
     }
-    Ok(Some(Expression::Joined(alloc::boxed::Box::new(
-        crate::dataset::JoinedRead {
-            source: if donor.source == 0 {
-                crate::dataset::AggregateSource::Primary
-            } else {
-                crate::dataset::AggregateSource::Secondary(donor.source - 1)
-            },
-            column,
-            keys,
-            name: dataset.into(),
-            schema: donor.schema.clone(),
-        },
-    ))))
 }
 
 impl Declaration {

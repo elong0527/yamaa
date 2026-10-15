@@ -169,7 +169,7 @@
         "record_unknown_phase",
         "group_and_filter_order"
       ],
-      "unicode_case_csv": "ID,UP,LOW,SENT,TITLE\n1,FOLLOW-UP,follow-up,Follow-up,Follow-Up\n2,\u00df\u0130\u00e9\ud83d\ude42ABC,\u00df\u0130\u00e9\ud83d\ude42abc,\u00df\u0130\u00e9\ud83d\ude42abc,\u00df\u0130\u00e9\ud83d\ude42Abc\n3,MiXeD,,,\n",
+      "unicode_case_csv": "ID,UP,LOW,SENT,TITLE\n1,FOLLOW-UP,follow-up,Follow-up,Follow-Up\n2,ßİé🙂ABC,ßİé🙂abc,ßİé🙂abc,ßİé🙂Abc\n3,MiXeD,,,\n",
       "row_driver_cases": [
         "unknown-row-driver",
         "omitted-row-driver",
@@ -2356,6 +2356,155 @@
           ],
           "csv": null
         }
+      ],
+      "row_join_keys": [
+        {
+          "name": "original_missing_driver_key",
+          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"input/source.csv\",\n      \"types\": {\n        \"W\": \"float\"\n      }\n    },\n    \"RIGHT\": {\n      \"path\": \"input/right.csv\",\n      \"types\": {\n        \"K\": \"str\",\n        \"V\": \"float\"\n      }\n    }\n  },\n  \"keys\": [\n    \"K\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"K\",\n      \"V\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"K\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"literal\": \"k\"\n      }\n    },\n    {\n      \"name\": \"V\",\n      \"type\": \"float\"\n    }\n  ],\n  \"rows\": [\n    {\n      \"id\": \"r\",\n      \"dataset\": \"SRC\",\n      \"derivations\": {\n        \"V\": {\n          \"source\": \"RIGHT.V\"\n        }\n      }\n    }\n  ]\n}\n",
+          "inputs": {
+            "input/source.csv": "W\n1.0\n",
+            "input/right.csv": "K,V\na,10.0\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0103",
+              "spec_paths": [
+                "rows[0].derivations.V.source"
+              ],
+              "context": {
+                "identifier": "SRC.K"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "raw_key_overrides_output_literal",
+          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"input/source.csv\",\n      \"types\": {\n        \"W\": \"float\",\n        \"K\": \"str\"\n      }\n    },\n    \"RIGHT\": {\n      \"path\": \"input/right.csv\",\n      \"types\": {\n        \"K\": \"str\",\n        \"V\": \"float\"\n      }\n    }\n  },\n  \"keys\": [\n    \"K\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"K\",\n      \"V\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"K\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"literal\": \"k\"\n      }\n    },\n    {\n      \"name\": \"V\",\n      \"type\": \"float\"\n    }\n  ],\n  \"rows\": [\n    {\n      \"id\": \"r\",\n      \"dataset\": \"SRC\",\n      \"derivations\": {\n        \"V\": {\n          \"source\": \"RIGHT.V\"\n        }\n      }\n    }\n  ]\n}\n",
+          "inputs": {
+            "input/source.csv": "K,W\na,1\n",
+            "input/right.csv": "K,V\na,10\nk,20\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "K,V\nk,10\n"
+        },
+        {
+          "name": "raw_key_type_is_independent_of_output_type",
+          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"input/source.csv\",\n      \"types\": {\n        \"W\": \"float\",\n        \"K\": \"str\"\n      }\n    },\n    \"RIGHT\": {\n      \"path\": \"input/right.csv\",\n      \"types\": {\n        \"K\": \"str\",\n        \"V\": \"float\"\n      }\n    }\n  },\n  \"keys\": [\n    \"K\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"K\",\n      \"V\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"K\",\n      \"type\": \"int\",\n      \"derivation\": {\n        \"literal\": 7\n      }\n    },\n    {\n      \"name\": \"V\",\n      \"type\": \"float\"\n    }\n  ],\n  \"rows\": [\n    {\n      \"id\": \"r\",\n      \"dataset\": \"SRC\",\n      \"derivations\": {\n        \"V\": {\n          \"source\": \"RIGHT.V\"\n        }\n      }\n    }\n  ]\n}\n",
+          "inputs": {
+            "input/source.csv": "K,W\na,1\n",
+            "input/right.csv": "K,V\na,10\nk,20\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "K,V\n7,10\n"
+        },
+        {
+          "name": "nongroup_driver_key_is_unavailable",
+          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"input/source.csv\",\n      \"types\": {\n        \"W\": \"float\",\n        \"K\": \"str\"\n      }\n    },\n    \"RIGHT\": {\n      \"path\": \"input/right.csv\",\n      \"types\": {\n        \"K\": \"str\",\n        \"V\": \"float\"\n      }\n    }\n  },\n  \"keys\": [\n    \"K\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"K\",\n      \"V\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"K\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"literal\": \"k\"\n      }\n    },\n    {\n      \"name\": \"V\",\n      \"type\": \"float\"\n    }\n  ],\n  \"rows\": [\n    {\n      \"id\": \"r\",\n      \"dataset\": \"SRC\",\n      \"derivations\": {\n        \"V\": {\n          \"source\": \"RIGHT.V\"\n        }\n      },\n      \"group_by\": [\n        \"SRC.W\"\n      ]\n    }\n  ]\n}\n",
+          "inputs": {
+            "input/source.csv": "K,W\na,1\n",
+            "input/right.csv": "K,V\na,10\nk,20\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "ungrouped_driver_field",
+              "requirement": "REQ-0067",
+              "spec_paths": [
+                "rows[0].derivations.V.source"
+              ],
+              "context": {
+                "identifier": "SRC.K",
+                "row": "r",
+                "dataset": "SRC"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "grouped_join_reads_raw_group_key",
+          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"input/source.csv\",\n      \"types\": {\n        \"W\": \"float\",\n        \"K\": \"str\"\n      }\n    },\n    \"RIGHT\": {\n      \"path\": \"input/right.csv\",\n      \"types\": {\n        \"K\": \"str\",\n        \"V\": \"float\"\n      }\n    }\n  },\n  \"keys\": [\n    \"K\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"K\",\n      \"V\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"K\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"literal\": \"k\"\n      }\n    },\n    {\n      \"name\": \"V\",\n      \"type\": \"float\"\n    }\n  ],\n  \"rows\": [\n    {\n      \"id\": \"r\",\n      \"dataset\": \"SRC\",\n      \"derivations\": {\n        \"V\": {\n          \"source\": \"RIGHT.V\"\n        }\n      },\n      \"group_by\": [\n        \"SRC.K\"\n      ]\n    }\n  ]\n}\n",
+          "inputs": {
+            "input/source.csv": "K,W\na,1\n",
+            "input/right.csv": "K,V\na,10\nk,20\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "K,V\nk,10\n"
+        },
+        {
+          "name": "secondary_driver_joins_primary_input",
+          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"input/source.csv\",\n      \"types\": {\n        \"W\": \"float\",\n        \"K\": \"str\"\n      }\n    },\n    \"RIGHT\": {\n      \"path\": \"input/right.csv\",\n      \"types\": {\n        \"K\": \"str\",\n        \"V\": \"float\"\n      }\n    }\n  },\n  \"keys\": [\n    \"K\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"K\",\n      \"V\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"K\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"literal\": \"k\"\n      }\n    },\n    {\n      \"name\": \"V\",\n      \"type\": \"float\"\n    }\n  ],\n  \"rows\": [\n    {\n      \"id\": \"r\",\n      \"dataset\": \"SRC\",\n      \"derivations\": {\n        \"V\": {\n          \"source\": \"RIGHT.V\"\n        }\n      }\n    }\n  ],\n  \"base\": \"RIGHT\"\n}\n",
+          "inputs": {
+            "input/source.csv": "K,W\na,1\n",
+            "input/right.csv": "K,V\na,10\nk,20\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "K,V\nk,10\n"
+        },
+        {
+          "name": "column_join_uses_constructed_output_key",
+          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"input/source.csv\",\n      \"types\": {\n        \"W\": \"float\",\n        \"K\": \"str\"\n      }\n    },\n    \"RIGHT\": {\n      \"path\": \"input/right.csv\",\n      \"types\": {\n        \"K\": \"str\",\n        \"V\": \"float\"\n      }\n    }\n  },\n  \"keys\": [\n    \"K\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"K\",\n      \"V\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"K\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"literal\": \"k\"\n      }\n    },\n    {\n      \"name\": \"V\",\n      \"type\": \"float\",\n      \"derivation\": {\n        \"source\": \"RIGHT.V\"\n      }\n    }\n  ],\n  \"rows\": [\n    {\n      \"id\": \"r\",\n      \"dataset\": \"SRC\",\n      \"derivations\": {}\n    }\n  ]\n}\n",
+          "inputs": {
+            "input/source.csv": "K,W\na,1\n",
+            "input/right.csv": "K,V\na,10\nk,20\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "K,V\nk,20\n"
+        },
+        {
+          "name": "named_lookup_reads_available_row_column",
+          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"input/source.csv\",\n      \"types\": {\n        \"W\": \"float\"\n      }\n    },\n    \"RIGHT\": {\n      \"path\": \"input/right.csv\",\n      \"types\": {\n        \"K\": \"str\",\n        \"V\": \"float\"\n      }\n    }\n  },\n  \"keys\": [\n    \"K\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"K\",\n      \"V\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"K\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"literal\": \"k\"\n      }\n    },\n    {\n      \"name\": \"V\",\n      \"type\": \"float\"\n    }\n  ],\n  \"rows\": [\n    {\n      \"id\": \"r\",\n      \"dataset\": \"SRC\",\n      \"derivations\": {\n        \"V\": {\n          \"source\": \"LOOK.V\"\n        }\n      }\n    }\n  ],\n  \"intermediates\": [\n    {\n      \"id\": \"LOOK\",\n      \"dataset\": \"RIGHT\",\n      \"key\": {\n        \"K\": \"K\"\n      }\n    }\n  ]\n}\n",
+          "inputs": {
+            "input/source.csv": "W\n1\n",
+            "input/right.csv": "K,V\nk,20\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "K,V\nk,20\n"
+        },
+        {
+          "name": "case_branch_uses_raw_join_key",
+          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"input/source.csv\",\n      \"types\": {\n        \"W\": \"float\",\n        \"K\": \"str\"\n      }\n    },\n    \"RIGHT\": {\n      \"path\": \"input/right.csv\",\n      \"types\": {\n        \"K\": \"str\",\n        \"V\": \"float\"\n      }\n    }\n  },\n  \"keys\": [\n    \"K\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"K\",\n      \"V\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"K\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"literal\": \"k\"\n      }\n    },\n    {\n      \"name\": \"V\",\n      \"type\": \"float\"\n    }\n  ],\n  \"rows\": [\n    {\n      \"id\": \"r\",\n      \"dataset\": \"SRC\",\n      \"derivations\": {\n        \"V\": {\n          \"case\": [\n            {\n              \"when\": \"SRC.W = 1\",\n              \"then\": {\n                \"source\": \"RIGHT.V\"\n              }\n            },\n            {\n              \"otherwise\": {\n                \"literal\": 0\n              }\n            }\n          ]\n        }\n      }\n    }\n  ]\n}\n",
+          "inputs": {
+            "input/source.csv": "K,W\na,1\n",
+            "input/right.csv": "K,V\na,10\nk,20\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "K,V\nk,10\n"
+        },
+        {
+          "name": "row_filter_uses_raw_join_key",
+          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"input/source.csv\",\n      \"types\": {\n        \"W\": \"float\",\n        \"K\": \"str\"\n      }\n    },\n    \"RIGHT\": {\n      \"path\": \"input/right.csv\",\n      \"types\": {\n        \"K\": \"str\",\n        \"V\": \"float\"\n      }\n    }\n  },\n  \"keys\": [\n    \"K\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"K\",\n      \"V\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"K\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"literal\": \"k\"\n      }\n    },\n    {\n      \"name\": \"V\",\n      \"type\": \"float\"\n    }\n  ],\n  \"rows\": [\n    {\n      \"id\": \"r\",\n      \"dataset\": \"SRC\",\n      \"derivations\": {\n        \"V\": {\n          \"source\": \"RIGHT.V\"\n        }\n      },\n      \"filter\": \"RIGHT.V = 10\"\n    }\n  ]\n}\n",
+          "inputs": {
+            "input/source.csv": "K,W\na,1\n",
+            "input/right.csv": "K,V\na,10\nk,20\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "K,V\nk,10\n"
+        },
+        {
+          "name": "raw_join_filter_precedes_unrelated_output_key_window",
+          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"input/source.csv\",\n      \"types\": {\n        \"W\": \"float\",\n        \"K\": \"str\"\n      }\n    },\n    \"RIGHT\": {\n      \"path\": \"input/right.csv\",\n      \"types\": {\n        \"K\": \"str\",\n        \"V\": \"float\"\n      }\n    }\n  },\n  \"keys\": [\n    \"K\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"K\",\n      \"V\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"K\",\n      \"type\": \"int\"\n    },\n    {\n      \"name\": \"V\",\n      \"type\": \"float\"\n    },\n    {\n      \"name\": \"W\",\n      \"type\": \"float\",\n      \"derivation\": {\n        \"source\": \"SRC.W\"\n      }\n    }\n  ],\n  \"rows\": [\n    {\n      \"id\": \"r\",\n      \"dataset\": \"SRC\",\n      \"derivations\": {\n        \"V\": {\n          \"source\": \"RIGHT.V\"\n        },\n        \"K\": {\n          \"row_number\": {\n            \"window\": {\n              \"order_by\": [\n                \"W\"\n              ]\n            }\n          }\n        }\n      },\n      \"filter\": \"V > 15\"\n    }\n  ]\n}\n",
+          "inputs": {
+            "input/source.csv": "K,W\na,2\nb,1\n",
+            "input/right.csv": "K,V\na,10\nb,20\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "K,V\n1,20\n"
+        }
       ]
     },
     "file-resources": {
@@ -2529,10 +2678,10 @@
           }
         },
         "root": {
-          "warning": "LOG_VERSION,ARTIFACT,SEVERITY,CONDITION,REQUIREMENT,SPEC_PATH,VERIFICATION_ID,FAILURE_COUNT,OFFENDING_KEYS,DETAILS\n1.0,generated/root.csv,warning,range_failed,REQ-0377,columns.ID.verifications[0].range,\u00e9\ud834\udd1e,8,\"[{\"\"ID\"\":1},{\"\"ID\"\":2},{\"\"ID\"\":3},{\"\"ID\"\":4},{\"\"ID\"\":5},{\"\"ID\"\":6},{\"\"ID\"\":7},{\"\"ID\"\":9223372036854775807}]\",\"{\"\"column\"\":\"\"ID\"\"}\"\n",
+          "warning": "LOG_VERSION,ARTIFACT,SEVERITY,CONDITION,REQUIREMENT,SPEC_PATH,VERIFICATION_ID,FAILURE_COUNT,OFFENDING_KEYS,DETAILS\n1.0,generated/root.csv,warning,range_failed,REQ-0377,columns.ID.verifications[0].range,é𝄞,8,\"[{\"\"ID\"\":1},{\"\"ID\"\":2},{\"\"ID\"\":3},{\"\"ID\"\":4},{\"\"ID\"\":5},{\"\"ID\"\":6},{\"\"ID\"\":7},{\"\"ID\"\":9223372036854775807}]\",\"{\"\"column\"\":\"\"ID\"\"}\"\n",
           "verification": {
-            "warning": "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n1.0,generated/root.csv,columns.ID.verifications[0].range,\u00e9\ud834\udd1e,range,ID,REQ-0377,warning,violated,range_failed,8,8,\"{\"\"column\"\":\"\"ID\"\"}\"\n",
-            "error": "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n1.0,generated/root.csv,columns.ID.verifications[0].range,\u00e9\ud834\udd1e,range,ID,REQ-0377,error,violated,range_failed,8,8,\"{\"\"column\"\":\"\"ID\"\"}\"\n"
+            "warning": "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n1.0,generated/root.csv,columns.ID.verifications[0].range,é𝄞,range,ID,REQ-0377,warning,violated,range_failed,8,8,\"{\"\"column\"\":\"\"ID\"\"}\"\n",
+            "error": "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n1.0,generated/root.csv,columns.ID.verifications[0].range,é𝄞,range,ID,REQ-0377,error,violated,range_failed,8,8,\"{\"\"column\"\":\"\"ID\"\"}\"\n"
           }
         }
       }

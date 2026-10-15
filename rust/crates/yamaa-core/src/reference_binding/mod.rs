@@ -100,6 +100,12 @@ pub struct Catalog {
     limits: Limits,
     selected: BTreeMap<String, SelectedRelation>,
     joined: BTreeMap<String, JoinedRelation>,
+    row_joins: Option<RowJoinScope>,
+}
+#[derive(Debug)]
+struct RowJoinScope {
+    driver: String,
+    groups: Option<alloc::vec::Vec<String>>,
 }
 #[derive(Debug)]
 pub(crate) struct JoinedRelation {
@@ -262,6 +268,26 @@ impl Catalog {
                     .map(|(_, kind)| *kind)
             })
         }))
+    }
+
+    /// Row-template implicit joins match raw driver fields, independently of output derivations.
+    pub(crate) fn with_row_joins(
+        mut self,
+        driver: &str,
+        groups: Option<&[String]>,
+    ) -> Result<Self, Error> {
+        let bytes = groups
+            .into_iter()
+            .flatten()
+            .try_fold(driver.len(), |n, name| {
+                n.checked_add(name.len()).ok_or(Error::SizeOverflow)
+            })?;
+        limit("scope_context_bytes", bytes, self.limits.catalog_bytes)?;
+        self.row_joins = Some(RowJoinScope {
+            driver: driver.into(),
+            groups: groups.map(<[String]>::to_vec),
+        });
+        Ok(self)
     }
 
     /// Retain pure donor schemas and inferred current-output equality metadata.
@@ -468,6 +494,7 @@ impl Catalog {
             limits,
             selected: BTreeMap::new(),
             joined: BTreeMap::new(),
+            row_joins: None,
         })
     }
 

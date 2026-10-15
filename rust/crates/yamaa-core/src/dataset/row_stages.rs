@@ -18,7 +18,9 @@ fn read_deferred(read: Read, deferred: &[bool], intermediates: &[Intermediate]) 
         Read::Column(column) => deferred[column],
         Read::Intermediate { index, .. } => intermediate_deferred(index, deferred, intermediates),
         Read::Source(_) => false,
-        Read::Joined(read) => read.keys.iter().any(|key| deferred[key.output_column]),
+        Read::Joined(read) => {
+            read.record_keys.is_none() && read.keys.iter().any(|key| deferred[key.output_column])
+        }
     }
 }
 fn expression_deferred(
@@ -28,7 +30,7 @@ fn expression_deferred(
 ) -> bool {
     match expression {
         Expression::Window(_) | Expression::ContextWindow(_) => true,
-        Expression::Joined(read) | Expression::JoinedSource { read, .. } => read.keys.iter().any(|key| deferred[key.output_column]),
+        Expression::Joined(read) | Expression::JoinedSource { read, .. } => read.record_keys.is_none() && read.keys.iter().any(|key| deferred[key.output_column]),
         Expression::Aggregate(aggregate) => match aggregate.relation() {
             AggregateRelation::Output { group_by } => group_by.iter().any(|&column| deferred[column])
                 || aggregate.bindings().iter().any(|binding| deferred[binding.column]),
