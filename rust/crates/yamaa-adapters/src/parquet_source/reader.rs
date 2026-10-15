@@ -83,8 +83,8 @@ pub(super) fn read_odm(bytes: &[u8]) -> Result<Decoded, Error> {
 
 /// Reconcile page counts with their held chunk and row-group metadata before
 /// any codec interprets a claimed value count as an allocation size. Repeated
-/// columns may contain more values than rows; their decoder storage remains
-/// proportional to the actual repeated data, without another count limit.
+/// columns may contain more values than rows. The ordinary physical decoder
+/// may still retain storage for every admitted repeated value.
 fn admit_page_counts(
     frame: &framing::Framing<'_>,
     metadata: &ParquetMetaData,
@@ -165,10 +165,23 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
     };
     admit_page_counts(&frame, &metadata)?;
     let mut payloads = payload::Validation::new();
-    for page in &frame.pages {
-        let column = columns.get(page.column).ok_or(Error::Malformed)?;
-        let decoded = compression::decode(page)?;
-        payloads.admit(page, &decoded, column)?;
+    let mut pages = frame.pages.iter().peekable();
+    for (row_group, group) in metadata.row_groups().iter().enumerate() {
+        let expected = usize::try_from(group.num_rows()).map_err(|_| Error::Malformed)?;
+        for column in 0..group.num_columns() {
+            let descriptor = columns.get(column).ok_or(Error::Malformed)?;
+            let mut rows = payload::Rows::new(expected);
+            while pages
+                .peek()
+                .is_some_and(|page| page.row_group == row_group && page.column == column)
+            {
+                let page = pages.next().unwrap();
+                let decoded = compression::decode(page)?;
+                rows.admit(page, &decoded, descriptor)?;
+                payloads.admit(page, &decoded, descriptor)?;
+            }
+            rows.finish()?;
+        }
     }
     let row_count =
         usize::try_from(metadata.file_metadata().num_rows()).map_err(|_| Error::Malformed)?;
@@ -383,6 +396,16 @@ mod tests {
         page.extend(body);
         page
     }
+    fn rle_levels(runs: &[(u8, usize)]) -> Vec<u8> {
+        let mut encoded = Vec::new();
+        for &(value, count) in runs {
+            unsigned((count as u64) * 2, &mut encoded);
+            encoded.push(value);
+        }
+        let mut bytes = (encoded.len() as u32).to_le_bytes().to_vec();
+        bytes.extend(encoded);
+        bytes
+    }
 
     // Independently encoded Parquet metadata: one UTF8 BYTE_ARRAY column S,
     // with the chosen repetition and supplied physical data pages.
@@ -522,6 +545,48 @@ mod tests {
                     matches!(error, Error::Profile(profile::Error::Unsupported { field, .. }) if field == "S")
                 );
             }
+        }
+    }
+
+    #[test]
+    fn huge_repeated_row_mismatch_precedes_a_safe_delta_representation_refusal() {
+        let values = i32::MAX as usize;
+        let non_null = 65_536;
+        let mut body = rle_levels(&[(0, values)]);
+        body.extend(rle_levels(&[(1, non_null), (0, values - non_null)]));
+        body.extend(progression(0, 1, non_null));
+        body.extend(progression(1, 0, non_null));
+        body.resize(body.len() + non_null, b'x');
+        // Only 65,536 strings and 64 KiB of suffixes reach DELTA in the old
+        // ordering, which safely refuses their triangular reconstructed size.
+        // The repeated row truth must now reject first, without authoring the
+        // unsafe i32::MAX-prefix allocation used by the original report.
+        let bytes = container(2, 1, values, 0, &[data_page(values, &body)]);
+        assert_eq!(read(&bytes).unwrap_err(), Error::Malformed);
+    }
+
+    #[test]
+    fn repeated_rows_include_empty_markers_and_continue_across_v1_pages() {
+        let mut first = rle_levels(&[(0, 1), (1, 1)]);
+        first.extend(rle_levels(&[(1, 2)]));
+        first.extend(progression(0, 0, 2));
+        first.extend(progression(1, 0, 2));
+        first.extend(b"ab");
+        let mut second = rle_levels(&[(1, 1), (0, 2), (1, 1)]);
+        second.extend(rle_levels(&[(1, 1), (0, 1), (1, 2)]));
+        second.extend(progression(0, 0, 3));
+        second.extend(progression(1, 0, 3));
+        second.extend(b"cde");
+        // Rows are [a,b,c], [], [d,e]. The second page starts with a continued
+        // value; its empty-list marker is still a row although it stores none.
+        let pages = [data_page(2, &first), data_page(4, &second)];
+        let bytes = container(2, 3, 6, 0, &pages);
+        assert!(
+            matches!(read(&bytes), Err(Error::Profile(profile::Error::Unsupported { field, .. })) if field == "S")
+        );
+        for rows in [2, 4] {
+            let bytes = container(2, rows, 6, 0, &pages);
+            assert_eq!(read(&bytes).unwrap_err(), Error::Malformed);
         }
     }
 }
