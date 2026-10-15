@@ -90,14 +90,21 @@ closed registry (see [Schema introduction](https://elong0527.github.io/yamaa/art
 
 Python engine:
 
+Download the wheel for your platform from the selected
+[GitHub release](https://github.com/elong0527/yamaa/releases), then install it:
+
+```sh
+python -m pip install ./yamaa-0.4.0-<wheel-tags>.whl
 ```
-pip install git+https://github.com/elong0527/yamaa.git#subdirectory=python
-```
+
+The release also provides a standalone Python source archive. See the
+[Python package guide](https://github.com/elong0527/yamaa/blob/main/python/README.md)
+for supported platforms, source prerequisites and checkout development builds.
 
 R engine:
 
-The planned first shared-engine R release uses a standalone source tarball attached to
-its [GitHub release](https://github.com/elong0527/yamaa/releases). After downloading
+R is distributed as a standalone source tarball attached to its
+[GitHub release](https://github.com/elong0527/yamaa/releases). After downloading
 `yamaa_0.4.0.tar.gz` from the selected qualified release:
 
 ```r
@@ -110,8 +117,9 @@ result$save()
 ```
 
 Source installation requires R 4.6.1, Rust 1.90.0/Cargo and platform build tools.
-The candidate tarball is not yet a qualified release asset. To build it from this
-checkout, follow [the R package guide](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md). CRAN and r-universe
+To build a checkout candidate, follow
+[the R package guide](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md).
+Release assets come from the complete native qualification workflow. CRAN and r-universe
 publication are later distribution work.
 
 ## Where to go next

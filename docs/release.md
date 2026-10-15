@@ -22,6 +22,26 @@ Python, R and Cargo versions move together;
 `rust/tools/check_shared_release_versions.py` checks that they agree. The
 previous Python release is the `yamaa-py-0.3.0` tag.
 
+## Publication
+
+After the final commit is on main and its complete native qualification has
+passed, push the coordinated tag `yamaa-v0.4.0` at that exact commit.
+`.github/workflows/release.yml` accepts a completed nightly main run, a main
+dispatch, or a same-repository `qualification/issue-*` push for the peeled tag
+commit. It requires all installed lanes, shared Rust/math, complete cohort
+comparisons and strict R package checks to have passed. Installed-only branch
+dispatches cannot release.
+
+The workflow downloads the qualified artifacts and publishes their unchanged
+bytes: one wheel per supported OS, the tested Linux Python sdist and the tested
+Linux R source tarball. Other native source lanes qualify their own host-built
+archives. Missing, expired or ambiguous artifacts fail publication; an existing
+release is never overwritten. The release includes committed notes from
+`docs/releases/<version>.md` and identifies the native run and selected artifacts.
+This route uses the workflow's GitHub token and needs no package-index
+credentials. PyPI publication is separate and requires configured authentication;
+the GitHub release assets remain the documented standalone download route.
+
 ## Approved decisions
 
 - Keep Python `domain`/`check`/`define`, result/error types, version metadata and
