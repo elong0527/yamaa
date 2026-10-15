@@ -7,26 +7,15 @@ use crate::{
     value::{ColumnType, ValueType},
 };
 
-#[derive(Default)]
-struct Findings {
-    diagnostics: Vec<Diagnostic>,
-}
-impl Findings {
-    fn push(&mut self, diagnostic: Diagnostic) {
-        if self.diagnostics.len() < crate::limits::Limits::FINDINGS {
-            self.diagnostics.push(diagnostic);
-        }
-    }
-}
 impl DatasetPlan {
     /// Only operand kinds are observed. Zero findings grants no value admission,
     /// function invocation, evaluation, verification or publication authority.
     pub fn metadata_type_findings(&self) -> Result<Vec<Diagnostic>, ProjectionError> {
-        let mut findings = Findings::default();
+        let mut findings = Vec::new();
         self.metadata_types(&mut findings)?;
-        Ok(findings.diagnostics)
+        Ok(findings)
     }
-    fn metadata_types(&self, findings: &mut Findings) -> Result<(), ProjectionError> {
+    fn metadata_types(&self, findings: &mut Vec<Diagnostic>) -> Result<(), ProjectionError> {
         for template in &self.templates {
             let (primary, _) = template
                 .mode
@@ -73,7 +62,7 @@ impl DatasetPlan {
         primary: &TableSchema,
         expression: &Expression,
         path: &str,
-        findings: &mut Findings,
+        findings: &mut Vec<Diagnostic>,
     ) -> Result<(), ProjectionError> {
         match expression {
             Expression::Flag(flag) => {

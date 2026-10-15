@@ -264,7 +264,7 @@ fn select<E>(
     for &row in &matching[1..] {
         let mut order = Ordering::Equal;
         for term in &selection.order_by {
-            let mut read = |row| -> Result<ValueRef<'_>, Box<ExecutionError<E>>> {
+            let read = |row| -> Result<ValueRef<'_>, Box<ExecutionError<E>>> {
                 let value = cell(table, source, assignment, row, term.column)?;
                 Ok(value)
             };

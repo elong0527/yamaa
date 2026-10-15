@@ -277,7 +277,7 @@ fn select<T: TableAccess + ?Sized>(
     for &row in &carrying[1..] {
         let mut order = Ordering::Equal;
         for term in &selection.order_by {
-            let mut read = |source_row| -> Result<ValueRef<'_>, Box<ExecutionError<T::Error>>> {
+            let read = |source_row| -> Result<ValueRef<'_>, Box<ExecutionError<T::Error>>> {
                 let value = table.cell(source_row, term.column).map_err(|error| {
                     Box::new(ExecutionError::Cell {
                         path: path.into(),

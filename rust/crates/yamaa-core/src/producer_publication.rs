@@ -82,7 +82,7 @@ impl PreparedPublication {
             {
                 return Err("producer_publication_incomplete");
             }
-            let artifact = entered
+            entered
                 .output
                 .as_ref()
                 .ok()

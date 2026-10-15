@@ -132,7 +132,6 @@ fn filter<T: TableAccess + ?Sized>(
     table: &T,
     bound: &BoundAggregate,
     source_row: usize,
-    state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<bool, Box<ExecutionError<T::Error>>> {
     if let Some(filter) = bound.filter() {
         return crate::dataset::execution::predicates::evaluate(filter, table, source_row, &[])
@@ -169,7 +168,7 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
     match bound.relation() {
         AggregateRelation::CurrentGroup => {
             for &source_row in &candidate.members {
-                if filter(donor, bound, source_row, state)? {
+                if filter(donor, bound, source_row)? {
                     members.push(source_row);
                 }
             }
@@ -192,7 +191,7 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
                 }
                 if matches {
                     first.get_or_insert(source_row);
-                    if filter(donor, bound, source_row, state)? {
+                    if filter(donor, bound, source_row)? {
                         members.push(source_row);
                     }
                 }
@@ -264,15 +263,13 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
                 }
                 if matches {
                     first.get_or_insert(source_row);
-                    if filter(donor, bound, source_row, state)?
+                    if filter(donor, bound, source_row)?
                         && narrow(
                             bound,
                             range_value.as_ref(),
                             donor,
                             coordinate,
-                            source_row,
-                            state,
-                        )?
+                            source_row)?
                     {
                         members.push(source_row);
                     }
@@ -292,7 +289,6 @@ fn narrow<T: TableAccess + ?Sized>(
     donor: &T,
     coordinate: Coordinate,
     source_row: usize,
-    state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<bool, Box<ExecutionError<T::Error>>> {
     use crate::dataset::RelationRangeFailure;
     let Some(range) = bound.range() else {

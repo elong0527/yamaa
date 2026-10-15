@@ -31,13 +31,12 @@ fn sample(kind: ColumnType) -> Value {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn validate_predicate<T: TableAccess + ?Sized>(
+fn validate_predicate<E>(
     predicate: &BoundPredicate,
     dataset: &CompletedRows<'_>,
     plan: &dataset::DatasetPlan,
-    state: &mut dataset::EvaluationState<'_, T::Error>,
     records: &mut Vec<CheckRecord>,
-) -> Result<(), Box<ExecutionError<T::Error>>> {
+) -> Result<(), Box<ExecutionError<E>>> {
     let mut samples = Vec::new();
     let mut bindings = Vec::new();
     for binding in predicate.bindings() {
