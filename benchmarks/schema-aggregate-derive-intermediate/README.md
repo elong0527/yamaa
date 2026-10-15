@@ -4,9 +4,6 @@
 binding reads a named intermediate that declares `keep`, so one
 row-scoped value is visible to every record the aggregate reduces.
 
-> **Engine coverage:** the Python engine implements this behavior.
-> The R engine does not implement it yet.
-
 **Input:** exposure records with sequence numbers (`EXSEQ`) and
 doses (`EXDOSE`), plus dose caps (`CAPDOSE`), which a subject may
 have more than one of.

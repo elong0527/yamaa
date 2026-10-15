@@ -13,14 +13,6 @@
 # other two, so each contract keeps its own `number`.
 #
 # `grammar/README.md` states the file format and the shape notation.
-#
-# Python-only divergence (issue #778): the `call` production is implemented by
-# the Python engine only. The R predicate parser has no function-call support
-# and rejects every `name(...)` text with `invalid_predicate`, so the R engine
-# is divergent here by design. The `call` acceptance vectors therefore live in
-# the Python test suite (python/tests/expressions/test_predicates.py), not in
-# `cases` below; the shared rejection vectors stay here because both parsers
-# agree on them.
 schema_version: "1.0"
 contract: predicate
 contract_version: "1.1.0"
