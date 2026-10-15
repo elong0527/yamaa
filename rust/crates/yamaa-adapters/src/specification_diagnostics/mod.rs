@@ -208,6 +208,14 @@ pub(super) fn decoder_limit(limit: &yamaa_core::limits::LimitExceeded, stage: &s
 /// Findings resolve against the retained schema/pass input or the shared YAML decoder.
 pub fn capture_failure(error: &crate::specification_source::Error) -> String {
     use crate::specification_source::Error;
+    if let Error::Limit(limit) = error {
+        let mut outcome = json!({"status":"resource_limit","stage":"capture","phase":"capture",
+            "resource":limit.resource,"limit":limit.limit});
+        if let Some(actual) = limit.actual {
+            outcome["actual"] = json!(actual);
+        }
+        return capture_response(outcome);
+    }
     if let Error::Decode {
         error: crate::yaml_decode::DecodeFailure::Limit(limit),
         ..
@@ -243,6 +251,7 @@ pub fn capture_failure(error: &crate::specification_source::Error) -> String {
         };
     }
     let code = match error {
+        Error::Limit(_) => unreachable!("handled physical capture refusal"),
         Error::Decode { .. } => "yaml_decode",
         Error::Bundle(_) => "schema_bundle",
         Error::Normalize(_) => "normalization",
@@ -297,6 +306,16 @@ mod resource_refusal_tests {
             schema::{NormalizationError, NormalizationResource},
         };
         for (error, phase, resource, bound) in [
+            (
+                Error::Limit(yamaa_core::limits::LimitExceeded {
+                    resource: "spec_bytes",
+                    limit: Limits::SPEC_BYTES,
+                    actual: Some(Limits::SPEC_BYTES + 1),
+                }),
+                "capture",
+                "spec_bytes",
+                Limits::SPEC_BYTES,
+            ),
             (
                 Error::Decode {
                     identity: "spec.yaml".into(),
