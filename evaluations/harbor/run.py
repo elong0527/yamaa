@@ -16,11 +16,10 @@ import asyncio
 import json
 import shutil
 import sys
+import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
-
-import tomllib
 
 
 def is_model_job(config: dict) -> bool:

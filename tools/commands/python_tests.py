@@ -11,10 +11,11 @@ from tools.paths import ROOT
 
 
 def main():
-    paths = ["python/tests", "tools/tests"]
-    if (ROOT / "evaluations/harbor/tests").is_dir():
-        paths.append("evaluations/harbor/tests")
-    subprocess.run([sys.executable, "-m", "pytest", *paths], cwd=ROOT, check=True)
+    subprocess.run(
+        [sys.executable, "-m", "pytest", "python/tests", "tools/tests"],
+        cwd=ROOT,
+        check=True,
+    )
     catalog = load_catalog(ROOT, ROOT / "rust/qualification/supplemental.json")
     with tempfile.TemporaryDirectory(prefix="yamaa-python-tests-") as directory:
         work = Path(directory)

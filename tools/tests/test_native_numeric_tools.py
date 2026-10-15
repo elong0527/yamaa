@@ -39,7 +39,7 @@ class NativeToolConsumers(unittest.TestCase):
                 "assess_rounding",
             ):
                 with self.subTest(tool=name):
-                    importlib.reload(importlib.import_module(name))
+                    importlib.reload(importlib.import_module("tools.numeric." + name))
 
     def test_former_differential_input_counts_and_independent_controls_remain_visible(
         self,

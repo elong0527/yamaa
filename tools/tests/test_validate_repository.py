@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 import yaml
 from tools.paths import ROOT
+from tools.staging import stage_grammar_inputs
 from tools.validation import _native_odm as OWNER_NATIVE_ODM
 from tools.validation import _native_specification as OWNER_NATIVE_SPECIFICATION
 from tools.validation import _repository_yaml as OWNER_REPOSITORY_YAML
@@ -267,25 +268,28 @@ class TestTextSourceBoundary(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             for relative in (
-                'rust/crates/yamaa-core/tests/fixtures/cases.json',
-                'rust/crates/yamaa-adapters/tests/fixtures/nested/cases.json',
-                'rust/crates/yamaa-core/tests/fixtures/notes.md',
-                'rust/crates/yamaa-core/tests/fixtures/helper.py',
-                'rust/crates/yamaa-core/tests/metadata.json',
-                'cases.json',
+                "rust/crates/yamaa-core/tests/fixtures/cases.json",
+                "rust/crates/yamaa-adapters/tests/fixtures/nested/cases.json",
+                "rust/crates/yamaa-core/tests/fixtures/notes.md",
+                "rust/crates/yamaa-core/tests/fixtures/helper.py",
+                "rust/crates/yamaa-core/tests/metadata.json",
+                "cases.json",
             ):
                 path = root / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(chr(0x00E9), encoding='utf-8')
+                path.write_text(chr(0x00E9), encoding="utf-8")
 
             errors = OWNER_EDITORIAL.validate_ascii_sources(root)
 
-        self.assertEqual(errors, [
-            'ERROR: cases.json:1:1: non_ascii_source byte 0xC3',
-            'ERROR: rust/crates/yamaa-core/tests/fixtures/helper.py:1:1: non_ascii_source byte 0xC3',
-            'ERROR: rust/crates/yamaa-core/tests/fixtures/notes.md:1:1: non_ascii_source byte 0xC3',
-            'ERROR: rust/crates/yamaa-core/tests/metadata.json:1:1: non_ascii_source byte 0xC3',
-        ])
+        self.assertEqual(
+            errors,
+            [
+                "ERROR: cases.json:1:1: non_ascii_source byte 0xC3",
+                "ERROR: rust/crates/yamaa-core/tests/fixtures/helper.py:1:1: non_ascii_source byte 0xC3",
+                "ERROR: rust/crates/yamaa-core/tests/fixtures/notes.md:1:1: non_ascii_source byte 0xC3",
+                "ERROR: rust/crates/yamaa-core/tests/metadata.json:1:1: non_ascii_source byte 0xC3",
+            ],
+        )
 
     def test_rejects_a_decoded_surrogate(self):
         document = {"value": chr(0xD800)}
@@ -6182,7 +6186,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
     # -- the R parser reads the same files ----------------------------------
 
     def test_the_r_runner_reads_the_same_contracts(self):
-        stager = self.root / "rust" / "tools" / "stage_grammar_inputs.py"
+        stager = Path(stage_grammar_inputs.__file__)
         text = stager.read_text()
         for contract, rule_id in OWNER_GRAMMAR_CHECKS.GRAMMAR_CONTRACTS.items():
             with self.subTest(contract=contract):
@@ -6550,8 +6554,6 @@ class TestReferenceDependencyBoundary(unittest.TestCase):
 
 class TestValidatorCLI(unittest.TestCase):
     def setUp(self):
-        self.tool_path = Path(__file__).parent / "validate_repository.py"
-        self.doc_tool_path = Path(__file__).parent / "check_documentation.py"
         self.test_dir = tempfile.TemporaryDirectory()
         self.root_dir = Path(self.test_dir.name)
         # Every repository carries R022's shared fixtures and the closed
@@ -6609,7 +6611,7 @@ class TestValidatorCLI(unittest.TestCase):
 
     def test_cli_help(self):
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--help"],
+            [sys.executable, "-m", "tools.validation.validate_repository", "--help"],
             capture_output=True,
             text=True,
         )
@@ -6619,7 +6621,13 @@ class TestValidatorCLI(unittest.TestCase):
 
     def test_cli_missing_schema_fails(self):
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -6633,7 +6641,13 @@ class TestValidatorCLI(unittest.TestCase):
         bad_yaml.write_text("a: 1\na: 2\n")
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -6649,7 +6663,13 @@ class TestValidatorCLI(unittest.TestCase):
         bad_yaml.write_text("a: 1\n  b: 2\n")
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -6668,7 +6688,13 @@ class TestValidatorCLI(unittest.TestCase):
         )
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -6692,7 +6718,13 @@ class TestValidatorCLI(unittest.TestCase):
         (yaml_dir / "schema_shared.yaml").write_text('version: "1.0"\n')
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -6708,7 +6740,13 @@ class TestValidatorCLI(unittest.TestCase):
         (self.root_dir / "outside.yaml").write_text('version: "1.0"\n')
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -6726,7 +6764,13 @@ class TestValidatorCLI(unittest.TestCase):
         (yaml_dir / "schema_link.yaml").symlink_to("schema_real.yaml")
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -6743,7 +6787,13 @@ class TestValidatorCLI(unittest.TestCase):
         (yaml_dir / "schema_extra.yaml").write_text("- not\n- a\n- mapping\n")
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -6761,7 +6811,13 @@ class TestValidatorCLI(unittest.TestCase):
         (yaml_dir / "other.yaml").write_text('version: "1.0"\n')
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -6780,7 +6836,13 @@ class TestValidatorCLI(unittest.TestCase):
         )
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -6795,7 +6857,13 @@ class TestValidatorCLI(unittest.TestCase):
         )
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -6810,7 +6878,13 @@ class TestValidatorCLI(unittest.TestCase):
         )
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -6827,7 +6901,13 @@ class TestValidatorCLI(unittest.TestCase):
         )
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -6842,7 +6922,13 @@ class TestValidatorCLI(unittest.TestCase):
         )
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -6861,7 +6947,13 @@ class TestValidatorCLI(unittest.TestCase):
         )
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -6880,7 +6972,13 @@ class TestValidatorCLI(unittest.TestCase):
         )
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -6897,7 +6995,13 @@ class TestValidatorCLI(unittest.TestCase):
         (yaml_dir / "schema_other.yaml").write_text('version: "2.0"\n')
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -6915,7 +7019,13 @@ class TestValidatorCLI(unittest.TestCase):
         (yaml_dir / "schema_extra.yaml").write_text('version: "2.0"\n')
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -6927,7 +7037,13 @@ class TestValidatorCLI(unittest.TestCase):
         ex_dir.mkdir(parents=True, exist_ok=True)
         # missing everything
         result = subprocess.run(
-            [sys.executable, str(self.doc_tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.check_documentation",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -6944,7 +7060,13 @@ class TestValidatorCLI(unittest.TestCase):
         (ex_dir / "expected" / "error.yaml").write_text("{}")
 
         result = subprocess.run(
-            [sys.executable, str(self.doc_tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.check_documentation",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -6991,7 +7113,13 @@ class TestValidatorCLI(unittest.TestCase):
         (ex_dir / "expected" / "error.yaml").write_text("{}")
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -7006,7 +7134,13 @@ class TestValidatorCLI(unittest.TestCase):
         )
 
         result = subprocess.run(
-            [sys.executable, str(self.doc_tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.check_documentation",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -7023,7 +7157,13 @@ class TestValidatorCLI(unittest.TestCase):
         )
 
         result = subprocess.run(
-            [sys.executable, str(self.doc_tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.check_documentation",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -7105,7 +7245,13 @@ class TestValidatorCLI(unittest.TestCase):
         )
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -7174,7 +7320,13 @@ bad_field: "what"
         )
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(self.root_dir)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
             capture_output=True,
             text=True,
         )
@@ -7586,7 +7738,13 @@ bad_field: "what"
 
         real_root = ROOT
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), "--root", str(real_root)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(real_root),
+            ],
             capture_output=True,
             text=True,
         )
@@ -8105,7 +8263,7 @@ class TestSourceProfileDiagnostics(unittest.TestCase):
 
     def test_a_unicode_fixture_keeps_its_exemption_when_shouted(self):
         self.assertTrue(
-            OWNER_EDITORIAL.is_unicode_fixture_csv(Path("benchmarks/ex/input/DM.CSV"))
+            OWNER_EDITORIAL.is_unicode_fixture_data(Path("benchmarks/ex/input/DM.CSV"))
         )
 
     def test_the_validation_condition_is_not_asked_of_a_fixture(self):

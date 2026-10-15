@@ -51,19 +51,40 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
         self,
     ):
         import os
+        import shutil
         import subprocess
         import sys
+        import sysconfig
         import venv
 
         if os.environ.get("YAMAA_PROJECT_WITNESS_ISOLATED") != "1":
             with tempfile.TemporaryDirectory(
                 prefix="yamaa-project-witness-"
             ) as directory:
-                venv.EnvBuilder(system_site_packages=True, with_pip=False).create(
-                    directory
-                )
+                venv.EnvBuilder(with_pip=False).create(directory)
                 interpreter = Path(directory) / (
                     "Scripts/python.exe" if os.name == "nt" else "bin/python"
+                )
+                child_packages = subprocess.check_output(
+                    [
+                        str(interpreter),
+                        "-c",
+                        "import sysconfig; print(sysconfig.get_paths()['purelib'])",
+                    ],
+                    text=True,
+                ).strip()
+
+                def clone_installed_file(source, destination):
+                    try:
+                        return os.link(source, destination)
+                    except OSError:
+                        return shutil.copy2(source, destination)
+
+                shutil.copytree(
+                    sysconfig.get_paths()["purelib"],
+                    child_packages,
+                    copy_function=clone_installed_file,
+                    dirs_exist_ok=True,
                 )
                 subprocess.run(
                     [

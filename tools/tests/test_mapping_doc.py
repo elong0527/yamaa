@@ -5,9 +5,10 @@ from pathlib import Path
 
 import yaml
 from tools.benchmark_docs import mapping_doc
+from tools.paths import ROOT
 
 HERE = Path(__file__).resolve().parent
-BENCHMARKS = HERE.parents[2] / "benchmarks"
+BENCHMARKS = ROOT / "benchmarks"
 
 
 def load_spec(name):
