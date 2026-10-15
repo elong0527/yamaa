@@ -563,8 +563,9 @@ validation with `ambiguous_dictionary`.
 ### Regular expressions: Errors
 
 The portable matcher follows the shared
-[fixed resource policy](../../docs/release.md#resource-limits). Its step counter
-starts fresh for each match.
+[fixed resource policy](../../docs/release.md#resource-limits). Each complete
+match call starts a fresh step counter covering search starts, backtracking,
+and nested assertions.
 
 A match-step refusal is reported as `engine_rejected`, with `resource`
 `regex_steps`, the applied `limit`, and `actual` when known.
