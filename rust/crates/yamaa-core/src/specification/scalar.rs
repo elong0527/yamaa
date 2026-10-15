@@ -28,8 +28,13 @@ pub(super) fn prepare(
     extraction: &str_extract::Prepared,
     templates: &str_template::Prepared,
 ) -> Result<Declaration, PrepareError> {
-    if depth > 64 {
-        return Err(PrepareError::limit("scalar_depth", 64, Some(depth), None));
+    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+        return Err(PrepareError::limit(
+            "semantic_depth",
+            crate::limits::Limits::SEMANTIC_DEPTH,
+            Some(depth),
+            None,
+        ));
     }
     let sources = sequence(d, field(d, payload, "sources")?)?;
     if op == "str_concat" {
@@ -89,8 +94,13 @@ pub(super) fn declaration_findings(
         findings: &mut Vec<PreflightFinding>,
         depth: usize,
     ) -> Result<(), PrepareError> {
-        if depth > 64 {
-            return Err(PrepareError::limit("scalar_depth", 64, None, None));
+        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+            return Err(PrepareError::limit(
+                "semantic_depth",
+                crate::limits::Limits::SEMANTIC_DEPTH,
+                None,
+                None,
+            ));
         }
         for op in ["greatest", "least"] {
             if let Some(payload) = d.field(id, op) {
@@ -203,11 +213,7 @@ fn bound_types(
     sources: &[String],
     catalog: &Catalog,
 ) -> Result<Vec<Option<ColumnType>>, BindError> {
-    sources
-        .iter()
-        .map(|name| catalog.type_of(name))
-        .collect::<Result<_, _>>()
-        .map_err(BindError::Catalog)
+    Ok(sources.iter().map(|name| catalog.type_of(name)).collect())
 }
 fn finish_extreme(
     sources: &[String],
@@ -277,10 +283,9 @@ pub(super) fn bind(
             for (name, kind) in sources.iter().zip(&mut types) {
                 if let Some((index, field)) = spec.intermediates.reference(name) {
                     if let Some(item) = &intermediates[index] {
-                        *kind = item.source_column(secondary, field).and_then(|column| {
-                            item.source_schema(secondary)
-                                .map(|schema| schema.columns()[column].kind)
-                        });
+                        *kind = item
+                            .source_column(secondary, field)
+                            .and_then(|column| item.source_kind(secondary, column));
                     }
                 }
             }
@@ -432,10 +437,8 @@ pub(super) fn bind_row(
                     .map(|name| {
                         if let Some((index, field)) = named.reference(name) {
                             Ok(intermediates[index].as_ref().and_then(|item| {
-                                item.source_column(secondary, field).and_then(|column| {
-                                    item.source_schema(secondary)
-                                        .map(|schema| schema.columns()[column].kind)
-                                })
+                                item.source_column(secondary, field)
+                                    .and_then(|column| item.source_kind(secondary, column))
                             }))
                         } else {
                             bound_types(std::slice::from_ref(name), catalog).map(|types| types[0])
@@ -535,8 +538,13 @@ pub(super) fn operand_references(
     names: &mut Vec<String>,
     depth: usize,
 ) -> Result<(), PrepareError> {
-    if depth > 64 {
-        return Err(PrepareError::limit("scalar_depth", 64, Some(depth), None));
+    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+        return Err(PrepareError::limit(
+            "semantic_depth",
+            crate::limits::Limits::SEMANTIC_DEPTH,
+            Some(depth),
+            None,
+        ));
     }
     if let Some(payload) = d.field(value, "source") {
         names.push(text(d, field(d, payload, "variable")?)?.into());

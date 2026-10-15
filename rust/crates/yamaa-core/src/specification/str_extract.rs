@@ -1,6 +1,6 @@
 //! Whole-request text declaration admission, then reference-owned extraction binding.
 use super::*;
-use crate::text_extract::{AdmissionError, StringExtract, MAX_DECLARATION_BYTES};
+use crate::text_extract::{AdmissionError, StringExtract};
 
 pub(super) struct Prepared(BTreeMap<usize, StringExtract>);
 impl Prepared {
@@ -12,44 +12,10 @@ impl Prepared {
         output: &TableSchema,
         findings: &mut Vec<PreflightFinding>,
     ) -> Result<Self, PrepareError> {
-        // Complete admission precedes every owned declaration or parser arena.
-        let mut bytes = 0usize;
-        walk(d, &mut |payload, path, _rows| {
-            let source = text(d, field(d, payload, "source")?)?;
-            let pattern = text(d, field(d, payload, "pattern")?)?;
-            let group = group(d, payload)?;
-            let handlers = ["missing", "no_match"]
-                .into_iter()
-                .filter_map(|name| d.field(payload, name))
-                .map(|id| match &d.nodes()[id] {
-                    N::Text(text) | N::Integer(text) => text.len(),
-                    _ => 0,
-                });
-            let amount = StringExtract::declaration_bytes(source, path, pattern, group, handlers)
-                .ok_or(PrepareError::limit(
-                "str_extract_metadata",
-                MAX_DECLARATION_BYTES,
-                None,
-                Some(path),
-            ))?;
-            bytes = bytes
-                .checked_add(amount)
-                .filter(|n| *n <= MAX_DECLARATION_BYTES)
-                .ok_or_else(|| {
-                    PrepareError::limit(
-                        "str_extract_metadata",
-                        MAX_DECLARATION_BYTES,
-                        None,
-                        Some(path),
-                    )
-                })?;
-            Ok(())
-        })?;
         let mut operations = BTreeMap::new();
-        let mut budget = crate::regex::CompileBudget::new(Default::default());
         walk(d, &mut |payload, path, rows| {
             let source = text(d, field(d, payload, "source")?)?;
-            let operation = StringExtract::with_budget(
+            let operation = StringExtract::new(
                 source.into(),
                 path.into(),
                 text(d, field(d, payload, "pattern")?)?.into(),
@@ -60,16 +26,9 @@ impl Prepared {
                 d.field(payload, "no_match")
                     .map(|id| literal(d, id, &format!("{path}.no_match")))
                     .transpose()?,
-                &mut budget,
             )
             .map_err(|error| match error {
                 AdmissionError::Shape => PrepareError::Internal,
-                AdmissionError::Limit => PrepareError::limit(
-                    "str_extract_compile",
-                    MAX_DECLARATION_BYTES,
-                    None,
-                    Some(path),
-                ),
                 AdmissionError::Regex(crate::regex::CompileError::Limit {
                     resource,
                     limit,
@@ -133,22 +92,15 @@ fn walk(
         depth: usize,
         visit: &mut impl FnMut(usize, &str, bool) -> Result<(), PrepareError>,
     ) -> Result<(), PrepareError> {
-        if depth > 64 {
+        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PrepareError::limit(
                 "str_extract_depth",
-                64,
+                crate::limits::Limits::SEMANTIC_DEPTH,
                 Some(depth),
                 Some(path),
             ));
         }
-        if path.len() > 65_536 {
-            return Err(PrepareError::limit(
-                "path_bytes",
-                65_536,
-                Some(path.len()),
-                Some(path),
-            ));
-        }
+
         for name in ["str_extract", "str_contains"] {
             if let Some(payload) = d.field(id, name) {
                 visit(payload, &format!("{path}.{name}"), rows)?;
@@ -327,10 +279,7 @@ fn finish(
         return Ok(None);
     }
     // Scope/availability succeeds before type and retained pattern/group facts.
-    if let Some(kind) = catalog
-        .type_of(operation.source())
-        .map_err(BindError::Catalog)?
-    {
+    if let Some(kind) = catalog.type_of(operation.source()) {
         if kind != ColumnType::Str {
             findings.push(BindFinding::TextExtract(
                 operation.input_diagnostic(kind_name(kind)),

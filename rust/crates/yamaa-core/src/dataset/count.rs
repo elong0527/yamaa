@@ -1,26 +1,18 @@
 //! Exact authored count bounds, independent of machine integer width.
 use std::cmp::Ordering;
 
-/// Admission policy for each canonical decimal count bound.
-pub const MAX_COUNT_BOUND_BYTES: usize = 65_536;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum CountBoundError {
     #[error("dataset count invalid")]
     Invalid,
-    #[error("dataset count limit")]
-    Limit,
 }
 
-/// A bounded canonical integer whose mathematical value need not fit i64.
+/// A canonical integer whose mathematical value need not fit i64.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RowCountBound(String);
 
 impl RowCountBound {
     pub fn new(text: &str) -> Result<Self, CountBoundError> {
-        if text.len() > MAX_COUNT_BOUND_BYTES {
-            return Err(CountBoundError::Limit);
-        }
         if !crate::schema::canonical_integer(text) {
             return Err(CountBoundError::Invalid);
         }
@@ -134,13 +126,5 @@ impl RowCount {
                 .is_none_or(|max| max.compare_count(count) != Ordering::Less)
             && self.min_fraction.is_none_or(|min| fraction >= min)
             && self.max_fraction.is_none_or(|max| fraction <= max)
-    }
-    pub fn bound_work(&self) -> usize {
-        self.min
-            .iter()
-            .chain(&self.max)
-            .map(|n| n.decimal().len())
-            .sum::<usize>()
-            .max(1)
     }
 }

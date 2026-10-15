@@ -1,6 +1,6 @@
 //! Whole-occurrence template admission followed by shared reference binding.
 use super::*;
-use crate::text_template::{AdmissionError, CompileBudget, StringTemplate, MAX_DECLARATION_BYTES};
+use crate::text_template::StringTemplate;
 pub(super) struct Prepared(BTreeMap<usize, StringTemplate>);
 impl Prepared {
     pub(super) fn get(&self, payload: usize) -> Result<StringTemplate, PrepareError> {
@@ -11,87 +11,16 @@ impl Prepared {
         output: &TableSchema,
         findings: &mut Vec<PreflightFinding>,
     ) -> Result<Self, PrepareError> {
-        let mut bytes = 0usize;
-        let mut budget = CompileBudget::new();
-        // Admit all effective row-default copies and all catalogue queries before parsing.
-        // A catalogue is bounded by the existing portable default reference limits.
-        // The multiplier conservatively covers scope/binding's repeated tree searches.
-        walk(d, &mut |payload, path, _rows, multiplicity| {
-            let template = template(d, payload)?;
-            let handler = d
-                .field(payload, "missing")
-                .map(|id| match &d.nodes()[id] {
-                    N::Text(t) | N::Integer(t) => t.len(),
-                    _ => 0,
-                })
-                .unwrap_or(0);
-            let amount = StringTemplate::declaration_bytes(template, path, handler)
-                .and_then(|n| n.checked_mul(multiplicity))
-                .ok_or_else(|| {
-                    PrepareError::limit(
-                        "str_template_metadata",
-                        MAX_DECLARATION_BYTES,
-                        None,
-                        Some(path),
-                    )
-                })?;
-            bytes = bytes
-                .checked_add(amount)
-                .filter(|n| *n <= MAX_DECLARATION_BYTES)
-                .ok_or_else(|| {
-                    PrepareError::limit(
-                        "str_template_metadata",
-                        MAX_DECLARATION_BYTES,
-                        None,
-                        Some(path),
-                    )
-                })?;
-            Ok(())
-        })?;
-        walk(d, &mut |payload, path, _rows, multiplicity| {
-            let template = template(d, payload)?;
-            let query = template
-                .len()
-                .checked_mul(4096)
-                .and_then(|n| n.checked_mul(multiplicity))
-                .ok_or_else(|| {
-                    PrepareError::limit(
-                        "str_template_work",
-                        crate::text_template::MAX_COMPILE_WORK,
-                        None,
-                        Some(path),
-                    )
-                })?;
-            budget.charge(query).map_err(|error| match error {
-                AdmissionError::Work { limit, actual } => {
-                    PrepareError::limit("str_template_work", limit, actual, Some(path))
-                }
-                _ => PrepareError::Internal,
-            })?;
-            Ok(())
-        })?;
         let mut operations = BTreeMap::new();
-        walk(d, &mut |payload, path, rows, _multiplicity| {
-            let operation = StringTemplate::with_budget(
+        walk(d, &mut |payload, path, rows| {
+            let operation = StringTemplate::new(
                 template(d, payload)?.into(),
                 path.into(),
                 d.field(payload, "missing")
                     .map(|id| literal(d, id, &format!("{path}.missing")))
                     .transpose()?,
-                &mut budget,
             )
-            .map_err(|error| match error {
-                AdmissionError::Shape => PrepareError::Internal,
-                AdmissionError::Work { limit, actual } => {
-                    PrepareError::limit("str_template_work", limit, actual, Some(path))
-                }
-                AdmissionError::Limit => PrepareError::limit(
-                    "str_template_compile",
-                    MAX_DECLARATION_BYTES,
-                    None,
-                    Some(path),
-                ),
-            })?;
+            .map_err(|_| PrepareError::Internal)?;
             if let Some(error) = operation.declaration_diagnostic() {
                 findings.push(PreflightFinding::TextTemplate(error.clone()));
             } else if !rows {
@@ -132,35 +61,27 @@ fn template(d: &Document, payload: usize) -> Result<&str, PrepareError> {
 }
 fn walk(
     d: &Document,
-    visit: &mut impl FnMut(usize, &str, bool, usize) -> Result<(), PrepareError>,
+    visit: &mut impl FnMut(usize, &str, bool) -> Result<(), PrepareError>,
 ) -> Result<(), PrepareError> {
     fn expression(
         d: &Document,
         id: usize,
         path: &str,
         rows: bool,
-        multiplicity: usize,
         depth: usize,
-        visit: &mut impl FnMut(usize, &str, bool, usize) -> Result<(), PrepareError>,
+        visit: &mut impl FnMut(usize, &str, bool) -> Result<(), PrepareError>,
     ) -> Result<(), PrepareError> {
-        if depth > 64 {
+        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PrepareError::limit(
                 "str_template_depth",
-                64,
+                crate::limits::Limits::SEMANTIC_DEPTH,
                 Some(depth),
                 Some(path),
             ));
         }
-        if path.len() > 65_536 {
-            return Err(PrepareError::limit(
-                "path_bytes",
-                65_536,
-                Some(path.len()),
-                Some(path),
-            ));
-        }
+
         if let Some(payload) = d.field(id, "str_template") {
-            visit(payload, &format!("{path}.str_template"), rows, multiplicity)?;
+            visit(payload, &format!("{path}.str_template"), rows)?;
         }
         if let Some(key) = d
             .field(id, "aggregate")
@@ -173,7 +94,6 @@ fn walk(
                         value,
                         &format!("{path}.aggregate.key.{}", text(d, name)?),
                         rows,
-                        multiplicity,
                         depth + 1,
                         visit,
                     )?;
@@ -191,7 +111,6 @@ fn walk(
                     field(d, field(d, binding, "derivation")?, "value")?,
                     &format!("{path}.aggregate.derive[{index}].derivation"),
                     true,
-                    multiplicity,
                     depth + 1,
                     visit,
                 )?;
@@ -207,7 +126,6 @@ fn walk(
                     child,
                     &format!("{path}.str_concat.sources[{index}]"),
                     rows,
-                    multiplicity,
                     depth + 1,
                     visit,
                 )?;
@@ -222,7 +140,6 @@ fn walk(
                             child,
                             &format!("{path}.case[{index}].{name}"),
                             rows,
-                            multiplicity,
                             depth + 1,
                             visit,
                         )?;
@@ -233,12 +150,6 @@ fn walk(
         Ok(())
     }
     let rows = present(d, d.root(), "rows");
-    let multiplicity = d
-        .field(d.root(), "rows")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        .map(|id| sequence(d, id).map(|items| items.len().max(1)))
-        .transpose()?
-        .unwrap_or(1);
     for &column in sequence(d, field(d, d.root(), "columns")?)? {
         if let Some(value) = d
             .field(column, "derivation")
@@ -249,7 +160,6 @@ fn walk(
                 value,
                 &format!("columns.{}.derivation", text(d, field(d, column, "name")?)?),
                 rows,
-                multiplicity,
                 0,
                 visit,
             )?;
@@ -268,7 +178,6 @@ fn walk(
                             value,
                             &format!("rows[{index}].derivations.{}", text(d, name)?),
                             true,
-                            1,
                             0,
                             visit,
                         )?;
@@ -290,7 +199,6 @@ fn walk(
                             value,
                             &format!("intermediates[{index}].key.{}", text(d, name)?),
                             rows,
-                            multiplicity,
                             0,
                             visit,
                         )?;
@@ -304,7 +212,7 @@ fn walk(
                 for &(name, handled) in mapping(d, items)? {
                     let path = format!("intermediates[{index}].derivations.{}", text(d, name)?);
                     let (value, path) = intermediate_derivations::value(d, handled, &path)?;
-                    expression(d, value, &path, true, 1, 0, visit)?;
+                    expression(d, value, &path, true, 0, visit)?;
                 }
             }
         }
@@ -351,7 +259,7 @@ fn finish(
         }
         return Ok(None);
     }
-    if let Some(kind) = catalog.type_of(source).map_err(BindError::Catalog)? {
+    if let Some(kind) = catalog.type_of(source) {
         if kind != ColumnType::Str {
             findings.push(BindFinding::TextTemplate(
                 operation

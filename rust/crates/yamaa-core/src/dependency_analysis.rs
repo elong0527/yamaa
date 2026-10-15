@@ -1,33 +1,9 @@
 //! Deterministic analysis of already-bound dependency graphs, without host effects.
 use std::{collections::BTreeSet, vec};
 
-/// Graph work limits, separate from language validation conditions.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Limits {
-    pub nodes: usize,
-    /// Count written edges before duplicate removal.
-    pub edges: usize,
-}
-
-impl Default for Limits {
-    /// Bound the prototype's graph allocations and work without recursive traversal.
-    fn default() -> Self {
-        Self {
-            nodes: 4096,
-            edges: 65_536,
-        }
-    }
-}
-
-/// Rejected graph shape or resource policy; a dependency cycle is an analysis result.
+/// Rejected graph shape; a dependency cycle is an analysis result.
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum Error {
-    #[error("dependency analysis node limit: limit={limit:?}, required={required:?}")]
-    NodeLimit { limit: usize, required: usize },
-    #[error("dependency analysis edge limit: limit={limit:?}, required={required:?}")]
-    EdgeLimit { limit: usize, required: usize },
-    #[error("dependency analysis size overflow")]
-    SizeOverflow,
     #[error("dependency analysis invalid dependency: node={node:?}, dependency={dependency:?}")]
     InvalidDependency { node: usize, dependency: usize },
 }
@@ -45,42 +21,18 @@ pub struct Analysis {
 ///
 /// Bindings to values outside this scheduling phase must be omitted by the binder.
 /// Every supplied edge refers to another node in this graph. Edge order and
-/// repetition do not change the result, but repeated edges still consume budget.
+/// repetition do not change the result.
 /// This service neither resolves references nor decides whether forward reads are legal.
-pub fn analyze(dependencies: &[Vec<usize>], limits: Limits) -> Result<Analysis, Error> {
-    admit(
-        dependencies.len(),
-        dependencies.iter().map(Vec::as_slice),
-        limits,
-    )?;
+pub fn analyze(dependencies: &[Vec<usize>]) -> Result<Analysis, Error> {
+    validate_indices(dependencies.len(), dependencies.iter().map(Vec::as_slice))?;
     Ok(analyze_admitted(dependencies.to_vec()))
 }
 
-/// Admit borrowed edges before either graph service copies or filters them.
-pub(crate) fn admit<'a>(
+/// Validate borrowed edges before either graph service copies or filters them.
+pub(crate) fn validate_indices<'a>(
     nodes: usize,
-    dependencies: impl Iterator<Item = &'a [usize]> + Clone,
-    limits: Limits,
+    dependencies: impl Iterator<Item = &'a [usize]>,
 ) -> Result<(), Error> {
-    if nodes > limits.nodes {
-        return Err(Error::NodeLimit {
-            limit: limits.nodes,
-            required: nodes,
-        });
-    }
-    let edges = dependencies
-        .clone()
-        .try_fold(0usize, |count, dependencies| {
-            count
-                .checked_add(dependencies.len())
-                .ok_or(Error::SizeOverflow)
-        })?;
-    if edges > limits.edges {
-        return Err(Error::EdgeLimit {
-            limit: limits.edges,
-            required: edges,
-        });
-    }
     for (node, dependencies_for_node) in dependencies.enumerate() {
         for &dependency in dependencies_for_node {
             if dependency >= nodes {
@@ -91,7 +43,7 @@ pub(crate) fn admit<'a>(
     Ok(())
 }
 
-/// Analyze an owned graph after its caller has admitted indices and work limits.
+/// Analyze an owned graph after its caller has validated indices.
 pub(crate) fn analyze_admitted(mut graph: Vec<Vec<usize>>) -> Analysis {
     for dependencies in &mut graph {
         dependencies.sort_unstable();
@@ -152,37 +104,6 @@ fn first_cycle(graph: &[Vec<usize>]) -> Option<Vec<usize>> {
 /// Select one earliest ready node at a time, including newly ready earlier declarations.
 fn stable_order(graph: &[Vec<usize>]) -> Vec<usize> {
     let mut order = Vec::with_capacity(graph.len());
-    match visit_stable_order(graph, |next| {
-        if let Some(node) = next {
-            order.push(node);
-        }
-        Ok::<_, std::convert::Infallible>(())
-    }) {
-        Ok(()) => order,
-        Err(never) => match never {},
-    }
-}
-
-/// Bound all scheduler vector/tree slots before allocating its admitted state.
-/// Counts cover remaining dependencies, reader lists and the maximal ready set;
-/// the caller owns and separately accounts for its emitted-order representation.
-pub(crate) fn stable_order_slots(graph: &[Vec<usize>]) -> usize {
-    graph
-        .iter()
-        .fold(graph.len().saturating_mul(3), |slots, edges| {
-            slots.saturating_add(edges.len())
-        })
-}
-
-/// Visit the same earliest-ready schedule for every already-admitted graph.
-/// Indices and graph storage must be admitted under the caller's own policies;
-/// this service applies no generic graph limits. Before emitting a node, or
-/// completing a stalled/exhausted schedule, it gives the caller an admission
-/// point. An error stops visitation immediately; no later node is emitted.
-pub(crate) fn visit_stable_order<E>(
-    graph: &[Vec<usize>],
-    mut admit: impl FnMut(Option<usize>) -> Result<(), E>,
-) -> Result<(), E> {
     let mut remaining: Vec<_> = graph.iter().map(Vec::len).collect();
     let mut readers = vec![Vec::new(); graph.len()];
     for (node, dependencies) in graph.iter().enumerate() {
@@ -195,10 +116,8 @@ pub(crate) fn visit_stable_order<E>(
         .enumerate()
         .filter_map(|(node, &count)| (count == 0).then_some(node))
         .collect();
-    loop {
-        let next = ready.pop_first();
-        admit(next)?;
-        let Some(node) = next else { break };
+    while let Some(node) = ready.pop_first() {
+        order.push(node);
         for &reader in &readers[node] {
             remaining[reader] -= 1;
             if remaining[reader] == 0 {
@@ -206,7 +125,7 @@ pub(crate) fn visit_stable_order<E>(
             }
         }
     }
-    Ok(())
+    order
 }
 
 #[cfg(test)]
@@ -214,45 +133,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn admitted_scheduler_preserves_admission_points_and_stops_on_refusal() {
+    fn scheduler_selects_newly_ready_earlier_declarations_first() {
         let graph = vec![vec![2], vec![2], vec![], vec![]];
-        let mut attempts = Vec::new();
         assert_eq!(
-            visit_stable_order(&graph, |next| {
-                attempts.push(next);
-                if next == Some(0) {
-                    Err("work exhausted")
-                } else {
-                    Ok(())
-                }
-            }),
-            Err("work exhausted")
+            analyze(&graph),
+            Ok(Analysis {
+                cycle: None,
+                order: vec![2, 0, 1, 3],
+            })
         );
-        assert_eq!(attempts, vec![Some(2), Some(0)]);
-        let mut attempts = Vec::new();
-        visit_stable_order(&graph, |next| {
-            attempts.push(next);
-            Ok::<_, std::convert::Infallible>(())
-        })
-        .unwrap();
-        assert_eq!(attempts, vec![Some(2), Some(0), Some(1), Some(3), None]);
     }
 
     #[test]
-    fn admitted_scheduler_uses_caller_limits_instead_of_the_probe_node_cap() {
-        let graph = vec![vec![]; Limits::default().nodes + 1];
-        let mut order = Vec::new();
-        visit_stable_order(&graph, |next| {
-            if let Some(node) = next {
-                order.push(node);
-            }
-            Ok::<_, std::convert::Infallible>(())
-        })
-        .unwrap();
-        assert_eq!(order, (0..4097).collect::<Vec<_>>());
-        assert!(matches!(
-            analyze(&graph, Limits::default()),
-            Err(Error::NodeLimit { .. })
-        ));
+    fn iterative_scheduler_handles_thousands_of_independent_declarations() {
+        let graph = vec![vec![]; 4097];
+        let analysis = analyze(&graph).unwrap();
+        assert_eq!(analysis.order, (0..4097).collect::<Vec<_>>());
+        assert_eq!(analysis.cycle, None);
     }
 }
