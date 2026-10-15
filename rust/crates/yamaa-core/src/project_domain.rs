@@ -3,7 +3,7 @@
 use crate::{
     domain::{self, CheckedSpecification},
     project_activation::{self, ActivationPort, Bindings, Failure},
-    specification_run::{CapturedAttempt, Limits, PortError, SourceDecoder, SourcePort},
+    specification_run::{CapturedAttempt, PortError, SourceDecoder, SourcePort},
 };
 use crate::{
     project_environment::ExecutionEnvironment,
@@ -53,7 +53,6 @@ impl CheckedProject<'_> {
         activation: &mut A,
         source: &mut P,
         decoder: &mut D,
-        limits: Limits,
         attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
     ) -> Result<(), Failure<A::Error>>
     where
@@ -64,7 +63,6 @@ impl CheckedProject<'_> {
             activation,
             source,
             decoder,
-            limits,
             attempt,
             (
                 None,
@@ -80,7 +78,6 @@ impl CheckedProject<'_> {
         activation: &mut A,
         source: &mut P,
         decoder: &mut D,
-        limits: Limits,
         attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
         observations: &mut project_activation::Observations,
     ) -> Result<(), Failure<A::Error>>
@@ -92,7 +89,6 @@ impl CheckedProject<'_> {
             activation,
             source,
             decoder,
-            limits,
             attempt,
             (
                 Some(observations),
@@ -108,7 +104,6 @@ impl CheckedProject<'_> {
         activation: &mut A,
         source: &mut P,
         decoder: &mut D,
-        limits: Limits,
         evidence: BuildEvidence<'_, P, D>,
         scope: crate::application_observer::Scope<'_>,
     ) -> Result<(), Failure<A::Error>>
@@ -120,7 +115,6 @@ impl CheckedProject<'_> {
             activation,
             source,
             decoder,
-            limits,
             evidence.0,
             (Some(evidence.1), scope),
         )
@@ -174,7 +168,6 @@ impl CheckedOwnedProject {
         activation: &mut A,
         source: &mut P,
         decoder: &mut D,
-        limits: Limits,
         attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
     ) -> Result<(), Failure<A::Error>>
     where
@@ -185,7 +178,6 @@ impl CheckedOwnedProject {
             activation,
             source,
             decoder,
-            limits,
             attempt,
             (
                 None,
@@ -199,7 +191,6 @@ impl CheckedOwnedProject {
         activation: &mut A,
         source: &mut P,
         decoder: &mut D,
-        limits: Limits,
         attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
         observations: &mut project_activation::Observations,
     ) -> Result<(), Failure<A::Error>>
@@ -211,7 +202,6 @@ impl CheckedOwnedProject {
             activation,
             source,
             decoder,
-            limits,
             attempt,
             (
                 Some(observations),
@@ -225,7 +215,6 @@ impl CheckedOwnedProject {
         activation: &mut A,
         source: &mut P,
         decoder: &mut D,
-        limits: Limits,
         evidence: BuildEvidence<'_, P, D>,
         scope: crate::application_observer::Scope<'_>,
     ) -> Result<(), Failure<A::Error>>
@@ -237,7 +226,6 @@ impl CheckedOwnedProject {
             activation,
             source,
             decoder,
-            limits,
             evidence.0,
             (Some(evidence.1), scope),
         )
@@ -248,7 +236,6 @@ fn build<A: ActivationPort, P: SourcePort, D: SourceDecoder>(
     activation: &mut A,
     source: &mut P,
     decoder: &mut D,
-    limits: Limits,
     attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
     (observations, scope): (
         Option<&mut project_activation::Observations>,
@@ -267,11 +254,10 @@ where
     });
     let selected = checked.compiled().called_functions();
     if selected.is_empty() {
-        checked.build_with_observer_into(
+        checked.build_into(
             source,
             decoder,
             &mut crate::function_invocation::NoFunctions::new(),
-            limits,
             attempt,
             scope,
         );
@@ -294,7 +280,6 @@ where
             lock,
             &functions,
             &mut scope.activation(activation),
-            project_activation::Limits::default(),
             observations,
         ),
         None => project_activation::activate_references(
@@ -310,6 +295,6 @@ where
     );
     let activated = activated?;
     let mut bindings = Bindings::new(&activated, activation);
-    checked.build_with_observer_into(source, decoder, &mut bindings, limits, attempt, scope);
+    checked.build_into(source, decoder, &mut bindings, attempt, scope);
     Ok(())
 }

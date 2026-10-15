@@ -17,16 +17,11 @@ pub trait ArtifactPort {
 /// returned length before observations or publication can accept the artifact.
 pub trait ArtifactEncoder {
     type Error;
-    fn encode(
-        &mut self,
-        dataset: &Dataset,
-        projection: &[usize],
-        byte_limit: usize,
-    ) -> Result<Vec<u8>, Self::Error>;
+    fn encode(&mut self, dataset: &Dataset, projection: &[usize]) -> Result<Vec<u8>, Self::Error>;
 }
 
 /// Portable observation formatting stays outside the application. Methods that
-/// return a complete report must enforce its budget; no method may publish.
+/// return a complete report preserve the entered attempt; no method may publish.
 pub trait OutputReport {
     type Error;
     type Report;
@@ -149,19 +144,17 @@ pub type Completion<R, C, P> = Result<
 pub fn complete<R: OutputReport, C: ArtifactEncoder, P: ArtifactPort>(
     prepared: &PreparedSpecification,
     execution: Option<&Execution>,
-    byte_limit: usize,
     report: &mut R,
     codec: &mut C,
     publisher: &mut P,
 ) -> Completion<R, C, P> {
-    let result =
-        prepare(prepared, execution, byte_limit, report, codec).map_err(|error| match error {
-            CompleteError::Report(e) => CompleteError::Report(e),
-            CompleteError::Encode(e) => CompleteError::Encode(e),
-            CompleteError::Projection => CompleteError::Projection,
-            CompleteError::OutputLimit => CompleteError::OutputLimit,
-            CompleteError::Publish(never) => match never {},
-        })?;
+    let result = prepare(prepared, execution, report, codec).map_err(|error| match error {
+        CompleteError::Report(e) => CompleteError::Report(e),
+        CompleteError::Encode(e) => CompleteError::Encode(e),
+        CompleteError::Projection => CompleteError::Projection,
+        CompleteError::OutputLimit => CompleteError::OutputLimit,
+        CompleteError::Publish(never) => match never {},
+    })?;
     if let Some(artifact) = &result.artifact {
         publisher
             .publish(&artifact.path, &artifact.bytes)
@@ -175,7 +168,6 @@ pub fn complete<R: OutputReport, C: ArtifactEncoder, P: ArtifactPort>(
 pub fn prepare<R: OutputReport, C: ArtifactEncoder>(
     prepared: &PreparedSpecification,
     execution: Option<&Execution>,
-    byte_limit: usize,
     report: &mut R,
     codec: &mut C,
 ) -> Preparation<R, C> {
@@ -207,9 +199,9 @@ pub fn prepare<R: OutputReport, C: ArtifactEncoder>(
         })
         .collect::<Result<Vec<_>, _>>()?;
     let bytes = codec
-        .encode(&execution.dataset, &projection, byte_limit)
+        .encode(&execution.dataset, &projection)
         .map_err(CompleteError::Encode)?;
-    if bytes.len() > byte_limit {
+    if crate::limits::Limits::output_bytes(bytes.len()).is_err() {
         return Err(CompleteError::OutputLimit);
     }
     let completed = report

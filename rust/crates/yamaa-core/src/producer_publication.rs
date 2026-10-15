@@ -4,23 +4,6 @@ use crate::{producer_build::Attempt, specification_output::PreparedOutput};
 use crate::{producer_graph::PreparedGraph, table::TableAccess};
 use std::sync::Arc;
 
-#[derive(Clone, Copy, Debug)]
-pub struct Limits {
-    pub nodes: usize,
-    pub path_bytes: usize,
-    pub artifact_bytes: usize,
-    pub work: usize,
-}
-impl Default for Limits {
-    fn default() -> Self {
-        Self {
-            nodes: 64,
-            path_bytes: 1_048_576,
-            artifact_bytes: crate::dataset::ExecutionBudget::longitudinal().max_output_bytes,
-            work: crate::capacity::EXECUTION_WORK,
-        }
-    }
-}
 /// An immutable request retained from one accepted node. There is no public
 /// constructor and no caller-supplied replacement path, byte owner or order.
 pub struct Artifact {
@@ -50,8 +33,6 @@ pub trait PublicationPort {
 pub enum Failure<E> {
     #[error("producer publication incomplete")]
     Incomplete,
-    #[error("producer publication limit: {0:?}")]
-    Limit(&'static str),
     #[error("producer publication preflight: {0:?}")]
     Preflight(E),
     #[error("producer publication publish: node={node:?}, error={error:?}")]
@@ -86,18 +67,10 @@ impl PreparedPublication {
     pub(crate) fn from_actual<C, D, T: TableAccess, R, RE, CE, A>(
         graph: &PreparedGraph,
         attempt: &Attempt<C, D, T, R, RE, CE, A>,
-        limits: Limits,
     ) -> Result<Self, &'static str> {
         if attempt.outcome.is_err() || attempt.nodes.len() != graph.order().len() {
             return Err("producer_publication_incomplete");
         }
-        let count = attempt.nodes.len();
-        if count == 0 || count > limits.nodes || count > limits.work {
-            return Err("producer_publication_nodes");
-        }
-        let mut paths = limits.path_bytes;
-        let mut bytes = limits.artifact_bytes;
-        let mut work = limits.work - count;
         for (entered, &expected) in attempt.nodes.iter().zip(graph.order()) {
             if entered.node != expected
                 || entered
@@ -116,18 +89,8 @@ impl PreparedPublication {
                 .and_then(Option::as_ref)
                 .and_then(PreparedOutput::artifact)
                 .ok_or("producer_publication_incomplete")?;
-            paths = paths
-                .checked_sub(artifact.path().len())
-                .ok_or("producer_publication_paths")?;
-            bytes = bytes
-                .checked_sub(artifact.bytes().len())
-                .ok_or("producer_publication_bytes")?;
-            work = work
-                .checked_sub(artifact.path().len())
-                .and_then(|left| left.checked_sub(artifact.bytes().len()))
-                .ok_or("producer_publication_work")?;
         }
-        // Complete cumulative admission precedes vector/text ownership growth.
+        // Every retained artifact belongs to the actual completed node order.
         let artifacts = attempt
             .nodes
             .iter()
@@ -153,40 +116,9 @@ impl PreparedPublication {
     pub fn save_into<P: PublicationPort>(
         &self,
         publisher: &mut P,
-        limits: Limits,
         attempt: &mut PublicationAttempt<P::Error>,
     ) {
         *attempt = Default::default();
-        let mut paths = limits.path_bytes;
-        let mut bytes = limits.artifact_bytes;
-        if self.artifacts.is_empty()
-            || self.artifacts.len() > limits.nodes
-            || self.artifacts.len() > limits.work
-        {
-            attempt.outcome = Err(Failure::Limit("producer_publication_nodes"));
-            return;
-        }
-        let mut work = limits.work - self.artifacts.len();
-        for artifact in &self.artifacts {
-            let Some(left) = paths.checked_sub(artifact.path.len()) else {
-                attempt.outcome = Err(Failure::Limit("producer_publication_paths"));
-                return;
-            };
-            paths = left;
-            let Some(left) = bytes.checked_sub(artifact.bytes.len()) else {
-                attempt.outcome = Err(Failure::Limit("producer_publication_bytes"));
-                return;
-            };
-            bytes = left;
-            let Some(left) = work
-                .checked_sub(artifact.path.len())
-                .and_then(|left| left.checked_sub(artifact.bytes.len()))
-            else {
-                attempt.outcome = Err(Failure::Limit("producer_publication_work"));
-                return;
-            };
-            work = left;
-        }
         // Reserve all prefix evidence before crossing any port.
         attempt.entered.reserve(self.artifacts.len());
         if let Err(error) = publisher.preflight(&self.artifacts) {
