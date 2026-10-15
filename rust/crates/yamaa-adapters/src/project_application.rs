@@ -323,8 +323,8 @@ mod resource_tests {
         assert_eq!(project, original);
         assert_eq!(project.len(), 1);
         assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&project[0].context).unwrap(),
-            serde_json::json!({"stage":"prepare", "code":"inventory"})
+            serde_json::from_str::<yamaa_core::json::Value>(&project[0].context).unwrap(),
+            yamaa_core::json::json!({"stage":"prepare", "code":"inventory"})
         );
     }
 
