@@ -480,3 +480,81 @@ for(profile in c("csv","parquet")) {
   unlink(work,recursive=TRUE)
 }
 cat("R uneven seven-to-one producer graphs retain independent counts through CSV and Parquet\n")
+
+assert_untyped_date_selector_producer <- function() {
+  work <- tempfile("public-producer-dates-")
+  dir.create(work)
+  work <- normalizePath(work,winslash="/")
+  on.exit(unlink(work,recursive=TRUE))
+  producer_spec <- "schema_version: '1.0'
+domain: ADSL
+keys: [USUBJID]
+input: {EX: {path: ../raw/ex.csv}}
+base: EX
+intermediates:
+  - id: EXP
+    dataset: EX
+    derivations:
+      EXSTDT: {to_date: {source: EXSTDTC}}
+      EXENDT0: {to_date: {source: EXENDTC}}
+      EXENDT: {first_available: {sources: [EXENDT0, EXSTDT]}}
+    filter: EX.EXENDT >= EX.EXSTDT
+    no_match: null
+columns:
+  - {name: USUBJID, type: str, label: Subject, derivation: EX.USUBJID}
+  - {name: TRTSDT, type: date, label: First Dose Date, derivation: EXP.EXSTDT}
+  - {name: TRTEDT, type: date, label: Last Dose Date, derivation: EXP.EXENDT}
+output: {path: ../generated/producer.csv, columns: [USUBJID, TRTSDT, TRTEDT]}
+"
+  write(work,"producer/p.yaml",producer_spec)
+  write(work,"consumer/root.yaml","schema_version: '1.0'
+domain: ADEX
+keys: [USUBJID]
+input: {ADSL: {path: ../generated/producer.csv, schema: ../producer/p.yaml}}
+base: ADSL
+columns:
+  - {name: USUBJID, type: str, label: Subject, derivation: ADSL.USUBJID}
+  - {name: TRTEDT, type: date, label: Last Dose Date, derivation: ADSL.TRTEDT}
+output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
+")
+  write(work,"raw/ex.csv","USUBJID,EXSTDTC,EXENDTC\nS01,2024-01-01,2024-01-10\nS02,2024-01-05,\n")
+  produced <- charToRaw("USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,2024-01-10\nS02,2024-01-05,2024-01-05\n")
+  consumed <- charToRaw("USUBJID,TRTEDT\nS01,2024-01-10\nS02,2024-01-05\n")
+  dir.create(file.path(work,"generated"))
+  for(entry in c("producer/p.yaml","consumer/root.yaml")) {
+    path <- file.path(work,entry)
+    stopifnot(nrow(yamaa_check(path)$issues)==0L)
+    result <- yamaa_domain(path)
+    stopifnot(nrow(result$issues)==0L,!is.null(result$output),nrow(result$output)==2L,
+      isTRUE(result$save()))
+    target <- file.path(work,"generated",if(startsWith(entry,"producer/")) "producer.csv" else "root.csv")
+    stopifnot(identical(readBin(target,"raw",n=file.info(target)$size),
+      if(startsWith(entry,"producer/")) produced else consumed))
+  }
+  target <- file.path(work,"generated/producer.csv")
+  stopifnot(identical(readBin(target,"raw",n=file.info(target)$size),produced))
+
+  # This filter remains invalid independently of selector result inference.
+  write(work,"producer/p.yaml",sub("EX.EXENDT >= EX.EXSTDT","EX.EXSTDT >= 'not-a-date'",producer_spec,fixed=TRUE))
+  prior <- list("generated/producer.csv"=charToRaw("previous producer bytes"),
+    "generated/root.csv"=charToRaw("previous consumer bytes"))
+  for(name in names(prior)) write(work,name,prior[[name]])
+  failed <- yamaa_domain(file.path(work,"consumer/root.yaml"))
+  issues <- failed$issues
+  stopifnot(is.null(failed$output),nrow(issues)==1L,
+    identical(issues$phase,"validation"),identical(issues$condition,"incompatible_input_type"),
+    identical(issues$requirement,"REQ-0190"),identical(issues$spec_paths,list("intermediates[0].filter")))
+  context <- jsonlite::fromJSON(issues$context[[1L]],simplifyVector=FALSE)
+  stopifnot(identical(context[sort(names(context))],list(left_type="date",right_type="str")))
+  for(index in 1:2) {
+    failure <- tryCatch(failed$save(),error=identity)
+    stopifnot(inherits(failure,"yamaa_domain_error"),
+      identical(conditionMessage(failure),"cannot save a failed build"),identical(failed$issues,issues))
+    for(name in names(prior)) {
+      target <- file.path(work,name)
+      stopifnot(identical(readBin(target,"raw",n=file.info(target)$size),prior[[name]]))
+    }
+  }
+}
+assert_untyped_date_selector_producer()
+cat("R public untyped date selectors and linked producer filter causes retain exact saved bytes\n")

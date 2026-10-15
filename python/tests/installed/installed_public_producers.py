@@ -216,6 +216,98 @@ output: {{path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}}
                     (self.root / "generated/root.csv").read_bytes(), CONSUMED
                 )
 
+    def test_untyped_date_selector_and_original_producer_filter_cause(self):
+        from yamaa import check
+
+        producer = """schema_version: '1.0'
+domain: ADSL
+keys: [USUBJID]
+input: {EX: {path: ../raw/ex.csv}}
+base: EX
+intermediates:
+  - id: EXP
+    dataset: EX
+    derivations:
+      EXSTDT: {to_date: {source: EXSTDTC}}
+      EXENDT0: {to_date: {source: EXENDTC}}
+      EXENDT: {first_available: {sources: [EXENDT0, EXSTDT]}}
+    filter: EX.EXENDT >= EX.EXSTDT
+    no_match: null
+columns:
+  - {name: USUBJID, type: str, label: Subject, derivation: EX.USUBJID}
+  - {name: TRTSDT, type: date, label: First Dose Date, derivation: EXP.EXSTDT}
+  - {name: TRTEDT, type: date, label: Last Dose Date, derivation: EXP.EXENDT}
+output: {path: ../generated/producer.csv, columns: [USUBJID, TRTSDT, TRTEDT]}
+"""
+        self.write("producer/p.yaml", producer)
+        self.write(
+            "consumer/root.yaml",
+            """schema_version: '1.0'
+domain: ADEX
+keys: [USUBJID]
+input: {ADSL: {path: ../generated/producer.csv, schema: ../producer/p.yaml}}
+base: ADSL
+columns:
+  - {name: USUBJID, type: str, label: Subject, derivation: ADSL.USUBJID}
+  - {name: TRTEDT, type: date, label: Last Dose Date, derivation: ADSL.TRTEDT}
+output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
+""",
+        )
+        self.write(
+            "raw/ex.csv",
+            "USUBJID,EXSTDTC,EXENDTC\nS01,2024-01-01,2024-01-10\nS02,2024-01-05,\n",
+        )
+        produced = b"USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,2024-01-10\nS02,2024-01-05,2024-01-05\n"
+        consumed = b"USUBJID,TRTEDT\nS01,2024-01-10\nS02,2024-01-05\n"
+        (self.root / "generated").mkdir()
+        for name, expected in [
+            ("producer/p.yaml", produced),
+            ("consumer/root.yaml", consumed),
+        ]:
+            path = self.root / name
+            self.assertTrue(check(path).issues.is_empty())
+            result = domain(path)
+            self.assertTrue(result.issues.is_empty(), result.issues)
+            self.assertIsNotNone(result.output)
+            self.assertEqual(result.output.height, 2)
+            self.assertTrue(result.save())
+            target = "producer.csv" if name.startswith("producer/") else "root.csv"
+            self.assertEqual((self.root / "generated" / target).read_bytes(), expected)
+        self.assertEqual((self.root / "generated/producer.csv").read_bytes(), produced)
+
+        # This comparison remains invalid even when selector inference is fixed.
+        self.write(
+            "producer/p.yaml",
+            producer.replace("EX.EXENDT >= EX.EXSTDT", "EX.EXSTDT >= 'not-a-date'"),
+        )
+        prior = {
+            "generated/producer.csv": b"previous producer bytes",
+            "generated/root.csv": b"previous consumer bytes",
+        }
+        for name, content in prior.items():
+            self.write(name, content)
+        failed = domain(self.root / "consumer/root.yaml")
+        self.assertIsNone(failed.output)
+        issues = failed.issues.to_dicts()
+        self.assertEqual(len(issues), 1)
+        actual = {**issues[0], "context": json.loads(issues[0]["context"])}
+        self.assertEqual(
+            actual,
+            {
+                "phase": "validation",
+                "condition": "incompatible_input_type",
+                "requirement": "REQ-0190",
+                "spec_paths": ["intermediates[0].filter"],
+                "context": {"left_type": "date", "right_type": "str"},
+            },
+        )
+        for _ in range(2):
+            with self.assertRaisesRegex(DomainError, "cannot save a failed build"):
+                failed.save()
+            self.assertEqual(failed.issues.to_dicts(), issues)
+            for name, content in prior.items():
+                self.assertEqual((self.root / name).read_bytes(), content)
+
     def test_original_aliases_fresh_union_before_data_and_retained_public_views(self):
         self.write("raw/raw.csv", b"ID,VALUE\n1,99.99\n")
         events = []
