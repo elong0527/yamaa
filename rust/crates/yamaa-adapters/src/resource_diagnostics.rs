@@ -348,6 +348,7 @@ mod tests {
             empty_string_present: false,
         }
     }
+    #[cfg(feature = "readstat")]
     #[test]
     fn actual_sas_reader_quota_keeps_its_bound_and_input_owner() {
         let mut declaration = input();
