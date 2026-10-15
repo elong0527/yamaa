@@ -274,7 +274,7 @@ pub(super) fn bind(
     let Some((index, field)) = declarations.reference(reference) else {
         return Ok(None);
     };
-    let Some(item) = &items[index] else {
+    let Some(item) = items.get(index).and_then(Option::as_ref) else {
         findings.push(BindFinding::UnknownReference {
             path: path.into(),
             name: reference.into(),
