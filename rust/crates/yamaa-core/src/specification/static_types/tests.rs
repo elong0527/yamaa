@@ -220,7 +220,7 @@ fn independent_calendar_findings_keep_first_error_priority() {
 fn independent_cut_findings_keep_first_error_priority() {
     use crate::mapping_cut::{AdmissionError, Cut};
     let labels = vec![String::from("a")];
-    let findings = Cut::declaration_findings("COUNT", "cut", &[10.0, 5.0], &labels).unwrap();
+    let findings = Cut::declaration_findings("cut", &[10.0, 5.0], &labels);
     assert_eq!(findings.len(), 2);
     assert_ne!(findings[0].context, findings[1].context);
     let AdmissionError::Diagnostic(first) = Cut::new(

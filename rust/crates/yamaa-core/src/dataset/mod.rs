@@ -417,18 +417,6 @@ impl Check {
             _ => return None,
         })
     }
-
-    pub fn row_count_work(&self) -> usize {
-        match self {
-            Self::WideRowCount { min, max } => min
-                .iter()
-                .chain(max)
-                .map(|bound| bound.decimal().len())
-                .sum::<usize>()
-                .max(1),
-            _ => 1,
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -38,53 +38,29 @@ pub struct OdmRead {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BoundOdm(OdmRead);
-fn read_bytes(read: &OdmRead) -> Option<usize> {
-    [&read.dataset, &read.item, &read.item_oid, &read.path]
-        .into_iter()
-        .chain(read.row.iter())
-        .chain(read.selectors.iter().flatten().flatten())
-        .try_fold(0usize, |used, text| used.checked_add(text.len()))
-}
-fn template_bytes(contexts: &[OdmTemplateScope]) -> Option<usize> {
-    if contexts.is_empty() {
-        return None;
-    }
-    contexts.iter().try_fold(0usize, |used, context| {
-        if context.row.is_empty()
-            || context.groups.as_ref().is_some_and(|fields| {
-                fields.iter().enumerate().any(|(index, field)| {
-                    !odm_source::HIERARCHY.contains(field) || fields[..index].contains(field)
+fn valid_templates(contexts: &[OdmTemplateScope]) -> bool {
+    !contexts.is_empty()
+        && contexts.iter().all(|context| {
+            !context.row.is_empty()
+                && context.groups.as_ref().is_none_or(|fields| {
+                    fields.iter().enumerate().all(|(index, field)| {
+                        odm_source::HIERARCHY.contains(field) && !fields[..index].contains(field)
+                    })
                 })
-            })
-        {
-            return None;
-        }
-        used.checked_add(context.row.capacity())
-            .and_then(|used| used.checked_add(std::mem::size_of::<OdmTemplateScope>()))
-            .and_then(|used| {
-                used.checked_add(match &context.groups {
-                    Some(fields) => fields
-                        .capacity()
-                        .checked_mul(std::mem::size_of::<usize>())?,
-                    None => 0,
-                })
-            })
-    })
+        })
 }
 impl BoundOdm {
     pub fn new(read: OdmRead) -> Result<Self, PlanError> {
-        let metadata = read_bytes(&read).and_then(|bytes| match &read.scope {
-            OdmScope::Templates(contexts)
-                if read.source.is_some()
+        let valid_scope = match &read.scope {
+            OdmScope::Templates(contexts) => {
+                read.source.is_some()
                     && read.phase == AggregatePhase::Derivation
-                    && read.row.is_none() =>
-            {
-                template_bytes(contexts).and_then(|extra| bytes.checked_add(extra))
+                    && read.row.is_none()
+                    && valid_templates(contexts)
             }
-            OdmScope::Templates(_) => None,
-            _ => Some(bytes),
-        });
-        if metadata.is_none_or(|bytes| bytes > 16 * 1024 * 1024)
+            _ => true,
+        };
+        if !valid_scope
             || [&read.dataset, &read.item, &read.item_oid, &read.path]
                 .iter()
                 .any(|text| text.is_empty())
@@ -108,9 +84,7 @@ impl BoundOdm {
         {
             return Err(PlanError::InvalidSource);
         }
-        let bytes = read_bytes(&self.0)
-            .and_then(|used| template_bytes(&contexts).and_then(|extra| used.checked_add(extra)));
-        if bytes.is_none_or(|bytes| bytes > 16 * 1024 * 1024) {
+        if !valid_templates(&contexts) {
             return Err(PlanError::InvalidSource);
         }
         self.0.scope = OdmScope::Templates(contexts);
@@ -264,6 +238,48 @@ fn visit_mut_at(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn complete_odm_metadata_keeps_real_template_shape_validation() {
+        let path = "x".repeat(16 * 1024 * 1024 + 1);
+        let mut bound = BoundOdm::new(OdmRead {
+            dataset: "SRC".into(),
+            item: "SRC.IT.VAL".into(),
+            item_oid: "IT.VAL".into(),
+            path: path.clone(),
+            row: None,
+            phase: AggregatePhase::Derivation,
+            scope: OdmScope::Records,
+            source: Some(AggregateSource::Primary),
+            selectors: [None, None, None],
+            filter: None,
+        })
+        .unwrap();
+        assert_eq!(bound.read().path, path);
+        let context = OdmTemplateScope {
+            row: "row-1".into(),
+            driver: 0,
+            groups: Some(vec![odm_source::HIERARCHY[0]]),
+        };
+        bound.defer(vec![context.clone()].into()).unwrap();
+        for invalid in [
+            vec![],
+            vec![OdmTemplateScope {
+                row: String::new(),
+                ..context.clone()
+            }],
+            vec![OdmTemplateScope {
+                groups: Some(vec![odm_source::HIERARCHY[0]; 2]),
+                ..context.clone()
+            }],
+        ] {
+            assert_eq!(bound.defer(invalid.into()), Err(PlanError::InvalidSource));
+            assert_eq!(
+                bound.read().scope,
+                OdmScope::Templates(vec![context.clone()].into())
+            );
+        }
+    }
 
     #[test]
     fn nested_scope_admission_refuses_depth_before_visiting_the_leaf() {
