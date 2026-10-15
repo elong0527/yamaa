@@ -29,6 +29,7 @@ mod integer_literal_overflow;
 mod intermediate_dependencies;
 mod namespace_admission;
 mod nested_windows;
+mod original_named_windows;
 mod predicate_suggestions;
 mod probe_successors;
 mod row_count_lookups;
