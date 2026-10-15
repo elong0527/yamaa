@@ -9,10 +9,12 @@ description = "Repository development tools; not a released yamaa runtime packag
 requires-python = ">=3.12"
 
 [tool.setuptools.packages.find]
-include = ["tools*", "python"]
+include = ["tools*", "python", "evaluations*"]
+exclude = ["evaluations.harbor.solutions*", "evaluations.harbor.prompts*"]
 
 [tool.ruff]
 target-version = "py312"
+extend-exclude = ["evaluations/harbor/solutions"]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I"]
