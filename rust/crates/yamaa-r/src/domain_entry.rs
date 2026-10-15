@@ -1,5 +1,5 @@
 //! Registered owned public result handles; the engine owns file orchestration.
-use crate::specification_service::{address, boundary};
+use crate::handle::{address, boundary};
 use extendr_api::prelude::*;
 use std::{
     cell::{Cell, RefCell},

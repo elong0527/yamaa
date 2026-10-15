@@ -1,5 +1,5 @@
 //! R transports one registered shared Define owner and fresh host issue views.
-use crate::specification_service::{address, boundary};
+use crate::handle::{address, boundary};
 use extendr_api::prelude::*;
 use std::{
     cell::{Cell, RefCell},

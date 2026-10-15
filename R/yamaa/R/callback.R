@@ -21,3 +21,10 @@
   if (admitted$tag == 0L) return(admitted)
   .scalar_native(if (date) 5L else 6L, admitted$payload)
 }
+
+# Formatting is explicitly limited to ordinary host conditions; interrupts stay
+# rooted in the native attempt and propagate only after Rust returns.
+.project_condition_details <- function(condition) {
+  list(.function_detail(function() class(condition)[1L],"R condition"),
+       .function_detail(function() conditionMessage(condition),"unavailable R condition message"))
+}

@@ -5,28 +5,14 @@ mod domain_entry;
 mod file_domain;
 mod file_producer;
 mod file_project;
-mod file_specification;
 mod function_callback;
 mod project_activation;
 mod project_result;
-mod schema_metadata;
-mod source_metadata;
-mod specification_inheritance;
-mod specification_result;
-mod specification_service;
+mod report_fields;
 mod style;
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add("_CORE_VERSION", yamaa_core::VERSION)?;
-    module.add_class::<schema_metadata::Schema>()?;
-    module.add_function(wrap_pyfunction!(
-        schema_metadata::_capture_schema_metadata,
-        module
-    )?)?;
-    module.add_function(wrap_pyfunction!(
-        schema_metadata::_schema_include_names,
-        module
-    )?)?;
     module.add_class::<define_entry::Define>()?;
     module.add(
         "DefineError",
@@ -40,41 +26,8 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     )?;
     module.add_function(wrap_pyfunction!(domain_entry::_domain_file, module)?)?;
     module.add_function(wrap_pyfunction!(domain_entry::_check_file, module)?)?;
-    {
-        module.add_class::<file_specification::Specification>()?;
-        module.add_class::<file_project::Specification>()?;
-        module.add_class::<file_project::Attempt>()?;
-        module.add_class::<file_producer::Specification>()?;
-        module.add_class::<file_producer::Attempt>()?;
-        module.add_class::<file_producer::Report>()?;
-        module.add_function(wrap_pyfunction!(
-            file_producer::_prepare_producer_file,
-            module
-        )?)?;
-        module.add_class::<project_result::Result>()?;
-        module.add_function(wrap_pyfunction!(
-            file_project::_prepare_file_project,
-            module
-        )?)?;
-        module.add_function(wrap_pyfunction!(
-            file_specification::_prepare_file_specification,
-            module
-        )?)?;
-    }
-    module.add_function(wrap_pyfunction!(
-        specification_inheritance::_prepare_document,
-        module
-    )?)?;
-    module.add_class::<specification_service::Specification>()?;
-    module.add_class::<specification_result::BuildResult>()?;
-    module.add_function(wrap_pyfunction!(
-        specification_service::_prepare_specification,
-        module
-    )?)?;
-    module.add_function(wrap_pyfunction!(
-        specification_inheritance::_prepare_inherited_specification,
-        module
-    )?)?;
+    module.add_class::<file_producer::Attempt>()?;
+    module.add_class::<file_producer::Report>()?;
     module.add_function(wrap_pyfunction!(style::_style_same_value, module)?)?;
     Ok(())
 }

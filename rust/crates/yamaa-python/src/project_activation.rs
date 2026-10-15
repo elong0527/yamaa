@@ -27,56 +27,6 @@ pub enum Error {
     Result(CallbackError),
     Protocol,
 }
-impl Error {
-    pub fn facts<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let facts = PyDict::new(py);
-        match self {
-            Self::Host(error) => {
-                facts.set_item("kind", "host")?;
-                facts.set_item("exception", error.value(py))?;
-            }
-            Self::Lock(findings) => {
-                facts.set_item("kind", "lock")?;
-                let rows = findings
-                    .iter()
-                    .map(|finding| {
-                        let row = PyDict::new(py);
-                        row.set_item("package", &finding.package)?;
-                        row.set_item("reason", finding.reason.as_str())?;
-                        row.set_item("expected", &finding.expected)?;
-                        row.set_item("actual", &finding.actual)?;
-                        Ok(row)
-                    })
-                    .collect::<PyResult<Vec<_>>>()?;
-                facts.set_item("findings", PyList::new(py, rows)?)?;
-            }
-            Self::Result(error) => {
-                facts.set_item("kind", "representation")?;
-                match error {
-                    CallbackError::Rejected { reason, returned } => {
-                        facts.set_item("reason", reason)?;
-                        facts.set_item("returned", returned)?;
-                    }
-                    CallbackError::Exception {
-                        class,
-                        message,
-                        truncated,
-                    } => {
-                        facts.set_item("class", class)?;
-                        facts.set_item("message", message)?;
-                        facts.set_item("truncated", truncated)?;
-                    }
-                    CallbackError::Boundary(error) => facts.set_item(
-                        "internal",
-                        matches!(error, yamaa_adapters::callback::BoundaryError::Internal),
-                    )?,
-                }
-            }
-            Self::Protocol => facts.set_item("kind", "protocol")?,
-        }
-        Ok(facts)
-    }
-}
 /// Borrow the exact captured lock snapshot for this activation. No construction
 /// imports a helper or project module; empty selection has no host effects.
 pub struct Port<'py, 'lock> {

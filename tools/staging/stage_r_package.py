@@ -44,10 +44,6 @@ def stage(destination: Path):
     from tools.staging import stage_grammar_inputs as grammar_helper
 
     grammar_helper.stage(resources / "grammar-original")
-    shutil.copytree(
-        WORKSPACE / "crates/yamaa-adapters/tests/fixtures/environment-candidate",
-        resources / "specification-environment-candidate",
-    )
     from tools.staging import stage_project_inputs as project_helper
 
     project_helper.stage(resources / "project-original")

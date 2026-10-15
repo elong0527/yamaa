@@ -52,8 +52,6 @@ def stage(runtime, destination):
                 "project-original",
                 "define-fixtures",
                 "grammar-original",
-                "specification-yaml",
-                "specification-environment-candidate",
             )
         ]
     for target in [*(target for _, target in copies), *directories]:
@@ -79,11 +77,6 @@ def stage(runtime, destination):
                 ],
                 check=True,
             )
-        shutil.copytree(ROOT / "yaml", destination / "specification-yaml")
-        shutil.copytree(
-            ROOT / "rust/crates/yamaa-adapters/tests/fixtures/environment-candidate",
-            destination / "specification-environment-candidate",
-        )
 
 
 def main():

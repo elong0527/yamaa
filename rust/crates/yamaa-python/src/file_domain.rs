@@ -142,7 +142,7 @@ impl RuntimePort for Runtime<'_, '_> {
                 ".",
             ],
         )?;
-        let fields = std::sync::Arc::new(crate::specification_result::fields(&metadata)?);
+        let fields = std::sync::Arc::new(crate::report_fields::fields(&metadata)?);
         let attempt = crate::file_producer::build_selected_with_observer(
             py,
             &mut build,
