@@ -1,22 +1,14 @@
-"""Validate repository checks through their focused owners."""
+"""Check repository source, authored fixture metadata, file layout and prose."""
 
 import argparse
-import sys
 from pathlib import Path
 
 import yaml
 from tools.paths import ROOT
-from tools.validation import _native_specification
 from tools.validation._repository_yaml import UniqueKeyLoader
 from tools.validation.editorial import validate_ascii_sources, validate_unicode_scalars
 from tools.validation.grammar_checks import validate_grammar_contracts
-from tools.validation.regex_checks import (
-    RegexBindingUnavailable,
-    require_regex_binding,
-    validate_regex_conformance,
-)
 from tools.validation.repository_artifacts import (
-    validate_csv_shapes,
     validate_examples_csv,
     validate_key_column_order,
 )
@@ -26,117 +18,58 @@ from tools.validation.repository_manifests import (
     validate_condition_registry,
     validate_expected_error_contracts,
 )
-from tools.validation.repository_schema import build_schema_env
-from tools.validation.repository_structure import (
-    validate_examples_define_documents,
-    validate_examples_environment_documents,
-    validate_examples_layout,
-    validate_examples_structure,
-)
+from tools.validation.repository_schema import validate_schema_sources
+from tools.validation.repository_structure import validate_examples_layout
 
 
 def check_yaml_files(root: Path):
-    errors = []
-    warnings = []
-    errors.extend(validate_ascii_sources(root))
-    for yaml_file in sorted(root.rglob("*.yaml")):
-        if ".github" in yaml_file.parts:
+    errors = list(validate_ascii_sources(root))
+    for path in sorted(root.rglob("*.yaml")):
+        if ".github" in path.parts:
             continue
+        label = path.relative_to(root)
         try:
-            with open(yaml_file, "r", encoding="utf-8") as f:
-                document = yaml.load(f, Loader=UniqueKeyLoader)
-            errors.extend(
-                validate_unicode_scalars(
-                    document,
-                    str(yaml_file.relative_to(root)),
-                )
+            document = yaml.load(
+                path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader
             )
-        except Exception as e:
-            msg = str(e)
-            if hasattr(e, "problem_mark") and e.problem_mark:
-                msg += f" at line {e.problem_mark.line + 1}"
-            errors.append(f"ERROR: {yaml_file.relative_to(root)}: {msg}")
-
-    # Also validate schemas
-    env, schema_errors = build_schema_env(root)
-    errors.extend(schema_errors)
-    environment_schema = None
-    if (root / "yaml" / "schema_environment.yaml").exists():
-        environment_schema, environment_schema_errors = build_schema_env(
-            root, "schema_environment.yaml"
-        )
-        errors.extend(environment_schema_errors)
-        if environment_schema_errors:
-            environment_schema = None
-    validation_fixtures, fixture_errors = load_validation_fixtures(root)
+            errors.extend(validate_unicode_scalars(document, str(label)))
+        except (OSError, UnicodeError, yaml.YAMLError, ValueError) as error:
+            message = str(error)
+            mark = getattr(error, "problem_mark", None)
+            if mark is not None:
+                message += f" at line {mark.line + 1}"
+            errors.append(f"ERROR: {label}: {message}")
+    errors.extend(validate_schema_sources(root))
+    _, fixture_errors = load_validation_fixtures(root)
     errors.extend(fixture_errors)
-    condition_registry, condition_registry_load_errors = load_condition_registry(root)
-    errors.extend(condition_registry_load_errors)
-    if condition_registry is not None:
-        errors.extend(validate_condition_registry(root, condition_registry))
-    errors.extend(validate_examples_structure(root, env, warnings, validation_fixtures))
+    registry, registry_errors = load_condition_registry(root)
+    errors.extend(registry_errors)
+    if registry is not None:
+        errors.extend(validate_condition_registry(root, registry))
     errors.extend(validate_examples_layout(root))
-    if environment_schema is not None:
-        errors.extend(validate_examples_environment_documents(root, environment_schema))
-    errors.extend(validate_examples_define_documents(root))
     errors.extend(validate_expected_error_contracts(root))
-    errors.extend(validate_csv_shapes(root))
     errors.extend(validate_key_column_order(root))
     errors.extend(validate_grammar_contracts(root))
-    errors.extend(validate_regex_conformance(root))
-
-    csv_errors, csv_warnings = validate_examples_csv(root, env)
-    errors.extend(csv_errors)
-    warnings.extend(csv_warnings)
-    return errors, warnings
+    errors.extend(validate_examples_csv(root))
+    return errors
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Validate yamaa repository structure and specs."
-    )
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--root",
-        type=Path,
-        default=ROOT,
-        help="Repository root directory",
-    )
-    parser.add_argument(
-        "--warnings-as-errors", action="store_true", help="Treat warnings as errors"
+        "--root", type=Path, default=ROOT, help="Repository root directory"
     )
     args = parser.parse_args()
-
-    try:
-        require_regex_binding()
-    except RegexBindingUnavailable as exc:
-        print(f"ERROR: {exc}")
-        return 1
-
-    errors, warnings = check_yaml_files(args.root)
-
-    for warning in warnings:
-        print(warning)
-
+    errors = check_yaml_files(args.root)
+    for error in errors:
+        print(error)
     if errors:
-        for e in errors:
-            print(e)
         return 1
-
-    if warnings and args.warnings_as_errors:
-        return 1
-
-    if _native_specification.DEFERRED_ENVIRONMENTS:
-        for environment in sorted(_native_specification.DEFERRED_ENVIRONMENTS):
-            print(
-                f"DEFERRED: R semantic source/binding/runtime coverage for {environment}; required installed R-host CI owns this lane."
-            )
-        print(
-            "PASS: Available-host repository checks are clean; R semantic coverage is deferred."
-        )
-    else:
-        print("PASS: Repository looks clean.")
+    print(
+        "PASS: Repository sources and layout are clean; native suites own language conformance."
+    )
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

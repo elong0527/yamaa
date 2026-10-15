@@ -4,16 +4,17 @@ use yamaa_core::{
     value::ColumnType,
 };
 
+pub mod aggregate_syntax;
 pub mod ipc_snapshot;
-#[path = "../../examples/support/odm_declaration.rs"]
+pub mod numeric_syntax;
 pub mod odm_declaration;
+pub mod predicate_syntax;
 pub mod project_call_compiler;
 pub mod project_codelist_compiler;
 pub mod project_schemas;
-#[path = "../../examples/support/schema_declaration.rs"]
 pub mod schema_declaration;
-#[path = "../../examples/support/string_template_syntax.rs"]
 pub mod string_template_syntax;
+pub mod syntax_spans;
 
 /// Construct an ordered schema independently of plan compilation.
 pub fn table_schema(columns: &[(&str, ColumnType)]) -> TableSchema {

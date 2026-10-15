@@ -72,10 +72,19 @@ Standalone installed suites use copied fixtures and readers; they must not
 import repository packages.
 
 For rule or schema changes, follow their area guides and run the corresponding
-AGENTS recipe. Shared Rust owns schema admission, inheritance, expressions,
-source binding and execution. Repository Python checks layout and authored
-artifacts and transports shared findings; it supplies no reference evaluator.
-Missing native bindings must fail explicitly.
+AGENTS recipe. Repository Python checks source syntax, physical schema includes,
+fixture metadata, grammar documents, layout and editorial rules without
+importing an installed engine. Its complete-corpus test refuses imports of
+yamaa, Polars and PyArrow. Shared Rust tests own schema admission, inheritance,
+expressions, source binding, execution and the unchanged grammar, regex and
+exact rounding fixtures directly.
+
+Installed Python and R conformance compares actual public results and saved
+artifacts with independent truth. A negative benchmark's `expected/error.yaml`
+is a partial structured assertion: the expected first issue, every declared
+path and context facts must match. Complete authored reports additionally pin
+all findings, exact values, logs, callbacks and artifact observations. Passing
+static repository validation does not establish engine release qualification.
 
 ## CI and release qualification
 

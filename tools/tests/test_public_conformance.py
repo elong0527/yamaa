@@ -184,6 +184,44 @@ class PublicConformance(unittest.TestCase):
         self.build["issues"].insert(0, {**issue, "condition": "earlier_failure"})
         self.assertEqual(self.verdict()["verdict"], "mismatch")
 
+    def test_validation_truth_requires_every_path_and_allows_independent_findings(self):
+        (self.case / "expected/error.yaml").write_text(
+            "phase: validation\ncondition: dependency_cycle\n"
+            "spec_paths: [columns.A.derivation, columns.B.derivation]\n"
+            "requirement: REQ-0072\ncontext: {cycle: [A, B, A]}\n"
+        )
+        (self.case / "benchmark.yaml").write_text(
+            METADATA + "validation: {rule: R001, validator: dependency_graph}\n"
+        )
+        cycle = {
+            "phase": "validation",
+            "condition": "dependency_cycle",
+            "spec_paths": ["columns.A.derivation", "columns.B.derivation"],
+            "requirement": "REQ-0072",
+            "context": {"cycle": ["A", "B", "A"]},
+        }
+        # Original c7b88a4f reports this independent forward reference beside
+        # the cycle in negative-adlb-computed-param. A partial error contract
+        # cannot stand in for exhaustive independently authored report truth.
+        independent = {
+            "phase": "validation",
+            "condition": "forward_reference",
+            "spec_paths": ["columns.C.derivation"],
+            "requirement": "REQ-0071",
+            "context": {"column": "C", "dependency": "B"},
+        }
+        self.build.update(
+            issues=[cycle, independent], saved=False, tables={"output": None}
+        )
+        self.assertEqual(self.verdict()["verdict"], "pass")
+        cycle["spec_paths"].pop()
+        result = self.verdict()
+        self.assertEqual(result["verdict"], "mismatch")
+        self.assertIn(
+            {"missing_validation_paths": ["columns.B.derivation"]},
+            result["findings"],
+        )
+
     def test_unsupported_and_engine_error_can_never_pass_negative_truth(self):
         (self.case / "expected/error.yaml").write_text(
             "phase: planning\ncondition: unsupported_operation\nspec_paths: [columns.VALUE]\n"

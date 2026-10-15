@@ -714,6 +714,53 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
                     "actual": issues[0] if issues else None,
                 }
             )
+        if want.get("phase") == "validation":
+            # Metadata registers the owning case, while expected/error.yaml is
+            # independent diagnostic truth. Keep the retired repository
+            # validator's complete-path controls here, against observations
+            # from actual installed public hosts.
+            registration = load_metadata(case).get("validation")
+            if registration is None:
+                result["findings"].append("validation fixture lacks case registration")
+            elif "blocked_by" in registration:
+                result["findings"].append(
+                    "validation fixture still declares a release blocker"
+                )
+            paths = want["spec_paths"]
+
+            def matches_path(actual, expected):
+                return (
+                    actual == expected
+                    or actual.startswith(expected + ".")
+                    or actual.startswith(expected + "[")
+                )
+
+            matched = set()
+            for issue in issues:
+                actual_paths = issue.get("spec_paths", [])
+                owned = (
+                    issue.get("phase") == "validation"
+                    and issue.get("condition") == want["condition"]
+                    and bool(actual_paths)
+                    and all(
+                        any(matches_path(actual, expected) for expected in paths)
+                        for actual in actual_paths
+                    )
+                )
+                if not owned:
+                    # expected/error.yaml is a partial structured assertion.
+                    # Independent same-phase findings may coexist (for
+                    # example, a cycle and a separate forward reference).
+                    # Complete-report truth owns exhaustive finding checks.
+                    continue
+                matched.update(
+                    expected
+                    for expected in paths
+                    if any(matches_path(actual, expected) for actual in actual_paths)
+                )
+            missing = [path for path in paths if path not in matched]
+            if missing:
+                result["findings"].append({"missing_validation_paths": missing})
         if any(b["tables"].get("output") is not None or b.get("saved") for b in builds):
             result["findings"].append("negative build exposed or saved output")
         result["verdict"] = "mismatch" if result["findings"] else "pass"
