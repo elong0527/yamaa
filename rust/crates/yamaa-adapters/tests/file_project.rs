@@ -1975,18 +1975,18 @@ mod file {
                         .unwrap();
                 assert_eq!(
                     project_application::check(&entry, &environment, Language::Python),
-                    [expected.clone()]
+                    std::slice::from_ref(&expected)
                 );
                 assert!(!study.0.join("root.yaml").exists());
                 fs::remove_dir_all(&study.0).unwrap();
                 for _ in 0..2 {
                     assert_eq!(
                         project_application::selection_failure(&selection, Language::Python),
-                        [expected.clone()]
+                        std::slice::from_ref(&expected)
                     );
                     assert_eq!(
                         project_application::failure(&application_error, Language::Python),
-                        [expected.clone()]
+                        std::slice::from_ref(&expected)
                     );
                     assert_eq!(owner.capture_reads(), 1);
                     let (_, bytes) = owner.captured_sources().next().unwrap();
