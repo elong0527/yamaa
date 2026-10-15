@@ -105,13 +105,13 @@ fn published_source_failure<E, PE>(
     };
     Failure::Diagnostic(vec![finding.diagnostic()])
 }
-fn published_limit_failure<E, PE>(
-    path: &str,
-    written: &str,
+fn published_boundary_failure<E, PE>(
     error: crate::limits::LimitExceeded,
+    dataset: &str,
+    written: &str,
 ) -> Failure<E, PE> {
     Failure::Diagnostic(vec![resource_diagnostic(
-        path,
+        &format!("datasets.{dataset}.artifact"),
         written,
         ResourceObservation::Limit(error),
     )])
@@ -120,22 +120,21 @@ fn published_csv_failure<E, PE>(
     error: &crate::csv_source::Error,
     dataset: &str,
     written: &str,
-    path: &str,
 ) -> Failure<E, PE> {
     if let crate::csv_source::Error::Limit {
         resource,
         limit,
         actual,
-    } = error
+    } = *error
     {
-        return published_limit_failure(
-            path,
-            written,
+        return published_boundary_failure(
             crate::limits::LimitExceeded {
                 resource,
-                limit: *limit,
-                actual: *actual,
+                limit,
+                actual,
             },
+            dataset,
+            written,
         );
     }
     published_source_failure(
@@ -151,10 +150,9 @@ fn published_typed_csv_failure<E, PE>(
     error: &crate::typed_csv::Error,
     dataset: &str,
     written: &str,
-    path: &str,
 ) -> Failure<E, PE> {
     if let crate::typed_csv::Error::Limit(error) = error {
-        return published_limit_failure(path, written, *error);
+        return published_boundary_failure(*error, dataset, written);
     }
     published_source_failure(
         error.finding(dataset),
@@ -413,12 +411,15 @@ impl<P: Ports> Application<P> {
             for ((dataset, (declaring, written, json)), location) in
                 composed.datasets().iter().zip(&outputs).zip(&locations)
             {
-                let artifact_path = format!("datasets.{}.artifact", dataset.id());
                 let bytes = ports
-                    .capture_published(&artifact_path, declaring, written)
+                    .capture_published(
+                        &format!("datasets.{}.artifact", dataset.id()),
+                        declaring,
+                        written,
+                    )
                     .map_err(Failure::Port)?;
                 if let Err(error) = Limits::source_bytes(bytes.as_ref().len()) {
-                    return Err(published_limit_failure(&artifact_path, written, error));
+                    return Err(published_boundary_failure(error, dataset.id(), written));
                 }
                 let kinds: Vec<_> = dataset
                     .columns()
@@ -431,9 +432,8 @@ impl<P: Ports> Application<P> {
                     })
                     .collect();
                 let rendered = if location.to_ascii_lowercase().ends_with(".csv") {
-                    let source = crate::csv_source::parse(bytes.as_ref()).map_err(|error| {
-                        published_csv_failure(&error, dataset.id(), written, &artifact_path)
-                    })?;
+                    let source = crate::csv_source::parse(bytes.as_ref())
+                        .map_err(|error| published_csv_failure(&error, dataset.id(), written))?;
                     crate::submission_json::admit_fields(
                         dataset,
                         source.names.iter().map(String::as_str),
@@ -442,12 +442,7 @@ impl<P: Ports> Application<P> {
                     let table = crate::typed_csv::PreparedTypes::new(&kinds)
                         .and_then(|types| types.convert(source))
                         .map_err(|error| {
-                            published_typed_csv_failure(
-                                &error,
-                                dataset.id(),
-                                written,
-                                &artifact_path,
-                            )
+                            published_typed_csv_failure(&error, dataset.id(), written)
                         })?;
                     crate::submission_json::render(
                         &composed,
@@ -463,6 +458,9 @@ impl<P: Ports> Application<P> {
                             "published Parquet profile",
                         )])
                     })?;
+                    Limits::table(table.row_count(), table.schema().columns().len()).map_err(
+                        |error| published_boundary_failure(error, dataset.id(), written),
+                    )?;
                     crate::submission_json::render(
                         &composed,
                         dataset,
@@ -745,6 +743,51 @@ mod projection_tests {
     use super::*;
 
     #[test]
+    fn published_boundaries_keep_structured_resource_facts_and_artifact_provenance() {
+        let source_error = Limits::source_bytes(Limits::SOURCE_BYTES + 1).unwrap_err();
+        let table_error = Limits::table(Limits::TABLE_ROWS + 1, 1).unwrap_err();
+        let declarations = (0..=Limits::COLUMNS)
+            .map(|index| (format!("C{index}"), crate::value::ColumnType::Str))
+            .collect::<Vec<_>>();
+        let typed_error = match crate::typed_csv::PreparedTypes::new(&declarations) {
+            Err(error) => error,
+            Ok(_) => panic!("oversized declarations must be refused"),
+        };
+        let failures: [Failure<(), ()>; 3] = [
+            published_boundary_failure(source_error, "DM", "published.csv"),
+            published_csv_failure(
+                &crate::csv_source::Error::Limit {
+                    resource: table_error.resource,
+                    limit: table_error.limit,
+                    actual: table_error.actual,
+                },
+                "DM",
+                "published.csv",
+            ),
+            published_typed_csv_failure(&typed_error, "DM", "published.csv"),
+        ];
+        for (failure, resource, limit) in [
+            (&failures[0], "source_bytes", Limits::SOURCE_BYTES),
+            (&failures[1], "table_rows", Limits::TABLE_ROWS),
+            (&failures[2], "columns", Limits::COLUMNS),
+        ] {
+            let Failure::Diagnostic(findings) = failure else {
+                panic!("boundary refusal must retain its diagnostic owner");
+            };
+            let diagnostic = &findings[0];
+            assert_eq!(diagnostic.code, ConditionCode::ApplicationRejected);
+            assert_eq!(diagnostic.code.definition().requirement, None);
+            assert_eq!(diagnostic.spec_paths, ["datasets.DM.artifact"]);
+            assert_eq!(diagnostic.context["stage"], "define");
+            assert_eq!(diagnostic.context["code"], "resource_limit");
+            assert_eq!(diagnostic.context["path"], "published.csv");
+            assert_eq!(diagnostic.context["resource"], resource);
+            assert_eq!(diagnostic.context["limit"], limit);
+            assert_eq!(diagnostic.context["actual"], limit + 1);
+        }
+    }
+
+    #[test]
     fn published_resource_and_csv_limits_retain_artifact_owner_and_size_facts() {
         let error = crate::limits::LimitExceeded {
             resource: "columns",
@@ -752,7 +795,7 @@ mod projection_tests {
             actual: Some(Limits::COLUMNS + 1),
         };
         let failures: [Failure<(), ()>; 3] = [
-            published_limit_failure("datasets.DM.artifact", "dm.csv", error),
+            published_boundary_failure(error, "DM", "dm.csv"),
             published_csv_failure(
                 &crate::csv_source::Error::Limit {
                     resource: error.resource,
@@ -761,14 +804,8 @@ mod projection_tests {
                 },
                 "DM",
                 "dm.csv",
-                "datasets.DM.artifact",
             ),
-            published_typed_csv_failure(
-                &crate::typed_csv::Error::Limit(error),
-                "DM",
-                "dm.csv",
-                "datasets.DM.artifact",
-            ),
+            published_typed_csv_failure(&crate::typed_csv::Error::Limit(error), "DM", "dm.csv"),
         ];
         for failure in failures {
             let Failure::Diagnostic(findings) = failure else {

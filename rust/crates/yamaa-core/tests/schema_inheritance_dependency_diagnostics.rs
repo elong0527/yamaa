@@ -305,7 +305,11 @@ mod schema {
         use crate::support::document::Tree as V;
 
         /// Build explicitly authored decoded schema documents without an interpreter oracle.
-        fn module(name: &str, declarations: Vec<(&str, V)>, includes: &[&str]) -> SchemaModule {
+        fn module(
+            name: &str,
+            declarations: Vec<(&'static str, V)>,
+            includes: &[&'static str],
+        ) -> SchemaModule {
             fn push(value: V, nodes: &mut Vec<N>) -> usize {
                 value.append(nodes)
             }
@@ -512,32 +516,92 @@ mod schema {
         }
 
         #[test]
-        fn doubling_field_reuse_refuses_before_exponential_materialization() {
-            let names: Vec<_> = (0..30).map(|index| format!("class_{index}")).collect();
+        fn doubling_field_reuse_is_rejected_as_a_duplicate_before_expansion() {
             let mut declarations = vec![
-                ("root_class", V::List(vec![reuse("class_29")])),
-                ("class_0", V::List(vec![field("id", "str")])),
+                ("version".into(), V::text("1.0")),
+                (
+                    "root_class".into(),
+                    V::List(vec![V::map(vec![("fields_from", V::text("level30"))])]),
+                ),
+                ("level0".into(), V::List(vec![field("id", "str")])),
             ];
-            for index in 1..names.len() {
+            for level in 1..=30 {
+                let inherited = V::map(vec![(
+                    "fields_from",
+                    V::text(format!("level{}", level - 1)),
+                )]);
                 declarations.push((
-                    names[index].as_str(),
-                    V::List(vec![
-                        V::map(vec![("fields_from", V::text(&names[index - 1]))]),
-                        V::map(vec![("fields_from", V::text(&names[index - 1]))]),
-                    ]),
+                    format!("level{level}"),
+                    V::List(vec![inherited.clone(), inherited]),
                 ));
             }
+            let module = SchemaModule {
+                name: "schema.yaml".into(),
+                document: V::Map(declarations).document(),
+            };
+            let BundleError::Invalid(issues) =
+                SchemaStructure::admit(vec![module], 0, "root_class").unwrap_err()
+            else {
+                panic!("duplicate reuse has a language finding, not a resource quota");
+            };
+            assert_eq!(issues.len(), 1);
+            assert_eq!(issues[0].module, 0);
+            assert_eq!(issues[0].path, "root_class.id");
+            assert_eq!(issues[0].kind, I::DuplicateField("id".into()));
+        }
+
+        #[test]
+        fn malformed_fields_precede_later_duplicate_reuse_in_the_selected_class() {
+            let root = module(
+                "schema.yaml",
+                vec![
+                    (
+                        "root_class",
+                        V::List(vec![
+                            V::map(vec![("broken", V::map(vec![]))]),
+                            reuse("doubled"),
+                        ]),
+                    ),
+                    ("doubled", V::List(vec![reuse("common"), reuse("common")])),
+                    ("common", V::List(vec![field("id", "str")])),
+                ],
+                &[],
+            );
+            let BundleError::Invalid(issues) =
+                SchemaStructure::admit(vec![root], 0, "root_class").unwrap_err()
+            else {
+                panic!("malformed declarations must keep their language findings");
+            };
+            assert_eq!(issues[0].path, "root_class.broken");
             assert_eq!(
-                SchemaStructure::admit(
-                    vec![module("schema.yaml", declarations, &[])],
-                    0,
-                    "root_class"
-                )
-                .unwrap_err(),
-                BundleError::Limit {
-                    resource: yamaa_core::schema::BundleResource::ExpandedFields,
-                    limit: 65_536,
-                },
+                issues[0].kind,
+                I::Descriptor(yamaa_core::schema::DescriptorIssue::MissingType)
+            );
+            assert_eq!(issues[1].path, "root_class.id");
+            assert_eq!(issues[1].kind, I::DuplicateField("id".into()));
+        }
+
+        #[test]
+        fn duplicate_reuse_does_not_hide_later_structural_reference_failures() {
+            let root = module(
+                "schema.yaml",
+                vec![
+                    (
+                        "root_class",
+                        V::List(vec![reuse("common"), reuse("common"), reuse("loop")]),
+                    ),
+                    ("common", V::List(vec![field("id", "str")])),
+                    ("loop", V::List(vec![reuse("loop")])),
+                ],
+                &[],
+            );
+            assert_eq!(
+                kinds(SchemaStructure::admit(vec![root], 0, "root_class").unwrap_err()),
+                [I::FieldsFromCycle(vec![
+                    "root_class".into(),
+                    "loop".into(),
+                    "loop".into(),
+                ])]
             );
         }
 

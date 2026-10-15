@@ -14,11 +14,10 @@ pub struct SchemaModule {
     pub document: Document,
 }
 
-/// Fixed semantic shape boundaries, independent of input storage.
+/// Fixed semantic recursion guard, independent of input storage.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BundleResource {
     Depth,
-    ExpandedFields,
 }
 
 /// Structured schema defects retain provenance; host adapters render existing diagnostics.
@@ -148,6 +147,11 @@ struct Raw {
 struct Named {
     name: String,
     raw: Raw,
+}
+#[derive(Clone)]
+struct ExpandedFields {
+    entries: Vec<Raw>,
+    repeated: bool,
 }
 struct RawRegistry {
     name: String,
@@ -294,24 +298,15 @@ impl Builder {
         }
         Ok(fields)
     }
-    fn expanded_shape(actual: Option<usize>) -> Result<(), BundleError> {
-        if actual.is_some_and(|actual| actual <= crate::limits::Limits::SCHEMA_FIELDS) {
-            return Ok(());
-        }
-        Err(BundleError::Limit {
-            resource: BundleResource::ExpandedFields,
-            limit: crate::limits::Limits::SCHEMA_FIELDS,
-        })
-    }
     /// Expand inherited immutable field occurrences in their declaring order.
     fn expand(
         &mut self,
         index: usize,
         classes: &[Named],
         names: &BTreeMap<String, usize>,
-        expanded: &mut [Option<Vec<Raw>>],
+        expanded: &mut [Option<ExpandedFields>],
         active: &mut Vec<usize>,
-    ) -> Result<Vec<Raw>, BundleError> {
+    ) -> Result<ExpandedFields, BundleError> {
         if active.contains(&index) {
             let mut cycle: Vec<_> = active.iter().map(|&id| classes[id].name.clone()).collect();
             cycle.push(classes[index].name.clone());
@@ -322,7 +317,6 @@ impl Builder {
             ));
         }
         if let Some(fields) = &expanded[index] {
-            Self::expanded_shape(Some(fields.len()))?;
             return Ok(fields.clone());
         }
         if active.len() >= crate::limits::Limits::SEMANTIC_DEPTH {
@@ -338,6 +332,8 @@ impl Builder {
         };
         let entries = entries.clone();
         let mut result = Vec::new();
+        let mut occurrences = BTreeSet::new();
+        let mut repeated = false;
         for node in entries {
             let item = Raw {
                 module: raw.module,
@@ -362,14 +358,32 @@ impl Builder {
                     ));
                 };
                 let copied = self.expand(target, classes, names, expanded, active)?;
-                Self::expanded_shape(result.len().checked_add(copied.len()))?;
-                result.extend(copied);
-            } else {
-                Self::expanded_shape(result.len().checked_add(1))?;
+                if !repeated {
+                    for field in copied.entries {
+                        result.push(field);
+                        if !occurrences.insert((field.module, field.node)) {
+                            repeated = true;
+                            break;
+                        }
+                    }
+                }
+            } else if !repeated {
                 result.push(item);
+                if !occurrences.insert((item.module, item.node)) {
+                    repeated = true;
+                }
             }
         }
         active.pop();
+        // A repeated leaf necessarily repeats a field name or shape defect.
+        // Keep the prefix through that occurrence so the normal descriptor pass
+        // reports any earlier defect first, at the selected class's paths. Later
+        // reuse edges still receive complete structural validation. Cache the
+        // bounded prefix too, so invalid reuse DAGs cannot multiply traversals.
+        let result = ExpandedFields {
+            entries: result,
+            repeated,
+        };
         expanded[index] = Some(result.clone());
         Ok(result)
     }
@@ -624,16 +638,20 @@ impl SchemaStructure {
         let mut expanded = vec![None; raw_classes.len()];
         let mut classes = Vec::new();
         for (index, class) in raw_classes.iter().enumerate() {
-            let entries = builder.expand(
+            let expanded = builder.expand(
                 index,
                 &raw_classes,
                 &class_names,
                 &mut expanded,
                 &mut Vec::new(),
             )?;
+            let fields = builder.fields(&expanded.entries, &class.name)?;
+            if expanded.repeated {
+                return Err(BundleError::Invalid(std::mem::take(&mut builder.issues)));
+            }
             classes.push(SchemaClass {
                 name: class.name.clone(),
-                fields: builder.fields(&entries, &class.name)?,
+                fields,
             });
         }
         let registry_names: BTreeMap<_, _> = raw_registries
