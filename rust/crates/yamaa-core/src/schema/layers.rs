@@ -6,7 +6,7 @@ use super::{
     SchemaDiagnostic, SchemaField, SchemaStructure, ValidationError,
 };
 use crate::diagnostic::ConditionCode;
-use alloc::{format, string::String, vec, vec::Vec};
+use std::vec;
 
 /// A written logical path and its retained input layer. Hosts attach their file identities.
 #[derive(Clone, Debug, PartialEq, Eq)]

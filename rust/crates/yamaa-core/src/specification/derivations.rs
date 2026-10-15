@@ -73,12 +73,12 @@ pub(super) fn prepare_value_with_driver(
     let op = text(d, op)?;
     let result_path = format!("{result_path}.{op}");
     let operation = match op {
-        "odm" => Operation::Odm(alloc::boxed::Box::new(odm::prepare(
+        "odm" => Operation::Odm(std::boxed::Box::new(odm::prepare(
             d,
             payload,
             &result_path,
         )?)),
-        "aggregate" => Operation::Aggregate(alloc::boxed::Box::new(aggregates::prepare(
+        "aggregate" => Operation::Aggregate(std::boxed::Box::new(aggregates::prepare(
             d,
             payload,
             &result_path,
@@ -110,7 +110,7 @@ pub(super) fn prepare_value_with_driver(
         "str_extract" => Operation::StrExtract(extraction.get(payload)?),
         "str_contains" => Operation::StrContains(extraction.get(payload)?),
         "greatest" | "least" | "str_concat" => {
-            Operation::Scalar(alloc::boxed::Box::new(scalar::prepare(
+            Operation::Scalar(std::boxed::Box::new(scalar::prepare(
                 d,
                 payload,
                 op,
@@ -130,7 +130,7 @@ pub(super) fn prepare_value_with_driver(
             if !features.is_empty() {
                 return Err(PrepareError::Unsupported(features));
             }
-            Operation::MappingCut(alloc::boxed::Box::new(declaration))
+            Operation::MappingCut(std::boxed::Box::new(declaration))
         }
         "str_case" => {
             let mut features = Vec::new();
@@ -222,7 +222,7 @@ pub(super) fn prepare_value_with_driver(
             if !features.is_empty() {
                 return Err(PrepareError::Unsupported(features));
             }
-            Operation::FirstAvailable(alloc::boxed::Box::new(operation))
+            Operation::FirstAvailable(std::boxed::Box::new(operation))
         }
         "row_number" | "rank" | "row_value" | "previous_non_missing" | "locf" | "baseline_flag" => {
             let mut features = Vec::new();
@@ -237,7 +237,7 @@ pub(super) fn prepare_value_with_driver(
             if !features.is_empty() {
                 return Err(PrepareError::Unsupported(features));
             }
-            Operation::Window(alloc::boxed::Box::new(operation))
+            Operation::Window(std::boxed::Box::new(operation))
         }
         "compute" => {
             for &(name, _) in mapping(d, payload)? {
@@ -285,7 +285,7 @@ pub(super) fn prepare_value_with_driver(
             if !features.is_empty() {
                 return Err(PrepareError::Unsupported(features));
             }
-            Operation::Source(alloc::boxed::Box::new(source))
+            Operation::Source(std::boxed::Box::new(source))
         }
         _ => return Err(unsupported(&result_path, op)),
     };
@@ -629,7 +629,7 @@ pub(super) fn bind_row(
                     }
                     Some(Ok(plan)) => {
                         let mut bindings = Vec::new();
-                        let mut seen = alloc::collections::BTreeSet::new();
+                        let mut seen = std::collections::BTreeSet::new();
                         for identifier in plan.identifiers() {
                             if !seen.insert(identifier) {
                                 continue;
@@ -720,7 +720,7 @@ pub(super) fn bind_row(
                 )? {
                     result.push(crate::dataset::CaseBranch {
                         when,
-                        assignment: alloc::boxed::Box::new(Assignment {
+                        assignment: std::boxed::Box::new(Assignment {
                             column,
                             expression,
                             path: branch.path.clone(),
@@ -858,7 +858,7 @@ pub(super) fn bind_selection(
             Expression::Source(column) => crate::dataset::SelectionRead::Source(column),
             Expression::Column(column) => crate::dataset::SelectionRead::Column(column),
             expression => {
-                crate::dataset::SelectionRead::Expression(alloc::boxed::Box::new(Assignment {
+                crate::dataset::SelectionRead::Expression(std::boxed::Box::new(Assignment {
                     column,
                     expression,
                     path: path.clone(),
@@ -870,7 +870,7 @@ pub(super) fn bind_selection(
         }
     }
     Ok(
-        (findings.len() == before).then_some(Expression::FirstAvailable(alloc::boxed::Box::new(
+        (findings.len() == before).then_some(Expression::FirstAvailable(std::boxed::Box::new(
             crate::dataset::FirstAvailable::new(operands, selection.missing.clone()),
         ))),
     )

@@ -1,6 +1,6 @@
 //! Immutable function contracts admitted without activating or invoking host code.
 use crate::value::{ColumnType, Value, ValueType};
-use alloc::{collections::BTreeSet, string::String, vec::Vec};
+use std::collections::BTreeSet;
 
 /// Resolved identity retained on every fatal invocation failure (REQ-0704).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -29,14 +29,21 @@ pub struct Parameter {
     pub presence: Presence,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum PlanError {
+    #[error("function signature empty identity")]
     EmptyIdentity,
+    #[error("function signature invalid host mapping")]
     InvalidHostMapping,
+    #[error("function signature invalid name: parameter={parameter:?}")]
     InvalidName { parameter: usize },
+    #[error("function signature duplicate name: parameter={parameter:?}")]
     DuplicateName { parameter: usize },
+    #[error("function signature empty host name: parameter={parameter:?}")]
     EmptyHostName { parameter: usize },
+    #[error("function signature duplicate host name: parameter={parameter:?}")]
     DuplicateHostName { parameter: usize },
+    #[error("function signature invalid default: parameter={parameter:?}")]
     InvalidDefault { parameter: usize },
 }
 

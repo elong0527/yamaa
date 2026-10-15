@@ -4,7 +4,7 @@ use crate::{
     diagnostic::ConditionCode,
     project_diagnostics::{Context, Diagnostic, Fact},
 };
-use alloc::{format, string::String, vec, vec::Vec};
+use std::vec;
 
 /// Original path and first invalid scalar offset from the retained decoder.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -13,6 +13,7 @@ pub struct UnicodeIssue {
     pub code_point: u32,
     pub offset: usize,
 }
+#[derive(Debug)]
 pub enum Failure<'a> {
     NonAscii {
         line: usize,
@@ -76,3 +77,10 @@ pub fn diagnostics<'a>(failure: Failure<'a>, identity: Option<&'a str>) -> Vec<D
             .collect(),
     }
 }
+
+impl<'a> std::fmt::Display for Failure<'a> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "yaml diagnostics: {self:?}")
+    }
+}
+impl<'a> std::error::Error for Failure<'a> {}

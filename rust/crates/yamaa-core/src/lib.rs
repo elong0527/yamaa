@@ -1,8 +1,6 @@
 //! Shared language semantics, preparation, execution and publication services.
-#![no_std]
 #![forbid(unsafe_code)]
 
-extern crate alloc;
 pub mod application_issue;
 
 pub mod aggregate_compiler;

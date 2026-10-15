@@ -1,10 +1,10 @@
 //! Typed canonical causes for named-selection binding and predicate findings.
 use super::*;
 use crate::{
-    diagnostic::{ConditionCode as C, ContextValue, Diagnostic},
+    diagnostic::{ConditionCode as C, Diagnostic},
     predicate_parser::GrammarFailure,
-    value::Value,
 };
+use serde_json::Value as JsonValue;
 
 #[derive(Clone, Copy, Debug)]
 pub(super) enum ReferenceCause {
@@ -42,15 +42,15 @@ impl LookupFinding {
     pub(super) fn text(&mut self, key: &str, value: &str) {
         self.0
             .context
-            .insert(key.into(), ContextValue::Scalar(Value::Str(value.into())));
+            .insert(key.into(), JsonValue::String(value.into()));
     }
     pub(super) fn texts(&mut self, key: &str, values: &[&str]) {
         self.0.context.insert(
             key.into(),
-            ContextValue::Sequence(
+            JsonValue::Array(
                 values
                     .iter()
-                    .map(|value| ContextValue::Scalar(Value::Str((*value).into())))
+                    .map(|value| JsonValue::String((*value).into()))
                     .collect(),
             ),
         );

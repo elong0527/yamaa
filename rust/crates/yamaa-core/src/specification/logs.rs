@@ -1,11 +1,11 @@
 //! Governed sidecar declarations and static findings, without file authority.
 use super::{output_profile, text, PrepareError};
 use crate::{
-    diagnostic::{ConditionCode, ContextValue, Diagnostic},
+    diagnostic::{ConditionCode, Diagnostic},
     schema::{Document, DocumentNode},
-    value::Value,
 };
-use alloc::{string::String, vec, vec::Vec};
+use serde_json::Value as JsonValue;
+use std::vec;
 
 #[derive(Clone, Debug, Default)]
 pub struct OutputLogs {
@@ -116,14 +116,14 @@ impl LogFinding {
         }
     }
     pub fn diagnostic(&self) -> Diagnostic {
-        let text = |value: &str| ContextValue::Scalar(Value::Str(value.into()));
+        let text = |value: &str| JsonValue::String(value.into());
         let (code, spec_paths, context) = match self {
             Self::MissingWarning { warnings } => (
                 ConditionCode::MissingWarningLog,
                 vec!["output.warning_log".into()],
                 [(
                     "warnings".into(),
-                    ContextValue::Sequence(warnings.iter().map(|path| text(path)).collect()),
+                    JsonValue::Array(warnings.iter().map(|path| text(path)).collect()),
                 )]
                 .into(),
             ),
@@ -134,9 +134,7 @@ impl LogFinding {
                     ("path".into(), text(path)),
                     (
                         "permitted".into(),
-                        ContextValue::Sequence(
-                            [".csv", ".parquet"].into_iter().map(text).collect(),
-                        ),
+                        JsonValue::Array([".csv", ".parquet"].into_iter().map(text).collect()),
                     ),
                 ]
                 .into(),

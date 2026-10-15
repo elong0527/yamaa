@@ -6,14 +6,15 @@ use crate::{
     table::ValueRef,
     value::{compare_present_refs, ValueType},
 };
-use core::cmp::Ordering;
+use std::cmp::Ordering;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum AggregateReductionError {
+    #[error("aggregate reduction numeric: {0:?}")]
     Numeric(ReductionError),
-    MultipleRecords {
-        count: usize,
-    },
+    #[error("aggregate reduction multiple records: count={count:?}")]
+    MultipleRecords { count: usize },
+    #[error("aggregate reduction incompatible inputs: argument={argument:?}, left={left:?}, right={right:?}")]
     IncompatibleInputs {
         argument: usize,
         left: ValueType,

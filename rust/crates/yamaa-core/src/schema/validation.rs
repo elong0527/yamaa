@@ -9,12 +9,7 @@ use crate::{
     diagnostic::{ConditionCode, Definition},
     regex::MatchLimits,
 };
-use alloc::{
-    format,
-    string::{String, ToString},
-    vec,
-    vec::Vec,
-};
+use std::vec;
 
 /// Large context values remain references until core admits the complete projection.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -80,13 +75,19 @@ impl Default for ValidationLimits {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ValidationError {
+    #[error("schema validation type: {0:?}")]
     Type(TypeError),
+    #[error("schema validation constraint: {0:?}")]
     Constraint(ConstraintError),
+    #[error("schema validation depth: limit={limit:?}")]
     Depth { limit: usize },
+    #[error("schema validation diagnostics: limit={limit:?}")]
     Diagnostics { limit: usize },
+    #[error("schema validation diagnostic text: limit={limit:?}")]
     DiagnosticText { limit: usize },
+    #[error("schema validation invalid descriptor")]
     InvalidDescriptor,
 }
 
@@ -575,7 +576,7 @@ impl Run<'_, '_> {
         }
         for (member, diagnostics) in &mut attempted {
             if self.outer(member, member.root(), site.deeper())? {
-                return Ok(core::mem::take(diagnostics));
+                return Ok(std::mem::take(diagnostics));
             }
         }
         if let Some((_, diagnostics)) = attempted.into_iter().next() {

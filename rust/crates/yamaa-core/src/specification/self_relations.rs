@@ -1,9 +1,6 @@
 //! SELF preparation uses authored phases and output metadata, never study ports.
 use super::*;
-use crate::{
-    dataset::{Intermediate, SecondarySource},
-    value::Value,
-};
+use crate::dataset::{Intermediate, SecondarySource};
 
 #[derive(Clone, Copy, Debug)]
 pub(super) enum Relation {
@@ -17,7 +14,8 @@ pub(super) fn declaration_findings(
     sources: &[SourceDeclaration],
     items: &[usize],
 ) -> Result<Vec<PreflightFinding>, PrepareError> {
-    use crate::diagnostic::{ConditionCode as C, ContextValue, Diagnostic};
+    use crate::diagnostic::{ConditionCode as C, Diagnostic};
+    use serde_json::Value as JsonValue;
     let mut findings = Vec::new();
     let mut bytes = 0usize;
     for (index, &item) in items.iter().enumerate() {
@@ -37,24 +35,15 @@ pub(super) fn declaration_findings(
             (
                 C::IntermediateIdentifierCollision,
                 vec![path, "input.SELF".into()],
-                vec![(
-                    "identifier".into(),
-                    ContextValue::Scalar(Value::Str("SELF".into())),
-                )],
+                vec![("identifier".into(), JsonValue::String("SELF".into()))],
             )
         } else if !present(d, d.root(), "rows") {
             (
                 C::LookupSelectionReference,
                 vec![path],
                 vec![
-                    (
-                        "intermediate".into(),
-                        ContextValue::Scalar(Value::Str(name.into())),
-                    ),
-                    (
-                        "identifier".into(),
-                        ContextValue::Scalar(Value::Str("SELF".into())),
-                    ),
+                    ("intermediate".into(), JsonValue::String(name.into())),
+                    ("identifier".into(), JsonValue::String("SELF".into())),
                 ],
             )
         } else {
@@ -78,8 +67,8 @@ pub(super) fn donor_defaults(
     project: Option<&functions::Prepared>,
     named: &intermediates::Declarations,
     templates: &str_template::Prepared,
-) -> Result<alloc::collections::BTreeSet<usize>, PrepareError> {
-    let mut fields = alloc::collections::BTreeSet::new();
+) -> Result<std::collections::BTreeSet<usize>, PrepareError> {
+    let mut fields = std::collections::BTreeSet::new();
     let mut register = |field: &str| {
         if let Some(column) = output
             .columns()
@@ -220,21 +209,14 @@ impl<'a> FirstTemplate<'a> {
                 operand_route: None,
                 spec_paths: vec![path.into()],
                 context: [
-                    (
-                        "identifier".into(),
-                        crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(name)),
-                    ),
+                    ("identifier".into(), serde_json::Value::String(name)),
                     (
                         "available_phase".into(),
-                        crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(
-                            "completed_prior_row_template".into(),
-                        )),
+                        serde_json::Value::String("completed_prior_row_template".into()),
                     ),
                     (
                         "required_phase".into(),
-                        crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(
-                            "row_construction".into(),
-                        )),
+                        serde_json::Value::String("row_construction".into()),
                     ),
                 ]
                 .into_iter()

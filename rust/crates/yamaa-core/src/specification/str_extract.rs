@@ -343,7 +343,7 @@ fn finish(
         return Ok(None);
     }
     Ok(source.map(|expression| Expression::StrExtract {
-        source: alloc::boxed::Box::new(Assignment {
+        source: std::boxed::Box::new(Assignment {
             column,
             path: format!("{}.source", operation.path()),
             expression,

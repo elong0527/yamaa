@@ -6,7 +6,7 @@ use crate::{
     project_diagnostics::{Context, Diagnostic, Fact},
     specification::PreparedSpecification,
 };
-use alloc::{vec, vec::Vec};
+use std::vec;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Phase {
@@ -21,9 +21,11 @@ impl Phase {
         }
     }
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
+    #[error("verification diagnostics invalid observation")]
     InvalidObservation,
+    #[error("verification diagnostics unsupported outcome")]
     UnsupportedOutcome,
 }
 pub struct Projection<'a> {

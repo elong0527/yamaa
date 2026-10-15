@@ -7,7 +7,7 @@ use crate::{
     regex,
     temporal::{Date, DateTime, TemporalError},
 };
-use alloc::{collections::BTreeSet, format, string::String, vec::Vec};
+use std::collections::BTreeSet;
 
 /// Temporal literal spelling is retained independently of its parsed civil value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,19 +17,21 @@ pub enum TemporalKind {
 }
 
 /// Grammar-owned rejection; regex resource policies have a separate outcome.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum GrammarFailure {
+    #[error("predicate parser invalid expression")]
     InvalidExpression,
+    #[error("predicate parser integer overflow")]
     IntegerOverflow,
+    #[error("predicate parser invalid escape")]
     InvalidEscape,
+    #[error("predicate parser invalid temporal: kind={kind:?}, error={error:?}")]
     InvalidTemporal {
         kind: TemporalKind,
         error: TemporalError,
     },
-    InvalidRegex {
-        byte: usize,
-        reason: &'static str,
-    },
+    #[error("predicate parser invalid regex: byte={byte:?}, reason={reason:?}")]
+    InvalidRegex { byte: usize, reason: &'static str },
 }
 impl GrammarFailure {
     /// The committed predicate grammar reports rejected temporal literals here too.
@@ -47,24 +49,32 @@ impl GrammarFailure {
 }
 
 /// Resource and unsupported outcomes never become a grammar rejection.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ParseError {
+    #[error(
+        "predicate parser grammar: position={position:?}, failure={failure:?}, message={message:?}"
+    )]
     Grammar {
         position: SourcePosition,
         failure: GrammarFailure,
         /// Production-owned explanation; hosts add the scalar source location.
         message: String,
     },
+    #[error(
+        "predicate parser limit: position={position:?}, resource={resource:?}, limit={limit:?}"
+    )]
     Limit {
         position: SourcePosition,
         resource: ParseResource,
         limit: usize,
     },
+    #[error("predicate parser regex limit: position={position:?}, resource={resource:?}, limit={limit:?}")]
     RegexLimit {
         position: SourcePosition,
         resource: regex::Resource,
         limit: usize,
     },
+    #[error("predicate parser unsupported regex: position={position:?}, byte={byte:?}, feature={feature:?}")]
     UnsupportedRegex {
         position: SourcePosition,
         byte: usize,
@@ -586,13 +596,13 @@ impl Parser<'_> {
         let negated = self.take("NOT");
         if self.take("IN") {
             self.require(TokenKind::Symbol(b'('), "expected '(' after IN")?;
-            let mut items = alloc::vec![self.operand()?];
+            let mut items = std::vec![self.operand()?];
             while self.token().kind == TokenKind::Symbol(b',') {
                 self.advance();
                 items.push(self.operand()?);
             }
             self.require(TokenKind::Symbol(b')'), "expected ')' after IN operands")?;
-            let children: Vec<_> = core::iter::once(value)
+            let children: Vec<_> = std::iter::once(value)
                 .chain(items.iter().copied())
                 .collect();
             return self.push(

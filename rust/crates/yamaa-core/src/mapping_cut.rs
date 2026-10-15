@@ -1,16 +1,19 @@
 //! Closed dictionary and interval selection, preserving raw literal results.
 use crate::{
-    diagnostic::{ConditionCode as C, ContextValue as V, Diagnostic},
+    diagnostic::{ConditionCode as C, Diagnostic},
     table::ValueRef,
     value::{compare_present_refs, FiniteFloat, Value},
 };
-use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
-use core::cmp::Ordering;
+use serde_json::Value as V;
+use std::cmp::Ordering;
+use std::{collections::BTreeMap, vec};
 
 pub const MAX_DECLARATION_BYTES: usize = 16_777_216;
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum AdmissionError {
+    #[error("mapping cut limit")]
     Limit,
+    #[error("mapping cut diagnostic: {0:?}")]
     Diagnostic(Diagnostic),
 }
 /// A selected result remains borrowed until the engine admits its copy.
@@ -90,7 +93,7 @@ fn diagnostic(
     }
 }
 fn text(value: &str) -> V {
-    V::Scalar(Value::Str(value.into()))
+    V::String(value.into())
 }
 fn actual(value: ValueRef<'_>) -> &'static str {
     match value {
@@ -141,10 +144,7 @@ impl Mapping {
                     &format!("{path}.dict"),
                     [
                         ("folded_key", text(&folded)),
-                        (
-                            "entries",
-                            V::Sequence(entries.into_iter().map(text).collect()),
-                        ),
+                        ("entries", V::Array(entries.into_iter().map(text).collect())),
                     ],
                 )));
             }
@@ -233,7 +233,7 @@ impl Cut {
                 .iter()
                 .map(|label| label.len().saturating_add(32))
                 .chain(missing.iter().map(text_bytes))
-                .chain(core::iter::once(breaks.len().saturating_mul(8))),
+                .chain(std::iter::once(breaks.len().saturating_mul(8))),
         )?;
         if let Some(finding) = Self::declaration_findings(&source, &path, &breaks, &labels)?
             .into_iter()
@@ -263,7 +263,7 @@ impl Cut {
             labels
                 .iter()
                 .map(|label| label.len().saturating_add(32))
-                .chain(core::iter::once(breaks.len().saturating_mul(8))),
+                .chain(std::iter::once(breaks.len().saturating_mul(8))),
         )?;
         let expected = [
             (

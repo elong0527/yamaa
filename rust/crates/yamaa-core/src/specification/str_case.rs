@@ -238,7 +238,7 @@ pub(super) fn bind(
         findings,
     )?
     .map(|expression| Expression::StrCase {
-        source: alloc::boxed::Box::new(Assignment {
+        source: std::boxed::Box::new(Assignment {
             column,
             path,
             expression,
@@ -296,7 +296,7 @@ pub(super) fn bind_row(
         }
     }
     Ok(source.map(|expression| Expression::StrCase {
-        source: alloc::boxed::Box::new(Assignment {
+        source: std::boxed::Box::new(Assignment {
             column,
             path,
             expression,

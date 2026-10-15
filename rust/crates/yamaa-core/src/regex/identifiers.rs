@@ -7,11 +7,11 @@ fn member(c: char, ranges: &[(u32, u32)]) -> bool {
     ranges
         .binary_search_by(|&(start, end)| {
             if end < value {
-                core::cmp::Ordering::Less
+                std::cmp::Ordering::Less
             } else if start > value {
-                core::cmp::Ordering::Greater
+                std::cmp::Ordering::Greater
             } else {
-                core::cmp::Ordering::Equal
+                std::cmp::Ordering::Equal
             }
         })
         .is_ok()
@@ -30,7 +30,6 @@ pub(super) fn part(c: char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloc::vec;
 
     /// Independent bitmap parsing checks every scalar against the authoritative UCD.
     #[test]

@@ -3,15 +3,17 @@ use super::{
     Document, DocumentKind as K, DocumentNode as N, SchemaContext as C, SchemaDiagnostic,
     SchemaStructure,
 };
-use alloc::{collections::BTreeSet, string::String};
+use std::collections::BTreeSet;
 
 /// Conservative escaped JSON admission shared across ordered captured reports.
 pub const MAX_SCHEMA_DIAGNOSTIC_BYTES: usize = 16_777_216;
 
 /// Malformed references and resource refusal are distinct from authored findings.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum SchemaDiagnosticError {
+    #[error("schema diagnostic projection limit")]
     Limit,
+    #[error("schema diagnostic projection invalid context")]
     InvalidContext,
 }
 

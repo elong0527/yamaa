@@ -5,12 +5,9 @@ use super::{
     Descriptor, DescriptorBudget, DescriptorError, DescriptorIssue, DescriptorLimits, Document,
     DocumentNode as N,
 };
-use alloc::{
+use std::{
     collections::{BTreeMap, BTreeSet},
-    format,
-    string::String,
     vec,
-    vec::Vec,
 };
 
 /// One immutable decoded source, identified by a bundle-local filename, never a digest.
@@ -98,13 +95,16 @@ pub struct BundleIssue {
 }
 
 /// Refusals cannot be mistaken for successful schema admission or language findings.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum BundleError {
+    #[error("schema bundle invalid: {0:?}")]
     Invalid(Vec<BundleIssue>),
+    #[error("schema bundle limit: resource={resource:?}, limit={limit:?}")]
     Limit {
         resource: BundleResource,
         limit: usize,
     },
+    #[error("schema bundle descriptor: {0:?}")]
     Descriptor(DescriptorError),
 }
 
@@ -273,7 +273,7 @@ impl Builder {
     fn fail(&mut self, raw: Raw, path: &str, kind: BundleIssueKind) -> BundleError {
         match self.issue(raw, path, kind) {
             Err(error) => error,
-            Ok(()) => BundleError::Invalid(core::mem::take(&mut self.issues)),
+            Ok(()) => BundleError::Invalid(std::mem::take(&mut self.issues)),
         }
     }
     /// Compile field/alias/registry descriptors in the existing stage order.
@@ -858,7 +858,7 @@ impl SchemaStructure {
                 builder.issue(raw, "$", BundleIssueKind::UnknownRegistry(name))?;
             }
         }
-        for (raw, path, reference) in core::mem::take(&mut builder.references) {
+        for (raw, path, reference) in std::mem::take(&mut builder.references) {
             if !builtin(&reference)
                 && !class_names.contains_key(&reference)
                 && kinds.get(&reference) != Some(&1)

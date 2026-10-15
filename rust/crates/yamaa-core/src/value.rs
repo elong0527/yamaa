@@ -1,7 +1,6 @@
 //! Closed runtime types, boundary normalization and comparison.
 
-use alloc::string::String;
-use core::cmp::Ordering;
+use std::cmp::Ordering;
 
 use crate::temporal::{Date, DateTime};
 
@@ -94,9 +93,11 @@ pub enum Selection {
 }
 
 /// The consuming operation owns the missing policy and diagnostic context.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ComparisonError {
+    #[error("value missing operand")]
     MissingOperand,
+    #[error("value incompatible types")]
     IncompatibleTypes,
 }
 
@@ -165,5 +166,31 @@ pub fn compare_present_refs(
         (Value::Date(a), Value::Date(b)) => Ok(a.cmp(&b)),
         (Value::DateTime(a), Value::DateTime(b)) => Ok(a.cmp(&b)),
         _ => Err(ComparisonError::IncompatibleTypes),
+    }
+}
+
+/// Encode a runtime scalar once at the owned JSON boundary. Arbitrary diagnostic
+/// integers use serde_json::Number directly rather than passing through f64.
+impl From<&Value> for serde_json::Value {
+    fn from(value: &Value) -> Self {
+        match value {
+            Value::Missing => Self::Null,
+            Value::Str(value) => Self::String(value.clone()),
+            Value::Int(value) => Self::from(*value),
+            Value::Float(value) => Self::Number(
+                serde_json::Number::from_f64(value.get()).expect("finite runtime float"),
+            ),
+            Value::Bool(value) => Self::Bool(*value),
+            Value::Date(value) => Self::String(value.to_string()),
+            Value::DateTime(value) => Self::String(value.to_string()),
+        }
+    }
+}
+impl From<Value> for serde_json::Value {
+    fn from(value: Value) -> Self {
+        match value {
+            Value::Str(value) => Self::String(value),
+            value => Self::from(&value),
+        }
     }
 }

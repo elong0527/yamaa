@@ -5,7 +5,7 @@ use crate::{
     dataset::{OrderTerm, Window, WindowKind},
     predicate_compiler,
 };
-use alloc::collections::BTreeSet;
+use std::collections::BTreeSet;
 
 #[derive(Clone, Debug)]
 enum Kind {
@@ -64,7 +64,8 @@ impl WindowFinding {
     }
     /// Retain the authored failure without consulting a host or source table.
     pub fn diagnostic(&self) -> crate::diagnostic::Diagnostic {
-        use crate::diagnostic::{ContextValue, Diagnostic};
+        use crate::diagnostic::Diagnostic;
+        use serde_json::Value as JsonValue;
         let (path, name, value) = match self {
             Self::ZeroOffset { path } => (path, "offset", crate::value::Value::Int(0)),
             Self::Order {
@@ -78,7 +79,7 @@ impl WindowFinding {
         Diagnostic {
             code: self.diagnostic_code(),
             spec_paths: vec![path.clone()],
-            context: [(name.into(), ContextValue::Scalar(value))].into(),
+            context: [(name.into(), JsonValue::from(value))].into(),
             source_span: None,
             operand_route: None,
         }

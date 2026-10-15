@@ -1,5 +1,5 @@
 //! Intermediate field visibility and correlated donor scope over compiler metadata.
-use alloc::{collections::BTreeSet, vec::Vec};
+use std::collections::BTreeSet;
 
 use crate::reference_binding::{Catalog, Error};
 
@@ -112,7 +112,7 @@ pub fn validate_field(
     target: Intermediate<'_>,
     limits: Limits,
 ) -> Result<Option<Finding>, Error> {
-    admit(core::iter::once(field).chain(names(target)), limits)?;
+    admit(std::iter::once(field).chain(names(target)), limits)?;
     Ok((visible(catalog, field, target) == Some(false)).then_some(Finding::UnknownField))
 }
 

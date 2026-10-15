@@ -5,7 +5,6 @@ use crate::{
     key_relation::ComparableType,
     match_value::{self, LiteralKind},
 };
-use alloc::boxed::Box;
 
 #[derive(Clone, Copy)]
 pub(super) struct Context<'a> {

@@ -1,13 +1,13 @@
 //! Numeric, aggregate and predicate grammar findings retain original spelling in core.
-use super::{ConditionCode as C, Context, ContextValue as V, Diagnostic};
+use super::{ConditionCode as C, Context, Diagnostic};
 use crate::{
     aggregate_parser::GrammarFailure as A, numeric_parser::GrammarFailure as N,
-    predicate_parser::GrammarFailure as P, value::Value,
+    predicate_parser::GrammarFailure as P,
 };
-use alloc::{string::ToString, vec};
+use serde_json::Value as V;
 
 fn text(value: &str) -> V {
-    V::Scalar(Value::Str(value.into()))
+    V::String(value.into())
 }
 fn finding(code: C, path: &str, expression: &str, extra: Context) -> Diagnostic {
     let mut context = extra;
@@ -31,7 +31,7 @@ fn function(
         text(expression.get(name.start..name.end)?),
     );
     if let Some(count) = count {
-        context.insert("argument_count".into(), V::Integer(count.to_string()));
+        context.insert("argument_count".into(), V::from(count));
     }
     Some(context)
 }
@@ -125,7 +125,7 @@ impl P {
     pub fn diagnostic(&self, path: &str, predicate: &str, position: usize) -> Diagnostic {
         let mut context = self.syntax_diagnostic().context;
         context.insert("predicate".into(), text(predicate));
-        context.insert("position".into(), V::Integer(position.to_string()));
+        context.insert("position".into(), V::from(position));
         if let Some(suggestion) = self.arithmetic_suggestion(predicate, position) {
             context.insert("suggestion".into(), text(suggestion));
         }
@@ -195,7 +195,7 @@ impl P {
         }
         let mut context: Context = [
             ("predicate".into(), text(predicate)),
-            ("position".into(), V::Integer(position.to_string())),
+            ("position".into(), V::from(position)),
         ]
         .into();
         if let Some(suggestion) = suggestion {
@@ -216,7 +216,7 @@ impl P {
         match self {
             Self::InvalidExpression | Self::InvalidEscape | Self::IntegerOverflow => {}
             Self::InvalidRegex { byte, reason } => {
-                context.insert("pattern_byte".into(), V::Integer(byte.to_string()));
+                context.insert("pattern_byte".into(), V::from(*byte));
                 context.insert("reason".into(), text(reason));
             }
             Self::InvalidTemporal { kind, error } => {

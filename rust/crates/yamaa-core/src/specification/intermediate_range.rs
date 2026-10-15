@@ -189,7 +189,7 @@ pub(super) fn bind(
         .path
         .len()
         .checked_add(name.len())
-        .and_then(|n| n.checked_add(core::mem::size_of::<RelationRange>()))
+        .and_then(|n| n.checked_add(std::mem::size_of::<RelationRange>()))
         .ok_or(BindError::Catalog(reference_binding::Error::SizeOverflow))?;
     let required = [lower.as_ref(), upper.as_ref()]
         .into_iter()

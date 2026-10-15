@@ -5,7 +5,7 @@ use crate::{
     dataset::{AggregatePhase, BoundOdm, Expression, OdmRead, OdmScope},
     reference_scope::Phase,
 };
-use alloc::collections::BTreeSet;
+use std::collections::BTreeSet;
 
 #[derive(Clone, Debug)]
 pub(super) struct Declaration {
@@ -247,7 +247,7 @@ pub(super) fn bind(
         filter,
     };
     BoundOdm::new(read)
-        .map(|bound| Some(Expression::Odm(alloc::boxed::Box::new(bound))))
+        .map(|bound| Some(Expression::Odm(std::boxed::Box::new(bound))))
         .map_err(BindError::InvalidPlan)
 }
 
