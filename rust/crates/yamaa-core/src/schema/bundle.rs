@@ -293,7 +293,7 @@ impl Builder {
         }
         Ok(fields)
     }
-    /// Expand immutable field occurrences, charging every copied occurrence across classes.
+    /// Expand inherited immutable field occurrences in their declaring order.
     fn expand(
         &mut self,
         index: usize,

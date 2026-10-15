@@ -14,7 +14,7 @@ pub enum ConstraintViolation {
     InvalidSize,
 }
 
-/// Logical validation work and regex matching retain independent request ceilings.
+/// A fixed per-match regex refusal remains distinct from a constraint mismatch.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ConstraintError {
     #[error("schema constraints regex: {0:?}")]

@@ -444,7 +444,6 @@ impl<'a> Run<'a> {
             }
             // Name the cycle itself, not only the residuals it blocks: the shared
             // analysis spells the first cycle the same way the flat compiler does.
-            // Charge its bounded scheduler state like the first scheduling pass.
             let (cycle_indices, closed) = match analysis.cycle {
                 Some(cycle) => (cycle, true),
                 None => (

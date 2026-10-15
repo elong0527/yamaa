@@ -1,4 +1,4 @@
-//! Independent metadata arenas exercise complete multi-domain work admission.
+//! Independent metadata arenas exercise complete multi-domain composition.
 use yamaa_core::{
     project_terminology::Catalogue,
     schema::{Document, DocumentNode as N},
@@ -162,19 +162,29 @@ fn thirty_domains_with_fifteen_hundred_nodes_admit_complete_column_and_row_scans
     }
 }
 #[test]
-fn excessive_selected_column_scans_refuse_the_complete_section() {
-    // These arenas fit the cumulative node/text ownership limits, but repeating
-    // complete row/name scans for every selected column exceeds the work bound.
+fn thirty_domains_with_two_hundred_fifty_columns_keep_complete_ordered_metadata() {
+    use yamaa_core::specification_submission_document::{
+        ColumnType, Core, OriginSource, OriginType,
+    };
     let documents: Vec<_> = (0..30).map(|index| specification(index, 250, 0)).collect();
-    assert!(
-        documents
-            .iter()
-            .map(|document| document.nodes().len())
-            .sum::<usize>()
-            < 524_288
-    );
-    let findings = compose(&documents).unwrap_err();
-    assert_eq!(findings.len(), 1);
-    assert_eq!(findings[0].definition().condition, "engine_rejected");
-    assert!(format!("{:?}", findings[0].context).contains("composition_admission_limit"));
+    let study = compose(&documents).unwrap();
+    assert_eq!(study.datasets().len(), 30);
+    assert_eq!(study.installed_version(), "1.0");
+    for (index, dataset) in study.datasets().iter().enumerate() {
+        assert_eq!(dataset.id(), format!("D{index}"));
+        assert_eq!(dataset.columns().len(), 250);
+        for (column, compiled) in dataset.columns().iter().enumerate() {
+            let declared = compiled.declaration();
+            assert_eq!(declared.name.value, format!("V{column:04}"));
+            assert_eq!(declared.column_type.value, ColumnType::String);
+            assert_eq!(declared.label.as_ref().unwrap().value, "Independent column");
+            let metadata = declared.submission.as_ref().unwrap();
+            assert_eq!(metadata.core.as_ref().unwrap().value, Core::Expected);
+            assert_eq!(metadata.length.as_ref().unwrap().value, "1");
+            let origin = metadata.origin_metadata.as_ref().unwrap();
+            assert_eq!(origin.kind.value, OriginType::Assigned);
+            assert_eq!(origin.source.as_ref().unwrap().value, OriginSource::Sponsor);
+            assert!(compiled.values().is_empty());
+        }
+    }
 }
