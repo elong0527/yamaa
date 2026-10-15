@@ -140,30 +140,140 @@ impl<'de> Deserialize<'de> for Value {
 }
 
 fn decode(text: &str, depth: usize) -> Result<Value, Error> {
-    if depth > 128 {
-        return Err(<Error as serde::de::Error>::custom(
-            "JSON recursion limit exceeded",
-        ));
+    let mut decoder = Decoder { text, offset: 0 };
+    let value = decoder.value(depth)?;
+    decoder.space();
+    if decoder.offset != text.len() {
+        return Err(Decoder::invalid());
     }
-    Ok(match text.as_bytes().first() {
-        Some(b'n') => Value::Null,
-        Some(b't') => Value::Bool(true),
-        Some(b'f') => Value::Bool(false),
-        Some(b'"') => Value::String(serde_json::from_str(text)?),
-        Some(b'[') => Value::Array(
-            serde_json::from_str::<Vec<&value::RawValue>>(text)?
-                .into_iter()
-                .map(|raw| decode(raw.get(), depth + 1))
-                .collect::<Result<_, _>>()?,
-        ),
-        Some(b'{') => Value::Object(
-            serde_json::from_str::<Map<String, &value::RawValue>>(text)?
-                .into_iter()
-                .map(|(key, raw)| Ok((key, decode(raw.get(), depth + 1)?)))
-                .collect::<Result<_, Error>>()?,
-        ),
-        _ => Value::Number(text.parse().map_err(<Error as serde::de::Error>::custom)?),
-    })
+    Ok(value)
+}
+
+/// Walk an already validated RawValue once. Revalidating each child container
+/// would multiply the work of materializing large retained table reports.
+struct Decoder<'a> {
+    text: &'a str,
+    offset: usize,
+}
+impl Decoder<'_> {
+    fn invalid() -> Error {
+        <Error as serde::de::Error>::custom("invalid exact JSON tree")
+    }
+    fn byte(&self) -> Option<u8> {
+        self.text.as_bytes().get(self.offset).copied()
+    }
+    fn space(&mut self) {
+        while matches!(self.byte(), Some(b' ' | b'\t' | b'\r' | b'\n')) {
+            self.offset += 1;
+        }
+    }
+    fn consume(&mut self, byte: u8) -> Result<(), Error> {
+        if self.byte() != Some(byte) {
+            return Err(Self::invalid());
+        }
+        self.offset += 1;
+        Ok(())
+    }
+    fn string(&mut self) -> Result<String, Error> {
+        self.consume(b'"')?;
+        let start = self.offset;
+        let mut escaped = false;
+        while let Some(byte) = self.byte() {
+            match byte {
+                b'"' => {
+                    let end = self.offset;
+                    self.offset += 1;
+                    return if escaped {
+                        serde_json::from_str(&self.text[start - 1..self.offset])
+                    } else {
+                        Ok(self.text[start..end].to_owned())
+                    };
+                }
+                b'\\' => {
+                    escaped = true;
+                    self.offset += 2;
+                }
+                _ => self.offset += 1,
+            }
+        }
+        Err(Self::invalid())
+    }
+    fn value(&mut self, depth: usize) -> Result<Value, Error> {
+        if depth > 128 {
+            return Err(<Error as serde::de::Error>::custom(
+                "JSON recursion limit exceeded",
+            ));
+        }
+        self.space();
+        Ok(match self.byte() {
+            Some(b'n' | b't' | b'f') => {
+                let (word, value) = match self.byte() {
+                    Some(b'n') => ("null", Value::Null),
+                    Some(b't') => ("true", Value::Bool(true)),
+                    _ => ("false", Value::Bool(false)),
+                };
+                if !self.text[self.offset..].starts_with(word) {
+                    return Err(Self::invalid());
+                }
+                self.offset += word.len();
+                value
+            }
+            Some(b'"') => Value::String(self.string()?),
+            Some(b'[') => {
+                self.offset += 1;
+                self.space();
+                let mut values = Vec::new();
+                if self.byte() != Some(b']') {
+                    loop {
+                        values.push(self.value(depth + 1)?);
+                        self.space();
+                        if self.byte() != Some(b',') {
+                            break;
+                        }
+                        self.offset += 1;
+                    }
+                }
+                self.consume(b']')?;
+                Value::Array(values)
+            }
+            Some(b'{') => {
+                self.offset += 1;
+                self.space();
+                let mut values = Map::new();
+                if self.byte() != Some(b'}') {
+                    loop {
+                        self.space();
+                        let key = self.string()?;
+                        self.space();
+                        self.consume(b':')?;
+                        values.insert(key, self.value(depth + 1)?);
+                        self.space();
+                        if self.byte() != Some(b',') {
+                            break;
+                        }
+                        self.offset += 1;
+                    }
+                }
+                self.consume(b'}')?;
+                Value::Object(values)
+            }
+            Some(b'-' | b'0'..=b'9') => {
+                let start = self.offset;
+                while matches!(
+                    self.byte(),
+                    Some(b'-' | b'+' | b'.' | b'e' | b'E' | b'0'..=b'9')
+                ) {
+                    self.offset += 1;
+                }
+                Value::Number(
+                    self.text[start..self.offset]
+                        .parse()
+                        .map_err(<Error as serde::de::Error>::custom)?,
+                )
+            }
+            _ => return Err(Self::invalid()),
+        })
+    }
 }
 
 impl Value {
@@ -528,5 +638,41 @@ mod tests {
     fn recursive_values_are_bounded_before_constructing_an_unbounded_tree() {
         let text = format!("{}0{}", "[".repeat(130), "]".repeat(130));
         assert!(from_str::<Value>(&text).is_err());
+    }
+
+    #[test]
+    fn validated_walk_retains_escaped_keys_nested_values_and_duplicate_behavior() {
+        let value: Value = from_str(r#" { "\u96ea\ud83d\ude00": [null, true, false, {}, [], {"q\"\\":"雪\ud83d\ude00"}], "same": 1, "same": 2, "wide": -184467440737095516160000, "exp": 1E+9999 } "#).unwrap();
+        assert_eq!(value["雪😀"][0], Value::Null);
+        assert_eq!(value["雪😀"][1], true);
+        assert_eq!(value["雪😀"][2], false);
+        assert_eq!(value["雪😀"][3], json!({}));
+        assert_eq!(value["雪😀"][4], json!([]));
+        assert_eq!(value["雪😀"][5]["q\"\\"], "雪😀");
+        assert_eq!(value["same"], 2);
+        assert_eq!(
+            value["wide"].as_number().unwrap().as_str(),
+            "-184467440737095516160000"
+        );
+        assert_eq!(value["exp"].as_number().unwrap().as_str(), "1E+9999");
+        assert_eq!(
+            from_str::<Value>(&to_string(&value).unwrap()).unwrap(),
+            value
+        );
+    }
+
+    #[test]
+    fn wire_admission_keeps_json_grammar_and_escaped_unicode_validation() {
+        for text in [
+            r#"{"x":1,}"#,
+            "[1,]",
+            r#"{"x":"\ud800"}"#,
+            r#"{"x":"\q"}"#,
+            r#"{"x":01}"#,
+            "[true false]",
+            "[1e,0]",
+        ] {
+            assert!(from_str::<Value>(text).is_err(), "{text:?}");
+        }
     }
 }
