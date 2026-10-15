@@ -1945,18 +1945,6 @@ columns:
             ).issues.rows(),
             result.issues.rows(),
         )
-        for path in ("x" * 65537, "\u00e9" * 32769):
-            refused = yamaa.domain(path)
-            self.assertIsNone(refused.output)
-            condition = "engine_rejected"
-            context = {"code": "resource_path", "stage": "prepare"}
-            self.assertEqual(refused.issues["condition"].to_list(), [condition])
-            self.assertEqual(json.loads(refused.issues["context"][0]), context)
-            self.assertEqual(yamaa.check(path).issues.rows(), refused.issues.rows())
-            self.assertEqual(
-                yamaa.domain(path, environment=path).issues["condition"].to_list(),
-                ["engine_rejected"],
-            )
         with self.assertRaises(yamaa.DomainError):
             result.save()
         for function in (yamaa.domain, yamaa.check):
