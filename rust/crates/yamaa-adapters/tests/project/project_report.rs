@@ -41,7 +41,6 @@ fn environment(extra: &str) -> OwnedEnvironment {
         ),
         Language::Python,
         &mut NoCapture,
-        Default::default(),
     )
     .unwrap()
     .into_owned()
@@ -74,15 +73,6 @@ struct Study {
     cached: BTreeMap<String, Arc<[u8]>>,
 }
 impl SourcePort for Study {
-    fn capture_observed(
-        &mut self,
-        source: &SourceDeclaration,
-        byte_limit: usize,
-        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-    ) -> Result<Arc<[u8]>, Self::Error> {
-        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-        <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-    }
     fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -99,8 +89,9 @@ impl SourcePort for Study {
     fn capture(
         &mut self,
         declaration: &SourceDeclaration,
-        maximum: usize,
+        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
     ) -> Result<Arc<[u8]>, Infallible> {
+        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
         let bytes = self
             .cached
             .entry(declaration.path.clone())
@@ -109,7 +100,6 @@ impl SourcePort for Study {
                     .unwrap()
                     .into()
             });
-        assert!(bytes.len() <= maximum);
         Ok(Arc::clone(bytes))
     }
 }
@@ -265,15 +255,6 @@ fn original_inspection_and_capture_failures_keep_complete_findings_and_counters(
         inspections: usize,
     }
     impl SourcePort for Resources {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         type Error = Failure;
         fn inspect(&mut self, _: &SourceDeclaration) -> Result<(), Failure> {
             self.inspections += 1;
@@ -297,7 +278,12 @@ fn original_inspection_and_capture_failures_keep_complete_findings_and_counters(
         fn capture_reads(&self) -> usize {
             self.captures
         }
-        fn capture(&mut self, _: &SourceDeclaration, _: usize) -> Result<Arc<[u8]>, Failure> {
+        fn capture(
+            &mut self,
+            _: &SourceDeclaration,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+        ) -> Result<Arc<[u8]>, Failure> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             Err(Failure {
                 original: std::rc::Rc::clone(&self.original),
                 classified: self.classified,

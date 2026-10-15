@@ -66,9 +66,7 @@ functions:
 "#,
         ),
         Language::Python,
-        &mut EnvironmentCapture,
-        Default::default(),
-    )
+        &mut EnvironmentCapture)
     .unwrap()
     .into_owned()
 }
@@ -185,15 +183,6 @@ struct Study {
     inspections: usize,
 }
 impl SourcePort for Study {
-    fn capture_observed(
-        &mut self,
-        source: &SourceDeclaration,
-        byte_limit: usize,
-        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-    ) -> Result<Arc<[u8]>, Self::Error> {
-        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-        <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-    }
     fn resource_failure(
         &self,
         _error: &Self::Error,
@@ -210,8 +199,12 @@ impl SourcePort for Study {
     fn capture_reads(&self) -> usize {
         usize::from(self.captured)
     }
-    fn capture(&mut self, _: &SourceDeclaration, maximum: usize) -> Result<Arc<[u8]>, Self::Error> {
-        assert!(self.bytes.len() <= maximum);
+    fn capture(
+        &mut self,
+        _: &SourceDeclaration,
+        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+    ) -> Result<Arc<[u8]>, Self::Error> {
+        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
         self.trace.borrow_mut().push("capture");
         self.captured = true;
         Ok(Arc::clone(&self.bytes))
@@ -650,23 +643,13 @@ fn unused_environment_does_not_request_any_host_activation() {
 }
 
 #[test]
-fn activation_projection_refuses_partial_budget_and_forged_case_order_without_effects() {
-    use yamaa_adapters::project_activation_observations::{
-        activation, activation_with_limit, Error,
-    };
+fn activation_projection_validates_forged_case_order_without_effects() {
+    use yamaa_adapters::project_activation_observations::{activation, Error};
     let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
     let (mut host, mut study) = ports();
     let mut attempt = run.execute_with_ports(&mut host, &mut study);
     let trace = host.trace.borrow().clone();
     let reads = study.capture_reads();
-    assert_eq!(
-        activation_with_limit(&run, &attempt.activation, 1),
-        Err(Error::Limit {
-            resource: "report_activation_bytes",
-            limit: 1,
-            actual: Some(152),
-        })
-    );
     assert!(activation(&run, &attempt.activation).is_ok());
     attempt.activation.tests.swap(0, 1);
     assert_eq!(
@@ -678,7 +661,7 @@ fn activation_projection_refuses_partial_budget_and_forged_case_order_without_ef
 }
 
 #[test]
-fn activation_count_refusals_retain_the_applied_cap_in_project_reports() {
+fn repeated_forged_activation_facts_cannot_gain_report_authority() {
     use yamaa_adapters::{project_activation_observations as activation, project_report};
     let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
     let (mut host, mut study) = ports();
@@ -686,11 +669,8 @@ fn activation_count_refusals_retain_the_applied_cap_in_project_reports() {
     let trace = host.trace.borrow().clone();
     let reads = study.capture_reads();
     let bindings = attempt.activation.bindings.clone();
-    for (resource, limit, actual) in [
-        ("report_activation_bindings", 1024, 1025),
-        ("report_activation_tests", 65_536, 65_537),
-    ] {
-        if resource == "report_activation_bindings" {
+    for (binding_observations, actual) in [(true, 1025), (false, 65_537)] {
+        if binding_observations {
             attempt.activation.bindings.resize(actual, bindings[0]);
         } else {
             attempt.activation.bindings = bindings.clone();
@@ -706,21 +686,14 @@ fn activation_count_refusals_retain_the_applied_cap_in_project_reports() {
         }
         assert_eq!(
             activation::activation(&run, &attempt.activation),
-            Err(activation::Error::Limit {
-                resource,
-                limit,
-                actual: Some(actual),
-            })
+            Err(activation::Error::InvalidObservation)
         );
-        let project_report::Error::Report(
-            yamaa_adapters::specification_report::Error::ResourceLimit(refusal),
-        ) = project_report::build_result(&run, &attempt, report_identity(), &[]).unwrap_err()
-        else {
-            panic!("typed activation report quota")
-        };
-        assert_eq!(refusal.resource, resource);
-        assert_eq!(refusal.limit, limit);
-        assert_eq!(refusal.actual, Some(actual));
+        assert!(matches!(
+            project_report::build_result(&run, &attempt, report_identity(), &[]),
+            Err(project_report::Error::Report(
+                yamaa_adapters::specification_report::Error::InvalidObservation
+            ))
+        ));
     }
     assert_eq!(*host.trace.borrow(), trace);
     assert_eq!(study.capture_reads(), reads);
@@ -857,7 +830,6 @@ fn project_reports_keep_opaque_failures_and_interrupts_original_and_failed_saves
                 details: HostDetails::Exception {
                     class: "OriginalFailure",
                     message: "é failure",
-                    truncated: false,
                 },
             }];
             let result = yamaa_adapters::project_report::build_result(
@@ -923,7 +895,6 @@ fn report_classifications_cannot_target_a_different_failure_or_supply_duplicates
     let details = HostDetails::Exception {
         class: "Failure",
         message: "same text",
-        truncated: false,
     };
     for facts in [
         vec![Classified::Host {
@@ -1125,7 +1096,6 @@ fn zero_sized_host_failures_remain_opaque_and_never_accept_address_classificatio
             details: HostDetails::Exception {
                 class: "Error",
                 message: "foreign facts",
-                truncated: false,
             },
         }],
     ] {
@@ -1150,15 +1120,6 @@ fn row_callbacks_join_primary_or_secondary_records_by_completed_keys() {
         reads: usize,
     }
     impl SourcePort for TwoSources {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn resource_failure(
             &self,
             _error: &Self::Error,
@@ -1176,8 +1137,9 @@ fn row_callbacks_join_primary_or_secondary_records_by_completed_keys() {
         fn capture(
             &mut self,
             source: &SourceDeclaration,
-            _: usize,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             self.reads += 1;
             self.trace.borrow_mut().push("capture");
             Ok(Arc::from(match source.name.as_str() {

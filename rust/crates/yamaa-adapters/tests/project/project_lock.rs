@@ -65,15 +65,15 @@ fn wrong_shapes_and_package_identity_mismatches_never_produce_partial_metadata()
     }
 }
 #[test]
-fn version_text_limits_and_nul_are_rejected_without_truncation() {
+fn complete_version_text_is_retained_and_nul_is_rejected_without_truncation() {
     let raw = format!(
         "{{\"R\":{{\"Version\":\"4.6.1\"}},\"Packages\":{{\"yamaa\":{{\"Version\":\"{}\"}}}}}}",
         "x".repeat(2049)
     );
-    assert!(matches!(
-        decode_renv(raw.as_bytes()),
-        Err(Error::Limit("text"))
-    ));
+    assert_eq!(
+        decode_renv(raw.as_bytes()).unwrap().packages["yamaa"],
+        "x".repeat(2049)
+    );
     assert!(matches!(
         decode_renv(br#"{"R":{"Version":"4.6.1"},"Packages":{"yamaa":{"Version":"0.2\u0000"}}}"#),
         Err(Error::Shape("Version"))
