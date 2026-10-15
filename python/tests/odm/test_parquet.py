@@ -50,6 +50,21 @@ def test_writer_rejects_non_integer_batch_size(
     assert not output.exists()
 
 
+@pytest.mark.parametrize("compression", [["zstd"], {"zstd"}, {"name": "zstd"}])
+def test_writer_rejects_unhashable_compression(
+    odm13_path: Path, tmp_path: Path, compression: object
+) -> None:
+    # An unhashable compression leaked a raw TypeError from the membership
+    # test against the supported set instead of the ODMError every other
+    # unsupported compression value gets.
+    output = tmp_path / "out.parquet"
+
+    with pytest.raises(ODMError, match="unsupported compression"):
+        write_odm_parquet(odm13_path, output, compression=compression)  # type: ignore[arg-type]
+
+    assert not output.exists()
+
+
 def test_writer_projects_two_groups_into_same_schema(
     odm20_path: Path, tmp_path: Path
 ) -> None:
