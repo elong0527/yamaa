@@ -22,6 +22,53 @@ local({
 })
 host_truth <- read_host_fixture(host_fixture_root,"original-specifications")
 root <- system.file("specification-original", package="yamaa", mustWork=TRUE)
+fixture_rows <- function(filename) {
+  jsonlite::fromJSON(file.path(root,filename),simplifyVector=FALSE)
+}
+json_equal <- function(actual,expected) {
+  wide_number <- function(value) {
+    if(is.numeric(value)) return(any(abs(value)>2^53-1))
+    is.list(value) && any(vapply(value,wide_number,logical(1)))
+  }
+  actual <- jsonlite::fromJSON(actual,simplifyVector=FALSE)
+  if(wide_number(actual) || wide_number(expected)) {
+    stop("wide JSON numbers require an independently authored wire assertion")
+  }
+  context_equal(actual,expected)
+}
+r_report <- function(expected) {
+  if(is.character(expected)) {
+    expected <- gsub('"runtime":"python"','"runtime":"r"',expected,fixed=TRUE)
+    expected <- gsub('"runtime_version":"fixture-runtime"',paste0('"runtime_version":"',as.character(getRversion()),'"'),expected,fixed=TRUE)
+    return(gsub('"engine_version":"fixture-engine"',paste0('"engine_version":"',yamaa:::.core_version(),'"'),expected,fixed=TRUE))
+  }
+  expected$runtime <- "r"
+  expected$runtime_version <- as.character(getRversion())
+  expected$engine_version <- yamaa:::.core_version()
+  expected
+}
+unsaved_report <- function(expected) {
+  if(is.character(expected)) return(sub('"artifacts":\\[.*?\\],"backend"','"artifacts":[],"backend"',expected,perl=TRUE))
+  expected$artifacts <- list()
+  expected
+}
+report_equal <- function(actual,expected) {
+  if(is.character(expected)) identical(actual,expected) else json_equal(actual,expected)
+}
+cached_report <- function(expected) {
+  if(is.character(expected)) return(gsub('"snapshots_created":1','"snapshots_created":0',expected,fixed=TRUE))
+  for(i in seq_along(expected$source_reads)) {
+    if(!is.null(expected$source_reads[[i]]$snapshots_created)) expected$source_reads[[i]]$snapshots_created <- 0L
+  }
+  expected
+}
+local({
+  wire <- '{"minimum":-9223372036854775808,"maximum":9223372036854775807}'
+  adjacent <- sub("9223372036854775807","9223372036854775806",wire,fixed=TRUE)
+  stopifnot(!identical(wire,adjacent),
+    inherits(tryCatch(json_equal(wire,jsonlite::fromJSON(adjacent,simplifyVector=FALSE)),
+      error=identity),"error"))
+})
 source(file.path(root,"issue-frame-truth.R"),local=TRUE)
 check_issue_frame <- function(actual,expected) {
   stopifnot(is.data.frame(actual),identical(names(actual),fixture_strings(host_truth[["issue_columns"]])))
@@ -52,14 +99,20 @@ for(literal in c("true","123456789012345678901234567890","null")) {
   expected <- paste0('{"outcome":{"diagnostics":[{"condition":"schema_version_mismatch","context":{"actual":',literal,',"expected":"1.0"},"phase":"validation","requirement":"REQ-0281","spec_paths":["schema_version"]}],"status":"invalid"},"protocol":"specification/prototype"}')
   stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),expected))
 }
-decode_truth <- read.delim(file.path(root,"decode-replay.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
-stopifnot(nrow(decode_truth)==8L)
-for(i in seq_len(nrow(decode_truth))) {
-  hex <- decode_truth$source_hex[[i]]
-  starts <- seq.int(1L,nchar(hex),by=2L)
-  bytes <- as.raw(strtoi(substring(hex,starts,starts+1L),base=16L))
-  failure <- tryCatch(prepare_entry("source.yaml",bytes,no_port,no_port,no_port),error=identity)
-  stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),decode_truth$expected[[i]]))
+decode_truth <- Filter(function(row) row$expected$outcome$status=="invalid",fixture_rows("yaml_transport.json"))
+stopifnot(length(decode_truth)==8L)
+for(row in decode_truth) {
+  expected <- row$expected
+  expected$protocol <- "specification/prototype"
+  requirements <- c(non_ascii_source="REQ-0705",invalid_text="REQ-0029",invalid_yaml="REQ-0280")
+  expected$outcome$diagnostics <- lapply(expected$outcome$diagnostics,function(finding) {
+    finding$phase <- "validation"
+    finding$requirement <- unname(requirements[[finding$condition]])
+    if(finding$condition=="non_ascii_source") finding$context$path <- "source.yaml"
+    finding
+  })
+  failure <- tryCatch(prepare_entry("source.yaml",fixture_bytes(row$source),no_port,no_port,no_port),error=identity)
+  stopifnot(inherits(failure,"error"),json_equal(conditionMessage(failure),expected))
 }
 for(case_name in fixture_strings(host_truth[["original_case_names"]])) {
   case <- file.path(root,"cases",case_name)
@@ -723,31 +776,31 @@ stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),"cannot 
 cat("native Parquet source failure collection and complete report passed\n")
 
 failed_report_truth <- function(fixture,prefix,cases,content=charToRaw("ID\n1\n")) {
-  truth <- read.delim(file.path(root,fixture),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
-  stopifnot(nrow(truth)==cases)
-  for(i in seq_len(nrow(truth))) {
+  if(endsWith(fixture,".json")) {
+    truth <- fixture_rows(fixture)
+  } else {
+    table <- read.delim(file.path(root,fixture),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
+    truth <- lapply(seq_len(nrow(table)),function(i) as.list(table[i,,drop=FALSE]))
+  }
+  stopifnot(length(truth)==cases)
+  for(row in truth) {
     held <- content
-    if("source_hex" %in% names(truth)) {
-      hex <- truth$source_hex[[i]]
-      held <- if(nzchar(hex)) as.raw(strtoi(substring(hex,seq.int(1L,nchar(hex),2L),seq.int(2L,nchar(hex),2L)),16L)) else raw()
-    }
-    handle <- prepare_entry("spec.yaml",charToRaw(truth$source[[i]]),no_port,no_port,no_port)
+    if(!is.null(row$source_bytes)) held <- fixture_bytes(row$source_bytes)
+    handle <- prepare_entry("spec.yaml",fixture_bytes(row$source),no_port,no_port,no_port)
     reads <- character()
     capture <- function(dataset,path,maximum) {
       stopifnot(dataset=="SRC",path=="source.csv",maximum>=length(held))
       reads <<- c(reads,path)
       list(held,TRUE)
     }
-    result <- build(handle,capture,paste0(prefix,"-",truth$case[[i]]),"spec.yaml")
+    result <- build(handle,capture,paste0(prefix,"-",row$case),"spec.yaml")
     rm(handle); gc()
-    expected <- gsub('"runtime":"python"','"runtime":"r"',truth$expected[[i]],fixed=TRUE)
-    expected <- gsub('"runtime_version":"fixture-runtime"',paste0('"runtime_version":"',as.character(getRversion()),'"'),expected,fixed=TRUE)
-    expected <- gsub('"engine_version":"fixture-engine"',paste0('"engine_version":"',yamaa:::.core_version(),'"'),expected,fixed=TRUE)
-    stopifnot(identical(build_observations(result),expected),is.null(build_output(result)))
+    expected <- r_report(row$expected)
+    stopifnot(report_equal(build_observations(result),expected),is.null(build_output(result)))
     for(j in seq_len(2L)) {
       failure <- tryCatch(build_save(result,no_port),error=identity)
       stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),"cannot save a failed build"),
-                identical(build_observations(result),expected))
+                report_equal(build_observations(result),expected))
     }
     stopifnot(identical(reads,"source.csv"))
   }
@@ -762,39 +815,36 @@ failed_report_truth("window-diagnostics.tsv","window",3L,charToRaw("ID,V\n1,2\n"
 cat("core window complete independent failed reports and retained save gates passed\n")
 failed_report_truth("predicate-diagnostics.tsv","predicate",1L,charToRaw("ID,V\n1,2\n"))
 cat("core predicate complete independent failed report and retained save gates passed\n")
-failed_report_truth("source-typing.tsv","typing",4L)
+failed_report_truth("source_typing.json","typing",4L)
 cat("core source typing complete independent failed reports and retained save gates passed\n")
 
-failed_report_truth("csv-profile-diagnostics.tsv","csv",13L)
+failed_report_truth("csv_profile_diagnostics.json","csv",13L)
 cat("core CSV profile complete independent failed reports and retained save gates passed\n")
 
 scalar_report_truth <- function(fixture,prefix,cases) {
-  truth <- read.delim(file.path(root,fixture),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="UTF-8",check.names=FALSE)
-  stopifnot(nrow(truth)==cases)
-  for(i in seq_len(nrow(truth))) {
-    handle <- prepare_entry("spec.yaml",charToRaw(truth$source[[i]]),no_port,no_port,no_port)
+  truth <- fixture_rows(fixture)
+  stopifnot(length(truth)==cases)
+  for(row in truth) {
+    handle <- prepare_entry("spec.yaml",fixture_bytes(row$source),no_port,no_port,no_port)
     reads <- character(); saves <- 0L
     capture <- function(dataset,path,maximum) {
       stopifnot(dataset=="SRC",path=="source.csv",maximum>=5L)
       reads <<- c(reads,path)
       list(charToRaw("ID\n1\n"),TRUE)
     }
-    result <- build(handle,capture,paste0(prefix,"-",truth$case[[i]]),"spec.yaml")
+    result <- build(handle,capture,paste0(prefix,"-",row$case),"spec.yaml")
     rm(handle);gc()
-    expected <- gsub('"runtime":"python"','"runtime":"r"',truth$expected[[i]],fixed=TRUE)
-    expected <- gsub('"runtime_version":"fixture-runtime"',paste0('"runtime_version":"',as.character(getRversion()),'"'),expected,fixed=TRUE)
-    expected <- gsub('"engine_version":"fixture-engine"',paste0('"engine_version":"',yamaa:::.core_version(),'"'),expected,fixed=TRUE)
-    unsaved <- sub('^\\{"artifacts":.*,"backend":','{"artifacts":[],"backend":',expected)
-    stopifnot(identical(build_observations(result),unsaved))
-    hex <- truth$output_hex[[i]]
-    if(nzchar(hex)) {
-      exact <- as.raw(strtoi(substring(hex,seq.int(1L,nchar(hex),2L),seq.int(2L,nchar(hex),2L)),16L))
+    expected <- r_report(row$expected)
+    unsaved <- unsaved_report(expected)
+    stopifnot(report_equal(build_observations(result),unsaved))
+    exact <- fixture_bytes(row$output)
+    if(length(exact)) {
       stopifnot(!is.null(build_output(result)))
       for(j in seq_len(2L)) {
         report <- build_save(result,function(path,content) {
           stopifnot(path=="result.csv",identical(content,exact));saves <<- saves+1L;TRUE
         })
-        stopifnot(identical(report,expected))
+        stopifnot(report_equal(report,expected))
       }
       stopifnot(saves==2L)
     } else {
@@ -805,14 +855,14 @@ scalar_report_truth <- function(fixture,prefix,cases) {
       }
       stopifnot(saves==0L)
     }
-    stopifnot(identical(build_observations(result),unsaved),identical(reads,"source.csv"))
+    stopifnot(report_equal(build_observations(result),unsaved),identical(reads,"source.csv"))
   }
 }
-scalar_report_truth("column-literals.tsv","literal",4L)
+scalar_report_truth("column_literals.json","literal",4L)
 cat("original column literals complete independent reports and exact CSV passed\n")
-scalar_report_truth("original-conversion-handlers.tsv","handler",5L)
+scalar_report_truth("original_conversion_handlers.json","handler",5L)
 cat("original conversion handlers complete independent reports and exact CSV passed\n")
-scalar_report_truth("original-row-conversion-handlers.tsv","row-handler",8L)
+scalar_report_truth("original_row_conversion_handlers.json","row-handler",8L)
 cat("original row conversion handlers complete independent reports and exact CSV passed\n")
 
 # Source-filter truth uses bytes rather than a host YAML/predicate planner.
@@ -822,63 +872,60 @@ hex_raw <- function(hex) {
   as.raw(strtoi(substring(hex,starts,starts+1L),base=16L))
 }
 source_selection_truth <- function(filename,prefix,cases) {
-filter_truth <- read.delim(file.path(root,filename),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="UTF-8",check.names=FALSE)
-stopifnot(nrow(filter_truth)==cases)
-for(i in seq_len(nrow(filter_truth))) {
-  row <- filter_truth[i,,drop=FALSE]
-  handle <- prepare_entry("spec.yaml",hex_raw(row$source_hex[[1L]]),no_port,no_port,no_port)
-  content <- hex_raw(row$input_hex[[1L]])
-  artifact <- hex_raw(row$artifact_hex[[1L]])
-  # Require captured citations without changing any finding.
-  captured <- row$expected[[1L]]
-  if(prefix=="row-filter" && row$case[[1L]] %in% fixture_strings(host_truth[["phase_replay_cases"]])) {
-    stopifnot(sum(gregexpr('"requirement":"REQ-0068"',captured,fixed=TRUE)[[1L]]>0L)==2L)
-  }
-  expected <- sub('"runtime":"python"','"runtime":"r"',captured,fixed=TRUE)
-  expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
-  expected <- sub('fixture-engine',yamaa:::.core_version(),expected,fixed=TRUE)
-  unsaved <- if(length(artifact)) sub('"artifacts":\\[.*?\\],"backend"','"artifacts":[],"backend"',expected,perl=TRUE) else expected
-  calls <- 0L
-  capture <- function(name,path,maximum) {
-    stopifnot(name=="SRC",path=="source.csv",length(content)<=maximum)
-    calls <<- calls+1L;list(content,calls==1L)
-  }
-  saves <- 0L
-  publish <- function(path,bytes) {
-    stopifnot(length(artifact)>0L,path=="result.csv",identical(bytes,artifact))
-    saves <<- saves+1L;TRUE
-  }
-  for(created in c(1L,0L)) {
-    if(created==0L) {
-      expected <- gsub('"snapshots_created":1','"snapshots_created":0',expected,fixed=TRUE)
-      unsaved <- gsub('"snapshots_created":1','"snapshots_created":0',unsaved,fixed=TRUE)
+  truth <- fixture_rows(filename)
+  stopifnot(length(truth)==cases)
+  for(row in truth) {
+    handle <- prepare_entry("spec.yaml",fixture_bytes(row$source),no_port,no_port,no_port)
+    content <- fixture_bytes(row$input)
+    artifact <- fixture_bytes(row$artifact)
+    # Require captured citations without changing any finding.
+    if(prefix=="row-filter" && row$case %in% fixture_strings(host_truth[["phase_replay_cases"]])) {
+      for(findings in list(row$expected$diagnostics,row$expected$nodes[[1L]]$diagnostics)) {
+        phase <- Filter(function(finding) finding$condition=="phase_boundary",findings)
+        stopifnot(length(phase)==1L,identical(phase[[1L]]$requirement,"REQ-0068"),
+          identical(phase[[1L]]$spec_paths,list("rows[0].filter")))
+      }
     }
-    result <- build(handle,capture,paste0(prefix,"-",row$case[[1L]]))
-    stopifnot(identical(build_observations(result),unsaved))
-    if(length(artifact)) {
-      stopifnot(!is.null(build_output(result)))
-      for(j in seq_len(2L)) stopifnot(identical(build_save(result,publish),expected))
-    } else {
-      stopifnot(is.null(build_output(result)))
-      actual <- tryCatch(build_save(result,publish),error=identity)
-      stopifnot(inherits(actual,"error"),identical(conditionMessage(actual),"cannot save a failed build"))
+    expected <- r_report(row$expected)
+    unsaved <- unsaved_report(expected)
+    calls <- 0L
+    capture <- function(name,path,maximum) {
+      stopifnot(name=="SRC",path=="source.csv",length(content)<=maximum)
+      calls <<- calls+1L;list(content,calls==1L)
     }
+    saves <- 0L
+    publish <- function(path,bytes) {
+      stopifnot(length(artifact)>0L,path=="result.csv",identical(bytes,artifact))
+      saves <<- saves+1L;TRUE
+    }
+    for(created in c(1L,0L)) {
+      if(created==0L) {
+        expected <- cached_report(expected)
+        unsaved <- cached_report(unsaved)
+      }
+      result <- build(handle,capture,paste0(prefix,"-",row$case))
+      stopifnot(report_equal(build_observations(result),unsaved))
+      if(length(artifact)) {
+        stopifnot(!is.null(build_output(result)))
+        for(j in seq_len(2L)) stopifnot(report_equal(build_save(result,publish),expected))
+      } else {
+        stopifnot(is.null(build_output(result)))
+        actual <- tryCatch(build_save(result,publish),error=identity)
+        stopifnot(inherits(actual,"error"),identical(conditionMessage(actual),"cannot save a failed build"))
+      }
+    }
+    stopifnot(calls==2L,saves==if(length(artifact)) 4L else 0L)
   }
-  stopifnot(calls==2L,saves==if(length(artifact)) 4L else 0L)
-}
 }
 # Original scalar source bindings have independently authored complete truth.
-source_binding_truth <- read.delim(file.path(root,"original-source-bindings.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
-stopifnot(nrow(source_binding_truth)==16L)
-for(i in seq_len(nrow(source_binding_truth))) {
-  row <- source_binding_truth[i,,drop=FALSE]
-  handle <- prepare_entry("spec.yaml",hex_raw(row$source_hex[[1L]]),no_port,no_port,no_port)
-  artifact <- hex_raw(row$artifact_hex[[1L]])
-  expected <- sub('"runtime":"python"','"runtime":"r"',row$expected[[1L]],fixed=TRUE)
-  expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
-  expected <- sub('fixture-engine',yamaa:::.core_version(),expected,fixed=TRUE)
-  unsaved <- if(length(artifact)) sub('"artifacts":\\[.*?\\],"backend"','"artifacts":[],"backend"',expected,perl=TRUE) else expected
-  case <- file.path(root,"source-binding-cases",row$case[[1L]])
+source_binding_truth <- fixture_rows("original_source_bindings.json")
+stopifnot(length(source_binding_truth)==16L)
+for(row in source_binding_truth) {
+  handle <- prepare_entry("spec.yaml",fixture_bytes(row$source),no_port,no_port,no_port)
+  artifact <- fixture_bytes(row$artifact)
+  expected <- r_report(row$expected)
+  unsaved <- unsaved_report(expected)
+  case <- file.path(root,"source-binding-cases",row$case)
   for(j in seq_len(2L)) {
     calls <- character();saves <- 0L
     capture <- function(name,path,maximum) {
@@ -890,10 +937,10 @@ for(i in seq_len(nrow(source_binding_truth))) {
       stopifnot(length(artifact)>0L,path=="result.csv",identical(content,artifact))
       saves <<- saves+1L;TRUE
     }
-    result <- build(handle,capture,paste0("source-binding-",row$case[[1L]]))
-    stopifnot(identical(build_observations(result),unsaved),identical(calls,if(file.exists(file.path(case,"donor.csv"))) c("SRC","DONOR") else "SRC"))
+    result <- build(handle,capture,paste0("source-binding-",row$case))
+    stopifnot(report_equal(build_observations(result),unsaved),identical(calls,if(file.exists(file.path(case,"donor.csv"))) c("SRC","DONOR") else "SRC"))
     if(length(artifact)) {
-      for(k in seq_len(2L)) stopifnot(identical(build_save(result,publish),expected))
+      for(k in seq_len(2L)) stopifnot(report_equal(build_save(result,publish),expected))
       stopifnot(saves==2L)
     } else {
       stopifnot(is.null(build_output(result)))
@@ -904,27 +951,25 @@ for(i in seq_len(nrow(source_binding_truth))) {
 }
 cat("original source bindings complete reports and exact repeated CSV passed\n")
 
-mapping_cut_admission <- read.delim(file.path(root,"mapping-cut-admission.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
-stopifnot(nrow(mapping_cut_admission)==5L)
-for(i in seq_len(nrow(mapping_cut_admission))) {
-  row <- mapping_cut_admission[i,,drop=FALSE]
-  failure <- tryCatch(prepare_entry("spec.yaml",hex_raw(row$source_hex[[1L]]),no_port,no_port,no_port),error=identity)
-  stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),row$expected[[1L]]))
+mapping_cut_admission <- fixture_rows("mapping_cut_admission.json")
+stopifnot(length(mapping_cut_admission)==5L)
+for(row in mapping_cut_admission) {
+  failure <- tryCatch(prepare_entry("spec.yaml",fixture_bytes(row$source),no_port,no_port,no_port),error=identity)
+  stopifnot(inherits(failure,"error"),json_equal(conditionMessage(failure),row$expected))
 }
 cat("original mapping/cut admission complete findings before ports passed\n")
 
 # Original mapping and cut operations have independently authored complete truth.
-mapping_cut_truth <- read.delim(file.path(root,"original-mapping-cut.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
-stopifnot(nrow(mapping_cut_truth)==21L)
-for(i in seq_len(nrow(mapping_cut_truth))) {
-  row <- mapping_cut_truth[i,,drop=FALSE]
-  handle <- prepare_entry("spec.yaml",hex_raw(row$source_hex[[1L]]),no_port,no_port,no_port)
-  artifact <- hex_raw(row$artifact_hex[[1L]])
-  expected <- sub('"runtime":"python"','"runtime":"r"',rawToChar(hex_raw(row$expected_wire_hex[[1L]])),fixed=TRUE)
+mapping_cut_truth <- fixture_rows("original_mapping_cut.json")
+stopifnot(length(mapping_cut_truth)==21L)
+for(row in mapping_cut_truth) {
+  handle <- prepare_entry("spec.yaml",fixture_bytes(row$source),no_port,no_port,no_port)
+  artifact <- fixture_bytes(row$artifact)
+  expected <- sub('"runtime":"python"','"runtime":"r"',row$expected_wire,fixed=TRUE)
   expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
   expected <- sub('fixture-engine',yamaa:::.core_version(),expected,fixed=TRUE)
   unsaved <- if(length(artifact)) sub('"artifacts":\\[.*?\\],"backend"','"artifacts":[],"backend"',expected,perl=TRUE) else expected
-  case <- file.path(root,"mapping-cut-cases",paste0(row$case[[1L]],"-fixture"))
+  case <- file.path(root,"mapping-cut-cases",paste0(row$case,"-fixture"))
   for(j in seq_len(2L)) {
     calls <- character();saves <- 0L
     capture <- function(name,path,maximum) {
@@ -936,7 +981,7 @@ for(i in seq_len(nrow(mapping_cut_truth))) {
       stopifnot(length(artifact)>0L,path=="result.csv",identical(content,artifact))
       saves <<- saves+1L;TRUE
     }
-    result <- build(handle,capture,paste0("mapping-cut-",row$case[[1L]]))
+    result <- build(handle,capture,paste0("mapping-cut-",row$case))
     stopifnot(identical(build_observations(result),unsaved),identical(calls,if(file.exists(file.path(case,"donor.csv"))) c("SRC","DONOR") else "SRC"))
     if(length(artifact)) {
       for(k in seq_len(2L)) stopifnot(identical(build_save(result,publish),expected))
@@ -958,12 +1003,13 @@ dictionary_prepare <- get(".prepare_file_specification",envir=asNamespace("yamaa
 dictionary_build <- get(".file_specification_build",envir=asNamespace("yamaa"))
 dictionary_reads <- get(".file_specification_reads",envir=asNamespace("yamaa"))
 for(name in names(dictionaries)) {
-  row <- mapping_cut_truth[mapping_cut_truth$case==name,,drop=FALSE]
-  stopifnot(nrow(row)==1L)
+  rows <- Filter(function(row) row$case==name,mapping_cut_truth)
+  stopifnot(length(rows)==1L)
+  row <- rows[[1L]]
   directory <- tempfile("dictionary-resource-");dir.create(directory)
   directory <- normalizePath(directory,winslash="/",mustWork=TRUE)
   inline <- paste0("dict: ",dictionaries[[name]])
-  authored <- rawToChar(hex_raw(row$source_hex[[1L]]))
+  authored <- row$source
   stopifnot(grepl(inline,authored,fixed=TRUE))
   writeBin(charToRaw(sub(inline,"dict: ./dictionary.yaml",authored,fixed=TRUE)),file.path(directory,"spec.yaml"))
   writeBin(charToRaw(paste0(dictionaries[[name]],"\n")),file.path(directory,"dictionary.yaml"))
@@ -971,10 +1017,10 @@ for(name in names(dictionaries)) {
   stopifnot(file.copy(file.path(case,"src.csv"),file.path(directory,"src.csv")))
   handle <- dictionary_prepare(directory,directory,"spec.yaml")
   stopifnot(dictionary_reads(handle)==2L)
-  expected <- sub('"runtime":"python"','"runtime":"r"',rawToChar(hex_raw(row$expected_wire_hex[[1L]])),fixed=TRUE)
+  expected <- sub('"runtime":"python"','"runtime":"r"',row$expected_wire,fixed=TRUE)
   expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
   expected <- sub('fixture-engine',yamaa:::.core_version(),expected,fixed=TRUE)
-  artifact <- hex_raw(row$artifact_hex[[1L]])
+  artifact <- fixture_bytes(row$artifact)
   for(created in c(1L,0L)) {
     if(created==0L) expected <- sub('"snapshots_created":1','"snapshots_created":0',expected,fixed=TRUE)
     unsaved <- if(length(artifact)) sub('"artifacts":\\[.*?\\],"backend"','"artifacts":[],"backend"',expected,perl=TRUE) else expected
@@ -996,55 +1042,55 @@ for(name in names(dictionaries)) {
 }
 cat("original dictionary resources complete reports and exact repeated CSV passed\n")
 
-source_selection_truth("source-filters.tsv","source-filter",13L)
+source_selection_truth("source_filters.json","source-filter",13L)
 cat("original source filters complete reports, cached reads and exact saved CSV passed\n")
-source_selection_truth("first-available.tsv","first-available",11L)
+source_selection_truth("first_available.json","first-available",11L)
 cat("original first available complete reports, cached reads and exact saved CSV passed\n")
 
-source_selection_truth("original-assertions.tsv","assert",17L)
+source_selection_truth("original_assertions.json","assert",17L)
 cat("original assertions complete reports, cached reads and exact saved CSV passed\n")
 
-source_selection_truth("original-all-or-none.tsv","all-or-none",11L)
+source_selection_truth("original_all_or_none.json","all-or-none",11L)
 cat("original all or none complete reports, cached reads and exact saved CSV passed\n")
 
-source_selection_truth("original-not-missing.tsv","column-check",10L)
+source_selection_truth("original_not_missing.json","column-check",10L)
 cat("original column not missing complete reports, cached reads and exact saved CSV passed\n")
 
-source_selection_truth("row-filter-admission.tsv","predicate-carrier",2L)
+source_selection_truth("row_filter_admission.json","predicate-carrier",2L)
 cat("row-filter integer carrier normative reports and failed-save gates passed\n")
-source_selection_truth("row-filters.tsv","row-filter",27L)
+source_selection_truth("row_filters.json","row-filter",27L)
 cat("row-template filters complete reports, cached reads and exact saved CSV passed\n")
 
-source_selection_truth("row-reductions.tsv","row-reduction",25L)
-source_selection_truth("correlated-aggregates.tsv","correlated-aggregate",16L)
-source_selection_truth("odm-reads.tsv","odm",14L)
-source_selection_truth("odm-deferred.tsv","odm-deferred",8L)
-odm_preflight <- read.delim(file.path(root,"odm-preflight.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
-stopifnot(nrow(odm_preflight)==8L)
-for(i in seq_len(nrow(odm_preflight))) for(j in seq_len(2L)) {
-  failure <- tryCatch(prepare_entry("spec.yaml",hex_raw(odm_preflight$source_hex[[i]]),no_port,no_port,no_port),error=identity)
-  stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),odm_preflight$expected[[i]]))
+source_selection_truth("row_reductions.json","row-reduction",25L)
+source_selection_truth("correlated_aggregates.json","correlated-aggregate",16L)
+source_selection_truth("odm_reads.json","odm",14L)
+source_selection_truth("odm_deferred.json","odm-deferred",8L)
+odm_preflight <- fixture_rows("odm_preflight.json")
+stopifnot(length(odm_preflight)==8L)
+for(row in odm_preflight) for(j in seq_len(2L)) {
+  failure <- tryCatch(prepare_entry("spec.yaml",fixture_bytes(row$source),no_port,no_port,no_port),error=identity)
+  stopifnot(inherits(failure,"error"),json_equal(conditionMessage(failure),row$expected))
 }
 cat("ODM reads complete reports, cached reads and exact saved CSV passed\n")
 cat("row-template MEAN and COUNT complete reports, cached reads and exact saved CSV passed\n")
 
-source_selection_truth("row-column-checks.tsv","row-column",48L)
+source_selection_truth("row_column_checks.json","row-column",48L)
 cat("row-template column checks complete reports, cached reads and exact saved CSV passed\n")
 
-source_selection_truth("original-column-values.tsv","column-value",20L)
+source_selection_truth("original_column_values.json","column-value",20L)
 cat("original column values complete reports, cached reads and exact saved CSV passed\n")
 
-source_selection_truth("original-column-matches.tsv","column-matches",16L)
+source_selection_truth("original_column_matches.json","column-matches",16L)
 cat("original column matches complete reports, cached reads and exact saved CSV passed\n")
 
-static_truth <- read.delim(file.path(root,"static-verification-checks.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="UTF-8",check.names=FALSE)
-stopifnot(nrow(static_truth)==15L)
+static_truth <- fixture_rows("static_verification_checks.json")
+stopifnot(length(static_truth)==15L)
 check_issues <- get(".specification_check_issues",envir=asNamespace("yamaa"))
-for(i in seq_len(nrow(static_truth))) {
-  handle <- prepare_entry("spec.yaml",hex_raw(static_truth$source_hex[[i]]),no_port,no_port,no_port)
-  for(j in seq_len(2L)) stopifnot(identical(check_issues(handle),static_truth$expected[[i]]))
+for(row in static_truth) {
+  handle <- prepare_entry("spec.yaml",fixture_bytes(row$source),no_port,no_port,no_port)
+  for(j in seq_len(2L)) stopifnot(json_equal(check_issues(handle),row$expected))
   frame <- get(".check_specification_issue_frame",envir=asNamespace("yamaa"))
-  for(j in seq_len(2L)) check_issue_frame(frame(handle),issue_frame_truth[[paste0("static/",static_truth$case[[i]])]])
+  for(j in seq_len(2L)) check_issue_frame(frame(handle),issue_frame_truth[[paste0("static/",row$case)]])
 }
 cat("static verification check complete issues without study authority passed\n")
 cat("static check issue data frames match fifteen independent payloads without study authority passed\n")

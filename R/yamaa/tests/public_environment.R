@@ -54,6 +54,23 @@ qualify_unavailable_environment_root <- function() {
 }
 qualify_unavailable_environment_root()
 
+qualify_static_check_without_study_inputs <- function() {
+  work <- tempfile("static-check-"); dir.create(work)
+  on.exit(unlink(work,recursive=TRUE),add=TRUE)
+  for(name in c("schema-functions","schema-non-finite","adam-adsl-bmi","adam-advs-percentiles")) {
+    stopifnot(file.copy(file.path(root,name),work,recursive=TRUE))
+    case <- file.path(work,name)
+    unlink(file.path(case,"input"),recursive=TRUE)
+    entry <- file.path(case,"sp\u00e9cification.yaml")
+    stopifnot(file.rename(file.path(case,"spec.yaml"),entry))
+    checked <- yamaa_check(entry,environment=file.path(case,"r/environment.yaml"))
+    stopifnot(nrow(checked$issues)==0L,
+      length(list.files(case,pattern="[.]csv$"))==0L)
+  }
+  cat("public R Check validates original studies without study inputs or publication\n")
+}
+qualify_static_check_without_study_inputs()
+
 previous <- getwd()
 work <- tempfile("public-environment-"); dir.create(work)
 for (name in fixture_strings(host_truth[["original_case_names"]])) {

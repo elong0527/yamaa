@@ -122,162 +122,16 @@ SCHEMA_MODULES = (
 
 
 FIXTURES = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures"
-# Original TSV column order for the fixtures converted to readable JSON in
-# #2416. Staging re-encodes the exact legacy TSV bytes the installed hosts
-# replay, so the staged tree is unchanged by the conversion.
-FIXTURE_TSV_HEADERS = {
-    "column_literals": ["case", "source", "expected", "output_hex"],
-    "correlated_aggregates": [
-        "case",
-        "source_hex",
-        "input_hex",
-        "expected",
-        "artifact_hex",
-    ],
-    "csv_profile_diagnostics": ["case", "source", "expected", "source_hex"],
-    "first_available": ["case", "source_hex", "input_hex", "expected", "artifact_hex"],
-    "mapping_cut_admission": ["case", "source_hex", "expected"],
-    "odm_deferred": ["case", "source_hex", "input_hex", "expected", "artifact_hex"],
-    "odm_preflight": ["case", "source_hex", "expected"],
-    "odm_reads": ["case", "source_hex", "input_hex", "expected", "artifact_hex"],
-    "original_all_or_none": [
-        "case",
-        "source_hex",
-        "input_hex",
-        "expected",
-        "artifact_hex",
-    ],
-    "original_assertions": [
-        "case",
-        "source_hex",
-        "input_hex",
-        "expected",
-        "artifact_hex",
-    ],
-    "original_column_matches": [
-        "case",
-        "source_hex",
-        "input_hex",
-        "expected",
-        "artifact_hex",
-    ],
-    "original_column_values": [
-        "case",
-        "source_hex",
-        "input_hex",
-        "expected",
-        "artifact_hex",
-    ],
-    "original_conversion_handlers": ["case", "source", "expected", "output_hex"],
-    "original_mapping_cut": [
-        "case",
-        "source_hex",
-        "inputs_json",
-        "expected",
-        "artifact_hex",
-        "expected_wire_hex",
-    ],
-    "original_not_missing": [
-        "case",
-        "source_hex",
-        "input_hex",
-        "expected",
-        "artifact_hex",
-    ],
-    "original_row_conversion_handlers": ["case", "source", "expected", "output_hex"],
-    "original_source_bindings": [
-        "case",
-        "source_hex",
-        "inputs_json",
-        "expected",
-        "artifact_hex",
-    ],
-    "row_column_checks": [
-        "case",
-        "source_hex",
-        "input_hex",
-        "expected",
-        "artifact_hex",
-    ],
-    "row_filter_admission": [
-        "case",
-        "source_hex",
-        "input_hex",
-        "expected",
-        "artifact_hex",
-    ],
-    "row_filters": ["case", "source_hex", "input_hex", "expected", "artifact_hex"],
-    "row_reductions": ["case", "source_hex", "input_hex", "expected", "artifact_hex"],
-    "source_filters": ["case", "source_hex", "input_hex", "expected", "artifact_hex"],
-    "source_typing": ["case", "source", "expected", "source_hex"],
-    "static_verification_checks": ["case", "source_hex", "expected"],
-    "yaml_transport": ["id", "source_hex", "expected"],
-}
-FIXTURE_TSV_KEY = {
-    "source_hex": "source",
-    "input_hex": "input",
-    "artifact_hex": "artifact",
-    "output_hex": "output",
-    "expected_wire_hex": "expected_wire",
-}
-# These fixtures also carry a plain `source` column, so their hex column keeps
-# a distinct JSON key.
-FIXTURE_TSV_HEX_KEY = {
-    "csv_profile_diagnostics": "source_bytes",
-    "source_typing": "source_bytes",
-}
 
 
 def fixture_rows(name):
     return json.loads((FIXTURES / (name + ".json")).read_text(encoding="utf-8"))
 
 
-def fixture_hex(value):
-    if isinstance(value, dict):
-        return value["hex"]
-    return value.encode("utf-8").hex()
-
-
-def fixture_tsv_bytes(name):
-    headers = FIXTURE_TSV_HEADERS[name]
-    lines = ["\t".join(headers)]
-    for row in fixture_rows(name):
-        cells = []
-        for header in headers:
-            if header == "expected":
-                cells.append(
-                    json.dumps(
-                        row["expected"],
-                        sort_keys=True,
-                        separators=(",", ":"),
-                        ensure_ascii=name == "original_mapping_cut",
-                    )
-                )
-            elif header == "inputs_json":
-                cells.append(
-                    json.dumps(
-                        {
-                            key: fixture_hex(value)
-                            for key, value in row["inputs"].items()
-                        },
-                        separators=(",", ":"),
-                    )
-                )
-            elif header.endswith("_hex"):
-                json_key = (
-                    FIXTURE_TSV_HEX_KEY[name]
-                    if header == "source_hex" and name in FIXTURE_TSV_HEX_KEY
-                    else FIXTURE_TSV_KEY[header]
-                )
-                cells.append(fixture_hex(row[json_key]))
-            else:
-                cells.append(row[header])
-        lines.append("\t".join(cells))
-    return ("\n".join(lines) + "\n").encode("utf-8")
-
-
-def stage_fixture_tsv(destination: Path, name: str, staged_name: str):
-    (destination / staged_name).write_bytes(fixture_tsv_bytes(name))
+def stage_json_fixtures(destination: Path):
+    """Copy authored JSON directly; installed readers own no intermediate format."""
+    for source in FIXTURES.glob("*.json"):
+        shutil.copy2(source, destination / source.name)
 
 
 def stage_text_extract_truth(destination: Path):
@@ -1070,55 +924,6 @@ def stage_inheritance_replay(destination: Path):
                 writer.writerow(record)
 
 
-def stage_decode_replay(destination: Path):
-    """Add the run envelope to existing independent decoder failure truth."""
-    records = [
-        {
-            "id": row["id"],
-            "source_hex": fixture_hex(row["source"]),
-            "expected": row["expected"],
-        }
-        for row in fixture_rows("yaml_transport")
-    ]
-    with (destination / "decode-replay.tsv").open(
-        "w", newline="", encoding="ascii"
-    ) as stream:
-        writer = csv.DictWriter(
-            stream,
-            fieldnames=["id", "source_hex", "expected"],
-            delimiter="\t",
-            lineterminator="\n",
-            quoting=csv.QUOTE_NONE,
-            quotechar=None,
-        )
-        writer.writeheader()
-        for record in records:
-            expected = record["expected"]
-            if expected["outcome"]["status"] != "invalid":
-                continue
-            expected["protocol"] = "specification/prototype"
-            for finding in expected["outcome"]["diagnostics"]:
-                # Existing private decoder truth receives only its rule citation.
-                finding.update(
-                    phase="validation",
-                    requirement={
-                        "non_ascii_source": "REQ-0705",
-                        "invalid_text": "REQ-0029",
-                        "invalid_yaml": "REQ-0280",
-                    }[finding["condition"]],
-                )
-                if finding["condition"] == "non_ascii_source":
-                    finding["context"]["path"] = "source.yaml"
-            writer.writerow(
-                dict(
-                    record,
-                    expected=json.dumps(
-                        expected, sort_keys=True, separators=(",", ":")
-                    ),
-                )
-            )
-
-
 def stage_issue_frame_truth(destination: Path):
     """Project committed report truth to literal R column expectations, never candidate output."""
     reports = {
@@ -1127,11 +932,10 @@ def stage_issue_frame_truth(destination: Path):
         ]
         for name in CASES
     }
-    with (destination / "static-verification-checks.tsv").open(
-        encoding="utf-8"
-    ) as stream:
-        for case in csv.DictReader(stream, delimiter="\t"):
-            reports["static/" + case["case"]] = json.loads(case["expected"])
+    for case in json.loads(
+        (destination / "static_verification_checks.json").read_text(encoding="utf-8")
+    ):
+        reports["static/" + case["case"]] = case["expected"]
 
     def text(value):
         # JSON's surrogate-pair escapes are not R string escapes. Emit code points.
@@ -1470,7 +1274,7 @@ def stage(destination: Path):
     (destination / "schema").mkdir()
     stage_inheritance_replay(destination)
     stage_completed_lookup_assertion_truth(destination)
-    stage_decode_replay(destination)
+    stage_json_fixtures(destination)
     stage_source_selection_truth(destination)
     stage_source_selection_truth(
         destination, "source_filter_scope", "source-filter-scope"
@@ -1537,7 +1341,6 @@ def stage(destination: Path):
         / "rust/crates/yamaa-adapters/tests/fixtures/predicate_diagnostics.tsv",
         destination / "predicate-diagnostics.tsv",
     )
-    stage_fixture_tsv(destination, "source_typing", "source-typing.tsv")
     shutil.copy2(
         REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/source_capture.tsv",
         destination / "source-capture.tsv",
@@ -1545,9 +1348,6 @@ def stage(destination: Path):
     shutil.copy2(
         REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/source_inspection.tsv",
         destination / "source-inspection.tsv",
-    )
-    stage_fixture_tsv(
-        destination, "original_source_bindings", "original-source-bindings.tsv"
     )
     shutil.copy2(
         REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/case_predicates.json",
@@ -1627,8 +1427,6 @@ def stage(destination: Path):
         case.mkdir()
         for name, content in row["inputs"].items():
             (case / (name.lower() + ".csv")).write_bytes(content.encode("utf-8"))
-    stage_fixture_tsv(destination, "mapping_cut_admission", "mapping-cut-admission.tsv")
-    stage_fixture_tsv(destination, "original_mapping_cut", "original-mapping-cut.tsv")
     source_cases = destination / "mapping-cut-cases"
     source_cases.mkdir()
     for row in fixture_rows("original_mapping_cut"):
@@ -1637,40 +1435,6 @@ def stage(destination: Path):
         case.mkdir()
         for name, content in row["inputs"].items():
             (case / (name.lower() + ".csv")).write_bytes(content.encode("utf-8"))
-    stage_fixture_tsv(destination, "source_filters", "source-filters.tsv")
-    stage_fixture_tsv(destination, "first_available", "first-available.tsv")
-    stage_fixture_tsv(destination, "original_assertions", "original-assertions.tsv")
-    stage_fixture_tsv(destination, "original_all_or_none", "original-all-or-none.tsv")
-    stage_fixture_tsv(destination, "original_not_missing", "original-not-missing.tsv")
-    stage_fixture_tsv(destination, "row_filters", "row-filters.tsv")
-    stage_fixture_tsv(destination, "row_filter_admission", "row-filter-admission.tsv")
-    stage_fixture_tsv(destination, "row_reductions", "row-reductions.tsv")
-    stage_fixture_tsv(destination, "correlated_aggregates", "correlated-aggregates.tsv")
-    stage_fixture_tsv(destination, "odm_reads", "odm-reads.tsv")
-    stage_fixture_tsv(destination, "odm_deferred", "odm-deferred.tsv")
-    stage_fixture_tsv(destination, "odm_preflight", "odm-preflight.tsv")
-    stage_fixture_tsv(destination, "row_column_checks", "row-column-checks.tsv")
-    stage_fixture_tsv(
-        destination, "original_column_values", "original-column-values.tsv"
-    )
-    stage_fixture_tsv(
-        destination, "original_column_matches", "original-column-matches.tsv"
-    )
-    stage_fixture_tsv(
-        destination, "static_verification_checks", "static-verification-checks.tsv"
-    )
-    stage_fixture_tsv(
-        destination, "csv_profile_diagnostics", "csv-profile-diagnostics.tsv"
-    )
-    stage_fixture_tsv(destination, "column_literals", "column-literals.tsv")
-    stage_fixture_tsv(
-        destination, "original_conversion_handlers", "original-conversion-handlers.tsv"
-    )
-    stage_fixture_tsv(
-        destination,
-        "original_row_conversion_handlers",
-        "original-row-conversion-handlers.tsv",
-    )
     for name in SCHEMA_MODULES:
         shutil.copy2(REPOSITORY / "yaml" / name, destination / "schema" / name)
     for name in (
