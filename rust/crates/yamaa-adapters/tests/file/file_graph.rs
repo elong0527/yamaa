@@ -142,8 +142,8 @@ fn native_diamond_aliases_own_one_canonical_document_and_no_artifact_authority()
         [1, 2, 2]
     );
     assert!(matches!(
-        graph.graph().checked().execution_capability(),
-        Err(PrepareError::Unsupported(_))
+        graph.graph().checked().metadata().execution_refusal(),
+        PrepareError::Unsupported(_)
     ));
     let paths = graph.captured_sources().map(|(p, _)| p).collect::<Vec<_>>();
     assert!(paths.iter().all(|p| p.ends_with(".yaml")));

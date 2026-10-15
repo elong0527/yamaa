@@ -128,9 +128,7 @@ mod file_inventory;
 pub mod host_limits;
 
 pub mod callback;
-pub mod dataset_execution;
 pub mod dataset_result;
-pub use dataset_execution::execute_dataset_with_budget;
 pub use yamaa_engine::dataset::ExecutionBudget;
 mod dataset_snapshot;
 mod execution_diagnostics;

@@ -573,9 +573,6 @@ fn check_field(field: arrow_ipc::Field<'_>, top: bool) -> Result<(), Error> {
 /// Only little-endian uncompressed V5 streams with explicit EOS are accepted.
 pub(crate) struct SnapshotShape {
     pub schema: TableSchema,
-    pub rows: usize,
-    pub cells: usize,
-    pub batches: usize,
 }
 
 pub(crate) fn preflight(mut input: &[u8], budget: ExecutionBudget) -> Result<SnapshotShape, Error> {
@@ -595,15 +592,7 @@ pub(crate) fn preflight(mut input: &[u8], budget: ExecutionBudget) -> Result<Sna
                 return Err(Error::InvalidStream);
             }
             let schema = schema.ok_or(Error::InvalidStream)?;
-            let cells = rows
-                .checked_mul(schema.columns().len())
-                .ok_or(Error::ShapeLimit)?;
-            return Ok(SnapshotShape {
-                schema,
-                rows,
-                cells,
-                batches,
-            });
+            return Ok(SnapshotShape { schema });
         }
         let length = usize::try_from(length).map_err(|_| Error::InvalidStream)?;
         if length > MAX_METADATA {

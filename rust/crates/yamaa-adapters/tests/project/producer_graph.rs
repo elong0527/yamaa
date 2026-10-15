@@ -132,8 +132,8 @@ fn recursive_original_documents_are_owned_once_and_all_alias_origins_remain_held
         ]
     );
     assert!(matches!(
-        graph.checked().execution_capability(),
-        Err(PrepareError::Unsupported(_))
+        graph.checked().metadata().execution_refusal(),
+        PrepareError::Unsupported(_)
     ));
     assert!(matches!(
         yamaa_engine::domain::check(graph.nodes()[1].document.model()),

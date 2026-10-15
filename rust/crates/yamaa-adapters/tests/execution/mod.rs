@@ -5,7 +5,6 @@ mod check_output_validation;
 mod compiled_model;
 mod completed_intermediate_scopes;
 mod completed_lookup_assertions;
-mod dataset_execution;
 mod declarative_case_intermediates;
 mod declarative_case_predicates;
 mod declarative_correlated_predicates;

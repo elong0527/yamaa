@@ -1,7 +1,3 @@
-// Preserve this original embedded assertion in each preparation context.
-#[allow(clippy::duplicate_mod)]
-#[path = "../support/schema_requirement_expectations.rs"]
-mod schema_requirement_expectations;
 
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, rc::Rc};
@@ -201,7 +197,7 @@ fn unchanged_independent_complete_original_preparation_reports_and_effect_counts
         };
         assert_eq!(
             outcome(error),
-            schema_requirement_expectations::reconciled(fields[4], true),
+            serde_json::from_str::<Value>(fields[4]).unwrap(),
             "{}",
             fields[0]
         );

@@ -3,7 +3,6 @@
 mod inheritance_capture;
 mod odm_declaration_fixture;
 mod preparation_dispatch;
-mod retired_schema_diagnostics;
 mod schema_capture;
 mod schema_declaration_fixture;
 mod schema_diagnostic_projection;

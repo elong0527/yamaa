@@ -451,15 +451,8 @@ fn aliased_text_and_json_expansion_are_bounded() {
 #[test]
 fn configurable_text_quota_accumulates_across_batches_and_sources() {
     use arrow_ipc::{Buffer as B, FieldNode as N};
-    use yamaa_adapters::ipc_table::{decode_snapshot_with_budget, snapshot_batches};
-    use yamaa_adapters::{execute_dataset_with_budget, ExecutionBudget};
-    use yamaa_core::{
-        table::{Column, TableSchema},
-        value::ColumnType,
-    };
-    use yamaa_engine::dataset::{
-        Assignment, DatasetPlan, Expression, RowMode, RowTemplate, SecondarySource,
-    };
+    use yamaa_adapters::ipc_table::snapshot_batches;
+    use yamaa_adapters::ExecutionBudget;
 
     let schema = Schema::new(vec![
         Field::new("A", DataType::Utf8, true),
@@ -491,38 +484,6 @@ fn configurable_text_quota_accumulates_across_batches_and_sources() {
         ..ExecutionBudget::default()
     };
     assert!(budget.max_ipc_bytes < 4 * length as usize);
-    let source = decode_snapshot_with_budget(&input, budget).unwrap();
-    let logical = yamaa_core::table::TableAccess::schema(&source).clone();
-    let plan = DatasetPlan::new_with_sources(
-        logical.clone(),
-        vec![SecondarySource {
-            name: "DONOR".into(),
-            schema: logical,
-        }],
-        TableSchema::new(vec![Column {
-            name: "A".into(),
-            kind: ColumnType::Str,
-        }])
-        .unwrap(),
-        vec![RowTemplate {
-            mode: RowMode::Records,
-            assignments: vec![Assignment {
-                column: 0,
-                expression: Expression::Source(0),
-                path: "columns.A".into(),
-            }],
-            filter: None,
-        }],
-        vec![],
-        vec![0],
-        vec![],
-    )
-    .unwrap();
-    assert!(matches!(
-        execute_dataset_with_budget(&plan, &input, &[&input], budget),
-        Err(E::ShapeLimit)
-    ));
-
     let record_start = 8 + u32::from_le_bytes(input[4..8].try_into().unwrap()) as usize;
     let mut two_batches = input[..input.len() - 8].to_vec();
     two_batches.extend_from_slice(&input[record_start..]);

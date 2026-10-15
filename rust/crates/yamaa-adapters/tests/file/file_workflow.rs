@@ -11,7 +11,7 @@ use yamaa_adapters::{
     producer_graph::Limits,
     shipped_schema,
 };
-use yamaa_core::project_function::Language;
+use yamaa_core::{project_function::Language, specification::PrepareError};
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 #[test]
@@ -239,7 +239,7 @@ fn complete_original_diamond_checks_each_canonical_node_once_without_data() {
     let graph = study.prepare(Default::default()).unwrap();
     assert_eq!(graph.capture_reads(), 5); // one environment + four canonical nodes
     assert_eq!(graph.graph().checked().metadata().order(), [3, 1, 2, 0]);
-    assert!(graph.graph().checked().execution_capability().is_err());
+    assert!(matches!(graph.graph().checked().metadata().execution_refusal(), PrepareError::Unsupported(_)));
     let expected = ["root.yaml", "left.yaml", "leaf.yaml"].map(|name| yamaa_adapters::issue_rows::Issue {
         phase: "validation".into(), condition: "invalid_regex".into(), requirement: Some("REQ-0827".into()),
         spec_paths: vec!["columns.VALUE.verifications[0].matches.pattern".into()],
@@ -1000,7 +1000,7 @@ fn selected_inherited_producer_seeds_original_closure_with_shared_aliases_and_di
         &nodes[2].producers[0].document
     ));
     assert_eq!(graph.graph().checked().metadata().order(), [3, 1, 2, 0]);
-    assert!(graph.graph().checked().execution_capability().is_err());
+    assert!(matches!(graph.graph().checked().metadata().execution_refusal(), PrepareError::Unsupported(_)));
     let rows = producer_check::prepared(&graph).unwrap();
     assert_eq!(rows.len(), 1);
     let context: serde_json::Value = serde_json::from_str(&rows[0].context).unwrap();
