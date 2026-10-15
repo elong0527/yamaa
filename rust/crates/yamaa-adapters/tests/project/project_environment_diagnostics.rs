@@ -424,7 +424,7 @@ fn invalid_inline_scalars_do_not_mask_independent_root_header_findings() {
             assert_eq!(context(issue)["declared"], "r");
             assert_eq!(context(issue)["runner"], "python");
         }
-        assert_eq!(context(&issues[2])["reason"], "missing_study");
+        assert_eq!(context(&issues[1])["reason"], "missing_study");
         for issue in &issues {
             assert_eq!(context(issue)["source"], "held/environment.yaml");
             assert_eq!(context(issue)["environment_path"], "$");
