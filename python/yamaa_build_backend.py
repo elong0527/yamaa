@@ -299,6 +299,35 @@ def preserve_workspace(archive: Path, workspace: Path, fixture_sources=()) -> No
                 else:
                     additions.append((name, path))
 
+            # Entries outside the verified sets above (member sources,
+            # local patches, fixtures, the manifest/lock/toolchain) are
+            # copied into the output archive verbatim below, so anything
+            # that is not a regular file or a directory -- a symlink or
+            # hard link naming a restored member's directory, a device
+            # or FIFO -- must be refused here rather than carried into
+            # the published sdist. A regular file whose name ends in "/"
+            # (or whose name otherwise collides once a trailing slash is
+            # stripped) extracts to the same path as the verified member
+            # without ever matching its exact-name verification, so those
+            # spellings are refused as duplicates as well.
+            # A GNU sparse entry reports isfile() but rewriting it with
+            # addfile drops its sparse map and publishes damaged data,
+            # so sparse entries are refused here as well.
+            if any(
+                entry.issparse() or not (entry.isfile() or entry.isdir())
+                for entry in entries
+            ):
+                raise ValueError(
+                    "source archive must not contain links or special files"
+                )
+            if any(entry.name.endswith("/") and not entry.isdir() for entry in entries):
+                raise ValueError(
+                    "source archive contains a non-directory member "
+                    "with a trailing slash"
+                )
+            if len({entry.name.rstrip("/") for entry in entries}) != len(entries):
+                raise ValueError("source archive contains duplicate members")
+
             with tempfile.NamedTemporaryFile(
                 dir=archive.parent, suffix=".tar.gz", delete=False
             ) as file:
