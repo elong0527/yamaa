@@ -103,6 +103,79 @@ The ordinary CI workflow runs the same check targets listed above for each PR.
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 
+Before every merge, run a fresh read-only review check with an authenticated
+GitHub CLI, supplying the exact final commit:
+
+```sh
+python -m tools.ci.review_gate --repository elong0527/yamaa --pr <number> --head <full-commit>
+```
+
+Use that command when GitHub CLI API access is available. If environment policy
+blocks it, approved authenticated GitHub connector reads must prove every same
+predicate from fresh API evidence: the exact head and base, this PR's authentic
+completed status and walkthrough/footer chronology, unchanged base history,
+and all resolved threads. Re-read the PR head and status immediately before
+merging. Large PRs require the complete bounded proof below through those
+reads as well. An unavailable CLI does not waive review requirements.
+
+This requires CodeRabbit's authentic `Review completed` status on that commit
+and resolved review threads. The PR must have its own authentic summary and
+walkthrough, with a final reviewed footer naming that exact head; completion
+must follow the walkthrough's last update. The reviewed range must end at that
+head. If the summary omits the range, an authentic formal review on this PR,
+submitted for this commit before completion, can supply it. A conflicting or
+ambiguous summary range cannot use that fallback. Incremental review ranges
+are supported. A status shared with another PR, a skipped status alone, or an
+earlier-head review does not pass. Any recorded base retarget or force-push
+requires a fresh PR and head, even if the base was later changed back to main.
+PRs above 300 changed files require bounded coverage below, including when a
+shared head already has a successful status. Triage findings outside inline
+threads as well.
+The trusted-main `review.yml` workflow publishes the `review-completion` status
+for current open PRs targeting main. It refreshes after PR/status/discussion
+events and on a five-minute schedule for review and thread changes. It never
+checks out PR code; a formal review submission is optional for clean reviews.
+
+The workflow does not configure repository rules. Server enforcement requires a
+maintainer to make `review-completion` from GitHub Actions a required status on
+main, require CodeRabbit's own status, and require conversation resolution.
+The fresh manual check remains mandatory, including during bootstrap and when
+scheduled runs are delayed. An administrator must configure these rules
+separately; the workflow's token cannot administer repository rules.
+
+An atomic change above CodeRabbit's 300-file review limit can use bounded
+review-only PRs. Each review PR must have a distinct head commit with the
+**complete target head tree**, a synthetic base in this repository, and at
+most 300 changed raw leaf paths (a rename can consume two paths). Create the
+base as a single child of the target head, restoring only that batch's original
+old leaves, including file modes, symlinks and gitlinks. Its single head child
+restores the full target tree. The batch deltas must cover the target's
+merge-base to head delta exactly once; unrelated changes, gaps and overlaps
+fail. Each synthetic head must belong to only its review PR. Keep these PRs
+open, preserve their bases, and do not merge them. List their actual numbers
+once in the target PR body as JSON, for example:
+
+```html
+<!-- yamaa-review-batches: [123, 124] -->
+```
+
+The gate permits this path only after the authentic target status explicitly
+says the diff exceeded the 300-file limit. Missing or pending target reviews
+cannot use it. Every batch still needs its own authentic `Review completed`
+status and resolved threads; target threads must also be resolved. The gate
+also binds each completion to this PR's exact base/head review range and final
+reviewed summary footer. The range can come from the summary or the authentic
+formal review for that commit. Completion must follow both the summary's last
+update and the formal review's submission when that receipt is used. Missing
+evidence, another PR sharing the head, or any recorded
+base retarget/force-push history requires a fresh review PR and head. This
+prevents a completion for an earlier base from covering a different diff.
+The gate checks complete Git trees and paginated PR files through the authenticated API,
+then rechecks all PR heads, bases, batch metadata and review statuses. It fails
+on truncated trees or incomplete evidence. Moving the target source requires
+new matching batch heads and fresh completed reviews. Batch metadata belongs
+in the PR body, not a committed evidence ledger.
+
 Native qualification is separate: `.github/workflows/native.yml` builds and
 installs the supported Python wheel/source and R source combinations nightly
 and on dispatch, or on a `qualification/issue-*` push. It checks public

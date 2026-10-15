@@ -83,7 +83,7 @@ class ClinicalItemRow(BaseModel):
     value: str | None = Field(alias="Value")
     value_present: bool = Field(alias="ValuePresent")
     is_null: bool = Field(alias="IsNull")
-    source_ordinal: int = Field(alias="SourceOrdinal", ge=1)
+    source_ordinal: int = Field(alias="SourceOrdinal", ge=1, le=2**64 - 1)
 
     @model_validator(mode="after")
     def validate_value_state(self) -> "ClinicalItemRow":
