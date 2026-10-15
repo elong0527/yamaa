@@ -71,8 +71,8 @@ pub(super) fn declaration_findings(
         } else {
             identifiers.insert(name, format!("{path}.id"));
         }
-        if !sources.iter().any(|source| source.name == dataset)
-            && !(dataset == "SELF" && present(d, d.root(), "rows"))
+        if !(sources.iter().any(|source| source.name == dataset)
+            || dataset == "SELF" && present(d, d.root(), "rows"))
         {
             admit_finding()?;
             let mut finding =
