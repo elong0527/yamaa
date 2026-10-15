@@ -593,7 +593,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         );
     }
     if let Expression::Joined(read) = &assignment.expression {
-        return joined::read(read, assignment, candidate, plan, row, state);
+        return joined::read(table, read, assignment, candidate, plan, row, state);
     }
     if let Expression::JoinedSource {
         read,
@@ -602,6 +602,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
     } = &assignment.expression
     {
         return joined::read_options(
+            table,
             read,
             filter.as_ref(),
             selection.as_ref(),

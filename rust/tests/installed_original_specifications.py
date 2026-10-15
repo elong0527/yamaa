@@ -2801,5 +2801,44 @@ columns:
                             result.save()
                         self.assertFalse((destination / "result.csv").exists())
 
+class RowJoinKeys(unittest.TestCase):
+    def test_original_row_join_keys_are_raw_driver_fields(self):
+        import yamaa
+
+        def issues(frame):
+            self.assertEqual(frame.columns, TRUTH["issue_columns"])
+            rows = frame.to_dicts()
+            for row in rows:
+                self.assertIsInstance(row["context"], str)
+                row["context"] = json.loads(row["context"])
+            return rows
+
+        self.assertEqual(len(TRUTH["row_join_keys"]), 11)
+        for case in TRUTH["row_join_keys"]:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                entry = root / "spec.yaml"
+                entry.write_text(case["specification"], encoding="utf-8")
+                self.assertEqual(issues(yamaa.check(entry).issues), case["check_issues"])
+                for name, content in case["inputs"].items():
+                    path = root / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(content, encoding="utf-8")
+                for _ in range(2):
+                    self.assertEqual(issues(yamaa.check(entry).issues), case["check_issues"])
+                    result = yamaa.domain(entry)
+                    self.assertEqual(issues(result.issues), case["issues"])
+                    if case["csv"] is not None:
+                        self.assertIsNotNone(result.output)
+                        self.assertTrue(result.save())
+                        self.assertEqual((root / "out.csv").read_bytes(), case["csv"].encode())
+                        (root / "out.csv").unlink()
+                    else:
+                        self.assertIsNone(result.output)
+                        with self.assertRaises(yamaa.DomainError):
+                            result.save()
+                        self.assertFalse((root / "out.csv").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

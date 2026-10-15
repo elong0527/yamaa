@@ -8,6 +8,10 @@ use alloc::{boxed::Box, vec::Vec};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum JoinedFinding {
     UnknownField,
+    CurrentKey {
+        identifier: String,
+        finding: crate::reference_scope::Finding,
+    },
     NoApplicableKeys {
         dataset: String,
         keys: Vec<String>,
@@ -35,34 +39,99 @@ impl Catalog {
         let Some(&(column, kind)) = donor.fields.get(field) else {
             return Ok(Some(Err(JoinedFinding::UnknownField)));
         };
-        let inferred = match &donor.inference {
-            crate::key_relation::Inference::Keys { keys } => keys,
-            crate::key_relation::Inference::NoApplicableKeys => {
+        let mut record_keys = None;
+        let row_pairs;
+        let inferred = if let Some(scope) = &self.row_joins {
+            use crate::reference_scope::{self, Phase, Reach, Scope};
+            let groups = scope
+                .groups
+                .as_ref()
+                .map(|names| names.iter().map(String::as_str).collect::<Vec<_>>());
+            let mut pairs = Vec::new();
+            let mut records = Vec::new();
+            for (index, (name, _)) in donor.keys.iter().enumerate() {
+                let Some(&(_, actual)) = donor.fields.get(name) else {
+                    continue;
+                };
+                let identifier = alloc::format!("{}.{}", scope.driver, name);
+                let findings = reference_scope::validate(
+                    self,
+                    &identifier,
+                    None,
+                    Scope {
+                        drivers: &[&scope.driver],
+                        current_driver: false,
+                        reach: Reach::Scalar,
+                        joined: false,
+                        phase: Phase::Row {
+                            group_by: groups.as_deref(),
+                        },
+                    },
+                    Default::default(),
+                )?;
+                if let Some(&finding) = findings.first() {
+                    return Ok(Some(Err(JoinedFinding::CurrentKey {
+                        identifier,
+                        finding,
+                    })));
+                }
+                let Some(Binding::Dataset {
+                    field, column_type, ..
+                }) = self.bind(&identifier)?
+                else {
+                    return Err(Error::InvalidAvailableOutput);
+                };
+                if !crate::key_relation::comparable(column_type.into(), actual.into()) {
+                    return Ok(Some(Err(JoinedFinding::KeyType {
+                        source: name.clone(),
+                        expected: column_type,
+                        actual,
+                    })));
+                }
+                pairs.push(index);
+                records.push(field);
+            }
+            if pairs.is_empty() {
                 return Ok(Some(Err(JoinedFinding::NoApplicableKeys {
                     dataset: owner.into(),
                     keys: donor.keys.iter().map(|(name, _)| name.clone()).collect(),
-                })))
+                })));
             }
-            crate::key_relation::Inference::Incompatible {
-                key,
-                expected,
-                actual,
-            } => {
-                return Ok(Some(Err(JoinedFinding::KeyType {
-                    source: donor.keys[*key].0.clone(),
-                    expected: *expected,
-                    actual: *actual,
-                })))
-            }
-            crate::key_relation::Inference::UndeclaredOutput { .. } => {
-                return Err(Error::InvalidAvailableOutput)
+            record_keys = Some(records);
+            row_pairs = pairs;
+            &row_pairs
+        } else {
+            match &donor.inference {
+                crate::key_relation::Inference::Keys { keys } => keys,
+                crate::key_relation::Inference::NoApplicableKeys => {
+                    return Ok(Some(Err(JoinedFinding::NoApplicableKeys {
+                        dataset: owner.into(),
+                        keys: donor.keys.iter().map(|(name, _)| name.clone()).collect(),
+                    })))
+                }
+                crate::key_relation::Inference::Incompatible {
+                    key,
+                    expected,
+                    actual,
+                } => {
+                    return Ok(Some(Err(JoinedFinding::KeyType {
+                        source: donor.keys[*key].0.clone(),
+                        expected: *expected,
+                        actual: *actual,
+                    })))
+                }
+                crate::key_relation::Inference::UndeclaredOutput { .. } => {
+                    return Err(Error::InvalidAvailableOutput)
+                }
             }
         };
         let mut keys = Vec::new();
         let mut dependencies = Vec::new();
         for &index in inferred {
             let (name, output_column) = &donor.keys[index];
-            if available.is_some_and(|available| !available.contains(output_column)) {
+            if record_keys.is_none()
+                && available.is_some_and(|available| !available.contains(output_column))
+            {
                 return Ok(Some(Err(JoinedFinding::UnavailableKey {
                     column: *output_column,
                 })));
@@ -76,7 +145,9 @@ impl Catalog {
                 source_column,
                 output_column: *output_column,
             });
-            dependencies.push(*output_column);
+            if record_keys.is_none() {
+                dependencies.push(*output_column);
+            }
         }
         let source = if donor.source == 0 {
             AggregateSource::Primary
@@ -90,6 +161,7 @@ impl Catalog {
                 keys,
                 name: owner.into(),
                 schema: donor.schema.clone(),
+                record_keys,
             })),
             kind,
             dependencies,

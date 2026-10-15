@@ -121,7 +121,7 @@ impl<S> BoundFunction<S> {
                 // The enclosing plan validates selected relations and key dependencies.
                 FunctionInput::Read(Read::Intermediate { .. }) => {}
                 FunctionInput::Read(Read::Joined(read)) => {
-                    read.validate(source, secondary, output, available)?
+                    read.validate(source, secondary, output, available, mode)?
                 }
                 FunctionInput::Read(Read::Source(column)) => {
                     if *column >= source.columns().len() {

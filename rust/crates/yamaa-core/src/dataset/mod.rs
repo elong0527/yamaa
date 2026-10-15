@@ -750,13 +750,13 @@ fn validate_assignment_at(
         validate_donor_reads(&assignment.expression, available, intermediates)?;
     }
     match &assignment.expression {
-        Expression::Joined(read) => read.validate(source, secondary, output, available)?,
+        Expression::Joined(read) => read.validate(source, secondary, output, available, mode)?,
         Expression::JoinedSource {
             read,
             filter,
             selection,
         } => {
-            read.validate(source, secondary, output, available)?;
+            read.validate(source, secondary, output, available, mode)?;
             let width = read.schema.columns().len();
             if let Some(filter) = filter {
                 filter
@@ -1214,14 +1214,14 @@ fn validate_assignment_at(
         Expression::Compute(numeric) => {
             for binding in numeric.bindings() {
                 if let Read::Joined(read) = &binding.read {
-                    read.validate(source, secondary, output, available)?;
+                    read.validate(source, secondary, output, available, mode)?;
                 }
             }
         }
         Expression::Flag(flag) => {
             for binding in flag.bindings() {
                 if let FlagRead::Read(Read::Joined(read)) = &binding.read {
-                    read.validate(source, secondary, output, available)?;
+                    read.validate(source, secondary, output, available, mode)?;
                 }
             }
         }
@@ -1230,7 +1230,7 @@ fn validate_assignment_at(
                 if let Some(when) = &branch.when {
                     for binding in when.bindings() {
                         if let Read::Joined(read) = &binding.read {
-                            read.validate(source, secondary, output, available)?;
+                            read.validate(source, secondary, output, available, mode)?;
                         }
                     }
                 }
@@ -1304,6 +1304,9 @@ fn function_record_read(
 ) -> bool {
     arguments.iter().any(|argument| match argument.input {
         FunctionInput::Read(Read::Source(_)) => scope != RecordReadScope::PrimaryMatching,
+        FunctionInput::Read(Read::Joined(ref read)) => {
+            scope != RecordReadScope::PrimaryMatching && read.record_keys.is_some()
+        }
         FunctionInput::Read(Read::Intermediate { index, column }) => current_record_read(
             &Expression::Intermediate { index, column },
             intermediates,
@@ -1343,7 +1346,9 @@ fn current_record_read(
             }
             AggregateRelation::Output { .. } => false,
         },
-        Expression::Joined(_) | Expression::JoinedSource { .. } => false,
+        Expression::Joined(read) | Expression::JoinedSource { read, .. } => {
+            include_raw && read.record_keys.is_some()
+        }
         Expression::Source(_) | Expression::RowLookup(_) => include_raw,
         // A key-grain collection is valid in the primary implicit form. A
         // global column shared by foreign drivers cannot borrow its coordinates.
@@ -1414,7 +1419,8 @@ fn current_record_read(
                             intermediates,
                             scope,
                         ),
-                        Read::Column(_) | Read::Joined(_) => false,
+                        Read::Joined(ref read) => include_raw && read.record_keys.is_some(),
+                        Read::Column(_) => false,
                     })
             }) || current_record_read(&branch.assignment.expression, intermediates, scope)
         }),
@@ -1618,11 +1624,11 @@ impl DatasetPlan {
                     for binding in filter.bindings() {
                         if let Read::Joined(read) = &binding.read {
                             joined::validate_source(read, &source, &secondary)?;
-                            read.validate(&source, &secondary, &output, &available)?;
-                            if read
-                                .keys
-                                .iter()
-                                .any(|key| deferred.get(key.output_column).copied().unwrap_or(true))
+                            read.validate(template_source, &secondary, &output, &available, mode)?;
+                            if read.record_keys.is_none()
+                                && read.keys.iter().any(|key| {
+                                    deferred.get(key.output_column).copied().unwrap_or(true)
+                                })
                             {
                                 return Err(PlanError::Filter(BindingError::UnavailableColumn));
                             }

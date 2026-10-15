@@ -91,6 +91,7 @@ fn supplied<T: TableAccess + ?Sized>(
         }
         if let FunctionInput::Read(Read::Joined(read)) = &argument.input {
             let value = joined::read(
+                table,
                 read,
                 context.assignment,
                 candidate,
