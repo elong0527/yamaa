@@ -139,13 +139,17 @@ impl Serialize for Value {
 impl<'de> Deserialize<'de> for Value {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = Box::<value::RawValue>::deserialize(deserializer)?;
-        decode(raw.get(), 0).map_err(serde::de::Error::custom)
+        decode(raw.get(), true).map_err(serde::de::Error::custom)
     }
 }
 
-fn decode(text: &str, depth: usize) -> Result<Value, Error> {
-    let mut decoder = Decoder { text, offset: 0 };
-    let value = decoder.value(depth)?;
+fn decode(text: &str, check_wire_depth: bool) -> Result<Value, Error> {
+    let mut decoder = Decoder {
+        text,
+        offset: 0,
+        check_wire_depth,
+    };
+    let value = decoder.value(0)?;
     decoder.space();
     if decoder.offset != text.len() {
         return Err(Decoder::invalid());
@@ -158,6 +162,7 @@ fn decode(text: &str, depth: usize) -> Result<Value, Error> {
 struct Decoder<'a> {
     text: &'a str,
     offset: usize,
+    check_wire_depth: bool,
 }
 impl Decoder<'_> {
     fn invalid() -> Error {
@@ -204,7 +209,10 @@ impl Decoder<'_> {
     }
     fn value(&mut self, depth: usize) -> Result<Value, Error> {
         self.space();
-        if depth >= DEFAULT_JSON_RECURSION_LIMIT - 1 && matches!(self.byte(), Some(b'[' | b'{')) {
+        if self.check_wire_depth
+            && depth >= DEFAULT_JSON_RECURSION_LIMIT - 1
+            && matches!(self.byte(), Some(b'[' | b'{'))
+        {
             return Err(<Error as serde::de::Error>::custom(
                 "JSON recursion limit exceeded",
             ));
@@ -535,10 +543,10 @@ impl PartialEq<Value> for bool {
 
 /// Serialize into the exact tree, without an intermediate machine-width JSON value.
 pub fn to_value<T: Serialize>(value: T) -> Result<Value, Error> {
-    serde_json::from_str(&serde_json::to_string(&value)?)
-}
-pub fn from_value<T: serde::de::DeserializeOwned>(value: Value) -> Result<T, Error> {
-    serde_json::from_str(&serde_json::to_string(&value)?)
+    let text = serde_json::to_string(&value)?;
+    let raw: &value::RawValue = serde_json::from_str(&text)?;
+    // Programmatic construction did not use serde_json's wire recursion guard.
+    decode(raw.get(), false)
 }
 
 /// Construct an owned context. Interpolated values retain exact numeric spelling.
@@ -602,7 +610,6 @@ mod tests {
             assert_eq!(value, Value::Number(number));
             assert_eq!(to_string(&value).unwrap(), text);
             assert_eq!(to_value(&value).unwrap(), value);
-            assert_eq!(from_value::<Value>(value.clone()).unwrap(), value);
         }
         assert_ne!(
             from_str::<Value>("1").unwrap(),
@@ -656,6 +663,24 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn programmatic_construction_keeps_trees_beyond_the_wire_recursion_boundary() {
+        const DIGITS: &str = "92233720368547758081234567890";
+        let mut value = Value::Number(DIGITS.parse().unwrap());
+        let mut previous = serde_json::Value::from(1);
+        for _ in 0..132 {
+            value = Value::Array(vec![value]);
+            previous = serde_json::Value::Array(vec![previous]);
+        }
+        assert!(serde_json::to_value(&previous).is_ok());
+        assert_eq!(to_value(&value).unwrap(), value);
+        let context = json!({"context": value.clone()});
+        assert_eq!(context["context"], value);
+        let text = format!("{}{DIGITS}{}", "[".repeat(132), "]".repeat(132));
+        assert_eq!(to_string(&value).unwrap(), text);
+        assert!(from_str::<Value>(&text).is_err());
     }
 
     #[test]

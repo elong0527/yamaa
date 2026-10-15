@@ -1217,8 +1217,12 @@ mod execution {
                 let case = row["case"].as_str().unwrap();
                 let run =
                     PreparedRun::prepare(prepare(&schema, &fixture_bytes(&row["source"]))).unwrap();
-                let inputs: BTreeMap<String, String> =
-                    yamaa_core::json::from_value(row["inputs"].clone()).unwrap();
+                let inputs: BTreeMap<String, String> = row["inputs"]
+                    .as_object()
+                    .unwrap()
+                    .iter()
+                    .map(|(key, value)| (key.clone(), value.as_str().unwrap().to_owned()))
+                    .collect();
                 let expected: yamaa_core::json::Value = row["expected"].clone();
                 // A second attempt must neither inherit choices nor accumulate handler counts.
                 for _ in 0..2 {
@@ -1344,8 +1348,12 @@ mod execution {
                 );
                 let run =
                     PreparedRun::prepare(prepare(&schema, &fixture_bytes(&row["source"]))).unwrap();
-                let inputs: BTreeMap<String, String> =
-                    yamaa_core::json::from_value(row["inputs"].clone()).unwrap();
+                let inputs: BTreeMap<String, String> = row["inputs"]
+                    .as_object()
+                    .unwrap()
+                    .iter()
+                    .map(|(key, value)| (key.clone(), value.as_str().unwrap().to_owned()))
+                    .collect();
                 let expected: yamaa_core::json::Value = row["expected"].clone();
                 // A second attempt must neither inherit choices nor accumulate handler counts.
                 for _ in 0..2 {

@@ -2043,8 +2043,12 @@ columns:
                 } else {
                     assert_eq!(
                         op.identifiers(),
-                        &yamaa_core::json::from_value::<Vec<String>>(value["identifiers"].clone())
+                        &value["identifiers"]
+                            .as_array()
                             .unwrap()
+                            .iter()
+                            .map(|value| value.as_str().unwrap().to_owned())
+                            .collect::<Vec<_>>()
                     );
                     let mut parts: Vec<yamaa_core::json::Value> = vec![];
                     for part in op.parts() {

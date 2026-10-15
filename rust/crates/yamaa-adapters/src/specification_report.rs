@@ -35,7 +35,7 @@ impl From<crate::source_diagnostics::SourceProjectionError> for Error {
     }
 }
 fn plain(value: &Value) -> Result<Value, Error> {
-    if let Ok(scalar) = yamaa_core::json::from_value::<ScalarValue>(value.clone()) {
+    if let Ok(scalar) = serde_json::from_str::<ScalarValue>(&value.to_string()) {
         return Ok(
             match scalar.into_core().map_err(|_| Error::InvalidObservation)? {
                 Scalar::Missing => Value::Null,
