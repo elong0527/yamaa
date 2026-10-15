@@ -139,7 +139,6 @@ impl StudyPort for Study {
         &mut self,
         node: &Node,
         source: &SourceDeclaration,
-        maximum: usize,
     ) -> Result<Arc<[u8]>, Self::Error> {
         assert_eq!((node.identity(), source.name.as_str()), ("/p", "RAW"));
         self.trace.borrow_mut().push("capture:/p:RAW".into());
@@ -150,9 +149,7 @@ impl StudyPort for Study {
             return Err("original source refusal");
         }
         let bytes = b"ID,VALUE\n1,1\n";
-        if bytes.len() > maximum {
-            return Err("source byte limit");
-        }
+
         self.reads += 1;
         Ok(Arc::from(bytes.as_slice()))
     }
@@ -183,23 +180,21 @@ struct Decoder {
     cardinality: Rc<Cell<usize>>,
     trace: Trace,
     failure: bool,
-    used: Option<build::DecodeUsage>,
 }
 impl SourceDecoder for Decoder {
     fn continue_after(&self, _error: &Self::Error) -> bool {
         false
     }
-    fn decode_with_interpretation(
+
+    type Error = &'static str;
+    type Table = Table;
+    fn decode(
         &mut self,
         source: &SourceDeclaration,
         bytes: &[u8],
         _interpretation: yamaa_core::specification::SourceInterpretation,
-    ) -> Result<Self::Table, Self::Error> {
-        self.decode(source, bytes)
-    }
-    type Error = &'static str;
-    type Table = Table;
-    fn decode(&mut self, source: &SourceDeclaration, bytes: &[u8]) -> Result<Table, Self::Error> {
+        _contract: Option<&yamaa_core::producer_contract::Contract>,
+    ) -> Result<Table, Self::Error> {
         self.trace
             .borrow_mut()
             .push(format!("decode:{}", source.name));
@@ -245,43 +240,35 @@ impl SourceDecoder for Decoder {
 struct Report {
     trace: Trace,
     node: String,
-    maximum: usize,
     failure: bool,
     diagnostics: bool,
-    diagnostic_bytes: usize,
     diagnostic_failure: bool,
     diagnostic_unwind: Option<Arc<()>>,
-    diagnostic_capacities: Vec<(usize, usize)>,
 }
 impl ReportPort for Report {
     fn prepare_diagnostics<C, D, T: TableAccess>(
         &mut self,
         node: &Node,
         _attempt: &yamaa_core::specification_run::CapturedAttempt<C, D, T>,
-        output_bytes: usize,
-        report_bytes: usize,
-    ) -> Result<usize, Self::Error> {
+    ) -> Result<(), Self::Error> {
         if !self.diagnostics {
-            return Ok(0);
+            return Ok(());
         }
         self.trace
             .borrow_mut()
             .push(format!("diagnostics:{}", node.identity()));
-        self.diagnostic_capacities
-            .push((output_bytes, report_bytes));
         if let Some(payload) = &self.diagnostic_unwind {
             std::panic::panic_any(Arc::clone(payload));
         }
         if self.diagnostic_failure {
             return Err("original diagnostic refusal");
         }
-        Ok(self.diagnostic_bytes)
+        Ok(())
     }
     fn select<C, D, T: TableAccess>(
         &mut self,
         node: &Node,
         _attempt: &yamaa_core::specification_run::CapturedAttempt<C, D, T>,
-        maximum: usize,
     ) -> Result<(), Self::Error> {
         self.trace
             .borrow_mut()
@@ -289,11 +276,8 @@ impl ReportPort for Report {
         if self.failure {
             return Err("original report refusal");
         }
-        if node.identity().len() > maximum {
-            return Err("report byte limit");
-        }
+
         self.node = node.identity().into();
-        self.maximum = maximum;
         Ok(())
     }
 }
@@ -314,7 +298,6 @@ impl OutputReport for Report {
         Ok(self.node.clone())
     }
     fn success(&mut self, _: &Execution, _: &[usize], _: &[u8]) -> Result<String, Self::Error> {
-        assert!(self.node.len() <= self.maximum);
         self.trace.borrow_mut().push("success".into());
         Ok(self.node.clone())
     }
@@ -330,7 +313,6 @@ impl CodecPort for Codec {
         plan: &PreparedSpecification,
         dataset: &Dataset,
         projection: &[usize],
-        maximum: usize,
     ) -> Result<Vec<u8>, Self::Error> {
         self.trace
             .borrow_mut()
@@ -342,9 +324,7 @@ impl CodecPort for Codec {
         assert_eq!(dataset.cell(0, 0).unwrap(), ValueRef::Int(1));
         assert_eq!(dataset.cell(0, 1).unwrap(), ValueRef::Int(1));
         let bytes = b"ID,VALUE\n1,1\n";
-        if bytes.len() > maximum {
-            return Err("output byte limit");
-        }
+
         Ok(bytes.to_vec())
     }
 }
@@ -372,7 +352,6 @@ impl Ports {
                 unwind: None,
             },
             decoder: Decoder {
-                used: None,
                 schema_case: 0,
                 cells: Rc::new(Cell::new(0)),
                 cardinality: Rc::new(Cell::new(0)),
@@ -382,13 +361,10 @@ impl Ports {
             report: Report {
                 trace: Rc::clone(&trace),
                 node: String::new(),
-                maximum: 0,
                 failure: false,
                 diagnostics: false,
-                diagnostic_bytes: 0,
                 diagnostic_failure: false,
                 diagnostic_unwind: None,
-                diagnostic_capacities: Vec::new(),
             },
             codec: Codec {
                 trace,
@@ -502,125 +478,58 @@ mod application_observations {
         );
     }
     #[test]
-    fn cumulative_work_entry_retains_actual_node_exits_calls_and_global_refusal() {
-        for (ceiling, accepted) in [(22, true), (21, false)] {
-            let mut ports = Ports::new();
-            let observer = recorder(&ports);
-            let mut attempt = Attempt::default();
-            let mut limits = build::Limits::default();
-            limits.execution.work_cells = ceiling;
-            limits.execution.source_rows = 3;
-            let result = prepared().build_publication_with_observer_into(
-                ports.borrow(),
-                limits,
-                &mut attempt,
-                Scope::new(&observer),
-            );
-            assert_eq!(result.is_ok(), accepted);
-            assert_eq!(attempt.outcome.is_ok(), accepted);
-            assert_immediately_before_actual_calls(&ports);
-            let events = observer.events.borrow();
-            assert_eq!(
-                calls(&events),
-                [
-                    (None, CallStage::Activation),
-                    (None, CallStage::Activation),
-                    (None, CallStage::Activation),
-                    (None, CallStage::Activation),
-                    (
-                        Some((1, "/p".into())),
-                        CallStage::Dataset(ExecutionPhase::Derivation)
-                    ),
-                    (
-                        Some((0, "/root".into())),
-                        CallStage::Dataset(ExecutionPhase::Derivation)
-                    )
-                ]
-            );
-            for node in [(1, "/p"), (0, "/root")] {
-                let identity = Some((node.0, node.1.into()));
-                assert!(events.contains(&Seen::Exit(
-                    identity.clone(),
-                    Phase::Input,
-                    Outcome::Succeeded
-                )));
-                assert!(events.contains(&Seen::Exit(
-                    identity.clone(),
-                    Phase::Dataset(ExecutionPhase::Admission),
-                    Outcome::Succeeded
-                )));
-                assert!(events.contains(&Seen::Exit(
-                    identity,
-                    Phase::Dataset(ExecutionPhase::Derivation),
-                    Outcome::Succeeded
-                )));
-            }
-            let root = Some((0, "/root".into()));
-            if accepted {
-                assert!(!events.iter().any(|e| matches!(e, Seen::Refusal(..))));
-                assert!(events.contains(&Seen::Exit(
-                    root,
-                    Phase::Dataset(ExecutionPhase::Verification),
-                    Outcome::Succeeded
-                )));
-            } else {
-                let refusal = Seen::Refusal(
-                    root.clone(),
-                    Phase::Dataset(ExecutionPhase::OutputKeys),
-                    yamaa_core::application_observer::Refusal {
-                        resource: yamaa_core::dataset::Resource::WorkCells,
-                        limit: 21,
-                        required: Some(22),
-                    },
-                );
-                let index = events
-                    .iter()
-                    .position(|e| *e == refusal)
-                    .expect("classified global work refusal absent");
-                assert_eq!(
-                    events[index + 1],
-                    Seen::Exit(
-                        root.clone(),
-                        Phase::Dataset(ExecutionPhase::OutputKeys),
-                        Outcome::Failed
-                    )
-                );
-                assert_eq!(
-                    events[index + 2],
-                    Seen::Phase(root.clone(), Phase::Dataset(ExecutionPhase::Finished))
-                );
-                assert!(!events.iter().any(|e| matches!(
-                    e,
-                    Seen::Phase(Some((0, _)), Phase::Dataset(ExecutionPhase::Verification))
-                )));
-                assert_eq!(
-                    events.last(),
-                    Some(&Seen::Exit(root, Phase::Output, Outcome::Failed))
-                );
-                assert!(attempt.nodes[0]
-                    .dataset
-                    .result
-                    .as_ref()
-                    .unwrap()
-                    .result
-                    .is_ok());
-                assert!(matches!(
-                    attempt.nodes[1]
-                        .dataset
-                        .result
-                        .as_ref()
-                        .unwrap()
-                        .result
-                        .as_ref()
-                        .map_err(|e| &**e),
-                    Err(ExecutionError::Limit {
-                        resource: yamaa_core::dataset::Resource::WorkCells,
-                        limit: 21,
-                        required: Some(22)
-                    })
-                ));
-            }
+    fn actual_node_exits_and_calls_keep_their_original_observer_order() {
+        let mut ports = Ports::new();
+        let observer = recorder(&ports);
+        let mut attempt = Attempt::default();
+        let result = prepared().build_into(ports.borrow(), &mut attempt, Scope::new(&observer));
+        assert!(result.is_ok());
+        assert!(attempt.outcome.is_ok());
+        assert_immediately_before_actual_calls(&ports);
+        let events = observer.events.borrow();
+        assert_eq!(
+            calls(&events),
+            [
+                (None, CallStage::Activation),
+                (None, CallStage::Activation),
+                (None, CallStage::Activation),
+                (None, CallStage::Activation),
+                (
+                    Some((1, "/p".into())),
+                    CallStage::Dataset(ExecutionPhase::Derivation)
+                ),
+                (
+                    Some((0, "/root".into())),
+                    CallStage::Dataset(ExecutionPhase::Derivation)
+                )
+            ]
+        );
+        for node in [(1, "/p"), (0, "/root")] {
+            let identity = Some((node.0, node.1.into()));
+            assert!(events.contains(&Seen::Exit(
+                identity.clone(),
+                Phase::Input,
+                Outcome::Succeeded
+            )));
+            assert!(events.contains(&Seen::Exit(
+                identity.clone(),
+                Phase::Dataset(ExecutionPhase::Admission),
+                Outcome::Succeeded
+            )));
+            assert!(events.contains(&Seen::Exit(
+                identity,
+                Phase::Dataset(ExecutionPhase::Derivation),
+                Outcome::Succeeded
+            )));
         }
+        let root = Some((0, "/root".into()));
+
+        assert!(!events.iter().any(|e| matches!(e, Seen::Refusal(..))));
+        assert!(events.contains(&Seen::Exit(
+            root,
+            Phase::Dataset(ExecutionPhase::Verification),
+            Outcome::Succeeded
+        )));
     }
 
     #[test]
@@ -629,18 +538,19 @@ mod application_observations {
         let mut ordinary = Ports::new();
         let mut plain = Attempt::default();
         let expected = build
-            .build_publication_into(ordinary.borrow(), Default::default(), &mut plain)
+            .build_into(
+                ordinary.borrow(),
+                &mut plain,
+                yamaa_core::application_observer::Scope::new(
+                    &yamaa_core::application_observer::Noop,
+                ),
+            )
             .unwrap();
         let mut ports = Ports::new();
         let observer = recorder(&ports);
         let mut attempt = Attempt::default();
         let held = build
-            .build_publication_with_observer_into(
-                ports.borrow(),
-                Default::default(),
-                &mut attempt,
-                Scope::new(&observer),
-            )
+            .build_into(ports.borrow(), &mut attempt, Scope::new(&observer))
             .unwrap();
         let real_trace = ports
             .activation
@@ -755,12 +665,7 @@ mod application_observations {
             let mut attempt = Attempt::default();
             let build = prepared();
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                build.build_publication_with_observer_into(
-                    ports.borrow(),
-                    Default::default(),
-                    &mut attempt,
-                    Scope::new(&observer),
-                )
+                build.build_into(ports.borrow(), &mut attempt, Scope::new(&observer))
             }));
             assert_immediately_before_actual_calls(&ports);
             let events = observer.events.borrow();
@@ -884,12 +789,7 @@ mod application_observations {
             let mut attempt = Attempt::default();
             let build = prepared();
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                build.build_publication_with_observer_into(
-                    ports.borrow(),
-                    Default::default(),
-                    &mut attempt,
-                    Scope::new(&observer),
-                )
+                build.build_into(ports.borrow(), &mut attempt, Scope::new(&observer))
             }));
             let events = observer.events.borrow();
             match failure {
@@ -961,7 +861,6 @@ fn prepared() -> build::PreparedBuild {
         "/root",
         &[node("/root", &root, &links), node("/p", &producer, &[])],
         environment(&["beta", "unused", "alpha"]),
-        Default::default(),
     )
     .unwrap()
     .into_build()
@@ -990,33 +889,25 @@ fn publication_diamond() -> build::PreparedBuild {
             node("/p", &leaf, &[]),
         ],
         environment(&["beta", "unused", "alpha"]),
-        Default::default(),
     )
     .unwrap()
     .into_build()
 }
 
 #[test]
-fn diagnostic_preparation_precedes_primary_and_dependent_entry_with_one_shared_byte_budget() {
+fn diagnostic_preparation_precedes_primary_encoding_and_dependent_entry() {
     let mut ports = Ports::new();
     ports.report.diagnostics = true;
-    ports.report.diagnostic_bytes = 4;
-    let primary = b"ID,VALUE\n1,1\n".len();
-    let limits = build::Limits {
-        output_bytes: primary * 2 + 8,
-        report_bytes: 100,
-        ..Default::default()
-    };
     let mut attempt = Attempt::default();
     assert!(prepared()
-        .build_publication_into(ports.borrow(), limits, &mut attempt)
+        .build_into(
+            ports.borrow(),
+            &mut attempt,
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop)
+        )
         .is_ok());
     assert!(attempt.outcome.is_ok());
     assert_eq!(ports.study.reads, 1);
-    assert_eq!(
-        ports.report.diagnostic_capacities,
-        [(primary * 2 + 8, 50), (primary + 4, 50)]
-    );
     let events = ports.activation.trace.borrow();
     let at = |event: &str| events.iter().position(|e| e == event).unwrap();
     assert!(at("diagnostics:/p") < at("encode:RAW"));
@@ -1039,7 +930,11 @@ fn diagnostic_refusal_stops_primary_encoding_and_every_dependent_source() {
     ports.report.diagnostic_failure = true;
     let mut attempt = Attempt::default();
     assert!(prepared()
-        .build_publication_into(ports.borrow(), Default::default(), &mut attempt)
+        .build_into(
+            ports.borrow(),
+            &mut attempt,
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop)
+        )
         .is_err());
     assert_eq!(attempt.nodes.len(), 1);
     assert_eq!(attempt.nodes[0].node, 1);
@@ -1069,7 +964,11 @@ fn failed_execution_diagnostic_refusal_retains_the_original_live_payload() {
     ports.report.diagnostics = true;
     ports.report.diagnostic_failure = true;
     let mut attempt = Attempt::default();
-    prepared().build_into(ports.borrow(), Default::default(), &mut attempt);
+    let _ = prepared().build_into(
+        ports.borrow(),
+        &mut attempt,
+        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+    );
     assert_eq!(attempt.nodes.len(), 1);
     let entered = &attempt.nodes[0];
     let error = entered
@@ -1098,31 +997,6 @@ fn failed_execution_diagnostic_refusal_retains_the_original_live_payload() {
 }
 
 #[test]
-fn diagnostic_accounting_refusal_precedes_the_first_primary_encoder() {
-    let mut ports = Ports::new();
-    ports.report.diagnostics = true;
-    ports.report.diagnostic_bytes = 4;
-    let limits = build::Limits {
-        output_bytes: 3,
-        ..Default::default()
-    };
-    let mut attempt = Attempt::default();
-    prepared().build_into(ports.borrow(), limits, &mut attempt);
-    assert_eq!(attempt.nodes.len(), 1);
-    assert!(matches!(
-        attempt.nodes[0].output,
-        Err(CompleteError::OutputLimit)
-    ));
-    assert_eq!(ports.report.diagnostic_capacities[0].0, 3);
-    assert!(!ports
-        .activation
-        .trace
-        .borrow()
-        .iter()
-        .any(|e| e.starts_with("encode:")));
-}
-
-#[test]
 fn diagnostic_unwind_preserves_entered_execution_and_original_payload() {
     let mut ports = Ports::new();
     ports.report.diagnostics = true;
@@ -1130,7 +1004,11 @@ fn diagnostic_unwind_preserves_entered_execution_and_original_payload() {
     ports.report.diagnostic_unwind = Some(Arc::clone(&original));
     let mut attempt = Attempt::default();
     let error = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        prepared().build_into(ports.borrow(), Default::default(), &mut attempt);
+        let _ = prepared().build_into(
+            ports.borrow(),
+            &mut attempt,
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+        );
     }))
     .unwrap_err();
     assert!(Arc::ptr_eq(
@@ -1225,7 +1103,13 @@ fn actual_build_seals_aliases_and_diamond_order_without_any_build_publication_or
         let mut ports = Ports::new();
         let mut evidence = Attempt::default();
         let held = build
-            .build_publication_into(ports.borrow(), Default::default(), &mut evidence)
+            .build_into(
+                ports.borrow(),
+                &mut evidence,
+                yamaa_core::application_observer::Scope::new(
+                    &yamaa_core::application_observer::Noop,
+                ),
+            )
             .unwrap();
         assert_eq!(ports.study.reads, 1);
         let build_events = ports.activation.trace.borrow().clone();
@@ -1244,7 +1128,7 @@ fn actual_build_seals_aliases_and_diamond_order_without_any_build_publication_or
         let mut publisher = Publication::new();
         let mut saved = Default::default();
         for _ in 0..2 {
-            held.save_into(&mut publisher, Default::default(), &mut saved);
+            held.save_into(&mut publisher, &mut saved);
             assert!(saved.outcome.is_ok());
             assert_eq!(
                 saved
@@ -1267,14 +1151,20 @@ fn every_save_failure_and_interrupt_keeps_original_and_actual_prefix_and_prior_w
             let mut ports = Ports::new();
             let mut evidence = Attempt::default();
             let held = publication_diamond()
-                .build_publication_into(ports.borrow(), Default::default(), &mut evidence)
+                .build_into(
+                    ports.borrow(),
+                    &mut evidence,
+                    yamaa_core::application_observer::Scope::new(
+                        &yamaa_core::application_observer::Noop,
+                    ),
+                )
                 .unwrap();
             let build_events = ports.activation.trace.borrow().clone();
             let mut publisher = Publication::new();
             publisher.failure = Some(failed);
             publisher.interrupt = interrupt;
             let mut saved = Default::default();
-            held.save_into(&mut publisher, Default::default(), &mut saved);
+            held.save_into(&mut publisher, &mut saved);
             let order = [3, 1, 2, 0];
             let position = order.iter().position(|&n| n == failed).unwrap();
             assert_eq!(
@@ -1293,7 +1183,7 @@ fn every_save_failure_and_interrupt_keeps_original_and_actual_prefix_and_prior_w
                 matches!(&saved.outcome,Err(SaveFailure::Publish {node,error}) if *node==failed && Rc::ptr_eq(&error.original,&publisher.original) && error.interrupt==interrupt)
             );
             publisher.failure = None;
-            held.save_into(&mut publisher, Default::default(), &mut saved);
+            held.save_into(&mut publisher, &mut saved);
             assert!(saved.outcome.is_ok());
             assert_eq!(*ports.activation.trace.borrow(), build_events);
             assert!(evidence.outcome.is_ok() && evidence.nodes.len() == 4);
@@ -1306,13 +1196,17 @@ fn save_unwind_and_whole_set_preflight_refusal_preserve_the_actual_evidence_with
     let mut ports = Ports::new();
     let mut evidence = Attempt::default();
     let held = publication_diamond()
-        .build_publication_into(ports.borrow(), Default::default(), &mut evidence)
+        .build_into(
+            ports.borrow(),
+            &mut evidence,
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+        )
         .unwrap();
     let mut publisher = Publication::new();
     publisher.unwind = Some(2);
     let mut saved = Default::default();
     let payload = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        held.save_into(&mut publisher, Default::default(), &mut saved)
+        held.save_into(&mut publisher, &mut saved)
     }))
     .unwrap_err();
     assert!(Arc::ptr_eq(
@@ -1331,7 +1225,7 @@ fn save_unwind_and_whole_set_preflight_refusal_preserve_the_actual_evidence_with
     assert_eq!(publisher.writes, [3, 1]);
     publisher.calls.clear();
     publisher.preflight_failure = true;
-    held.save_into(&mut publisher, Default::default(), &mut saved);
+    held.save_into(&mut publisher, &mut saved);
     assert!(saved.entered.is_empty());
     assert_eq!(publisher.calls, ["preflight"]);
     assert!(
@@ -1339,54 +1233,22 @@ fn save_unwind_and_whole_set_preflight_refusal_preserve_the_actual_evidence_with
     );
 }
 #[test]
-fn cumulative_save_quotas_and_failed_actual_build_never_cross_publication_ports() {
-    use yamaa_core::producer_publication::{Failure as SaveFailure, Limits as SaveLimits};
+fn failed_actual_build_discards_forged_caller_success_before_publication() {
     let build = publication_diamond();
     let mut ports = Ports::new();
     let mut evidence = Attempt::default();
-    let held = build
-        .build_publication_into(ports.borrow(), Default::default(), &mut evidence)
-        .unwrap();
-    for limits in [
-        SaveLimits {
-            nodes: 3,
-            ..Default::default()
-        },
-        SaveLimits {
-            path_bytes: 47,
-            ..Default::default()
-        },
-        SaveLimits {
-            artifact_bytes: 51,
-            ..Default::default()
-        },
-        SaveLimits {
-            work: 3,
-            ..Default::default()
-        },
-    ] {
-        let mut publisher = Publication::new();
-        let mut saved = Default::default();
-        held.save_into(&mut publisher, limits, &mut saved);
-        assert!(publisher.calls.is_empty() && saved.entered.is_empty());
-        assert!(matches!(saved.outcome, Err(SaveFailure::Limit(_))));
-    }
     // Forged caller success is discarded on actual failed activation.
     ports.activation.mode = Mode::Lock;
     evidence.outcome = Ok(());
     assert!(build
-        .build_publication_into(ports.borrow(), Default::default(), &mut evidence)
+        .build_into(
+            ports.borrow(),
+            &mut evidence,
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop)
+        )
         .is_err());
     assert!(evidence.nodes.is_empty());
     assert!(matches!(evidence.outcome, Err(Failure::Activation(_))));
-    ports.activation.mode = Mode::Pass;
-    let mut limits = build::Limits::default();
-    limits.publication.artifact_bytes = 51;
-    assert!(matches!(
-        build.build_publication_into(ports.borrow(), limits, &mut evidence),
-        Err("producer_publication_bytes")
-    ));
-    assert!(evidence.outcome.is_ok() && evidence.nodes.len() == 4);
 }
 
 #[test]
@@ -1394,7 +1256,11 @@ fn whole_union_activates_before_study_and_two_aliases_ingest_one_producer_artifa
     let build = prepared();
     let mut ports = Ports::new();
     let mut attempt = Attempt::default();
-    build.build_into(ports.borrow(), Default::default(), &mut attempt);
+    let _ = build.build_into(
+        ports.borrow(),
+        &mut attempt,
+        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+    );
     assert!(attempt.outcome.is_ok());
     assert_eq!(ports.study.reads, 1);
     assert_eq!(
@@ -1457,8 +1323,16 @@ fn each_build_repeats_every_gate_and_old_attempt_evidence_stays_independent() {
     let mut ports = Ports::new();
     let mut first = Attempt::default();
     let mut second = Attempt::default();
-    build.build_into(ports.borrow(), Default::default(), &mut first);
-    build.build_into(ports.borrow(), Default::default(), &mut second);
+    let _ = build.build_into(
+        ports.borrow(),
+        &mut first,
+        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+    );
+    let _ = build.build_into(
+        ports.borrow(),
+        &mut second,
+        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+    );
     assert!(first.outcome.is_ok() && second.outcome.is_ok());
     assert_eq!(ports.study.reads, 2);
     assert_eq!(
@@ -1472,7 +1346,11 @@ fn each_build_repeats_every_gate_and_old_attempt_evidence_stays_independent() {
         2
     );
     ports.activation.mode = Mode::Lock;
-    build.build_into(ports.borrow(), Default::default(), &mut second);
+    let _ = build.build_into(
+        ports.borrow(),
+        &mut second,
+        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+    );
     assert!(second.nodes.is_empty());
     assert_eq!(first.nodes.len(), 2);
     assert!(matches!(
@@ -1489,7 +1367,11 @@ fn lock_binding_and_case_interrupts_keep_original_failure_and_zero_study_authori
         let mut ports = Ports::new();
         ports.activation.mode = mode;
         let mut attempt = Attempt::default();
-        build.build_into(ports.borrow(), Default::default(), &mut attempt);
+        let _ = build.build_into(
+            ports.borrow(),
+            &mut attempt,
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+        );
         assert!(attempt.nodes.is_empty());
         assert_eq!(ports.study.reads, 0);
         assert!(!ports
@@ -1541,7 +1423,11 @@ fn producer_and_consumer_failures_keep_entered_prefix_and_original_payload_witho
         let mut ports = Ports::new();
         ports.activation.mode = mode;
         let mut attempt = Attempt::default();
-        build.build_into(ports.borrow(), Default::default(), &mut attempt);
+        let _ = build.build_into(
+            ports.borrow(),
+            &mut attempt,
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+        );
         assert!(matches!(attempt.outcome, Err(Failure::Node { .. })));
         assert_eq!(attempt.nodes.len(), nodes);
         let last = attempt.nodes.last().unwrap();
@@ -1597,7 +1483,11 @@ fn source_decode_report_and_codec_failures_stop_dependents_and_retain_exact_stag
             _ => ports.codec.failure = true,
         }
         let mut attempt = Attempt::default();
-        build.build_into(ports.borrow(), Default::default(), &mut attempt);
+        let _ = build.build_into(
+            ports.borrow(),
+            &mut attempt,
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+        );
         assert_eq!(attempt.nodes.len(), 1);
         let node = &attempt.nodes[0];
         assert!(matches!(attempt.outcome, Err(Failure::Node { node: 1 })));
@@ -1638,44 +1528,6 @@ fn source_decode_report_and_codec_failures_stop_dependents_and_retain_exact_stag
 }
 
 #[test]
-fn routing_admission_before_capture_leaves_both_acquisition_branches_unentered() {
-    let build = prepared();
-    let mut ports = Ports::new();
-    let mut attempt = Attempt::default();
-    let limits = build::Limits {
-        // Both generated-source inspections finish, then the first capture's
-        // routing lookup refuses before borrowing bytes or entering study.
-        routing_work: 5,
-        ..Default::default()
-    };
-    build.build_into(ports.borrow(), limits, &mut attempt);
-    assert!(matches!(attempt.outcome, Err(Failure::Node { node: 0 })));
-    assert_eq!(attempt.nodes.len(), 2);
-    let consumer = &attempt.nodes[1].dataset;
-    assert!(matches!(
-        consumer.result,
-        Err(PortError::Capture(CaptureError::Limit(
-            "producer_routing_work"
-        )))
-    ));
-    assert_eq!(consumer.sources.len(), 1);
-    let source = &consumer.sources[0];
-    assert_eq!(source.read.origin, None);
-    assert!(!source.read.captured && source.snapshot.is_none() && source.table.is_none());
-    assert_eq!(ports.study.reads, 1);
-    assert_eq!(
-        ports
-            .study
-            .trace
-            .borrow()
-            .iter()
-            .filter(|event| event.starts_with("capture:"))
-            .count(),
-        1
-    );
-}
-
-#[test]
 fn study_capture_unwind_retains_resource_entry_without_inventing_a_completed_snapshot() {
     let build = prepared();
     let mut ports = Ports::new();
@@ -1683,7 +1535,11 @@ fn study_capture_unwind_retains_resource_entry_without_inventing_a_completed_sna
     ports.study.unwind = Some(Arc::clone(&payload));
     let mut attempt = Attempt::default();
     let error = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        build.build_into(ports.borrow(), Default::default(), &mut attempt);
+        let _ = build.build_into(
+            ports.borrow(),
+            &mut attempt,
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+        );
     }))
     .unwrap_err();
     assert!(Arc::ptr_eq(
@@ -1703,64 +1559,20 @@ fn study_capture_unwind_retains_resource_entry_without_inventing_a_completed_sna
 }
 
 #[test]
-fn graph_quotas_precede_ports_or_keep_the_honest_node_prefix_and_count_alias_reingestion() {
-    let build = prepared();
-    for resource in ["nodes", "functions", "source", "output", "routing", "cells"] {
-        let mut limits = build::Limits::default();
-        match resource {
-            "nodes" => limits.nodes = 1,
-            "functions" => limits.activation.functions = 1,
-            "source" => limits.source_bytes = b"ID,VALUE\n1,1\n".len() * 2,
-            "output" => limits.output_bytes = b"ID,VALUE\n1,1\n".len(),
-            "routing" => limits.routing_work = 0,
-            _ => limits.source_cells = 0,
-        }
-        let mut ports = Ports::new();
-        let mut attempt = Attempt::default();
-        build.build_into(ports.borrow(), limits, &mut attempt);
-        assert!(attempt.outcome.is_err());
-        if matches!(resource, "nodes" | "functions") {
-            assert!(ports.activation.trace.borrow().is_empty());
-            assert!(attempt.nodes.is_empty());
-        } else if resource == "cells" {
-            assert_eq!(attempt.nodes.len(), 1);
-            assert_eq!(ports.study.reads, 1);
-            assert!(!ports
-                .activation
-                .trace
-                .borrow()
-                .iter()
-                .any(|s| s == "invoke:beta:1"));
-        } else {
-            assert_eq!(attempt.nodes.len(), 2);
-            assert_eq!(ports.study.reads, 1);
-            assert!(attempt.nodes[0]
-                .output
-                .as_ref()
-                .unwrap()
-                .as_ref()
-                .unwrap()
-                .artifact()
-                .is_some());
-            if resource == "source" {
-                assert_eq!(attempt.nodes[1].dataset.sources.len(), 2);
-                assert!(attempt.nodes[1].dataset.sources[0].snapshot.is_some());
-                assert!(attempt.nodes[1].dataset.sources[1].snapshot.is_none());
-            }
-        }
-    }
-}
-
-#[test]
 fn caller_owned_attempt_survives_original_host_unwind_with_incomplete_entered_node() {
     let build = prepared();
     let mut ports = Ports::new();
     ports.activation.mode = Mode::Unwind;
     let mut attempt = Attempt::default();
     let error = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        build.build_into(ports.borrow(), Default::default(), &mut attempt)
+        build.build_into(
+            ports.borrow(),
+            &mut attempt,
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+        )
     }))
-    .unwrap_err();
+    .err()
+    .expect("the original callback panic must propagate");
     assert!(Arc::ptr_eq(
         error.downcast_ref::<Arc<()>>().unwrap(),
         &ports.activation.unwind
@@ -1772,41 +1584,6 @@ fn caller_owned_attempt_survives_original_host_unwind_with_incomplete_entered_no
     assert_eq!(attempt.activation.bindings.len(), 2);
 }
 
-impl yamaa_core::producer_build::DecodePort for Decoder {
-    fn usage(&self) -> Option<build::DecodeUsage> {
-        self.used
-    }
-    fn decode_bounded(
-        &mut self,
-        source: &SourceDeclaration,
-        bytes: &[u8],
-        _contract: Option<&yamaa_core::producer_contract::Contract>,
-        limits: yamaa_core::producer_build::DecodeLimits,
-    ) -> Result<Table, build::DecodeError<Self::Error>> {
-        if limits.cells < 2 || bytes.len() > limits.storage_bytes || bytes.len() > limits.work_bytes
-        {
-            return Err(build::DecodeError::Codec("original bounded codec refusal"));
-        }
-        // This codec's modeled charges are the admitted input bytes themselves.
-        self.used = Some(build::DecodeUsage {
-            storage_bytes: bytes.len(),
-            work_bytes: bytes.len(),
-        });
-        self.decode(source, bytes)
-            .map_err(build::DecodeError::Codec)
-    }
-    fn decode_bounded_interpreted(
-        &mut self,
-        source: &SourceDeclaration,
-        bytes: &[u8],
-        contract: Option<&yamaa_core::producer_contract::Contract>,
-        limits: yamaa_core::producer_build::DecodeLimits,
-        _interpretation: yamaa_core::specification::SourceInterpretation,
-    ) -> Result<Table, build::DecodeError<Self::Error>> {
-        self.decode_bounded(source, bytes, contract, limits)
-    }
-}
-
 #[test]
 fn producer_schema_mismatch_keeps_portable_diagnostics_before_consumer_cardinality_or_cell_observation(
 ) {
@@ -1815,7 +1592,11 @@ fn producer_schema_mismatch_keeps_portable_diagnostics_before_consumer_cardinali
         let mut ports = Ports::new();
         ports.decoder.schema_case = schema_case;
         let mut attempt = Attempt::default();
-        build.build_into(ports.borrow(), Default::default(), &mut attempt);
+        let _ = build.build_into(
+            ports.borrow(),
+            &mut attempt,
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+        );
         assert!(matches!(attempt.outcome, Err(Failure::Node { node: 0 })));
         assert_eq!(ports.decoder.cardinality.get(), 0);
         assert_eq!(ports.decoder.cells.get(), 0);
@@ -1852,167 +1633,66 @@ fn producer_schema_mismatch_keeps_portable_diagnostics_before_consumer_cardinali
             .all(|s| s.table.is_none() && s.snapshot.is_some()));
     }
 }
-#[test]
-fn alias_cells_and_codec_storage_and_work_are_reserved_before_decoded_table_ownership() {
-    let build = prepared();
-    for mode in 0..4 {
-        let mut ports = Ports::new();
-        let mut limits = build::Limits::default();
-        match mode {
-            0 => limits.source_cells = 5,
-            1 => limits.source_storage_bytes = 0,
-            2 => limits.decode_work_bytes = 0,
-            _ => limits.routing_work = 7,
-        }
-        let mut attempt = Attempt::default();
-        build.build_into(ports.borrow(), limits, &mut attempt);
-        assert!(attempt.outcome.is_err());
-        let entered = attempt.nodes.last().unwrap();
-        assert!(entered.dataset.sources.last().unwrap().table.is_none());
-        if mode == 0 {
-            assert_eq!(attempt.nodes.len(), 2);
-            assert!(entered.dataset.sources[0].table.is_some());
-            assert!(!ports
-                .activation
-                .trace
-                .borrow()
-                .iter()
-                .any(|s| s == "decode:SECOND"));
-        } else if mode == 3 {
-            assert_eq!(attempt.nodes.len(), 2);
-            assert!(entered.dataset.sources[0].snapshot.is_some());
-            assert_eq!(entered.dataset.sources.len(), 1);
-            assert!(entered.dataset.sources.iter().all(|s| s.table.is_none()));
-            assert!(!ports
-                .activation
-                .trace
-                .borrow()
-                .iter()
-                .any(|s| s == "decode:FIRST"));
-            let Err(PortError::Run(yamaa_core::specification_run::RunError::Sources(errors))) =
-                &entered.dataset.result
-            else {
-                panic!("original bounded decoder refusal")
-            };
-            assert_eq!(errors.len(), 1);
-            assert!(matches!(
-                errors[0],
-                (0, build::DecodeError::Limit("producer_routing_work"))
-            ));
-        } else {
-            assert_eq!(attempt.nodes.len(), 1);
-        }
-    }
-}
 
 #[test]
-fn actual_graph_has_one_work_ceiling_and_input_slot_reservations_at_exact_boundaries() {
-    // Each admitted one-row node costs six key-construction units, three
-    // function/value units and two output-key scans: eleven per entered node.
+fn aliases_reingest_the_held_producer_without_repeating_study_authority() {
     let prepared = prepared();
-    for (work, rows, accepted) in [(22, 3, true), (21, 3, false), (22, 2, false)] {
-        let mut ports = Ports::new();
-        let mut attempt = Attempt::default();
-        let mut limits = build::Limits::default();
-        limits.execution.work_cells = work;
-        limits.execution.source_rows = rows;
-        prepared.build_into(ports.borrow(), limits, &mut attempt);
-        assert_eq!(attempt.outcome.is_ok(), accepted);
-        assert_eq!(ports.study.reads, 1);
-        let trace = ports.activation.trace.borrow();
-        assert_eq!(
-            &trace[..7],
-            [
-                "lock",
-                "bind:beta",
-                "bind:alpha",
-                "invoke:beta:7",
-                "invoke:beta:-9223372036854775808",
-                "invoke:alpha:7",
-                "invoke:alpha:-9223372036854775808"
-            ]
-        );
-        if rows == 2 {
-            // The pooled rows ceiling refuses the producer's second source at
-            // decode time after both nodes are entered.
-            assert_eq!(attempt.nodes.len(), 2);
-            assert_eq!(attempt.nodes[0].node, 1);
-            let producer = attempt.nodes.iter().find(|node| node.node == 0).unwrap();
-            let Err(PortError::Run(yamaa_core::specification_run::RunError::Sources(errors))) =
-                &producer.dataset.result
-            else {
-                panic!("pooled rows ceiling refusal")
-            };
-            assert!(matches!(
-                errors.as_slice(),
-                [(
-                    1,
-                    build::DecodeError::ResourceLimit {
-                        resource: "rows",
-                        limit: 2,
-                        actual: Some(3)
-                    }
-                )]
-            ));
-            assert_eq!(ports.decoder.cells.get(), 0);
-        } else {
-            assert_eq!(attempt.nodes.len(), 2);
-            assert!(attempt.nodes[0]
-                .dataset
-                .result
-                .as_ref()
-                .unwrap()
-                .result
-                .is_ok());
-            assert!(attempt.nodes[0]
-                .output
-                .as_ref()
-                .unwrap()
-                .as_ref()
-                .unwrap()
-                .artifact()
-                .is_some());
-            for source in &attempt.nodes[1].dataset.sources {
-                assert_eq!(source.read.snapshots_created, Some(0));
-            }
-            assert!(trace.iter().any(|e| e == "invoke:beta:1"));
-            assert!(trace.iter().any(|e| e == "invoke:alpha:1"));
-            if work == 21 {
-                assert!(matches!(
-                    attempt.nodes[1]
-                        .dataset
-                        .result
-                        .as_ref()
-                        .unwrap()
-                        .result
-                        .as_ref()
-                        .map_err(|e| &**e),
-                    Err(ExecutionError::Limit {
-                        resource: yamaa_core::dataset::Resource::WorkCells,
-                        limit: 21,
-                        required: Some(22)
-                    })
-                ));
-                assert!(!trace.iter().any(|e| e == "encode:FIRST"));
-            } else {
-                assert!(attempt.nodes[1]
-                    .dataset
-                    .result
-                    .as_ref()
-                    .unwrap()
-                    .result
-                    .is_ok());
-                assert!(trace.iter().any(|e| e == "encode:FIRST"));
-            }
-        }
+    let mut ports = Ports::new();
+    let mut attempt = Attempt::default();
+    let _ = prepared.build_into(
+        ports.borrow(),
+        &mut attempt,
+        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+    );
+    assert!(attempt.outcome.is_ok());
+    assert_eq!(ports.study.reads, 1);
+    assert_eq!(attempt.nodes.len(), 2);
+    let trace = ports.activation.trace.borrow();
+    assert_eq!(
+        &trace[..7],
+        [
+            "lock",
+            "bind:beta",
+            "bind:alpha",
+            "invoke:beta:7",
+            "invoke:beta:-9223372036854775808",
+            "invoke:alpha:7",
+            "invoke:alpha:-9223372036854775808"
+        ]
+    );
+    assert!(attempt.nodes[0]
+        .dataset
+        .result
+        .as_ref()
+        .unwrap()
+        .result
+        .is_ok());
+    assert!(attempt.nodes[0]
+        .output
+        .as_ref()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .artifact()
+        .is_some());
+    for source in &attempt.nodes[1].dataset.sources {
+        assert_eq!(source.read.snapshots_created, Some(0));
     }
+    assert!(trace.iter().any(|event| event == "invoke:beta:1"));
+    assert!(trace.iter().any(|event| event == "invoke:alpha:1"));
+    assert!(attempt.nodes[1]
+        .dataset
+        .result
+        .as_ref()
+        .unwrap()
+        .result
+        .is_ok());
+    assert!(trace.iter().any(|event| event == "encode:FIRST"));
 }
 
 #[test]
-fn owned_column_weighted_output_cells_keep_the_completed_producer_at_the_exact_boundary() {
-    use yamaa_core::schema::{
-        Document, DocumentNode as N, SpecificationDocument, ValidationBudget,
-    };
+fn owned_columns_and_serialized_projection_keep_independent_shapes_across_nodes() {
+    use yamaa_core::schema::{Document, DocumentNode as N, SpecificationDocument};
     fn append(nodes: &mut Vec<N>, node: N) -> usize {
         let index = nodes.len();
         nodes.push(node);
@@ -2061,10 +1741,9 @@ fn owned_column_weighted_output_cells_keep_the_completed_producer_at_the_exact_b
             plan: &PreparedSpecification,
             dataset: &Dataset,
             projection: &[usize],
-            maximum: usize,
         ) -> Result<Vec<u8>, Self::Error> {
             if plan.source().name == "RAW" {
-                return self.0.encode(plan, dataset, projection, maximum);
+                return self.0.encode(plan, dataset, projection);
             }
             assert_eq!(projection, [0, 1, 2]);
             assert_eq!(dataset.row_count(), 2);
@@ -2075,7 +1754,6 @@ fn owned_column_weighted_output_cells_keep_the_completed_producer_at_the_exact_b
             }
             self.0.trace.borrow_mut().push("encode:FIRST".into());
             let bytes = b"ID,VALUE,ROW\n1,1,1\n1,1,2\n";
-            assert!(bytes.len() <= maximum);
             Ok(bytes.to_vec())
         }
     }
@@ -2142,12 +1820,9 @@ fn owned_column_weighted_output_cells_keep_the_completed_producer_at_the_exact_b
     root.push((rows_name, rows));
     let mut ordered_nodes = Vec::new();
     let root = ordered(&nodes, document.root(), &mut ordered_nodes);
-    let root = SpecificationDocument::admit(
-        Document::new(ordered_nodes, root, Default::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap();
+    let root = SpecificationDocument::admit(Document::new(ordered_nodes, root).unwrap())
+        .unwrap()
+        .unwrap();
     let producer = support::document(&[("RAW", None)], Some("beta"));
     let links = [
         candidate("/root", "FIRST", "/p", &producer),
@@ -2157,7 +1832,6 @@ fn owned_column_weighted_output_cells_keep_the_completed_producer_at_the_exact_b
         "/root",
         &[node("/root", &root, &links), node("/p", &producer, &[])],
         environment(&["beta", "unused", "alpha"]),
-        Default::default(),
     )
     .unwrap()
     .into_build();
@@ -2168,166 +1842,140 @@ fn owned_column_weighted_output_cells_keep_the_completed_producer_at_the_exact_b
             .collect::<Vec<_>>(),
         [("/root", 4), ("/p", 2)]
     );
-    // The root owns four columns, while its serialized projection keeps three.
-    // The pooled budget charges actual output cells: the producer uses 2 and
-    // the root 8, so a total of 10 completes and 9 refuses at the root node.
-    for (cells, accepted, root_calls) in [(10, true, 2), (9, false, 0)] {
-        let mut ports = Ports::new();
-        let mut codec = RootCodec(Codec {
-            trace: Rc::clone(&ports.codec.trace),
-            failure: false,
-        });
-        let mut attempt =
-            build::BuildAttempt::<Activation, Study, Decoder, Report, RootCodec>::default();
-        let mut limits = build::Limits::default();
-        limits.execution.output_cells = cells;
-        prepared.build_into(
-            build::Ports {
-                activation: &mut ports.activation,
-                study: &mut ports.study,
-                decoder: &mut ports.decoder,
-                report: &mut ports.report,
-                codec: &mut codec,
-            },
-            limits,
-            &mut attempt,
-        );
-        assert_eq!(
-            attempt.outcome.is_ok(),
-            accepted,
-            "outcome={:?}, dataset={:?}",
-            attempt.outcome,
-            attempt
-                .nodes
-                .last()
-                .map(|node| node.dataset.result.as_ref().map(|run| &run.result))
-        );
-        assert_eq!(ports.study.reads, 1);
-        assert_eq!(attempt.nodes.len(), 2);
-        let producer = &attempt.nodes[0];
-        assert_eq!(producer.node, 1);
-        let execution = producer
-            .dataset
-            .result
+    // Runtime columns and the serialized projection remain distinct.
+
+    let mut ports = Ports::new();
+    let mut codec = RootCodec(Codec {
+        trace: Rc::clone(&ports.codec.trace),
+        failure: false,
+    });
+    let mut attempt =
+        build::BuildAttempt::<Activation, Study, Decoder, Report, RootCodec>::default();
+    let _ = prepared.build_into(
+        build::Ports {
+            activation: &mut ports.activation,
+            study: &mut ports.study,
+            decoder: &mut ports.decoder,
+            report: &mut ports.report,
+            codec: &mut codec,
+        },
+        &mut attempt,
+        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+    );
+    assert_eq!(
+        attempt.outcome.is_ok(),
+        true,
+        "outcome={:?}, dataset={:?}",
+        attempt.outcome,
+        attempt
+            .nodes
+            .last()
+            .map(|node| node.dataset.result.as_ref().map(|run| &run.result))
+    );
+    assert_eq!(ports.study.reads, 1);
+    assert_eq!(attempt.nodes.len(), 2);
+    let producer = &attempt.nodes[0];
+    assert_eq!(producer.node, 1);
+    let execution = producer
+        .dataset
+        .result
+        .as_ref()
+        .unwrap()
+        .result
+        .as_ref()
+        .unwrap();
+    assert_eq!(execution.dataset.row_count(), 1);
+    assert_eq!(execution.dataset.schema().columns().len(), 2);
+    assert_eq!(execution.dataset.cell(0, 1).unwrap(), ValueRef::Int(1));
+    assert_eq!(
+        producer
+            .output
             .as_ref()
             .unwrap()
-            .result
             .as_ref()
-            .unwrap();
-        assert_eq!(execution.dataset.row_count(), 1);
-        assert_eq!(execution.dataset.schema().columns().len(), 2);
-        assert_eq!(execution.dataset.cell(0, 1).unwrap(), ValueRef::Int(1));
-        assert_eq!(
-            producer
-                .output
-                .as_ref()
-                .unwrap()
-                .as_ref()
-                .unwrap()
-                .artifact()
-                .unwrap()
-                .bytes(),
-            b"ID,VALUE\n1,1\n"
-        );
-        let root = &attempt.nodes[1];
-        assert_eq!(root.node, 0);
-        assert!(root.dataset.sources.iter().all(|source| {
-            source.read.captured
-                && source.read.snapshots_created == Some(0)
-                && source.snapshot.is_some()
-                && source.table.is_some()
-        }));
-        let trace = ports.activation.trace.borrow();
-        assert_eq!(
-            trace
-                .iter()
-                .filter(|event| *event == "invoke:beta:1")
-                .count(),
-            1
-        );
-        assert_eq!(
-            trace
-                .iter()
-                .filter(|event| *event == "invoke:alpha:1")
-                .count(),
-            root_calls
-        );
-        assert_eq!(
-            trace.iter().filter(|event| *event == "encode:RAW").count(),
-            1
-        );
-        if accepted {
-            let execution = root
-                .dataset
-                .result
-                .as_ref()
-                .unwrap()
-                .result
-                .as_ref()
-                .unwrap();
-            assert_eq!(execution.dataset.row_count(), 2);
-            assert_eq!(execution.dataset.schema().columns().len(), 4);
-            assert_eq!(execution.dataset.cell(0, 2).unwrap(), ValueRef::Int(1));
-            assert_eq!(execution.dataset.cell(1, 2).unwrap(), ValueRef::Int(2));
-            assert!(root
-                .output
-                .as_ref()
-                .unwrap()
-                .as_ref()
-                .unwrap()
-                .artifact()
-                .is_some());
-            assert_eq!(
-                trace
-                    .iter()
-                    .filter(|event| *event == "encode:FIRST")
-                    .count(),
-                1
-            );
-        } else {
-            assert!(matches!(attempt.outcome, Err(Failure::Node { node: 0 })));
-            assert!(matches!(
-                root.dataset
-                    .result
-                    .as_ref()
-                    .unwrap()
-                    .result
-                    .as_ref()
-                    .map_err(|error| &**error),
-                Err(ExecutionError::Limit { .. })
-            ));
-            assert!(root.output.as_ref().unwrap().is_none());
-            assert!(!trace
-                .iter()
-                .any(|event| event == "report:/root" || event == "encode:FIRST"));
-        }
-    }
+            .unwrap()
+            .artifact()
+            .unwrap()
+            .bytes(),
+        b"ID,VALUE\n1,1\n"
+    );
+    let root = &attempt.nodes[1];
+    assert_eq!(root.node, 0);
+    assert!(root.dataset.sources.iter().all(|source| {
+        source.read.captured
+            && source.read.snapshots_created == Some(0)
+            && source.snapshot.is_some()
+            && source.table.is_some()
+    }));
+    let trace = ports.activation.trace.borrow();
+    assert_eq!(
+        trace
+            .iter()
+            .filter(|event| *event == "invoke:beta:1")
+            .count(),
+        1
+    );
+    assert_eq!(
+        trace
+            .iter()
+            .filter(|event| *event == "invoke:alpha:1")
+            .count(),
+        2
+    );
+    assert_eq!(
+        trace.iter().filter(|event| *event == "encode:RAW").count(),
+        1
+    );
+
+    let execution = root
+        .dataset
+        .result
+        .as_ref()
+        .unwrap()
+        .result
+        .as_ref()
+        .unwrap();
+    assert_eq!(execution.dataset.row_count(), 2);
+    assert_eq!(execution.dataset.schema().columns().len(), 4);
+    assert_eq!(execution.dataset.cell(0, 2).unwrap(), ValueRef::Int(1));
+    assert_eq!(execution.dataset.cell(1, 2).unwrap(), ValueRef::Int(2));
+    assert!(root
+        .output
+        .as_ref()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .artifact()
+        .is_some());
+    assert_eq!(
+        trace
+            .iter()
+            .filter(|event| *event == "encode:FIRST")
+            .count(),
+        1
+    );
 }
 
 struct PoolDecoder {
     inner: Decoder,
     raw_rows: usize,
     consumer_rows: usize,
-    known: bool,
-    used: Option<build::DecodeUsage>,
-    admitted: Vec<build::DecodeLimits>,
 }
 impl SourceDecoder for PoolDecoder {
     fn continue_after(&self, _error: &Self::Error) -> bool {
         false
     }
-    fn decode_with_interpretation(
+
+    type Error = &'static str;
+    type Table = Table;
+    fn decode(
         &mut self,
         source: &SourceDeclaration,
         bytes: &[u8],
-        _interpretation: yamaa_core::specification::SourceInterpretation,
-    ) -> Result<Self::Table, Self::Error> {
-        self.decode(source, bytes)
-    }
-    type Error = &'static str;
-    type Table = Table;
-    fn decode(&mut self, source: &SourceDeclaration, bytes: &[u8]) -> Result<Table, Self::Error> {
-        let mut table = self.inner.decode(source, bytes)?;
+        interpretation: yamaa_core::specification::SourceInterpretation,
+        contract: Option<&yamaa_core::producer_contract::Contract>,
+    ) -> Result<Table, Self::Error> {
+        let mut table = self.inner.decode(source, bytes, interpretation, contract)?;
         let rows = if source.name == "RAW" {
             self.raw_rows
         } else {
@@ -2337,51 +1985,7 @@ impl SourceDecoder for PoolDecoder {
         Ok(table)
     }
 }
-impl build::DecodePort for PoolDecoder {
-    fn decode_bounded_interpreted(
-        &mut self,
-        source: &SourceDeclaration,
-        bytes: &[u8],
-        contract: Option<&yamaa_core::producer_contract::Contract>,
-        limits: build::DecodeLimits,
-        _interpretation: yamaa_core::specification::SourceInterpretation,
-    ) -> Result<Table, build::DecodeError<Self::Error>> {
-        self.decode_bounded(source, bytes, contract, limits)
-    }
-    fn usage(&self) -> Option<build::DecodeUsage> {
-        self.used
-    }
-    fn decode_bounded(
-        &mut self,
-        source: &SourceDeclaration,
-        bytes: &[u8],
-        _: Option<&yamaa_core::producer_contract::Contract>,
-        limits: build::DecodeLimits,
-    ) -> Result<Table, build::DecodeError<Self::Error>> {
-        self.admitted.push(limits);
-        self.used = None;
-        let rows = if source.name == "RAW" {
-            self.raw_rows
-        } else {
-            self.consumer_rows
-        };
-        // This synthetic compact codec stores two fixed Value slots per record.
-        // Admit its actual modeled slots before expanding the held table.
-        let storage = rows * 2 * std::mem::size_of::<Value>();
-        if storage > limits.storage_bytes || bytes.len() > limits.work_bytes {
-            self.used = self.known.then_some(build::DecodeUsage::default());
-            return Err(build::DecodeError::Codec("original bounded codec refusal"));
-        }
-        let table = self
-            .decode(source, bytes)
-            .map_err(build::DecodeError::Codec)?;
-        self.used = self.known.then_some(build::DecodeUsage {
-            storage_bytes: storage,
-            work_bytes: bytes.len(),
-        });
-        Ok(table)
-    }
-}
+
 fn uneven_prepared() -> build::PreparedBuild {
     let producer = support::grouped_document(&[("RAW", None)]);
     let root = document(&[("FIRST", Some("/p"))], None);
@@ -2390,95 +1994,52 @@ fn uneven_prepared() -> build::PreparedBuild {
         "/root",
         &[node("/root", &root, &links), node("/p", &producer, &[])],
         environment(&[]),
-        Default::default(),
     )
     .unwrap()
     .into_build()
 }
 #[test]
-fn native_uneven_graph_uses_actual_row_and_decoder_pools_without_grant_multiplication() {
-    for (rows, consumer_rows, cells, known, accepted) in [
-        (10, 1, 16, true, true),
-        (8, 1, 16, true, true),
-        (7, 1, 16, true, false),
-        (10, 4, 24, true, false),
-        (10, 1, 15, true, false),
-        (10, 1, 16, false, false),
-    ] {
-        let mut ports = Ports::new();
-        let mut decoder = PoolDecoder {
-            inner: ports.decoder,
-            raw_rows: 7,
-            consumer_rows,
-            known,
-            used: None,
-            admitted: Vec::new(),
-        };
-        let mut limits = build::Limits::default();
-        limits.execution.source_rows = rows;
-        limits.source_cells = cells;
-        limits.execution.output_rows = 2;
-        limits.execution.output_cells = 4;
-        limits.source_storage_bytes = 32 * std::mem::size_of::<Value>();
-        limits.decode_work_bytes = 2 * b"ID,VALUE\n1,1\n".len();
-        let mut attempt =
-            build::BuildAttempt::<Activation, Study, PoolDecoder, Report, Codec>::default();
-        uneven_prepared().build_into(
-            build::Ports {
-                activation: &mut ports.activation,
-                study: &mut ports.study,
-                decoder: &mut decoder,
-                report: &mut ports.report,
-                codec: &mut ports.codec,
-            },
-            limits,
-            &mut attempt,
-        );
-        assert_eq!(
-            attempt.outcome.is_ok(),
-            accepted,
-            "rows={rows} known={known}: {:?}",
-            attempt.outcome
-        );
-        if accepted {
-            assert_eq!(attempt.nodes.len(), 2);
-            assert_eq!(decoder.admitted[0].rows, rows);
-            assert_eq!(decoder.admitted[1].rows, rows - 7);
-            assert_eq!(
-                decoder.admitted[1].storage_bytes,
-                18 * std::mem::size_of::<Value>()
-            );
-            assert_eq!(decoder.admitted[1].work_bytes, b"ID,VALUE\n1,1\n".len());
-        } else if known {
-            let Err(PortError::Run(yamaa_core::specification_run::RunError::Sources(errors))) =
-                &attempt.nodes[1].dataset.result
-            else {
-                panic!("pooled cumulative source overflow")
-            };
-            if cells == 15 {
-                assert!(matches!(
-                    errors.as_slice(),
-                    [(
-                        0,
-                        build::DecodeError::ResourceLimit {
-                            resource: "cells",
-                            limit: 15,
-                            actual: Some(16)
-                        }
-                    )]
-                ));
-            } else {
-                assert!(
-                    matches!(errors.as_slice(), [(0, build::DecodeError::ResourceLimit { resource: "rows", limit, actual: Some(actual) })] if *limit == rows && *actual == 7 + consumer_rows)
-                );
-            }
-            assert_eq!(decoder.inner.cells.get(), 0);
-        } else {
-            assert_eq!(decoder.admitted[1].storage_bytes, 0);
-            assert_eq!(decoder.admitted[1].work_bytes, 0);
-        }
-        assert_eq!(ports.study.reads, 1);
-    }
+fn uneven_graph_tables_keep_independent_row_counts_and_one_study_capture() {
+    let mut ports = Ports::new();
+    let mut decoder = PoolDecoder {
+        inner: ports.decoder,
+        raw_rows: 7,
+        consumer_rows: 1,
+    };
+    let mut attempt =
+        build::BuildAttempt::<Activation, Study, PoolDecoder, Report, Codec>::default();
+    let _ = uneven_prepared().build_into(
+        build::Ports {
+            activation: &mut ports.activation,
+            study: &mut ports.study,
+            decoder: &mut decoder,
+            report: &mut ports.report,
+            codec: &mut ports.codec,
+        },
+        &mut attempt,
+        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
+    );
+    assert!(attempt.outcome.is_ok(), "{:?}", attempt.outcome);
+    assert_eq!(attempt.nodes.len(), 2);
+    assert_eq!(
+        attempt.nodes[0].dataset.sources[0]
+            .table
+            .as_ref()
+            .unwrap()
+            .rows
+            .len(),
+        7
+    );
+    assert_eq!(
+        attempt.nodes[1].dataset.sources[0]
+            .table
+            .as_ref()
+            .unwrap()
+            .rows
+            .len(),
+        1
+    );
+    assert_eq!(ports.study.reads, 1);
 }
 
 struct PrefixStudy(usize);
@@ -2496,117 +2057,60 @@ impl StudyPort for PrefixStudy {
     fn inspect(&mut self, _: &Node, _: &SourceDeclaration) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn capture(
-        &mut self,
-        _: &Node,
-        _: &SourceDeclaration,
-        _: usize,
-    ) -> Result<Arc<[u8]>, Self::Error> {
+    fn capture(&mut self, _: &Node, _: &SourceDeclaration) -> Result<Arc<[u8]>, Self::Error> {
         self.0 += 1;
         Ok(Arc::from(b"ID,VALUE\n1,1\n".as_slice()))
     }
 }
 struct PrefixDecoder {
     inner: Decoder,
-    known: bool,
     unwind: Option<Arc<()>>,
-    used: Option<build::DecodeUsage>,
-    admitted: Vec<build::DecodeLimits>,
+    entered: Vec<String>,
 }
 impl SourceDecoder for PrefixDecoder {
-    fn decode_with_interpretation(
-        &mut self,
-        source: &SourceDeclaration,
-        bytes: &[u8],
-        _interpretation: yamaa_core::specification::SourceInterpretation,
-    ) -> Result<Self::Table, Self::Error> {
-        self.decode(source, bytes)
-    }
     type Error = &'static str;
     type Table = Table;
     fn continue_after(&self, error: &Self::Error) -> bool {
         *error == "original semantic decode failure"
     }
-    fn decode(&mut self, source: &SourceDeclaration, bytes: &[u8]) -> Result<Table, Self::Error> {
-        self.inner.decode(source, bytes)
-    }
-}
-impl build::DecodePort for PrefixDecoder {
-    fn decode_bounded_interpreted(
+    fn decode(
         &mut self,
         source: &SourceDeclaration,
         bytes: &[u8],
+        interpretation: yamaa_core::specification::SourceInterpretation,
         contract: Option<&yamaa_core::producer_contract::Contract>,
-        limits: build::DecodeLimits,
-        _interpretation: yamaa_core::specification::SourceInterpretation,
-    ) -> Result<Table, build::DecodeError<Self::Error>> {
-        self.decode_bounded(source, bytes, contract, limits)
-    }
-    fn usage(&self) -> Option<build::DecodeUsage> {
-        self.used
-    }
-    fn decode_bounded(
-        &mut self,
-        source: &SourceDeclaration,
-        bytes: &[u8],
-        _: Option<&yamaa_core::producer_contract::Contract>,
-        limits: build::DecodeLimits,
-    ) -> Result<Table, build::DecodeError<Self::Error>> {
-        self.used = None;
-        self.admitted.push(limits);
-        let usage = build::DecodeUsage {
-            storage_bytes: 2 * std::mem::size_of::<Value>(),
-            work_bytes: if source.name == "RAW" { 5 } else { bytes.len() },
-        };
-        if usage.storage_bytes > limits.storage_bytes || usage.work_bytes > limits.work_bytes {
-            return Err(build::DecodeError::Codec("original bounded codec refusal"));
-        }
-        // The codec admits these fixed slots and encoded bytes before entering
-        // the modeled stage; semantic failure keeps that actual admitted prefix.
-        self.used = self.known.then_some(usage);
+    ) -> Result<Table, Self::Error> {
+        self.entered.push(source.name.clone());
         if source.name == "RAW" {
             if let Some(payload) = &self.unwind {
                 std::panic::panic_any(Arc::clone(payload));
             }
-            return Err(build::DecodeError::Codec(
-                "original semantic decode failure",
-            ));
+            return Err("original semantic decode failure");
         }
-        self.decode(source, bytes)
-            .map_err(build::DecodeError::Codec)
+        self.inner.decode(source, bytes, interpretation, contract)
     }
 }
+
 #[test]
-fn native_semantic_decode_prefixes_refund_only_known_capacity_and_preserve_unwind() {
+fn native_semantic_decode_failures_keep_later_independent_sources_and_original_unwind() {
     let root = document(&[("RAW", None), ("NEXT", None)], None);
-    let prepared = yamaa_core::producer_graph::prepare(
-        "/p",
-        &[node("/p", &root, &[])],
-        environment(&[]),
-        Default::default(),
-    )
-    .unwrap()
-    .into_build();
-    for (known, unwind) in [(true, false), (false, false), (true, true)] {
+    let prepared =
+        yamaa_core::producer_graph::prepare("/p", &[node("/p", &root, &[])], environment(&[]))
+            .unwrap()
+            .into_build();
+    for unwind in [false, true] {
         let mut ports = Ports::new();
         let payload = Arc::new(());
         let mut decoder = PrefixDecoder {
             inner: ports.decoder,
-            known,
             unwind: unwind.then(|| Arc::clone(&payload)),
-            used: None,
-            admitted: Vec::new(),
-        };
-        let limits = build::Limits {
-            source_storage_bytes: 4 * std::mem::size_of::<Value>(),
-            decode_work_bytes: 30,
-            ..Default::default()
+            entered: Vec::new(),
         };
         let mut study = PrefixStudy(0);
         let mut attempt =
             build::BuildAttempt::<Activation, PrefixStudy, PrefixDecoder, Report, Codec>::default();
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            prepared.build_into(
+            let _ = prepared.build_into(
                 build::Ports {
                     activation: &mut ports.activation,
                     study: &mut study,
@@ -2614,8 +2118,10 @@ fn native_semantic_decode_prefixes_refund_only_known_capacity_and_preserve_unwin
                     report: &mut ports.report,
                     codec: &mut ports.codec,
                 },
-                limits,
                 &mut attempt,
+                yamaa_core::application_observer::Scope::new(
+                    &yamaa_core::application_observer::Noop,
+                ),
             );
         }));
         assert_eq!(attempt.nodes.len(), 1);
@@ -2625,22 +2131,14 @@ fn native_semantic_decode_prefixes_refund_only_known_capacity_and_preserve_unwin
                 held.downcast_ref::<Arc<()>>().unwrap(),
                 &payload
             ));
-            assert_eq!(decoder.admitted.len(), 1);
+            assert_eq!(decoder.entered.len(), 1);
             assert!(attempt.nodes[0].dataset.result.is_err());
             assert!(attempt.nodes[0].dataset.sources[0].table.is_none());
         } else {
             result.unwrap();
-            assert_eq!(decoder.admitted.len(), 2);
-            let second = decoder.admitted[1];
-            assert_eq!(
-                (second.storage_bytes, second.work_bytes),
-                if known {
-                    (2 * std::mem::size_of::<Value>(), 25)
-                } else {
-                    (0, 0)
-                }
-            );
-            assert_eq!(attempt.nodes[0].dataset.sources[1].table.is_some(), known);
+            assert_eq!(decoder.entered.len(), 2);
+            assert_eq!(decoder.entered, ["RAW", "NEXT"]);
+            assert!(attempt.nodes[0].dataset.sources[1].table.is_some());
             let Err(PortError::Run(yamaa_core::specification_run::RunError::Sources(errors))) =
                 &attempt.nodes[0].dataset.result
             else {
@@ -2653,7 +2151,7 @@ fn native_semantic_decode_prefixes_refund_only_known_capacity_and_preserve_unwin
                     build::DecodeError::Codec("original semantic decode failure")
                 ))
             ));
-            assert_eq!(errors.len(), if known { 1 } else { 2 });
+            assert_eq!(errors.len(), 1);
         }
         assert!(!ports
             .activation

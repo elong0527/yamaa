@@ -7,10 +7,10 @@ use std::{
 };
 use support::{call, function, specification, Tree};
 use yamaa_core::{
-    dataset::{self, ExecutionError},
+    dataset::ExecutionError,
     domain,
     function_invocation::{Argument, FailureKind, FunctionPort, HostError},
-    specification_run::{CapturedAttempt, Limits, SourceDecoder, SourcePort},
+    specification_run::{CapturedAttempt, SourceDecoder, SourcePort},
 };
 use yamaa_core::{
     function_signature::{InvocationPlan, ProjectInvocationPlan},
@@ -92,15 +92,7 @@ impl SourcePort for Port {
     ) -> Option<yamaa_core::resource::ResourceFailure> {
         None
     }
-    fn capture_observed(
-        &mut self,
-        source: &SourceDeclaration,
-        byte_limit: usize,
-        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-    ) -> Result<Arc<[u8]>, Self::Error> {
-        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-        self.capture(source, byte_limit)
-    }
+
     type Error = Payload;
     fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), Payload> {
         assert_eq!(source.path, "input.csv");
@@ -110,9 +102,13 @@ impl SourcePort for Port {
     fn capture_reads(&self) -> usize {
         self.reads
     }
-    fn capture(&mut self, source: &SourceDeclaration, limit: usize) -> Result<Arc<[u8]>, Payload> {
+    fn capture(
+        &mut self,
+        source: &SourceDeclaration,
+        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+    ) -> Result<Arc<[u8]>, Payload> {
         assert_eq!(source.path, "input.csv");
-        assert_eq!(limit, 1024);
+        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
         self.trace.borrow_mut().push("capture");
         if !self.requested {
             self.reads += 1;
@@ -147,17 +143,16 @@ impl SourceDecoder for Decoder {
     fn continue_after(&self, _error: &Self::Error) -> bool {
         false
     }
-    fn decode_with_interpretation(
+
+    type Error = Payload;
+    type Table = Table;
+    fn decode(
         &mut self,
         source: &SourceDeclaration,
         bytes: &[u8],
         _interpretation: yamaa_core::specification::SourceInterpretation,
-    ) -> Result<Self::Table, Self::Error> {
-        self.decode(source, bytes)
-    }
-    type Error = Payload;
-    type Table = Table;
-    fn decode(&mut self, source: &SourceDeclaration, bytes: &[u8]) -> Result<Table, Payload> {
+        _contract: Option<&yamaa_core::producer_contract::Contract>,
+    ) -> Result<Table, Payload> {
         assert_eq!(source.path, "input.csv");
         assert_eq!(bytes, b"held input");
         self.trace.borrow_mut().push("decode");
@@ -204,23 +199,7 @@ impl FunctionPort for Bindings {
         Ok(Value::Int(*value))
     }
 }
-fn limits() -> Limits {
-    Limits {
-        source_bytes: 1024,
-        source_cells: 64,
-        execution: dataset::Limits {
-            source_rows: 4,
-            output_rows: 4,
-            output_cells: 16,
-            key_cells: 8,
-            work_cells: 64,
-            scalar_text_bytes: 1024,
-            output_text_bytes: 1024,
-            identity_cells: 16,
-            identity_text_bytes: 1024,
-        },
-    }
-}
+
 fn model(name: &str) -> yamaa_core::schema::SpecificationDocument {
     specification(vec![(
         "VALUE",
@@ -268,12 +247,12 @@ fn checked_calls_execute_through_shared_capture_and_repeat_on_held_snapshots() {
     let (mut port, mut decoder) = ports(&trace, &cells);
     for expected_reads in [Some(1), Some(0)] {
         let mut attempt = CapturedAttempt::new(checked.compiled().source());
-        checked.build_with_functions_into(
+        checked.build_into(
             &mut port,
             &mut decoder,
             &mut bindings,
-            limits(),
             &mut attempt,
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
         );
         assert_eq!(attempt.sources.len(), 1);
         assert_eq!(attempt.sources[0].read.snapshots_created, expected_reads);
@@ -327,11 +306,10 @@ fn observer_counts_actual_calls_and_preserves_signature_short_circuit_and_origin
         let (mut source, mut decoder) = ports(&trace, &cells);
         let mut attempt = CapturedAttempt::new(checked.compiled().source());
         let observer = Stages::default();
-        checked.build_with_observer_into(
+        checked.build_into(
             &mut source,
             &mut decoder,
             &mut functions,
-            limits(),
             &mut attempt,
             Scope::new(&observer),
         );
@@ -470,96 +448,6 @@ fn observer_counts_actual_calls_and_preserves_signature_short_circuit_and_origin
 }
 
 #[test]
-fn classified_limit_observation_keeps_exact_facts_and_never_invents_generic_capacity_details() {
-    use yamaa_core::application_observer::{Phase, Refusal, Scope};
-    use yamaa_core::dataset::{ExecutionPhase, Resource};
-    for classified in [true, false] {
-        let checked = domain::check_with_project(&model("id"), &[function("id")]).unwrap();
-        let trace = Rc::new(RefCell::new(vec![]));
-        let cells = Rc::new(Cell::new(0));
-        let mut functions = Bindings {
-            plan: Some(checked.compiled().project_calls().unwrap().plans()[0].clone()),
-            trace: Rc::clone(&trace),
-            raised: None,
-        };
-        let (mut source, mut decoder) = ports(&trace, &cells);
-        let mut limits = limits();
-        if classified {
-            limits.execution.work_cells = 0;
-        } else {
-            limits.execution.source_rows = 0;
-        }
-        let mut attempt = CapturedAttempt::new(checked.compiled().source());
-        let observer = Stages::default();
-        checked.build_with_observer_into(
-            &mut source,
-            &mut decoder,
-            &mut functions,
-            limits,
-            &mut attempt,
-            Scope::new(&observer),
-        );
-        let error = attempt.result.unwrap().result.unwrap_err();
-        let refusals = observer
-            .0
-            .borrow()
-            .iter()
-            .filter_map(|event| {
-                if let Stage::Refusal(phase, refusal) = event {
-                    Some((*phase, *refusal))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-        if classified {
-            assert!(matches!(
-                *error,
-                ExecutionError::Limit {
-                    resource: Resource::WorkCells,
-                    limit: 0,
-                    required: Some(1)
-                }
-            ));
-            assert_eq!(
-                refusals,
-                [(
-                    Phase::Dataset(ExecutionPhase::Derivation),
-                    Refusal {
-                        resource: Resource::WorkCells,
-                        limit: 0,
-                        required: Some(1)
-                    }
-                )]
-            );
-        } else {
-            assert!(matches!(
-                *error,
-                ExecutionError::Limit {
-                    resource: Resource::SourceRows,
-                    limit: 0,
-                    required: Some(1)
-                }
-            ));
-            assert_eq!(
-                refusals,
-                [(
-                    Phase::Dataset(ExecutionPhase::Admission),
-                    Refusal {
-                        resource: Resource::SourceRows,
-                        limit: 0,
-                        required: Some(1)
-                    }
-                )]
-            );
-        }
-        assert_eq!(source.reads, 1);
-        assert_eq!(cells.get(), 0);
-        assert_eq!(*trace.borrow(), ["inspect", "capture", "decode"]);
-    }
-}
-
-#[test]
 fn unmatched_activation_signatures_fail_before_every_study_port_and_keep_static_failures_early() {
     let trace = Rc::new(RefCell::new(vec![]));
     let cells = Rc::new(Cell::new(0));
@@ -575,12 +463,12 @@ fn unmatched_activation_signatures_fail_before_every_study_port_and_keep_static_
         raised: None,
     };
     let mut attempt = CapturedAttempt::new(checked.compiled().source());
-    checked.build_with_functions_into(
+    checked.build_into(
         &mut port,
         &mut decoder,
         &mut bindings,
-        limits(),
         &mut attempt,
+        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
     );
     assert!(attempt.sources.is_empty());
     let execution = attempt.result.unwrap();
@@ -639,8 +527,7 @@ fn concat_function_signature_is_admitted_before_any_table_access() {
         trace: Rc::clone(&trace),
         raised: None,
     };
-    let attempt =
-        plan.execute_observed_functions(&Untouched, &[], &mut bindings, limits().execution);
+    let attempt = plan.execute(&Untouched, &[], &mut bindings, None);
     assert!(matches!(
         *attempt.result.unwrap_err(),
         ExecutionError::FunctionBinding { slot: 0 }
@@ -705,7 +592,12 @@ fn compiled_first_available_preserves_operand_cell_failure_without_fallback() {
     };
     let checked = domain::check(&spec).unwrap();
     let plan = checked.compiled().bind(&source.schema).unwrap();
-    let attempt = plan.execute_observed(&source, limits().execution);
+    let attempt = plan.execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(attempt.handler_counts.is_empty() && attempt.retained_verifications.is_empty());
     let ExecutionError::Cell {
         path,
@@ -743,12 +635,12 @@ fn callback_failures_preserve_original_payload_and_source_observations_without_r
     };
     let (mut port, mut decoder) = ports(&trace, &cells);
     let mut attempt = CapturedAttempt::new(checked.compiled().source());
-    checked.build_with_functions_into(
+    checked.build_into(
         &mut port,
         &mut decoder,
         &mut bindings,
-        limits(),
         &mut attempt,
+        yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
     );
     assert_eq!(attempt.sources.len(), 1);
     assert!(attempt.sources[0].table.is_some());
@@ -943,8 +835,11 @@ mod project_usecase {
                     &mut activation,
                     &mut port,
                     &mut decoder,
-                    limits(),
                     &mut attempt,
+                    None,
+                    yamaa_core::application_observer::Scope::new(
+                        &yamaa_core::application_observer::Noop,
+                    ),
                 )
                 .unwrap();
             assert_eq!(attempt.sources[0].read.snapshots_created, created);
@@ -984,8 +879,11 @@ mod project_usecase {
                 &mut activation,
                 &mut port,
                 &mut decoder,
-                limits(),
-                &mut attempt
+                &mut attempt,
+                None,
+                yamaa_core::application_observer::Scope::new(
+                    &yamaa_core::application_observer::Noop
+                )
             ),
             Err(Failure::Lock(_))
         ));
@@ -1018,8 +916,11 @@ mod project_usecase {
                     &mut activation,
                     &mut port,
                     &mut decoder,
-                    limits(),
                     &mut attempt,
+                    None,
+                    yamaa_core::application_observer::Scope::new(
+                        &yamaa_core::application_observer::Noop,
+                    ),
                 )
                 .unwrap_err();
             match (mode, failure) {
@@ -1089,13 +990,15 @@ mod project_usecase {
         for mode in [0, 8] {
             activation.mode = mode;
             checked
-                .build_observed_into(
+                .build_into(
                     &mut activation,
                     &mut port,
                     &mut decoder,
-                    limits(),
                     &mut attempt,
-                    &mut observations,
+                    Some(&mut observations),
+                    yamaa_core::application_observer::Scope::new(
+                        &yamaa_core::application_observer::Noop,
+                    ),
                 )
                 .unwrap();
             assert_eq!(observations.lock, LockObservation::Verified);
@@ -1139,13 +1042,15 @@ mod project_usecase {
         assert_eq!(port.reads, 1);
         activation.mode = 1;
         assert!(matches!(
-            checked.build_observed_into(
+            checked.build_into(
                 &mut activation,
                 &mut port,
                 &mut decoder,
-                limits(),
                 &mut attempt,
-                &mut observations
+                Some(&mut observations),
+                yamaa_core::application_observer::Scope::new(
+                    &yamaa_core::application_observer::Noop
+                )
             ),
             Err(Failure::Lock(_))
         ));
@@ -1181,13 +1086,15 @@ mod project_usecase {
             let (mut port, mut decoder) = ports(&trace, &cells);
             let mut attempt = CapturedAttempt::new(checked.compiled().source());
             let mut observations = Observations::default();
-            let Err(Failure::Tests(failures)) = checked.build_observed_into(
+            let Err(Failure::Tests(failures)) = checked.build_into(
                 &mut activation,
                 &mut port,
                 &mut decoder,
-                limits(),
                 &mut attempt,
-                &mut observations,
+                Some(&mut observations),
+                yamaa_core::application_observer::Scope::new(
+                    &yamaa_core::application_observer::Noop,
+                ),
             ) else {
                 panic!("late case failure");
             };
@@ -1252,12 +1159,12 @@ mod project_usecase {
             let mut activation_observations = Default::default();
             let observer = Stages::default();
             checked
-                .build_with_observer_into(
+                .build_into(
                     &mut activation,
                     &mut source,
                     &mut decoder,
-                    limits(),
-                    (&mut attempt, &mut activation_observations),
+                    &mut attempt,
+                    Some(&mut activation_observations),
                     Scope::new(&observer),
                 )
                 .unwrap();
@@ -1327,8 +1234,11 @@ mod project_usecase {
                     &mut activation,
                     &mut port,
                     &mut decoder,
-                    limits(),
                     &mut attempt,
+                    None,
+                    yamaa_core::application_observer::Scope::new(
+                        &yamaa_core::application_observer::Noop,
+                    ),
                 )
                 .unwrap();
             assert_eq!(
