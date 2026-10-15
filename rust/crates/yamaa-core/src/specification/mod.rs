@@ -1161,7 +1161,7 @@ impl PreparedSpecification {
         let output_path = String::from(text(d, field(d, output_id, "path")?)?);
         // Retain the complete integer for output-declaration diagnostics, even
         // when it exceeds REQ-0744's range. Build validation retains its existing
-        // post-verification phase; the artifact byte budget stays independent.
+        // post-verification phase; saved-file size is admitted at publication.
         let output_decimals = d
             .field(output_id, "decimals")
             .filter(|&id| !matches!(d.nodes()[id], N::Null))

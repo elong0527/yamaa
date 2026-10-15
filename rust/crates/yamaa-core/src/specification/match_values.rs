@@ -510,7 +510,7 @@ pub(super) fn visit_keys(
     ) -> Result<(), PrepareError> {
         if depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PrepareError::limit(
-                "expression_depth",
+                "semantic_depth",
                 crate::limits::Limits::SEMANTIC_DEPTH,
                 Some(depth),
                 Some(path),

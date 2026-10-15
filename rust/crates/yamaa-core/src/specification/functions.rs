@@ -121,7 +121,7 @@ fn collect_calls(
 ) -> Result<(), PrepareError> {
     if depth > crate::limits::Limits::SEMANTIC_DEPTH {
         return Err(PrepareError::limit(
-            "function_call_depth",
+            "semantic_depth",
             crate::limits::Limits::SEMANTIC_DEPTH,
             Some(depth),
             Some(path),
@@ -129,14 +129,6 @@ fn collect_calls(
     }
 
     if let Some(node) = d.field(value, "function") {
-        if requests.len() >= 1024 {
-            return Err(PrepareError::limit(
-                "function_calls",
-                1024,
-                Some(requests.len() + 1),
-                Some(path),
-            ));
-        }
         requests.push((node, format!("{path}.function"), contextual));
     }
     if let Some(bindings) = d
@@ -173,14 +165,6 @@ fn collect_calls(
     }
     if let Some(case) = d.field(value, "case") {
         let branches = sequence(d, case)?;
-        if branches.len() > 1024 {
-            return Err(PrepareError::limit(
-                "case_branches",
-                1024,
-                Some(branches.len()),
-                None,
-            ));
-        }
         for (index, &branch) in branches.iter().enumerate() {
             for name in ["then", "otherwise"] {
                 if let Some(value) = d.field(branch, name) {
@@ -204,38 +188,6 @@ pub(super) fn prepare(
     columns: &[usize],
     functions: &[Function],
 ) -> Result<Prepared, PrepareError> {
-    // The held environment is globally admitted. Bound a borrowed lookup index
-    // for malformed-call name checks and missing-parameter projection too;
-    // neither path may rescan all definitions once per retained diagnostic.
-    if functions.len() > 65_536 {
-        return Err(PrepareError::limit(
-            "function_definitions",
-            65_536,
-            Some(functions.len()),
-            None,
-        ));
-    }
-    let depth = usize::BITS as usize - functions.len().max(1).leading_zeros() as usize;
-    let mut name_bytes = 0usize;
-    for function in functions {
-        name_bytes = name_bytes
-            .checked_add(function.definition().name.len())
-            .filter(|&n| n <= 16_777_216)
-            .ok_or_else(|| {
-                PrepareError::limit("function_definition_bytes", 16_777_216, None, None)
-            })?;
-    }
-    if name_bytes
-        .checked_mul((depth + 1) * 16)
-        .is_none_or(|n| n > 67_108_864)
-    {
-        return Err(PrepareError::limit(
-            "function_definition_work",
-            67_108_864,
-            name_bytes.checked_mul((depth + 1) * 16),
-            None,
-        ));
-    }
     let mut function_index = BTreeMap::new();
     for function in functions {
         if function_index
@@ -282,14 +234,6 @@ pub(super) fn prepare(
     let has_rows = present(d, d.root(), "rows");
     if has_rows {
         let rows = sequence(d, field(d, d.root(), "rows")?)?;
-        if rows.len() > 16 {
-            return Err(PrepareError::limit(
-                "row_templates",
-                16,
-                Some(rows.len()),
-                Some("rows"),
-            ));
-        }
         for (row, &node) in rows.iter().enumerate() {
             for &(name, derivation) in mapping(d, field(d, node, "derivations")?)? {
                 if let Some(value) = d.field(derivation, "value") {

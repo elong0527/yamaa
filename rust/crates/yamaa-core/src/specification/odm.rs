@@ -246,7 +246,7 @@ pub(super) fn bind(
 pub(super) fn contains(d: &Document, node: usize, depth: usize) -> Result<bool, PrepareError> {
     if depth > crate::limits::Limits::SEMANTIC_DEPTH {
         return Err(PrepareError::limit(
-            "odm_expression_depth",
+            "semantic_depth",
             crate::limits::Limits::SEMANTIC_DEPTH,
             Some(depth),
             None,
@@ -302,22 +302,18 @@ pub(super) fn context_findings(
         column: Option<&'a str>,
         row: Option<usize>,
         depth: usize,
-        bytes: &mut usize,
+
         sites: &mut Vec<Site<'a>>,
     ) -> Result<(), PrepareError> {
         if depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PrepareError::limit(
-                "odm_expression_depth",
+                "semantic_depth",
                 crate::limits::Limits::SEMANTIC_DEPTH,
                 Some(depth),
                 Some(path),
             ));
         }
 
-        *bytes = bytes
-            .checked_add(path.len())
-            .filter(|&n| n <= 16_777_216)
-            .ok_or_else(|| PrepareError::limit("odm_site_metadata", 16_777_216, None, None))?;
         match &d.nodes()[node] {
             N::Mapping(fields) => {
                 if let Some(value) = d.field(node, "value").filter(|_| {
@@ -338,7 +334,6 @@ pub(super) fn context_findings(
                         column,
                         row,
                         depth + 1,
-                        bytes,
                         sites,
                     );
                 }
@@ -349,22 +344,6 @@ pub(super) fn context_findings(
                         text(d, field(d, payload, "item")?)?
                     };
                     let (dataset, _) = item.split_once('.').ok_or(PrepareError::Internal)?;
-                    *bytes = bytes
-                        .checked_add(item.len().checked_mul(4).ok_or_else(|| {
-                            PrepareError::limit("odm_site_metadata", 16_777_216, None, None)
-                        })?)
-                        .filter(|&n| n <= 16_777_216)
-                        .ok_or_else(|| {
-                            PrepareError::limit("odm_site_metadata", 16_777_216, None, None)
-                        })?;
-                    if sites.len() >= 128 {
-                        return Err(PrepareError::limit(
-                            "odm_sites",
-                            128,
-                            Some(sites.len()),
-                            None,
-                        ));
-                    }
                     sites.push(Site {
                         payload,
                         item,
@@ -393,7 +372,6 @@ pub(super) fn context_findings(
                             column,
                             row,
                             depth + 1,
-                            bytes,
                             sites,
                         )?;
                     }
@@ -409,7 +387,6 @@ pub(super) fn context_findings(
                         column,
                         row,
                         depth + 1,
-                        bytes,
                         sites,
                     )?;
                 }
@@ -438,7 +415,7 @@ pub(super) fn context_findings(
             .map(|driver| driver.or_else(|| (inputs.len() == 1).then(|| inputs[0])))
     };
     let mut sites = Vec::new();
-    let mut bytes = 0;
+
     for &node in sequence(d, field(d, root, "columns")?)? {
         if let Some(derivation) = d
             .field(node, "derivation")
@@ -453,7 +430,6 @@ pub(super) fn context_findings(
                 Some(column),
                 None,
                 0,
-                &mut bytes,
                 &mut sites,
             )?;
         }
@@ -480,7 +456,6 @@ pub(super) fn context_findings(
                             None,
                             Some(index),
                             0,
-                            &mut bytes,
                             &mut sites,
                         )?;
                     }
@@ -592,7 +567,7 @@ pub(super) fn inputs(d: &Document) -> Result<BTreeSet<&str>, PrepareError> {
     ) -> Result<(), PrepareError> {
         if depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PrepareError::limit(
-                "odm_expression_depth",
+                "semantic_depth",
                 crate::limits::Limits::SEMANTIC_DEPTH,
                 None,
                 None,

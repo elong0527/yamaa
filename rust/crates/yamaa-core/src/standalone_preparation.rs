@@ -84,8 +84,8 @@ fn expand(
 }
 
 /// Parent presence (including null) precedes normalization. Normalization, strict
-/// window expansion and model admission share the caller's existing cumulative
-/// provenance. No study data is read during preparation.
+/// window expansion and model admission preserve the source provenance.
+/// No study data is read during preparation.
 pub fn prepare(schema: &SchemaStructure, raw: Document) -> Result<PreparedStandalone, Error> {
     if raw.field(raw.root(), "parents").is_some() {
         return Err(Error::InheritanceRequired);

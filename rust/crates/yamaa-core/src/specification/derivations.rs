@@ -51,17 +51,9 @@ pub(super) fn prepare_value_with_driver(
 ) -> Result<cases::Branch, PrepareError> {
     if depth > crate::limits::Limits::SEMANTIC_DEPTH {
         return Err(PrepareError::limit(
-            "expression_depth",
+            "semantic_depth",
             crate::limits::Limits::SEMANTIC_DEPTH,
             Some(depth),
-            Some(result_path),
-        ));
-    }
-    if result_path.len() > 65_536 {
-        return Err(PrepareError::limit(
-            "path_bytes",
-            65_536,
-            Some(result_path.len()),
             Some(result_path),
         ));
     }
@@ -917,7 +909,7 @@ fn references_mode(
 ) -> Result<(), PrepareError> {
     if depth > crate::limits::Limits::SEMANTIC_DEPTH {
         return Err(PrepareError::limit(
-            "expression_depth",
+            "semantic_depth",
             crate::limits::Limits::SEMANTIC_DEPTH,
             Some(depth),
             None,

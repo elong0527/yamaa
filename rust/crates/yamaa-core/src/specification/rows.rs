@@ -46,20 +46,8 @@ struct Template {
 fn deferred_odm_contexts(
     declarations: &[Template],
     templates: &[RowTemplate],
-) -> Result<std::rc::Rc<[crate::dataset::OdmTemplateScope]>, BindError> {
+) -> std::rc::Rc<[crate::dataset::OdmTemplateScope]> {
     declarations
-        .iter()
-        .try_fold(0usize, |used, template| {
-            used.checked_add(template.id.len()).and_then(|used| {
-                used.checked_add(
-                    std::mem::size_of::<crate::dataset::OdmTemplateScope>()
-                        + 8 * std::mem::size_of::<usize>(),
-                )
-            })
-        })
-        .filter(|&bytes| bytes <= 16_777_216)
-        .ok_or(BindError::Internal)?;
-    Ok(declarations
         .iter()
         .zip(templates)
         .map(|(declaration, template)| crate::dataset::OdmTemplateScope {
@@ -76,7 +64,7 @@ fn deferred_odm_contexts(
             },
         })
         .collect::<Vec<_>>()
-        .into())
+        .into()
 }
 #[derive(Debug)]
 pub(super) struct Rows {
@@ -179,7 +167,7 @@ fn default_reads(
     fn contains_window(d: &Document, value: usize, depth: usize) -> Result<bool, PrepareError> {
         if depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PrepareError::limit(
-                "expression_depth",
+                "semantic_depth",
                 crate::limits::Limits::SEMANTIC_DEPTH,
                 None,
                 None,
@@ -376,22 +364,6 @@ fn select_defaults(
                 .map(|default| default.unwrap_or((true, Vec::new(), None)))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let edges = defaults.iter().try_fold(0usize, |n, (_, edges, _)| {
-        n.checked_add(edges.len())
-            .ok_or_else(|| PrepareError::limit("row_dependencies", 67_108_864, None, None))
-    })?;
-    if columns
-        .len()
-        .checked_mul(edges.max(1))
-        .is_none_or(|work| work > 67_108_864)
-    {
-        return Err(PrepareError::limit(
-            "row_dependencies",
-            67_108_864,
-            None,
-            None,
-        ));
-    }
     let mut local = defaults
         .iter()
         .map(|(local, _, _)| *local)
@@ -474,23 +446,7 @@ fn select_defaults(
             break;
         }
     }
-    // Charge the complete retained and projected context before the first copy.
     // Grouping preserves authored row order and emits columns in declaration order.
-    let mut context_bytes = 0usize;
-    for (&column, rows) in &overridden {
-        let bytes = rows
-            .iter()
-            .try_fold(output.columns()[column].name.len(), |n, row| {
-                n.checked_add(row.len()).ok_or_else(|| {
-                    PrepareError::limit("row_default_context", 16_777_216, None, None)
-                })
-            })?;
-        context_bytes = bytes
-            .checked_mul(4)
-            .and_then(|n| context_bytes.checked_add(n))
-            .filter(|&n| n <= 16_777_216)
-            .ok_or_else(|| PrepareError::limit("row_default_context", 16_777_216, None, None))?;
-    }
     let findings = overridden
         .into_iter()
         .map(|(column, rows)| PreflightFinding::DuplicateRowDefault {
@@ -511,7 +467,7 @@ fn select_defaults(
         .collect())
 }
 
-/// Bound every retained row-phase finding before copying any authored context.
+/// Validate every row-phase use before projecting its authored context.
 fn validate_row_phases(
     templates: &[Template],
     project: Option<&functions::Prepared>,
@@ -526,14 +482,9 @@ fn validate_row_phases(
             &'a crate::project_call_document::Argument,
         )>,
     }
-    fn register<'a>(
-        site: Site<'a>,
-        output: &TableSchema,
-        sites: &mut Vec<Site<'a>>,
-        bytes: &mut usize,
-    ) -> Result<(), PrepareError> {
+    fn register<'a>(site: Site<'a>, output: &TableSchema, sites: &mut Vec<Site<'a>>) {
         if site.identifier.contains('.') {
-            return Ok(());
+            return;
         }
         let Some(column) = output
             .columns()
@@ -541,7 +492,7 @@ fn validate_row_phases(
             .position(|c| c.name == site.identifier)
         else {
             // Unknown bare sources retain their ordinary binding diagnostic.
-            return Ok(());
+            return;
         };
         if site
             .template
@@ -549,42 +500,12 @@ fn validate_row_phases(
             .iter()
             .any(|d| d.column == column)
         {
-            return Ok(());
-        }
-        let mut cost = site
-            .declaration
-            .path
-            .len()
-            .checked_add(site.identifier.len())
-            .and_then(|n| n.checked_add(site.template.id.len()))
-            .and_then(|n| n.checked_add(128))
-            .ok_or_else(|| PrepareError::limit("function_findings", 16_777_216, None, None))?;
-        if let Some((call, argument)) = site.function {
-            cost = cost
-                .checked_add(call.call.name.len())
-                .and_then(|n| n.checked_add(argument.name.len().checked_mul(2)?))
-                .ok_or_else(|| PrepareError::limit("function_findings", 16_777_216, None, None))?;
-        }
-        let cost = cost
-            .checked_mul(4)
-            .ok_or_else(|| PrepareError::limit("function_findings", 16_777_216, None, None))?;
-        *bytes = bytes
-            .checked_add(cost)
-            .filter(|&n| n <= 16_777_216)
-            .ok_or_else(|| PrepareError::limit("function_findings", 16_777_216, None, None))?;
-        if sites.len() >= 65_536 {
-            return Err(PrepareError::limit(
-                "function_findings",
-                65_536,
-                Some(sites.len() + 1),
-                None,
-            ));
+            return;
         }
         sites.push(site);
-        Ok(())
     }
     let mut sites = Vec::new();
-    let mut bytes = 0usize;
+
     for template in templates {
         for declaration in &template.declarations {
             match &declaration.operation {
@@ -597,8 +518,7 @@ fn validate_row_phases(
                     },
                     output,
                     &mut sites,
-                    &mut bytes,
-                )?,
+                ),
                 RowOperation::ProjectFunction(call) => {
                     let call = &project
                         .ok_or(PrepareError::Internal)?
@@ -620,8 +540,7 @@ fn validate_row_phases(
                                 },
                                 output,
                                 &mut sites,
-                                &mut bytes,
-                            )?;
+                            );
                         }
                     }
                 }
@@ -684,13 +603,8 @@ impl Rows {
     ) -> Result<Self, PrepareError> {
         let root = d.root();
         let raw_rows = sequence(d, field(d, root, "rows")?)?;
-        if raw_rows.is_empty() || raw_rows.len() > 16 {
-            return Err(PrepareError::limit(
-                "row_templates",
-                16,
-                Some(raw_rows.len()),
-                Some("rows"),
-            ));
+        if raw_rows.is_empty() {
+            return Err(PrepareError::Internal);
         }
         let columns = sequence(d, field(d, root, "columns")?)?;
         let filters = raw_rows
@@ -1029,37 +943,6 @@ impl Rows {
         calls: &crate::project_calls::ProjectCalls,
     ) -> Result<Vec<usize>, PrepareError> {
         let mut uses = std::vec![0usize; calls.calls().len()];
-        // A row label can appear in each argument finding and its projected context.
-        // Admit the cumulative copies before source binding can construct findings.
-        let mut row_context = 0usize;
-        for template in &self.templates {
-            for declaration in &template.declarations {
-                for call in declaration.operation.calls() {
-                    let arguments = calls
-                        .calls()
-                        .get(call)
-                        .ok_or(PrepareError::Internal)?
-                        .located
-                        .call
-                        .arguments
-                        .len();
-                    let cost = template
-                        .id
-                        .len()
-                        .checked_mul(arguments)
-                        .and_then(|n| n.checked_mul(4))
-                        .ok_or_else(|| {
-                            PrepareError::limit("function_row_context", 16_777_216, None, None)
-                        })?;
-                    row_context = row_context
-                        .checked_add(cost)
-                        .filter(|&n| n <= 16_777_216)
-                        .ok_or_else(|| {
-                            PrepareError::limit("function_row_context", 16_777_216, None, None)
-                        })?;
-                }
-            }
-        }
         for declaration in self
             .templates
             .iter()
@@ -1068,9 +951,7 @@ impl Rows {
         {
             for call in declaration.operation.calls() {
                 let count = uses.get_mut(call).ok_or(PrepareError::Internal)?;
-                *count = count
-                    .checked_add(1)
-                    .ok_or_else(|| PrepareError::limit("function_calls", 1024, None, None))?;
+                *count = count.checked_add(1).ok_or(PrepareError::Internal)?;
             }
         }
         Ok(uses)
@@ -1685,10 +1566,7 @@ impl Rows {
             )? {
                 crate::dataset::odm::visit_mut(&mut value.expression, &mut |bound| {
                     if odm_contexts.is_none() {
-                        odm_contexts = Some(
-                            deferred_odm_contexts(&self.templates, &templates)
-                                .map_err(|_| crate::dataset::PlanError::InvalidSource)?,
-                        );
+                        odm_contexts = Some(deferred_odm_contexts(&self.templates, &templates));
                     }
                     bound.defer(odm_contexts.as_ref().unwrap().clone())
                 })

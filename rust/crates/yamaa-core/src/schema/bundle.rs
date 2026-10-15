@@ -186,7 +186,7 @@ impl Builder {
     fn node(&self, raw: Raw) -> &N {
         &self.modules[raw.module].document.nodes()[raw.node]
     }
-    /// Find a descriptor member; the scan is charged even if no name matches.
+    /// Find a descriptor member in its retained declaring document.
     fn field(&mut self, raw: Raw, name: &str) -> Result<Option<Raw>, BundleError> {
         Ok(self.modules[raw.module]
             .document

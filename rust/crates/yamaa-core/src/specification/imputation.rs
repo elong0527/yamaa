@@ -134,11 +134,10 @@ pub(super) fn declaration_findings(
         findings: &mut Vec<PreflightFinding>,
         depth: usize,
         rows: bool,
-        bytes: &mut usize,
     ) -> Result<(), PrepareError> {
         if depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PrepareError::limit(
-                "case_depth",
+                "semantic_depth",
                 crate::limits::Limits::SEMANTIC_DEPTH,
                 Some(depth),
                 Some(path),
@@ -148,32 +147,6 @@ pub(super) fn declaration_findings(
         for &op in OPERATIONS {
             if let Some(payload) = d.field(value, op) {
                 let path = format!("{path}.{op}");
-                // Charge occurrence copies before policy/context construction, even
-                // if an admitted arena shares one long scalar across declarations.
-                *bytes = bytes
-                    .checked_add(path.len())
-                    .and_then(|n| n.checked_add(512))
-                    .filter(|n| *n <= 16_777_216)
-                    .ok_or_else(|| {
-                        PrepareError::limit("imputation_metadata", 16_777_216, None, Some(&path))
-                    })?;
-                for &(key, value) in mapping(d, payload)? {
-                    for id in [key, value] {
-                        if let N::Text(text) | N::Integer(text) = &d.nodes()[id] {
-                            *bytes = bytes
-                                .checked_add(text.len())
-                                .filter(|n| *n <= 16_777_216)
-                                .ok_or_else(|| {
-                                    PrepareError::limit(
-                                        "imputation_metadata",
-                                        16_777_216,
-                                        None,
-                                        Some(&path),
-                                    )
-                                })?;
-                        }
-                    }
-                }
                 match prepare(d, payload, op, &path, None, None, &mut Vec::new()) {
                     Ok(operation) => {
                         let kind = if rows {
@@ -245,14 +218,13 @@ pub(super) fn declaration_findings(
                     findings,
                     depth + 1,
                     rows,
-                    bytes,
                 )?;
             }
         }
         Ok(())
     }
     let rows = present(d, d.root(), "rows");
-    let mut bytes = 0;
+
     for (index, &column) in columns.iter().enumerate() {
         if let Some(value) = d
             .field(column, "derivation")
@@ -266,7 +238,6 @@ pub(super) fn declaration_findings(
                 findings,
                 0,
                 rows,
-                &mut bytes,
             )?;
         }
     }
@@ -286,7 +257,6 @@ pub(super) fn declaration_findings(
                             findings,
                             0,
                             true,
-                            &mut bytes,
                         )?;
                     }
                 }
@@ -302,7 +272,6 @@ pub(super) fn declaration_findings(
             findings,
             0,
             present(d, d.root(), "rows"),
-            &mut bytes,
         )
     })?;
     Ok(())

@@ -69,7 +69,7 @@ fn prepare_kind(
 ) -> Result<Kind, PrepareError> {
     if depth > crate::limits::Limits::SEMANTIC_DEPTH {
         return Err(PrepareError::limit(
-            "intermediate_type_depth",
+            "semantic_depth",
             crate::limits::Limits::SEMANTIC_DEPTH,
             Some(depth),
             None,
@@ -163,7 +163,7 @@ fn prepare_driver_kind(
 ) -> Result<Kind, PrepareError> {
     if depth > crate::limits::Limits::SEMANTIC_DEPTH {
         return Err(PrepareError::limit(
-            "intermediate_type_depth",
+            "semantic_depth",
             crate::limits::Limits::SEMANTIC_DEPTH,
             Some(depth),
             None,

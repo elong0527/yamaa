@@ -78,9 +78,7 @@ impl Declarations {
         }
         for call in calls {
             let count = uses.get_mut(call).ok_or(PrepareError::Internal)?;
-            *count = count
-                .checked_add(1)
-                .ok_or_else(|| PrepareError::limit("function_calls", 1024, None, None))?;
+            *count = count.checked_add(1).ok_or(PrepareError::Internal)?;
         }
         Ok(())
     }

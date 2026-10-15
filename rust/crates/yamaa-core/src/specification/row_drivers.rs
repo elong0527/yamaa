@@ -169,7 +169,7 @@ pub(super) fn admit_reads(
     ) -> Result<(), PrepareError> {
         if depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PrepareError::limit(
-                "expression_depth",
+                "semantic_depth",
                 crate::limits::Limits::SEMANTIC_DEPTH,
                 None,
                 None,

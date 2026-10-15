@@ -239,7 +239,7 @@ impl Run<'_> {
             let N::Sequence(items) = &self.input.nodes()[node] else {
                 return self.bad_type(node, C::LayerKind(DocumentKind::Sequence), path);
             };
-            // Retained input occurrences avoid uncharged identity-string copies.
+            // Compare the retained identity occurrences directly.
             let mut seen: Vec<usize> = Vec::new();
             for (index, &member) in items.iter().enumerate() {
                 let id = if matches!(self.input.nodes()[member], N::Mapping(_)) {

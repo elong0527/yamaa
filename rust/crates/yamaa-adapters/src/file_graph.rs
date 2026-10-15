@@ -49,7 +49,7 @@ impl RejectedGraph {
     pub fn error(&self) -> &Error {
         &self.error
     }
-    /// Original root request, retained after its ownership quota is admitted.
+    /// Retain the original root request with its captured graph.
     pub fn entry(&self) -> Option<&str> {
         self.entry.as_deref()
     }
