@@ -11,6 +11,10 @@ use serde_json::value;
 use serde_json::Error;
 pub type Map<K, V> = BTreeMap<K, V>;
 
+// Preserve serde_json's default wire recursion budget. It decrements before
+// entering a container and rejects zero, admitting 127 nested containers.
+const DEFAULT_JSON_RECURSION_LIMIT: usize = 128;
+
 /// A validated JSON number, retaining integer, fractional and exponent spelling.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Number(String);
@@ -199,12 +203,12 @@ impl Decoder<'_> {
         Err(Self::invalid())
     }
     fn value(&mut self, depth: usize) -> Result<Value, Error> {
-        if depth > 128 {
+        self.space();
+        if depth >= DEFAULT_JSON_RECURSION_LIMIT - 1 && matches!(self.byte(), Some(b'[' | b'{')) {
             return Err(<Error as serde::de::Error>::custom(
                 "JSON recursion limit exceeded",
             ));
         }
-        self.space();
         Ok(match self.byte() {
             Some(b'n' | b't' | b'f') => {
                 let (word, value) = match self.byte() {
@@ -627,17 +631,31 @@ mod tests {
     }
 
     #[test]
-    fn serde_private_number_shaped_objects_remain_ordinary_objects() {
-        let text = r#"{"$serde_json::private::Number":"99999999999999999999"}"#;
-        let value: Value = from_str(text).unwrap();
-        assert!(value.is_object());
-        assert_eq!(to_string(&value).unwrap(), text);
+    fn serde_private_token_shaped_objects_remain_ordinary_objects() {
+        for text in [
+            r#"{"$serde_json::private::Number":"99999999999999999999"}"#,
+            r#"{"$serde_json::private::RawValue":"[1,2]"}"#,
+        ] {
+            let value: Value = from_str(text).unwrap();
+            assert!(value.is_object());
+            assert_eq!(to_string(&value).unwrap(), text);
+        }
     }
 
     #[test]
-    fn recursive_values_are_bounded_before_constructing_an_unbounded_tree() {
-        let text = format!("{}0{}", "[".repeat(130), "]".repeat(130));
-        assert!(from_str::<Value>(&text).is_err());
+    fn recursive_values_keep_the_existing_json_deserializer_boundary() {
+        for depth in [0, 1, 126, 127, 128, 129, 130] {
+            for leaf in ["0", "[]", "{}"] {
+                for (opening, closing) in [("[", "]"), ("{\"nested\":", "}")] {
+                    let text = format!("{}{leaf}{}", opening.repeat(depth), closing.repeat(depth));
+                    assert_eq!(
+                        from_str::<Value>(&text).is_ok(),
+                        from_str::<serde_json::Value>(&text).is_ok(),
+                        "depth={depth}, leaf={leaf}, opening={opening}",
+                    );
+                }
+            }
+        }
     }
 
     #[test]
