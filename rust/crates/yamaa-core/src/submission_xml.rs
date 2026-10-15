@@ -19,6 +19,7 @@ struct Element {
     attributes: Vec<(&'static str, String)>,
     children: Vec<Element>,
     text: Option<String>,
+    text_path: Option<String>,
     path: String,
 }
 impl Element {
@@ -28,6 +29,7 @@ impl Element {
             attributes: Vec::new(),
             children: Vec::new(),
             text: None,
+            text_path: None,
             path: path.into(),
         }
     }
@@ -45,9 +47,19 @@ impl Element {
         self.children.push(child);
     }
     fn translated(&mut self, name: &'static str, text: &str, language: &str) {
+        self.translated_at(name, text, language, None);
+    }
+    fn translated_at(
+        &mut self,
+        name: &'static str,
+        text: &str,
+        language: &str,
+        text_path: Option<&str>,
+    ) {
         let mut wrapper = Self::new(name, &self.path);
         let mut translated = Self::new("TranslatedText", &self.path).attr("xml:lang", language);
         translated.text = Some(text.into());
+        translated.text_path = text_path.map(String::from);
         wrapper.push(translated);
         self.push(wrapper);
     }
@@ -70,12 +82,13 @@ impl Element {
             self.push(node);
         }
     }
-    fn leaf(&mut self, id: &str, href: &str, title: &str) {
+    fn leaf(&mut self, id: &str, href: &str, title: &str, title_path: Option<&str>) {
         let mut node = Self::new("def:leaf", &self.path)
             .attr("ID", format!("LF.{id}"))
             .attr("xlink:href", href);
         let mut child = Self::new("def:title", &self.path);
         child.text = Some(title.into());
+        child.text_path = title_path.map(String::from);
         node.push(child);
         self.push(node);
     }
@@ -106,7 +119,11 @@ impl Element {
         if let Some(text) = &self.text {
             append(
                 out,
-                &format!(">{}</{}>\n", escape(text, &self.path, false)?, self.name),
+                &format!(
+                    ">{}</{}>\n",
+                    escape(text, self.text_path.as_deref().unwrap_or(&self.path), false)?,
+                    self.name
+                ),
             )?;
         } else if self.children.is_empty() {
             append(out, "/>\n")?;
@@ -233,7 +250,13 @@ fn comment(node: &mut Element, comment: &s::Comment, language: &str) {
         }
     }
 }
-fn item_definition(column: &model::Column, identity: &str, path: &str, language: &str) -> Element {
+fn item_definition(
+    column: &model::Column,
+    identity: &str,
+    path: &str,
+    label_path: &str,
+    language: &str,
+) -> Element {
     let name = &column.declaration.name.value;
     let meta = column
         .declaration
@@ -259,7 +282,7 @@ fn item_definition(column: &model::Column, identity: &str, path: &str, language:
             "def:CommentOID",
             meta.comment.as_ref().map(|_| format!("COM.{identity}")),
         );
-    item.translated(
+    item.translated_at(
         "Description",
         &column
             .declaration
@@ -268,6 +291,7 @@ fn item_definition(column: &model::Column, identity: &str, path: &str, language:
             .expect("composed label")
             .value,
         language,
+        Some(label_path),
     );
     if let Some(list) = &meta.codelist {
         item.push(
@@ -498,6 +522,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
             id,
             &dataset.href,
             dataset.href.rsplit('/').next().unwrap_or(&dataset.href),
+            None,
         );
         metadata.push(group);
     }
@@ -507,6 +532,10 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
                 column,
                 &identity,
                 &format!("datasets.{identity}.submission"),
+                &format!(
+                    "datasets.{}.columns.{}.label",
+                    dataset.id, column.declaration.name.value
+                ),
                 language,
             );
             if !column.values.is_empty() {
@@ -636,11 +665,15 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
             metadata.push(node);
         }
     }
-    for document in &section.documents.value {
+    for (index, document) in section.documents.value.iter().enumerate() {
         metadata.leaf(
             &document.id.value,
             &document.link.value,
             &document.title.value,
+            Some(&format!(
+                "{}.documents[{index}].title",
+                model::family_name(section.family)
+            )),
         );
     }
     root.push(metadata);

@@ -299,6 +299,46 @@ if (file.exists(file.path(root, "DM.JSON"))) {
     all(vapply(artifacts(result), `[[`, character(1), "state") == "Stopped"))
 }
 unlink(root, recursive = TRUE)
+for (case in host_truth[["xml_text_cases"]]) {
+  root <- fixture("sdtm-dm-metadata")
+  for (filename in c("spec.yaml", "environment.yaml")) {
+    path <- file.path(root, filename)
+    text <- paste(readLines(path), collapse = "\n")
+    mutations <- if (filename == "spec.yaml") case[["specification_mutations"]] else case[["environment_mutations"]]
+    for (mutation in mutations) {
+      stopifnot(grepl(mutation[[1L]], text, fixed = TRUE))
+      text <- sub(mutation[[1L]], mutation[[2L]], text, fixed = TRUE)
+    }
+    if (filename == "environment.yaml") text <- sub("dataset_json: true", "dataset_json: false", text, fixed = TRUE)
+    writeLines(text, path)
+  }
+  if (case[["inherit_specification"]]) {
+    stopifnot(file.rename(file.path(root, "spec.yaml"), file.path(root, "base.yaml")))
+    writeLines(c("schema_version: '1.0'", "parents: base.yaml"), file.path(root, "spec.yaml"))
+  }
+  result <- yamaa_define(file.path(root, "environment.yaml"), "sdtm", created = host_truth[["created"]])
+  check_issues(result, empty = !length(case[["issues"]]))
+  stopifnot(nrow(result$issues) == length(case[["issues"]]),
+    !file.exists(file.path(root, "define.xml")), !file.exists(file.path(root, "dm.json")))
+  for (i in seq_along(case[["issues"]])) {
+    expected <- case[["issues"]][[i]]
+    stopifnot(identical(result$issues$phase[[i]], expected[["phase"]]),
+      identical(result$issues$condition[[i]], expected[["condition"]]),
+      identical(result$issues$requirement[[i]], expected[["requirement"]]),
+      identical(result$issues$spec_paths[[i]], fixture_strings(expected[["spec_paths"]])),
+      identical(jsonlite::fromJSON(result$issues$context[[i]], simplifyVector = FALSE), expected[["context"]]))
+  }
+  if (length(case[["issues"]])) {
+    stopifnot(refused(result), length(artifacts(result)) == 0L)
+  } else {
+    held <- artifacts(result)
+    stopifnot(length(held) == 1L, identical(held[[1L]]$path, "define.xml"))
+    for (fragment in case[["xml_fragments"]]) stopifnot(grepl(fragment, rawToChar(held[[1L]]$bytes), fixed = TRUE))
+    stopifnot(isTRUE(result$save()), identical(rawfile(file.path(root, "define.xml")), held[[1L]]$bytes))
+  }
+  stopifnot(!dir.exists(file.path(root, "input")), !file.exists(file.path(root, "dm.csv")))
+  unlink(root, recursive = TRUE)
+}
 Sys.setenv(PATH = original_path)
 unlink(native_path, recursive = TRUE)
 cat("PASS: shared installed R Define DM goldens, AE/VS structure, issues, held Save, version and zero-write failures\n")

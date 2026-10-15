@@ -436,5 +436,47 @@ class PublicDefine(unittest.TestCase):
         data = json.loads(result._native.artifacts()[0][1])
         self.assertEqual([row[5] for row in data["rows"]], [34.0, 67.0, 52.0])
 
+    def test_xml_text_findings_name_the_original_field_and_keep_render_order(self):
+        for case in TRUTH["xml_text_cases"]:
+            with self.subTest(case=case["name"]):
+                directory = self.fixture("sdtm-dm-metadata")
+                for filename, mutations in [
+                    ("spec.yaml", case["specification_mutations"]),
+                    ("environment.yaml", case["environment_mutations"]),
+                ]:
+                    path = directory / filename
+                    text = path.read_text()
+                    for before, after in mutations:
+                        self.assertIn(before, text)
+                        text = text.replace(before, after, 1)
+                    if filename == "environment.yaml":
+                        text = text.replace("dataset_json: true", "dataset_json: false")
+                    path.write_text(text)
+                if case["inherit_specification"]:
+                    (directory / "spec.yaml").rename(directory / "base.yaml")
+                    (directory / "spec.yaml").write_text("schema_version: '1.0'\nparents: base.yaml\n")
+                result = self.call(directory)
+                actual = [
+                    {**row, "context": json.loads(row["context"])}
+                    for row in result.issues.to_dicts()
+                ]
+                self.assertEqual(actual, case["issues"])
+                self.assertFalse((directory / "define.xml").exists())
+                self.assertFalse((directory / "dm.json").exists())
+                if case["issues"]:
+                    with self.assertRaises(DefineError):
+                        result.save()
+                    self.assertEqual(result._native.artifacts(), [])
+                else:
+                    [(name, content, state)] = result._native.artifacts()
+                    self.assertEqual((name, state), ("define.xml", "Ready"))
+                    self.validate_xml(content)
+                    for fragment in case["xml_fragments"]:
+                        self.assertIn(fragment.encode(), content)
+                    self.assertTrue(result.save())
+                    self.assertEqual((directory / name).read_bytes(), content)
+                self.assertFalse((directory / "input").exists())
+                self.assertFalse((directory / "dm.csv").exists())
+
 
 if __name__ == "__main__": unittest.main()
