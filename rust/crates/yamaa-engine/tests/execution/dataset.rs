@@ -1549,6 +1549,230 @@ fn scalar_text_work_is_cumulative_and_separate_from_retained_text() {
     );
 }
 
+/// Rows that select successfully allocate no mapping/cut diagnostic, so they
+/// must not be charged the copied-diagnostic estimate for every row (#2429).
+#[test]
+fn mapping_and_cut_rows_without_diagnostics_do_not_consume_diagnostic_text_budget() {
+    use yamaa_core::mapping_cut::{Cut, Mapping, MappingCut};
+    let policy = Limits {
+        scalar_text_bytes: 100,
+        ..limits()
+    };
+    let mapping_source = table(
+        &[("id", ColumnType::Int), ("v", ColumnType::Str)],
+        (0..20_i64)
+            .map(|id| vec![Value::Int(id), Value::Str("Y".into())])
+            .collect(),
+    );
+    let mapping_plan = record_plan(
+        &mapping_source,
+        schema(&[("id", ColumnType::Int), ("code", ColumnType::Int)]),
+        vec![
+            assign(0, Expression::Source(0)),
+            assign(
+                1,
+                Expression::MappingCut {
+                    source: Box::new(assign(1, Expression::Source(1))),
+                    operation: MappingCut::Mapping(
+                        Mapping::new(
+                            "V".into(),
+                            "columns.C1.derivation.mapping".into(),
+                            vec![("Y".into(), Value::Int(1)), ("N".into(), Value::Int(0))],
+                            true,
+                            None,
+                            None,
+                        )
+                        .unwrap(),
+                    ),
+                },
+            ),
+        ],
+        vec![],
+    );
+    let mapped = mapping_plan.execute(&mapping_source, policy).unwrap();
+    assert_eq!(mapped.dataset.rows().len(), 20);
+    assert!(mapped
+        .dataset
+        .rows()
+        .iter()
+        .all(|row| row[1] == Value::Int(1)));
+
+    let cut_source = table(
+        &[("id", ColumnType::Int), ("age", ColumnType::Int)],
+        (0..20_i64)
+            .map(|id| vec![Value::Int(id), Value::Int(30)])
+            .collect(),
+    );
+    let cut_plan = record_plan(
+        &cut_source,
+        schema(&[("id", ColumnType::Int), ("band", ColumnType::Str)]),
+        vec![
+            assign(0, Expression::Source(0)),
+            assign(
+                1,
+                Expression::MappingCut {
+                    source: Box::new(assign(1, Expression::Source(1))),
+                    operation: MappingCut::Cut(
+                        Cut::new(
+                            "AGE".into(),
+                            "columns.C1.derivation.cut".into(),
+                            vec![18.0],
+                            vec!["a".into(), "b".into()],
+                            true,
+                            None,
+                        )
+                        .unwrap(),
+                    ),
+                },
+            ),
+        ],
+        vec![],
+    );
+    let cut = cut_plan.execute(&cut_source, policy).unwrap();
+    assert_eq!(cut.dataset.rows().len(), 20);
+    assert!(cut
+        .dataset
+        .rows()
+        .iter()
+        .all(|row| row[1] == Value::Str("b".into())));
+}
+
+/// A row that does produce a selection diagnostic is still charged the
+/// copied-diagnostic estimate, and refuses when that charge exceeds the budget.
+#[test]
+fn mapping_selection_failure_still_charges_diagnostic_text_budget() {
+    use yamaa_core::mapping_cut::{Mapping, MappingCut};
+    use yamaa_engine::dataset::Resource;
+    let source = table(
+        &[("id", ColumnType::Int), ("v", ColumnType::Str)],
+        vec![vec![Value::Int(1), Value::Str("Z".into())]],
+    );
+    let plan = record_plan(
+        &source,
+        schema(&[("id", ColumnType::Int), ("code", ColumnType::Int)]),
+        vec![
+            assign(0, Expression::Source(0)),
+            assign(
+                1,
+                Expression::MappingCut {
+                    source: Box::new(assign(1, Expression::Source(1))),
+                    operation: MappingCut::Mapping(
+                        Mapping::new(
+                            "V".into(),
+                            "columns.C1.derivation.mapping".into(),
+                            vec![("Y".into(), Value::Int(1))],
+                            true,
+                            None,
+                            None,
+                        )
+                        .unwrap(),
+                    ),
+                },
+            ),
+        ],
+        vec![],
+    );
+    // One byte for the source read, plus the diagnostic estimate:
+    // source name (1) + operation path (29) + input value (1) + 1024.
+    assert_eq!(
+        *plan
+            .execute(
+                &source,
+                Limits {
+                    scalar_text_bytes: 100,
+                    ..limits()
+                }
+            )
+            .unwrap_err(),
+        ExecutionError::Limit {
+            resource: Resource::ScalarTextBytes,
+            limit: 100,
+            required: Some(1056)
+        }
+    );
+    // With room for the diagnostic, the selection failure itself surfaces.
+    assert!(matches!(
+        *plan
+            .execute(
+                &source,
+                Limits {
+                    scalar_text_bytes: 2000,
+                    ..limits()
+                }
+            )
+            .unwrap_err(),
+        ExecutionError::SemanticDiagnostic { .. }
+    ));
+}
+
+/// A reached handler literal whose retained conversion fails is the other
+/// branch that allocates a mapping diagnostic, so it is charged there too.
+#[test]
+fn mapping_handler_conversion_failure_still_charges_diagnostic_text_budget() {
+    use yamaa_core::mapping_cut::{Mapping, MappingCut};
+    use yamaa_engine::dataset::Resource;
+    let source = table(
+        &[("id", ColumnType::Int), ("v", ColumnType::Str)],
+        vec![vec![Value::Int(1), Value::Missing]],
+    );
+    let plan = record_plan(
+        &source,
+        schema(&[("id", ColumnType::Int), ("code", ColumnType::Int)]),
+        vec![
+            assign(0, Expression::Source(0)),
+            assign(
+                1,
+                Expression::MappingCut {
+                    source: Box::new(assign(1, Expression::Source(1))),
+                    operation: MappingCut::Mapping(
+                        Mapping::new(
+                            "V".into(),
+                            "columns.C1.derivation.mapping".into(),
+                            vec![("Y".into(), Value::Int(1))],
+                            true,
+                            Some(Value::Str("bad".into())),
+                            None,
+                        )
+                        .unwrap(),
+                    ),
+                },
+            ),
+        ],
+        vec![],
+    );
+    // Three bytes for the selected handler literal, plus the diagnostic
+    // estimate: source name (1) + operation path (29) + missing input (0) + 1024.
+    assert_eq!(
+        *plan
+            .execute(
+                &source,
+                Limits {
+                    scalar_text_bytes: 100,
+                    ..limits()
+                }
+            )
+            .unwrap_err(),
+        ExecutionError::Limit {
+            resource: Resource::ScalarTextBytes,
+            limit: 100,
+            required: Some(1057)
+        }
+    );
+    // With room for the diagnostic, the conversion failure itself surfaces.
+    assert!(matches!(
+        *plan
+            .execute(
+                &source,
+                Limits {
+                    scalar_text_bytes: 2000,
+                    ..limits()
+                }
+            )
+            .unwrap_err(),
+        ExecutionError::SemanticDiagnostic { .. }
+    ));
+}
+
 /// UTF-8 bytes, including copies into dependent columns, are counted before retention.
 #[test]
 fn output_text_limit_counts_bytes_and_fresh_runs_reset_counters() {
