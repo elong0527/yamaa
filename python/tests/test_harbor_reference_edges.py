@@ -280,6 +280,10 @@ def test_temperature_never_becomes_fa(tmp_path, language, only_temperature):
     assert all(r["FAOBJ"] != "TEMPERATURE" for r in rows)
     if only_temperature:
         assert rows == []
+    else:
+        # The full diary yields FA rows for its other reactions; without
+        # this the assertion above passes vacuously on an empty output.
+        assert rows
 
 
 def test_blank_completion_is_a_missed_day(tmp_path, language):
